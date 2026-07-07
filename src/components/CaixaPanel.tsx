@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  DollarSign, ArrowUpRight, ArrowDownRight, Lock, Unlock, Users, 
-  Receipt, ShoppingCart, Percent, CreditCard, Check, AlertTriangle, 
-  Clock, X, RefreshCw, Edit3, Trash2, Plus, ChevronRight, 
+import {
+  DollarSign, ArrowUpRight, ArrowDownRight, Lock, Unlock, Users,
+  Receipt, ShoppingCart, Percent, CreditCard, Check, AlertTriangle,
+  Clock, X, RefreshCw, Edit3, Trash2, Plus, ChevronRight,
   MapPin, ClipboardList, BarChart2, Package, Shield, Star,
   MessageSquare, Send, Printer, Cpu, HelpCircle, Smartphone,
   Gift, Tag, TrendingUp, Heart
 } from 'lucide-react';
 import { Order, OrderItem, CaixaTurno, CaixaMovimentacao, Pagamento, Table, Product } from '../types';
 import { PRODUCTS, CATEGORIES } from '../data';
+import clsx from 'clsx';
 
 interface CaixaPanelProps {
   orders: Order[];
@@ -73,10 +74,10 @@ interface BotChatMessage {
   timestamp: string;
 }
 
-export function CaixaPanel({ 
-  orders, 
-  onRefreshOrders, 
-  apiBaseUrl, 
+export function CaixaPanel({
+  orders,
+  onRefreshOrders,
+  apiBaseUrl,
   authHeaders,
   activeWaiterNome,
   salonTables,
@@ -111,7 +112,7 @@ export function CaixaPanel({
 
   const handleTabChange = (tabId: 'dashboard' | 'operacao' | 'cardapio' | 'estoque' | 'financeiro' | 'clientes' | 'relatorios' | 'robo_ia' | 'configuracoes') => {
     setActiveTab(tabId);
-    switch(tabId) {
+    switch (tabId) {
       case 'dashboard':
         setActiveSubTab('desempenho');
         break;
@@ -209,7 +210,7 @@ export function CaixaPanel({
       console.error('Error saving fidelity config:', err);
     }
   };
-  
+
   // Config Salão sub-tab
   const [configSalSubTab, setConfigSalSubTab] = useState<'pedido' | 'fechamento' | 'atendimento'>('pedido');
 
@@ -229,10 +230,10 @@ export function CaixaPanel({
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
   // Otimizações / Estoque / Desempenho States
-  const [waitersPerformance, setWaitersPerformance] = useState<{nome_garcon: string, pedidos_atendidos: number, comissao_acumulada: number}[]>([]);
-  const [estoqueInsumos, setEstoqueInsumos] = useState<{id: string, nome: string, estoque_atual: number, estoque_minimo: number, estoque_maximo: number, unidade_medida: string, preco_medio_custo: number}[]>([]);
-  const [estoqueSugestoes, setEstoqueSugestoes] = useState<{id: string, nome: string, estoque_atual: number, estoque_minimo: number, estoque_maximo: number, unidade_medida: string, quantidade_sugerida: number}[]>([]);
-  const [horariosPico, setHorariosPico] = useState<{dia_semana_label: string, dia_semana: number, hora: string, total_pedidos: number}[]>([]);
+  const [waitersPerformance, setWaitersPerformance] = useState<{ nome_garcon: string, pedidos_atendidos: number, comissao_acumulada: number }[]>([]);
+  const [estoqueInsumos, setEstoqueInsumos] = useState<{ id: string, nome: string, estoque_atual: number, estoque_minimo: number, estoque_maximo: number, unidade_medida: string, preco_medio_custo: number }[]>([]);
+  const [estoqueSugestoes, setEstoqueSugestoes] = useState<{ id: string, nome: string, estoque_atual: number, estoque_minimo: number, estoque_maximo: number, unidade_medida: string, quantidade_sugerida: number }[]>([]);
+  const [horariosPico, setHorariosPico] = useState<{ dia_semana_label: string, dia_semana: number, hora: string, total_pedidos: number }[]>([]);
   const [fidelidadeConfig, setFidelidadeConfig] = useState({
     ativo: true,
     tipo_recompensa: 'PONTOS', // PONTOS | CASHBACK
@@ -240,7 +241,7 @@ export function CaixaPanel({
     valor_ponto_em_dinheiro: 0.05
   });
 
-  
+
   // Table management states
   const [showAddMesaModal, setShowAddMesaModal] = useState(false);
   const [newMesaId, setNewMesaId] = useState('');
@@ -406,7 +407,7 @@ export function CaixaPanel({
     try {
       const date = new Date(c.criado_em);
       criadoEm = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false });
-    } catch (e) {}
+    } catch (e) { }
 
     let canal: 'ifood' | 'site' | 'whats' = 'site';
     if (c.identificador && c.identificador.toLowerCase().includes('ifood')) {
@@ -583,7 +584,7 @@ export function CaixaPanel({
   const [iaUpsellEnabled, setIaUpsellEnabled] = useState(true);
   const [iaVoiceTone, setIaVoiceTone] = useState<'direto' | 'conversador'>('conversador');
   const [iaMaxInteractions, setIaMaxInteractions] = useState(5);
-  
+
   const [restaurantNicho, setRestaurantNicho] = useState<'hamburgueria' | 'pizzaria' | 'doceria' | 'alacarte' | 'selfservice'>('hamburgueria');
   const [modulesActive, setModulesActive] = useState({
     salon: true,
@@ -809,7 +810,7 @@ export function CaixaPanel({
   const startHoldConfirm = (e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
     if (holdIntervalRef.current) return;
-    
+
     let progress = 0;
     const interval = window.setInterval(() => {
       progress += 5; // 20 steps of 100ms = 2000ms (2 seconds)
@@ -823,7 +824,7 @@ export function CaixaPanel({
         setHoldProgress(progress);
       }
     }, 100);
-    
+
     holdIntervalRef.current = interval;
   };
 
@@ -927,7 +928,7 @@ export function CaixaPanel({
     e.preventDefault();
     if (!selectedOrder) return;
     setErrorMsg('');
-    
+
     try {
       const res = await fetch(`${apiBaseUrl}/caixa/comandas/${selectedOrder.id}/pagar`, {
         method: 'POST',
@@ -941,7 +942,7 @@ export function CaixaPanel({
       if (res.ok) {
         setPaymentValor('');
         setSelectedItemIds([]);
-        
+
         // Refresh local details modal state
         const updatedOrdersRes = await fetch(`${apiBaseUrl}/comandas/detalhes/todos?fechada=false`, { headers: authHeaders });
         if (updatedOrdersRes.ok) {
@@ -1149,15 +1150,15 @@ export function CaixaPanel({
         return;
       }
       const newComanda = await openRes.json();
-      
-      const itemsList = pdvCart.flatMap(item => 
+
+      const itemsList = pdvCart.flatMap(item =>
         Array.from({ length: item.quantity }, () => ({
           produto_id: item.product.id,
           observacao: item.obs,
           cliente_nome: pdvCustomerName || 'Consumo Geral'
         }))
       );
-      
+
       const launchRes = await fetch(`${apiBaseUrl}/comandas/${newComanda.id}/lancamentos`, {
         method: "POST",
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
@@ -1231,13 +1232,13 @@ export function CaixaPanel({
   const handleSendChatbotMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInputText.trim()) return;
-    
+
     const userMsg: BotChatMessage = {
       sender: 'user',
       text: chatInputText,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
-    
+
     setChatbotMessages(prev => [...prev, userMsg]);
     const promptText = chatInputText;
     setChatInputText('');
@@ -1247,7 +1248,7 @@ export function CaixaPanel({
     setTimeout(() => {
       let replyText = "Desculpe, não entendi muito bem. Você gostaria de ver nossas opções de pastéis ou hambúrgueres?";
       const lower = promptText.toLowerCase();
-      
+
       if (lower.includes('pastel') || lower.includes('pasteis')) {
         replyText = "Temos pastéis tradicionais incríveis (carne, queijo, frango) a partir de R$ 12.00 e pastel doce de Nutella com Morango! Qual sabor gostaria?";
       } else if (lower.includes('burger') || lower.includes('hambur') || lower.includes('carne')) {
@@ -1278,7 +1279,7 @@ export function CaixaPanel({
   });
 
   // Extract all active kitchen items from orders database
-  const activeKitchenItems = orders.flatMap(order => 
+  const activeKitchenItems = orders.flatMap(order =>
     order.itens
       .filter(item => item.status === 'preparando' || item.status === 'pronto')
       .filter(() => {
@@ -1297,46 +1298,45 @@ export function CaixaPanel({
   );
 
   return (
-    <div className={`flex h-[88vh] bg-[#0B0B0C] text-white overflow-hidden rounded-3xl border border-[#27272A] font-sans selection:bg-[#C5A880]/30 text-xs ${
-      fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''
-    }`}>
-      
+    <div className={`flex h-[88vh] bg-[#0B0B0C] text-white overflow-hidden rounded-3xl border border-[#27272A] font-sans selection:bg-[#C5A880]/30 text-xs ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''
+      }`}>
+
       {/* SIDEBAR - ANOTA AI / KOMA THEME */}
-      <aside className="w-64 bg-[#121214] border-r border-[#27272A] flex flex-col justify-between shrink-0">
-        <div className="space-y-6 pt-5">
+      <aside className={clsx('w-64', 'bg-[#121214]', 'border-r', 'border-[#27272A]', 'flex', 'flex-col', 'justify-between', 'shrink-0')}>
+        <div className={clsx('space-y-6', 'pt-5')}>
           {/* Brand header */}
-          <div className="px-5 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="h-7.5 w-7.5 bg-[#C5A880] rounded-xl flex items-center justify-center font-bold text-[#121214] font-serif text-sm">K</div>
-              <div className="font-serif font-bold text-sm tracking-tight">Kôma Caixa</div>
+          <div className={clsx('px-5', 'flex', 'items-center', 'justify-between')}>
+            <div className={clsx('flex', 'items-center', 'gap-2')}>
+              <div className={clsx('h-7.5', 'w-7.5', 'bg-[#C5A880]', 'rounded-xl', 'flex', 'items-center', 'justify-center', 'font-bold', 'text-[#121214]', 'font-serif', 'text-sm')}>K</div>
+              <div className={clsx('font-serif', 'font-bold', 'text-sm', 'tracking-tight')}>Kôma Caixa</div>
             </div>
             {turno?.status === 'aberto' ? (
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" title="Caixa Aberto" />
+              <span className={clsx('h-2', 'w-2', 'rounded-full', 'bg-emerald-500', 'animate-pulse')} title="Caixa Aberto" />
             ) : (
-              <span className="h-2 w-2 rounded-full bg-[#7A1F2D]" title="Caixa Fechado" />
+              <span className={clsx('h-2', 'w-2', 'rounded-full', 'bg-[#7A1F2D]')} title="Caixa Fechado" />
             )}
           </div>
 
           {/* Quick status bar */}
           <div className="px-3.5">
-            <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-2.5 flex items-center justify-between">
+            <div className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-2xl', 'p-2.5', 'flex', 'items-center', 'justify-between')}>
               <div className="space-y-0.5">
-                <span className="text-[9px] uppercase tracking-wider text-gray-400 font-bold block">Status do Turno</span>
-                <span className="font-semibold text-[10px] text-white">
+                <span className={clsx('text-[9px]', 'uppercase', 'tracking-wider', 'text-gray-400', 'font-bold', 'block')}>Status do Turno</span>
+                <span className={clsx('font-semibold', 'text-[10px]', 'text-white')}>
                   {turno?.status === 'aberto' ? 'Caixa Aberto' : 'Caixa Fechado'}
                 </span>
               </div>
               {turno?.status === 'aberto' ? (
-                <button 
-                  onClick={() => setShowFecharModal(true)} 
-                  className="px-2 py-1 bg-[#7A1F2D] hover:bg-[#601823] text-white text-[9px] font-bold rounded-lg cursor-pointer transition-all uppercase tracking-wider"
+                <button
+                  onClick={() => setShowFecharModal(true)}
+                  className={clsx('px-2', 'py-1', 'bg-[#7A1F2D]', 'hover:bg-[#601823]', 'text-white', 'text-[9px]', 'font-bold', 'rounded-lg', 'cursor-pointer', 'transition-all', 'uppercase', 'tracking-wider')}
                 >
                   Fechar
                 </button>
               ) : (
-                <button 
-                  onClick={() => setShowAbrirModal(true)} 
-                  className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-bold rounded-lg cursor-pointer transition-all uppercase tracking-wider animate-pulse-subtle"
+                <button
+                  onClick={() => setShowAbrirModal(true)}
+                  className={clsx('px-2', 'py-1', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'text-[9px]', 'font-bold', 'rounded-lg', 'cursor-pointer', 'transition-all', 'uppercase', 'tracking-wider', 'animate-pulse-subtle')}
                 >
                   Abrir
                 </button>
@@ -1345,7 +1345,7 @@ export function CaixaPanel({
           </div>
 
           {/* Tabs Navigation */}
-          <nav className="px-2.5 space-y-4 overflow-y-auto flex-1 max-h-[calc(88vh-230px)] scrollbar-thin scrollbar-thumb-zinc-800 text-left">
+          <nav className={clsx('px-2.5', 'space-y-4', 'overflow-y-auto', 'flex-1', 'max-h-[calc(88vh-230px)]', 'scrollbar-thin', 'scrollbar-thumb-zinc-800', 'text-left')}>
             {[
               {
                 category: 'Fluxo Operacional',
@@ -1384,7 +1384,7 @@ export function CaixaPanel({
               }
             ].map((group, gIdx) => (
               <div key={gIdx} className="space-y-1">
-                <span className="text-[8px] uppercase tracking-wider text-gray-500 font-bold px-3.5 block mb-1">
+                <span className={clsx('text-[8px]', 'uppercase', 'tracking-wider', 'text-gray-500', 'font-bold', 'px-3.5', 'block', 'mb-1')}>
                   {group.category}
                 </span>
                 {group.items.map((tab) => {
@@ -1401,18 +1401,17 @@ export function CaixaPanel({
                           handleTabChange(tab.id as any);
                         }
                       }}
-                      className={`w-full px-3.5 py-1.5 rounded-xl text-left font-semibold transition-all flex items-center justify-between cursor-pointer group ${
-                        (tab.id === 'chat_copiloto' ? (activeTab === 'operacao' && activeSubTab === 'chat_copiloto') : activeTab === tab.id)
-                          ? 'bg-[#C5A880]/15 text-[#C5A880] border border-[#C5A880]/10 font-bold shadow-inner'
-                          : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]/50 border border-transparent'
-                      }`}
+                      className={`w-full px-3.5 py-1.5 rounded-xl text-left font-semibold transition-all flex items-center justify-between cursor-pointer group ${(tab.id === 'chat_copiloto' ? (activeTab === 'operacao' && activeSubTab === 'chat_copiloto') : activeTab === tab.id)
+                        ? 'bg-[#C5A880]/15 text-[#C5A880] border border-[#C5A880]/10 font-bold shadow-inner'
+                        : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]/50 border border-transparent'
+                        }`}
                     >
-                      <div className="flex items-center gap-3">
+                      <div className={clsx('flex', 'items-center', 'gap-3')}>
                         <Icon size={13} className={(tab.id === 'chat_copiloto' ? (activeTab === 'operacao' && activeSubTab === 'chat_copiloto') : activeTab === tab.id) ? 'text-[#C5A880]' : 'text-gray-500 group-hover:text-white'} />
                         <span className="text-[10px]">{tab.label}</span>
                       </div>
                       {tab.id === 'operacao' && (simulatedOrders.filter(o => o.status === 'analise').length + activeKitchenItems.length) > 0 && (
-                        <span className="bg-[#C5A880] text-[#121214] text-[7px] font-bold px-1.5 py-0.5 rounded-full font-mono">
+                        <span className={clsx('bg-[#C5A880]', 'text-[#121214]', 'text-[7px]', 'font-bold', 'px-1.5', 'py-0.5', 'rounded-full', 'font-mono')}>
                           {simulatedOrders.filter(o => o.status === 'analise').length + activeKitchenItems.length}
                         </span>
                       )}
@@ -1425,20 +1424,19 @@ export function CaixaPanel({
         </div>
 
         {/* Footer info */}
-        <div className="p-4 border-t border-[#27272A] space-y-2 bg-[#18181B]/40">
+        <div className={clsx('p-4', 'border-t', 'border-[#27272A]', 'space-y-2', 'bg-[#18181B]/40')}>
           <div className="space-y-1">
-            <span className="text-[8px] text-gray-500 uppercase tracking-widest block font-bold">Acessibilidade / Fonte</span>
-            <div className="grid grid-cols-3 gap-0.5 bg-[#09090B] p-0.5 rounded-lg border border-[#27272A]">
+            <span className={clsx('text-[8px]', 'text-gray-500', 'uppercase', 'tracking-widest', 'block', 'font-bold')}>Acessibilidade / Fonte</span>
+            <div className={clsx('grid', 'grid-cols-3', 'gap-0.5', 'bg-[#09090B]', 'p-0.5', 'rounded-lg', 'border', 'border-[#27272A]')}>
               {(['padrao', 'grande', 'gigante'] as const).map((sz) => (
                 <button
                   key={sz}
                   type="button"
                   onClick={() => changeFontSize(sz)}
-                  className={`py-0.5 rounded text-[8px] font-bold uppercase transition-all cursor-pointer ${
-                    fontSize === sz
-                      ? 'bg-[#C5A880] text-[#121214]'
-                      : 'text-gray-400 hover:text-white'
-                  }`}
+                  className={`py-0.5 rounded text-[8px] font-bold uppercase transition-all cursor-pointer ${fontSize === sz
+                    ? 'bg-[#C5A880] text-[#121214]'
+                    : 'text-gray-400 hover:text-white'
+                    }`}
                 >
                   {sz === 'padrao' ? 'Pad' : sz === 'grande' ? 'Grd' : 'Ggt'}
                 </button>
@@ -1446,11 +1444,11 @@ export function CaixaPanel({
             </div>
           </div>
 
-          <div className="border-t border-[#27272A]/50 pt-2 space-y-1">
-            <span className="text-[9px] text-gray-500 uppercase tracking-widest block">Operador ativo</span>
-            <span className="font-bold text-white block truncate">{activeWaiterNome}</span>
-            <span className="text-[9px] text-[#C5A880] flex items-center gap-1 mt-1 font-mono">
-              <span className="h-1 w-1 bg-emerald-500 rounded-full animate-ping" />
+          <div className={clsx('border-t', 'border-[#27272A]/50', 'pt-2', 'space-y-1')}>
+            <span className={clsx('text-[9px]', 'text-gray-500', 'uppercase', 'tracking-widest', 'block')}>Operador ativo</span>
+            <span className={clsx('font-bold', 'text-white', 'block', 'truncate')}>{activeWaiterNome}</span>
+            <span className={clsx('text-[9px]', 'text-[#C5A880]', 'flex', 'items-center', 'gap-1', 'mt-1', 'font-mono')}>
+              <span className={clsx('h-1', 'w-1', 'bg-emerald-500', 'rounded-full', 'animate-ping')} />
               Sincronização Online
             </span>
           </div>
@@ -1458,10 +1456,10 @@ export function CaixaPanel({
       </aside>
 
       {/* CONTENT AREA */}
-      <main className="flex-1 bg-[#09090B] flex flex-col overflow-hidden">
+      <main className={clsx('flex-1', 'bg-[#09090B]', 'flex', 'flex-col', 'overflow-hidden')}>
         {/* Top header bar */}
-        <header className="h-14 border-b border-[#27272A] bg-[#121214] px-6 flex items-center justify-between shrink-0">
-          <h2 className="font-serif font-bold text-sm tracking-tight text-white uppercase tracking-wider">
+        <header className={clsx('h-14', 'border-b', 'border-[#27272A]', 'bg-[#121214]', 'px-6', 'flex', 'items-center', 'justify-between', 'shrink-0')}>
+          <h2 className={clsx('font-serif', 'font-bold', 'text-sm', 'tracking-tight', 'text-white', 'uppercase', 'tracking-wider')}>
             {activeTab === 'dashboard' && 'Painel Executivo e Metas'}
             {activeTab === 'operacao' && 'Gestão de Atendimento Local'}
             {activeTab === 'cardapio' && 'Gestão e Engenharia do Cardápio'}
@@ -1473,23 +1471,23 @@ export function CaixaPanel({
             {activeTab === 'configuracoes' && 'Configurações e Parâmetros'}
           </h2>
 
-          <div className="flex items-center gap-3">
-            <button 
+          <div className={clsx('flex', 'items-center', 'gap-3')}>
+            <button
               onClick={() => {
                 fetchTurno();
                 onRefreshOrders();
                 fetchSystemUsers();
               }}
-              className="p-1.5 hover:bg-[#1C1C1F] rounded-lg border border-[#27272A] text-gray-400 hover:text-white transition-all cursor-pointer flex items-center gap-1.5"
+              className={clsx('p-1.5', 'hover:bg-[#1C1C1F]', 'rounded-lg', 'border', 'border-[#27272A]', 'text-gray-400', 'hover:text-white', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'gap-1.5')}
             >
               <RefreshCw size={12} className={isLoading ? 'animate-spin' : ''} />
-              <span className="text-[9px] font-bold font-mono">Atualizar</span>
+              <span className={clsx('text-[9px]', 'font-bold', 'font-mono')}>Atualizar</span>
             </button>
           </div>
         </header>
 
         {/* Sub-tabs Navigation Bar */}
-        <div className="bg-[#121214]/60 border-b border-[#27272A] px-6 py-1.5 flex gap-2 shrink-0 overflow-x-auto scrollbar-none">
+        <div className={clsx('bg-[#121214]/60', 'border-b', 'border-[#27272A]', 'px-6', 'py-1.5', 'flex', 'gap-2', 'shrink-0', 'overflow-x-auto', 'scrollbar-none')}>
           {activeTab === 'dashboard' && [
             { id: 'desempenho', label: 'Minha Performance' },
             { id: 'metas', label: 'Metas & Previsões' },
@@ -1498,11 +1496,10 @@ export function CaixaPanel({
             <button
               key={sub.id}
               onClick={() => setActiveSubTab(sub.id)}
-              className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                activeSubTab === sub.id
-                  ? 'bg-[#C5A880] text-[#121214]'
-                  : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
-              }`}
+              className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${activeSubTab === sub.id
+                ? 'bg-[#C5A880] text-[#121214]'
+                : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
+                }`}
             >
               {sub.label}
             </button>
@@ -1517,11 +1514,10 @@ export function CaixaPanel({
             <button
               key={sub.id}
               onClick={() => setActiveSubTab(sub.id)}
-              className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                activeSubTab === sub.id
-                  ? 'bg-[#C5A880] text-[#121214]'
-                  : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
-              }`}
+              className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${activeSubTab === sub.id
+                ? 'bg-[#C5A880] text-[#121214]'
+                : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
+                }`}
             >
               {sub.label}
             </button>
@@ -1535,11 +1531,10 @@ export function CaixaPanel({
             <button
               key={sub.id}
               onClick={() => setActiveSubTab(sub.id)}
-              className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                activeSubTab === sub.id
-                  ? 'bg-[#C5A880] text-[#121214]'
-                  : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
-              }`}
+              className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${activeSubTab === sub.id
+                ? 'bg-[#C5A880] text-[#121214]'
+                : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
+                }`}
             >
               {sub.label}
             </button>
@@ -1553,11 +1548,10 @@ export function CaixaPanel({
             <button
               key={sub.id}
               onClick={() => setActiveSubTab(sub.id)}
-              className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                activeSubTab === sub.id
-                  ? 'bg-[#C5A880] text-[#121214]'
-                  : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
-              }`}
+              className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${activeSubTab === sub.id
+                ? 'bg-[#C5A880] text-[#121214]'
+                : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
+                }`}
             >
               {sub.label}
             </button>
@@ -1572,11 +1566,10 @@ export function CaixaPanel({
             <button
               key={sub.id}
               onClick={() => setActiveSubTab(sub.id)}
-              className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                activeSubTab === sub.id
-                  ? 'bg-[#C5A880] text-[#121214]'
-                  : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
-              }`}
+              className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${activeSubTab === sub.id
+                ? 'bg-[#C5A880] text-[#121214]'
+                : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
+                }`}
             >
               {sub.label}
             </button>
@@ -1591,11 +1584,10 @@ export function CaixaPanel({
             <button
               key={sub.id}
               onClick={() => setActiveSubTab(sub.id)}
-              className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                activeSubTab === sub.id
-                  ? 'bg-[#C5A880] text-[#121214]'
-                  : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
-              }`}
+              className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${activeSubTab === sub.id
+                ? 'bg-[#C5A880] text-[#121214]'
+                : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
+                }`}
             >
               {sub.label}
             </button>
@@ -1608,11 +1600,10 @@ export function CaixaPanel({
             <button
               key={sub.id}
               onClick={() => setActiveSubTab(sub.id)}
-              className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                activeSubTab === sub.id
-                  ? 'bg-[#C5A880] text-[#121214]'
-                  : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
-              }`}
+              className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${activeSubTab === sub.id
+                ? 'bg-[#C5A880] text-[#121214]'
+                : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
+                }`}
             >
               {sub.label}
             </button>
@@ -1625,11 +1616,10 @@ export function CaixaPanel({
             <button
               key={sub.id}
               onClick={() => setActiveSubTab(sub.id)}
-              className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                activeSubTab === sub.id
-                  ? 'bg-[#C5A880] text-[#121214]'
-                  : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
-              }`}
+              className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${activeSubTab === sub.id
+                ? 'bg-[#C5A880] text-[#121214]'
+                : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
+                }`}
             >
               {sub.label}
             </button>
@@ -1644,11 +1634,10 @@ export function CaixaPanel({
             <button
               key={sub.id}
               onClick={() => setActiveSubTab(sub.id)}
-              className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                activeSubTab === sub.id
-                  ? 'bg-[#C5A880] text-[#121214]'
-                  : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
-              }`}
+              className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${activeSubTab === sub.id
+                ? 'bg-[#C5A880] text-[#121214]'
+                : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
+                }`}
             >
               {sub.label}
             </button>
@@ -1656,21 +1645,21 @@ export function CaixaPanel({
         </div>
 
         {/* Dynamic Inner views */}
-        <div className="flex-1 overflow-y-auto p-5 relative">
-          
+        <div className={clsx('flex-1', 'overflow-y-auto', 'p-5', 'relative')}>
+
           {/* CASHIER CLOSED WARNING BANNER */}
           {turno?.status !== 'aberto' && ['pedidos', 'pdv', 'salon', 'kds'].includes(activeSubTab) && (
-            <div className="absolute inset-0 bg-black/80 backdrop-blur-xs z-30 flex flex-col items-center justify-center text-center p-8 space-y-4">
-              <div className="p-4 bg-[#1C1C1F] rounded-full border border-amber-500/20 text-amber-500">
+            <div className={clsx('absolute', 'inset-0', 'bg-black/80', 'backdrop-blur-xs', 'z-30', 'flex', 'flex-col', 'items-center', 'justify-center', 'text-center', 'p-8', 'space-y-4')}>
+              <div className={clsx('p-4', 'bg-[#1C1C1F]', 'rounded-full', 'border', 'border-amber-500/20', 'text-amber-500')}>
                 <Lock size={32} />
               </div>
-              <h3 className="font-serif text-base font-bold text-white">Turno de Caixa Fechado</h3>
-              <p className="max-w-md text-[10px] text-gray-400 leading-relaxed">
+              <h3 className={clsx('font-serif', 'text-base', 'font-bold', 'text-white')}>Turno de Caixa Fechado</h3>
+              <p className={clsx('max-w-md', 'text-[10px]', 'text-gray-400', 'leading-relaxed')}>
                 Você precisa abrir o caixa digitando o fundo de troco inicial da noite para poder acessar as telas de vendas e comandas.
               </p>
-              <button 
+              <button
                 onClick={() => setShowAbrirModal(true)}
-                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all cursor-pointer text-[10px] uppercase tracking-wider"
+                className={clsx('px-5', 'py-2.5', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'font-bold', 'rounded-xl', 'transition-all', 'cursor-pointer', 'text-[10px]', 'uppercase', 'tracking-wider')}
               >
                 Abrir Caixa Agora
               </button>
@@ -1679,68 +1668,68 @@ export function CaixaPanel({
 
           {/* VIEW 1: MEUS PEDIDOS (Kanban) */}
           {activeSubTab === 'pedidos' && (
-            <div className="h-full flex flex-col space-y-4">
-              
+            <div className={clsx('h-full', 'flex', 'flex-col', 'space-y-4')}>
+
               {/* Controls bar */}
-              <div className="bg-[#121214] border border-[#27272A] p-3 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                <div className="flex items-center gap-4">
-                  <label className="flex items-center gap-2 cursor-pointer font-semibold text-gray-300">
-                    <input 
-                      type="checkbox" 
+              <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-3', 'rounded-2xl', 'flex', 'flex-col', 'sm:flex-row', 'justify-between', 'items-start', 'sm:items-center', 'gap-3')}>
+                <div className={clsx('flex', 'items-center', 'gap-4')}>
+                  <label className={clsx('flex', 'items-center', 'gap-2', 'cursor-pointer', 'font-semibold', 'text-gray-300')}>
+                    <input
+                      type="checkbox"
                       checked={autoAccept}
                       onChange={(e) => setAutoAccept(e.target.checked)}
-                      className="rounded border-[#27272A] text-[#7A1F2D] focus:ring-[#7A1F2D] h-3.5 w-3.5 bg-[#121214]"
+                      className={clsx('rounded', 'border-[#27272A]', 'text-[#7A1F2D]', 'focus:ring-[#7A1F2D]', 'h-3.5', 'w-3.5', 'bg-[#121214]')}
                     />
                     <span>Aceitar os pedidos automaticamente (iFood/Apps)</span>
                   </label>
                 </div>
-                <div className="text-[10px] text-gray-400">
-                  Total Delivery hoje: <strong className="text-white">R$ {simulatedOrders.reduce((s,o) => s+o.total, 0).toFixed(2)}</strong>
+                <div className={clsx('text-[10px]', 'text-gray-400')}>
+                  Total Delivery hoje: <strong className="text-white">R$ {simulatedOrders.reduce((s, o) => s + o.total, 0).toFixed(2)}</strong>
                 </div>
               </div>
 
               {/* Kanban columns */}
-              <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
-                
+              <div className={clsx('flex-1', 'grid', 'grid-cols-1', 'md:grid-cols-3', 'gap-4')}>
+
                 {/* COLUMN 1: Em análise */}
                 {/* COLUMN 1: Em análise */}
-                <div className="bg-[#121214]/50 border border-[#27272A] rounded-2xl flex flex-col overflow-hidden">
-                  <div className="bg-[#18181B] px-4 py-2.5 border-b border-[#27272A] flex justify-between items-center shrink-0">
-                    <span className="font-bold text-gray-300 font-serif">Em análise</span>
-                    <span className="bg-amber-500/10 text-amber-400 font-bold px-2 py-0.5 rounded-full font-mono text-[9px]">
+                <div className={clsx('bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden')}>
+                  <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
+                    <span className={clsx('font-bold', 'text-gray-300', 'font-serif')}>Em análise</span>
+                    <span className={clsx('bg-amber-500/10', 'text-amber-400', 'font-bold', 'px-2', 'py-0.5', 'rounded-full', 'font-mono', 'text-[9px]')}>
                       {simulatedOrders.filter(o => o.status === 'analise').length}
                     </span>
                   </div>
 
-                  <div className="p-3 flex-1 overflow-y-auto space-y-3">
+                  <div className={clsx('p-3', 'flex-1', 'overflow-y-auto', 'space-y-3')}>
                     {simulatedOrders.filter(o => o.status === 'analise').length === 0 ? (
-                      <div className="py-20 text-center text-gray-500 italic text-[10px]">Nenhum pedido pendente</div>
+                      <div className={clsx('py-20', 'text-center', 'text-gray-500', 'italic', 'text-[10px]')}>Nenhum pedido pendente</div>
                     ) : (
                       simulatedOrders.filter(o => o.status === 'analise').map((order) => (
-                        <div key={order.id} className="bg-[#1C1C1F] border border-[#27272A] hover:border-amber-500/30 p-3 rounded-xl space-y-2.5 transition-all">
-                          <div className="flex justify-between items-start">
+                        <div key={order.id} className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'hover:border-amber-500/30', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all')}>
+                          <div className={clsx('flex', 'justify-between', 'items-start')}>
                             <div>
-                              <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-[#7A1F2D]/20 text-[#C46A74] rounded font-mono block w-fit mb-1">{order.canal}</span>
-                              <strong className="text-white text-xs block">{order.cliente}</strong>
-                              <span className="text-[9px] text-gray-400 block">{order.telefone}</span>
+                              <span className={clsx('px-1.5', 'py-0.5', 'text-[8px]', 'uppercase', 'tracking-wider', 'font-bold', 'bg-[#7A1F2D]/20', 'text-[#C46A74]', 'rounded', 'font-mono', 'block', 'w-fit', 'mb-1')}>{order.canal}</span>
+                              <strong className={clsx('text-white', 'text-xs', 'block')}>{order.cliente}</strong>
+                              <span className={clsx('text-[9px]', 'text-gray-400', 'block')}>{order.telefone}</span>
                             </div>
-                            <span className="font-bold text-amber-400 font-mono text-[11px] shrink-0">R$ {order.total.toFixed(2)}</span>
+                            <span className={clsx('font-bold', 'text-amber-400', 'font-mono', 'text-[11px]', 'shrink-0')}>R$ {order.total.toFixed(2)}</span>
                           </div>
 
-                          <p className="text-[10px] text-gray-300 bg-[#09090B] p-1.5 rounded border border-[#27272A]/30 leading-relaxed font-mono">
+                          <p className={clsx('text-[10px]', 'text-gray-300', 'bg-[#09090B]', 'p-1.5', 'rounded', 'border', 'border-[#27272A]/30', 'leading-relaxed', 'font-mono')}>
                             {order.itens}
                           </p>
 
-                          <div className="flex gap-1.5 pt-1">
+                          <div className={clsx('flex', 'gap-1.5', 'pt-1')}>
                             <button
                               onClick={() => handleUpdateDeliveryStatus(order.id, 'producao')}
-                              className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[9px] transition-all cursor-pointer uppercase tracking-wider"
+                              className={clsx('flex-1', 'py-1.5', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider')}
                             >
                               Aceitar Pedido
                             </button>
                             <button
                               onClick={() => handleRecusarPedido(order.id)}
-                              className="px-2 py-1.5 bg-[#7A1F2D]/20 hover:bg-[#7A1F2D] text-[#C46A74] hover:text-white rounded-lg font-bold text-[9px] transition-all cursor-pointer"
+                              className={clsx('px-2', 'py-1.5', 'bg-[#7A1F2D]/20', 'hover:bg-[#7A1F2D]', 'text-[#C46A74]', 'hover:text-white', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer')}
                             >
                               Recusar
                             </button>
@@ -1752,44 +1741,44 @@ export function CaixaPanel({
                 </div>
 
                 {/* COLUMN 2: Em produção */}
-                <div className="bg-[#121214]/50 border border-[#27272A] rounded-2xl flex flex-col overflow-hidden">
-                  <div className="bg-[#18181B] px-4 py-2.5 border-b border-[#27272A] flex justify-between items-center shrink-0">
-                    <span className="font-bold text-gray-300 font-serif">Em produção</span>
-                    <span className="bg-[#C5A880]/10 text-[#C5A880] font-bold px-2 py-0.5 rounded-full font-mono text-[9px]">
+                <div className={clsx('bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden')}>
+                  <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
+                    <span className={clsx('font-bold', 'text-gray-300', 'font-serif')}>Em produção</span>
+                    <span className={clsx('bg-[#C5A880]/10', 'text-[#C5A880]', 'font-bold', 'px-2', 'py-0.5', 'rounded-full', 'font-mono', 'text-[9px]')}>
                       {simulatedOrders.filter(o => o.status === 'producao').length + tableOrdersInProduction.length}
                     </span>
                   </div>
 
-                  <div className="p-3 flex-1 overflow-y-auto space-y-3">
+                  <div className={clsx('p-3', 'flex-1', 'overflow-y-auto', 'space-y-3')}>
                     {simulatedOrders.filter(o => o.status === 'producao').length === 0 && tableOrdersInProduction.length === 0 ? (
-                      <div className="py-20 text-center text-gray-500 italic text-[10px]">Nenhum pedido em produção</div>
+                      <div className={clsx('py-20', 'text-center', 'text-gray-500', 'italic', 'text-[10px]')}>Nenhum pedido em produção</div>
                     ) : (
                       <>
                         {/* Pedidos Delivery em Produção */}
                         {simulatedOrders.filter(o => o.status === 'producao').map((order) => (
-                          <div key={order.id} className="bg-[#1C1C1F] border border-[#27272A] hover:border-[#C5A880]/30 p-3 rounded-xl space-y-2.5 transition-all">
-                            <div className="flex justify-between items-start">
+                          <div key={order.id} className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'hover:border-[#C5A880]/30', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all')}>
+                            <div className={clsx('flex', 'justify-between', 'items-start')}>
                               <div>
-                                <strong className="text-white text-xs block">{order.cliente}</strong>
-                                <span className="text-[9px] text-gray-400 block">{order.telefone}</span>
+                                <strong className={clsx('text-white', 'text-xs', 'block')}>{order.cliente}</strong>
+                                <span className={clsx('text-[9px]', 'text-gray-400', 'block')}>{order.telefone}</span>
                               </div>
-                              <span className="font-bold text-white font-mono text-[11px] shrink-0">R$ {order.total.toFixed(2)}</span>
+                              <span className={clsx('font-bold', 'text-white', 'font-mono', 'text-[11px]', 'shrink-0')}>R$ {order.total.toFixed(2)}</span>
                             </div>
 
-                            <p className="text-[10px] text-gray-300 bg-[#09090B] p-1.5 rounded border border-[#27272A]/30 leading-relaxed font-mono">
+                            <p className={clsx('text-[10px]', 'text-gray-300', 'bg-[#09090B]', 'p-1.5', 'rounded', 'border', 'border-[#27272A]/30', 'leading-relaxed', 'font-mono')}>
                               {order.itens}
                             </p>
 
                             {order.endereco && (
-                              <span className="text-[9px] text-gray-400 flex items-start gap-1 block">
-                                <MapPin size={10} className="shrink-0 text-rose-500 mt-0.5" />
+                              <span className={clsx('text-[9px]', 'text-gray-400', 'flex', 'items-start', 'gap-1', 'block')}>
+                                <MapPin size={10} className={clsx('shrink-0', 'text-rose-500', 'mt-0.5')} />
                                 <span className="truncate">{order.endereco}</span>
                               </span>
                             )}
 
                             <button
                               onClick={() => handleUpdateDeliveryStatus(order.id, 'pronto')}
-                              className="w-full py-1.5 bg-[#C5A880] hover:bg-[#b0936b] text-[#121214] rounded-lg font-bold text-[9px] transition-all cursor-pointer uppercase tracking-wider"
+                              className={clsx('w-full', 'py-1.5', 'bg-[#C5A880]', 'hover:bg-[#b0936b]', 'text-[#121214]', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider')}
                             >
                               Marcar como Pronto
                             </button>
@@ -1809,21 +1798,21 @@ export function CaixaPanel({
                             .join(' + ');
 
                           return (
-                            <div key={`table-prod-${order.id}`} className="bg-[#121214] border border-[#27272A]/60 hover:border-[#C5A880]/30 p-3 rounded-xl space-y-2.5 transition-all text-left">
-                              <div className="flex justify-between items-start">
+                            <div key={`table-prod-${order.id}`} className={clsx('bg-[#121214]', 'border', 'border-[#27272A]/60', 'hover:border-[#C5A880]/30', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all', 'text-left')}>
+                              <div className={clsx('flex', 'justify-between', 'items-start')}>
                                 <div>
-                                  <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-[#C5A880]/15 text-[#C5A880] rounded font-mono block w-fit mb-1">
+                                  <span className={clsx('px-1.5', 'py-0.5', 'text-[8px]', 'uppercase', 'tracking-wider', 'font-bold', 'bg-[#C5A880]/15', 'text-[#C5A880]', 'rounded', 'font-mono', 'block', 'w-fit', 'mb-1')}>
                                     Mesa {order.mesaId}
                                   </span>
-                                  <strong className="text-white text-xs block">
+                                  <strong className={clsx('text-white', 'text-xs', 'block')}>
                                     {(order as any).identificador || `Consumo Mesa ${order.mesaId}`}
                                   </strong>
-                                  <span className="text-[9px] text-gray-500 block">Atendente: {order.garcomNome || 'Garçom'}</span>
+                                  <span className={clsx('text-[9px]', 'text-gray-500', 'block')}>Atendente: {order.garcomNome || 'Garçom'}</span>
                                 </div>
-                                <span className="text-[9px] text-gray-500 font-mono">#{order.id.slice(-4)}</span>
+                                <span className={clsx('text-[9px]', 'text-gray-500', 'font-mono')}>#{order.id.slice(-4)}</span>
                               </div>
 
-                              <p className="text-[10px] text-[#C5A880] bg-[#09090B] p-1.5 rounded border border-[#27272A]/30 leading-relaxed font-mono">
+                              <p className={clsx('text-[10px]', 'text-[#C5A880]', 'bg-[#09090B]', 'p-1.5', 'rounded', 'border', 'border-[#27272A]/30', 'leading-relaxed', 'font-mono')}>
                                 {itemsStr}
                               </p>
 
@@ -1844,7 +1833,7 @@ export function CaixaPanel({
                                     alert("Erro ao atualizar status dos pratos.");
                                   }
                                 }}
-                                className="w-full py-1.5 bg-[#C5A880] hover:bg-[#b0936b] text-[#121214] rounded-lg font-bold text-[9px] transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1"
+                                className={clsx('w-full', 'py-1.5', 'bg-[#C5A880]', 'hover:bg-[#b0936b]', 'text-[#121214]', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1')}
                               >
                                 <Check size={11} />
                                 <span>Pronto (Mesa)</span>
@@ -1858,40 +1847,40 @@ export function CaixaPanel({
                 </div>
 
                 {/* COLUMN 3: Prontos para entrega */}
-                <div className="bg-[#121214]/50 border border-[#27272A] rounded-2xl flex flex-col overflow-hidden">
-                  <div className="bg-[#18181B] px-4 py-2.5 border-b border-[#27272A] flex justify-between items-center shrink-0">
-                    <span className="font-bold text-gray-300 font-serif">Prontos / Em trânsito</span>
-                    <span className="bg-emerald-500/10 text-emerald-400 font-bold px-2 py-0.5 rounded-full font-mono text-[9px]">
+                <div className={clsx('bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden')}>
+                  <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
+                    <span className={clsx('font-bold', 'text-gray-300', 'font-serif')}>Prontos / Em trânsito</span>
+                    <span className={clsx('bg-emerald-500/10', 'text-emerald-400', 'font-bold', 'px-2', 'py-0.5', 'rounded-full', 'font-mono', 'text-[9px]')}>
                       {simulatedOrders.filter(o => o.status === 'pronto').length + tableOrdersReady.length}
                     </span>
                   </div>
 
-                  <div className="p-3 flex-1 overflow-y-auto space-y-3">
+                  <div className={clsx('p-3', 'flex-1', 'overflow-y-auto', 'space-y-3')}>
                     {simulatedOrders.filter(o => o.status === 'pronto').length === 0 && tableOrdersReady.length === 0 ? (
-                      <div className="py-20 text-center text-gray-500 italic text-[10px]">Nenhum pedido pronto</div>
+                      <div className={clsx('py-20', 'text-center', 'text-gray-500', 'italic', 'text-[10px]')}>Nenhum pedido pronto</div>
                     ) : (
                       <>
                         {/* Pedidos Delivery Prontos */}
                         {simulatedOrders.filter(o => o.status === 'pronto').map((order) => (
-                          <div key={order.id} className="bg-[#1C1C1F] border border-emerald-500/30 p-3 rounded-xl space-y-2.5 transition-all">
-                            <div className="flex justify-between items-start">
+                          <div key={order.id} className={clsx('bg-[#1C1C1F]', 'border', 'border-emerald-500/30', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all')}>
+                            <div className={clsx('flex', 'justify-between', 'items-start')}>
                               <div>
-                                <strong className="text-white text-xs block">{order.cliente}</strong>
-                                <span className="text-[9px] text-gray-400 block">{order.telefone}</span>
+                                <strong className={clsx('text-white', 'text-xs', 'block')}>{order.cliente}</strong>
+                                <span className={clsx('text-[9px]', 'text-gray-400', 'block')}>{order.telefone}</span>
                               </div>
-                              <span className="font-bold text-emerald-400 font-mono text-[11px] shrink-0">R$ {order.total.toFixed(2)}</span>
+                              <span className={clsx('font-bold', 'text-emerald-400', 'font-mono', 'text-[11px]', 'shrink-0')}>R$ {order.total.toFixed(2)}</span>
                             </div>
 
                             {order.endereco && (
-                              <span className="text-[9px] text-gray-400 flex items-start gap-1 block">
-                                <MapPin size={10} className="shrink-0 text-rose-500 mt-0.5" />
+                              <span className={clsx('text-[9px]', 'text-gray-400', 'flex', 'items-start', 'gap-1', 'block')}>
+                                <MapPin size={10} className={clsx('shrink-0', 'text-rose-500', 'mt-0.5')} />
                                 <span className="leading-relaxed">{order.endereco}</span>
                               </span>
                             )}
 
                             <button
                               onClick={() => handleFinalizarPedido(order.id)}
-                              className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[9px] transition-all cursor-pointer uppercase tracking-wider"
+                              className={clsx('w-full', 'py-1.5', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider')}
                             >
                               Finalizar Pedido
                             </button>
@@ -1911,20 +1900,20 @@ export function CaixaPanel({
                             .join(' + ');
 
                           return (
-                            <div key={`table-ready-${order.id}`} className="bg-[#121214] border border-emerald-500/20 hover:border-emerald-500/40 p-3 rounded-xl space-y-2.5 transition-all text-left">
-                              <div className="flex justify-between items-start">
+                            <div key={`table-ready-${order.id}`} className={clsx('bg-[#121214]', 'border', 'border-emerald-500/20', 'hover:border-emerald-500/40', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all', 'text-left')}>
+                              <div className={clsx('flex', 'justify-between', 'items-start')}>
                                 <div>
-                                  <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-emerald-500/10 text-emerald-400 rounded font-mono block w-fit mb-1">
+                                  <span className={clsx('px-1.5', 'py-0.5', 'text-[8px]', 'uppercase', 'tracking-wider', 'font-bold', 'bg-emerald-500/10', 'text-emerald-400', 'rounded', 'font-mono', 'block', 'w-fit', 'mb-1')}>
                                     Mesa {order.mesaId} - Pronto
                                   </span>
-                                  <strong className="text-white text-xs block">
+                                  <strong className={clsx('text-white', 'text-xs', 'block')}>
                                     {(order as any).identificador || `Consumo Mesa ${order.mesaId}`}
                                   </strong>
                                 </div>
-                                <span className="text-[9px] text-gray-500 font-mono">#{order.id.slice(-4)}</span>
+                                <span className={clsx('text-[9px]', 'text-gray-500', 'font-mono')}>#{order.id.slice(-4)}</span>
                               </div>
 
-                              <p className="text-[10px] text-emerald-400 bg-[#09090B] p-1.5 rounded border border-[#27272A]/10 leading-relaxed font-mono">
+                              <p className={clsx('text-[10px]', 'text-emerald-400', 'bg-[#09090B]', 'p-1.5', 'rounded', 'border', 'border-[#27272A]/10', 'leading-relaxed', 'font-mono')}>
                                 {itemsStr}
                               </p>
 
@@ -1945,7 +1934,7 @@ export function CaixaPanel({
                                     alert("Erro ao atualizar status dos pratos.");
                                   }
                                 }}
-                                className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[9px] transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1"
+                                className={clsx('w-full', 'py-1.5', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1')}
                               >
                                 <Check size={11} />
                                 <span>Entregar na Mesa</span>
@@ -1964,40 +1953,40 @@ export function CaixaPanel({
 
           {/* VIEW 2: PDV (Pedidos Balcão) */}
           {activeSubTab === 'pdv' && (
-            <div className="h-full flex gap-5 overflow-hidden">
-              
+            <div className={clsx('h-full', 'flex', 'gap-5', 'overflow-hidden')}>
+
               {/* Product grid column */}
-              <div className="flex-1 flex flex-col space-y-4 overflow-hidden">
-                <div className="space-y-3 shrink-0">
-                  <div className="flex gap-2">
+              <div className={clsx('flex-1', 'flex', 'flex-col', 'space-y-4', 'overflow-hidden')}>
+                <div className={clsx('space-y-3', 'shrink-0')}>
+                  <div className={clsx('flex', 'gap-2')}>
                     <div className="flex-1">
-                      <input 
+                      <input
                         id="pdv-search-input"
-                        type="text" 
-                        placeholder="Pesquisar prato no menu..." 
+                        type="text"
+                        placeholder="Pesquisar prato no menu..."
                         value={pdvSearch}
                         onChange={(e) => setPdvSearch(e.target.value)}
-                        className="w-full px-4 py-2 bg-[#121214] border border-[#27272A] rounded-xl focus:outline-none focus:border-[#C5A880] text-white"
+                        className={clsx('w-full', 'px-4', 'py-2', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'focus:outline-none', 'focus:border-[#C5A880]', 'text-white')}
                       />
-                      <span className="text-[8px] text-gray-500 font-mono block mt-1 text-left">Atalho: Pressione [F1] para pesquisar</span>
+                      <span className={clsx('text-[8px]', 'text-gray-500', 'font-mono', 'block', 'mt-1', 'text-left')}>Atalho: Pressione [F1] para pesquisar</span>
                     </div>
                     {pdvSearch && (
-                      <button 
-                        onClick={() => setPdvSearch('')} 
-                        className="px-3 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-gray-400 hover:text-white"
+                      <button
+                        onClick={() => setPdvSearch('')}
+                        className={clsx('px-3', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-gray-400', 'hover:text-white')}
                       >
                         Limpar
                       </button>
                     )}
                   </div>
 
-                  <div className="flex gap-1.5 overflow-x-auto pb-1.5 scrollbar-thin">
+                  <div className={clsx('flex', 'gap-1.5', 'overflow-x-auto', 'pb-1.5', 'scrollbar-thin')}>
                     <button
                       type="button"
                       onClick={() => setPdvSelectedCategory('todos')}
                       className={`px-3 py-1.5 text-[10px] font-bold rounded-lg cursor-pointer whitespace-nowrap transition-all border ${pdvSelectedCategory === 'todos'
-                          ? 'bg-[#7A1F2D] text-white border-transparent'
-                          : 'bg-[#121214] border-[#27272A] text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
+                        ? 'bg-[#7A1F2D] text-white border-transparent'
+                        : 'bg-[#121214] border-[#27272A] text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
                         }`}
                     >
                       Todos
@@ -2008,8 +1997,8 @@ export function CaixaPanel({
                         type="button"
                         onClick={() => setPdvSelectedCategory(cat)}
                         className={`px-3 py-1.5 text-[10px] font-bold rounded-lg cursor-pointer whitespace-nowrap transition-all border ${pdvSelectedCategory === cat
-                            ? 'bg-[#7A1F2D] text-white border-transparent'
-                            : 'bg-[#121214] border-[#27272A] text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
+                          ? 'bg-[#7A1F2D] text-white border-transparent'
+                          : 'bg-[#121214] border-[#27272A] text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
                           }`}
                       >
                         {cat}
@@ -2018,21 +2007,21 @@ export function CaixaPanel({
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto pr-1">
-                  <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+                <div className={clsx('flex-1', 'overflow-y-auto', 'pr-1')}>
+                  <div className={clsx('grid', 'grid-cols-2', 'sm:grid-cols-3', 'xl:grid-cols-4', 'gap-3')}>
                     {filteredProducts.map(p => (
-                      <div 
+                      <div
                         key={p.id}
                         onClick={() => handlePdvAddToCart(p)}
-                        className="bg-[#121214]/60 border border-[#27272A] hover:border-[#C5A880]/30 p-3 rounded-xl flex flex-col justify-between gap-3 cursor-pointer group hover:shadow-md transition-all text-left"
+                        className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'hover:border-[#C5A880]/30', 'p-3', 'rounded-xl', 'flex', 'flex-col', 'justify-between', 'gap-3', 'cursor-pointer', 'group', 'hover:shadow-md', 'transition-all', 'text-left')}
                       >
                         <div>
-                          <h4 className="font-serif font-bold text-white group-hover:text-[#C5A880] transition-colors">{p.nome}</h4>
-                          <p className="text-[9px] text-gray-500 mt-1 line-clamp-2">{p.descricao}</p>
+                          <h4 className={clsx('font-serif', 'font-bold', 'text-white', 'group-hover:text-[#C5A880]', 'transition-colors')}>{p.nome}</h4>
+                          <p className={clsx('text-[9px]', 'text-gray-500', 'mt-1', 'line-clamp-2')}>{p.descricao}</p>
                         </div>
-                        <div className="flex justify-between items-center">
-                          <span className="font-bold text-white font-mono">R$ {p.preco.toFixed(2)}</span>
-                          <span className="p-1 bg-[#1C1C1F] group-hover:bg-[#C5A880] text-gray-400 group-hover:text-[#121214] rounded-lg transition-colors border border-[#27272A]/50">
+                        <div className={clsx('flex', 'justify-between', 'items-center')}>
+                          <span className={clsx('font-bold', 'text-white', 'font-mono')}>R$ {p.preco.toFixed(2)}</span>
+                          <span className={clsx('p-1', 'bg-[#1C1C1F]', 'group-hover:bg-[#C5A880]', 'text-gray-400', 'group-hover:text-[#121214]', 'rounded-lg', 'transition-colors', 'border', 'border-[#27272A]/50')}>
                             <Plus size={12} />
                           </span>
                         </div>
@@ -2043,60 +2032,60 @@ export function CaixaPanel({
               </div>
 
               {/* Shopping cart sidebar */}
-              <div className="w-80 bg-[#121214] border border-[#27272A] rounded-2xl flex flex-col overflow-hidden shrink-0">
-                <div className="bg-[#18181B] px-4 py-3 border-b border-[#27272A] flex justify-between items-center shrink-0">
-                  <span className="font-bold text-white font-serif flex items-center gap-1.5">
+              <div className={clsx('w-80', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden', 'shrink-0')}>
+                <div className={clsx('bg-[#18181B]', 'px-4', 'py-3', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
+                  <span className={clsx('font-bold', 'text-white', 'font-serif', 'flex', 'items-center', 'gap-1.5')}>
                     <ShoppingCart size={14} className="text-[#C5A880]" />
                     <span>Carrinho de Vendas</span>
                   </span>
-                  <span className="bg-[#C5A880]/10 text-[#C5A880] font-bold px-2 py-0.5 rounded-full font-mono text-[9px]">
+                  <span className={clsx('bg-[#C5A880]/10', 'text-[#C5A880]', 'font-bold', 'px-2', 'py-0.5', 'rounded-full', 'font-mono', 'text-[9px]')}>
                     {pdvCart.reduce((sum, item) => sum + item.quantity, 0)} itens
                   </span>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                <div className={clsx('flex-1', 'overflow-y-auto', 'p-3', 'space-y-2')}>
                   {pdvCart.length === 0 ? (
-                    <div className="py-24 text-center space-y-2 text-gray-500 italic">
+                    <div className={clsx('py-24', 'text-center', 'space-y-2', 'text-gray-500', 'italic')}>
                       <p>Carrinho Vazio</p>
-                      <p className="text-[9px] text-gray-600">Clique nos produtos ao lado para lançar</p>
+                      <p className={clsx('text-[9px]', 'text-gray-600')}>Clique nos produtos ao lado para lançar</p>
                     </div>
                   ) : (
                     pdvCart.map((item, idx) => (
-                      <div key={`${item.product.id}-${idx}`} className="bg-[#1C1C1F] p-2.5 rounded-xl border border-[#27272A] space-y-2">
-                        <div className="flex justify-between items-start">
+                      <div key={`${item.product.id}-${idx}`} className={clsx('bg-[#1C1C1F]', 'p-2.5', 'rounded-xl', 'border', 'border-[#27272A]', 'space-y-2')}>
+                        <div className={clsx('flex', 'justify-between', 'items-start')}>
                           <div className="space-y-0.5">
-                            <strong className="text-white block truncate w-40">{item.product.nome}</strong>
-                            <span className="text-[9px] text-[#C5A880] font-mono">R$ {item.product.preco.toFixed(2)} / un</span>
+                            <strong className={clsx('text-white', 'block', 'truncate', 'w-40')}>{item.product.nome}</strong>
+                            <span className={clsx('text-[9px]', 'text-[#C5A880]', 'font-mono')}>R$ {item.product.preco.toFixed(2)} / un</span>
                           </div>
-                          <button 
+                          <button
                             onClick={() => handlePdvRemoveCartItem(idx)}
-                            className="text-gray-500 hover:text-rose-500 p-0.5 cursor-pointer"
+                            className={clsx('text-gray-500', 'hover:text-rose-500', 'p-0.5', 'cursor-pointer')}
                           >
                             <Trash2 size={12} />
                           </button>
                         </div>
-                        
-                        <div className="flex justify-between items-center">
-                          <div className="flex items-center bg-[#09090B] border border-[#27272A] rounded-lg overflow-hidden">
-                            <button 
-                              type="button" 
+
+                        <div className={clsx('flex', 'justify-between', 'items-center')}>
+                          <div className={clsx('flex', 'items-center', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'overflow-hidden')}>
+                            <button
+                              type="button"
                               onClick={() => handlePdvUpdateCartQty(idx, -1)}
-                              className="px-2 py-1 text-gray-400 hover:text-white cursor-pointer hover:bg-[#1C1C1F]"
+                              className={clsx('px-2', 'py-1', 'text-gray-400', 'hover:text-white', 'cursor-pointer', 'hover:bg-[#1C1C1F]')}
                             >
                               -
                             </button>
-                            <span className="px-2 text-[10px] font-bold font-mono text-white">{item.quantity}</span>
-                            <button 
-                              type="button" 
+                            <span className={clsx('px-2', 'text-[10px]', 'font-bold', 'font-mono', 'text-white')}>{item.quantity}</span>
+                            <button
+                              type="button"
                               onClick={() => handlePdvUpdateCartQty(idx, 1)}
-                              className="px-2 py-1 text-gray-400 hover:text-white cursor-pointer hover:bg-[#1C1C1F]"
+                              className={clsx('px-2', 'py-1', 'text-gray-400', 'hover:text-white', 'cursor-pointer', 'hover:bg-[#1C1C1F]')}
                             >
                               +
                             </button>
                           </div>
-                          <input 
-                            type="text" 
-                            placeholder="Obs..." 
+                          <input
+                            type="text"
+                            placeholder="Obs..."
                             value={item.obs}
                             onChange={(e) => {
                               const val = e.target.value;
@@ -2106,7 +2095,7 @@ export function CaixaPanel({
                                 return c;
                               });
                             }}
-                            className="w-24 px-1.5 py-1 text-[9px] bg-[#09090B] border border-[#27272A] rounded focus:outline-none focus:border-[#C5A880] text-white"
+                            className={clsx('w-24', 'px-1.5', 'py-1', 'text-[9px]', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded', 'focus:outline-none', 'focus:border-[#C5A880]', 'text-white')}
                           />
                         </div>
                       </div>
@@ -2114,39 +2103,37 @@ export function CaixaPanel({
                   )}
                 </div>
 
-                <form onSubmit={handlePdvSubmitOrder} className="bg-[#18181B] p-3 border-t border-[#27272A] space-y-3 shrink-0">
+                <form onSubmit={handlePdvSubmitOrder} className={clsx('bg-[#18181B]', 'p-3', 'border-t', 'border-[#27272A]', 'space-y-3', 'shrink-0')}>
                   <div className="space-y-1">
-                    <div className="flex gap-2 p-0.5 bg-[#09090B] border border-[#27272A] rounded-lg shrink-0">
+                    <div className={clsx('flex', 'gap-2', 'p-0.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'shrink-0')}>
                       <button
                         type="button"
                         onClick={() => setPdvOrderType('balcao')}
-                        className={`flex-1 py-1 text-[9px] font-bold rounded transition-all cursor-pointer ${
-                          pdvOrderType === 'balcao' ? 'bg-[#7A1F2D] text-white shadow-sm' : 'text-gray-400 hover:text-white'
-                        }`}
+                        className={`flex-1 py-1 text-[9px] font-bold rounded transition-all cursor-pointer ${pdvOrderType === 'balcao' ? 'bg-[#7A1F2D] text-white shadow-sm' : 'text-gray-400 hover:text-white'
+                          }`}
                       >
                         Balcão/Delivery
                       </button>
                       <button
                         type="button"
                         onClick={() => setPdvOrderType('mesa')}
-                        className={`flex-1 py-1 text-[9px] font-bold rounded transition-all cursor-pointer ${
-                          pdvOrderType === 'mesa' ? 'bg-[#7A1F2D] text-white shadow-sm' : 'text-gray-400 hover:text-white'
-                        }`}
+                        className={`flex-1 py-1 text-[9px] font-bold rounded transition-all cursor-pointer ${pdvOrderType === 'mesa' ? 'bg-[#7A1F2D] text-white shadow-sm' : 'text-gray-400 hover:text-white'
+                          }`}
                       >
                         Salão/Mesa
                       </button>
                     </div>
-                    <span className="text-[7.5px] text-gray-500 font-mono block text-left">Atalhos de Tipo: [F2] Balcão • [F3] Salão</span>
+                    <span className={clsx('text-[7.5px]', 'text-gray-500', 'font-mono', 'block', 'text-left')}>Atalhos de Tipo: [F2] Balcão • [F3] Salão</span>
                   </div>
 
                   {pdvOrderType === 'mesa' ? (
                     <div className="space-y-1">
-                      <label className="text-[8px] text-gray-400 font-bold uppercase tracking-wider block">Mesa Destino:</label>
+                      <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Mesa Destino:</label>
                       <select
                         id="pdv-mesa-select"
                         value={pdvTargetMesaId}
                         onChange={(e) => setPdvTargetMesaId(parseInt(e.target.value))}
-                        className="w-full px-2 py-1.5 bg-[#09090B] border border-[#27272A] rounded-lg focus:outline-none focus:border-[#C5A880] text-white text-[10px]"
+                        className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'focus:border-[#C5A880]', 'text-white', 'text-[10px]')}
                       >
                         <option value={0}>Selecione uma mesa...</option>
                         {salonTables.map(t => (
@@ -2155,41 +2142,41 @@ export function CaixaPanel({
                       </select>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 gap-1.5">
+                    <div className={clsx('grid', 'grid-cols-2', 'gap-1.5')}>
                       <div className="space-y-1">
-                        <label className="text-[8px] text-gray-400 font-bold uppercase tracking-wider block">Nome Cliente:</label>
-                        <input 
+                        <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Nome Cliente:</label>
+                        <input
                           id="pdv-customer-name-input"
-                          type="text" 
-                          placeholder="Ex: Maria" 
+                          type="text"
+                          placeholder="Ex: Maria"
                           required={pdvCart.length > 0}
                           value={pdvCustomerName}
                           onChange={(e) => setPdvCustomerName(e.target.value)}
-                          className="w-full px-2 py-1.5 bg-[#09090B] border border-[#27272A] rounded-lg focus:outline-none text-white text-[10px]"
+                          className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'text-white', 'text-[10px]')}
                         />
                       </div>
                       <div className="space-y-1">
-                        <label className="text-[8px] text-gray-400 font-bold uppercase tracking-wider block">Telefone:</label>
-                        <input 
-                          type="text" 
-                          placeholder="(81) 9..." 
+                        <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Telefone:</label>
+                        <input
+                          type="text"
+                          placeholder="(81) 9..."
                           value={pdvCustomerPhone}
                           onChange={(e) => setPdvCustomerPhone(e.target.value)}
-                          className="w-full px-2 py-1.5 bg-[#09090B] border border-[#27272A] rounded-lg focus:outline-none text-white text-[10px]"
+                          className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'text-white', 'text-[10px]')}
                         />
                       </div>
                     </div>
                   )}
 
-                  <div className="flex justify-between items-center font-mono border-t border-[#27272A] pt-2 text-[11px] font-bold text-white">
+                  <div className={clsx('flex', 'justify-between', 'items-center', 'font-mono', 'border-t', 'border-[#27272A]', 'pt-2', 'text-[11px]', 'font-bold', 'text-white')}>
                     <span>Total Pedido:</span>
-                    <span className="text-[#C5A880] text-sm">
+                    <span className={clsx('text-[#C5A880]', 'text-sm')}>
                       R$ {pdvCart.reduce((sum, item) => sum + (item.product.preco * item.quantity), 0).toFixed(2)}
                     </span>
                   </div>
 
                   {modoExclusivoSalao && (pdvOrderType !== 'mesa' || !pdvTargetMesaId || pdvTargetMesaId === 0) && (
-                    <div className="text-[9.5px] text-amber-500 border border-amber-500/20 bg-amber-500/5 px-2.5 py-1.5 rounded-lg text-left leading-relaxed">
+                    <div className={clsx('text-[9.5px]', 'text-amber-500', 'border', 'border-amber-500/20', 'bg-amber-500/5', 'px-2.5', 'py-1.5', 'rounded-lg', 'text-left', 'leading-relaxed')}>
                       Durante o modo de testes de salão, todos os pedidos de venda devem ser vinculados a uma Mesa física ativa.
                     </div>
                   )}
@@ -2198,13 +2185,13 @@ export function CaixaPanel({
                     id="pdv-submit-btn"
                     type="submit"
                     disabled={modoExclusivoSalao && (pdvOrderType !== 'mesa' || !pdvTargetMesaId || pdvTargetMesaId === 0)}
-                    className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-zinc-800 disabled:text-zinc-500 disabled:border-zinc-800 disabled:cursor-not-allowed text-white rounded-lg font-bold text-[9px] uppercase tracking-wider transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 shadow"
+                    className={clsx('w-full', 'py-2', 'bg-emerald-600', 'hover:bg-emerald-700', 'disabled:bg-zinc-800', 'disabled:text-zinc-500', 'disabled:border-zinc-800', 'disabled:cursor-not-allowed', 'text-white', 'rounded-lg', 'font-bold', 'text-[9px]', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'flex', 'flex-col', 'items-center', 'justify-center', 'gap-0.5', 'shadow')}
                   >
-                    <div className="flex items-center gap-1">
+                    <div className={clsx('flex', 'items-center', 'gap-1')}>
                       <Check size={12} />
                       <span>Lançar Pedido</span>
                     </div>
-                    <span className="text-[7.5px] text-emerald-200/80 font-mono font-normal">Pressione [F4] para finalizar</span>
+                    <span className={clsx('text-[7.5px]', 'text-emerald-200/80', 'font-mono', 'font-normal')}>Pressione [F4] para finalizar</span>
                   </button>
                 </form>
               </div>
@@ -2214,40 +2201,39 @@ export function CaixaPanel({
 
           {/* VIEW 3: MAPA DE MESAS (Salão) */}
           {activeSubTab === 'salon' && (
-            <div className="h-full flex flex-col space-y-4">
-              <div className="bg-[#121214] border border-[#27272A] p-3 rounded-2xl flex justify-between items-center gap-3">
-                <span className="font-serif font-bold text-gray-300">Estrutura Física do Salão</span>
+            <div className={clsx('h-full', 'flex', 'flex-col', 'space-y-4')}>
+              <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-3', 'rounded-2xl', 'flex', 'justify-between', 'items-center', 'gap-3')}>
+                <span className={clsx('font-serif', 'font-bold', 'text-gray-300')}>Estrutura Física do Salão</span>
                 <button
                   onClick={() => setShowAddMesaModal(true)}
-                  className="px-4 py-2 bg-[#C5A880] hover:bg-[#b0936b] text-[#121214] font-bold rounded-xl flex items-center gap-1.5 cursor-pointer text-[10px] uppercase tracking-wider shadow"
+                  className={clsx('px-4', 'py-2', 'bg-[#C5A880]', 'hover:bg-[#b0936b]', 'text-[#121214]', 'font-bold', 'rounded-xl', 'flex', 'items-center', 'gap-1.5', 'cursor-pointer', 'text-[10px]', 'uppercase', 'tracking-wider', 'shadow')}
                 >
                   <Plus size={12} />
                   <span>Adicionar Mesa</span>
                 </button>
               </div>
 
-              <div className="flex-1 bg-[#121214]/50 border border-[#27272A] rounded-3xl p-5 overflow-y-auto">
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+              <div className={clsx('flex-1', 'bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'overflow-y-auto')}>
+                <div className={clsx('grid', 'grid-cols-1', 'sm:grid-cols-2', 'md:grid-cols-3', 'lg:grid-cols-4', 'xl:grid-cols-6', 'gap-4')}>
                   {salonTables.map((table) => {
                     const tableOrders = orders.filter(o => o.mesaId === table.id);
                     const isOcupada = tableOrders.length > 0;
-                    
+
                     return (
-                      <div 
+                      <div
                         key={table.id}
-                        className={`bg-[#121214] border rounded-2xl p-3 flex flex-col justify-between gap-3 transition-all relative group ${
-                          isOcupada ? 'border-rose-500/40 hover:border-rose-500' : 'border-[#27272A] hover:border-[#C5A880]/30'
-                        }`}
+                        className={`bg-[#121214] border rounded-2xl p-3 flex flex-col justify-between gap-3 transition-all relative group ${isOcupada ? 'border-rose-500/40 hover:border-rose-500' : 'border-[#27272A] hover:border-[#C5A880]/30'
+                          }`}
                       >
-                        <div className="flex justify-between items-start">
+                        <div className={clsx('flex', 'justify-between', 'items-start')}>
                           <div>
-                            <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest block">Mesa</span>
-                            <strong className="text-xl font-serif text-white leading-none">{table.id}</strong>
+                            <span className={clsx('text-[9px]', 'font-bold', 'text-gray-500', 'uppercase', 'tracking-widest', 'block')}>Mesa</span>
+                            <strong className={clsx('text-xl', 'font-serif', 'text-white', 'leading-none')}>{table.id}</strong>
                             {table.nome && table.nome !== `Mesa ${table.id}` && (
-                              <span className="text-[9px] text-[#C5A880] block mt-0.5">{table.nome}</span>
+                              <span className={clsx('text-[9px]', 'text-[#C5A880]', 'block', 'mt-0.5')}>{table.nome}</span>
                             )}
                           </div>
-                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className={clsx('flex', 'gap-1', 'opacity-0', 'group-hover:opacity-100', 'transition-opacity')}>
                             <button
                               onClick={() => {
                                 const newCap = prompt(`Nova capacidade para Mesa ${table.id}?`, table.capacidade.toString());
@@ -2255,14 +2241,14 @@ export function CaixaPanel({
                                   onUpdateMesa(table.id, parseInt(newCap), undefined);
                                 }
                               }}
-                              className="p-1 text-gray-400 hover:text-[#C5A880]"
+                              className={clsx('p-1', 'text-gray-400', 'hover:text-[#C5A880]')}
                               title="Editar capacidade"
                             >
                               <Edit3 size={10} />
                             </button>
                             <button
                               onClick={() => handleDeleteMesaAction(table.id)}
-                              className="p-1 text-gray-400 hover:text-[#7A1F2D]"
+                              className={clsx('p-1', 'text-gray-400', 'hover:text-[#7A1F2D]')}
                               title="Excluir mesa"
                             >
                               <Trash2 size={10} />
@@ -2272,14 +2258,14 @@ export function CaixaPanel({
 
                         <div>
                           {isOcupada ? (
-                            <span className="px-2 py-0.5 text-[8px] bg-rose-500/10 text-rose-400 font-bold rounded-md block w-fit border border-rose-500/10 uppercase tracking-wider">Ocupada</span>
+                            <span className={clsx('px-2', 'py-0.5', 'text-[8px]', 'bg-rose-500/10', 'text-rose-400', 'font-bold', 'rounded-md', 'block', 'w-fit', 'border', 'border-rose-500/10', 'uppercase', 'tracking-wider')}>Ocupada</span>
                           ) : (
-                            <span className="px-2 py-0.5 text-[8px] bg-emerald-500/10 text-emerald-400 rounded-md block w-fit border border-emerald-500/10 uppercase tracking-wider">Livre</span>
+                            <span className={clsx('px-2', 'py-0.5', 'text-[8px]', 'bg-emerald-500/10', 'text-emerald-400', 'rounded-md', 'block', 'w-fit', 'border', 'border-emerald-500/10', 'uppercase', 'tracking-wider')}>Livre</span>
                           )}
                         </div>
 
                         {isOcupada && (
-                          <div className="flex gap-1 pt-1.5 border-t border-[#27272A]">
+                          <div className={clsx('flex', 'gap-1', 'pt-1.5', 'border-t', 'border-[#27272A]')}>
                             <button
                               onClick={() => {
                                 const o = tableOrders[0];
@@ -2302,13 +2288,13 @@ export function CaixaPanel({
                                 const sub = o.itens.filter((item: any) => !item.pago).reduce((s: number, it: any) => s + it.preco_unit, 0);
                                 setPaymentValor((sub * (1.0 + (checkoutServiceTax ? serviceTaxRate / 100 : 0))).toFixed(2));
                               }}
-                              className="flex-1 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold text-[8px] transition-all cursor-pointer uppercase tracking-wider"
+                              className={clsx('flex-1', 'py-1', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'rounded', 'font-bold', 'text-[8px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider')}
                             >
                               Checkout
                             </button>
                             <button
                               onClick={() => handleForceFreeTable(table.id)}
-                              className="p-1 bg-[#7A1F2D]/20 hover:bg-[#7A1F2D] text-[#C46A74] hover:text-white rounded transition-colors cursor-pointer"
+                              className={clsx('p-1', 'bg-[#7A1F2D]/20', 'hover:bg-[#7A1F2D]', 'text-[#C46A74]', 'hover:text-white', 'rounded', 'transition-colors', 'cursor-pointer')}
                             >
                               <X size={10} />
                             </button>
@@ -2326,38 +2312,38 @@ export function CaixaPanel({
           {activeSubTab === 'desempenho' && (
             <div className="space-y-6">
               {/* Header metrics boxes */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-[#121214] border border-[#27272A] p-4 rounded-2xl">
-                  <span className="text-[9px] uppercase tracking-wider font-bold text-gray-400 block">Faturamento de Hoje</span>
-                  <strong className="text-xl text-white font-mono block mt-1">R$ 1.956,20</strong>
+              <div className={clsx('grid', 'grid-cols-2', 'md:grid-cols-4', 'gap-4')}>
+                <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-4', 'rounded-2xl')}>
+                  <span className={clsx('text-[9px]', 'uppercase', 'tracking-wider', 'font-bold', 'text-gray-400', 'block')}>Faturamento de Hoje</span>
+                  <strong className={clsx('text-xl', 'text-white', 'font-mono', 'block', 'mt-1')}>R$ 1.956,20</strong>
                 </div>
-                <div className="bg-[#121214] border border-[#27272A] p-4 rounded-2xl">
-                  <span className="text-[9px] uppercase tracking-wider font-bold text-gray-400 block">Em análise agora</span>
-                  <strong className="text-xl text-amber-500 font-mono block mt-1">
+                <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-4', 'rounded-2xl')}>
+                  <span className={clsx('text-[9px]', 'uppercase', 'tracking-wider', 'font-bold', 'text-gray-400', 'block')}>Em análise agora</span>
+                  <strong className={clsx('text-xl', 'text-amber-500', 'font-mono', 'block', 'mt-1')}>
                     {simulatedOrders.filter(o => o.status === 'analise').length}
                   </strong>
                 </div>
-                <div className="bg-[#121214] border border-[#27272A] p-4 rounded-2xl">
-                  <span className="text-[9px] uppercase tracking-wider font-bold text-gray-400 block">Em produção agora</span>
-                  <strong className="text-xl text-[#C5A880] font-mono block mt-1">
+                <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-4', 'rounded-2xl')}>
+                  <span className={clsx('text-[9px]', 'uppercase', 'tracking-wider', 'font-bold', 'text-gray-400', 'block')}>Em produção agora</span>
+                  <strong className={clsx('text-xl', 'text-[#C5A880]', 'font-mono', 'block', 'mt-1')}>
                     {simulatedOrders.filter(o => o.status === 'producao').length + activeKitchenItems.filter(i => i.status === 'preparando').length}
                   </strong>
                 </div>
-                <div className="bg-[#121214] border border-[#27272A] p-4 rounded-2xl">
-                  <span className="text-[9px] uppercase tracking-wider font-bold text-gray-400 block">Pronto para entrega</span>
-                  <strong className="text-xl text-emerald-500 font-mono block mt-1">
+                <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-4', 'rounded-2xl')}>
+                  <span className={clsx('text-[9px]', 'uppercase', 'tracking-wider', 'font-bold', 'text-gray-400', 'block')}>Pronto para entrega</span>
+                  <strong className={clsx('text-xl', 'text-emerald-500', 'font-mono', 'block', 'mt-1')}>
                     {simulatedOrders.filter(o => o.status === 'pronto').length}
                   </strong>
                 </div>
               </div>
 
               {/* Date Filters & Middle Metrics */}
-              <div className="bg-[#121214] border border-[#27272A] p-4 rounded-2xl space-y-4">
-                <div className="flex justify-between items-center border-b border-[#27272A] pb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="font-serif font-bold text-gray-200">Relatório Consolidado</span>
+              <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-4', 'rounded-2xl', 'space-y-4')}>
+                <div className={clsx('flex', 'justify-between', 'items-center', 'border-b', 'border-[#27272A]', 'pb-3')}>
+                  <div className={clsx('flex', 'items-center', 'gap-2')}>
+                    <span className={clsx('font-serif', 'font-bold', 'text-gray-200')}>Relatório Consolidado</span>
                   </div>
-                  <div className="flex gap-1 bg-[#09090B] p-1 rounded-xl border border-[#27272A]">
+                  <div className={clsx('flex', 'gap-1', 'bg-[#09090B]', 'p-1', 'rounded-xl', 'border', 'border-[#27272A]')}>
                     {[
                       { id: '7', label: 'Últimos 7 dias' },
                       { id: '15', label: 'Últimos 15 dias' },
@@ -2366,11 +2352,10 @@ export function CaixaPanel({
                       <button
                         key={r.id}
                         onClick={() => setDesempenhoRange(r.id as any)}
-                        className={`px-3 py-1 text-[9px] font-bold rounded-lg cursor-pointer transition-all ${
-                          desempenhoRange === r.id
-                            ? 'bg-[#7A1F2D] text-white shadow'
-                            : 'text-gray-400 hover:text-white'
-                        }`}
+                        className={`px-3 py-1 text-[9px] font-bold rounded-lg cursor-pointer transition-all ${desempenhoRange === r.id
+                          ? 'bg-[#7A1F2D] text-white shadow'
+                          : 'text-gray-400 hover:text-white'
+                          }`}
                       >
                         {r.label}
                       </button>
@@ -2378,33 +2363,33 @@ export function CaixaPanel({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 font-mono">
-                  <div className="bg-[#1C1C1F] p-3.5 rounded-xl border border-[#27272A]/50 flex justify-between items-center">
+                <div className={clsx('grid', 'grid-cols-1', 'md:grid-cols-3', 'gap-4', 'font-mono')}>
+                  <div className={clsx('bg-[#1C1C1F]', 'p-3.5', 'rounded-xl', 'border', 'border-[#27272A]/50', 'flex', 'justify-between', 'items-center')}>
                     <div>
-                      <span className="text-[8px] font-bold font-sans text-gray-400 uppercase tracking-widest block">Faturamento</span>
-                      <strong className="text-base text-white mt-1 block">R$ {desempenhoRange === '7' ? "19.652,18" : desempenhoRange === '15' ? "38.120,40" : "75.892,10"}</strong>
+                      <span className={clsx('text-[8px]', 'font-bold', 'font-sans', 'text-gray-400', 'uppercase', 'tracking-widest', 'block')}>Faturamento</span>
+                      <strong className={clsx('text-base', 'text-white', 'mt-1', 'block')}>R$ {desempenhoRange === '7' ? "19.652,18" : desempenhoRange === '15' ? "38.120,40" : "75.892,10"}</strong>
                     </div>
-                    <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded flex items-center gap-0.5">
+                    <span className={clsx('text-[10px]', 'text-emerald-400', 'font-bold', 'bg-emerald-500/10', 'px-2', 'py-0.5', 'rounded', 'flex', 'items-center', 'gap-0.5')}>
                       <ArrowUpRight size={10} /> 28.2%
                     </span>
                   </div>
 
-                  <div className="bg-[#1C1C1F] p-3.5 rounded-xl border border-[#27272A]/50 flex justify-between items-center">
+                  <div className={clsx('bg-[#1C1C1F]', 'p-3.5', 'rounded-xl', 'border', 'border-[#27272A]/50', 'flex', 'justify-between', 'items-center')}>
                     <div>
-                      <span className="text-[8px] font-bold font-sans text-gray-400 uppercase tracking-widest block">Pedidos</span>
-                      <strong className="text-base text-white mt-1 block">{desempenhoRange === '7' ? "527" : desempenhoRange === '15' ? "1.042" : "2.115"}</strong>
+                      <span className={clsx('text-[8px]', 'font-bold', 'font-sans', 'text-gray-400', 'uppercase', 'tracking-widest', 'block')}>Pedidos</span>
+                      <strong className={clsx('text-base', 'text-white', 'mt-1', 'block')}>{desempenhoRange === '7' ? "527" : desempenhoRange === '15' ? "1.042" : "2.115"}</strong>
                     </div>
-                    <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded flex items-center gap-0.5">
+                    <span className={clsx('text-[10px]', 'text-emerald-400', 'font-bold', 'bg-emerald-500/10', 'px-2', 'py-0.5', 'rounded', 'flex', 'items-center', 'gap-0.5')}>
                       <ArrowUpRight size={10} /> 24.8%
                     </span>
                   </div>
 
-                  <div className="bg-[#1C1C1F] p-3.5 rounded-xl border border-[#27272A]/50 flex justify-between items-center">
+                  <div className={clsx('bg-[#1C1C1F]', 'p-3.5', 'rounded-xl', 'border', 'border-[#27272A]/50', 'flex', 'justify-between', 'items-center')}>
                     <div>
-                      <span className="text-[8px] font-bold font-sans text-gray-400 uppercase tracking-widest block">Ticket Médio</span>
-                      <strong className="text-base text-white mt-1 block">R$ {desempenhoRange === '7' ? "37,29" : desempenhoRange === '15' ? "36,58" : "35,88"}</strong>
+                      <span className={clsx('text-[8px]', 'font-bold', 'font-sans', 'text-gray-400', 'uppercase', 'tracking-widest', 'block')}>Ticket Médio</span>
+                      <strong className={clsx('text-base', 'text-white', 'mt-1', 'block')}>R$ {desempenhoRange === '7' ? "37,29" : desempenhoRange === '15' ? "36,58" : "35,88"}</strong>
                     </div>
-                    <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded flex items-center gap-0.5">
+                    <span className={clsx('text-[10px]', 'text-emerald-400', 'font-bold', 'bg-emerald-500/10', 'px-2', 'py-0.5', 'rounded', 'flex', 'items-center', 'gap-0.5')}>
                       <ArrowUpRight size={10} /> 2.7%
                     </span>
                   </div>
@@ -2412,14 +2397,14 @@ export function CaixaPanel({
               </div>
 
               {/* Bottom Gauges & Best Sellers List */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-                
+              <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5')}>
+
                 {/* 1. Cardapio Quality Gauge */}
-                <div className="bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 flex flex-col items-center justify-between text-center space-y-4">
-                  <span className="font-serif font-bold text-gray-300 block text-left w-full border-b border-[#27272A] pb-2">Qualidade do Cardápio</span>
-                  
-                  <div className="relative h-28 w-28 flex items-center justify-center">
-                    <svg className="absolute inset-0 transform -rotate-90" viewBox="0 0 100 100">
+                <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'flex', 'flex-col', 'items-center', 'justify-between', 'text-center', 'space-y-4')}>
+                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'text-left', 'w-full', 'border-b', 'border-[#27272A]', 'pb-2')}>Qualidade do Cardápio</span>
+
+                  <div className={clsx('relative', 'h-28', 'w-28', 'flex', 'items-center', 'justify-center')}>
+                    <svg className={clsx('absolute', 'inset-0', 'transform', '-rotate-90')} viewBox="0 0 100 100">
                       <circle cx="50" cy="50" r="42" stroke="#27272A" strokeWidth="8" fill="transparent" />
                       <circle cx="50" cy="50" r="42" stroke="url(#gradient)" strokeWidth="8" fill="transparent" strokeDasharray="264" strokeDashoffset={264 - (264 * 85) / 100} strokeLinecap="round" />
                       <defs>
@@ -2429,31 +2414,31 @@ export function CaixaPanel({
                         </linearGradient>
                       </defs>
                     </svg>
-                    <span className="text-lg font-bold font-mono text-white">85%</span>
+                    <span className={clsx('text-lg', 'font-bold', 'font-mono', 'text-white')}>85%</span>
                   </div>
 
                   <div className="space-y-1">
-                    <strong className="text-white font-medium block text-xs">Cardápio Otimizado</strong>
-                    <p className="text-[9px] text-gray-500">Seu cardápio possui ótimas descrições e fotos de alta resolução cadastrados.</p>
+                    <strong className={clsx('text-white', 'font-medium', 'block', 'text-xs')}>Cardápio Otimizado</strong>
+                    <p className={clsx('text-[9px]', 'text-gray-500')}>Seu cardápio possui ótimas descrições e fotos de alta resolução cadastrados.</p>
                   </div>
                 </div>
 
                 {/* 2. Modality Split Gauges */}
-                <div className="bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 space-y-3">
-                  <span className="font-serif font-bold text-gray-300 block border-b border-[#27272A] pb-2">Pedidos por Modalidade</span>
-                  
-                  <div className="space-y-2.5 pt-2">
+                <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-3')}>
+                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'border-b', 'border-[#27272A]', 'pb-2')}>Pedidos por Modalidade</span>
+
+                  <div className={clsx('space-y-2.5', 'pt-2')}>
                     {[
                       { name: "Entrega (Delivery)", count: 263, max: 539, barColor: "bg-rose-600" },
                       { name: "Consumo no Local (Mesa)", count: 214, max: 539, barColor: "bg-[#C5A880]" },
                       { name: "Retirada (Balcão)", count: 62, max: 539, barColor: "bg-emerald-600" }
                     ].map((mod, idx) => (
                       <div key={idx} className="space-y-1">
-                        <div className="flex justify-between text-[10px]">
+                        <div className={clsx('flex', 'justify-between', 'text-[10px]')}>
                           <span className="text-gray-400">{mod.name}</span>
-                          <strong className="text-white font-mono">{mod.count} pedidos</strong>
+                          <strong className={clsx('text-white', 'font-mono')}>{mod.count} pedidos</strong>
                         </div>
-                        <div className="h-1.5 w-full bg-[#1C1C1F] rounded-full overflow-hidden">
+                        <div className={clsx('h-1.5', 'w-full', 'bg-[#1C1C1F]', 'rounded-full', 'overflow-hidden')}>
                           <div className={`h-full ${mod.barColor} rounded-full`} style={{ width: `${(mod.count / mod.max) * 100}%` }} />
                         </div>
                       </div>
@@ -2462,10 +2447,10 @@ export function CaixaPanel({
                 </div>
 
                 {/* 3. Top Items list */}
-                <div className="bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 space-y-3">
-                  <span className="font-serif font-bold text-gray-300 block border-b border-[#27272A] pb-2">Top 5 Itens Mais Pedidos</span>
-                  
-                  <div className="divide-y divide-[#27272A]/50">
+                <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-3')}>
+                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'border-b', 'border-[#27272A]', 'pb-2')}>Top 5 Itens Mais Pedidos</span>
+
+                  <div className={clsx('divide-y', 'divide-[#27272A]/50')}>
                     {[
                       { rank: "1º", name: "Pastel de Carne", count: 142, price: 12.00 },
                       { rank: "2º", name: "Hambúrguer Kôma", count: 98, price: 22.00 },
@@ -2473,14 +2458,13 @@ export function CaixaPanel({
                       { rank: "4º", name: "Coca-Cola Lata", count: 74, price: 6.00 },
                       { rank: "5º", name: "Cerveja Heineken", count: 60, price: 8.50 }
                     ].map((item, idx) => (
-                      <div key={idx} className="py-2 flex justify-between items-center">
-                        <div className="flex items-center gap-2.5">
-                          <span className={`h-5 w-5 rounded-lg flex items-center justify-center text-[10px] font-mono font-bold ${
-                            idx === 0 ? 'bg-[#7A1F2D] text-white' : idx === 1 ? 'bg-[#C5A880] text-[#121214]' : 'bg-[#1C1C1F] text-gray-400'
-                          }`}>{item.rank}</span>
-                          <span className="font-medium text-white block">{item.name}</span>
+                      <div key={idx} className={clsx('py-2', 'flex', 'justify-between', 'items-center')}>
+                        <div className={clsx('flex', 'items-center', 'gap-2.5')}>
+                          <span className={`h-5 w-5 rounded-lg flex items-center justify-center text-[10px] font-mono font-bold ${idx === 0 ? 'bg-[#7A1F2D] text-white' : idx === 1 ? 'bg-[#C5A880] text-[#121214]' : 'bg-[#1C1C1F] text-gray-400'
+                            }`}>{item.rank}</span>
+                          <span className={clsx('font-medium', 'text-white', 'block')}>{item.name}</span>
                         </div>
-                        <span className="text-[10px] font-bold text-gray-400 font-mono">{item.count} saídas</span>
+                        <span className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'font-mono')}>{item.count} saídas</span>
                       </div>
                     ))}
                   </div>
@@ -2492,66 +2476,64 @@ export function CaixaPanel({
 
           {/* VIEW 5: COZINHA (KDS) */}
           {activeSubTab === 'kds' && (
-            <div className="bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 space-y-4">
-              <div className="border-b border-[#27272A] pb-3 flex items-center justify-between">
-                <span className="font-serif font-bold text-gray-300">Painel de Produção da Cozinha</span>
-                <span className="bg-[#C5A880]/10 text-[#C5A880] font-bold px-2 py-0.5 rounded-full font-mono text-[9px]">
+            <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4')}>
+              <div className={clsx('border-b', 'border-[#27272A]', 'pb-3', 'flex', 'items-center', 'justify-between')}>
+                <span className={clsx('font-serif', 'font-bold', 'text-gray-300')}>Painel de Produção da Cozinha</span>
+                <span className={clsx('bg-[#C5A880]/10', 'text-[#C5A880]', 'font-bold', 'px-2', 'py-0.5', 'rounded-full', 'font-mono', 'text-[9px]')}>
                   {activeKitchenItems.length} pratos ativos
                 </span>
               </div>
 
               {activeKitchenItems.length === 0 ? (
-                <div className="py-32 text-center text-gray-500 italic space-y-1">
+                <div className={clsx('py-32', 'text-center', 'text-gray-500', 'italic', 'space-y-1')}>
                   <p>Cozinha Limpa!</p>
-                  <p className="text-[9px] text-gray-600">Nenhum pedido aguardando preparo no momento</p>
+                  <p className={clsx('text-[9px]', 'text-gray-600')}>Nenhum pedido aguardando preparo no momento</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+                <div className={clsx('grid', 'grid-cols-1', 'sm:grid-cols-2', 'md:grid-cols-3', 'xl:grid-cols-4', 'gap-4')}>
                   {activeKitchenItems.map((item) => (
-                    <div 
-                      key={item.id} 
-                      className={`bg-[#121214] border p-3 rounded-2xl space-y-3 flex flex-col justify-between ${
-                        item.status === 'pronto' ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-[#27272A]'
-                      }`}
+                    <div
+                      key={item.id}
+                      className={`bg-[#121214] border p-3 rounded-2xl space-y-3 flex flex-col justify-between ${item.status === 'pronto' ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-[#27272A]'
+                        }`}
                     >
                       <div className="space-y-2">
                         {/* Header */}
-                        <div className="flex justify-between items-start">
+                        <div className={clsx('flex', 'justify-between', 'items-start')}>
                           <div>
-                            <span className="text-[9px] text-gray-400 font-bold block">
+                            <span className={clsx('text-[9px]', 'text-gray-400', 'font-bold', 'block')}>
                               Mesa {item.mesaId > 0 ? item.mesaId : "Balcão"}
                             </span>
-                            <strong className="text-white text-xs block mt-0.5 truncate w-32">{item.nome}</strong>
+                            <strong className={clsx('text-white', 'text-xs', 'block', 'mt-0.5', 'truncate', 'w-32')}>{item.nome}</strong>
                           </div>
-                          <span className={`px-2 py-0.5 text-[8px] font-bold rounded font-mono ${
-                            item.status === 'pronto' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-[#C5A880]/15 text-[#C5A880]'
-                          }`}>
+                          <span className={`px-2 py-0.5 text-[8px] font-bold rounded font-mono ${item.status === 'pronto' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-[#C5A880]/15 text-[#C5A880]'
+                            }`}>
                             {item.status}
                           </span>
                         </div>
 
                         {/* Observations / details */}
                         {item.observacao && (
-                          <div className="bg-[#09090B] border border-[#27272A]/50 p-2 rounded-lg text-rose-400 font-bold text-[10px] leading-relaxed font-mono">
+                          <div className={clsx('bg-[#09090B]', 'border', 'border-[#27272A]/50', 'p-2', 'rounded-lg', 'text-rose-400', 'font-bold', 'text-[10px]', 'leading-relaxed', 'font-mono')}>
                             Obs: {item.observacao}
                           </div>
                         )}
-                        <span className="text-[9px] text-gray-500 block truncate">Lançado por: {item.garcomNome}</span>
+                        <span className={clsx('text-[9px]', 'text-gray-500', 'block', 'truncate')}>Lançado por: {item.garcomNome}</span>
                       </div>
 
                       {/* Actions */}
-                      <div className="pt-2 border-t border-[#27272A] shrink-0">
+                      <div className={clsx('pt-2', 'border-t', 'border-[#27272A]', 'shrink-0')}>
                         {item.status === 'preparando' ? (
                           <button
                             onClick={() => handleUpdateItemStatus(item.id, 'pronto')}
-                            className="w-full py-1.5 bg-[#C5A880] hover:bg-[#b0936b] text-[#121214] font-bold rounded-lg text-[9px] uppercase tracking-wider cursor-pointer"
+                            className={clsx('w-full', 'py-1.5', 'bg-[#C5A880]', 'hover:bg-[#b0936b]', 'text-[#121214]', 'font-bold', 'rounded-lg', 'text-[9px]', 'uppercase', 'tracking-wider', 'cursor-pointer')}
                           >
                             Marcar como Pronto
                           </button>
                         ) : (
                           <button
                             onClick={() => handleUpdateItemStatus(item.id, 'entregue')}
-                            className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-[9px] uppercase tracking-wider cursor-pointer"
+                            className={clsx('w-full', 'py-1.5', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'font-bold', 'rounded-lg', 'text-[9px]', 'uppercase', 'tracking-wider', 'cursor-pointer')}
                           >
                             Marcar como Entregue
                           </button>
@@ -2566,37 +2548,36 @@ export function CaixaPanel({
 
           {/* VIEW 6: GESTÃO DE SALÃO (CRUD Garçons & Taxas) */}
           {activeSubTab === 'equipe' && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-              
+            <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5')}>
+
               {/* CRUD table list */}
-              <div className="lg:col-span-2 bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 space-y-4">
-                <span className="font-serif font-bold text-gray-300 block pb-1 border-b border-[#27272A]">Cadastro de Funcionários (Equipe)</span>
-                
+              <div className={clsx('lg:col-span-2', 'bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4')}>
+                <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Cadastro de Funcionários (Equipe)</span>
+
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left font-sans text-xs border-collapse">
+                  <table className={clsx('w-full', 'text-left', 'font-sans', 'text-xs', 'border-collapse')}>
                     <thead>
-                      <tr className="border-b border-[#27272A] text-gray-400 font-bold">
+                      <tr className={clsx('border-b', 'border-[#27272A]', 'text-gray-400', 'font-bold')}>
                         <th className="py-2">Nome</th>
                         <th className="py-2">Nome de Usuário (Login)</th>
                         <th className="py-2">Cargo</th>
-                        <th className="py-2 text-right">Ação</th>
+                        <th className={clsx('py-2', 'text-right')}>Ação</th>
                       </tr>
                     </thead>
                     <tbody>
                       {systemUsers.map(user => (
-                        <tr key={user.id} className="border-b border-[#27272A]/40 hover:bg-[#1C1C1F]/20 transition-colors">
-                          <td className="py-2.5 text-white font-bold">{user.nome}</td>
-                          <td className="py-2.5 font-mono text-gray-400">{user.usuario}</td>
+                        <tr key={user.id} className={clsx('border-b', 'border-[#27272A]/40', 'hover:bg-[#1C1C1F]/20', 'transition-colors')}>
+                          <td className={clsx('py-2.5', 'text-white', 'font-bold')}>{user.nome}</td>
+                          <td className={clsx('py-2.5', 'font-mono', 'text-gray-400')}>{user.usuario}</td>
                           <td className="py-2.5">
-                            <span className={`px-2 py-0.5 text-[8px] font-bold rounded uppercase tracking-wider ${
-                              user.role === 'admin' ? 'bg-[#7A1F2D]/20 text-[#C46A74]' : user.role === 'caixa' ? 'bg-[#C5A880]/10 text-[#C5A880]' : 'bg-emerald-500/10 text-emerald-400'
-                            }`}>{user.role}</span>
+                            <span className={`px-2 py-0.5 text-[8px] font-bold rounded uppercase tracking-wider ${user.role === 'admin' ? 'bg-[#7A1F2D]/20 text-[#C46A74]' : user.role === 'caixa' ? 'bg-[#C5A880]/10 text-[#C5A880]' : 'bg-emerald-500/10 text-emerald-400'
+                              }`}>{user.role}</span>
                           </td>
-                          <td className="py-2.5 text-right">
+                          <td className={clsx('py-2.5', 'text-right')}>
                             {user.role !== 'admin' && (
                               <button
                                 onClick={() => handleDeleteUser(user.id)}
-                                className="p-1 text-gray-500 hover:text-rose-500 cursor-pointer"
+                                className={clsx('p-1', 'text-gray-500', 'hover:text-rose-500', 'cursor-pointer')}
                                 title="Excluir funcionário"
                               >
                                 <Trash2 size={13} />
@@ -2612,84 +2593,84 @@ export function CaixaPanel({
 
               {/* Add form & Service fee settings */}
               <div className="space-y-4">
-                
+
                 {/* Add Waiter form */}
-                <div className="bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5">
-                  <span className="font-serif font-bold text-gray-300 block pb-1 border-b border-[#27272A] mb-3">Registrar Funcionário</span>
-                  
-                  <form onSubmit={handleAddUserSubmit} className="space-y-3 text-left">
+                <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5')}>
+                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]', 'mb-3')}>Registrar Funcionário</span>
+
+                  <form onSubmit={handleAddUserSubmit} className={clsx('space-y-3', 'text-left')}>
                     <div className="space-y-1">
-                      <label className="text-[8px] text-gray-400 font-bold uppercase tracking-wider block">Nome Completo:</label>
-                      <input 
+                      <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Nome Completo:</label>
+                      <input
                         type="text"
                         required
                         placeholder="Ex: Pedro Henrique"
                         value={newUserNome}
                         onChange={(e) => setNewUserNome(e.target.value)}
-                        className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-white text-[10px]"
+                        className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-[10px]')}
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[8px] text-gray-400 font-bold uppercase tracking-wider block">Nome de Usuário (Login):</label>
-                      <input 
+                      <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Nome de Usuário (Login):</label>
+                      <input
                         type="text"
                         required
                         placeholder="pedro123"
                         value={newUserUsuario}
                         onChange={(e) => setNewUserUsuario(e.target.value)}
-                        className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-white font-mono text-[10px]"
+                        className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'font-mono', 'text-[10px]')}
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[8px] text-gray-400 font-bold uppercase tracking-wider block">Senha Acesso:</label>
-                      <input 
+                      <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Senha Acesso:</label>
+                      <input
                         type="password"
                         required
                         placeholder="Mínimo 3 dígitos"
                         value={newUserSenha}
                         onChange={(e) => setNewUserSenha(e.target.value)}
-                        className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-white text-[10px]"
+                        className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-[10px]')}
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[8px] text-gray-400 font-bold uppercase tracking-wider block">Função / Cargo:</label>
+                      <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Função / Cargo:</label>
                       <select
                         value={newUserRole}
                         onChange={(e) => setNewUserRole(e.target.value)}
-                        className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-white text-[10px]"
+                        className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-[10px]')}
                       >
                         <option value="garcom">Garçom</option>
                         <option value="caixa">Operador Caixa</option>
                       </select>
                     </div>
-                    <button type="submit" className="w-full py-2 bg-[#C5A880] hover:bg-[#b0936b] text-[#121214] font-bold text-[9px] uppercase tracking-wider rounded-lg transition-all cursor-pointer">Registrar Equipe</button>
+                    <button type="submit" className={clsx('w-full', 'py-2', 'bg-[#C5A880]', 'hover:bg-[#b0936b]', 'text-[#121214]', 'font-bold', 'text-[9px]', 'uppercase', 'tracking-wider', 'rounded-lg', 'transition-all', 'cursor-pointer')}>Registrar Equipe</button>
                   </form>
                 </div>
 
                 {/* Service tax config */}
-                <div className="bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 space-y-3">
-                  <span className="font-serif font-bold text-gray-300 block pb-1 border-b border-[#27272A]">Taxa de Serviço do Salão</span>
-                  
-                  <div className="flex justify-between items-center pt-1">
-                    <span className="text-[10px] text-gray-300 font-semibold">Ativar Taxa de 10% de Serviço</span>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input 
-                        type="checkbox" 
+                <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-3')}>
+                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Taxa de Serviço do Salão</span>
+
+                  <div className={clsx('flex', 'justify-between', 'items-center', 'pt-1')}>
+                    <span className={clsx('text-[10px]', 'text-gray-300', 'font-semibold')}>Ativar Taxa de 10% de Serviço</span>
+                    <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer')}>
+                      <input
+                        type="checkbox"
                         checked={checkoutServiceTax}
                         onChange={(e) => {
                           setCheckoutServiceTax(e.target.checked);
                           updateConfiguracoes({ taxa_servico_ativa: e.target.checked });
                         }}
-                        className="sr-only peer"
+                        className={clsx('sr-only', 'peer')}
                       />
-                      <div className="w-9 h-5 bg-[#27272A] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                      <div className={clsx('w-9', 'h-5', 'bg-[#27272A]', 'peer-focus:outline-none', 'rounded-full', 'peer', 'peer-checked:after:translate-x-full', 'peer-checked:after:border-white', "after:content-['']", 'after:absolute', 'after:top-[2px]', 'after:left-[2px]', 'after:bg-white', 'after:border-gray-300', 'after:border', 'after:rounded-full', 'after:h-4', 'after:w-4', 'after:transition-all', 'peer-checked:bg-emerald-600')}></div>
                     </label>
                   </div>
 
                   {checkoutServiceTax && (
-                    <div className="space-y-1 pt-1.5 animate-scale-in">
-                      <label className="text-[8px] text-gray-400 font-bold uppercase tracking-wider block">Porcentagem Customizada (%):</label>
-                      <input 
+                    <div className={clsx('space-y-1', 'pt-1.5', 'animate-scale-in')}>
+                      <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Porcentagem Customizada (%):</label>
+                      <input
                         type="number"
                         min="1"
                         max="30"
@@ -2699,7 +2680,7 @@ export function CaixaPanel({
                           setServiceTaxRate(val);
                           updateConfiguracoes({ taxa_servico_padrao: val });
                         }}
-                        className="w-full px-3 py-1.5 bg-[#09090B] border border-[#27272A] rounded-xl text-white font-mono text-[10px]"
+                        className={clsx('w-full', 'px-3', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'font-mono', 'text-[10px]')}
                       />
                     </div>
                   )}
@@ -2712,16 +2693,16 @@ export function CaixaPanel({
 
           {/* VIEW 7: CONFIGURAÇÕES SALÃO (App Garçom & Impressoras) */}
           {activeSubTab === 'impressoras' && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-              
+            <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5')}>
+
               {/* Waiters permissions switches (Left Column) */}
-              <div className="lg:col-span-2 bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 space-y-4 flex flex-col overflow-hidden">
-                <div className="border-b border-[#27272A] pb-3 flex justify-between items-center shrink-0">
-                  <span className="font-serif font-bold text-gray-300">Configurações de Permissões do App do Garçom</span>
+              <div className={clsx('lg:col-span-2', 'bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'flex', 'flex-col', 'overflow-hidden')}>
+                <div className={clsx('border-b', 'border-[#27272A]', 'pb-3', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
+                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300')}>Configurações de Permissões do App do Garçom</span>
                 </div>
 
                 {/* Sub tabs inside configurations */}
-                <div className="flex gap-1.5 bg-[#09090B] p-1 rounded-xl border border-[#27272A] w-fit shrink-0">
+                <div className={clsx('flex', 'gap-1.5', 'bg-[#09090B]', 'p-1', 'rounded-xl', 'border', 'border-[#27272A]', 'w-fit', 'shrink-0')}>
                   {[
                     { id: 'pedido', label: '1. Pedido' },
                     { id: 'fechamento', label: '2. Fechamento de Conta' },
@@ -2730,11 +2711,10 @@ export function CaixaPanel({
                     <button
                       key={tab.id}
                       onClick={() => setConfigSalSubTab(tab.id as any)}
-                      className={`px-3 py-1.5 text-[9px] font-bold rounded-lg cursor-pointer transition-all ${
-                        configSalSubTab === tab.id
-                          ? 'bg-[#7A1F2D] text-white shadow'
-                          : 'text-gray-400 hover:text-white'
-                      }`}
+                      className={`px-3 py-1.5 text-[9px] font-bold rounded-lg cursor-pointer transition-all ${configSalSubTab === tab.id
+                        ? 'bg-[#7A1F2D] text-white shadow'
+                        : 'text-gray-400 hover:text-white'
+                        }`}
                     >
                       {tab.label}
                     </button>
@@ -2742,10 +2722,10 @@ export function CaixaPanel({
                 </div>
 
                 {/* Switch list */}
-                <div className="flex-1 overflow-y-auto pr-1 space-y-3.5 pt-2">
-                  
+                <div className={clsx('flex-1', 'overflow-y-auto', 'pr-1', 'space-y-3.5', 'pt-2')}>
+
                   {configSalSubTab === 'pedido' && (
-                    <div className="space-y-3.5 animate-scale-in">
+                    <div className={clsx('space-y-3.5', 'animate-scale-in')}>
                       {[
                         { title: "Permitir que garçom faça lançamentos de pedidos de delivery", desc: "Ao ativar, garçons podem criar comandas com canais externos no salão.", checked: permDelivery, setChecked: setPermDelivery },
                         { title: "Permitir que Garçons editem pedidos", desc: "Permite atualizar observações ou acrescentar itens em comandas já enviadas.", checked: permEdit, setChecked: setPermEdit },
@@ -2755,14 +2735,14 @@ export function CaixaPanel({
                         { title: "Permitir que garçons abram comandas sem pedido", desc: "Permite reservar uma mesa com status 'ocupada' sem lançar nenhum item.", checked: permOpenEmpty, setChecked: setPermOpenEmpty },
                         { title: "Permitir impressão automática dos pedidos feitos pelo Garçom", desc: "Dispara a via térmica de produção no balcão imediatamente após o garçom confirmar.", checked: permAutoPrint, setChecked: setPermAutoPrint }
                       ].map((item, idx) => (
-                        <div key={idx} className="flex justify-between items-start gap-4">
+                        <div key={idx} className={clsx('flex', 'justify-between', 'items-start', 'gap-4')}>
                           <div className="space-y-0.5">
-                            <strong className="text-white block font-semibold">{item.title}</strong>
-                            <span className="text-[9px] text-gray-500 block leading-relaxed">{item.desc}</span>
+                            <strong className={clsx('text-white', 'block', 'font-semibold')}>{item.title}</strong>
+                            <span className={clsx('text-[9px]', 'text-gray-500', 'block', 'leading-relaxed')}>{item.desc}</span>
                           </div>
-                          <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
-                            <input type="checkbox" checked={item.checked} onChange={(e) => item.setChecked(e.target.checked)} className="sr-only peer" />
-                            <div className="w-8 h-4.5 bg-[#27272A] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-emerald-600"></div>
+                          <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer', 'shrink-0', 'mt-0.5')}>
+                            <input type="checkbox" checked={item.checked} onChange={(e) => item.setChecked(e.target.checked)} className={clsx('sr-only', 'peer')} />
+                            <div className={clsx('w-8', 'h-4.5', 'bg-[#27272A]', 'peer-focus:outline-none', 'rounded-full', 'peer', 'peer-checked:after:translate-x-full', 'peer-checked:after:border-white', "after:content-['']", 'after:absolute', 'after:top-[2px]', 'after:left-[2px]', 'after:bg-white', 'after:border-gray-300', 'after:border', 'after:rounded-full', 'after:h-3.5', 'after:w-3.5', 'after:transition-all', 'peer-checked:bg-emerald-600')}></div>
                           </label>
                         </div>
                       ))}
@@ -2770,20 +2750,20 @@ export function CaixaPanel({
                   )}
 
                   {configSalSubTab === 'fechamento' && (
-                    <div className="space-y-3.5 animate-scale-in">
+                    <div className={clsx('space-y-3.5', 'animate-scale-in')}>
                       {[
                         { title: "Permitir que Garçom feche a conta", desc: "Autoriza o garçom a encerrar a mesa e dar a baixa definitiva no consumo.", checked: permCloseAccount, setChecked: setPermCloseAccount },
                         { title: "Permitir que Garçom aplique desconto", desc: "Habilita a aplicação de porcentagem de desconto na conta final direto pelo aplicativo.", checked: permDiscount, setChecked: setPermDiscount },
                         { title: "Permitir que Garçom aplique acréscimo", desc: "Habilita a adição de valores extras ou gorjetas no fechamento da conta pelo app.", checked: permSurcharge, setChecked: setPermSurcharge }
                       ].map((item, idx) => (
-                        <div key={idx} className="flex justify-between items-start gap-4">
+                        <div key={idx} className={clsx('flex', 'justify-between', 'items-start', 'gap-4')}>
                           <div className="space-y-0.5">
-                            <strong className="text-white block font-semibold">{item.title}</strong>
-                            <span className="text-[9px] text-gray-500 block leading-relaxed">{item.desc}</span>
+                            <strong className={clsx('text-white', 'block', 'font-semibold')}>{item.title}</strong>
+                            <span className={clsx('text-[9px]', 'text-gray-500', 'block', 'leading-relaxed')}>{item.desc}</span>
                           </div>
-                          <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
-                            <input type="checkbox" checked={item.checked} onChange={(e) => item.setChecked(e.target.checked)} className="sr-only peer" />
-                            <div className="w-8 h-4.5 bg-[#27272A] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-emerald-600"></div>
+                          <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer', 'shrink-0', 'mt-0.5')}>
+                            <input type="checkbox" checked={item.checked} onChange={(e) => item.setChecked(e.target.checked)} className={clsx('sr-only', 'peer')} />
+                            <div className={clsx('w-8', 'h-4.5', 'bg-[#27272A]', 'peer-focus:outline-none', 'rounded-full', 'peer', 'peer-checked:after:translate-x-full', 'peer-checked:after:border-white', "after:content-['']", 'after:absolute', 'after:top-[2px]', 'after:left-[2px]', 'after:bg-white', 'after:border-gray-300', 'after:border', 'after:rounded-full', 'after:h-3.5', 'after:w-3.5', 'after:transition-all', 'peer-checked:bg-emerald-600')}></div>
                           </label>
                         </div>
                       ))}
@@ -2791,7 +2771,7 @@ export function CaixaPanel({
                   )}
 
                   {configSalSubTab === 'atendimento' && (
-                    <div className="space-y-3.5 animate-scale-in">
+                    <div className={clsx('space-y-3.5', 'animate-scale-in')}>
                       {[
                         { title: "Permitir que o garçom informe quantas pessoas vão sentar à mesa", desc: "Abre pergunta inicial na abertura da mesa para cálculo automático do consumo/taxa individual.", checked: permPeopleCount, setChecked: setPermPeopleCount },
                         { title: "Permitir que Garçom transfira mesas e comandas", desc: "Permite realocar todo o consumo de uma mesa para outra mesa vazia.", checked: permTransferTables, setChecked: setPermTransferTables },
@@ -2799,25 +2779,25 @@ export function CaixaPanel({
                         { title: "Permitir que Cliente chame Garçom na mesa", desc: "Dispara notificações no painel do garçom se o cliente apertar o botão no cardápio digital QR Code.", checked: permClientCall, setChecked: setPermClientCall },
                         { title: "Permitir exibição de mesas ociosas", desc: "Destaca no mapa mesas sem novos pedidos há mais tempo.", checked: permShowIdleTables, setChecked: setPermShowIdleTables }
                       ].map((item, idx) => (
-                        <div key={idx} className="flex justify-between items-start gap-4">
+                        <div key={idx} className={clsx('flex', 'justify-between', 'items-start', 'gap-4')}>
                           <div className="space-y-0.5">
-                            <strong className="text-white block font-semibold">{item.title}</strong>
-                            <span className="text-[9px] text-gray-500 block leading-relaxed">{item.desc}</span>
+                            <strong className={clsx('text-white', 'block', 'font-semibold')}>{item.title}</strong>
+                            <span className={clsx('text-[9px]', 'text-gray-500', 'block', 'leading-relaxed')}>{item.desc}</span>
                           </div>
-                          <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
-                            <input type="checkbox" checked={item.checked} onChange={(e) => item.setChecked(e.target.checked)} className="sr-only peer" />
-                            <div className="w-8 h-4.5 bg-[#27272A] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-emerald-600"></div>
+                          <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer', 'shrink-0', 'mt-0.5')}>
+                            <input type="checkbox" checked={item.checked} onChange={(e) => item.setChecked(e.target.checked)} className={clsx('sr-only', 'peer')} />
+                            <div className={clsx('w-8', 'h-4.5', 'bg-[#27272A]', 'peer-focus:outline-none', 'rounded-full', 'peer', 'peer-checked:after:translate-x-full', 'peer-checked:after:border-white', "after:content-['']", 'after:absolute', 'after:top-[2px]', 'after:left-[2px]', 'after:bg-white', 'after:border-gray-300', 'after:border', 'after:rounded-full', 'after:h-3.5', 'after:w-3.5', 'after:transition-all', 'peer-checked:bg-emerald-600')}></div>
                           </label>
                         </div>
                       ))}
 
                       {permShowIdleTables && (
-                        <div className="p-3 bg-[#1C1C1F] rounded-xl border border-[#27272A] space-y-1.5 animate-scale-in">
-                          <label className="text-[8px] text-gray-400 font-bold uppercase tracking-wider block">Tempo de Ociosidade Limite (Minutos):</label>
-                          <div className="flex items-center gap-2">
-                            <button type="button" onClick={() => setIdleTimeThreshold(Math.max(5, idleTimeThreshold - 5))} className="px-2.5 py-1 bg-[#09090B] border border-[#27272A] rounded-lg text-white font-bold cursor-pointer">-</button>
-                            <span className="text-white font-mono font-bold text-xs">{idleTimeThreshold} min</span>
-                            <button type="button" onClick={() => setIdleTimeThreshold(idleTimeThreshold + 5)} className="px-2.5 py-1 bg-[#09090B] border border-[#27272A] rounded-lg text-white font-bold cursor-pointer">+</button>
+                        <div className={clsx('p-3', 'bg-[#1C1C1F]', 'rounded-xl', 'border', 'border-[#27272A]', 'space-y-1.5', 'animate-scale-in')}>
+                          <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Tempo de Ociosidade Limite (Minutos):</label>
+                          <div className={clsx('flex', 'items-center', 'gap-2')}>
+                            <button type="button" onClick={() => setIdleTimeThreshold(Math.max(5, idleTimeThreshold - 5))} className={clsx('px-2.5', 'py-1', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'text-white', 'font-bold', 'cursor-pointer')}>-</button>
+                            <span className={clsx('text-white', 'font-mono', 'font-bold', 'text-xs')}>{idleTimeThreshold} min</span>
+                            <button type="button" onClick={() => setIdleTimeThreshold(idleTimeThreshold + 5)} className={clsx('px-2.5', 'py-1', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'text-white', 'font-bold', 'cursor-pointer')}>+</button>
                           </div>
                         </div>
                       )}
@@ -2828,66 +2808,66 @@ export function CaixaPanel({
               </div>
 
               {/* Printer messages & test (Right Column) */}
-              <div className="bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 space-y-4 flex flex-col justify-between">
+              <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'flex', 'flex-col', 'justify-between')}>
                 <div className="space-y-4">
-                  <span className="font-serif font-bold text-gray-300 block pb-1 border-b border-[#27272A]">Impressoras térmicas</span>
-                  
-                  <div className="space-y-3 text-left">
+                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Impressoras térmicas</span>
+
+                  <div className={clsx('space-y-3', 'text-left')}>
                     <div className="space-y-1">
-                      <label className="text-[9px] font-bold text-gray-300 uppercase tracking-wider block">Mensagem de Cabeçalho:</label>
-                      <input 
+                      <label className={clsx('text-[9px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Mensagem de Cabeçalho:</label>
+                      <input
                         type="text"
                         value={printHeader}
                         onChange={(e) => {
                           setPrintHeader(e.target.value);
                           localStorage.setItem("koma_print_header", e.target.value);
                         }}
-                        className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-white text-[10px]"
+                        className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-[10px]')}
                       />
                     </div>
 
                     <div className="space-y-1">
-                      <label className="text-[9px] font-bold text-gray-300 uppercase tracking-wider block">Mensagem de Rodapé:</label>
-                      <input 
+                      <label className={clsx('text-[9px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Mensagem de Rodapé:</label>
+                      <input
                         type="text"
                         value={printFooter}
                         onChange={(e) => {
                           setPrintFooter(e.target.value);
                           localStorage.setItem("koma_print_footer", e.target.value);
                         }}
-                        className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-white text-[10px]"
+                        className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-[10px]')}
                       />
                     </div>
 
-                    <div className="flex justify-between items-center pt-2">
-                      <span className="text-[10px] text-gray-300 font-semibold">Unificar Vias de Delivery (Via Única)</span>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input 
-                          type="checkbox" 
+                    <div className={clsx('flex', 'justify-between', 'items-center', 'pt-2')}>
+                      <span className={clsx('text-[10px]', 'text-gray-300', 'font-semibold')}>Unificar Vias de Delivery (Via Única)</span>
+                      <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer')}>
+                        <input
+                          type="checkbox"
                           checked={unificarViasDelivery}
                           onChange={(e) => {
                             setUnificarViasDelivery(e.target.checked);
                             updateConfiguracoes({ unificar_vias_delivery: e.target.checked });
                           }}
-                          className="sr-only peer"
+                          className={clsx('sr-only', 'peer')}
                         />
-                        <div className="w-9 h-5 bg-[#27272A] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                        <div className={clsx('w-9', 'h-5', 'bg-[#27272A]', 'peer-focus:outline-none', 'rounded-full', 'peer', 'peer-checked:after:translate-x-full', 'peer-checked:after:border-white', "after:content-['']", 'after:absolute', 'after:top-[2px]', 'after:left-[2px]', 'after:bg-white', 'after:border-gray-300', 'after:border', 'after:rounded-full', 'after:h-4', 'after:w-4', 'after:transition-all', 'peer-checked:bg-emerald-600')}></div>
                       </label>
                     </div>
 
-                    <div className="flex justify-between items-center pt-2 border-t border-[#27272A]/40">
-                      <span className="text-[10px] text-gray-300 font-semibold">Modo Exclusivo de Salão (Kôma Lite)</span>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input 
-                          type="checkbox" 
+                    <div className={clsx('flex', 'justify-between', 'items-center', 'pt-2', 'border-t', 'border-[#27272A]/40')}>
+                      <span className={clsx('text-[10px]', 'text-gray-300', 'font-semibold')}>Modo Exclusivo de Salão (Kôma Lite)</span>
+                      <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer')}>
+                        <input
+                          type="checkbox"
                           checked={modoExclusivoSalao}
                           onChange={(e) => {
                             setModoExclusivoSalao(e.target.checked);
                             updateConfiguracoes({ modo_exclusivo_salao: e.target.checked });
                           }}
-                          className="sr-only peer"
+                          className={clsx('sr-only', 'peer')}
                         />
-                        <div className="w-9 h-5 bg-[#27272A] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                        <div className={clsx('w-9', 'h-5', 'bg-[#27272A]', 'peer-focus:outline-none', 'rounded-full', 'peer', 'peer-checked:after:translate-x-full', 'peer-checked:after:border-white', "after:content-['']", 'after:absolute', 'after:top-[2px]', 'after:left-[2px]', 'after:bg-white', 'after:border-gray-300', 'after:border', 'after:rounded-full', 'after:h-4', 'after:w-4', 'after:transition-all', 'peer-checked:bg-emerald-600')}></div>
                       </label>
                     </div>
                   </div>
@@ -2896,19 +2876,19 @@ export function CaixaPanel({
                   <div className="space-y-2">
                     <button
                       onClick={handleSearchPrinters}
-                      className="w-full py-1.5 bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] text-gray-300 font-bold rounded-lg text-[9px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer"
+                      className={clsx('w-full', 'py-1.5', 'bg-[#1C1C1F]', 'hover:bg-[#27272A]', 'border', 'border-[#27272A]', 'text-gray-300', 'font-bold', 'rounded-lg', 'text-[9px]', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1.5', 'cursor-pointer')}
                     >
                       <Printer size={12} />
                       <span>{isSearchingPrinters ? 'Procurando...' : 'Achar Impressoras'}</span>
                     </button>
 
                     {detectedPrinters.length > 0 && (
-                      <div className="space-y-1 animate-scale-in">
+                      <div className={clsx('space-y-1', 'animate-scale-in')}>
                         {detectedPrinters.map((p, idx) => (
-                          <div key={idx} className="p-2 bg-[#09090B] border border-[#27272A] rounded-lg text-[9px] text-gray-400 font-mono flex justify-between items-center">
+                          <div key={idx} className={clsx('p-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'text-[9px]', 'text-gray-400', 'font-mono', 'flex', 'justify-between', 'items-center')}>
                             <span>{p}</span>
-                            <button 
-                              type="button" 
+                            <button
+                              type="button"
                               onClick={async () => {
                                 try {
                                   const res = await fetch(`${apiBaseUrl}/comandas/teste-impressao`, {
@@ -2925,7 +2905,7 @@ export function CaixaPanel({
                                   alert('Erro de conexão ao testar impressora.');
                                 }
                               }}
-                              className="text-[8px] uppercase tracking-wider text-[#C5A880] font-bold hover:text-white cursor-pointer"
+                              className={clsx('text-[8px]', 'uppercase', 'tracking-wider', 'text-[#C5A880]', 'font-bold', 'hover:text-white', 'cursor-pointer')}
                             >
                               Teste
                             </button>
@@ -2937,25 +2917,25 @@ export function CaixaPanel({
                 </div>
 
                 {/* Mockup live preview coupon */}
-                <div className="bg-[#FFFFFC] text-black p-4 rounded-xl border border-gray-300 font-mono text-[9px] space-y-3 shadow-inner my-2">
-                  <div className="text-center font-bold border-b border-dashed border-gray-400 pb-1.5 uppercase leading-normal">
+                <div className={clsx('bg-[#FFFFFC]', 'text-black', 'p-4', 'rounded-xl', 'border', 'border-gray-300', 'font-mono', 'text-[9px]', 'space-y-3', 'shadow-inner', 'my-2')}>
+                  <div className={clsx('text-center', 'font-bold', 'border-b', 'border-dashed', 'border-gray-400', 'pb-1.5', 'uppercase', 'leading-normal')}>
                     <span>{printHeader}</span>
                   </div>
                   <div className="space-y-1">
-                    <div className="flex justify-between">
+                    <div className={clsx('flex', 'justify-between')}>
                       <span>1x Pastel Carne</span>
                       <span>R$ 12,00</span>
                     </div>
-                    <div className="flex justify-between">
+                    <div className={clsx('flex', 'justify-between')}>
                       <span>1x Coca-Cola</span>
                       <span>R$ 6,00</span>
                     </div>
                   </div>
-                  <div className="flex justify-between font-bold border-t border-dashed border-gray-400 pt-1 text-[10px]">
+                  <div className={clsx('flex', 'justify-between', 'font-bold', 'border-t', 'border-dashed', 'border-gray-400', 'pt-1', 'text-[10px]')}>
                     <span>Total:</span>
                     <span>R$ 18,00</span>
                   </div>
-                  <div className="text-center text-[8px] text-gray-600 border-t border-dashed border-gray-400 pt-1.5 uppercase leading-normal">
+                  <div className={clsx('text-center', 'text-[8px]', 'text-gray-600', 'border-t', 'border-dashed', 'border-gray-400', 'pt-1.5', 'uppercase', 'leading-normal')}>
                     <span>{printFooter}</span>
                   </div>
                 </div>
@@ -2967,46 +2947,46 @@ export function CaixaPanel({
 
           {/* VIEW 8A: ROBÔ & IA - CONFIGURAÇÕES DO PROMPT & GOVERNANÇA */}
           {activeTab === 'robo_ia' && activeSubTab === 'prompt' && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 text-left animate-fade-in">
+            <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5', 'text-left', 'animate-fade-in')}>
               {/* Left Column: System Prompt */}
-              <div className="lg:col-span-2 bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 space-y-4">
-                <div className="border-b border-[#27272A] pb-3 flex justify-between items-center">
-                  <span className="font-serif font-bold text-gray-300">Prompt do Atendente Virtual</span>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" checked={aiBotActive} onChange={(e) => setAiBotActive(e.target.checked)} className="sr-only peer" />
-                    <div className="w-8 h-4.5 bg-[#27272A] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-emerald-600"></div>
+              <div className={clsx('lg:col-span-2', 'bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4')}>
+                <div className={clsx('border-b', 'border-[#27272A]', 'pb-3', 'flex', 'justify-between', 'items-center')}>
+                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300')}>Prompt do Atendente Virtual</span>
+                  <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer')}>
+                    <input type="checkbox" checked={aiBotActive} onChange={(e) => setAiBotActive(e.target.checked)} className={clsx('sr-only', 'peer')} />
+                    <div className={clsx('w-8', 'h-4.5', 'bg-[#27272A]', 'peer-focus:outline-none', 'rounded-full', 'peer', 'peer-checked:after:translate-x-full', 'peer-checked:after:border-white', "after:content-['']", 'after:absolute', 'after:top-[2px]', 'after:left-[2px]', 'after:bg-white', 'after:border-gray-300', 'after:border', 'after:rounded-full', 'after:h-3.5', 'after:w-3.5', 'after:transition-all', 'peer-checked:bg-emerald-600')}></div>
                   </label>
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Diretrizes da IA (Prompt de Sistema):</label>
+                  <label className={clsx('text-[9px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Diretrizes da IA (Prompt de Sistema):</label>
                   <textarea
                     rows={8}
                     value={aiSystemPrompt}
                     onChange={(e) => setAiSystemPrompt(e.target.value)}
-                    className="w-full p-3 bg-[#09090B] border border-[#27272A] rounded-xl focus:outline-none focus:border-[#C5A880] text-white text-[10px] resize-none leading-relaxed font-mono"
+                    className={clsx('w-full', 'p-3', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'focus:outline-none', 'focus:border-[#C5A880]', 'text-white', 'text-[10px]', 'resize-none', 'leading-relaxed', 'font-mono')}
                   />
-                  <span className="text-[8px] text-gray-500 block leading-relaxed">
+                  <span className={clsx('text-[8px]', 'text-gray-500', 'block', 'leading-relaxed')}>
                     Instrua a inteligência artificial sobre a história da sua casa, especialidades do cardápio e regras de tom de voz. Evite comandos conflitantes com as travas de governança ao lado.
                   </span>
                 </div>
               </div>
 
               {/* Right Column: Painel de Governança */}
-              <div className="bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 space-y-4 flex flex-col justify-between">
+              <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'flex', 'flex-col', 'justify-between')}>
                 <div className="space-y-4">
-                  <div className="border-b border-[#27272A] pb-2">
-                    <span className="font-serif font-bold text-gray-300 block">Segurança & Governança da IA</span>
-                    <span className="text-[8px] text-gray-500 block mt-0.5">Defina limites comerciais estritos para evitar abusos ou prejuízos nas conversas automatizadas.</span>
+                  <div className={clsx('border-b', 'border-[#27272A]', 'pb-2')}>
+                    <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block')}>Segurança & Governança da IA</span>
+                    <span className={clsx('text-[8px]', 'text-gray-500', 'block', 'mt-0.5')}>Defina limites comerciais estritos para evitar abusos ou prejuízos nas conversas automatizadas.</span>
                   </div>
 
                   {/* Negociar Descontos Toggle */}
-                  <div className="bg-[#1C1C1F]/40 border border-[#27272A]/40 rounded-xl p-3 flex justify-between items-center">
+                  <div className={clsx('bg-[#1C1C1F]/40', 'border', 'border-[#27272A]/40', 'rounded-xl', 'p-3', 'flex', 'justify-between', 'items-center')}>
                     <div className="space-y-0.5">
-                      <span className="text-[9px] font-bold text-white block">Negociar Descontos</span>
-                      <span className="text-[7px] text-gray-500 block">Autoriza IA a oferecer cupons no chat</span>
+                      <span className={clsx('text-[9px]', 'font-bold', 'text-white', 'block')}>Negociar Descontos</span>
+                      <span className={clsx('text-[7px]', 'text-gray-500', 'block')}>Autoriza IA a oferecer cupons no chat</span>
                     </div>
-                    <button 
+                    <button
                       onClick={() => setIaDiscountEnabled(!iaDiscountEnabled)}
                       className={`w-9 h-5 rounded-full p-0.5 transition-colors duration-200 focus:outline-none cursor-pointer ${iaDiscountEnabled ? 'bg-emerald-600' : 'bg-[#27272A]'}`}
                     >
@@ -3016,30 +2996,30 @@ export function CaixaPanel({
 
                   {/* Teto de Desconto Selector */}
                   {iaDiscountEnabled && (
-                    <div className="space-y-1.5 animate-fade-in">
-                      <label className="text-[8px] font-bold text-gray-400 uppercase tracking-widest block">Teto de Desconto Permitido (%):</label>
-                      <div className="flex gap-2 items-center">
-                        <input 
-                          type="range" 
-                          min="5" 
-                          max="25" 
+                    <div className={clsx('space-y-1.5', 'animate-fade-in')}>
+                      <label className={clsx('text-[8px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-widest', 'block')}>Teto de Desconto Permitido (%):</label>
+                      <div className={clsx('flex', 'gap-2', 'items-center')}>
+                        <input
+                          type="range"
+                          min="5"
+                          max="25"
                           step="5"
                           value={iaMaxDiscount}
                           onChange={(e) => setIaMaxDiscount(Number(e.target.value))}
-                          className="flex-1 accent-[#C5A880] cursor-pointer"
+                          className={clsx('flex-1', 'accent-[#C5A880]', 'cursor-pointer')}
                         />
-                        <span className="text-[10px] font-mono font-bold text-white bg-[#09090B] px-2.5 py-1 border border-[#27272A] rounded-lg">{iaMaxDiscount}%</span>
+                        <span className={clsx('text-[10px]', 'font-mono', 'font-bold', 'text-white', 'bg-[#09090B]', 'px-2.5', 'py-1', 'border', 'border-[#27272A]', 'rounded-lg')}>{iaMaxDiscount}%</span>
                       </div>
                     </div>
                   )}
 
                   {/* Upsell Ativo Toggle */}
-                  <div className="bg-[#1C1C1F]/40 border border-[#27272A]/40 rounded-xl p-3 flex justify-between items-center">
+                  <div className={clsx('bg-[#1C1C1F]/40', 'border', 'border-[#27272A]/40', 'rounded-xl', 'p-3', 'flex', 'justify-between', 'items-center')}>
                     <div className="space-y-0.5">
-                      <span className="text-[9px] font-bold text-white block">Upsell / Sugestões Ativas</span>
-                      <span className="text-[7px] text-gray-500 block">Sugere adicionais e bebidas para aumentar o ticket</span>
+                      <span className={clsx('text-[9px]', 'font-bold', 'text-white', 'block')}>Upsell / Sugestões Ativas</span>
+                      <span className={clsx('text-[7px]', 'text-gray-500', 'block')}>Sugere adicionais e bebidas para aumentar o ticket</span>
                     </div>
-                    <button 
+                    <button
                       onClick={() => setIaUpsellEnabled(!iaUpsellEnabled)}
                       className={`w-9 h-5 rounded-full p-0.5 transition-colors duration-200 focus:outline-none cursor-pointer ${iaUpsellEnabled ? 'bg-emerald-600' : 'bg-[#27272A]'}`}
                     >
@@ -3049,25 +3029,23 @@ export function CaixaPanel({
 
                   {/* Tom de Voz selector */}
                   <div className="space-y-1.5">
-                    <label className="text-[8px] font-bold text-gray-400 uppercase tracking-widest block">Personalidade / Tom de Voz:</label>
-                    <div className="grid grid-cols-2 gap-2">
+                    <label className={clsx('text-[8px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-widest', 'block')}>Personalidade / Tom de Voz:</label>
+                    <div className={clsx('grid', 'grid-cols-2', 'gap-2')}>
                       <button
                         onClick={() => setIaVoiceTone('direto')}
-                        className={`py-1.5 rounded-xl border text-[9px] font-bold transition-all cursor-pointer ${
-                          iaVoiceTone === 'direto'
-                            ? 'bg-[#C5A880]/15 border-[#C5A880] text-[#C5A880]'
-                            : 'bg-[#1C1C1F]/40 border-[#27272A] text-gray-500'
-                        }`}
+                        className={`py-1.5 rounded-xl border text-[9px] font-bold transition-all cursor-pointer ${iaVoiceTone === 'direto'
+                          ? 'bg-[#C5A880]/15 border-[#C5A880] text-[#C5A880]'
+                          : 'bg-[#1C1C1F]/40 border-[#27272A] text-gray-500'
+                          }`}
                       >
                         Direto (Economiza Tokens)
                       </button>
                       <button
                         onClick={() => setIaVoiceTone('conversador')}
-                        className={`py-1.5 rounded-xl border text-[9px] font-bold transition-all cursor-pointer ${
-                          iaVoiceTone === 'conversador'
-                            ? 'bg-[#C5A880]/15 border-[#C5A880] text-[#C5A880]'
-                            : 'bg-[#1C1C1F]/40 border-[#27272A] text-gray-500'
-                        }`}
+                        className={`py-1.5 rounded-xl border text-[9px] font-bold transition-all cursor-pointer ${iaVoiceTone === 'conversador'
+                          ? 'bg-[#C5A880]/15 border-[#C5A880] text-[#C5A880]'
+                          : 'bg-[#1C1C1F]/40 border-[#27272A] text-gray-500'
+                          }`}
                       >
                         Conversador (Fidelidade)
                       </button>
@@ -3076,12 +3054,12 @@ export function CaixaPanel({
 
                   {/* Teto de Interações selector */}
                   <div className="space-y-1.5">
-                    <label className="text-[8px] font-bold text-gray-400 uppercase tracking-widest block">Teto de Mensagens sem Pedido:</label>
-                    <div className="flex gap-2 items-center">
+                    <label className={clsx('text-[8px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-widest', 'block')}>Teto de Mensagens sem Pedido:</label>
+                    <div className={clsx('flex', 'gap-2', 'items-center')}>
                       <select
                         value={iaMaxInteractions}
                         onChange={(e) => setIaMaxInteractions(Number(e.target.value))}
-                        className="flex-1 px-3 py-1.5 bg-[#09090B] border border-[#27272A] rounded-xl text-white text-[10px]"
+                        className={clsx('flex-1', 'px-3', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-[10px]')}
                       >
                         <option value="3">3 interações (Máxima economia)</option>
                         <option value="5">5 interações (Padrão sugerido)</option>
@@ -3091,9 +3069,9 @@ export function CaixaPanel({
                   </div>
                 </div>
 
-                <button 
+                <button
                   onClick={() => alert('Parâmetros de governança da IA salvos no banco de dados.')}
-                  className="w-full py-2 bg-[#C5A880] hover:bg-[#B3966E] text-[#121214] font-bold rounded-xl text-[9px] uppercase tracking-wider transition-all cursor-pointer shadow-lg mt-4"
+                  className={clsx('w-full', 'py-2', 'bg-[#C5A880]', 'hover:bg-[#B3966E]', 'text-[#121214]', 'font-bold', 'rounded-xl', 'text-[9px]', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-lg', 'mt-4')}
                 >
                   Salvar Parâmetros
                 </button>
@@ -3103,40 +3081,40 @@ export function CaixaPanel({
 
           {/* VIEW 8B: ROBÔ & IA - SIMULADOR DE CHAT */}
           {activeTab === 'robo_ia' && activeSubTab === 'simulador' && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 text-left animate-fade-in">
+            <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5', 'text-left', 'animate-fade-in')}>
               {/* Left Column: Interactive Chat Simulation */}
-              <div className="lg:col-span-2 bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 flex flex-col overflow-hidden h-[72vh]">
-                <div className="border-b border-[#27272A] pb-3 flex justify-between items-center shrink-0">
-                  <span className="font-serif font-bold text-gray-300">Simulador de Chat Kôma IA</span>
-                  <span className="text-[8px] text-emerald-400 font-mono flex items-center gap-1">
-                    <span className="h-1.5 w-1.5 bg-emerald-500 rounded-full animate-ping" />
+              <div className={clsx('lg:col-span-2', 'bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'flex', 'flex-col', 'overflow-hidden', 'h-[72vh]')}>
+                <div className={clsx('border-b', 'border-[#27272A]', 'pb-3', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
+                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300')}>Simulador de Chat Kôma IA</span>
+                  <span className={clsx('text-[8px]', 'text-emerald-400', 'font-mono', 'flex', 'items-center', 'gap-1')}>
+                    <span className={clsx('h-1.5', 'w-1.5', 'bg-emerald-500', 'rounded-full', 'animate-ping')} />
                     Robô Ativo
                   </span>
                 </div>
 
-                <div className="flex-1 bg-[#09090B] border border-[#27272A] rounded-2xl p-4 flex flex-col justify-between space-y-4">
+                <div className={clsx('flex-1', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-2xl', 'p-4', 'flex', 'flex-col', 'justify-between', 'space-y-4')}>
                   <textarea
                     readOnly
                     value={chatbotMessages.map(msg => `[${msg.sender === 'user' ? 'CLIENTE' : 'IA'} - ${msg.timestamp}]: ${msg.text}`).join('\n') + (isBotTyping ? '\n[IA - Digitando...]' : '')}
-                    className="w-full flex-1 p-3 bg-[#000000] border border-[#27272A] rounded-xl text-emerald-500 font-mono text-[9px] leading-relaxed focus:outline-none resize-none overflow-y-auto"
+                    className={clsx('w-full', 'flex-1', 'p-3', 'bg-[#000000]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-emerald-500', 'font-mono', 'text-[9px]', 'leading-relaxed', 'focus:outline-none', 'resize-none', 'overflow-y-auto')}
                     ref={(el) => {
                       if (el) el.scrollTop = el.scrollHeight;
                     }}
                   />
 
-                  <form onSubmit={handleSendChatbotMessage} className="flex gap-2 pt-2 border-t border-[#27272A] shrink-0">
+                  <form onSubmit={handleSendChatbotMessage} className={clsx('flex', 'gap-2', 'pt-2', 'border-t', 'border-[#27272A]', 'shrink-0')}>
                     <input
                       type="text"
                       placeholder="Simule uma conversa com o bot..."
                       value={chatInputText}
                       disabled={!aiBotActive}
                       onChange={(e) => setChatInputText(e.target.value)}
-                      className="flex-1 px-4 py-2 bg-[#121214] border border-[#27272A] rounded-xl focus:outline-none focus:border-[#C5A880] text-white disabled:opacity-50 text-[10px]"
+                      className={clsx('flex-1', 'px-4', 'py-2', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'focus:outline-none', 'focus:border-[#C5A880]', 'text-white', 'disabled:opacity-50', 'text-[10px]')}
                     />
                     <button
                       type="submit"
                       disabled={!aiBotActive}
-                      className="p-2 bg-[#C5A880] hover:bg-[#b0936b] disabled:bg-[#1C1C1F] text-[#121214] disabled:text-gray-500 rounded-xl transition-all cursor-pointer flex items-center justify-center shrink-0"
+                      className={clsx('p-2', 'bg-[#C5A880]', 'hover:bg-[#b0936b]', 'disabled:bg-[#1C1C1F]', 'text-[#121214]', 'disabled:text-gray-500', 'rounded-xl', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'justify-center', 'shrink-0')}
                     >
                       <Send size={14} />
                     </button>
@@ -3147,25 +3125,25 @@ export function CaixaPanel({
               {/* Right Column: Support Tickets and Feedbacks */}
               <div className="space-y-4">
                 {/* Pending Chats */}
-                <div className="bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 space-y-3 text-left">
-                  <span className="font-serif font-bold text-gray-300 block pb-1 border-b border-[#27272A]">Chamados de Clientes (IA Pendente)</span>
+                <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-3', 'text-left')}>
+                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Chamados de Clientes (IA Pendente)</span>
                   <div className="space-y-2">
                     {supportChats.length === 0 ? (
-                      <span className="text-[10px] text-gray-500 italic block text-center py-5">Nenhum chamado pendente</span>
+                      <span className={clsx('text-[10px]', 'text-gray-500', 'italic', 'block', 'text-center', 'py-5')}>Nenhum chamado pendente</span>
                     ) : (
                       supportChats.map(chat => (
-                        <div key={chat.id} className="bg-[#1C1C1F] p-3 rounded-xl border border-[#27272A] space-y-2 text-left">
-                          <div className="flex justify-between items-center text-[10px]">
-                            <strong className="text-white block truncate w-32 font-bold">{chat.cliente}</strong>
-                            <span className="text-[8px] uppercase tracking-wider font-mono font-bold text-rose-500">{chat.canal}</span>
+                        <div key={chat.id} className={clsx('bg-[#1C1C1F]', 'p-3', 'rounded-xl', 'border', 'border-[#27272A]', 'space-y-2', 'text-left')}>
+                          <div className={clsx('flex', 'justify-between', 'items-center', 'text-[10px]')}>
+                            <strong className={clsx('text-white', 'block', 'truncate', 'w-32', 'font-bold')}>{chat.cliente}</strong>
+                            <span className={clsx('text-[8px]', 'uppercase', 'tracking-wider', 'font-mono', 'font-bold', 'text-rose-500')}>{chat.canal}</span>
                           </div>
-                          <p className="text-[10px] text-gray-400 line-clamp-2 leading-relaxed">{chat.ultimaMsg}</p>
+                          <p className={clsx('text-[10px]', 'text-gray-400', 'line-clamp-2', 'leading-relaxed')}>{chat.ultimaMsg}</p>
                           <button
                             onClick={() => {
                               alert(`Transferindo conversa com ${chat.cliente} para o chat do Caixa...`);
                               setSupportChats(prev => prev.filter(c => c.id !== chat.id));
                             }}
-                            className="w-full py-1 bg-[#C5A880] hover:bg-[#b0936b] text-[#121214] font-bold rounded-lg text-[8px] uppercase tracking-wider cursor-pointer"
+                            className={clsx('w-full', 'py-1', 'bg-[#C5A880]', 'hover:bg-[#b0936b]', 'text-[#121214]', 'font-bold', 'rounded-lg', 'text-[8px]', 'uppercase', 'tracking-wider', 'cursor-pointer')}
                           >
                             Conversar
                           </button>
@@ -3176,20 +3154,20 @@ export function CaixaPanel({
                 </div>
 
                 {/* Feedbacks list */}
-                <div className="bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 space-y-3 text-left">
-                  <span className="font-serif font-bold text-gray-300 block pb-1 border-b border-[#27272A]">Últimos Feedbacks / Avaliações</span>
-                  <div className="space-y-2.5 max-h-[30vh] overflow-y-auto pr-1">
+                <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-3', 'text-left')}>
+                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Últimos Feedbacks / Avaliações</span>
+                  <div className={clsx('space-y-2.5', 'max-h-[30vh]', 'overflow-y-auto', 'pr-1')}>
                     {customerFeedbacks.map(fb => (
-                      <div key={fb.id} className="bg-[#1C1C1F] p-2.5 rounded-xl border border-[#27272A] space-y-1.5 text-left">
-                        <div className="flex justify-between items-center">
-                          <strong className="text-white block text-[10px] font-bold">{fb.cliente}</strong>
-                          <div className="flex gap-0.5 text-amber-500">
+                      <div key={fb.id} className={clsx('bg-[#1C1C1F]', 'p-2.5', 'rounded-xl', 'border', 'border-[#27272A]', 'space-y-1.5', 'text-left')}>
+                        <div className={clsx('flex', 'justify-between', 'items-center')}>
+                          <strong className={clsx('text-white', 'block', 'text-[10px]', 'font-bold')}>{fb.cliente}</strong>
+                          <div className={clsx('flex', 'gap-0.5', 'text-amber-500')}>
                             {Array.from({ length: fb.estrelas }, (_, i) => (
                               <Star key={i} size={8} fill="currentColor" />
                             ))}
                           </div>
                         </div>
-                        <p className="text-[10px] text-gray-400 italic leading-relaxed">"{fb.comentario}"</p>
+                        <p className={clsx('text-[10px]', 'text-gray-400', 'italic', 'leading-relaxed')}>"{fb.comentario}"</p>
                       </div>
                     ))}
                   </div>
@@ -3200,13 +3178,13 @@ export function CaixaPanel({
 
           {/* VIEW 9: PAGAMENTOS & PLANOS */}
           {activeSubTab === 'planos' && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-              
+            <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5')}>
+
               {/* Online payment toggles (Left Column) */}
-              <div className="lg:col-span-2 bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 space-y-4">
-                <span className="font-serif font-bold text-gray-300 block pb-1 border-b border-[#27272A]">Integrações de Pagamento Online</span>
-                
-                <p className="text-[10px] text-gray-400 leading-relaxed bg-[#09090B] p-3 rounded-xl border border-[#27272A]/50">
+              <div className={clsx('lg:col-span-2', 'bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4')}>
+                <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Integrações de Pagamento Online</span>
+
+                <p className={clsx('text-[10px]', 'text-gray-400', 'leading-relaxed', 'bg-[#09090B]', 'p-3', 'rounded-xl', 'border', 'border-[#27272A]/50')}>
                   Ative formas de recebimento online integradas diretamente na comanda digital do cliente. Os valores são creditados de forma imediata na sua conta bancária.
                 </p>
 
@@ -3215,14 +3193,14 @@ export function CaixaPanel({
                     { title: "Pix Automático in-app", desc: "Gera um QR Code Pix dinâmico para o cliente pagar direto no celular e libera a mesa de forma autônoma.", checked: payPixActive, setChecked: setPayPixActive },
                     { title: "Cartão de Crédito Online", desc: "Permite pagamentos via crédito diretamente pela carteira digital do cliente na tela de consumo.", checked: payCardActive, setChecked: setPayCardActive }
                   ].map((item, idx) => (
-                    <div key={idx} className="flex justify-between items-start gap-4">
-                      <div className="space-y-0.5 text-left">
-                        <strong className="text-white block font-semibold">{item.title}</strong>
-                        <span className="text-[9px] text-gray-500 block leading-relaxed">{item.desc}</span>
+                    <div key={idx} className={clsx('flex', 'justify-between', 'items-start', 'gap-4')}>
+                      <div className={clsx('space-y-0.5', 'text-left')}>
+                        <strong className={clsx('text-white', 'block', 'font-semibold')}>{item.title}</strong>
+                        <span className={clsx('text-[9px]', 'text-gray-500', 'block', 'leading-relaxed')}>{item.desc}</span>
                       </div>
-                      <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
-                        <input type="checkbox" checked={item.checked} onChange={(e) => item.setChecked(e.target.checked)} className="sr-only peer" />
-                        <div className="w-8 h-4.5 bg-[#27272A] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-emerald-600"></div>
+                      <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer', 'shrink-0', 'mt-0.5')}>
+                        <input type="checkbox" checked={item.checked} onChange={(e) => item.setChecked(e.target.checked)} className={clsx('sr-only', 'peer')} />
+                        <div className={clsx('w-8', 'h-4.5', 'bg-[#27272A]', 'peer-focus:outline-none', 'rounded-full', 'peer', 'peer-checked:after:translate-x-full', 'peer-checked:after:border-white', "after:content-['']", 'after:absolute', 'after:top-[2px]', 'after:left-[2px]', 'after:bg-white', 'after:border-gray-300', 'after:border', 'after:rounded-full', 'after:h-3.5', 'after:w-3.5', 'after:transition-all', 'peer-checked:bg-emerald-600')}></div>
                       </label>
                     </div>
                   ))}
@@ -3230,29 +3208,28 @@ export function CaixaPanel({
               </div>
 
               {/* SaaS Plans (Right Column) */}
-              <div className="bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 space-y-4">
-                <span className="font-serif font-bold text-gray-300 block pb-1 border-b border-[#27272A]">Assinatura e Planos Kôma</span>
-                
+              <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4')}>
+                <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Assinatura e Planos Kôma</span>
+
                 <div className="space-y-3">
                   {[
                     { id: 'bronze', name: 'Plano Bronze', price: 'R$ 99/mês', features: ['Menu Digital QR Code', 'Gestão de Mesas', 'Suporte por e-mail'] },
                     { id: 'gold', name: 'Plano Ouro (Recomendado)', price: 'R$ 199/mês', features: ['Menu Digital + iFood', 'Robô de Atendimento IA', 'Suporte 24h WhatsApp'] },
                     { id: 'platinum', name: 'Plano Platinum', price: 'R$ 349/mês', features: ['Multi-lojas Integrado', 'Gestão de Estoque Avançado', 'Gerente de Contas Dedicado'] }
                   ].map((plan) => (
-                    <div 
+                    <div
                       key={plan.id}
                       onClick={() => setSelectedPlan(plan.id as any)}
-                      className={`p-3.5 rounded-2xl border transition-all cursor-pointer text-left ${
-                        selectedPlan === plan.id
-                          ? 'bg-[#7A1F2D]/15 border-[#7A1F2D] shadow'
-                          : 'bg-[#1C1C1F] border-[#27272A] hover:border-[#C5A880]/30'
-                      }`}
+                      className={`p-3.5 rounded-2xl border transition-all cursor-pointer text-left ${selectedPlan === plan.id
+                        ? 'bg-[#7A1F2D]/15 border-[#7A1F2D] shadow'
+                        : 'bg-[#1C1C1F] border-[#27272A] hover:border-[#C5A880]/30'
+                        }`}
                     >
-                      <div className="flex justify-between items-center mb-1">
-                        <strong className="text-white block text-xs">{plan.name}</strong>
-                        <span className="font-bold text-[#C5A880] font-mono text-[11px]">{plan.price}</span>
+                      <div className={clsx('flex', 'justify-between', 'items-center', 'mb-1')}>
+                        <strong className={clsx('text-white', 'block', 'text-xs')}>{plan.name}</strong>
+                        <span className={clsx('font-bold', 'text-[#C5A880]', 'font-mono', 'text-[11px]')}>{plan.price}</span>
                       </div>
-                      <ul className="space-y-0.5 text-[9px] text-gray-400 pl-3 list-disc">
+                      <ul className={clsx('space-y-0.5', 'text-[9px]', 'text-gray-400', 'pl-3', 'list-disc')}>
                         {plan.features.map((f, i) => (
                           <li key={i}>{f}</li>
                         ))}
@@ -3267,53 +3244,51 @@ export function CaixaPanel({
 
           {/* VIEW: RECUPERADOR DE VENDAS */}
           {activeSubTab === 'recuperador' && (
-            <div className="space-y-5 text-left animate-fade-in">
-              <div className="bg-[#121214] border border-[#27272A] p-4.5 rounded-3xl space-y-2">
-                <h3 className="font-serif font-bold text-base text-white">Recuperador de Vendas Abandonadas</h3>
-                <p className="text-[10px] text-gray-400 leading-relaxed">
+            <div className={clsx('space-y-5', 'text-left', 'animate-fade-in')}>
+              <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-4.5', 'rounded-3xl', 'space-y-2')}>
+                <h3 className={clsx('font-serif', 'font-bold', 'text-base', 'text-white')}>Recuperador de Vendas Abandonadas</h3>
+                <p className={clsx('text-[10px]', 'text-gray-400', 'leading-relaxed')}>
                   Monitore carrinhos de compras que foram iniciados no site de delivery ou pelo robô, mas não foram concluídos pelo cliente. Envie uma mensagem automática de incentivo no WhatsApp.
                 </p>
               </div>
 
-              <div className="bg-[#121214]/60 border border-[#27272A] rounded-3xl overflow-hidden">
-                <table className="w-full text-left text-[10px]">
+              <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'overflow-hidden')}>
+                <table className={clsx('w-full', 'text-left', 'text-[10px]')}>
                   <thead>
-                    <tr className="bg-[#1C1C1F] border-b border-[#27272A] text-gray-400 uppercase tracking-wider font-bold">
+                    <tr className={clsx('bg-[#1C1C1F]', 'border-b', 'border-[#27272A]', 'text-gray-400', 'uppercase', 'tracking-wider', 'font-bold')}>
                       <th className="p-3.5">Cliente</th>
                       <th className="p-3.5">WhatsApp</th>
                       <th className="p-3.5">Itens do Carrinho</th>
                       <th className="p-3.5">Total</th>
                       <th className="p-3.5">Abandonado há</th>
                       <th className="p-3.5">Status</th>
-                      <th className="p-3.5 text-right">Ação</th>
+                      <th className={clsx('p-3.5', 'text-right')}>Ação</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#27272A]/40">
+                  <tbody className={clsx('divide-y', 'divide-[#27272A]/40')}>
                     {abandonedCarts.map((cart) => (
-                      <tr key={cart.id} className="hover:bg-[#1C1C1F]/35 transition-colors">
-                        <td className="p-3.5 font-bold text-white">{cart.cliente}</td>
-                        <td className="p-3.5 text-gray-300 font-mono">{cart.telefone}</td>
-                        <td className="p-3.5 text-gray-400 italic max-w-xs truncate">{cart.itens}</td>
-                        <td className="p-3.5 font-bold text-emerald-500 font-mono">R$ {cart.total.toFixed(2)}</td>
-                        <td className="p-3.5 text-gray-400">{cart.abandonadoEm}</td>
+                      <tr key={cart.id} className={clsx('hover:bg-[#1C1C1F]/35', 'transition-colors')}>
+                        <td className={clsx('p-3.5', 'font-bold', 'text-white')}>{cart.cliente}</td>
+                        <td className={clsx('p-3.5', 'text-gray-300', 'font-mono')}>{cart.telefone}</td>
+                        <td className={clsx('p-3.5', 'text-gray-400', 'italic', 'max-w-xs', 'truncate')}>{cart.itens}</td>
+                        <td className={clsx('p-3.5', 'font-bold', 'text-emerald-500', 'font-mono')}>R$ {cart.total.toFixed(2)}</td>
+                        <td className={clsx('p-3.5', 'text-gray-400')}>{cart.abandonadoEm}</td>
                         <td className="p-3.5">
-                          <span className={`px-2 py-0.5 rounded-full text-[8px] font-bold uppercase ${
-                            cart.status === 'recuperado' 
-                              ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' 
-                              : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
-                          }`}>
+                          <span className={`px-2 py-0.5 rounded-full text-[8px] font-bold uppercase ${cart.status === 'recuperado'
+                            ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                            : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                            }`}>
                             {cart.status === 'recuperado' ? 'Recuperado' : 'Pendente'}
                           </span>
                         </td>
-                        <td className="p-3.5 text-right">
+                        <td className={clsx('p-3.5', 'text-right')}>
                           <button
                             onClick={() => handleRecuperarCart(cart.id, cart.cliente, cart.telefone)}
                             disabled={cart.status === 'recuperado'}
-                            className={`px-2.5 py-1 text-[9px] font-bold rounded-lg uppercase tracking-wider cursor-pointer transition-all ${
-                              cart.status === 'recuperado'
-                                ? 'bg-zinc-800 text-gray-500 border border-transparent cursor-not-allowed'
-                                : 'bg-[#C5A880] hover:bg-[#B3966E] text-[#121214] border border-transparent'
-                            }`}
+                            className={`px-2.5 py-1 text-[9px] font-bold rounded-lg uppercase tracking-wider cursor-pointer transition-all ${cart.status === 'recuperado'
+                              ? 'bg-zinc-800 text-gray-500 border border-transparent cursor-not-allowed'
+                              : 'bg-[#C5A880] hover:bg-[#B3966E] text-[#121214] border border-transparent'
+                              }`}
                           >
                             Recuperar no Whats
                           </button>
@@ -3330,27 +3305,27 @@ export function CaixaPanel({
 
           {/* VIEW: CUPONS DE DESCONTO */}
           {activeSubTab === 'cupom' && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 text-left animate-fade-in">
-              <div className="md:col-span-1 bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-4 h-fit">
-                <span className="font-serif font-bold text-gray-300 block pb-1 border-b border-[#27272A]">Criar Novo Cupom</span>
+            <div className={clsx('grid', 'grid-cols-1', 'md:grid-cols-3', 'gap-5', 'text-left', 'animate-fade-in')}>
+              <div className={clsx('md:col-span-1', 'bg-[#121214]', 'border', 'border-[#27272A]', 'p-5', 'rounded-3xl', 'space-y-4', 'h-fit')}>
+                <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Criar Novo Cupom</span>
                 <form onSubmit={handleAddCoupon} className="space-y-4">
                   <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-gray-300 uppercase tracking-wider block">Código do Cupom:</label>
+                    <label className={clsx('text-[9px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Código do Cupom:</label>
                     <input
                       type="text"
                       placeholder="EX: FESTA20"
                       value={newCouponCode}
                       onChange={(e) => setNewCouponCode(e.target.value)}
-                      className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-white text-[10px]"
+                      className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-[10px]')}
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-gray-300 uppercase tracking-wider block">Tipo de Desconto:</label>
+                    <label className={clsx('text-[9px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Tipo de Desconto:</label>
                     <select
                       value={newCouponTipo}
                       onChange={(e) => setNewCouponTipo(e.target.value as any)}
-                      className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-white text-[10px]"
+                      className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-[10px]')}
                     >
                       <option value="percentual">Percentual (%)</option>
                       <option value="fixo">Fixo (R$)</option>
@@ -3358,61 +3333,60 @@ export function CaixaPanel({
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-gray-300 uppercase tracking-wider block">Valor do Desconto:</label>
+                    <label className={clsx('text-[9px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Valor do Desconto:</label>
                     <input
                       type="number"
                       value={newCouponVal}
                       onChange={(e) => setNewCouponVal(Number(e.target.value))}
-                      className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-white font-mono text-[10px]"
+                      className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'font-mono', 'text-[10px]')}
                     />
                   </div>
 
                   <button
                     type="submit"
-                    className="w-full py-2 bg-[#C5A880] hover:bg-[#B3966E] text-[#121214] font-bold rounded-xl text-[9px] uppercase tracking-wider transition-all cursor-pointer"
+                    className={clsx('w-full', 'py-2', 'bg-[#C5A880]', 'hover:bg-[#B3966E]', 'text-[#121214]', 'font-bold', 'rounded-xl', 'text-[9px]', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}
                   >
                     Salvar Cupom
                   </button>
                 </form>
               </div>
 
-              <div className="md:col-span-2 bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 space-y-4">
-                <span className="font-serif font-bold text-gray-300 block pb-1 border-b border-[#27272A]">Cupons Cadastrados</span>
-                <div className="overflow-hidden border border-[#27272A]/40 rounded-2xl">
-                  <table className="w-full text-left text-[10px]">
+              <div className={clsx('md:col-span-2', 'bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4')}>
+                <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Cupons Cadastrados</span>
+                <div className={clsx('overflow-hidden', 'border', 'border-[#27272A]/40', 'rounded-2xl')}>
+                  <table className={clsx('w-full', 'text-left', 'text-[10px]')}>
                     <thead>
-                      <tr className="bg-[#1C1C1F] border-b border-[#27272A] text-gray-400 uppercase tracking-wider font-bold">
+                      <tr className={clsx('bg-[#1C1C1F]', 'border-b', 'border-[#27272A]', 'text-gray-400', 'uppercase', 'tracking-wider', 'font-bold')}>
                         <th className="p-3">Código</th>
                         <th className="p-3">Tipo</th>
                         <th className="p-3">Desconto</th>
                         <th className="p-3">Status</th>
-                        <th className="p-3 text-right">Ação</th>
+                        <th className={clsx('p-3', 'text-right')}>Ação</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#27272A]/40">
+                    <tbody className={clsx('divide-y', 'divide-[#27272A]/40')}>
                       {coupons.map((coupon) => (
-                        <tr key={coupon.id} className="hover:bg-[#1C1C1F]/20 transition-colors">
-                          <td className="p-3 font-mono font-bold text-white tracking-wide">{coupon.codigo}</td>
-                          <td className="p-3 text-gray-400 capitalize">{coupon.tipo === 'percentual' ? 'Percentual' : 'Fixo'}</td>
-                          <td className="p-3 font-bold text-emerald-400 font-mono">
+                        <tr key={coupon.id} className={clsx('hover:bg-[#1C1C1F]/20', 'transition-colors')}>
+                          <td className={clsx('p-3', 'font-mono', 'font-bold', 'text-white', 'tracking-wide')}>{coupon.codigo}</td>
+                          <td className={clsx('p-3', 'text-gray-400', 'capitalize')}>{coupon.tipo === 'percentual' ? 'Percentual' : 'Fixo'}</td>
+                          <td className={clsx('p-3', 'font-bold', 'text-emerald-400', 'font-mono')}>
                             {coupon.tipo === 'percentual' ? `${coupon.valor}%` : `R$ ${coupon.valor.toFixed(2)}`}
                           </td>
                           <td className="p-3">
                             <button
                               onClick={() => setCoupons(prev => prev.map(c => c.id === coupon.id ? { ...c, ativo: !c.ativo } : c))}
-                              className={`px-2 py-0.5 rounded-full text-[8px] font-bold uppercase transition-all cursor-pointer ${
-                                coupon.ativo 
-                                  ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' 
-                                  : 'bg-zinc-800 text-gray-500 border border-transparent'
-                              }`}
+                              className={`px-2 py-0.5 rounded-full text-[8px] font-bold uppercase transition-all cursor-pointer ${coupon.ativo
+                                ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                                : 'bg-zinc-800 text-gray-500 border border-transparent'
+                                }`}
                             >
                               {coupon.ativo ? 'Ativo' : 'Inativo'}
                             </button>
                           </td>
-                          <td className="p-3 text-right">
+                          <td className={clsx('p-3', 'text-right')}>
                             <button
                               onClick={() => setCoupons(prev => prev.filter(c => c.id !== coupon.id))}
-                              className="p-1 hover:bg-[#7A1F2D]/20 text-[#7A1F2D] hover:text-[#FF5C75] rounded-lg transition-colors cursor-pointer border border-transparent"
+                              className={clsx('p-1', 'hover:bg-[#7A1F2D]/20', 'text-[#7A1F2D]', 'hover:text-[#FF5C75]', 'rounded-lg', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}
                             >
                               <Trash2 size={12} />
                             </button>
@@ -3428,31 +3402,31 @@ export function CaixaPanel({
 
           {/* VIEW: FIDELIDADE */}
           {activeSubTab === 'fidelidade' && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 text-left animate-fade-in">
-              <div className="md:col-span-1 bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-4 h-fit">
-                <span className="font-serif font-bold text-gray-300 block pb-1 border-b border-[#27272A]">Ajustes de Fidelização</span>
-                
+            <div className={clsx('grid', 'grid-cols-1', 'md:grid-cols-3', 'gap-5', 'text-left', 'animate-fade-in')}>
+              <div className={clsx('md:col-span-1', 'bg-[#121214]', 'border', 'border-[#27272A]', 'p-5', 'rounded-3xl', 'space-y-4', 'h-fit')}>
+                <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Ajustes de Fidelização</span>
+
                 <form onSubmit={handleSaveFidelityConfig} className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-gray-400">Ativar Programa</span>
-                    <label className="relative inline-flex items-center cursor-pointer shrink-0">
-                      <input 
-                        type="checkbox" 
-                        checked={fidelidadeConfig.ativo} 
-                        onChange={(e) => setFidelidadeConfig(prev => ({ ...prev, ativo: e.target.checked }))} 
-                        className="sr-only peer" 
+                  <div className={clsx('flex', 'items-center', 'justify-between')}>
+                    <span className={clsx('text-[10px]', 'text-gray-400')}>Ativar Programa</span>
+                    <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer', 'shrink-0')}>
+                      <input
+                        type="checkbox"
+                        checked={fidelidadeConfig.ativo}
+                        onChange={(e) => setFidelidadeConfig(prev => ({ ...prev, ativo: e.target.checked }))}
+                        className={clsx('sr-only', 'peer')}
                       />
-                      <div className="w-8 h-4.5 bg-[#27272A] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-emerald-600"></div>
+                      <div className={clsx('w-8', 'h-4.5', 'bg-[#27272A]', 'peer-focus:outline-none', 'rounded-full', 'peer', 'peer-checked:after:translate-x-full', 'peer-checked:after:border-white', "after:content-['']", 'after:absolute', 'after:top-[2px]', 'after:left-[2px]', 'after:bg-white', 'after:border-gray-300', 'after:border', 'after:rounded-full', 'after:h-3.5', 'after:w-3.5', 'after:transition-all', 'peer-checked:bg-emerald-600')}></div>
                     </label>
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-gray-300 uppercase tracking-wider block">Tipo de Recompensa:</label>
+                    <label className={clsx('text-[9px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Tipo de Recompensa:</label>
                     <select
                       value={fidelidadeConfig.tipo_recompensa}
                       onChange={(e) => setFidelidadeConfig(prev => ({ ...prev, tipo_recompensa: e.target.value }))}
                       disabled={!fidelidadeConfig.ativo}
-                      className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-white text-[10px] disabled:opacity-50"
+                      className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-[10px]', 'disabled:opacity-50')}
                     >
                       <option value="PONTOS">Pontos de Fidelidade</option>
                       <option value="CASHBACK">Retorno (Cashback %)</option>
@@ -3460,7 +3434,7 @@ export function CaixaPanel({
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-gray-300 uppercase tracking-wider block">
+                    <label className={clsx('text-[9px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>
                       {fidelidadeConfig.tipo_recompensa === 'PONTOS' ? 'Conversão (R$ 1 = X pontos):' : 'Porcentagem de Cashback (%):'}
                     </label>
                     <input
@@ -3468,70 +3442,70 @@ export function CaixaPanel({
                       value={fidelidadeConfig.taxa_conversao}
                       onChange={(e) => setFidelidadeConfig(prev => ({ ...prev, taxa_conversao: Number(e.target.value) }))}
                       disabled={!fidelidadeConfig.ativo}
-                      className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-white font-mono text-[10px] disabled:opacity-50"
+                      className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'font-mono', 'text-[10px]', 'disabled:opacity-50')}
                     />
                   </div>
 
                   {fidelidadeConfig.tipo_recompensa === 'PONTOS' && (
                     <div className="space-y-1">
-                      <label className="text-[9px] font-bold text-gray-300 uppercase tracking-wider block">Valor de 1 Ponto em Recompensa (R$):</label>
+                      <label className={clsx('text-[9px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Valor de 1 Ponto em Recompensa (R$):</label>
                       <input
                         type="number"
                         step="0.01"
                         value={fidelidadeConfig.valor_ponto_em_dinheiro}
                         onChange={(e) => setFidelidadeConfig(prev => ({ ...prev, valor_ponto_em_dinheiro: Number(e.target.value) }))}
                         disabled={!fidelidadeConfig.ativo}
-                        className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-white font-mono text-[10px] disabled:opacity-50"
+                        className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'font-mono', 'text-[10px]', 'disabled:opacity-50')}
                       />
                     </div>
                   )}
 
                   <button
                     type="submit"
-                    className="w-full py-2 bg-[#C5A880] hover:bg-[#B3966E] text-[#121214] font-bold rounded-xl text-[10px] uppercase tracking-wider transition-all cursor-pointer"
+                    className={clsx('w-full', 'py-2', 'bg-[#C5A880]', 'hover:bg-[#B3966E]', 'text-[#121214]', 'font-bold', 'rounded-xl', 'text-[10px]', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}
                   >
                     Salvar Ajustes
                   </button>
                 </form>
               </div>
 
-              <div className="md:col-span-2 bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 space-y-4">
-                <span className="font-serif font-bold text-gray-300 block pb-1 border-b border-[#27272A]">
+              <div className={clsx('md:col-span-2', 'bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4')}>
+                <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>
                   {fidelidadeConfig.tipo_recompensa === 'PONTOS' ? 'Saldo de Clientes (Clube de Pontos)' : 'Saldo de Clientes (Programa Cashback)'}
                 </span>
-                
-                <div className="overflow-hidden border border-[#27272A]/40 rounded-2xl">
-                  <table className="w-full text-left text-[10px]">
+
+                <div className={clsx('overflow-hidden', 'border', 'border-[#27272A]/40', 'rounded-2xl')}>
+                  <table className={clsx('w-full', 'text-left', 'text-[10px]')}>
                     <thead>
-                      <tr className="bg-[#1C1C1F] border-b border-[#27272A] text-gray-400 uppercase tracking-wider font-bold">
+                      <tr className={clsx('bg-[#1C1C1F]', 'border-b', 'border-[#27272A]', 'text-gray-400', 'uppercase', 'tracking-wider', 'font-bold')}>
                         <th className="p-3">Cliente</th>
                         {fidelidadeConfig.tipo_recompensa === 'PONTOS' ? (
                           <>
                             <th className="p-3">Pontos Acumulados</th>
-                            <th className="p-3 font-bold text-emerald-400 font-mono">Valor Equivalente (R$)</th>
+                            <th className={clsx('p-3', 'font-bold', 'text-emerald-400', 'font-mono')}>Valor Equivalente (R$)</th>
                           </>
                         ) : (
-                          <th className="p-3 font-bold text-emerald-400 font-mono">Saldo Cashback Disponível</th>
+                          <th className={clsx('p-3', 'font-bold', 'text-emerald-400', 'font-mono')}>Saldo Cashback Disponível</th>
                         )}
-                        <th className="p-3 text-right">Ação</th>
+                        <th className={clsx('p-3', 'text-right')}>Ação</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#27272A]/40">
+                    <tbody className={clsx('divide-y', 'divide-[#27272A]/40')}>
                       {loyaltyUsers.map((user) => (
-                        <tr key={user.id} className="hover:bg-[#1C1C1F]/20 transition-colors">
-                          <td className="p-3 font-bold text-white">{user.cliente}</td>
+                        <tr key={user.id} className={clsx('hover:bg-[#1C1C1F]/20', 'transition-colors')}>
+                          <td className={clsx('p-3', 'font-bold', 'text-white')}>{user.cliente}</td>
                           {fidelidadeConfig.tipo_recompensa === 'PONTOS' ? (
                             <>
-                              <td className="p-3 font-mono font-bold text-[#C5A880]">{user.pontos} pts</td>
-                              <td className="p-3 font-bold text-emerald-400 font-mono">R$ {(user.pontos * fidelidadeConfig.valor_ponto_em_dinheiro).toFixed(2)}</td>
+                              <td className={clsx('p-3', 'font-mono', 'font-bold', 'text-[#C5A880]')}>{user.pontos} pts</td>
+                              <td className={clsx('p-3', 'font-bold', 'text-emerald-400', 'font-mono')}>R$ {(user.pontos * fidelidadeConfig.valor_ponto_em_dinheiro).toFixed(2)}</td>
                             </>
                           ) : (
-                            <td className="p-3 font-bold text-emerald-400 font-mono">R$ {user.saldoCashback.toFixed(2)}</td>
+                            <td className={clsx('p-3', 'font-bold', 'text-emerald-400', 'font-mono')}>R$ {user.saldoCashback.toFixed(2)}</td>
                           )}
-                          <td className="p-3 text-right">
+                          <td className={clsx('p-3', 'text-right')}>
                             <button
                               onClick={() => alert(`Lançamento manual para ${user.cliente}`)}
-                              className="px-2 py-1 bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] text-gray-300 font-bold rounded-lg text-[9px] uppercase tracking-wider cursor-pointer"
+                              className={clsx('px-2', 'py-1', 'bg-[#1C1C1F]', 'hover:bg-[#27272A]', 'border', 'border-[#27272A]', 'text-gray-300', 'font-bold', 'rounded-lg', 'text-[9px]', 'uppercase', 'tracking-wider', 'cursor-pointer')}
                             >
                               Creditar
                             </button>
@@ -3549,62 +3523,62 @@ export function CaixaPanel({
 
           {/* VIEW: RELATÓRIO GERAL */}
           {activeSubTab === 'relatorio_geral' && (
-            <div className="space-y-5 text-left animate-fade-in">
+            <div className={clsx('space-y-5', 'text-left', 'animate-fade-in')}>
               {/* Banner azul de informações */}
-              <div className="bg-sky-500/10 border border-sky-500/20 text-sky-300 p-4 rounded-2xl flex items-start gap-3 relative">
-                <button className="absolute right-3 top-3 text-sky-300/60 hover:text-sky-300 cursor-pointer"><X size={14} /></button>
-                <div className="p-1 bg-sky-500/20 rounded-full shrink-0 text-sky-400 mt-0.5">
+              <div className={clsx('bg-sky-500/10', 'border', 'border-sky-500/20', 'text-sky-300', 'p-4', 'rounded-2xl', 'flex', 'items-start', 'gap-3', 'relative')}>
+                <button className={clsx('absolute', 'right-3', 'top-3', 'text-sky-300/60', 'hover:text-sky-300', 'cursor-pointer')}><X size={14} /></button>
+                <div className={clsx('p-1', 'bg-sky-500/20', 'rounded-full', 'shrink-0', 'text-sky-400', 'mt-0.5')}>
                   <HelpCircle size={16} />
                 </div>
                 <div className="space-y-0.5">
-                  <strong className="text-[11px] block font-bold text-white">Veja aqui informações sobre suas vendas. Filtre por datas e exporte as informações</strong>
-                  <span className="text-[9px] text-sky-300/80 block leading-relaxed">Este relatório mostra como está o faturamento e a quantidade vendida em seu estabelecimento no período desejado.</span>
+                  <strong className={clsx('text-[11px]', 'block', 'font-bold', 'text-white')}>Veja aqui informações sobre suas vendas. Filtre por datas e exporte as informações</strong>
+                  <span className={clsx('text-[9px]', 'text-sky-300/80', 'block', 'leading-relaxed')}>Este relatório mostra como está o faturamento e a quantidade vendida em seu estabelecimento no período desejado.</span>
                 </div>
               </div>
 
               {/* Date Filter selector bar */}
-              <div className="flex justify-between items-center gap-3">
-                <div className="bg-[#121214] border border-[#27272A] rounded-xl px-3 py-1.5 text-[10px] text-gray-300 font-bold font-mono">
+              <div className={clsx('flex', 'justify-between', 'items-center', 'gap-3')}>
+                <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'px-3', 'py-1.5', 'text-[10px]', 'text-gray-300', 'font-bold', 'font-mono')}>
                   25/06/2026 - 01/07/2026
                 </div>
-                <div className="flex gap-2">
-                  <button className="px-3 py-1 bg-[#C5A880] text-[#121214] hover:bg-[#B3966E] rounded-xl text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer">Filtrar</button>
-                  <button className="px-3 py-1 bg-[#1C1C1F] text-gray-300 hover:text-white border border-[#27272A] rounded-xl text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer">Exportar</button>
+                <div className={clsx('flex', 'gap-2')}>
+                  <button className={clsx('px-3', 'py-1', 'bg-[#C5A880]', 'text-[#121214]', 'hover:bg-[#B3966E]', 'rounded-xl', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}>Filtrar</button>
+                  <button className={clsx('px-3', 'py-1', 'bg-[#1C1C1F]', 'text-gray-300', 'hover:text-white', 'border', 'border-[#27272A]', 'rounded-xl', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}>Exportar</button>
                 </div>
               </div>
 
               {/* Grid of KPI cards */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className={clsx('grid', 'grid-cols-2', 'md:grid-cols-4', 'gap-4')}>
                 {[
                   { label: "Faturamento", value: "R$ 21.806,62", color: "text-[#C5A880]" },
                   { label: "Ticket médio", value: "R$ 36,59", color: "text-white" },
                   { label: "Total de pedidos", value: "596", color: "text-white" },
                   { label: "Clientes ativos", value: "301", color: "text-white" }
                 ].map((card, idx) => (
-                  <div key={idx} className="bg-[#121214] border border-[#27272A] rounded-2xl p-4.5 space-y-1 flex flex-col justify-center">
-                    <span className="text-[9px] text-gray-400 uppercase tracking-widest font-bold block">{card.label}</span>
+                  <div key={idx} className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-2xl', 'p-4.5', 'space-y-1', 'flex', 'flex-col', 'justify-center')}>
+                    <span className={clsx('text-[9px]', 'text-gray-400', 'uppercase', 'tracking-widest', 'font-bold', 'block')}>{card.label}</span>
                     <strong className={`text-base font-serif font-bold ${card.color}`}>{card.value}</strong>
                   </div>
                 ))}
               </div>
 
               {/* SVG Double Bar Chart (Weekly Sales split by delivery vs local) */}
-              <div className="bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="font-serif font-bold text-gray-300 block">Pedidos e Entregas (Semanal)</span>
-                  <div className="flex gap-4 text-[9px] font-bold">
-                    <div className="flex items-center gap-1.5 text-sky-400">
-                      <span className="h-2 w-2 bg-sky-400 rounded-sm" />
+              <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4')}>
+                <div className={clsx('flex', 'justify-between', 'items-center')}>
+                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block')}>Pedidos e Entregas (Semanal)</span>
+                  <div className={clsx('flex', 'gap-4', 'text-[9px]', 'font-bold')}>
+                    <div className={clsx('flex', 'items-center', 'gap-1.5', 'text-sky-400')}>
+                      <span className={clsx('h-2', 'w-2', 'bg-sky-400', 'rounded-sm')} />
                       <span>Entrega</span>
                     </div>
-                    <div className="flex items-center gap-1.5 text-blue-600">
-                      <span className="h-2 w-2 bg-blue-600 rounded-sm" />
+                    <div className={clsx('flex', 'items-center', 'gap-1.5', 'text-blue-600')}>
+                      <span className={clsx('h-2', 'w-2', 'bg-blue-600', 'rounded-sm')} />
                       <span>Pedidos</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="pt-2 relative h-48 w-full flex items-end justify-between px-4 border-b border-[#27272A] pb-4">
+                <div className={clsx('pt-2', 'relative', 'h-48', 'w-full', 'flex', 'items-end', 'justify-between', 'px-4', 'border-b', 'border-[#27272A]', 'pb-4')}>
                   {/* SVG Bar graphs */}
                   {[
                     { label: "Dom", delivery: 98, local: 82 },
@@ -3618,26 +3592,26 @@ export function CaixaPanel({
                     const maxScale = 150;
                     const delHeight = `${(day.delivery / maxScale) * 100}%`;
                     const locHeight = `${(day.local / maxScale) * 100}%`;
-                    
+
                     return (
-                      <div key={idx} className="flex flex-col items-center gap-2 h-full flex-1 relative">
-                        <div className="flex-1 w-full flex items-end justify-center gap-1.5 pb-1">
+                      <div key={idx} className={clsx('flex', 'flex-col', 'items-center', 'gap-2', 'h-full', 'flex-1', 'relative')}>
+                        <div className={clsx('flex-1', 'w-full', 'flex', 'items-end', 'justify-center', 'gap-1.5', 'pb-1')}>
                           {day.delivery > 0 ? (
-                            <div className="w-3 bg-sky-400 rounded-t-sm group relative" style={{ height: delHeight }} title={`Entrega: ${day.delivery}`}>
-                              <span className="absolute -top-5 left-1/2 -translate-x-1/2 bg-black text-white text-[8px] font-bold px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity font-mono">{day.delivery}</span>
+                            <div className={clsx('w-3', 'bg-sky-400', 'rounded-t-sm', 'group', 'relative')} style={{ height: delHeight }} title={`Entrega: ${day.delivery}`}>
+                              <span className={clsx('absolute', '-top-5', 'left-1/2', '-translate-x-1/2', 'bg-black', 'text-white', 'text-[8px]', 'font-bold', 'px-1', 'rounded', 'opacity-0', 'group-hover:opacity-100', 'transition-opacity', 'font-mono')}>{day.delivery}</span>
                             </div>
                           ) : (
-                            <div className="w-3 h-0.5 bg-zinc-800 rounded-t-sm" />
+                            <div className={clsx('w-3', 'h-0.5', 'bg-zinc-800', 'rounded-t-sm')} />
                           )}
                           {day.local > 0 ? (
-                            <div className="w-3 bg-blue-600 rounded-t-sm group relative" style={{ height: locHeight }} title={`Dine-in: ${day.local}`}>
-                              <span className="absolute -top-5 left-1/2 -translate-x-1/2 bg-black text-white text-[8px] font-bold px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity font-mono">{day.local}</span>
+                            <div className={clsx('w-3', 'bg-blue-600', 'rounded-t-sm', 'group', 'relative')} style={{ height: locHeight }} title={`Dine-in: ${day.local}`}>
+                              <span className={clsx('absolute', '-top-5', 'left-1/2', '-translate-x-1/2', 'bg-black', 'text-white', 'text-[8px]', 'font-bold', 'px-1', 'rounded', 'opacity-0', 'group-hover:opacity-100', 'transition-opacity', 'font-mono')}>{day.local}</span>
                             </div>
                           ) : (
-                            <div className="w-3 h-0.5 bg-zinc-800 rounded-t-sm" />
+                            <div className={clsx('w-3', 'h-0.5', 'bg-zinc-800', 'rounded-t-sm')} />
                           )}
                         </div>
-                        <span className="text-[9px] font-bold text-gray-400 uppercase">{day.label}</span>
+                        <span className={clsx('text-[9px]', 'font-bold', 'text-gray-400', 'uppercase')}>{day.label}</span>
                       </div>
                     );
                   })}
@@ -3648,32 +3622,32 @@ export function CaixaPanel({
 
           {/* VIEW: RELATÓRIO DE GARÇONS */}
           {activeSubTab === 'relatorio_garçons' && (
-            <div className="space-y-5 text-left animate-fade-in">
+            <div className={clsx('space-y-5', 'text-left', 'animate-fade-in')}>
               {/* Banner azul de informações */}
-              <div className="bg-sky-500/10 border border-sky-500/20 text-sky-300 p-4 rounded-2xl flex items-start gap-3 relative">
-                <button className="absolute right-3 top-3 text-sky-300/60 hover:text-sky-300 cursor-pointer"><X size={14} /></button>
-                <div className="p-1 bg-sky-500/20 rounded-full shrink-0 text-sky-400 mt-0.5">
+              <div className={clsx('bg-sky-500/10', 'border', 'border-sky-500/20', 'text-sky-300', 'p-4', 'rounded-2xl', 'flex', 'items-start', 'gap-3', 'relative')}>
+                <button className={clsx('absolute', 'right-3', 'top-3', 'text-sky-300/60', 'hover:text-sky-300', 'cursor-pointer')}><X size={14} /></button>
+                <div className={clsx('p-1', 'bg-sky-500/20', 'rounded-full', 'shrink-0', 'text-sky-400', 'mt-0.5')}>
                   <HelpCircle size={16} />
                 </div>
                 <div className="space-y-0.5">
-                  <strong className="text-[11px] block font-bold text-white">Veja aqui informações sobre suas vendas. Filtre por datas e exporte as informações</strong>
-                  <span className="text-[9px] text-sky-300/80 block leading-relaxed">Este relatório mostra como está o faturamento e a quantidade vendida em seu estabelecimento usando o modo garçom.</span>
+                  <strong className={clsx('text-[11px]', 'block', 'font-bold', 'text-white')}>Veja aqui informações sobre suas vendas. Filtre por datas e exporte as informações</strong>
+                  <span className={clsx('text-[9px]', 'text-sky-300/80', 'block', 'leading-relaxed')}>Este relatório mostra como está o faturamento e a quantidade vendida em seu estabelecimento usando o modo garçom.</span>
                 </div>
               </div>
 
               {/* Date Filter selector bar */}
-              <div className="flex justify-between items-center gap-3">
-                <div className="bg-[#121214] border border-[#27272A] rounded-xl px-3 py-1.5 text-[10px] text-gray-300 font-bold font-mono">
+              <div className={clsx('flex', 'justify-between', 'items-center', 'gap-3')}>
+                <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'px-3', 'py-1.5', 'text-[10px]', 'text-gray-300', 'font-bold', 'font-mono')}>
                   01/06/2026 - 01/07/2026
                 </div>
-                <div className="flex gap-2">
-                  <button className="p-1.5 bg-[#1C1C1F] text-gray-300 hover:text-white border border-[#27272A] rounded-xl cursor-pointer" title="Imprimir"><Printer size={12} /></button>
-                  <button className="px-3 py-1 bg-[#C5A880] text-[#121214] hover:bg-[#B3966E] rounded-xl text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer">Exportar</button>
+                <div className={clsx('flex', 'gap-2')}>
+                  <button className={clsx('p-1.5', 'bg-[#1C1C1F]', 'text-gray-300', 'hover:text-white', 'border', 'border-[#27272A]', 'rounded-xl', 'cursor-pointer')} title="Imprimir"><Printer size={12} /></button>
+                  <button className={clsx('px-3', 'py-1', 'bg-[#C5A880]', 'text-[#121214]', 'hover:bg-[#B3966E]', 'rounded-xl', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}>Exportar</button>
                 </div>
               </div>
 
               {/* Grid of KPI cards */}
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              <div className={clsx('grid', 'grid-cols-2', 'md:grid-cols-5', 'gap-4')}>
                 {[
                   { label: "Faturamento", value: "R$ 51.140,06", color: "text-[#C5A880]" },
                   { label: "Ticket médio", value: "R$ 39,25", color: "text-white" },
@@ -3681,37 +3655,37 @@ export function CaixaPanel({
                   { label: "Taxa de serviço", value: "R$ 0,00", color: "text-white" },
                   { label: "Garçons ativos", value: "2", color: "text-white" }
                 ].map((card, idx) => (
-                  <div key={idx} className="bg-[#121214] border border-[#27272A] rounded-2xl p-4 md:p-4.5 space-y-1 flex flex-col justify-center">
-                    <span className="text-[9px] text-gray-400 uppercase tracking-widest font-bold block">{card.label}</span>
+                  <div key={idx} className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-2xl', 'p-4', 'md:p-4.5', 'space-y-1', 'flex', 'flex-col', 'justify-center')}>
+                    <span className={clsx('text-[9px]', 'text-gray-400', 'uppercase', 'tracking-widest', 'font-bold', 'block')}>{card.label}</span>
                     <strong className={`text-xs md:text-sm font-serif font-bold ${card.color}`}>{card.value}</strong>
                   </div>
                 ))}
               </div>
 
               {/* Waiter Performance Table */}
-              <div className="bg-[#121214]/60 border border-[#27272A] rounded-3xl overflow-hidden p-5 space-y-4">
-                <span className="font-serif font-bold text-gray-300 block">Faturamento por Garçom (Comissão Acumulada)</span>
-                <div className="overflow-hidden border border-[#27272A]/40 rounded-2xl">
-                  <table className="w-full text-left text-[10px]">
+              <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'overflow-hidden', 'p-5', 'space-y-4')}>
+                <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block')}>Faturamento por Garçom (Comissão Acumulada)</span>
+                <div className={clsx('overflow-hidden', 'border', 'border-[#27272A]/40', 'rounded-2xl')}>
+                  <table className={clsx('w-full', 'text-left', 'text-[10px]')}>
                     <thead>
-                      <tr className="bg-[#1C1C1F] border-b border-[#27272A] text-gray-400 uppercase tracking-wider font-bold">
+                      <tr className={clsx('bg-[#1C1C1F]', 'border-b', 'border-[#27272A]', 'text-gray-400', 'uppercase', 'tracking-wider', 'font-bold')}>
                         <th className="p-3.5">Nome Garçom</th>
                         <th className="p-3.5">Pedidos Atendidos</th>
-                        <th className="p-3.5 text-right font-bold text-emerald-400">Comissão Acumulada (10% Serviço)</th>
+                        <th className={clsx('p-3.5', 'text-right', 'font-bold', 'text-emerald-400')}>Comissão Acumulada (10% Serviço)</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#27272A]/40">
-                      {(waitersPerformance.length > 0 
-                        ? waitersPerformance 
+                    <tbody className={clsx('divide-y', 'divide-[#27272A]/40')}>
+                      {(waitersPerformance.length > 0
+                        ? waitersPerformance
                         : [
-                            { nome_garcon: "Mateus", pedidos_atendidos: 42, comissao_acumulada: 182.30 },
-                            { nome_garcon: "Sarah", pedidos_atendidos: 39, comissao_acumulada: 165.90 }
-                          ]
+                          { nome_garcon: "Mateus", pedidos_atendidos: 42, comissao_acumulada: 182.30 },
+                          { nome_garcon: "Sarah", pedidos_atendidos: 39, comissao_acumulada: 165.90 }
+                        ]
                       ).map((waiter, idx) => (
-                        <tr key={idx} className="hover:bg-[#1C1C1F]/20 transition-colors">
-                          <td className="p-3.5 font-bold text-white">{waiter.nome_garcon}</td>
-                          <td className="p-3.5 font-mono text-gray-300">{waiter.pedidos_atendidos}</td>
-                          <td className="p-3.5 font-mono text-emerald-400 font-bold text-right">R$ {waiter.comissao_acumulada.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <tr key={idx} className={clsx('hover:bg-[#1C1C1F]/20', 'transition-colors')}>
+                          <td className={clsx('p-3.5', 'font-bold', 'text-white')}>{waiter.nome_garcon}</td>
+                          <td className={clsx('p-3.5', 'font-mono', 'text-gray-300')}>{waiter.pedidos_atendidos}</td>
+                          <td className={clsx('p-3.5', 'font-mono', 'text-emerald-400', 'font-bold', 'text-right')}>R$ {waiter.comissao_acumulada.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -3723,43 +3697,43 @@ export function CaixaPanel({
 
           {/* MOCK VIEW: METAS DO TURNOS & PREVISÃO DE PICO (IA) */}
           {activeTab === 'dashboard' && activeSubTab === 'metas' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-left animate-fade-in">
-              <div className="bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-4">
-                <span className="font-serif font-bold text-gray-300 block pb-1 border-b border-[#27272A]">Painel de Metas do Dia</span>
+            <div className={clsx('grid', 'grid-cols-1', 'md:grid-cols-2', 'gap-5', 'text-left', 'animate-fade-in')}>
+              <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-5', 'rounded-3xl', 'space-y-4')}>
+                <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Painel de Metas do Dia</span>
                 <div className="space-y-3">
-                  <div className="flex justify-between text-[10px]">
+                  <div className={clsx('flex', 'justify-between', 'text-[10px]')}>
                     <span className="text-gray-400">Progresso da Meta (R$ 3.000,00)</span>
-                    <strong className="text-white font-mono">65.2% (R$ 1.956,20)</strong>
+                    <strong className={clsx('text-white', 'font-mono')}>65.2% (R$ 1.956,20)</strong>
                   </div>
-                  <div className="h-3 w-full bg-[#1C1C1F] rounded-full overflow-hidden border border-[#27272A]/40">
-                    <div className="h-full bg-gradient-to-r from-[#7A1F2D] to-[#C5A880] rounded-full" style={{ width: '65.2%' }} />
+                  <div className={clsx('h-3', 'w-full', 'bg-[#1C1C1F]', 'rounded-full', 'overflow-hidden', 'border', 'border-[#27272A]/40')}>
+                    <div className={clsx('h-full', 'bg-gradient-to-r', 'from-[#7A1F2D]', 'to-[#C5A880]', 'rounded-full')} style={{ width: '65.2%' }} />
                   </div>
-                  <span className="text-[8px] text-gray-500 block leading-tight">Faltam R$ 1.043,80 para atingir a meta diária estipulada pelo gestor.</span>
+                  <span className={clsx('text-[8px]', 'text-gray-500', 'block', 'leading-tight')}>Faltam R$ 1.043,80 para atingir a meta diária estipulada pelo gestor.</span>
                 </div>
               </div>
 
-              <div className="bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-4">
-                <span className="font-serif font-bold text-gray-300 block pb-1 border-b border-[#27272A]">Horários de Pico (SQL Histórico)</span>
-                <p className="text-[10px] text-gray-400 leading-relaxed">
+              <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-5', 'rounded-3xl', 'space-y-4')}>
+                <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Horários de Pico (SQL Histórico)</span>
+                <p className={clsx('text-[10px]', 'text-gray-400', 'leading-relaxed')}>
                   Gráfico de demanda histórica por hora, gerado via consultas SQL puras e indexadas a partir de comandas fechadas.
                 </p>
-                <div className="h-28 flex items-end justify-between gap-1.5 border-b border-[#27272A] pb-2 pt-2 px-2">
-                  {(horariosPico.length > 0 
+                <div className={clsx('h-28', 'flex', 'items-end', 'justify-between', 'gap-1.5', 'border-b', 'border-[#27272A]', 'pb-2', 'pt-2', 'px-2')}>
+                  {(horariosPico.length > 0
                     ? horariosPico.slice(0, 8).map(h => ({ hr: h.hora, val: Math.min(100, (h.total_pedidos / Math.max(1, ...horariosPico.map(x => x.total_pedidos))) * 100), count: h.total_pedidos }))
                     : [
-                        { hr: "18h", val: 20, count: 20 },
-                        { hr: "19h", val: 55, count: 55 },
-                        { hr: "20h", val: 90, count: 90 },
-                        { hr: "21h", val: 100, count: 100 },
-                        { hr: "22h", val: 80, count: 80 },
-                        { hr: "23h", val: 40, count: 40 }
-                      ]
+                      { hr: "18h", val: 20, count: 20 },
+                      { hr: "19h", val: 55, count: 55 },
+                      { hr: "20h", val: 90, count: 90 },
+                      { hr: "21h", val: 100, count: 100 },
+                      { hr: "22h", val: 80, count: 80 },
+                      { hr: "23h", val: 40, count: 40 }
+                    ]
                   ).map((h, i) => (
-                    <div key={i} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
-                      <div className="w-full bg-[#7A1F2D]/80 rounded-t-sm group relative" style={{ height: `${h.val}%` }}>
-                        <span className="absolute -top-5 left-1/2 -translate-x-1/2 bg-black text-white text-[8px] font-bold px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity font-mono">{h.count} ped.</span>
+                    <div key={i} className={clsx('flex-1', 'flex', 'flex-col', 'items-center', 'gap-1.5', 'h-full', 'justify-end')}>
+                      <div className={clsx('w-full', 'bg-[#7A1F2D]/80', 'rounded-t-sm', 'group', 'relative')} style={{ height: `${h.val}%` }}>
+                        <span className={clsx('absolute', '-top-5', 'left-1/2', '-translate-x-1/2', 'bg-black', 'text-white', 'text-[8px]', 'font-bold', 'px-1', 'rounded', 'opacity-0', 'group-hover:opacity-100', 'transition-opacity', 'font-mono')}>{h.count} ped.</span>
                       </div>
-                      <span className="text-[8px] font-bold text-gray-500 font-mono">{h.hr}</span>
+                      <span className={clsx('text-[8px]', 'font-bold', 'text-gray-500', 'font-mono')}>{h.hr}</span>
                     </div>
                   ))}
                 </div>
@@ -3769,9 +3743,9 @@ export function CaixaPanel({
 
           {/* MOCK VIEW: RANKING TOP ITEMS */}
           {activeTab === 'dashboard' && activeSubTab === 'top10' && (
-            <div className="bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 space-y-4 text-left animate-fade-in max-w-xl">
-              <span className="font-serif font-bold text-gray-300 block border-b border-[#27272A] pb-2">Ranking Geral de Saídas</span>
-              <div className="divide-y divide-[#27272A]/50">
+            <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'text-left', 'animate-fade-in', 'max-w-xl')}>
+              <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'border-b', 'border-[#27272A]', 'pb-2')}>Ranking Geral de Saídas</span>
+              <div className={clsx('divide-y', 'divide-[#27272A]/50')}>
                 {[
                   { rank: "1º", name: "Pastel de Carne", count: 142, price: 12.00 },
                   { rank: "2º", name: "Hambúrguer Kôma", count: 98, price: 22.00 },
@@ -3779,17 +3753,16 @@ export function CaixaPanel({
                   { rank: "4º", name: "Coca-Cola Lata", count: 74, price: 6.00 },
                   { rank: "5º", name: "Cerveja Heineken", count: 60, price: 8.50 }
                 ].map((item, idx) => (
-                  <div key={idx} className="py-3.5 flex justify-between items-center">
-                    <div className="flex items-center gap-3.5">
-                      <span className={`h-6 w-6 rounded-lg flex items-center justify-center text-[10px] font-mono font-bold ${
-                        idx === 0 ? 'bg-[#7A1F2D] text-white' : idx === 1 ? 'bg-[#C5A880] text-[#121214]' : 'bg-[#1C1C1F] text-gray-400'
-                      }`}>{item.rank}</span>
+                  <div key={idx} className={clsx('py-3.5', 'flex', 'justify-between', 'items-center')}>
+                    <div className={clsx('flex', 'items-center', 'gap-3.5')}>
+                      <span className={`h-6 w-6 rounded-lg flex items-center justify-center text-[10px] font-mono font-bold ${idx === 0 ? 'bg-[#7A1F2D] text-white' : idx === 1 ? 'bg-[#C5A880] text-[#121214]' : 'bg-[#1C1C1F] text-gray-400'
+                        }`}>{item.rank}</span>
                       <div>
-                        <span className="font-medium text-white block text-xs">{item.name}</span>
-                        <span className="text-[9px] text-gray-500 font-mono">R$ {item.price.toFixed(2)}</span>
+                        <span className={clsx('font-medium', 'text-white', 'block', 'text-xs')}>{item.name}</span>
+                        <span className={clsx('text-[9px]', 'text-gray-500', 'font-mono')}>R$ {item.price.toFixed(2)}</span>
                       </div>
                     </div>
-                    <span className="text-[10px] font-bold text-emerald-400 font-mono">{item.count} saídas</span>
+                    <span className={clsx('text-[10px]', 'font-bold', 'text-emerald-400', 'font-mono')}>{item.count} saídas</span>
                   </div>
                 ))}
               </div>
@@ -3798,24 +3771,24 @@ export function CaixaPanel({
 
           {/* MOCK VIEW: FICHA TÉCNICA */}
           {activeTab === 'cardapio' && activeSubTab === 'ficha_tecnica' && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 text-left animate-fade-in">
-              <div className="lg:col-span-1 bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-4 h-fit">
-                <span className="font-serif font-bold text-gray-300 block pb-1 border-b border-[#27272A]">Simulador de Custos (CMV)</span>
-                <p className="text-[10px] text-gray-400 leading-relaxed">
+            <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5', 'text-left', 'animate-fade-in')}>
+              <div className={clsx('lg:col-span-1', 'bg-[#121214]', 'border', 'border-[#27272A]', 'p-5', 'rounded-3xl', 'space-y-4', 'h-fit')}>
+                <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Simulador de Custos (CMV)</span>
+                <p className={clsx('text-[10px]', 'text-gray-400', 'leading-relaxed')}>
                   Cruza a quantidade e preço médio de compras de insumos para definir a margem de lucro de cada prato.
                 </p>
-                <div className="space-y-3.5 text-[10px] font-mono">
-                  <div className="p-3 bg-[#1C1C1F] rounded-2xl border border-[#27272A]/50 space-y-2">
-                    <span className="text-[9px] font-bold font-sans text-[#C5A880] block uppercase tracking-wider">Hambúrguer Kôma</span>
-                    <div className="flex justify-between"><span>Pão Brioche (1 un):</span> <span>R$ 1.50</span></div>
-                    <div className="flex justify-between"><span>Blend Carne 150g:</span> <span>R$ 4.20</span></div>
-                    <div className="flex justify-between"><span>Queijo Cheddar 30g:</span> <span>R$ 1.10</span></div>
-                    <div className="flex justify-between"><span>Embalagem + Caixa:</span> <span>R$ 1.20</span></div>
-                    <div className="border-t border-[#27272A]/60 pt-2 flex justify-between font-bold text-white">
+                <div className={clsx('space-y-3.5', 'text-[10px]', 'font-mono')}>
+                  <div className={clsx('p-3', 'bg-[#1C1C1F]', 'rounded-2xl', 'border', 'border-[#27272A]/50', 'space-y-2')}>
+                    <span className={clsx('text-[9px]', 'font-bold', 'font-sans', 'text-[#C5A880]', 'block', 'uppercase', 'tracking-wider')}>Hambúrguer Kôma</span>
+                    <div className={clsx('flex', 'justify-between')}><span>Pão Brioche (1 un):</span> <span>R$ 1.50</span></div>
+                    <div className={clsx('flex', 'justify-between')}><span>Blend Carne 150g:</span> <span>R$ 4.20</span></div>
+                    <div className={clsx('flex', 'justify-between')}><span>Queijo Cheddar 30g:</span> <span>R$ 1.10</span></div>
+                    <div className={clsx('flex', 'justify-between')}><span>Embalagem + Caixa:</span> <span>R$ 1.20</span></div>
+                    <div className={clsx('border-t', 'border-[#27272A]/60', 'pt-2', 'flex', 'justify-between', 'font-bold', 'text-white')}>
                       <span>Custo Total Insumos:</span>
                       <span>R$ 8.00</span>
                     </div>
-                    <div className="flex justify-between text-emerald-400 font-bold">
+                    <div className={clsx('flex', 'justify-between', 'text-emerald-400', 'font-bold')}>
                       <span>Margem Bruta (venda R$ 22.00):</span>
                       <span>63.6%</span>
                     </div>
@@ -3823,31 +3796,31 @@ export function CaixaPanel({
                 </div>
               </div>
 
-              <div className="lg:col-span-2 bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 space-y-4">
-                <span className="font-serif font-bold text-gray-300 block pb-1 border-b border-[#27272A]">Fichas Técnicas Cadastradas</span>
-                <div className="overflow-hidden border border-[#27272A]/40 rounded-2xl">
-                  <table className="w-full text-left text-[10px]">
+              <div className={clsx('lg:col-span-2', 'bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4')}>
+                <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Fichas Técnicas Cadastradas</span>
+                <div className={clsx('overflow-hidden', 'border', 'border-[#27272A]/40', 'rounded-2xl')}>
+                  <table className={clsx('w-full', 'text-left', 'text-[10px]')}>
                     <thead>
-                      <tr className="bg-[#1C1C1F] border-b border-[#27272A] text-gray-400 uppercase tracking-wider font-bold">
+                      <tr className={clsx('bg-[#1C1C1F]', 'border-b', 'border-[#27272A]', 'text-gray-400', 'uppercase', 'tracking-wider', 'font-bold')}>
                         <th className="p-3">Nome</th>
                         <th className="p-3">Categoria</th>
-                        <th className="p-3 font-mono">Preço de Venda</th>
-                        <th className="p-3 font-mono">Custo Insumos</th>
-                        <th className="p-3 text-right">Margem de Lucro</th>
+                        <th className={clsx('p-3', 'font-mono')}>Preço de Venda</th>
+                        <th className={clsx('p-3', 'font-mono')}>Custo Insumos</th>
+                        <th className={clsx('p-3', 'text-right')}>Margem de Lucro</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#27272A]/40">
+                    <tbody className={clsx('divide-y', 'divide-[#27272A]/40')}>
                       {[
                         { nome: "Hambúrguer Kôma", cat: "Burgers", venda: 22.00, custo: 8.00, margem: "63.6%" },
                         { nome: "Pastel de Carne", cat: "Pastéis", venda: 12.00, custo: 3.50, margem: "70.8%" },
                         { nome: "Coca-Cola Lata", cat: "Bebidas", venda: 6.00, custo: 2.20, margem: "63.3%" }
                       ].map((p, idx) => (
-                        <tr key={idx} className="hover:bg-[#1C1C1F]/20 transition-colors">
-                          <td className="p-3 font-bold text-white">{p.nome}</td>
-                          <td className="p-3 text-gray-400">{p.cat}</td>
-                          <td className="p-3 font-mono text-gray-300">R$ {p.venda.toFixed(2)}</td>
-                          <td className="p-3 font-mono text-rose-400">R$ {p.custo.toFixed(2)}</td>
-                          <td className="p-3 font-bold text-emerald-400 text-right">{p.margem}</td>
+                        <tr key={idx} className={clsx('hover:bg-[#1C1C1F]/20', 'transition-colors')}>
+                          <td className={clsx('p-3', 'font-bold', 'text-white')}>{p.nome}</td>
+                          <td className={clsx('p-3', 'text-gray-400')}>{p.cat}</td>
+                          <td className={clsx('p-3', 'font-mono', 'text-gray-300')}>R$ {p.venda.toFixed(2)}</td>
+                          <td className={clsx('p-3', 'font-mono', 'text-rose-400')}>R$ {p.custo.toFixed(2)}</td>
+                          <td className={clsx('p-3', 'font-bold', 'text-emerald-400', 'text-right')}>{p.margem}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -3859,13 +3832,13 @@ export function CaixaPanel({
 
           {/* CARDÁPIO EM LISTA */}
           {activeTab === 'cardapio' && activeSubTab === 'cardapio_lista' && (
-            <div className="space-y-4 animate-fade-in text-left">
-              <div className="flex justify-between items-center">
+            <div className={clsx('space-y-4', 'animate-fade-in', 'text-left')}>
+              <div className={clsx('flex', 'justify-between', 'items-center')}>
                 <div>
-                  <span className="font-serif font-bold text-gray-300 text-base block">Cardápio</span>
-                  <span className="text-[9px] text-gray-500">{apiProdutos.length} produtos cadastrados</span>
+                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'text-base', 'block')}>Cardápio</span>
+                  <span className={clsx('text-[9px]', 'text-gray-500')}>{apiProdutos.length} produtos cadastrados</span>
                 </div>
-                <div className="flex gap-2">
+                <div className={clsx('flex', 'gap-2')}>
                   <button
                     onClick={() => {
                       const json = JSON.stringify(apiProdutos, null, 2);
@@ -3874,13 +3847,13 @@ export function CaixaPanel({
                       const a = document.createElement('a'); a.href = url; a.download = 'cardapio_koma.json'; a.click();
                       URL.revokeObjectURL(url);
                     }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1C1C1F] border border-[#27272A] hover:border-[#C5A880]/40 text-gray-300 hover:text-[#C5A880] rounded-xl text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+                    className={clsx('flex', 'items-center', 'gap-1.5', 'px-3', 'py-1.5', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'hover:border-[#C5A880]/40', 'text-gray-300', 'hover:text-[#C5A880]', 'rounded-xl', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}
                   >
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
                     Exportar JSON
                   </button>
-                  <label className="flex items-center gap-1.5 px-3 py-1.5 bg-[#C5A880]/10 border border-[#C5A880]/20 hover:bg-[#C5A880]/20 text-[#C5A880] rounded-xl text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                  <label className={clsx('flex', 'items-center', 'gap-1.5', 'px-3', 'py-1.5', 'bg-[#C5A880]/10', 'border', 'border-[#C5A880]/20', 'hover:bg-[#C5A880]/20', 'text-[#C5A880]', 'rounded-xl', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
                     Importar JSON
                     <input type="file" accept=".json" className="hidden" onChange={async (e) => {
                       const file = e.target.files?.[0]; if (!file) return;
@@ -3903,22 +3876,22 @@ export function CaixaPanel({
                   byCat[cat].push(p);
                 });
                 return Object.entries(byCat).map(([cat, prods]) => (
-                  <div key={cat} className="bg-[#121214]/60 border border-[#27272A] rounded-2xl overflow-hidden">
-                    <div className="bg-[#18181B] px-4 py-2.5 border-b border-[#27272A]">
-                      <span className="font-bold text-[#C5A880] text-[10px] uppercase tracking-wider">{cat}</span>
+                  <div key={cat} className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-2xl', 'overflow-hidden')}>
+                    <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]')}>
+                      <span className={clsx('font-bold', 'text-[#C5A880]', 'text-[10px]', 'uppercase', 'tracking-wider')}>{cat}</span>
                     </div>
-                    <div className="divide-y divide-[#27272A]/40">
+                    <div className={clsx('divide-y', 'divide-[#27272A]/40')}>
                       {prods.map(prod => (
-                        <div key={prod.id} className="flex items-center justify-between px-4 py-3 hover:bg-[#1C1C1F]/30 transition-colors">
-                          <div className="flex items-center gap-3">
-                            {(prod as any).imagem && <img src={(prod as any).imagem} alt={prod.nome} className="w-8 h-8 rounded-lg object-cover" />}
+                        <div key={prod.id} className={clsx('flex', 'items-center', 'justify-between', 'px-4', 'py-3', 'hover:bg-[#1C1C1F]/30', 'transition-colors')}>
+                          <div className={clsx('flex', 'items-center', 'gap-3')}>
+                            {(prod as any).imagem && <img src={(prod as any).imagem} alt={prod.nome} className={clsx('w-8', 'h-8', 'rounded-lg', 'object-cover')} />}
                             <div>
-                              <span className="text-white text-xs font-semibold block">{prod.nome}</span>
-                              {(prod as any).descricao && <span className="text-[9px] text-gray-500 block">{(prod as any).descricao}</span>}
+                              <span className={clsx('text-white', 'text-xs', 'font-semibold', 'block')}>{prod.nome}</span>
+                              {(prod as any).descricao && <span className={clsx('text-[9px]', 'text-gray-500', 'block')}>{(prod as any).descricao}</span>}
                             </div>
                           </div>
-                          <div className="flex items-center gap-3 shrink-0">
-                            <span className="font-mono font-bold text-[#C5A880] text-xs">R$ {prod.preco.toFixed(2)}</span>
+                          <div className={clsx('flex', 'items-center', 'gap-3', 'shrink-0')}>
+                            <span className={clsx('font-mono', 'font-bold', 'text-[#C5A880]', 'text-xs')}>R$ {prod.preco.toFixed(2)}</span>
                             <span className={`text-[8px] font-bold px-2 py-0.5 rounded-full ${(prod as any).ativo !== false ? 'bg-emerald-600/15 text-emerald-400' : 'bg-red-900/20 text-red-400'}`}>
                               {(prod as any).ativo !== false ? 'Ativo' : 'Esgotado'}
                             </span>
@@ -3930,7 +3903,7 @@ export function CaixaPanel({
                 ));
               })()}
               {apiProdutos.length === 0 && (
-                <div className="py-20 text-center text-gray-500 italic text-xs">Nenhum produto encontrado. Cadastre em "Listagem de Produtos".</div>
+                <div className={clsx('py-20', 'text-center', 'text-gray-500', 'italic', 'text-xs')}>Nenhum produto encontrado. Cadastre em "Listagem de Produtos".</div>
               )}
             </div>
           )}
@@ -3948,51 +3921,51 @@ export function CaixaPanel({
               byCat[cat].push(p);
             });
             return (
-              <div className="space-y-4 animate-fade-in text-left max-w-2xl">
+              <div className={clsx('space-y-4', 'animate-fade-in', 'text-left', 'max-w-2xl')}>
                 {/* Header */}
-                <div className="flex justify-between items-center">
+                <div className={clsx('flex', 'justify-between', 'items-center')}>
                   <div>
-                    <span className="font-serif font-bold text-gray-300 block">Pausa Rápida de Produtos</span>
-                    <span className="text-[8px] text-gray-500 block mt-0.5">Esgotado bloqueia o item no app do garçom instantaneamente.</span>
+                    <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block')}>Pausa Rápida de Produtos</span>
+                    <span className={clsx('text-[8px]', 'text-gray-500', 'block', 'mt-0.5')}>Esgotado bloqueia o item no app do garçom instantaneamente.</span>
                   </div>
-                  <button onClick={fetchProdutos} className="text-[9px] text-gray-400 hover:text-white flex items-center gap-1 cursor-pointer transition-colors">
-                    <RefreshCw size={10}/> Atualizar
+                  <button onClick={fetchProdutos} className={clsx('text-[9px]', 'text-gray-400', 'hover:text-white', 'flex', 'items-center', 'gap-1', 'cursor-pointer', 'transition-colors')}>
+                    <RefreshCw size={10} /> Atualizar
                   </button>
                 </div>
 
                 {/* Search */}
                 <div className="relative">
-                  <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  <svg className={clsx('absolute', 'left-3', 'top-1/2', '-translate-y-1/2', 'text-gray-500')} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
                   <input
                     value={disponibilidadeSearch}
                     onChange={e => setDisponibilidadeSearch(e.target.value)}
                     placeholder="Pesquisar produto..."
-                    className="w-full pl-8 pr-4 py-2 bg-[#121214] border border-[#27272A] rounded-xl text-white text-xs placeholder-gray-600 focus:outline-none focus:border-[#C5A880]/40 transition-colors"
+                    className={clsx('w-full', 'pl-8', 'pr-4', 'py-2', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-xs', 'placeholder-gray-600', 'focus:outline-none', 'focus:border-[#C5A880]/40', 'transition-colors')}
                   />
                   {disponibilidadeSearch && (
-                    <button onClick={() => setDisponibilidadeSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
-                      <X size={11}/>
+                    <button onClick={() => setDisponibilidadeSearch('')} className={clsx('absolute', 'right-3', 'top-1/2', '-translate-y-1/2', 'text-gray-500', 'hover:text-white')}>
+                      <X size={11} />
                     </button>
                   )}
                 </div>
 
                 {/* Categories */}
                 {Object.entries(byCat).map(([cat, prods]) => (
-                  <div key={cat} className="bg-[#121214]/60 border border-[#27272A] rounded-2xl overflow-hidden">
-                    <div className="bg-[#18181B] px-4 py-2 border-b border-[#27272A] flex justify-between items-center">
-                      <span className="font-bold text-[#C5A880] text-[10px] uppercase tracking-wider">{cat}</span>
-                      <span className="text-[8px] text-gray-500">{prods.length} item{prods.length !== 1 ? 's' : ''}</span>
+                  <div key={cat} className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-2xl', 'overflow-hidden')}>
+                    <div className={clsx('bg-[#18181B]', 'px-4', 'py-2', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center')}>
+                      <span className={clsx('font-bold', 'text-[#C5A880]', 'text-[10px]', 'uppercase', 'tracking-wider')}>{cat}</span>
+                      <span className={clsx('text-[8px]', 'text-gray-500')}>{prods.length} item{prods.length !== 1 ? 's' : ''}</span>
                     </div>
-                    <div className="divide-y divide-[#27272A]/40">
+                    <div className={clsx('divide-y', 'divide-[#27272A]/40')}>
                       {prods.map(prod => {
                         const isAtivo = (prod as any).ativo !== false;
                         return (
                           <div key={prod.id} className={`flex items-center justify-between px-4 py-3 transition-colors ${isAtivo ? 'hover:bg-[#1C1C1F]/30' : 'bg-red-950/10'}`}>
-                            <div className="flex items-center gap-3">
+                            <div className={clsx('flex', 'items-center', 'gap-3')}>
                               {(prod as any).imagem && <img src={(prod as any).imagem} alt={prod.nome} className={`w-8 h-8 rounded-lg object-cover ${!isAtivo ? 'opacity-40 grayscale' : ''}`} />}
                               <div>
                                 <span className={`text-xs font-semibold block ${isAtivo ? 'text-white' : 'text-gray-500 line-through'}`}>{prod.nome}</span>
-                                <span className="text-[9px] text-gray-500 font-mono">R$ {prod.preco.toFixed(2)}</span>
+                                <span className={clsx('text-[9px]', 'text-gray-500', 'font-mono')}>R$ {prod.preco.toFixed(2)}</span>
                               </div>
                             </div>
                             <button
@@ -4007,11 +3980,10 @@ export function CaixaPanel({
                                   else { alert('Erro ao atualizar disponibilidade.'); }
                                 } catch { alert('Erro de conexão.'); }
                               }}
-                              className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase transition-all cursor-pointer border ${
-                                isAtivo
-                                  ? 'bg-emerald-600/10 text-emerald-500 hover:bg-red-800/20 hover:text-red-400 border-emerald-600/20 hover:border-red-600/20'
-                                  : 'bg-red-800/15 text-red-400 hover:bg-emerald-600/20 hover:text-emerald-400 border-red-600/20 hover:border-emerald-600/20'
-                              }`}
+                              className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase transition-all cursor-pointer border ${isAtivo
+                                ? 'bg-emerald-600/10 text-emerald-500 hover:bg-red-800/20 hover:text-red-400 border-emerald-600/20 hover:border-red-600/20'
+                                : 'bg-red-800/15 text-red-400 hover:bg-emerald-600/20 hover:text-emerald-400 border-red-600/20 hover:border-emerald-600/20'
+                                }`}
                             >
                               {isAtivo ? '✓ Disponível' : '✗ Esgotado'}
                             </button>
@@ -4022,7 +3994,7 @@ export function CaixaPanel({
                   </div>
                 ))}
                 {filtered.length === 0 && (
-                  <div className="py-16 text-center text-gray-500 italic text-xs">Nenhum produto encontrado para "{disponibilidadeSearch}".</div>
+                  <div className={clsx('py-16', 'text-center', 'text-gray-500', 'italic', 'text-xs')}>Nenhum produto encontrado para "{disponibilidadeSearch}".</div>
                 )}
               </div>
             );
@@ -4033,38 +4005,38 @@ export function CaixaPanel({
 
           {/* MOCK VIEW: ENTRADA DE XML NFE */}
           {activeTab === 'estoque' && activeSubTab === 'xml' && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 text-left animate-fade-in">
-              <div className="lg:col-span-1 bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-4 h-fit">
-                <span className="font-serif font-bold text-gray-300 block pb-1 border-b border-[#27272A]">Importar XML de NFe</span>
-                <div className="border-2 border-dashed border-[#27272A] rounded-2xl py-8 px-4 text-center cursor-pointer hover:border-[#C5A880]/30 transition-all flex flex-col items-center justify-center space-y-2">
-                  <span className="text-[10px] text-gray-400">Arraste seu arquivo .xml aqui</span>
-                  <span className="text-[8px] text-gray-500">ou clique para selecionar do computador</span>
+            <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5', 'text-left', 'animate-fade-in')}>
+              <div className={clsx('lg:col-span-1', 'bg-[#121214]', 'border', 'border-[#27272A]', 'p-5', 'rounded-3xl', 'space-y-4', 'h-fit')}>
+                <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Importar XML de NFe</span>
+                <div className={clsx('border-2', 'border-dashed', 'border-[#27272A]', 'rounded-2xl', 'py-8', 'px-4', 'text-center', 'cursor-pointer', 'hover:border-[#C5A880]/30', 'transition-all', 'flex', 'flex-col', 'items-center', 'justify-center', 'space-y-2')}>
+                  <span className={clsx('text-[10px]', 'text-gray-400')}>Arraste seu arquivo .xml aqui</span>
+                  <span className={clsx('text-[8px]', 'text-gray-500')}>ou clique para selecionar do computador</span>
                 </div>
-                <p className="text-[8px] text-gray-500 leading-normal">O sistema cadastrará insumos e reajustará o estoque automaticamente ao processar.</p>
+                <p className={clsx('text-[8px]', 'text-gray-500', 'leading-normal')}>O sistema cadastrará insumos e reajustará o estoque automaticamente ao processar.</p>
               </div>
 
-              <div className="lg:col-span-2 bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 space-y-4">
-                <span className="font-serif font-bold text-gray-300 block pb-1 border-b border-[#27272A]">Entradas de NF-e Recentes</span>
-                <div className="overflow-hidden border border-[#27272A]/40 rounded-2xl">
-                  <table className="w-full text-left text-[10px]">
+              <div className={clsx('lg:col-span-2', 'bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4')}>
+                <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Entradas de NF-e Recentes</span>
+                <div className={clsx('overflow-hidden', 'border', 'border-[#27272A]/40', 'rounded-2xl')}>
+                  <table className={clsx('w-full', 'text-left', 'text-[10px]')}>
                     <thead>
-                      <tr className="bg-[#1C1C1F] border-b border-[#27272A] text-gray-400 uppercase tracking-wider font-bold">
+                      <tr className={clsx('bg-[#1C1C1F]', 'border-b', 'border-[#27272A]', 'text-gray-400', 'uppercase', 'tracking-wider', 'font-bold')}>
                         <th className="p-3">Nota</th>
                         <th className="p-3">Fornecedor</th>
-                        <th className="p-3 font-mono">Valor NFe</th>
-                        <th className="p-3 text-right">Data Importação</th>
+                        <th className={clsx('p-3', 'font-mono')}>Valor NFe</th>
+                        <th className={clsx('p-3', 'text-right')}>Data Importação</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#27272A]/40">
+                    <tbody className={clsx('divide-y', 'divide-[#27272A]/40')}>
                       {[
                         { nota: "NF-001923", for: "Distribuidora Carnes Ltda", valor: 1450.00, data: "28/06/2026" },
                         { nota: "NF-001855", for: "Hortifruti Central", valor: 380.50, data: "25/06/2026" }
                       ].map((n, idx) => (
-                        <tr key={idx} className="hover:bg-[#1C1C1F]/20 transition-colors">
-                          <td className="p-3 font-mono font-bold text-white">{n.nota}</td>
-                          <td className="p-3 text-gray-300">{n.for}</td>
-                          <td className="p-3 font-mono text-emerald-400">R$ {n.valor.toFixed(2)}</td>
-                          <td className="p-3 text-gray-400 text-right">{n.data}</td>
+                        <tr key={idx} className={clsx('hover:bg-[#1C1C1F]/20', 'transition-colors')}>
+                          <td className={clsx('p-3', 'font-mono', 'font-bold', 'text-white')}>{n.nota}</td>
+                          <td className={clsx('p-3', 'text-gray-300')}>{n.for}</td>
+                          <td className={clsx('p-3', 'font-mono', 'text-emerald-400')}>R$ {n.valor.toFixed(2)}</td>
+                          <td className={clsx('p-3', 'text-gray-400', 'text-right')}>{n.data}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -4076,28 +4048,28 @@ export function CaixaPanel({
 
           {/* MOCK VIEW: FORNECEDORES */}
           {activeTab === 'estoque' && activeSubTab === 'fornecedores' && (
-            <div className="bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 space-y-4 text-left animate-fade-in max-w-2xl">
-              <span className="font-serif font-bold text-gray-300 block border-b border-[#27272A] pb-2">Fornecedores Cadastrados</span>
-              <div className="overflow-hidden border border-[#27272A]/40 rounded-2xl">
-                <table className="w-full text-left text-[10px]">
+            <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'text-left', 'animate-fade-in', 'max-w-2xl')}>
+              <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'border-b', 'border-[#27272A]', 'pb-2')}>Fornecedores Cadastrados</span>
+              <div className={clsx('overflow-hidden', 'border', 'border-[#27272A]/40', 'rounded-2xl')}>
+                <table className={clsx('w-full', 'text-left', 'text-[10px]')}>
                   <thead>
-                    <tr className="bg-[#1C1C1F] border-b border-[#27272A] text-gray-400 uppercase tracking-wider font-bold">
+                    <tr className={clsx('bg-[#1C1C1F]', 'border-b', 'border-[#27272A]', 'text-gray-400', 'uppercase', 'tracking-wider', 'font-bold')}>
                       <th className="p-3.5">Nome Fantasia</th>
                       <th className="p-3.5">Telefone</th>
                       <th className="p-3.5">CNPJ</th>
-                      <th className="p-3.5 text-right">Insumos Principais</th>
+                      <th className={clsx('p-3.5', 'text-right')}>Insumos Principais</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#27272A]/40">
+                  <tbody className={clsx('divide-y', 'divide-[#27272A]/40')}>
                     {[
                       { nome: "Distribuidora Carnes Ltda", tel: "(11) 98765-4321", cnpj: "12.345.678/0001-99", ins: "Carne Bovina, Frango" },
                       { nome: "Hortifruti Central", tel: "(11) 98888-7777", cnpj: "98.765.432/0001-88", ins: "Hortaliças, Tomate" }
                     ].map((f, idx) => (
-                      <tr key={idx} className="hover:bg-[#1C1C1F]/20 transition-colors">
-                        <td className="p-3.5 font-bold text-white">{f.nome}</td>
-                        <td className="p-3.5 font-mono text-gray-300">{f.tel}</td>
-                        <td className="p-3.5 font-mono text-gray-400">{f.cnpj}</td>
-                        <td className="p-3.5 text-gray-400 text-right italic">{f.ins}</td>
+                      <tr key={idx} className={clsx('hover:bg-[#1C1C1F]/20', 'transition-colors')}>
+                        <td className={clsx('p-3.5', 'font-bold', 'text-white')}>{f.nome}</td>
+                        <td className={clsx('p-3.5', 'font-mono', 'text-gray-300')}>{f.tel}</td>
+                        <td className={clsx('p-3.5', 'font-mono', 'text-gray-400')}>{f.cnpj}</td>
+                        <td className={clsx('p-3.5', 'text-gray-400', 'text-right', 'italic')}>{f.ins}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -4108,29 +4080,29 @@ export function CaixaPanel({
 
           {/* MOCK VIEW: FLUXO DE CAIXA DRE */}
           {activeTab === 'financeiro' && activeSubTab === 'fluxo' && (
-            <div className="space-y-5 text-left animate-fade-in">
-              <div className="bg-[#121214] border border-[#27272A] p-4.5 rounded-3xl space-y-2">
-                <h3 className="font-serif font-bold text-base text-white">Demonstrativo de Fluxo de Caixa</h3>
-                <p className="text-[10px] text-gray-400 leading-relaxed">
+            <div className={clsx('space-y-5', 'text-left', 'animate-fade-in')}>
+              <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-4.5', 'rounded-3xl', 'space-y-2')}>
+                <h3 className={clsx('font-serif', 'font-bold', 'text-base', 'text-white')}>Demonstrativo de Fluxo de Caixa</h3>
+                <p className={clsx('text-[10px]', 'text-gray-400', 'leading-relaxed')}>
                   Resumo simplificado de receitas, custos e despesas operacionais do mês atual.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5 font-mono text-[10px]">
-                <div className="bg-emerald-500/5 border border-emerald-500/10 p-5 rounded-3xl space-y-2">
-                  <span className="font-sans font-bold text-emerald-400 uppercase tracking-widest text-[8px] block">Receitas Totais</span>
-                  <strong className="text-xl text-white block">R$ 51.140,06</strong>
-                  <span className="text-gray-500 text-[8px] block">Entradas consolidadas do caixa de vendas.</span>
+              <div className={clsx('grid', 'grid-cols-1', 'md:grid-cols-3', 'gap-5', 'font-mono', 'text-[10px]')}>
+                <div className={clsx('bg-emerald-500/5', 'border', 'border-emerald-500/10', 'p-5', 'rounded-3xl', 'space-y-2')}>
+                  <span className={clsx('font-sans', 'font-bold', 'text-emerald-400', 'uppercase', 'tracking-widest', 'text-[8px]', 'block')}>Receitas Totais</span>
+                  <strong className={clsx('text-xl', 'text-white', 'block')}>R$ 51.140,06</strong>
+                  <span className={clsx('text-gray-500', 'text-[8px]', 'block')}>Entradas consolidadas do caixa de vendas.</span>
                 </div>
-                <div className="bg-rose-500/5 border border-rose-500/10 p-5 rounded-3xl space-y-2">
-                  <span className="font-sans font-bold text-rose-400 uppercase tracking-widest text-[8px] block">Custos e CMV</span>
-                  <strong className="text-xl text-white block">R$ 18.420,10</strong>
-                  <span className="text-gray-500 text-[8px] block">Com base na ficha técnica de insumos baixados.</span>
+                <div className={clsx('bg-rose-500/5', 'border', 'border-rose-500/10', 'p-5', 'rounded-3xl', 'space-y-2')}>
+                  <span className={clsx('font-sans', 'font-bold', 'text-rose-400', 'uppercase', 'tracking-widest', 'text-[8px]', 'block')}>Custos e CMV</span>
+                  <strong className={clsx('text-xl', 'text-white', 'block')}>R$ 18.420,10</strong>
+                  <span className={clsx('text-gray-500', 'text-[8px]', 'block')}>Com base na ficha técnica de insumos baixados.</span>
                 </div>
-                <div className="bg-sky-500/5 border border-sky-500/10 p-5 rounded-3xl space-y-2">
-                  <span className="font-sans font-bold text-sky-400 uppercase tracking-widest text-[8px] block">Lucro Líquido Estimado</span>
-                  <strong className="text-xl text-emerald-400 block">R$ 32.719,96</strong>
-                  <span className="text-gray-500 text-[8px] block">Margem líquida aproximada de 63.9%.</span>
+                <div className={clsx('bg-sky-500/5', 'border', 'border-sky-500/10', 'p-5', 'rounded-3xl', 'space-y-2')}>
+                  <span className={clsx('font-sans', 'font-bold', 'text-sky-400', 'uppercase', 'tracking-widest', 'text-[8px]', 'block')}>Lucro Líquido Estimado</span>
+                  <strong className={clsx('text-xl', 'text-emerald-400', 'block')}>R$ 32.719,96</strong>
+                  <span className={clsx('text-gray-500', 'text-[8px]', 'block')}>Margem líquida aproximada de 63.9%.</span>
                 </div>
               </div>
             </div>
@@ -4138,21 +4110,21 @@ export function CaixaPanel({
 
           {/* MOCK VIEW: FECHAMENTO CEGO */}
           {activeTab === 'financeiro' && activeSubTab === 'fechamento' && (
-            <div className="bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 space-y-4 text-left animate-fade-in max-w-md">
-              <span className="font-serif font-bold text-gray-300 block border-b border-[#27272A] pb-2">Fechamento Cego de Turno</span>
-              <p className="text-[10px] text-gray-400 leading-relaxed">
+            <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'text-left', 'animate-fade-in', 'max-w-md')}>
+              <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'border-b', 'border-[#27272A]', 'pb-2')}>Fechamento Cego de Turno</span>
+              <p className={clsx('text-[10px]', 'text-gray-400', 'leading-relaxed')}>
                 Declare os valores físicos presentes na gaveta para encerrar o caixa. O sistema fará a conferência de quebras sem exibir o saldo esperado para evitar fraudes.
               </p>
               <div className="space-y-3">
                 <div className="space-y-1">
-                  <label className="text-[8px] font-bold text-gray-400 block uppercase">Dinheiro Físico (R$):</label>
-                  <input type="number" placeholder="R$ 0,00" className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-white font-mono text-[10px]" />
+                  <label className={clsx('text-[8px]', 'font-bold', 'text-gray-400', 'block', 'uppercase')}>Dinheiro Físico (R$):</label>
+                  <input type="number" placeholder="R$ 0,00" className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'font-mono', 'text-[10px]')} />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[8px] font-bold text-gray-400 block uppercase">Comprovantes Cartão (R$):</label>
-                  <input type="number" placeholder="R$ 0,00" className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-white font-mono text-[10px]" />
+                  <label className={clsx('text-[8px]', 'font-bold', 'text-gray-400', 'block', 'uppercase')}>Comprovantes Cartão (R$):</label>
+                  <input type="number" placeholder="R$ 0,00" className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'font-mono', 'text-[10px]')} />
                 </div>
-                <button type="button" onClick={() => alert('Turno fechado com sucesso!')} className="w-full py-2 bg-[#7A1F2D] hover:bg-[#8d2a3a] text-white font-bold rounded-xl text-[9px] uppercase tracking-wider cursor-pointer">
+                <button type="button" onClick={() => alert('Turno fechado com sucesso!')} className={clsx('w-full', 'py-2', 'bg-[#7A1F2D]', 'hover:bg-[#8d2a3a]', 'text-white', 'font-bold', 'rounded-xl', 'text-[9px]', 'uppercase', 'tracking-wider', 'cursor-pointer')}>
                   Confirmar Encerramento de Turno
                 </button>
               </div>
@@ -4161,20 +4133,20 @@ export function CaixaPanel({
 
           {/* MOCK VIEW: SUPRIMENTO / SANGRIA */}
           {activeTab === 'financeiro' && activeSubTab === 'suprimento' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-left animate-fade-in">
-              <div className="bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-4">
-                <span className="font-serif font-bold text-gray-300 block pb-1 border-b border-[#27272A]">Sangria (Retirada de Caixa)</span>
+            <div className={clsx('grid', 'grid-cols-1', 'md:grid-cols-2', 'gap-5', 'text-left', 'animate-fade-in')}>
+              <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-5', 'rounded-3xl', 'space-y-4')}>
+                <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Sangria (Retirada de Caixa)</span>
                 <div className="space-y-3">
-                  <input type="number" placeholder="Valor R$" className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-white font-mono text-[10px]" />
-                  <input type="text" placeholder="Motivo da Sangria" className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-white text-[10px]" />
-                  <button type="button" onClick={() => alert('Sangria efetuada')} className="px-4 py-2 bg-[#7A1F2D] text-white font-bold rounded-xl text-[9px] uppercase tracking-wider cursor-pointer">Confirmar Sangria</button>
+                  <input type="number" placeholder="Valor R$" className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'font-mono', 'text-[10px]')} />
+                  <input type="text" placeholder="Motivo da Sangria" className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-[10px]')} />
+                  <button type="button" onClick={() => alert('Sangria efetuada')} className={clsx('px-4', 'py-2', 'bg-[#7A1F2D]', 'text-white', 'font-bold', 'rounded-xl', 'text-[9px]', 'uppercase', 'tracking-wider', 'cursor-pointer')}>Confirmar Sangria</button>
                 </div>
               </div>
-              <div className="bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-4">
-                <span className="font-serif font-bold text-gray-300 block pb-1 border-b border-[#27272A]">Suprimento (Entrada de Troco)</span>
+              <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-5', 'rounded-3xl', 'space-y-4')}>
+                <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Suprimento (Entrada de Troco)</span>
                 <div className="space-y-3">
-                  <input type="number" placeholder="Valor R$" className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-white font-mono text-[10px]" />
-                  <button type="button" onClick={() => alert('Suprimento efetuado')} className="px-4 py-2 bg-emerald-600 text-white font-bold rounded-xl text-[9px] uppercase tracking-wider cursor-pointer">Confirmar Suprimento</button>
+                  <input type="number" placeholder="Valor R$" className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'font-mono', 'text-[10px]')} />
+                  <button type="button" onClick={() => alert('Suprimento efetuado')} className={clsx('px-4', 'py-2', 'bg-emerald-600', 'text-white', 'font-bold', 'rounded-xl', 'text-[9px]', 'uppercase', 'tracking-wider', 'cursor-pointer')}>Confirmar Suprimento</button>
                 </div>
               </div>
             </div>
@@ -4182,37 +4154,37 @@ export function CaixaPanel({
 
           {/* MOCK VIEW: PAINEL FISCAL NFCE */}
           {activeTab === 'financeiro' && activeSubTab === 'fiscal' && (
-            <div className="space-y-5 text-left animate-fade-in">
-              <div className="bg-[#121214] border border-[#27272A] p-4.5 rounded-3xl space-y-2">
-                <h3 className="font-serif font-bold text-base text-white">Notas Fiscais de Consumidor (NFC-e)</h3>
-                <p className="text-[10px] text-gray-400 leading-relaxed">
+            <div className={clsx('space-y-5', 'text-left', 'animate-fade-in')}>
+              <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-4.5', 'rounded-3xl', 'space-y-2')}>
+                <h3 className={clsx('font-serif', 'font-bold', 'text-base', 'text-white')}>Notas Fiscais de Consumidor (NFC-e)</h3>
+                <p className={clsx('text-[10px]', 'text-gray-400', 'leading-relaxed')}>
                   Acompanhe e retransmita notas fiscais rejeitadas ou em contingência para a SEFAZ.
                 </p>
               </div>
 
-              <div className="bg-[#121214]/60 border border-[#27272A] rounded-3xl overflow-hidden">
-                <table className="w-full text-left text-[10px]">
+              <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'overflow-hidden')}>
+                <table className={clsx('w-full', 'text-left', 'text-[10px]')}>
                   <thead>
-                    <tr className="bg-[#1C1C1F] border-b border-[#27272A] text-gray-400 uppercase tracking-wider font-bold">
+                    <tr className={clsx('bg-[#1C1C1F]', 'border-b', 'border-[#27272A]', 'text-gray-400', 'uppercase', 'tracking-wider', 'font-bold')}>
                       <th className="p-3.5">Mesa / Ref</th>
                       <th className="p-3.5">Data Emissão</th>
-                      <th className="p-3.5 font-mono">Valor Comanda</th>
+                      <th className={clsx('p-3.5', 'font-mono')}>Valor Comanda</th>
                       <th className="p-3.5">Chave de Acesso SEFAZ</th>
-                      <th className="p-3.5 text-right">Status</th>
+                      <th className={clsx('p-3.5', 'text-right')}>Status</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#27272A]/40">
+                  <tbody className={clsx('divide-y', 'divide-[#27272A]/40')}>
                     {[
                       { ref: "Mesa 12", data: "01/07/2026 22:30", valor: 145.00, chave: "3526 0712 3456 7800 0199 6500 1000 0019 2314 5678", status: "Autorizada" },
                       { ref: "Mesa 05", data: "01/07/2026 21:15", valor: 89.90, chave: "3526 0712 3456 7800 0199 6500 1000 0018 5514 5678", status: "Autorizada" }
                     ].map((f, idx) => (
-                      <tr key={idx} className="hover:bg-[#1C1C1F]/20 transition-colors">
-                        <td className="p-3.5 font-bold text-white">{f.ref}</td>
-                        <td className="p-3.5 text-gray-400">{f.data}</td>
-                        <td className="p-3.5 font-mono text-emerald-400">R$ {f.valor.toFixed(2)}</td>
-                        <td className="p-3.5 font-mono text-gray-500 tracking-wider text-[8px]">{f.chave}</td>
-                        <td className="p-3.5 text-right">
-                          <span className="px-2 py-0.5 rounded-full text-[8px] font-bold uppercase bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                      <tr key={idx} className={clsx('hover:bg-[#1C1C1F]/20', 'transition-colors')}>
+                        <td className={clsx('p-3.5', 'font-bold', 'text-white')}>{f.ref}</td>
+                        <td className={clsx('p-3.5', 'text-gray-400')}>{f.data}</td>
+                        <td className={clsx('p-3.5', 'font-mono', 'text-emerald-400')}>R$ {f.valor.toFixed(2)}</td>
+                        <td className={clsx('p-3.5', 'font-mono', 'text-gray-500', 'tracking-wider', 'text-[8px]')}>{f.chave}</td>
+                        <td className={clsx('p-3.5', 'text-right')}>
+                          <span className={clsx('px-2', 'py-0.5', 'rounded-full', 'text-[8px]', 'font-bold', 'uppercase', 'bg-emerald-500/10', 'text-emerald-500', 'border', 'border-emerald-500/20')}>
                             {f.status}
                           </span>
                         </td>
@@ -4226,30 +4198,30 @@ export function CaixaPanel({
 
           {/* MOCK VIEW: CRM CLIENTES */}
           {activeTab === 'clientes' && activeSubTab === 'crm' && (
-            <div className="bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 space-y-4 text-left animate-fade-in max-w-3xl">
-              <span className="font-serif font-bold text-gray-300 block border-b border-[#27272A] pb-2">CRM — Cadastro de Clientes</span>
-              <div className="overflow-hidden border border-[#27272A]/40 rounded-2xl">
-                <table className="w-full text-left text-[10px]">
+            <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'text-left', 'animate-fade-in', 'max-w-3xl')}>
+              <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'border-b', 'border-[#27272A]', 'pb-2')}>CRM — Cadastro de Clientes</span>
+              <div className={clsx('overflow-hidden', 'border', 'border-[#27272A]/40', 'rounded-2xl')}>
+                <table className={clsx('w-full', 'text-left', 'text-[10px]')}>
                   <thead>
-                    <tr className="bg-[#1C1C1F] border-b border-[#27272A] text-gray-400 uppercase tracking-wider font-bold">
+                    <tr className={clsx('bg-[#1C1C1F]', 'border-b', 'border-[#27272A]', 'text-gray-400', 'uppercase', 'tracking-wider', 'font-bold')}>
                       <th className="p-3.5">Nome</th>
                       <th className="p-3.5">WhatsApp</th>
-                      <th className="p-3.5 font-mono">Pedidos</th>
-                      <th className="p-3.5 font-mono">Ticket Médio</th>
-                      <th className="p-3.5 text-right">Frequência</th>
+                      <th className={clsx('p-3.5', 'font-mono')}>Pedidos</th>
+                      <th className={clsx('p-3.5', 'font-mono')}>Ticket Médio</th>
+                      <th className={clsx('p-3.5', 'text-right')}>Frequência</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#27272A]/40">
+                  <tbody className={clsx('divide-y', 'divide-[#27272A]/40')}>
                     {[
                       { nome: "João Silva", wpp: "(11) 99999-1111", ped: 12, ticket: 45.50, freq: "Semanal" },
                       { nome: "Maria Souza", wpp: "(11) 98888-2222", ped: 8, ticket: 32.10, freq: "Quinzenal" }
                     ].map((c, idx) => (
-                      <tr key={idx} className="hover:bg-[#1C1C1F]/20 transition-colors">
-                        <td className="p-3.5 font-bold text-white">{c.nome}</td>
-                        <td className="p-3.5 font-mono text-gray-300">{c.wpp}</td>
-                        <td className="p-3.5 font-mono text-gray-300">{c.ped}</td>
-                        <td className="p-3.5 font-mono text-emerald-400">R$ {c.ticket.toFixed(2)}</td>
-                        <td className="p-3.5 text-gray-400 text-right font-bold text-[8px] uppercase tracking-wider">{c.freq}</td>
+                      <tr key={idx} className={clsx('hover:bg-[#1C1C1F]/20', 'transition-colors')}>
+                        <td className={clsx('p-3.5', 'font-bold', 'text-white')}>{c.nome}</td>
+                        <td className={clsx('p-3.5', 'font-mono', 'text-gray-300')}>{c.wpp}</td>
+                        <td className={clsx('p-3.5', 'font-mono', 'text-gray-300')}>{c.ped}</td>
+                        <td className={clsx('p-3.5', 'font-mono', 'text-emerald-400')}>R$ {c.ticket.toFixed(2)}</td>
+                        <td className={clsx('p-3.5', 'text-gray-400', 'text-right', 'font-bold', 'text-[8px]', 'uppercase', 'tracking-wider')}>{c.freq}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -4260,21 +4232,21 @@ export function CaixaPanel({
 
           {/* MOCK VIEW: CHAT CO-PILOTO */}
           {activeTab === 'operacao' && activeSubTab === 'chat_copiloto' && (
-            <div className="h-[calc(82vh-100px)] flex gap-4 text-left animate-fade-in">
+            <div className={clsx('h-[calc(82vh-100px)]', 'flex', 'gap-4', 'text-left', 'animate-fade-in')}>
               {/* Left Column: Contatos */}
-              <div className="w-1/4 bg-[#121214] border border-[#27272A] rounded-3xl flex flex-col overflow-hidden">
-                <div className="p-4 border-b border-[#27272A] space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="font-serif font-bold text-xs text-white">Conversas WhatsApp</span>
-                    <span className="bg-[#C5A880]/15 text-[#C5A880] text-[8px] font-bold px-1.5 py-0.5 rounded-full">3 Ativos</span>
+              <div className={clsx('w-1/4', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-3xl', 'flex', 'flex-col', 'overflow-hidden')}>
+                <div className={clsx('p-4', 'border-b', 'border-[#27272A]', 'space-y-3')}>
+                  <div className={clsx('flex', 'justify-between', 'items-center')}>
+                    <span className={clsx('font-serif', 'font-bold', 'text-xs', 'text-white')}>Conversas WhatsApp</span>
+                    <span className={clsx('bg-[#C5A880]/15', 'text-[#C5A880]', 'text-[8px]', 'font-bold', 'px-1.5', 'py-0.5', 'rounded-full')}>3 Ativos</span>
                   </div>
                   {/* Global Toggle */}
-                  <div className="bg-[#1C1C1F] border border-[#27272A]/60 rounded-xl p-2.5 flex justify-between items-center">
+                  <div className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]/60', 'rounded-xl', 'p-2.5', 'flex', 'justify-between', 'items-center')}>
                     <div className="space-y-0.5">
-                      <span className="text-[9px] font-bold text-white block">Piloto Automático</span>
-                      <span className="text-[7px] text-gray-500 block">IA responde sem intervenção</span>
+                      <span className={clsx('text-[9px]', 'font-bold', 'text-white', 'block')}>Piloto Automático</span>
+                      <span className={clsx('text-[7px]', 'text-gray-500', 'block')}>IA responde sem intervenção</span>
                     </div>
-                    <button 
+                    <button
                       onClick={() => setIaPilotMode(iaPilotMode === 'copilot' ? 'autopilot' : 'copilot')}
                       className={`w-9 h-5 rounded-full p-0.5 transition-colors duration-200 focus:outline-none cursor-pointer ${iaPilotMode === 'autopilot' ? 'bg-[#C5A880]' : 'bg-[#27272A]'}`}
                     >
@@ -4283,32 +4255,30 @@ export function CaixaPanel({
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-2.5 space-y-1.5">
+                <div className={clsx('flex-1', 'overflow-y-auto', 'p-2.5', 'space-y-1.5')}>
                   {copilotContacts.map(contact => (
                     <button
                       key={contact.id}
                       onClick={() => setActiveChatContactId(contact.id)}
-                      className={`w-full p-3 rounded-2xl border text-left transition-all flex flex-col gap-1.5 cursor-pointer relative ${
-                        activeChatContactId === contact.id
-                          ? 'bg-[#C5A880]/10 border-[#C5A880]/30 text-white'
-                          : 'bg-[#1C1C1F]/40 border-transparent hover:bg-[#1C1C1F]/80 text-gray-400'
-                      }`}
+                      className={`w-full p-3 rounded-2xl border text-left transition-all flex flex-col gap-1.5 cursor-pointer relative ${activeChatContactId === contact.id
+                        ? 'bg-[#C5A880]/10 border-[#C5A880]/30 text-white'
+                        : 'bg-[#1C1C1F]/40 border-transparent hover:bg-[#1C1C1F]/80 text-gray-400'
+                        }`}
                     >
-                      <div className="flex justify-between items-center">
-                        <span className="text-[10px] font-bold text-white block">{contact.name}</span>
-                        <span className="text-[8px] text-gray-500">{contact.time}</span>
+                      <div className={clsx('flex', 'justify-between', 'items-center')}>
+                        <span className={clsx('text-[10px]', 'font-bold', 'text-white', 'block')}>{contact.name}</span>
+                        <span className={clsx('text-[8px]', 'text-gray-500')}>{contact.time}</span>
                       </div>
-                      <span className="text-[8px] truncate leading-relaxed block">{contact.lastMsg}</span>
-                      <div className="flex justify-between items-center pt-1">
-                        <span className={`text-[7px] font-bold px-1.5 py-0.5 rounded-full ${
-                          contact.iaStatus === 'Aguardando Co-Piloto' ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' :
+                      <span className={clsx('text-[8px]', 'truncate', 'leading-relaxed', 'block')}>{contact.lastMsg}</span>
+                      <div className={clsx('flex', 'justify-between', 'items-center', 'pt-1')}>
+                        <span className={`text-[7px] font-bold px-1.5 py-0.5 rounded-full ${contact.iaStatus === 'Aguardando Co-Piloto' ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' :
                           contact.iaStatus === 'Piloto Automático' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' :
-                          'bg-gray-500/10 text-gray-400 border border-gray-500/20'
-                        }`}>
+                            'bg-gray-500/10 text-gray-400 border border-gray-500/20'
+                          }`}>
                           {contact.iaStatus}
                         </span>
                         {contact.pendingAction && (
-                          <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+                          <span className={clsx('h-2', 'w-2', 'rounded-full', 'bg-amber-500', 'animate-pulse')} />
                         )}
                       </div>
                     </button>
@@ -4317,24 +4287,24 @@ export function CaixaPanel({
               </div>
 
               {/* Center Column: Janela de Chat */}
-              <div className="flex-1 bg-[#121214] border border-[#27272A] rounded-3xl flex flex-col overflow-hidden relative">
+              <div className={clsx('flex-1', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-3xl', 'flex', 'flex-col', 'overflow-hidden', 'relative')}>
                 {/* Active Contact Header */}
                 {(() => {
                   const contact = copilotContacts.find(c => c.id === activeChatContactId);
                   if (!contact) return null;
                   return (
-                    <div className="p-4 border-b border-[#27272A] bg-[#1C1C1F]/50 flex justify-between items-center">
+                    <div className={clsx('p-4', 'border-b', 'border-[#27272A]', 'bg-[#1C1C1F]/50', 'flex', 'justify-between', 'items-center')}>
                       <div>
-                        <span className="text-[11px] font-bold text-white block">{contact.name}</span>
-                        <span className="text-[8px] text-gray-400 block">{contact.phone} • WhatsApp</span>
+                        <span className={clsx('text-[11px]', 'font-bold', 'text-white', 'block')}>{contact.name}</span>
+                        <span className={clsx('text-[8px]', 'text-gray-400', 'block')}>{contact.phone} • WhatsApp</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <button 
+                      <div className={clsx('flex', 'items-center', 'gap-2')}>
+                        <button
                           onClick={() => {
                             setCopilotContacts(prev => prev.map(c => c.id === activeChatContactId ? { ...c, iaStatus: "Atendimento Humano", pendingAction: false } : c));
                             alert('A IA foi pausada. Modo de intervenção manual ativo.');
                           }}
-                          className="px-2.5 py-1 bg-[#7A1F2D] hover:bg-[#8d2a3a] text-white rounded-lg text-[8px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+                          className={clsx('px-2.5', 'py-1', 'bg-[#7A1F2D]', 'hover:bg-[#8d2a3a]', 'text-white', 'rounded-lg', 'text-[8px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}
                         >
                           ⚠️ Assumir Atendimento
                         </button>
@@ -4344,35 +4314,34 @@ export function CaixaPanel({
                 })()}
 
                 {/* Conversation area */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                <div className={clsx('flex-1', 'overflow-y-auto', 'p-4', 'space-y-4')}>
                   {copilotMessages.filter(m => m.contactId === activeChatContactId).map((msg, index) => (
                     <div key={index} className={`flex ${msg.sender === 'cliente' ? 'justify-start' : 'justify-end'}`}>
-                      <div className={`max-w-[70%] rounded-2xl p-3 text-[10px] space-y-1.5 ${
-                        msg.sender === 'cliente' 
-                          ? 'bg-[#1C1C1F] text-white border border-[#27272A]' 
-                          : 'bg-[#C5A880]/15 text-[#C5A880] border border-[#C5A880]/10'
-                      }`}>
-                        <div className="flex justify-between gap-4 text-gray-400 text-[8px]">
-                          <span className="font-bold uppercase">{msg.sender === 'cliente' ? 'Cliente' : msg.sender === 'ia' ? 'IA Co-Piloto' : 'Atendente'}</span>
+                      <div className={`max-w-[70%] rounded-2xl p-3 text-[10px] space-y-1.5 ${msg.sender === 'cliente'
+                        ? 'bg-[#1C1C1F] text-white border border-[#27272A]'
+                        : 'bg-[#C5A880]/15 text-[#C5A880] border border-[#C5A880]/10'
+                        }`}>
+                        <div className={clsx('flex', 'justify-between', 'gap-4', 'text-gray-400', 'text-[8px]')}>
+                          <span className={clsx('font-bold', 'uppercase')}>{msg.sender === 'cliente' ? 'Cliente' : msg.sender === 'ia' ? 'IA Co-Piloto' : 'Atendente'}</span>
                           <span>{msg.time}</span>
                         </div>
                         {msg.isAudio ? (
                           <div className="space-y-2">
-                            <div className="flex items-center gap-2 bg-[#121214] p-2 rounded-xl border border-[#27272A]">
-                              <button className="h-6 w-6 bg-[#C5A880] text-[#121214] rounded-full flex items-center justify-center cursor-pointer">▶</button>
-                              <div className="flex gap-0.5 items-center flex-1 h-3">
-                                {[3,6,4,8,12,6,4,9,14,10,7,5,8,3,2,6,9,11,8,4].map((h, i) => (
-                                  <div key={i} className="bg-sky-400 flex-1 rounded-sm" style={{ height: `${h * 7}%` }} />
+                            <div className={clsx('flex', 'items-center', 'gap-2', 'bg-[#121214]', 'p-2', 'rounded-xl', 'border', 'border-[#27272A]')}>
+                              <button className={clsx('h-6', 'w-6', 'bg-[#C5A880]', 'text-[#121214]', 'rounded-full', 'flex', 'items-center', 'justify-center', 'cursor-pointer')}>▶</button>
+                              <div className={clsx('flex', 'gap-0.5', 'items-center', 'flex-1', 'h-3')}>
+                                {[3, 6, 4, 8, 12, 6, 4, 9, 14, 10, 7, 5, 8, 3, 2, 6, 9, 11, 8, 4].map((h, i) => (
+                                  <div key={i} className={clsx('bg-sky-400', 'flex-1', 'rounded-sm')} style={{ height: `${h * 7}%` }} />
                                 ))}
                               </div>
                             </div>
-                            <div className="bg-sky-500/10 border border-sky-500/20 p-2.5 rounded-xl space-y-1">
-                              <span className="bg-sky-400 text-[#121214] text-[7px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider">IA Transcrição</span>
-                              <p className="text-sky-100 leading-relaxed font-serif text-[9px] italic">"{msg.audioText}"</p>
+                            <div className={clsx('bg-sky-500/10', 'border', 'border-sky-500/20', 'p-2.5', 'rounded-xl', 'space-y-1')}>
+                              <span className={clsx('bg-sky-400', 'text-[#121214]', 'text-[7px]', 'font-bold', 'px-1.5', 'py-0.5', 'rounded-full', 'uppercase', 'tracking-wider')}>IA Transcrição</span>
+                              <p className={clsx('text-sky-100', 'leading-relaxed', 'font-serif', 'text-[9px]', 'italic')}>"{msg.audioText}"</p>
                             </div>
                           </div>
                         ) : (
-                          <p className="leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                          <p className={clsx('leading-relaxed', 'whitespace-pre-wrap')}>{msg.text}</p>
                         )}
                       </div>
                     </div>
@@ -4380,75 +4349,75 @@ export function CaixaPanel({
                 </div>
 
                 {/* Send raw message */}
-                <div className="p-4 border-t border-[#27272A] bg-[#1C1C1F]/30 flex gap-2">
-                  <input 
-                    type="text" 
-                    placeholder="Escreva uma mensagem de intervenção humana..." 
-                    className="flex-1 px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-white text-[10px] focus:outline-none focus:border-[#C5A880]"
+                <div className={clsx('p-4', 'border-t', 'border-[#27272A]', 'bg-[#1C1C1F]/30', 'flex', 'gap-2')}>
+                  <input
+                    type="text"
+                    placeholder="Escreva uma mensagem de intervenção humana..."
+                    className={clsx('flex-1', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-[10px]', 'focus:outline-none', 'focus:border-[#C5A880]')}
                   />
-                  <button className="px-4 py-2 bg-[#C5A880] text-[#121214] font-bold rounded-xl text-[9px] uppercase tracking-wider cursor-pointer">Enviar</button>
+                  <button className={clsx('px-4', 'py-2', 'bg-[#C5A880]', 'text-[#121214]', 'font-bold', 'rounded-xl', 'text-[9px]', 'uppercase', 'tracking-wider', 'cursor-pointer')}>Enviar</button>
                 </div>
               </div>
 
               {/* Right Column: Painel Co-Piloto */}
-              <div className="w-1/4 bg-[#121214] border border-[#27272A] rounded-3xl p-4 flex flex-col justify-between overflow-y-auto">
+              <div className={clsx('w-1/4', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-4', 'flex', 'flex-col', 'justify-between', 'overflow-y-auto')}>
                 <div className="space-y-4">
-                  <div className="border-b border-[#27272A] pb-2">
-                    <span className="font-serif font-bold text-xs text-white block">Ações do Co-Piloto</span>
-                    <span className="text-[8px] text-gray-500 block leading-relaxed">Revise e edite a resposta e os itens antes de enviar ao cliente.</span>
+                  <div className={clsx('border-b', 'border-[#27272A]', 'pb-2')}>
+                    <span className={clsx('font-serif', 'font-bold', 'text-xs', 'text-white', 'block')}>Ações do Co-Piloto</span>
+                    <span className={clsx('text-[8px]', 'text-gray-500', 'block', 'leading-relaxed')}>Revise e edite a resposta e os itens antes de enviar ao cliente.</span>
                   </div>
 
                   {/* Resposta Sugerida */}
                   <div className="space-y-1.5">
-                    <label className="text-[8px] font-bold text-gray-400 uppercase tracking-widest block">Resposta Sugerida pela IA:</label>
-                    <textarea 
+                    <label className={clsx('text-[8px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-widest', 'block')}>Resposta Sugerida pela IA:</label>
+                    <textarea
                       value={copilotDraftResponses[activeChatContactId] || ''}
                       onChange={(e) => {
                         const val = e.target.value;
                         setCopilotDraftResponses(prev => ({ ...prev, [activeChatContactId]: val }));
                       }}
                       rows={4}
-                      className="w-full p-2.5 bg-[#09090B] border border-[#27272A] rounded-xl text-white text-[9px] leading-relaxed resize-none focus:outline-none focus:border-[#C5A880]"
+                      className={clsx('w-full', 'p-2.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-[9px]', 'leading-relaxed', 'resize-none', 'focus:outline-none', 'focus:border-[#C5A880]')}
                     />
                   </div>
 
                   {/* Carrinho Rascunhado */}
                   <div className="space-y-2">
-                    <label className="text-[8px] font-bold text-gray-400 uppercase tracking-widest block">Carrinho Rascunhado (IA):</label>
+                    <label className={clsx('text-[8px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-widest', 'block')}>Carrinho Rascunhado (IA):</label>
                     {copilotDraftCarts[activeChatContactId] && copilotDraftCarts[activeChatContactId].length > 0 ? (
-                      <div className="bg-[#1C1C1F] border border-[#27272A]/80 rounded-2xl p-3 space-y-2">
+                      <div className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]/80', 'rounded-2xl', 'p-3', 'space-y-2')}>
                         {copilotDraftCarts[activeChatContactId].map((item, idx) => (
-                          <div key={idx} className="flex justify-between items-center border-b border-[#27272A]/40 pb-1.5 last:border-b-0 last:pb-0 text-[9px]">
+                          <div key={idx} className={clsx('flex', 'justify-between', 'items-center', 'border-b', 'border-[#27272A]/40', 'pb-1.5', 'last:border-b-0', 'last:pb-0', 'text-[9px]')}>
                             <div>
-                              <strong className="text-white block font-bold">{item.product.nome}</strong>
-                              <span className="text-[8px] text-gray-400 block">{item.quantity}x • R$ {item.product.preco.toFixed(2)}</span>
+                              <strong className={clsx('text-white', 'block', 'font-bold')}>{item.product.nome}</strong>
+                              <span className={clsx('text-[8px]', 'text-gray-400', 'block')}>{item.quantity}x • R$ {item.product.preco.toFixed(2)}</span>
                             </div>
-                            <span className="font-bold font-mono text-[#C5A880]">R$ {(item.product.preco * item.quantity).toFixed(2)}</span>
+                            <span className={clsx('font-bold', 'font-mono', 'text-[#C5A880]')}>R$ {(item.product.preco * item.quantity).toFixed(2)}</span>
                           </div>
                         ))}
-                        <div className="pt-1.5 border-t border-[#27272A] flex justify-between items-center text-[10px]">
-                          <strong className="text-white font-serif">Subtotal Rascunho</strong>
-                          <strong className="text-emerald-400 font-mono font-bold">
+                        <div className={clsx('pt-1.5', 'border-t', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'text-[10px]')}>
+                          <strong className={clsx('text-white', 'font-serif')}>Subtotal Rascunho</strong>
+                          <strong className={clsx('text-emerald-400', 'font-mono', 'font-bold')}>
                             R$ {copilotDraftCarts[activeChatContactId].reduce((acc, c) => acc + (c.product.preco * c.quantity), 0).toFixed(2)}
                           </strong>
                         </div>
                       </div>
                     ) : (
-                      <div className="text-center p-4 bg-[#1C1C1F] border border-[#27272A]/60 rounded-2xl">
-                        <span className="text-[9px] text-gray-500 italic block">Nenhum carrinho detectado neste chat.</span>
+                      <div className={clsx('text-center', 'p-4', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]/60', 'rounded-2xl')}>
+                        <span className={clsx('text-[9px]', 'text-gray-500', 'italic', 'block')}>Nenhum carrinho detectado neste chat.</span>
                       </div>
                     )}
                   </div>
                 </div>
 
-                <div className="pt-4 border-t border-[#27272A] space-y-2">
-                  <button 
+                <div className={clsx('pt-4', 'border-t', 'border-[#27272A]', 'space-y-2')}>
+                  <button
                     disabled={!copilotDraftResponses[activeChatContactId]}
                     onClick={() => {
                       // Process approval
                       const contact = copilotContacts.find(c => c.id === activeChatContactId);
                       if (!contact) return;
-                      
+
                       // 1. Add suggested response to messages history
                       setCopilotMessages(prev => [
                         ...prev,
@@ -4477,17 +4446,17 @@ export function CaixaPanel({
                       // 3. Update contact status to responded / clear pending
                       setCopilotContacts(prev => prev.map(c => c.id === activeChatContactId ? { ...c, iaStatus: "Resposta Enviada", pendingAction: false } : c));
                     }}
-                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl text-[9px] uppercase tracking-wider transition-all cursor-pointer shadow-lg"
+                    className={clsx('w-full', 'py-2.5', 'bg-emerald-600', 'hover:bg-emerald-700', 'disabled:opacity-50', 'text-white', 'font-bold', 'rounded-xl', 'text-[9px]', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-lg')}
                   >
                     Aprovar e Enviar (WhatsApp)
                   </button>
-                  <button 
+                  <button
                     onClick={() => {
                       setCopilotDraftCarts(prev => ({ ...prev, [activeChatContactId]: [] }));
                       setCopilotDraftResponses(prev => ({ ...prev, [activeChatContactId]: "" }));
                       setCopilotContacts(prev => prev.map(c => c.id === activeChatContactId ? { ...c, pendingAction: false, iaStatus: "Rascunho Limpo" } : c));
                     }}
-                    className="w-full py-1.5 bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] text-gray-400 hover:text-white rounded-xl text-[8px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+                    className={clsx('w-full', 'py-1.5', 'bg-[#1C1C1F]', 'hover:bg-[#27272A]', 'border', 'border-[#27272A]', 'text-gray-400', 'hover:text-white', 'rounded-xl', 'text-[8px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}
                   >
                     Limpar Rascunhos
                   </button>
@@ -4498,21 +4467,21 @@ export function CaixaPanel({
 
           {/* VIEW: FRETISTAS & LOGÍSTICA */}
           {activeSubTab === 'entregadores' && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 animate-fade-in text-left">
-              
+            <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5', 'animate-fade-in', 'text-left')}>
+
               {/* Painel de Entregas (Colunas da Esquerda) */}
-              <div className="lg:col-span-2 bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 space-y-5 flex flex-col overflow-hidden">
-                <div className="border-b border-[#27272A] pb-3 shrink-0">
-                  <span className="font-serif font-bold text-gray-300 block text-sm">Controle de Despacho e Entregas</span>
-                  <span className="text-[9px] text-gray-500 block">Gerencie o fluxo de saída e entrega de pedidos de Delivery.</span>
+              <div className={clsx('lg:col-span-2', 'bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-5', 'flex', 'flex-col', 'overflow-hidden')}>
+                <div className={clsx('border-b', 'border-[#27272A]', 'pb-3', 'shrink-0')}>
+                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'text-sm')}>Controle de Despacho e Entregas</span>
+                  <span className={clsx('text-[9px]', 'text-gray-500', 'block')}>Gerencie o fluxo de saída e entrega de pedidos de Delivery.</span>
                 </div>
 
                 {/* Pedidos Pendentes de Envio */}
-                <div className="space-y-3 flex-1 overflow-y-auto">
-                  <span className="text-[10px] font-bold text-[#C5A880] uppercase tracking-wider block">Pedidos para Despachar</span>
-                  
+                <div className={clsx('space-y-3', 'flex-1', 'overflow-y-auto')}>
+                  <span className={clsx('text-[10px]', 'font-bold', 'text-[#C5A880]', 'uppercase', 'tracking-wider', 'block')}>Pedidos para Despachar</span>
+
                   {simulatedOrders.filter(o => o.status === 'producao' || o.status === 'analise').length === 0 ? (
-                    <div className="py-8 text-center text-gray-500 text-xs italic bg-[#1C1C1F]/20 border border-[#27272A]/40 rounded-2xl">
+                    <div className={clsx('py-8', 'text-center', 'text-gray-500', 'text-xs', 'italic', 'bg-[#1C1C1F]/20', 'border', 'border-[#27272A]/40', 'rounded-2xl')}>
                       Não há pedidos prontos ou em produção aguardando despacho no momento.
                     </div>
                   ) : (
@@ -4520,27 +4489,27 @@ export function CaixaPanel({
                       {simulatedOrders.filter(o => o.status === 'producao' || o.status === 'analise').map((order) => {
                         const motoboyId = selectedMotoboys[order.id] || '';
                         return (
-                          <div key={order.id} className="p-4 bg-[#1C1C1F] border border-[#27272A] rounded-2xl flex flex-col sm:flex-row justify-between gap-3 text-xs">
-                            <div className="space-y-1.5 flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="font-bold text-white text-[11px]">Pedido {order.id}</span>
-                                <span className="bg-[#C5A880]/15 text-[#C5A880] text-[8px] font-bold px-1.5 py-0.5 rounded border border-[#C5A880]/20 uppercase">
+                          <div key={order.id} className={clsx('p-4', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'sm:flex-row', 'justify-between', 'gap-3', 'text-xs')}>
+                            <div className={clsx('space-y-1.5', 'flex-1')}>
+                              <div className={clsx('flex', 'items-center', 'gap-2')}>
+                                <span className={clsx('font-bold', 'text-white', 'text-[11px]')}>Pedido {order.id}</span>
+                                <span className={clsx('bg-[#C5A880]/15', 'text-[#C5A880]', 'text-[8px]', 'font-bold', 'px-1.5', 'py-0.5', 'rounded', 'border', 'border-[#C5A880]/20', 'uppercase')}>
                                   {order.canal}
                                 </span>
                               </div>
-                              <span className="text-gray-300 font-bold block">{order.cliente} • {order.telefone}</span>
-                              <span className="text-gray-400 text-[10px] block leading-relaxed">{order.endereco}</span>
-                              <span className="text-[9px] text-gray-500 block font-mono">Itens: {order.itens}</span>
+                              <span className={clsx('text-gray-300', 'font-bold', 'block')}>{order.cliente} • {order.telefone}</span>
+                              <span className={clsx('text-gray-400', 'text-[10px]', 'block', 'leading-relaxed')}>{order.endereco}</span>
+                              <span className={clsx('text-[9px]', 'text-gray-500', 'block', 'font-mono')}>Itens: {order.itens}</span>
                             </div>
-                            
-                            <div className="flex flex-col sm:items-end justify-between gap-2 shrink-0">
-                              <span className="font-mono font-bold text-emerald-400 text-[11px]">R$ {order.total.toFixed(2)}</span>
-                              
-                              <div className="flex items-center gap-2">
+
+                            <div className={clsx('flex', 'flex-col', 'sm:items-end', 'justify-between', 'gap-2', 'shrink-0')}>
+                              <span className={clsx('font-mono', 'font-bold', 'text-emerald-400', 'text-[11px]')}>R$ {order.total.toFixed(2)}</span>
+
+                              <div className={clsx('flex', 'items-center', 'gap-2')}>
                                 <select
                                   value={motoboyId}
                                   onChange={(e) => setSelectedMotoboys(prev => ({ ...prev, [order.id]: e.target.value }))}
-                                  className="py-1.5 px-2 bg-[#121214] border border-[#27272A] text-white rounded-xl text-[10px] focus:outline-none focus:border-[#C5A880]"
+                                  className={clsx('py-1.5', 'px-2', 'bg-[#121214]', 'border', 'border-[#27272A]', 'text-white', 'rounded-xl', 'text-[10px]', 'focus:outline-none', 'focus:border-[#C5A880]')}
                                 >
                                   <option value="">Selecione o Entregador...</option>
                                   {motoboys.filter(m => m.ativo).map(m => (
@@ -4551,7 +4520,7 @@ export function CaixaPanel({
                                   type="button"
                                   disabled={!motoboyId}
                                   onClick={() => handleDespacharPedido(order.id, parseInt(motoboyId))}
-                                  className="py-1.5 px-3 bg-[#7A1F2D] hover:bg-[#9d2b3c] disabled:opacity-50 text-white font-bold rounded-xl text-[10px] uppercase tracking-wider transition-colors cursor-pointer"
+                                  className={clsx('py-1.5', 'px-3', 'bg-[#7A1F2D]', 'hover:bg-[#9d2b3c]', 'disabled:opacity-50', 'text-white', 'font-bold', 'rounded-xl', 'text-[10px]', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
                                 >
                                   Despachar
                                 </button>
@@ -4564,35 +4533,35 @@ export function CaixaPanel({
                   )}
 
                   {/* Pedidos Em Trânsito */}
-                  <span className="text-[10px] font-bold text-[#C5A880] uppercase tracking-wider block pt-4">Em Trânsito (Entregas Ativas)</span>
-                  
+                  <span className={clsx('text-[10px]', 'font-bold', 'text-[#C5A880]', 'uppercase', 'tracking-wider', 'block', 'pt-4')}>Em Trânsito (Entregas Ativas)</span>
+
                   {simulatedOrders.filter(o => o.status === 'pronto').length === 0 ? (
-                    <div className="py-8 text-center text-gray-500 text-xs italic bg-[#1C1C1F]/20 border border-[#27272A]/40 rounded-2xl">
+                    <div className={clsx('py-8', 'text-center', 'text-gray-500', 'text-xs', 'italic', 'bg-[#1C1C1F]/20', 'border', 'border-[#27272A]/40', 'rounded-2xl')}>
                       Nenhum pedido em trânsito no momento.
                     </div>
                   ) : (
                     <div className="space-y-3">
                       {simulatedOrders.filter(o => o.status === 'pronto').map((order) => {
                         return (
-                          <div key={order.id} className="p-4 bg-[#1C1C1F]/40 border border-[#27272A]/40 rounded-2xl flex flex-col sm:flex-row justify-between gap-3 text-xs">
-                            <div className="space-y-1 flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="font-bold text-white text-[11px]">Pedido {order.id}</span>
-                                <span className="bg-emerald-500/10 text-emerald-400 text-[8px] font-bold px-1.5 py-0.5 rounded border border-emerald-500/20 uppercase tracking-wider">
+                          <div key={order.id} className={clsx('p-4', 'bg-[#1C1C1F]/40', 'border', 'border-[#27272A]/40', 'rounded-2xl', 'flex', 'flex-col', 'sm:flex-row', 'justify-between', 'gap-3', 'text-xs')}>
+                            <div className={clsx('space-y-1', 'flex-1')}>
+                              <div className={clsx('flex', 'items-center', 'gap-2')}>
+                                <span className={clsx('font-bold', 'text-white', 'text-[11px]')}>Pedido {order.id}</span>
+                                <span className={clsx('bg-emerald-500/10', 'text-emerald-400', 'text-[8px]', 'font-bold', 'px-1.5', 'py-0.5', 'rounded', 'border', 'border-emerald-500/20', 'uppercase', 'tracking-wider')}>
                                   Em Trânsito
                                 </span>
                               </div>
-                              <span className="text-gray-300 font-bold block">{order.cliente} • {order.telefone}</span>
-                              <span className="text-gray-400 text-[10px] block leading-relaxed">{order.endereco}</span>
+                              <span className={clsx('text-gray-300', 'font-bold', 'block')}>{order.cliente} • {order.telefone}</span>
+                              <span className={clsx('text-gray-400', 'text-[10px]', 'block', 'leading-relaxed')}>{order.endereco}</span>
                             </div>
-                            
-                            <div className="flex flex-col sm:items-end justify-between gap-2 shrink-0">
-                              <span className="font-mono font-bold text-emerald-400 text-[11px]">R$ {order.total.toFixed(2)}</span>
-                              
+
+                            <div className={clsx('flex', 'flex-col', 'sm:items-end', 'justify-between', 'gap-2', 'shrink-0')}>
+                              <span className={clsx('font-mono', 'font-bold', 'text-emerald-400', 'text-[11px]')}>R$ {order.total.toFixed(2)}</span>
+
                               <button
                                 type="button"
                                 onClick={() => handleFinalizarPedido(order.id)}
-                                className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-[10px] uppercase tracking-wider transition-colors cursor-pointer"
+                                className={clsx('py-1.5', 'px-3', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'font-bold', 'rounded-xl', 'text-[10px]', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
                               >
                                 Concluir Entrega
                               </button>
@@ -4606,26 +4575,25 @@ export function CaixaPanel({
               </div>
 
               {/* Gerenciamento de Fretistas (Coluna da Direita) */}
-              <div className="bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 space-y-4 flex flex-col justify-between overflow-hidden">
-                <div className="space-y-4 flex-1 flex flex-col overflow-hidden">
-                  <div className="border-b border-[#27272A] pb-3 shrink-0">
-                    <span className="font-serif font-bold text-gray-300 block text-sm">Fretistas Cadastrados</span>
-                    <span className="text-[9px] text-gray-500 block">Lista de motoboys e entregadores de plantão.</span>
+              <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'flex', 'flex-col', 'justify-between', 'overflow-hidden')}>
+                <div className={clsx('space-y-4', 'flex-1', 'flex', 'flex-col', 'overflow-hidden')}>
+                  <div className={clsx('border-b', 'border-[#27272A]', 'pb-3', 'shrink-0')}>
+                    <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'text-sm')}>Fretistas Cadastrados</span>
+                    <span className={clsx('text-[9px]', 'text-gray-500', 'block')}>Lista de motoboys e entregadores de plantão.</span>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto space-y-2.5">
+                  <div className={clsx('flex-1', 'overflow-y-auto', 'space-y-2.5')}>
                     {motoboys.length === 0 ? (
-                      <span className="text-xs text-gray-500 italic">Nenhum fretista cadastrado.</span>
+                      <span className={clsx('text-xs', 'text-gray-500', 'italic')}>Nenhum fretista cadastrado.</span>
                     ) : (
                       motoboys.map((m) => (
-                        <div key={m.id} className="p-3 bg-[#1C1C1F] border border-[#27272A] rounded-xl flex items-center justify-between gap-2">
+                        <div key={m.id} className={clsx('p-3', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'flex', 'items-center', 'justify-between', 'gap-2')}>
                           <div className="text-xs">
-                            <span className="font-bold text-white block">{m.nome}</span>
-                            <span className="text-[10px] text-gray-400 block font-mono">{m.telefone}</span>
+                            <span className={clsx('font-bold', 'text-white', 'block')}>{m.nome}</span>
+                            <span className={clsx('text-[10px]', 'text-gray-400', 'block', 'font-mono')}>{m.telefone}</span>
                           </div>
-                          <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ${
-                            m.ativo ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                          }`}>
+                          <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ${m.ativo ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                            }`}>
                             {m.ativo ? 'Ativo' : 'Inativo'}
                           </span>
                         </div>
@@ -4635,16 +4603,16 @@ export function CaixaPanel({
                 </div>
 
                 {/* Cadastro de novo Motoboy */}
-                <form onSubmit={handleCadastrarMotoboy} className="pt-4 border-t border-[#27272A] space-y-3 shrink-0">
-                  <span className="text-[10px] font-bold text-[#C5A880] uppercase tracking-wider block">Novo Fretista</span>
-                  
+                <form onSubmit={handleCadastrarMotoboy} className={clsx('pt-4', 'border-t', 'border-[#27272A]', 'space-y-3', 'shrink-0')}>
+                  <span className={clsx('text-[10px]', 'font-bold', 'text-[#C5A880]', 'uppercase', 'tracking-wider', 'block')}>Novo Fretista</span>
+
                   <input
                     type="text"
                     required
                     placeholder="Nome do Entregador"
                     value={novoMotoboyNome}
                     onChange={(e) => setNovoMotoboyNome(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-white text-xs focus:outline-none focus:border-[#C5A880]"
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-xs', 'focus:outline-none', 'focus:border-[#C5A880]')}
                   />
                   <input
                     type="text"
@@ -4652,11 +4620,11 @@ export function CaixaPanel({
                     placeholder="Telefone (ex: 81 99999-8888)"
                     value={novoMotoboyTelefone}
                     onChange={(e) => setNovoMotoboyTelefone(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-white text-xs font-mono focus:outline-none focus:border-[#C5A880]"
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-xs', 'font-mono', 'focus:outline-none', 'focus:border-[#C5A880]')}
                   />
                   <button
                     type="submit"
-                    className="w-full py-2 bg-[#7A1F2D] hover:bg-[#9d2b3c] text-white font-bold rounded-xl text-[10px] uppercase tracking-wider transition-colors cursor-pointer"
+                    className={clsx('w-full', 'py-2', 'bg-[#7A1F2D]', 'hover:bg-[#9d2b3c]', 'text-white', 'font-bold', 'rounded-xl', 'text-[10px]', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
                   >
                     Adicionar Fretista
                   </button>
@@ -4668,16 +4636,16 @@ export function CaixaPanel({
 
           {/* MOCK VIEW: SETUP WIZARD (NICHO) */}
           {activeTab === 'configuracoes' && activeSubTab === 'nicho_wizard' && (
-            <div className="bg-[#121214] border border-[#27272A] rounded-3xl p-6 text-left max-w-2xl mx-auto space-y-6 animate-fade-in">
-              <div className="border-b border-[#27272A] pb-3">
-                <span className="font-serif font-bold text-base text-white block">Setup Wizard — Assistente de Configuração</span>
-                <span className="text-[10px] text-gray-400 block mt-1">Configure as regras de operação e a estrutura do menu de acordo com o nicho de mercado do seu restaurante.</span>
+            <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-6', 'text-left', 'max-w-2xl', 'mx-auto', 'space-y-6', 'animate-fade-in')}>
+              <div className={clsx('border-b', 'border-[#27272A]', 'pb-3')}>
+                <span className={clsx('font-serif', 'font-bold', 'text-base', 'text-white', 'block')}>Setup Wizard — Assistente de Configuração</span>
+                <span className={clsx('text-[10px]', 'text-gray-400', 'block', 'mt-1')}>Configure as regras de operação e a estrutura do menu de acordo com o nicho de mercado do seu restaurante.</span>
               </div>
 
               {/* Nicho selector Grid */}
               <div className="space-y-2">
-                <label className="text-[9px] font-bold text-gray-300 uppercase tracking-wider block">Escolha seu Nicho Operacional:</label>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                <label className={clsx('text-[9px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Escolha seu Nicho Operacional:</label>
+                <div className={clsx('grid', 'grid-cols-2', 'sm:grid-cols-5', 'gap-3')}>
                   {[
                     { id: 'hamburgueria', label: 'Hamburgueria', icon: '🍔' },
                     { id: 'pizzaria', label: 'Pizzaria', icon: '🍕' },
@@ -4699,29 +4667,28 @@ export function CaixaPanel({
                           setModulesActive({ salon: true, delivery: true });
                         }
                       }}
-                      className={`p-4 rounded-2xl border text-center transition-all flex flex-col items-center justify-center gap-2 cursor-pointer ${
-                        restaurantNicho === n.id
-                          ? 'bg-[#C5A880]/15 border-[#C5A880] text-[#C5A880] shadow-inner font-bold'
-                          : 'bg-[#1C1C1F]/40 border-[#27272A] text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
-                      }`}
+                      className={`p-4 rounded-2xl border text-center transition-all flex flex-col items-center justify-center gap-2 cursor-pointer ${restaurantNicho === n.id
+                        ? 'bg-[#C5A880]/15 border-[#C5A880] text-[#C5A880] shadow-inner font-bold'
+                        : 'bg-[#1C1C1F]/40 border-[#27272A] text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
+                        }`}
                     >
                       <span className="text-xl">{n.icon}</span>
-                      <span className="text-[9px] block whitespace-nowrap">{n.label}</span>
+                      <span className={clsx('text-[9px]', 'block', 'whitespace-nowrap')}>{n.label}</span>
                     </button>
                   ))}
                 </div>
               </div>
 
               {/* Módulos de UI Actives */}
-              <div className="bg-[#1C1C1F]/40 border border-[#27272A] rounded-2xl p-4.5 space-y-4">
-                <span className="text-[10px] font-bold text-white block uppercase tracking-wider">Módulos Ativos do Sistema</span>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex justify-between items-center p-3 bg-[#121214] border border-[#27272A]/60 rounded-xl">
+              <div className={clsx('bg-[#1C1C1F]/40', 'border', 'border-[#27272A]', 'rounded-2xl', 'p-4.5', 'space-y-4')}>
+                <span className={clsx('text-[10px]', 'font-bold', 'text-white', 'block', 'uppercase', 'tracking-wider')}>Módulos Ativos do Sistema</span>
+                <div className={clsx('grid', 'grid-cols-2', 'gap-4')}>
+                  <div className={clsx('flex', 'justify-between', 'items-center', 'p-3', 'bg-[#121214]', 'border', 'border-[#27272A]/60', 'rounded-xl')}>
                     <div>
-                      <strong className="text-[10px] text-white block font-bold">Mapa de Mesas (Salão)</strong>
-                      <span className="text-[8px] text-gray-500 block">Exibe grid físico de comandas e consumo local</span>
+                      <strong className={clsx('text-[10px]', 'text-white', 'block', 'font-bold')}>Mapa de Mesas (Salão)</strong>
+                      <span className={clsx('text-[8px]', 'text-gray-500', 'block')}>Exibe grid físico de comandas e consumo local</span>
                     </div>
-                    <button 
+                    <button
                       onClick={() => setModulesActive(prev => ({ ...prev, salon: !prev.salon }))}
                       className={`w-9 h-5 rounded-full p-0.5 transition-colors duration-200 focus:outline-none cursor-pointer ${modulesActive.salon ? 'bg-emerald-600' : 'bg-[#27272A]'}`}
                     >
@@ -4729,12 +4696,12 @@ export function CaixaPanel({
                     </button>
                   </div>
 
-                  <div className="flex justify-between items-center p-3 bg-[#121214] border border-[#27272A]/60 rounded-xl">
+                  <div className={clsx('flex', 'justify-between', 'items-center', 'p-3', 'bg-[#121214]', 'border', 'border-[#27272A]/60', 'rounded-xl')}>
                     <div>
-                      <strong className="text-[10px] text-white block font-bold">Entrega / Delivery</strong>
-                      <span className="text-[8px] text-gray-500 block">Ativa triagem de entregadores e taxas por bairro</span>
+                      <strong className={clsx('text-[10px]', 'text-white', 'block', 'font-bold')}>Entrega / Delivery</strong>
+                      <span className={clsx('text-[8px]', 'text-gray-500', 'block')}>Ativa triagem de entregadores e taxas por bairro</span>
                     </div>
-                    <button 
+                    <button
                       onClick={() => setModulesActive(prev => ({ ...prev, delivery: !prev.delivery }))}
                       className={`w-9 h-5 rounded-full p-0.5 transition-colors duration-200 focus:outline-none cursor-pointer ${modulesActive.delivery ? 'bg-emerald-600' : 'bg-[#27272A]'}`}
                     >
@@ -4745,11 +4712,11 @@ export function CaixaPanel({
               </div>
 
               {/* Nicho-specific customized settings card */}
-              <div className="bg-[#C5A880]/5 border border-[#C5A880]/15 rounded-2xl p-4.5 space-y-3">
-                <span className="text-[10px] font-bold text-[#C5A880] flex items-center gap-1.5 uppercase tracking-wider">
+              <div className={clsx('bg-[#C5A880]/5', 'border', 'border-[#C5A880]/15', 'rounded-2xl', 'p-4.5', 'space-y-3')}>
+                <span className={clsx('text-[10px]', 'font-bold', 'text-[#C5A880]', 'flex', 'items-center', 'gap-1.5', 'uppercase', 'tracking-wider')}>
                   🍕 Configurações Automáticas do Nicho: {restaurantNicho.toUpperCase()}
                 </span>
-                <ul className="text-[9px] text-gray-400 space-y-1.5 list-disc pl-4 leading-relaxed">
+                <ul className={clsx('text-[9px]', 'text-gray-400', 'space-y-1.5', 'list-disc', 'pl-4', 'leading-relaxed')}>
                   {restaurantNicho === 'pizzaria' && (
                     <>
                       <li><strong>Pedidos Fracionados:</strong> Ativado cálculo de pizza meio a meio (Preço baseado no sabor mais caro).</li>
@@ -4784,11 +4751,11 @@ export function CaixaPanel({
                 </ul>
               </div>
 
-              <div className="pt-4 border-t border-[#27272A] flex justify-end">
-                <button 
-                  type="button" 
+              <div className={clsx('pt-4', 'border-t', 'border-[#27272A]', 'flex', 'justify-end')}>
+                <button
+                  type="button"
                   onClick={() => alert(`Nicho ${restaurantNicho.toUpperCase()} configurado com sucesso! Módulos de interface atualizados.`)}
-                  className="px-5 py-2.5 bg-[#C5A880] hover:bg-[#B3966E] text-[#121214] font-bold rounded-xl text-[9px] uppercase tracking-wider transition-all cursor-pointer shadow-lg"
+                  className={clsx('px-5', 'py-2.5', 'bg-[#C5A880]', 'hover:bg-[#B3966E]', 'text-[#121214]', 'font-bold', 'rounded-xl', 'text-[9px]', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-lg')}
                 >
                   Salvar Configurações de Nicho
                 </button>
@@ -4797,489 +4764,480 @@ export function CaixaPanel({
           )}
 
         </div>
-      </main>
+      </main >
 
       {/* 1. MODAL: ABRIR CAIXA */}
-      {showAbrirModal && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <form onSubmit={handleAbrirCaixa} className="bg-[#1C1C1F] border border-[#27272A] rounded-3xl w-full max-w-sm p-6 space-y-5 shadow-2xl animate-scale-in">
-            <div className="flex justify-between items-center border-b border-[#27272A] pb-3">
-              <h3 className="font-serif font-bold text-lg text-white">Abertura de Caixa</h3>
-              <button type="button" onClick={() => setShowAbrirModal(false)} className="p-1 hover:bg-[#27272A] rounded-full text-gray-400 hover:text-white transition-colors cursor-pointer border border-transparent"><X size={16} /></button>
-            </div>
-            
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-gray-300 uppercase tracking-wider block">Fundo de Troco Inicial (R$):</label>
-              <div className="relative">
-                <span className="absolute left-3.5 top-3 text-gray-400 font-mono">R$</span>
-                <input 
-                  type="number" 
-                  step="0.01"
-                  required
-                  value={saldoInicial} 
-                  onChange={(e) => setSaldoInicial(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2.5 bg-[#121214] border border-[#27272A] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#C5A880]/20 focus:border-[#C5A880] text-white font-mono"
-                />
-              </div>
-            </div>
-
-            {errorMsg && (
-              <div className="bg-rose-500/10 border border-rose-500/25 text-rose-400 p-2.5 rounded-xl text-center font-medium block">
-                {errorMsg}
-              </div>
-            )}
-
-            <div className="flex gap-2.5">
-              <button type="button" onClick={() => setShowAbrirModal(false)} className="flex-1 py-2.5 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] text-white rounded-xl transition-all cursor-pointer font-bold">Cancelar</button>
-              <button type="submit" className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-all cursor-pointer font-bold shadow-md">Confirmar Abertura</button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* 2. MODAL: FECHAR CAIXA */}
-      {showFecharModal && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <form onSubmit={handleFecharCaixa} className="bg-[#1C1C1F] border border-[#27272A] rounded-3xl w-full max-w-md p-6 space-y-5 shadow-2xl animate-scale-in">
-            <div className="flex justify-between items-center border-b border-[#27272A] pb-3">
-              <h3 className="font-serif font-bold text-lg text-white">Fechamento do Caixa</h3>
-              <button type="button" onClick={() => setShowFecharModal(false)} className="p-1 hover:bg-[#27272A] rounded-full text-gray-400 hover:text-white transition-colors cursor-pointer border border-transparent"><X size={16} /></button>
-            </div>
-            
-            <p className="text-[11px] text-gray-400 leading-relaxed bg-[#121214] p-3 rounded-xl border border-[#27272A]">
-              Insira os valores contados fisicamente na gaveta de dinheiro e confira as maquininhas de cartão/pix antes de fechar o turno.
-            </p>
-
-            <div className="space-y-4 font-sans text-xs">
-              <div className="grid grid-cols-3 gap-2 text-[10px] text-gray-400 uppercase tracking-wider font-bold border-b border-[#27272A] pb-1.5">
-                <span>Método</span>
-                <span className="text-right">Esperado</span>
-                <span className="text-right">Declarado</span>
+      {
+        showAbrirModal && (
+          <div className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4')}>
+            <form onSubmit={handleAbrirCaixa} className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-3xl', 'w-full', 'max-w-sm', 'p-6', 'space-y-5', 'shadow-2xl', 'animate-scale-in')}>
+              <div className={clsx('flex', 'justify-between', 'items-center', 'border-b', 'border-[#27272A]', 'pb-3')}>
+                <h3 className={clsx('font-serif', 'font-bold', 'text-lg', 'text-white')}>Abertura de Caixa</h3>
+                <button type="button" onClick={() => setShowAbrirModal(false)} className={clsx('p-1', 'hover:bg-[#27272A]', 'rounded-full', 'text-gray-400', 'hover:text-white', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}><X size={16} /></button>
               </div>
 
-              <div className="grid grid-cols-3 items-center gap-2 font-mono">
-                <span className="font-sans text-gray-300">Dinheiro</span>
-                <span className="text-right text-gray-400">R$ {turno?.total_esperado_dinheiro?.toFixed(2)}</span>
-                <input 
-                  type="number" 
-                  step="0.01"
-                  required
-                  placeholder="0.00"
-                  value={decDinheiro} 
-                  onChange={(e) => setDecDinheiro(e.target.value)}
-                  className="text-right py-1.5 bg-[#121214] border border-[#27272A] rounded-lg focus:outline-none focus:border-[#C5A880] text-white"
-                />
-              </div>
-
-              <div className="grid grid-cols-3 items-center gap-2 font-mono">
-                <span className="font-sans text-gray-300 font-medium">Pix</span>
-                <span className="text-right text-gray-400">R$ {turno?.total_esperado_pix?.toFixed(2)}</span>
-                <span className="text-right text-emerald-400 text-[10px] font-sans font-bold uppercase tracking-wide">Conciliado</span>
-              </div>
-
-              <div className="grid grid-cols-3 items-center gap-2 font-mono">
-                <span className="font-sans text-gray-300 font-medium">Cartão</span>
-                <span className="text-right text-gray-400">R$ {turno?.total_esperado_cartao?.toFixed(2)}</span>
-                <span className="text-right text-emerald-400 text-[10px] font-sans font-bold uppercase tracking-wide">Conciliado</span>
-              </div>
-            </div>
-
-            {errorMsg && (
-              <div className="bg-rose-500/10 border border-rose-500/25 text-rose-400 p-2.5 rounded-xl text-center font-medium block">
-                {errorMsg}
-              </div>
-            )}
-
-            <div className="flex gap-2.5 pt-2">
-              <button type="button" onClick={() => setShowFecharModal(false)} className="flex-1 py-2.5 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] text-white rounded-xl transition-all cursor-pointer font-bold">Voltar</button>
-              <button 
-                type="button"
-                onMouseDown={startHoldConfirm}
-                onMouseUp={cancelHoldConfirm}
-                onMouseLeave={cancelHoldConfirm}
-                onTouchStart={startHoldConfirm}
-                onTouchEnd={cancelHoldConfirm}
-                style={{ 
-                  background: holdProgress > 0 
-                    ? `linear-gradient(to right, #22C55E ${holdProgress}%, #7A1F2D ${holdProgress}%)` 
-                    : '#7A1F2D' 
-                }}
-                className="flex-1 py-2.5 text-white rounded-xl transition-all cursor-pointer font-bold shadow-md select-none relative overflow-hidden active:scale-95"
-              >
-                {holdProgress > 0 ? `Segurando (${Math.round(holdProgress)}%)` : 'Segurar para Fechar (2s)'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* 3. MODAL: SUPRIMENTO / SANGRIA */}
-      {showMovModal && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <form onSubmit={handleMovimentar} className="bg-[#1C1C1F] border border-[#27272A] rounded-3xl w-full max-w-sm p-6 space-y-5 shadow-2xl animate-scale-in">
-            <div className="flex justify-between items-center border-b border-[#27272A] pb-3">
-              <h3 className="font-serif font-bold text-lg text-white">Suprimento / Sangria</h3>
-              <button type="button" onClick={() => setShowMovModal(false)} className="p-1 hover:bg-[#27272A] rounded-full text-gray-400 hover:text-white transition-colors cursor-pointer border border-transparent"><X size={16} /></button>
-            </div>
-
-            <div className="flex gap-2 p-1 bg-[#121214] border border-[#27272A] rounded-xl shrink-0">
-              <button
-                type="button"
-                onClick={() => setMovTipo('suprimento')}
-                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                  movTipo === 'suprimento'
-                    ? 'bg-emerald-600 text-white font-bold'
-                    : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                <ArrowUpRight size={13} />
-                <span>Suprimento (Inserir)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setMovTipo('sangria')}
-                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                  movTipo === 'sangria'
-                    ? 'bg-[#7A1F2D] text-white shadow-sm font-bold'
-                    : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                <ArrowDownRight size={13} />
-                <span>Sangria (Retirar)</span>
-              </button>
-            </div>
-            
-            <div className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-gray-300 uppercase tracking-wider block">Valor (R$):</label>
+                <label className={clsx('text-[10px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Fundo de Troco Inicial (R$):</label>
                 <div className="relative">
-                  <span className="absolute left-3.5 top-3 text-gray-400 font-mono">R$</span>
-                  <input 
-                    type="number" 
+                  <span className={clsx('absolute', 'left-3.5', 'top-3', 'text-gray-400', 'font-mono')}>R$</span>
+                  <input
+                    type="number"
                     step="0.01"
                     required
-                    placeholder="0.00"
-                    value={movValor} 
-                    onChange={(e) => setMovValor(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2.5 bg-[#121214] border border-[#27272A] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#C5A880]/20 focus:border-[#C5A880] text-white font-mono"
+                    value={saldoInicial}
+                    onChange={(e) => setSaldoInicial(e.target.value)}
+                    className={clsx('w-full', 'pl-9', 'pr-4', 'py-2.5', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'focus:outline-none', 'focus:ring-2', 'focus:ring-[#C5A880]/20', 'focus:border-[#C5A880]', 'text-white', 'font-mono')}
                   />
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-gray-300 uppercase tracking-wider block">Motivo / Descrição:</label>
-                <input 
-                  type="text" 
-                  required
-                  placeholder="Ex: Troco inicial extra, Sangria de segurança..."
-                  value={movDesc} 
-                  onChange={(e) => setMovDesc(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-[#121214] border border-[#27272A] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#C5A880]/20 focus:border-[#C5A880] text-white"
-                />
+              {errorMsg && (
+                <div className={clsx('bg-rose-500/10', 'border', 'border-rose-500/25', 'text-rose-400', 'p-2.5', 'rounded-xl', 'text-center', 'font-medium', 'block')}>
+                  {errorMsg}
+                </div>
+              )}
+
+              <div className={clsx('flex', 'gap-2.5')}>
+                <button type="button" onClick={() => setShowAbrirModal(false)} className={clsx('flex-1', 'py-2.5', 'bg-[#121214]', 'hover:bg-[#27272A]', 'border', 'border-[#27272A]', 'text-white', 'rounded-xl', 'transition-all', 'cursor-pointer', 'font-bold')}>Cancelar</button>
+                <button type="submit" className={clsx('flex-1', 'py-2.5', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'rounded-xl', 'transition-all', 'cursor-pointer', 'font-bold', 'shadow-md')}>Confirmar Abertura</button>
               </div>
-            </div>
+            </form>
+          </div>
+        )
+      }
 
-            {errorMsg && (
-              <div className="bg-rose-500/10 border border-rose-500/25 text-rose-400 p-2.5 rounded-xl text-center font-medium block">
-                {errorMsg}
+      {/* 2. MODAL: FECHAR CAIXA */}
+      {
+        showFecharModal && (
+          <div className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4')}>
+            <form onSubmit={handleFecharCaixa} className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-3xl', 'w-full', 'max-w-md', 'p-6', 'space-y-5', 'shadow-2xl', 'animate-scale-in')}>
+              <div className={clsx('flex', 'justify-between', 'items-center', 'border-b', 'border-[#27272A]', 'pb-3')}>
+                <h3 className={clsx('font-serif', 'font-bold', 'text-lg', 'text-white')}>Fechamento do Caixa</h3>
+                <button type="button" onClick={() => setShowFecharModal(false)} className={clsx('p-1', 'hover:bg-[#27272A]', 'rounded-full', 'text-gray-400', 'hover:text-white', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}><X size={16} /></button>
               </div>
-            )}
 
-            <div className="flex gap-2.5">
-              <button type="button" onClick={() => setShowMovModal(false)} className="flex-1 py-2.5 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] text-white rounded-xl transition-all cursor-pointer font-bold">Cancelar</button>
-              <button type="submit" className="flex-1 py-2.5 bg-[#C5A880] hover:bg-[#b0936b] text-[#121214] rounded-xl transition-all cursor-pointer font-bold shadow-md">Salvar Lançamento</button>
-            </div>
-          </form>
-        </div>
-      )}
+              <p className={clsx('text-[11px]', 'text-gray-400', 'leading-relaxed', 'bg-[#121214]', 'p-3', 'rounded-xl', 'border', 'border-[#27272A]')}>
+                Insira os valores contados fisicamente na gaveta de dinheiro e confira as maquininhas de cartão/pix antes de fechar o turno.
+              </p>
 
-      {/* 4. MODAL: LIQUIDAÇÃO DE CONTA */}
-      {selectedOrder && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-[#0D0D10]/95 backdrop-blur-xl rounded-3xl border border-[#C5A880]/15 shadow-2xl w-full max-w-3xl overflow-hidden max-h-[90vh] flex flex-col my-4">
-            
-            <div className="bg-[#18181B] text-white p-5 flex justify-between items-center shrink-0 border-b border-[#27272A]">
-              <div>
-                <span className="text-[10px] font-bold text-[#C5A880] uppercase tracking-wider block">Checkout / Caixa</span>
-                <h3 className="font-serif text-lg font-bold text-white">
-                  {selectedOrder.mesaId > 0 ? `Mesa ${selectedOrder.mesaId}` : `Pedido Balcão`}
-                </h3>
-              </div>
-              <button 
-                type="button" 
-                onClick={() => setSelectedOrder(null)} 
-                className="p-1.5 hover:bg-[#27272A] rounded-full text-gray-400 hover:text-white transition-colors cursor-pointer border border-transparent"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="p-5 overflow-y-auto flex-1 bg-[#18181B] grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between border-b border-[#27272A] pb-1.5">
-                  <h4 className="font-serif font-bold text-gray-300">Extrato Consumo</h4>
-                  <label className="flex items-center gap-1.5 text-[10px] text-gray-400 font-bold uppercase tracking-wider cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      checked={checkoutServiceTax}
-                      onChange={(e) => {
-                        setCheckoutServiceTax(e.target.checked);
-                        const { subtotal } = getCheckoutTotals(selectedOrder);
-                        const newTotal = subtotal + (e.target.checked ? subtotal * (serviceTaxRate / 100) : 0);
-                        setPaymentValor(newTotal.toFixed(2));
-                      }}
-                      className="rounded border-[#27272A] text-[#7A1F2D] focus:ring-[#7A1F2D] h-3.5 w-3.5 bg-[#121214]"
-                    />
-                    <span>Taxa de {serviceTaxRate}%</span>
-                  </label>
+              <div className={clsx('space-y-4', 'font-sans', 'text-xs')}>
+                <div className={clsx('grid', 'grid-cols-3', 'gap-2', 'text-[10px]', 'text-gray-400', 'uppercase', 'tracking-wider', 'font-bold', 'border-b', 'border-[#27272A]', 'pb-1.5')}>
+                  <span>Método</span>
+                  <span className="text-right">Esperado</span>
+                  <span className="text-right">Declarado</span>
                 </div>
 
-                <div className="space-y-2.5 max-h-[40vh] overflow-y-auto pr-1">
-                  {selectedOrder.itens.map((item) => {
-                    const isPaid = item.pago;
-                    return (
-                      <div 
-                        key={item.id}
-                        onClick={() => {
-                          if (isPaid) return;
-                          setSelectedItemIds(prev => {
-                            const copy = [...prev];
-                            const idx = copy.indexOf(item.id);
-                            if (idx >= 0) {
-                              copy.splice(idx, 1);
-                            } else {
-                              copy.push(item.id);
-                            }
-                            const activeSelectedItems = selectedOrder.itens.filter(i => copy.includes(i.id));
-                            const sub = activeSelectedItems.reduce((sum, it) => sum + it.preco, 0);
-                            const t = sub * (1.0 + (checkoutServiceTax ? serviceTaxRate / 100 : 0));
-                            setPaymentValor(t.toFixed(2));
-                            return copy;
-                          });
+                <div className={clsx('grid', 'grid-cols-3', 'items-center', 'gap-2', 'font-mono')}>
+                  <span className={clsx('font-sans', 'text-gray-300')}>Dinheiro</span>
+                  <span className={clsx('text-right', 'text-gray-400')}>R$ {turno?.total_esperado_dinheiro?.toFixed(2)}</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    placeholder="0.00"
+                    value={decDinheiro}
+                    onChange={(e) => setDecDinheiro(e.target.value)}
+                    className={clsx('text-right', 'py-1.5', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'focus:border-[#C5A880]', 'text-white')}
+                  />
+                </div>
+
+                <div className={clsx('grid', 'grid-cols-3', 'items-center', 'gap-2', 'font-mono')}>
+                  <span className={clsx('font-sans', 'text-gray-300', 'font-medium')}>Pix</span>
+                  <span className={clsx('text-right', 'text-gray-400')}>R$ {turno?.total_esperado_pix?.toFixed(2)}</span>
+                  <span className={clsx('text-right', 'text-emerald-400', 'text-[10px]', 'font-sans', 'font-bold', 'uppercase', 'tracking-wide')}>Conciliado</span>
+                </div>
+
+                <div className={clsx('grid', 'grid-cols-3', 'items-center', 'gap-2', 'font-mono')}>
+                  <span className={clsx('font-sans', 'text-gray-300', 'font-medium')}>Cartão</span>
+                  <span className={clsx('text-right', 'text-gray-400')}>R$ {turno?.total_esperado_cartao?.toFixed(2)}</span>
+                  <span className={clsx('text-right', 'text-emerald-400', 'text-[10px]', 'font-sans', 'font-bold', 'uppercase', 'tracking-wide')}>Conciliado</span>
+                </div>
+              </div>
+
+              {errorMsg && (
+                <div className={clsx('bg-rose-500/10', 'border', 'border-rose-500/25', 'text-rose-400', 'p-2.5', 'rounded-xl', 'text-center', 'font-medium', 'block')}>
+                  {errorMsg}
+                </div>
+              )}
+
+              <div className={clsx('flex', 'gap-2.5', 'pt-2')}>
+                <button type="button" onClick={() => setShowFecharModal(false)} className={clsx('flex-1', 'py-2.5', 'bg-[#121214]', 'hover:bg-[#27272A]', 'border', 'border-[#27272A]', 'text-white', 'rounded-xl', 'transition-all', 'cursor-pointer', 'font-bold')}>Voltar</button>
+                <button
+                  type="button"
+                  onMouseDown={startHoldConfirm}
+                  onMouseUp={cancelHoldConfirm}
+                  onMouseLeave={cancelHoldConfirm}
+                  onTouchStart={startHoldConfirm}
+                  onTouchEnd={cancelHoldConfirm}
+                  style={{
+                    background: holdProgress > 0
+                      ? `linear-gradient(to right, #22C55E ${holdProgress}%, #7A1F2D ${holdProgress}%)`
+                      : '#7A1F2D'
+                  }}
+                  className={clsx('flex-1', 'py-2.5', 'text-white', 'rounded-xl', 'transition-all', 'cursor-pointer', 'font-bold', 'shadow-md', 'select-none', 'relative', 'overflow-hidden', 'active:scale-95')}
+                >
+                  {holdProgress > 0 ? `Segurando (${Math.round(holdProgress)}%)` : 'Segurar para Fechar (2s)'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )
+      }
+
+      {/* 3. MODAL: SUPRIMENTO / SANGRIA */}
+      {
+        showMovModal && (
+          <div className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4')}>
+            <form onSubmit={handleMovimentar} className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-3xl', 'w-full', 'max-w-sm', 'p-6', 'space-y-5', 'shadow-2xl', 'animate-scale-in')}>
+              <div className={clsx('flex', 'justify-between', 'items-center', 'border-b', 'border-[#27272A]', 'pb-3')}>
+                <h3 className={clsx('font-serif', 'font-bold', 'text-lg', 'text-white')}>Suprimento / Sangria</h3>
+                <button type="button" onClick={() => setShowMovModal(false)} className={clsx('p-1', 'hover:bg-[#27272A]', 'rounded-full', 'text-gray-400', 'hover:text-white', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}><X size={16} /></button>
+              </div>
+
+              <div className={clsx('flex', 'gap-2', 'p-1', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'shrink-0')}>
+                <button
+                  type="button"
+                  onClick={() => setMovTipo('suprimento')}
+                  className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${movTipo === 'suprimento'
+                    ? 'bg-emerald-600 text-white font-bold'
+                    : 'text-gray-400 hover:text-white'
+                    }`}
+                >
+                  <ArrowUpRight size={13} />
+                  <span>Suprimento (Inserir)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMovTipo('sangria')}
+                  className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${movTipo === 'sangria'
+                    ? 'bg-[#7A1F2D] text-white shadow-sm font-bold'
+                    : 'text-gray-400 hover:text-white'
+                    }`}
+                >
+                  <ArrowDownRight size={13} />
+                  <span>Sangria (Retirar)</span>
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className={clsx('text-[10px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Valor (R$):</label>
+                  <div className="relative">
+                    <span className={clsx('absolute', 'left-3.5', 'top-3', 'text-gray-400', 'font-mono')}>R$</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      required
+                      placeholder="0.00"
+                      value={movValor}
+                      onChange={(e) => setMovValor(e.target.value)}
+                      className={clsx('w-full', 'pl-9', 'pr-4', 'py-2.5', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'focus:outline-none', 'focus:ring-2', 'focus:ring-[#C5A880]/20', 'focus:border-[#C5A880]', 'text-white', 'font-mono')}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className={clsx('text-[10px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Motivo / Descrição:</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: Troco inicial extra, Sangria de segurança..."
+                    value={movDesc}
+                    onChange={(e) => setMovDesc(e.target.value)}
+                    className={clsx('w-full', 'px-4', 'py-2.5', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'focus:outline-none', 'focus:ring-2', 'focus:ring-[#C5A880]/20', 'focus:border-[#C5A880]', 'text-white')}
+                  />
+                </div>
+              </div>
+
+              {errorMsg && (
+                <div className={clsx('bg-rose-500/10', 'border', 'border-rose-500/25', 'text-rose-400', 'p-2.5', 'rounded-xl', 'text-center', 'font-medium', 'block')}>
+                  {errorMsg}
+                </div>
+              )}
+
+              <div className={clsx('flex', 'gap-2.5')}>
+                <button type="button" onClick={() => setShowMovModal(false)} className={clsx('flex-1', 'py-2.5', 'bg-[#121214]', 'hover:bg-[#27272A]', 'border', 'border-[#27272A]', 'text-white', 'rounded-xl', 'transition-all', 'cursor-pointer', 'font-bold')}>Cancelar</button>
+                <button type="submit" className={clsx('flex-1', 'py-2.5', 'bg-[#C5A880]', 'hover:bg-[#b0936b]', 'text-[#121214]', 'rounded-xl', 'transition-all', 'cursor-pointer', 'font-bold', 'shadow-md')}>Salvar Lançamento</button>
+              </div>
+            </form>
+          </div>
+        )
+      }
+
+      {/* 4. MODAL: LIQUIDAÇÃO DE CONTA */}
+      {
+        selectedOrder && (
+          <div className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4', 'overflow-y-auto')}>
+            <div className={clsx('bg-[#0D0D10]/95', 'backdrop-blur-xl', 'rounded-3xl', 'border', 'border-[#C5A880]/15', 'shadow-2xl', 'w-full', 'max-w-3xl', 'overflow-hidden', 'max-h-[90vh]', 'flex', 'flex-col', 'my-4')}>
+
+              <div className={clsx('bg-[#18181B]', 'text-white', 'p-5', 'flex', 'justify-between', 'items-center', 'shrink-0', 'border-b', 'border-[#27272A]')}>
+                <div>
+                  <span className={clsx('text-[10px]', 'font-bold', 'text-[#C5A880]', 'uppercase', 'tracking-wider', 'block')}>Checkout / Caixa</span>
+                  <h3 className={clsx('font-serif', 'text-lg', 'font-bold', 'text-white')}>
+                    {selectedOrder.mesaId > 0 ? `Mesa ${selectedOrder.mesaId}` : `Pedido Balcão`}
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedOrder(null)}
+                  className={clsx('p-1.5', 'hover:bg-[#27272A]', 'rounded-full', 'text-gray-400', 'hover:text-white', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className={clsx('p-5', 'overflow-y-auto', 'flex-1', 'bg-[#18181B]', 'grid', 'grid-cols-1', 'md:grid-cols-2', 'gap-5')}>
+                <div className="space-y-4">
+                  <div className={clsx('flex', 'items-center', 'justify-between', 'border-b', 'border-[#27272A]', 'pb-1.5')}>
+                    <h4 className={clsx('font-serif', 'font-bold', 'text-gray-300')}>Extrato Consumo</h4>
+                    <label className={clsx('flex', 'items-center', 'gap-1.5', 'text-[10px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'cursor-pointer')}>
+                      <input
+                        type="checkbox"
+                        checked={checkoutServiceTax}
+                        onChange={(e) => {
+                          setCheckoutServiceTax(e.target.checked);
+                          const { subtotal } = getCheckoutTotals(selectedOrder);
+                          const newTotal = subtotal + (e.target.checked ? subtotal * (serviceTaxRate / 100) : 0);
+                          setPaymentValor(newTotal.toFixed(2));
                         }}
-                        className={`flex items-start justify-between p-2.5 rounded-xl border border-transparent transition-all text-[11px] ${
-                          isPaid 
-                            ? 'bg-emerald-500/5 border-emerald-500/10 text-emerald-400' 
+                        className={clsx('rounded', 'border-[#27272A]', 'text-[#7A1F2D]', 'focus:ring-[#7A1F2D]', 'h-3.5', 'w-3.5', 'bg-[#121214]')}
+                      />
+                      <span>Taxa de {serviceTaxRate}%</span>
+                    </label>
+                  </div>
+
+                  <div className={clsx('space-y-2.5', 'max-h-[40vh]', 'overflow-y-auto', 'pr-1')}>
+                    {selectedOrder.itens.map((item) => {
+                      const isPaid = item.pago;
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={() => {
+                            if (isPaid) return;
+                            setSelectedItemIds(prev => {
+                              const copy = [...prev];
+                              const idx = copy.indexOf(item.id);
+                              if (idx >= 0) {
+                                copy.splice(idx, 1);
+                              } else {
+                                copy.push(item.id);
+                              }
+                              const activeSelectedItems = selectedOrder.itens.filter(i => copy.includes(i.id));
+                              const sub = activeSelectedItems.reduce((sum, it) => sum + it.preco, 0);
+                              const t = sub * (1.0 + (checkoutServiceTax ? serviceTaxRate / 100 : 0));
+                              setPaymentValor(t.toFixed(2));
+                              return copy;
+                            });
+                          }}
+                          className={`flex items-start justify-between p-2.5 rounded-xl border border-transparent transition-all text-[11px] ${isPaid
+                            ? 'bg-emerald-500/5 border-emerald-500/10 text-emerald-400'
                             : selectedItemIds.includes(item.id)
                               ? 'bg-[#C5A880]/10 border-[#C5A880]/30 cursor-pointer shadow-inner'
                               : 'bg-[#121214]/60 border-[#27272A]/50 hover:border-[#27272A] cursor-pointer'
-                        }`}
-                      >
-                        <div className="flex gap-2 items-start flex-1 min-w-0">
-                          {!isPaid && (
-                            <div className={`mt-0.5 h-3.5 w-3.5 rounded border border-[#27272A] flex items-center justify-center shrink-0 bg-[#121214] ${
-                              selectedItemIds.includes(item.id) ? 'border-[#C5A880] bg-[#C5A880]/10' : ''
-                            }`}>
-                              {selectedItemIds.includes(item.id) && <Check size={10} className="text-[#C5A880]" />}
+                            }`}
+                        >
+                          <div className={clsx('flex', 'gap-2', 'items-start', 'flex-1', 'min-w-0')}>
+                            {!isPaid && (
+                              <div className={`mt-0.5 h-3.5 w-3.5 rounded border border-[#27272A] flex items-center justify-center shrink-0 bg-[#121214] ${selectedItemIds.includes(item.id) ? 'border-[#C5A880] bg-[#C5A880]/10' : ''
+                                }`}>
+                                {selectedItemIds.includes(item.id) && <Check size={10} className="text-[#C5A880]" />}
+                              </div>
+                            )}
+                            <div className={clsx('min-w-0', 'space-y-0.5')}>
+                              <span className={clsx('font-semibold', 'text-white', 'block', 'truncate')}>{item.nome}</span>
+                              <span className={clsx('text-[9px]', 'text-gray-400', 'block')}>Cliente: {item.clienteNome}</span>
                             </div>
-                          )}
-                          <div className="min-w-0 space-y-0.5">
-                            <span className="font-semibold text-white block truncate">{item.nome}</span>
-                            <span className="text-[9px] text-gray-400 block">Cliente: {item.clienteNome}</span>
+                          </div>
+
+                          <div className={clsx('text-right', 'pl-3', 'shrink-0', 'font-mono')}>
+                            <span className={clsx('font-bold', 'text-gray-300')}>R$ {item.preco.toFixed(2)}</span>
+                            {isPaid && <span className={clsx('text-[8px]', 'uppercase', 'tracking-wider', 'block', 'font-bold', 'text-emerald-500', 'font-sans', 'mt-0.5')}>Pago</span>}
                           </div>
                         </div>
+                      );
+                    })}
+                  </div>
 
-                        <div className="text-right pl-3 shrink-0 font-mono">
-                          <span className="font-bold text-gray-300">R$ {item.preco.toFixed(2)}</span>
-                          {isPaid && <span className="text-[8px] uppercase tracking-wider block font-bold text-emerald-500 font-sans mt-0.5">Pago</span>}
+                  {(() => {
+                    const { subtotal, taxa, total } = getCheckoutTotals(selectedOrder);
+                    return (
+                      <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'p-4', 'rounded-2xl', 'font-mono', 'text-[11px]', 'space-y-2')}>
+                        <div className={clsx('flex', 'justify-between')}>
+                          <span className={clsx('font-sans', 'text-gray-400')}>Total Itens em Aberto:</span>
+                          <span className="text-gray-300">R$ {subtotal.toFixed(2)}</span>
+                        </div>
+                        {checkoutServiceTax && (
+                          <div className={clsx('flex', 'justify-between')}>
+                            <span className={clsx('font-sans', 'text-gray-400')}>Taxa Serviço ({serviceTaxRate}%):</span>
+                            <span className="text-gray-300">R$ {taxa.toFixed(2)}</span>
+                          </div>
+                        )}
+                        {selectedOrder.valorPago && selectedOrder.valorPago > 0 ? (
+                          <div className={clsx('flex', 'justify-between', 'text-emerald-400')}>
+                            <span className={clsx('font-sans', 'font-bold')}>Total Pago Parcial:</span>
+                            <span className="font-bold">R$ {selectedOrder.valorPago.toFixed(2)}</span>
+                          </div>
+                        ) : null}
+                        <div className={clsx('flex', 'justify-between', 'border-t', 'border-[#27272A]', 'pt-2', 'text-sm', 'text-[#C5A880]', 'font-bold')}>
+                          <span className="font-sans">Saldo Restante:</span>
+                          <span>R$ {Math.max(0, total - (selectedOrder.valorPago || 0)).toFixed(2)}</span>
                         </div>
                       </div>
                     );
-                  })}
+                  })()}
                 </div>
 
-                {(() => {
-                  const { subtotal, taxa, total } = getCheckoutTotals(selectedOrder);
-                  return (
-                    <div className="bg-[#121214]/60 border border-[#27272A] p-4 rounded-2xl font-mono text-[11px] space-y-2">
-                      <div className="flex justify-between">
-                        <span className="font-sans text-gray-400">Total Itens em Aberto:</span>
-                        <span className="text-gray-300">R$ {subtotal.toFixed(2)}</span>
-                      </div>
-                      {checkoutServiceTax && (
-                        <div className="flex justify-between">
-                          <span className="font-sans text-gray-400">Taxa Serviço ({serviceTaxRate}%):</span>
-                          <span className="text-gray-300">R$ {taxa.toFixed(2)}</span>
-                        </div>
-                      )}
-                      {selectedOrder.valorPago && selectedOrder.valorPago > 0 ? (
-                        <div className="flex justify-between text-emerald-400">
-                          <span className="font-sans font-bold">Total Pago Parcial:</span>
-                          <span className="font-bold">R$ {selectedOrder.valorPago.toFixed(2)}</span>
-                        </div>
-                      ) : null}
-                      <div className="flex justify-between border-t border-[#27272A] pt-2 text-sm text-[#C5A880] font-bold">
-                        <span className="font-sans">Saldo Restante:</span>
-                        <span>R$ {Math.max(0, total - (selectedOrder.valorPago || 0)).toFixed(2)}</span>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
+                <div className="space-y-4">
+                  <h4 className={clsx('font-serif', 'font-bold', 'text-gray-300', 'border-b', 'border-[#27272A]', 'pb-1.5')}>Divisão e Recebimento</h4>
 
-              <div className="space-y-4">
-                <h4 className="font-serif font-bold text-gray-300 border-b border-[#27272A] pb-1.5">Divisão e Recebimento</h4>
-                
-                <div className="grid grid-cols-2 gap-3 bg-[#121214] p-3 rounded-2xl border border-[#27272A]">
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Pessoas:</label>
-                    <input 
-                      type="number" 
-                      min="1"
-                      value={splitPeople}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setSplitPeople(val);
-                        const { total } = getCheckoutTotals(selectedOrder);
-                        const peopleNum = parseInt(val, 10) || 1;
-                        setPaymentValor((Math.max(0, total - (selectedOrder.valorPago || 0)) / peopleNum).toFixed(2));
-                      }}
-                      className="w-full px-3 py-1.5 text-xs bg-[#1C1C1F] border border-[#27272A] rounded-xl focus:outline-none text-white text-center font-mono"
-                    />
-                  </div>
-                  <div className="space-y-1 flex flex-col justify-end text-right">
-                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Valor por Pessoa:</span>
-                    <span className="text-sm font-bold text-white font-mono leading-relaxed">
-                      R$ {(() => {
-                        const { total } = getCheckoutTotals(selectedOrder);
-                        const peopleNum = parseInt(splitPeople, 10) || 1;
-                        return (Math.max(0, total - (selectedOrder.valorPago || 0)) / peopleNum).toFixed(2);
-                      })()}
-                    </span>
-                  </div>
-                </div>
-
-                <form onSubmit={handleProcessPayment} className="space-y-4 bg-[#121214]/40 p-4 rounded-2xl border border-[#27272A]/50">
-                  <span className="text-[10px] font-bold text-[#C5A880] uppercase tracking-wider block">Receber Pagamento</span>
-                  
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Método de Baixa:</label>
-                    <div className="flex gap-2 p-1 bg-[#121214] border border-[#27272A] rounded-xl shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => setPaymentMetodo('dinheiro')}
-                        className={`flex-1 py-2 text-[10px] font-bold rounded-lg transition-all cursor-pointer ${
-                          paymentMetodo === 'dinheiro' ? 'bg-[#7A1F2D] text-white shadow-sm' : 'text-gray-400 hover:text-white'
-                        }`}
-                      >
-                        Dinheiro
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPaymentMetodo('pix')}
-                        className={`flex-1 py-2 text-[10px] font-bold rounded-lg transition-all cursor-pointer ${
-                          paymentMetodo === 'pix' ? 'bg-[#7A1F2D] text-white shadow-sm' : 'text-gray-400 hover:text-white'
-                        }`}
-                      >
-                        Pix
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPaymentMetodo('cartao')}
-                        className={`flex-1 py-2 text-[10px] font-bold rounded-lg transition-all cursor-pointer ${
-                          paymentMetodo === 'cartao' ? 'bg-[#7A1F2D] text-white shadow-sm' : 'text-gray-400 hover:text-white'
-                        }`}
-                      >
-                        Cartão
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Valor a Lançar (R$):</label>
-                    <div className="relative">
-                      <span className="absolute left-3.5 top-2.5 text-gray-400 font-mono text-[11px]">R$</span>
-                      <input 
-                        type="number" 
-                        step="0.01"
-                        required
-                        value={paymentValor}
-                        onChange={(e) => setPaymentValor(e.target.value)}
-                        className="w-full pl-9 pr-4 py-2 text-xs bg-[#121214] border border-[#27272A] rounded-xl focus:outline-none focus:border-[#C5A880] text-white font-mono"
+                  <div className={clsx('grid', 'grid-cols-2', 'gap-3', 'bg-[#121214]', 'p-3', 'rounded-2xl', 'border', 'border-[#27272A]')}>
+                    <div className="space-y-1">
+                      <label className={clsx('text-[9px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Pessoas:</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={splitPeople}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSplitPeople(val);
+                          const { total } = getCheckoutTotals(selectedOrder);
+                          const peopleNum = parseInt(val, 10) || 1;
+                          setPaymentValor((Math.max(0, total - (selectedOrder.valorPago || 0)) / peopleNum).toFixed(2));
+                        }}
+                        className={clsx('w-full', 'px-3', 'py-1.5', 'text-xs', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'focus:outline-none', 'text-white', 'text-center', 'font-mono')}
                       />
                     </div>
+                    <div className={clsx('space-y-1', 'flex', 'flex-col', 'justify-end', 'text-right')}>
+                      <span className={clsx('text-[9px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Valor por Pessoa:</span>
+                      <span className={clsx('text-sm', 'font-bold', 'text-white', 'font-mono', 'leading-relaxed')}>
+                        R$ {(() => {
+                          const { total } = getCheckoutTotals(selectedOrder);
+                          const peopleNum = parseInt(splitPeople, 10) || 1;
+                          return (Math.max(0, total - (selectedOrder.valorPago || 0)) / peopleNum).toFixed(2);
+                        })()}
+                      </span>
+                    </div>
                   </div>
 
-                  {selectedItemIds.length > 0 && (
-                    <div className="bg-[#C5A880]/15 border border-[#C5A880]/30 text-[#C5A880] p-2.5 rounded-xl text-[10px]">
-                      Lançando pagamento para <strong>{selectedItemIds.length} item(ns)</strong> selecionados.
-                    </div>
-                  )}
+                  <form onSubmit={handleProcessPayment} className={clsx('space-y-4', 'bg-[#121214]/40', 'p-4', 'rounded-2xl', 'border', 'border-[#27272A]/50')}>
+                    <span className={clsx('text-[10px]', 'font-bold', 'text-[#C5A880]', 'uppercase', 'tracking-wider', 'block')}>Receber Pagamento</span>
 
-                  {errorMsg && (
-                    <div className="bg-rose-500/10 border border-rose-500/25 text-rose-400 p-2.5 rounded-xl text-center font-medium block">
-                      {errorMsg}
+                    <div className="space-y-1.5">
+                      <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Método de Baixa:</label>
+                      <div className={clsx('flex', 'gap-2', 'p-1', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'shrink-0')}>
+                        <button
+                          type="button"
+                          onClick={() => setPaymentMetodo('dinheiro')}
+                          className={`flex-1 py-2 text-[10px] font-bold rounded-lg transition-all cursor-pointer ${paymentMetodo === 'dinheiro' ? 'bg-[#7A1F2D] text-white shadow-sm' : 'text-gray-400 hover:text-white'
+                            }`}
+                        >
+                          Dinheiro
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPaymentMetodo('pix')}
+                          className={`flex-1 py-2 text-[10px] font-bold rounded-lg transition-all cursor-pointer ${paymentMetodo === 'pix' ? 'bg-[#7A1F2D] text-white shadow-sm' : 'text-gray-400 hover:text-white'
+                            }`}
+                        >
+                          Pix
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPaymentMetodo('cartao')}
+                          className={`flex-1 py-2 text-[10px] font-bold rounded-lg transition-all cursor-pointer ${paymentMetodo === 'cartao' ? 'bg-[#7A1F2D] text-white shadow-sm' : 'text-gray-400 hover:text-white'
+                            }`}
+                        >
+                          Cartão
+                        </button>
+                      </div>
                     </div>
-                  )}
 
-                  <button 
-                    type="submit"
-                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer uppercase tracking-wider text-[10px]"
-                  >
-                    <Check size={14} />
-                    <span>Lançar Pagamento / Baixa</span>
-                  </button>
-                </form>
+                    <div className="space-y-1.5">
+                      <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Valor a Lançar (R$):</label>
+                      <div className="relative">
+                        <span className={clsx('absolute', 'left-3.5', 'top-2.5', 'text-gray-400', 'font-mono', 'text-[11px]')}>R$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          required
+                          value={paymentValor}
+                          onChange={(e) => setPaymentValor(e.target.value)}
+                          className={clsx('w-full', 'pl-9', 'pr-4', 'py-2', 'text-xs', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'focus:outline-none', 'focus:border-[#C5A880]', 'text-white', 'font-mono')}
+                        />
+                      </div>
+                    </div>
+
+                    {selectedItemIds.length > 0 && (
+                      <div className={clsx('bg-[#C5A880]/15', 'border', 'border-[#C5A880]/30', 'text-[#C5A880]', 'p-2.5', 'rounded-xl', 'text-[10px]')}>
+                        Lançando pagamento para <strong>{selectedItemIds.length} item(ns)</strong> selecionados.
+                      </div>
+                    )}
+
+                    {errorMsg && (
+                      <div className={clsx('bg-rose-500/10', 'border', 'border-rose-500/25', 'text-rose-400', 'p-2.5', 'rounded-xl', 'text-center', 'font-medium', 'block')}>
+                        {errorMsg}
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      className={clsx('w-full', 'py-3', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'rounded-xl', 'font-bold', 'flex', 'items-center', 'justify-center', 'gap-1.5', 'shadow-md', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'text-[10px]')}
+                    >
+                      <Check size={14} />
+                      <span>Lançar Pagamento / Baixa</span>
+                    </button>
+                  </form>
+                </div>
               </div>
-            </div>
 
+            </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* 5. MODAL: ADICIONAR MESA */}
-      {showAddMesaModal && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <form onSubmit={handleAddMesaSubmit} className="bg-[#1C1C1F] border border-[#27272A] rounded-3xl w-full max-w-sm p-6 space-y-4 shadow-2xl animate-scale-in">
-            <div className="flex justify-between items-center border-b border-[#27272A] pb-3">
-              <h3 className="font-serif font-bold text-lg text-white">Criar Nova Mesa</h3>
-              <button type="button" onClick={() => setShowAddMesaModal(false)} className="p-1 hover:bg-[#27272A] rounded-full text-gray-400 hover:text-white cursor-pointer"><X size={16} /></button>
-            </div>
-
-            <div className="space-y-3 text-left">
-              <div className="space-y-1">
-                <label className="text-[9px] font-bold text-gray-300 uppercase tracking-wider block">Número da Mesa:</label>
-                <input 
-                  type="number"
-                  required
-                  placeholder="Ex: 31"
-                  value={newMesaId}
-                  onChange={(e) => setNewMesaId(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#121214] border border-[#27272A] rounded-xl text-white font-mono"
-                />
+      {
+        showAddMesaModal && (
+          <div className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4')}>
+            <form onSubmit={handleAddMesaSubmit} className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-3xl', 'w-full', 'max-w-sm', 'p-6', 'space-y-4', 'shadow-2xl', 'animate-scale-in')}>
+              <div className={clsx('flex', 'justify-between', 'items-center', 'border-b', 'border-[#27272A]', 'pb-3')}>
+                <h3 className={clsx('font-serif', 'font-bold', 'text-lg', 'text-white')}>Criar Nova Mesa</h3>
+                <button type="button" onClick={() => setShowAddMesaModal(false)} className={clsx('p-1', 'hover:bg-[#27272A]', 'rounded-full', 'text-gray-400', 'hover:text-white', 'cursor-pointer')}><X size={16} /></button>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[9px] font-bold text-gray-300 uppercase tracking-wider block">Capacidade (Lugares):</label>
-                <input 
-                  type="number"
-                  required
-                  placeholder="Ex: 4"
-                  value={newMesaCap}
-                  onChange={(e) => setNewMesaCap(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#121214] border border-[#27272A] rounded-xl text-white font-mono"
-                />
+              <div className={clsx('space-y-3', 'text-left')}>
+                <div className="space-y-1">
+                  <label className={clsx('text-[9px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Número da Mesa:</label>
+                  <input
+                    type="number"
+                    required
+                    placeholder="Ex: 31"
+                    value={newMesaId}
+                    onChange={(e) => setNewMesaId(e.target.value)}
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'font-mono')}
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className={clsx('text-[9px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Nome Personalizado (Opcional):</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Varanda VIP"
+                    value={newMesaNome}
+                    onChange={(e) => setNewMesaNome(e.target.value)}
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white')}
+                  />
+                </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[9px] font-bold text-gray-300 uppercase tracking-wider block">Nome Personalizado (Opcional):</label>
-                <input 
-                  type="text"
-                  placeholder="Ex: Varanda VIP"
-                  value={newMesaNome}
-                  onChange={(e) => setNewMesaNome(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#121214] border border-[#27272A] rounded-xl text-white"
-                />
+              <div className={clsx('flex', 'gap-2', 'pt-2')}>
+                <button type="button" onClick={() => setShowAddMesaModal(false)} className={clsx('flex-1', 'py-2', 'bg-[#121214]', 'hover:bg-[#27272A]', 'border', 'border-[#27272A]', 'text-white', 'rounded-xl', 'font-bold', 'cursor-pointer')}>Cancelar</button>
+                <button type="submit" className={clsx('flex-1', 'py-2', 'bg-[#C5A880]', 'hover:bg-[#b0936b]', 'text-[#121214]', 'rounded-xl', 'font-bold', 'cursor-pointer')}>Salvar Mesa</button>
               </div>
-            </div>
-
-            <div className="flex gap-2 pt-2">
-              <button type="button" onClick={() => setShowAddMesaModal(false)} className="flex-1 py-2 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] text-white rounded-xl font-bold cursor-pointer">Cancelar</button>
-              <button type="submit" className="flex-1 py-2 bg-[#C5A880] hover:bg-[#b0936b] text-[#121214] rounded-xl font-bold cursor-pointer">Salvar Mesa</button>
-            </div>
-          </form>
-        </div>
-      )}
+            </form>
+          </div>
+        )
+      }
 
     </div>
   );

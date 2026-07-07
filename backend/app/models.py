@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey, event
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.hybrid import hybrid_property
 import datetime
@@ -348,7 +348,7 @@ class ActivityLog(Base):
 
 
 # Register ORM event listeners to enforce log immutability
-from sqlalchemy import event
+
 
 @event.listens_for(ActivityLog, 'before_update')
 def block_activity_log_update(mapper, connection, target):

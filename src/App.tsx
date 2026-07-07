@@ -12,6 +12,8 @@ import { MesaCard } from './components/MesaCard';
 import { MesaDetailsModal } from './components/MesaDetailsModal';
 import { KitchenPanel } from './components/KitchenPanel';
 import { CaixaPanel } from './components/CaixaPanel';
+import clsx from 'clsx';
+
 
 const LOCAL_STORAGE_DRAFTS_KEY = 'koma_drafts_vFinal_v3';
 const LOCAL_STORAGE_SETTINGS_KEY = 'koma_settings_vFinal_v3';
@@ -35,7 +37,7 @@ export default function App() {
     const searchParams = new URLSearchParams(window.location.search);
     const viewParam = searchParams.get('view');
     const hash = window.location.hash;
-    
+
     if (viewParam === 'caixa' || viewParam === 'gerencia' || hash === '#caixa' || hash === '#gerencia') {
       return 'caixa';
     }
@@ -88,18 +90,18 @@ export default function App() {
       const viewParam = searchParams.get('view');
       const hash = window.location.hash;
       const newPortal = (viewParam === 'caixa' || viewParam === 'gerencia' || hash === '#caixa' || hash === '#gerencia') ? 'caixa' : 'garcom';
-      
+
       setPortal(newPortal);
-      
+
       const tokenKey = newPortal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
       const idKey = newPortal === 'caixa' ? "koma_caixa_id" : "koma_waiter_id";
       const nameKey = newPortal === 'caixa' ? "koma_caixa_name" : "koma_waiter_name";
       const roleKey = newPortal === 'caixa' ? "koma_caixa_role" : "koma_user_role";
-      
+
       setIsAuthenticated(!!localStorage.getItem(tokenKey));
       setActiveWaiterId(localStorage.getItem(idKey) || "");
       setActiveWaiterNome(localStorage.getItem(nameKey) || "");
-      
+
       if (newPortal === 'caixa') {
         setActiveRole((localStorage.getItem(roleKey) as AppRole) || 'caixa');
       } else {
@@ -596,7 +598,7 @@ export default function App() {
         return;
       }
       const comandas = await response.json();
-      
+
       const mappedOrders = comandas.map((comanda: any) => {
         return {
           id: comanda.id,
@@ -630,7 +632,7 @@ export default function App() {
     if (!isAuthenticated) return;
     fetchOrdersFromAPI();
     fetchTables();
-    
+
     if (isWsConnected) return;
 
     const interval = setInterval(() => {
@@ -658,7 +660,7 @@ export default function App() {
         return;
       }
       const data = await response.json();
-      
+
       // Enforce portal-specific permissions
       const role = data.usuario.role;
       if (portal === 'caixa' && role !== 'caixa' && role !== 'admin') {
@@ -681,7 +683,7 @@ export default function App() {
       localStorage.setItem(idKey, data.usuario.id);
       localStorage.setItem(nameKey, data.usuario.nome);
       localStorage.setItem(roleKey, role);
-      
+
       setActiveWaiterId(data.usuario.id);
       setActiveWaiterNome(data.usuario.nome);
       setActiveRole(role);
@@ -707,7 +709,7 @@ export default function App() {
     localStorage.removeItem(idKey);
     localStorage.removeItem(nameKey);
     localStorage.removeItem(roleKey);
-    
+
     setIsAuthenticated(false);
     setActiveWaiterId("");
     setActiveWaiterNome("");
@@ -873,7 +875,7 @@ export default function App() {
       });
       if (!response.ok) return;
       const comandas = await response.json();
-      
+
       const targetComanda = comandas.find((c: any) => {
         const normIdent = c.identificador || "Consumo Geral";
         return normIdent === customerName;
@@ -1065,22 +1067,22 @@ export default function App() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-[#09090B] flex items-center justify-center p-4 selection:bg-[#C5A880]/30 selection:text-white relative overflow-hidden">
+      <div className={clsx('min-h-screen', 'bg-[#09090B]', 'flex', 'items-center', 'justify-center', 'p-4', 'selection:bg-[#C5A880]/30', 'selection:text-white', 'relative', 'overflow-hidden')}>
         {/* Decorative backdrop gradients */}
-        <div className="absolute top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full bg-[#7A1F2D]/10 blur-[100px] pointer-events-none" />
-        <div className="absolute bottom-1/4 right-1/4 translate-x-1/2 translate-y-1/2 w-96 h-96 rounded-full bg-[#C5A880]/5 blur-[100px] pointer-events-none" />
+        <div className={clsx('absolute', 'top-1/4', 'left-1/4', '-translate-x-1/2', '-translate-y-1/2', 'w-96', 'h-96', 'rounded-full', 'bg-[#7A1F2D]/10', 'blur-[100px]', 'pointer-events-none')} />
+        <div className={clsx('absolute', 'bottom-1/4', 'right-1/4', 'translate-x-1/2', 'translate-y-1/2', 'w-96', 'h-96', 'rounded-full', 'bg-[#C5A880]/5', 'blur-[100px]', 'pointer-events-none')} />
 
-        <div className="w-full max-w-md bg-[#121214]/80 backdrop-blur-xl border border-[#27272A] rounded-3xl p-8 shadow-2xl relative z-10 animate-fade-in">
+        <div className={clsx('w-full', 'max-w-md', 'bg-[#121214]/80', 'backdrop-blur-xl', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-8', 'shadow-2xl', 'relative', 'z-10', 'animate-fade-in')}>
           {/* Logo / Header */}
-          <div className="text-center space-y-4 mb-8">
-            <div className="flex justify-center">
+          <div className={clsx('text-center', 'space-y-4', 'mb-8')}>
+            <div className={clsx('flex', 'justify-center')}>
               <img
                 src="/src/assets/logo.png"
                 alt="Kôma Logo"
-                className="h-28 object-contain rounded-2xl shadow-lg border border-[#27272A]/40 bg-[#FAF7F2]"
+                className={clsx('h-28', 'object-contain', 'rounded-2xl', 'shadow-lg', 'border', 'border-[#27272A]/40', 'bg-[#FAF7F2]')}
               />
             </div>
-            <p className="text-[10px] text-[#A1A1AA] uppercase tracking-widest font-sans font-bold">
+            <p className={clsx('text-[10px]', 'text-[#A1A1AA]', 'uppercase', 'tracking-widest', 'font-sans', 'font-bold')}>
               {portal === 'caixa' ? "Painel de Gerenciamento & Caixa" : "Portal do Garçom"}
             </p>
           </div>
@@ -1088,13 +1090,13 @@ export default function App() {
           {/* Form */}
           <form onSubmit={handleLoginSubmit} className="space-y-5">
             {loginError && (
-              <div className="p-3.5 bg-red-950/40 border border-red-900/50 rounded-2xl text-xs text-red-300 text-center animate-shake">
+              <div className={clsx('p-3.5', 'bg-red-950/40', 'border', 'border-red-900/50', 'rounded-2xl', 'text-xs', 'text-red-300', 'text-center', 'animate-shake')}>
                 {loginError}
               </div>
             )}
 
             <div className="space-y-1.5">
-              <label htmlFor="login-username" className="text-[10px] text-[#A1A1AA] font-bold uppercase tracking-wider block">Usuário</label>
+              <label htmlFor="login-username" className={clsx('text-[10px]', 'text-[#A1A1AA]', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Usuário</label>
               <input
                 id="login-username"
                 type="text"
@@ -1102,12 +1104,12 @@ export default function App() {
                 value={loginUsername}
                 onChange={(e) => setLoginUsername(e.target.value)}
                 placeholder="Ex: georlan"
-                className="w-full bg-[#0E0E10] text-white border border-[#27272A] rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-[#C5A880] focus:border-[#C5A880]/50 placeholder-gray-600 transition-all"
+                className={clsx('w-full', 'bg-[#0E0E10]', 'text-white', 'border', 'border-[#27272A]', 'rounded-xl', 'px-4', 'py-3', 'text-sm', 'font-semibold', 'focus:outline-none', 'focus:ring-1', 'focus:ring-[#C5A880]', 'focus:border-[#C5A880]/50', 'placeholder-gray-600', 'transition-all')}
               />
             </div>
 
             <div className="space-y-1.5">
-              <label htmlFor="login-password" className="text-[10px] text-[#A1A1AA] font-bold uppercase tracking-wider block">Senha</label>
+              <label htmlFor="login-password" className={clsx('text-[10px]', 'text-[#A1A1AA]', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Senha</label>
               <input
                 id="login-password"
                 type="password"
@@ -1115,14 +1117,14 @@ export default function App() {
                 value={loginPassword}
                 onChange={(e) => setLoginPassword(e.target.value)}
                 placeholder="••••••"
-                className="w-full bg-[#0E0E10] text-white border border-[#27272A] rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-[#C5A880] focus:border-[#C5A880]/50 placeholder-gray-600 transition-all"
+                className={clsx('w-full', 'bg-[#0E0E10]', 'text-white', 'border', 'border-[#27272A]', 'rounded-xl', 'px-4', 'py-3', 'text-sm', 'font-semibold', 'focus:outline-none', 'focus:ring-1', 'focus:ring-[#C5A880]', 'focus:border-[#C5A880]/50', 'placeholder-gray-600', 'transition-all')}
               />
             </div>
 
             <button
               type="submit"
               disabled={isLoggingIn}
-              className="w-full py-3.5 bg-gradient-to-r from-[#7A1F2D] to-[#8C2333] hover:from-[#8C2333] hover:to-[#9E283A] text-white rounded-xl text-sm font-bold uppercase tracking-wider shadow-lg transition-all duration-200 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2 border border-[#C5A880]/15"
+              className={clsx('w-full', 'py-3.5', 'bg-gradient-to-r', 'from-[#7A1F2D]', 'to-[#8C2333]', 'hover:from-[#8C2333]', 'hover:to-[#9E283A]', 'text-white', 'rounded-xl', 'text-sm', 'font-bold', 'uppercase', 'tracking-wider', 'shadow-lg', 'transition-all', 'duration-200', 'cursor-pointer', 'disabled:opacity-50', 'flex', 'items-center', 'justify-center', 'gap-2', 'border', 'border-[#C5A880]/15')}
             >
               {isLoggingIn ? "Autenticando..." : "Entrar"}
             </button>
@@ -1133,55 +1135,53 @@ export default function App() {
   }
 
   return (
-    <div className={`min-h-screen bg-[#09090B] text-[#FAF7F2] font-sans flex flex-col antialiased selection:bg-[#C5A880]/30 selection:text-white ${
-      fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''
-    }`}>
+    <div className={`min-h-screen bg-[#09090B] text-[#FAF7F2] font-sans flex flex-col antialiased selection:bg-[#C5A880]/30 selection:text-white ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''
+      }`}>
 
       {/* TOAST NOTIFICATIONS */}
-      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 pointer-events-none" aria-live="polite">
+      <div className={clsx('fixed', 'top-4', 'left-1/2', '-translate-x-1/2', 'z-[100]', 'flex', 'flex-col', 'gap-2', 'pointer-events-none')} aria-live="polite">
         {toasts.map(toast => (
           <div
             key={toast.id}
-            className={`px-5 py-3 rounded-2xl text-sm font-semibold shadow-2xl border animate-fade-in backdrop-blur-md ${
-              toast.type === 'success' ? 'bg-emerald-900/90 border-emerald-700/50 text-emerald-100' :
-              toast.type === 'error'   ? 'bg-red-900/90 border-red-700/50 text-red-100' :
-                                         'bg-[#1C1C1F]/95 border-[#27272A] text-gray-200'
-            }`}
+            className={`px-5 py-3 rounded-2xl text-sm font-semibold shadow-2xl border animate-fade-in backdrop-blur-md ${toast.type === 'success' ? 'bg-emerald-900/90 border-emerald-700/50 text-emerald-100' :
+              toast.type === 'error' ? 'bg-red-900/90 border-red-700/50 text-red-100' :
+                'bg-[#1C1C1F]/95 border-[#27272A] text-gray-200'
+              }`}
           >
             {toast.message}
           </div>
         ))}
       </div>
-      
+
       {/* GLOBAL TOP HEADER */}
-      <header className="bg-[#121214]/85 backdrop-blur-md border-b border-[#27272A]/50 text-white shrink-0 sticky top-0 z-30 shadow-xl">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex justify-between items-center">
-            
+      <header className={clsx('bg-[#121214]/85', 'backdrop-blur-md', 'border-b', 'border-[#27272A]/50', 'text-white', 'shrink-0', 'sticky', 'top-0', 'z-30', 'shadow-xl')}>
+        <div className={clsx('max-w-7xl', 'mx-auto', 'px-4', 'sm:px-6', 'lg:px-8', 'py-4')}>
+          <div className={clsx('flex', 'justify-between', 'items-center')}>
+
             {/* Left: Menu trigger & Editable Title */}
-            <div className="flex items-center gap-3.5">
+            <div className={clsx('flex', 'items-center', 'gap-3.5')}>
               <button
                 id="open-sidebar-btn"
                 onClick={() => setIsSidebarOpen(true)}
-                className="p-2 bg-[#1C1C1F] hover:bg-[#27272A] text-[#C5A880] rounded-xl transition-all cursor-pointer border border-[#27272A] hover:border-[#C5A880]/30 flex items-center justify-center"
+                className={clsx('p-2', 'bg-[#1C1C1F]', 'hover:bg-[#27272A]', 'text-[#C5A880]', 'rounded-xl', 'transition-all', 'cursor-pointer', 'border', 'border-[#27272A]', 'hover:border-[#C5A880]/30', 'flex', 'items-center', 'justify-center')}
                 title="Abrir Menu e Configurações"
               >
                 <Menu size={20} />
               </button>
-              
-              <div className="flex items-center gap-3">
-                <div className="h-10 px-2 bg-[#FAF7F2] rounded-xl flex items-center justify-center border border-[#27272A]/20 shadow-md shrink-0">
+
+              <div className={clsx('flex', 'items-center', 'gap-3')}>
+                <div className={clsx('h-10', 'px-2', 'bg-[#FAF7F2]', 'rounded-xl', 'flex', 'items-center', 'justify-center', 'border', 'border-[#27272A]/20', 'shadow-md', 'shrink-0')}>
                   <img
                     src="/src/assets/logo.png"
                     alt="Kôma Logo"
-                    className="h-7 object-contain"
+                    className={clsx('h-7', 'object-contain')}
                   />
                 </div>
                 <div>
-                  <h1 className="font-serif text-lg sm:text-xl font-bold tracking-tight text-white leading-tight">
+                  <h1 className={clsx('font-serif', 'text-lg', 'sm:text-xl', 'font-bold', 'tracking-tight', 'text-white', 'leading-tight')}>
                     {restaurantName}
                   </h1>
-                  <p className="text-[10px] text-[#A1A1AA] font-sans">
+                  <p className={clsx('text-[10px]', 'text-[#A1A1AA]', 'font-sans')}>
                     Atendimento • {activeWaiter.nome}
                   </p>
                 </div>
@@ -1189,26 +1189,25 @@ export default function App() {
             </div>
 
             {/* Right: Quick actions / indicators */}
-            <div className="flex items-center gap-3">
+            <div className={clsx('flex', 'items-center', 'gap-3')}>
               {/* Connection indicator */}
               <div
                 title={isWsConnected ? 'Conectado em tempo real' : 'Reconectando...'}
-                className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider border transition-all ${
-                  isWsConnected
-                    ? 'bg-emerald-900/20 border-emerald-800/30 text-emerald-400'
-                    : 'bg-amber-900/20 border-amber-800/30 text-amber-400 animate-pulse'
-                }`}
+                className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider border transition-all ${isWsConnected
+                  ? 'bg-emerald-900/20 border-emerald-800/30 text-emerald-400'
+                  : 'bg-amber-900/20 border-amber-800/30 text-amber-400 animate-pulse'
+                  }`}
               >
-                {isWsConnected ? <Wifi size={10}/> : <WifiOff size={10}/>}
+                {isWsConnected ? <Wifi size={10} /> : <WifiOff size={10} />}
                 {isWsConnected ? 'Online' : 'Reconectando'}
               </div>
-              <button 
+              <button
                 id="header-profile-btn"
                 onClick={() => setIsSidebarOpen(true)}
-                className="flex items-center gap-2 px-3 py-1.5 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-xs font-semibold hover:border-[#C5A880]/30 transition-all text-[#FAF7F2] cursor-pointer"
+                className={clsx('flex', 'items-center', 'gap-2', 'px-3', 'py-1.5', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-xs', 'font-semibold', 'hover:border-[#C5A880]/30', 'transition-all', 'text-[#FAF7F2]', 'cursor-pointer')}
               >
                 <User size={13} className="text-[#C5A880]" />
-                <span className="hidden sm:inline">{activeWaiter.nome}</span>
+                <span className={clsx('hidden', 'sm:inline')}>{activeWaiter.nome}</span>
               </button>
             </div>
 
@@ -1218,34 +1217,34 @@ export default function App() {
 
       {/* LATERAL DRAWER MENU (Sidebar Overlays) */}
       {isSidebarOpen && (
-        <div className="fixed inset-0 z-50 flex animate-fade-in">
+        <div className={clsx('fixed', 'inset-0', 'z-50', 'flex', 'animate-fade-in')}>
           {/* Backdrop */}
-          <div 
+          <div
             id="sidebar-backdrop"
             onClick={() => setIsSidebarOpen(false)}
-            className="fixed inset-0 bg-black/75 backdrop-blur-xs transition-opacity"
+            className={clsx('fixed', 'inset-0', 'bg-black/75', 'backdrop-blur-xs', 'transition-opacity')}
           />
-          
+
           {/* Drawer content */}
-          <div className="relative w-80 max-w-sm bg-[#0E0E10]/95 backdrop-blur-xl border-r border-[#C5A880]/10 h-full flex flex-col justify-between shadow-2xl z-10 p-6 text-[#FAF7F2] overflow-y-auto animate-slide-in-left">
+          <div className={clsx('relative', 'w-80', 'max-w-sm', 'bg-[#0E0E10]/95', 'backdrop-blur-xl', 'border-r', 'border-[#C5A880]/10', 'h-full', 'flex', 'flex-col', 'justify-between', 'shadow-2xl', 'z-10', 'p-6', 'text-[#FAF7F2]', 'overflow-y-auto', 'animate-slide-in-left')}>
             <div className="space-y-7">
-              
+
               {/* Header inside drawer */}
-              <div className="flex items-center justify-between pb-4 border-b border-[#27272A]">
-                <div className="flex items-center gap-2">
-                  <div className="h-7 px-1.5 bg-[#FAF7F2] rounded-lg flex items-center justify-center border border-[#27272A]/20 shadow-sm shrink-0">
+              <div className={clsx('flex', 'items-center', 'justify-between', 'pb-4', 'border-b', 'border-[#27272A]')}>
+                <div className={clsx('flex', 'items-center', 'gap-2')}>
+                  <div className={clsx('h-7', 'px-1.5', 'bg-[#FAF7F2]', 'rounded-lg', 'flex', 'items-center', 'justify-center', 'border', 'border-[#27272A]/20', 'shadow-sm', 'shrink-0')}>
                     <img
                       src="/src/assets/logo.png"
                       alt="Kôma Logo"
-                      className="h-5 object-contain"
+                      className={clsx('h-5', 'object-contain')}
                     />
                   </div>
-                  <span className="font-serif font-bold text-base text-[#FAF7F2]">{restaurantName}</span>
+                  <span className={clsx('font-serif', 'font-bold', 'text-base', 'text-[#FAF7F2]')}>{restaurantName}</span>
                 </div>
                 <button
                   id="close-sidebar-btn"
                   onClick={() => setIsSidebarOpen(false)}
-                  className="p-1.5 rounded-lg hover:bg-[#1C1C1F] text-[#A1A1AA] hover:text-white transition-colors cursor-pointer"
+                  className={clsx('p-1.5', 'rounded-lg', 'hover:bg-[#1C1C1F]', 'text-[#A1A1AA]', 'hover:text-white', 'transition-colors', 'cursor-pointer')}
                 >
                   <X size={18} />
                 </button>
@@ -1253,21 +1252,21 @@ export default function App() {
 
               {/* SECTION 1: MINHA CONTA */}
               <div className="space-y-3">
-                <h3 className="text-[10px] uppercase tracking-wider font-bold text-[#C5A880] font-sans">Minha Conta (Operador)</h3>
-                <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-4 space-y-3.5">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 bg-[#C5A880]/10 border border-[#C5A880]/20 text-[#C5A880] rounded-full flex items-center justify-center font-bold">
+                <h3 className={clsx('text-[10px]', 'uppercase', 'tracking-wider', 'font-bold', 'text-[#C5A880]', 'font-sans')}>Minha Conta (Operador)</h3>
+                <div className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-2xl', 'p-4', 'space-y-3.5')}>
+                  <div className={clsx('flex', 'items-center', 'gap-3')}>
+                    <div className={clsx('h-10', 'w-10', 'bg-[#C5A880]/10', 'border', 'border-[#C5A880]/20', 'text-[#C5A880]', 'rounded-full', 'flex', 'items-center', 'justify-center', 'font-bold')}>
                       {activeWaiter.nome[0]}
                     </div>
                     <div>
-                      <h4 className="text-sm font-bold text-white">{activeWaiter.nome}</h4>
-                      <p className="text-[10px] text-[#A1A1AA]">Garçom em Atendimento</p>
+                      <h4 className={clsx('text-sm', 'font-bold', 'text-white')}>{activeWaiter.nome}</h4>
+                      <p className={clsx('text-[10px]', 'text-[#A1A1AA]')}>Garçom em Atendimento</p>
                     </div>
                   </div>
 
                   <button
                     onClick={handleLogout}
-                    className="w-full py-2.5 bg-[#7A1F2D]/10 hover:bg-[#7A1F2D]/20 text-rose-400 hover:text-rose-300 border border-[#7A1F2D]/35 hover:border-[#7A1F2D]/50 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2"
+                    className={clsx('w-full', 'py-2.5', 'bg-[#7A1F2D]/10', 'hover:bg-[#7A1F2D]/20', 'text-rose-400', 'hover:text-rose-300', 'border', 'border-[#7A1F2D]/35', 'hover:border-[#7A1F2D]/50', 'rounded-xl', 'text-xs', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'justify-center', 'gap-2')}
                   >
                     Logout / Sair
                   </button>
@@ -1276,44 +1275,43 @@ export default function App() {
 
               {/* SECTION 2: CONFIGURAÇÕES DE VISUALIZAÇÃO */}
               <div className="space-y-3">
-                <h3 className="text-[10px] uppercase tracking-wider font-bold text-[#C5A880] font-sans">Exibição do Cardápio</h3>
-                <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-4 space-y-3">
-                  <label className="flex items-center justify-between text-xs text-[#FAF7F2] cursor-pointer p-1.5 rounded hover:bg-[#27272A]/40">
+                <h3 className={clsx('text-[10px]', 'uppercase', 'tracking-wider', 'font-bold', 'text-[#C5A880]', 'font-sans')}>Exibição do Cardápio</h3>
+                <div className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-2xl', 'p-4', 'space-y-3')}>
+                  <label className={clsx('flex', 'items-center', 'justify-between', 'text-xs', 'text-[#FAF7F2]', 'cursor-pointer', 'p-1.5', 'rounded', 'hover:bg-[#27272A]/40')}>
                     <span>Exibir Imagens dos Pratos</span>
                     <input
                       id="sidebar-toggle-images"
                       type="checkbox"
                       checked={settings.exibirImagens}
                       onChange={(e) => setSettings({ ...settings, exibirImagens: e.target.checked })}
-                      className="rounded border-[#27272A] text-[#7A1F2D] focus:ring-[#7A1F2D] h-4 w-4 bg-[#121214]"
+                      className={clsx('rounded', 'border-[#27272A]', 'text-[#7A1F2D]', 'focus:ring-[#7A1F2D]', 'h-4', 'w-4', 'bg-[#121214]')}
                     />
                   </label>
-                  
-                  <label className="flex items-center justify-between text-xs text-[#FAF7F2] cursor-pointer p-1.5 rounded hover:bg-[#27272A]/40">
+
+                  <label className={clsx('flex', 'items-center', 'justify-between', 'text-xs', 'text-[#FAF7F2]', 'cursor-pointer', 'p-1.5', 'rounded', 'hover:bg-[#27272A]/40')}>
                     <span>Exibir Descrição dos Pratos</span>
                     <input
                       id="sidebar-toggle-descriptions"
                       type="checkbox"
                       checked={settings.exibirDescricoes}
                       onChange={(e) => setSettings({ ...settings, exibirDescricoes: e.target.checked })}
-                      className="rounded border-[#27272A] text-[#7A1F2D] focus:ring-[#7A1F2D] h-4 w-4 bg-[#121214]"
+                      className={clsx('rounded', 'border-[#27272A]', 'text-[#7A1F2D]', 'focus:ring-[#7A1F2D]', 'h-4', 'w-4', 'bg-[#121214]')}
                     />
                   </label>
 
                   {/* Tamanho da Fonte */}
-                  <div className="border-t border-[#27272A]/60 pt-2.5 mt-1">
-                    <span className="text-[10px] font-bold text-gray-400 block mb-1.5 uppercase tracking-wider">Tamanho da Fonte</span>
-                    <div className="grid grid-cols-3 gap-1 bg-[#121214] p-1 rounded-xl border border-[#27272A]">
+                  <div className={clsx('border-t', 'border-[#27272A]/60', 'pt-2.5', 'mt-1')}>
+                    <span className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'block', 'mb-1.5', 'uppercase', 'tracking-wider')}>Tamanho da Fonte</span>
+                    <div className={clsx('grid', 'grid-cols-3', 'gap-1', 'bg-[#121214]', 'p-1', 'rounded-xl', 'border', 'border-[#27272A]')}>
                       {(['padrao', 'grande', 'gigante'] as const).map((sz) => (
                         <button
                           key={sz}
                           type="button"
                           onClick={() => changeFontSize(sz)}
-                          className={`py-1 rounded-lg text-[9px] font-bold uppercase transition-all cursor-pointer ${
-                            fontSize === sz
-                              ? 'bg-[#C5A880] text-[#121214]'
-                              : 'text-gray-400 hover:text-white'
-                          }`}
+                          className={`py-1 rounded-lg text-[9px] font-bold uppercase transition-all cursor-pointer ${fontSize === sz
+                            ? 'bg-[#C5A880] text-[#121214]'
+                            : 'text-gray-400 hover:text-white'
+                            }`}
                         >
                           {sz === 'padrao' ? 'Padrão' : sz === 'grande' ? 'Grande' : 'Gigante'}
                         </button>
@@ -1325,17 +1323,17 @@ export default function App() {
 
             </div>
 
-            <div className="pt-6 border-t border-[#27272A] text-center text-[10px] text-[#71717A] font-sans">
+            <div className={clsx('pt-6', 'border-t', 'border-[#27272A]', 'text-center', 'text-[10px]', 'text-[#71717A]', 'font-sans')}>
               <p>{restaurantName}</p>
-              <p className="mt-0.5 font-mono">v3.5 • Dark Engine</p>
+              <p className={clsx('mt-0.5', 'font-mono')}>v3.5 • Dark Engine</p>
             </div>
           </div>
         </div>
       )}
 
       {/* MAIN CONTAINER */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-7">
-        
+      <main className={clsx('flex-1', 'max-w-7xl', 'w-full', 'mx-auto', 'px-4', 'sm:px-6', 'lg:px-8', 'py-8', 'space-y-7')}>
+
         {/* VIEW 1: COZINHA (KITCHEN QUEUE) */}
         {activeRole === 'cozinha' ? (
           <KitchenPanel
@@ -1359,22 +1357,22 @@ export default function App() {
         ) : (
           /* VIEW 2: SALÃO (WAITERS OR CASHIER DASHBOARD) */
           <div className="space-y-6">
-            
+
             {/* Table layout grid */}
             <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-[#27272A]">
-                <div className="flex items-center gap-3">
-                  <h3 className="font-serif text-2xl font-bold tracking-tight text-white">Mapa de Mesas</h3>
+              <div className={clsx('flex', 'flex-col', 'sm:flex-row', 'sm:items-center', 'justify-between', 'gap-4', 'pb-3', 'border-b', 'border-[#27272A]')}>
+                <div className={clsx('flex', 'items-center', 'gap-3')}>
+                  <h3 className={clsx('font-serif', 'text-2xl', 'font-bold', 'tracking-tight', 'text-white')}>Mapa de Mesas</h3>
                   {/* Legend */}
-                  <div className="hidden md:flex items-center gap-3 text-[10px] font-sans font-bold uppercase tracking-wider text-gray-400">
-                    <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500"></span> Livre</span>
-                    <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-rose-500"></span> Ocupada</span>
-                    <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-[#C5A880] animate-pulse"></span> Pronto p/ Servir</span>
+                  <div className={clsx('hidden', 'md:flex', 'items-center', 'gap-3', 'text-[10px]', 'font-sans', 'font-bold', 'uppercase', 'tracking-wider', 'text-gray-400')}>
+                    <span className={clsx('flex', 'items-center', 'gap-1')}><span className={clsx('h-2.5', 'w-2.5', 'rounded-full', 'bg-emerald-500')}></span> Livre</span>
+                    <span className={clsx('flex', 'items-center', 'gap-1')}><span className={clsx('h-2.5', 'w-2.5', 'rounded-full', 'bg-rose-500')}></span> Ocupada</span>
+                    <span className={clsx('flex', 'items-center', 'gap-1')}><span className={clsx('h-2.5', 'w-2.5', 'rounded-full', 'bg-[#C5A880]', 'animate-pulse')}></span> Pronto p/ Servir</span>
                   </div>
                 </div>
-                
+
                 {/* Filters */}
-                <div className="flex gap-1.5 overflow-x-auto pb-1">
+                <div className={clsx('flex', 'gap-1.5', 'overflow-x-auto', 'pb-1')}>
                   {(['todos', 'livres', 'ocupadas', 'prontas'] as const).map((filter) => {
                     const label = {
                       todos: 'Todas',
@@ -1387,11 +1385,10 @@ export default function App() {
                       <button
                         key={filter}
                         onClick={() => setTableFilter(filter)}
-                        className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer whitespace-nowrap border ${
-                          tableFilter === filter
-                            ? 'bg-[#7A1F2D] text-white border-transparent shadow-md'
-                            : 'bg-[#1C1C1F] hover:bg-[#27272A] text-gray-300 hover:text-white border-[#27272A]'
-                        }`}
+                        className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer whitespace-nowrap border ${tableFilter === filter
+                          ? 'bg-[#7A1F2D] text-white border-transparent shadow-md'
+                          : 'bg-[#1C1C1F] hover:bg-[#27272A] text-gray-300 hover:text-white border-[#27272A]'
+                          }`}
                       >
                         {label}
                       </button>
@@ -1399,8 +1396,8 @@ export default function App() {
                   })}
                 </div>
               </div>
-              
-              <div className="grid grid-cols-3 gap-1 sm:gap-6">
+
+              <div className={clsx('grid', 'grid-cols-3', 'gap-1', 'sm:gap-6')}>
                 {(() => {
                   const filteredTables = salonTables.filter(table => {
                     const tableOrders = orders.filter(o => o.mesaId === table.id);
@@ -1419,7 +1416,7 @@ export default function App() {
 
                   if (filteredTables.length === 0) {
                     return (
-                      <div className="col-span-full py-10 text-center text-gray-500 text-sm italic font-sans">
+                      <div className={clsx('col-span-full', 'py-10', 'text-center', 'text-gray-500', 'text-sm', 'italic', 'font-sans')}>
                         Nenhuma mesa encontrada neste status.
                       </div>
                     );
@@ -1458,9 +1455,9 @@ export default function App() {
       </main>
 
       {/* FOOTER */}
-      <footer className="bg-[#121214] text-[#71717A] border-t border-[#27272A] py-7 text-center text-xs shrink-0 font-sans">
-        <div className="max-w-7xl mx-auto px-4 space-y-1">
-          <p className="font-serif text-sm text-[#C5A880] font-medium">{restaurantName}</p>
+      <footer className={clsx('bg-[#121214]', 'text-[#71717A]', 'border-t', 'border-[#27272A]', 'py-7', 'text-center', 'text-xs', 'shrink-0', 'font-sans')}>
+        <div className={clsx('max-w-7xl', 'mx-auto', 'px-4', 'space-y-1')}>
+          <p className={clsx('font-serif', 'text-sm', 'text-[#C5A880]', 'font-medium')}>{restaurantName}</p>
           <p className="text-[10px]">© 2026 Haute Cuisine Controller. Todos os direitos reservados. Sincronização API • Polling 4s.</p>
         </div>
       </footer>
@@ -1468,18 +1465,18 @@ export default function App() {
       {/* MODAL CONTROLLER */}
       {selectedTable && (() => {
         const selectedTableActiveClients = Array.from(new Set(
-          selectedTableOrders.flatMap(order => 
+          selectedTableOrders.flatMap(order =>
             order.itens
               .map(item => item.clienteNome.trim())
               .filter(name => name !== '' && name !== 'Consumo Geral')
           )
         ));
-        
+
         // Concurrency: Waiters other than active editing drafts on this table (synced via WebSockets)
         const otherWaitersServing = Object.keys(activeDrafts[selectedTable.id] || {})
           .filter(gId => gId !== activeWaiterId)
           .map(gId => activeDrafts[selectedTable.id][gId].garcomNome);
-        
+
         return (
           <MesaDetailsModal
             table={selectedTable}
