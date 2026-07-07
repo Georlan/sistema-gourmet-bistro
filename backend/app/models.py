@@ -1,0 +1,415 @@
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey
+from sqlalchemy.orm import relationship
+from sqlalchemy.ext.hybrid import hybrid_property
+import datetime
+from .database import Base
+from .crypt import encrypt_field, decrypt_field
+
+class Usuario(Base):
+    __tablename__ = "usuarios"
+    
+    id = Column(String, primary_key=True, index=True)  # ex: "g-01", "c-01"
+    nome = Column(String, nullable=False)
+    usuario = Column(String, unique=True, index=True, nullable=False)  # Login handle
+    senha_hash = Column(String, nullable=False)  # bcrypt hashed password
+    role = Column(String, default="garcom", nullable=False)  # "garcom" | "caixa" | "admin"
+    
+    # Relationships
+    comandas_abertas = relationship("Comanda", back_populates="criada_por")
+    lancamentos_feitos = relationship("Lancamento", back_populates="garcom")
+
+
+class Categoria(Base):
+    __tablename__ = "categorias"
+    
+    id = Column(String, primary_key=True, index=True)  # ex: "cat-hamburgueres-bovinos"
+    nome = Column(String, unique=True, nullable=False)
+    destino_impressao = Column(String, default="COZINHA")  # "COZINHA" | "BAR" | "NENHUM"
+    
+    # Relationships
+    produtos = relationship("Produto", back_populates="categoria")
+    observacoes_predefinidas = relationship("ObservacaoPredefinida", back_populates="categoria")
+
+
+class Produto(Base):
+    __tablename__ = "produtos"
+    
+    id = Column(String, primary_key=True, index=True)
+    nome = Column(String, nullable=False)
+    categoria_id = Column(String, ForeignKey("categorias.id"), nullable=False)
+    preco = Column(Float, nullable=False)
+    descricao = Column(String, default="")
+    imagem = Column(String, default="")
+    ativo = Column(Boolean, default=True)  # Toggle product availability
+    
+    # Relationships
+    categoria = relationship("Categoria", back_populates="produtos")
+
+
+class Mesa(Base):
+    __tablename__ = "mesas"
+    
+    id = Column(Integer, primary_key=True, index=True)  # Fixed ID: 1, 2, 3...
+    capacidade = Column(Integer, nullable=False, default=4)
+    nome = Column(String, nullable=True)  # Editable custom name (e.g. "Mesa VIP", "Varanda 1")
+
+
+class ObservacaoPredefinida(Base):
+    __tablename__ = "observacoes_predefinidas"
+    
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    categoria_id = Column(String, ForeignKey("categorias.id"), nullable=False)
+    texto = Column(String, nullable=False)  # e.g., "Sem cebola", "Sem cheddar", "Pra viagem"
+    
+    # Relationships
+    categoria = relationship("Categoria", back_populates="observacoes_predefinidas")
+
+
+class Comanda(Base):
+    __tablename__ = "comandas"
+    
+    id = Column(String, primary_key=True, index=True)
+    mesa_id = Column(Integer, ForeignKey("mesas.id"), nullable=True)  # Null for takeout
+    garcom_id = Column(String, ForeignKey("usuarios.id"), nullable=False)
+    
+    tipo = Column(String, default="Consumo no Local")  # Consumo no Local | Retirada
+    _identificador = Column("identificador", String, nullable=True)  # Client name encrypted
+    numero_pedido = Column(Integer, nullable=False)  # Global sequential order number (shared when splitting)
+
+    @hybrid_property
+    def identificador(self):
+        return decrypt_field(self._identificador)
+
+    @identificador.setter
+    def identificador(self, value):
+        self._identificador = encrypt_field(value)
+    
+    fechada = Column(Boolean, default=False)
+    criado_em = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    fechado_em = Column(DateTime, nullable=True)
+    valor_pago = Column(Float, default=0.0, nullable=False)  # Sum of generic partial payments made
+    
+    # Delivery operational fields
+    delivery_status = Column(String, nullable=True)  # analise, producao, transito, finalizado
+    delivery_taxa = Column(Float, default=0.0)
+    _delivery_telefone = Column("delivery_telefone", String, nullable=True)
+    _delivery_endereco = Column("delivery_endereco", String, nullable=True)
+    motoboy_id = Column(Integer, ForeignKey("motoboys.id"), nullable=True)
+
+    @hybrid_property
+    def delivery_telefone(self):
+        return decrypt_field(self._delivery_telefone)
+
+    @delivery_telefone.setter
+    def delivery_telefone(self, value):
+        self._delivery_telefone = encrypt_field(value)
+
+    @hybrid_property
+    def delivery_endereco(self):
+        return decrypt_field(self._delivery_endereco)
+
+    @delivery_endereco.setter
+    def delivery_endereco(self, value):
+        self._delivery_endereco = encrypt_field(value)
+
+    # Relationships
+    criada_por = relationship("Usuario", back_populates="comandas_abertas")
+    lancamentos = relationship("Lancamento", back_populates="comanda", cascade="all, delete-orphan")
+    itens = relationship("Item", back_populates="comanda", cascade="all, delete-orphan")
+    motoboy = relationship("Motoboy", back_populates="comandas")
+
+
+class Lancamento(Base):
+    __tablename__ = "lancamentos"
+    
+    id = Column(String, primary_key=True, index=True)
+    comanda_id = Column(String, ForeignKey("comandas.id"), nullable=False)
+    garcom_id = Column(String, ForeignKey("usuarios.id"), nullable=False)
+    timestamp = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    
+    # Relationships
+    comanda = relationship("Comanda", back_populates="lancamentos")
+    garcom = relationship("Usuario", back_populates="lancamentos_feitos")
+    itens = relationship("Item", back_populates="lancamento", cascade="all, delete-orphan")
+
+
+class Item(Base):
+    __tablename__ = "itens"
+    
+    id = Column(String, primary_key=True, index=True)
+    comanda_id = Column(String, ForeignKey("comandas.id"), nullable=False)
+    lancamento_id = Column(String, ForeignKey("lancamentos.id"), nullable=False)
+    produto_id = Column(String, ForeignKey("produtos.id"), nullable=False)
+    
+    preco_unit = Column(Float, nullable=False)  # Snapshot of price at order time
+    observacao = Column(String, default="")
+    _cliente_nome = Column("cliente_nome", String, default="Consumo Geral")
+
+    @hybrid_property
+    def cliente_nome(self):
+        return decrypt_field(self._cliente_nome)
+
+    @cliente_nome.setter
+    def cliente_nome(self, value):
+        self._cliente_nome = encrypt_field(value)
+    
+    status = Column(String, default="preparando")  # preparando | pronto | entregue | cancelado
+    cancelado_por = Column(String, ForeignKey("usuarios.id"), nullable=True)
+    impresso_em = Column(DateTime, nullable=True)  # Individual unit print log
+    pago = Column(Boolean, default=False, nullable=False)  # Settle item payment individually
+    
+    # Relationships
+    comanda = relationship("Comanda", back_populates="itens")
+    lancamento = relationship("Lancamento", back_populates="itens")
+    produto = relationship("Produto")
+
+
+class CaixaTurno(Base):
+    __tablename__ = "caixa_turnos"
+    
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    aberto_por_id = Column(String, ForeignKey("usuarios.id"), nullable=False)
+    aberto_em = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    fechado_em = Column(DateTime, nullable=True)
+    fechado_por_id = Column(String, ForeignKey("usuarios.id"), nullable=True)
+    
+    saldo_inicial = Column(Float, nullable=False)
+    declarado_dinheiro = Column(Float, nullable=True)
+    declarado_pix = Column(Float, nullable=True)
+    declarado_cartao = Column(Float, nullable=True)
+    status = Column(String, default="aberto")  # "aberto" | "fechado"
+
+
+class CaixaMovimentacao(Base):
+    __tablename__ = "caixa_movimentacoes"
+    
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    turno_id = Column(Integer, ForeignKey("caixa_turnos.id"), nullable=False)
+    tipo = Column(String, nullable=False)  # "suprimento" | "sangria"
+    valor = Column(Float, nullable=False)
+    descricao = Column(String, default="")
+    criado_em = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+
+class Pagamento(Base):
+    __tablename__ = "pagamentos"
+    
+    id = Column(String, primary_key=True, index=True)
+    comanda_id = Column(String, ForeignKey("comandas.id"), nullable=False)
+    turno_id = Column(Integer, ForeignKey("caixa_turnos.id"), nullable=False)
+    valor = Column(Float, nullable=False)
+    metodo = Column(String, nullable=False)  # "dinheiro" | "pix" | "cartao"
+    criado_em = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+# Alias compatibility
+Garcom = Usuario
+
+
+class ConfiguracaoRestaurante(Base):
+    __tablename__ = "configuracoes_restaurante"
+    
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    nicho = Column(String, default="hamburgueria")  # "hamburgueria" | "pizzaria" | "doceria" | "alacarte" | "selfservice"
+    mapa_mesas_ativo = Column(Boolean, default=True)
+    delivery_ativo = Column(Boolean, default=True)
+    taxa_servico_ativa = Column(Boolean, default=True)
+    taxa_servico_padrao = Column(Float, default=10.0)
+    unificar_vias_delivery = Column(Boolean, default=False)
+    modo_exclusivo_salao = Column(Boolean, default=True)
+
+
+class ConfiguracaoIA(Base):
+    __tablename__ = "configuracoes_ia"
+    
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    permitir_descontos = Column(Boolean, default=False)
+    desconto_maximo = Column(Float, default=10.0)
+    permitir_upsell = Column(Boolean, default=True)
+    tom_de_voz = Column(String, default="direto")  # "direto" | "conversador"
+    teto_interacoes = Column(Integer, default=5)
+
+
+class MensagemWhatsApp(Base):
+    __tablename__ = "mensagens_whatsapp"
+    
+    id = Column(String, primary_key=True, index=True)
+    _cliente_telefone = Column("cliente_telefone", String, nullable=False)
+    remetente = Column(String, nullable=False)  # "cliente" | "ia" | "humano"
+    _conteudo = Column("conteudo", String, nullable=False)
+    _transcricao = Column("transcricao", String, nullable=True)
+    audio_url = Column(String, nullable=True)
+    criado_em = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+    @hybrid_property
+    def cliente_telefone(self):
+        return decrypt_field(self._cliente_telefone)
+
+    @cliente_telefone.setter
+    def cliente_telefone(self, value):
+        self._cliente_telefone = encrypt_field(value)
+
+    @hybrid_property
+    def conteudo(self):
+        return decrypt_field(self._conteudo)
+
+    @conteudo.setter
+    def conteudo(self, value):
+        self._conteudo = encrypt_field(value)
+
+    @hybrid_property
+    def transcricao(self):
+        return decrypt_field(self._transcricao)
+
+    @transcricao.setter
+    def transcricao(self, value):
+        self._transcricao = encrypt_field(value)
+
+
+class RascunhoPedido(Base):
+    __tablename__ = "rascunhos_pedidos"
+    
+    id = Column(String, primary_key=True, index=True)
+    _cliente_telefone = Column("cliente_telefone", String, nullable=False)
+    _conteudo_json = Column("conteudo_json", String, nullable=False)
+    _ia_sugestao_resposta = Column("ia_sugestao_resposta", String, nullable=True)
+    status = Column(String, default="pendente")  # "pendente" | "aprovado" | "recusado"
+    criado_em = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+    @hybrid_property
+    def cliente_telefone(self):
+        return decrypt_field(self._cliente_telefone)
+
+    @cliente_telefone.setter
+    def cliente_telefone(self, value):
+        self._cliente_telefone = encrypt_field(value)
+
+    @hybrid_property
+    def conteudo_json(self):
+        return decrypt_field(self._conteudo_json)
+
+    @conteudo_json.setter
+    def conteudo_json(self, value):
+        self._conteudo_json = encrypt_field(value)
+
+    @hybrid_property
+    def ia_sugestao_resposta(self):
+        return decrypt_field(self._ia_sugestao_resposta)
+
+    @ia_sugestao_resposta.setter
+    def ia_sugestao_resposta(self, value):
+        self._ia_sugestao_resposta = encrypt_field(value)
+
+
+class GrupoModificador(Base):
+    __tablename__ = "grupo_modificadores"
+    
+    id = Column(String, primary_key=True, index=True)
+    nome = Column(String, nullable=False)
+    min_selecoes = Column(Integer, default=0)
+    max_selecoes = Column(Integer, default=1)
+    tipo = Column(String, default="obrigatorio")  # "obrigatorio" | "opcional" | "meio_a_meio"
+
+
+class OpcaoModificador(Base):
+    __tablename__ = "opcao_modificadores"
+    
+    id = Column(String, primary_key=True, index=True)
+    grupo_id = Column(String, ForeignKey("grupo_modificadores.id"), nullable=False)
+    nome = Column(String, nullable=False)
+    preco_adicional = Column(Float, default=0.0)
+    ativo = Column(Boolean, default=True)
+
+
+class ProdutoGrupoModificador(Base):
+    __tablename__ = "produto_grupo_modificadores"
+    
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    produto_id = Column(String, ForeignKey("produtos.id"), nullable=False)
+    grupo_id = Column(String, ForeignKey("grupo_modificadores.id"), nullable=False)
+
+
+class ItemModificador(Base):
+    __tablename__ = "item_modificadores"
+    
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    item_id = Column(String, ForeignKey("itens.id"), nullable=False)
+    opcao_modificador_id = Column(String, ForeignKey("opcao_modificadores.id"), nullable=False)
+    preco_aplicado = Column(Float, nullable=False)
+
+
+class ActivityLog(Base):
+    __tablename__ = "activity_logs"
+    
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    garcom_id = Column(String, ForeignKey("usuarios.id"), nullable=False)
+    action = Column(String, nullable=False)  # e.g., "CANCEL_ITEM", "APPLY_DISCOUNT", "REOPEN_CAIXA", "GDPR_DELETE"
+    details = Column(String, default="")
+    timestamp = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+
+# Register ORM event listeners to enforce log immutability
+from sqlalchemy import event
+
+@event.listens_for(ActivityLog, 'before_update')
+def block_activity_log_update(mapper, connection, target):
+    raise PermissionError("Activity logs are immutable and cannot be updated.")
+
+@event.listens_for(ActivityLog, 'before_delete')
+def block_activity_log_delete(mapper, connection, target):
+    raise PermissionError("Activity logs are immutable and cannot be deleted.")
+
+
+class Insumo(Base):
+    __tablename__ = "insumos"
+    
+    id = Column(String, primary_key=True, index=True)
+    nome = Column(String, nullable=False)
+    estoque_atual = Column(Float, default=0.0)
+    estoque_minimo = Column(Float, default=10.0)
+    estoque_maximo = Column(Float, default=50.0)
+    unidade_medida = Column(String, default="un")  # kg, g, l, ml, un
+    preco_medio_custo = Column(Float, default=0.0)
+
+
+class ConfigFidelizacao(Base):
+    __tablename__ = "config_fidelizacao"
+    
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    ativo = Column(Boolean, default=False)
+    tipo_recompensa = Column(String, default="PONTOS")  # PONTOS | CASHBACK
+    taxa_conversao = Column(Float, default=1.0)  # R$ 1 = X points or X% cashback
+    valor_ponto_em_dinheiro = Column(Float, default=0.05)  # 1 point = R$ 0.05 discount
+
+
+class HistoricoFidelidade(Base):
+    __tablename__ = "historico_fidelidade"
+    
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    _cliente_telefone = Column("cliente_telefone", String, nullable=False)
+    tipo_movimentacao = Column(String, nullable=False)  # ACUMULO | RESGATE
+    valor_delta = Column(Float, nullable=False)
+    comanda_id = Column(String, ForeignKey("comandas.id"), nullable=True)
+    criado_em = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+    @hybrid_property
+    def cliente_telefone(self):
+        return decrypt_field(self._cliente_telefone)
+
+    @cliente_telefone.setter
+    def cliente_telefone(self, value):
+        self._cliente_telefone = encrypt_field(value)
+
+
+class Motoboy(Base):
+    __tablename__ = "motoboys"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String, nullable=False)
+    telefone = Column(String, nullable=False)
+    ativo = Column(Boolean, default=True)
+    
+    # Relationship to comandas
+    comandas = relationship("Comanda", back_populates="motoboy")
+
+
+

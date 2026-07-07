@@ -1,0 +1,1521 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Menu, X, User, Wifi, WifiOff } from 'lucide-react';
+import { Table, Order, DraftItem, AppSettings, AppRole, Product } from './types';
+import { TABLES, WAITERS, RESTAURANT_CONFIG, PRODUCTS } from './data';
+import { getTableTotal } from './domain';
+import { MesaCard } from './components/MesaCard';
+import { MesaDetailsModal } from './components/MesaDetailsModal';
+import { KitchenPanel } from './components/KitchenPanel';
+import { CaixaPanel } from './components/CaixaPanel';
+
+const LOCAL_STORAGE_DRAFTS_KEY = 'koma_drafts_vFinal_v3';
+const LOCAL_STORAGE_SETTINGS_KEY = 'koma_settings_vFinal_v3';
+const LOCAL_STORAGE_RESTAURANT_NAME_KEY = 'koma_restaurant_name_v3';
+const LOCAL_STORAGE_HIST_CLIENTS_KEY = 'koma_historic_clients_v3';
+
+const API_BASE_URL = `http://${window.location.hostname}:8000`;
+
+const parseBackendDateTime = (dateStr: string): number => {
+  if (!dateStr) return Date.now();
+  if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !/-\d{2}:\d{2}$/.test(dateStr)) {
+    return new Date(dateStr + 'Z').getTime();
+  }
+  return new Date(dateStr).getTime();
+};
+
+export default function App() {
+  // 1. Roles & Active user state (Strictly 'garcom')
+  // 1. Detect portal (garcom or caixa/management) from URL query parameters or hashes
+  const [portal, setPortal] = useState<'garcom' | 'caixa'>(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const viewParam = searchParams.get('view');
+    const hash = window.location.hash;
+    
+    if (viewParam === 'caixa' || viewParam === 'gerencia' || hash === '#caixa' || hash === '#gerencia') {
+      return 'caixa';
+    }
+    return 'garcom';
+  });
+
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    const key = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
+    return !!localStorage.getItem(key);
+  });
+  const [activeWaiterId, setActiveWaiterId] = useState<string>(() => {
+    const key = portal === 'caixa' ? "koma_caixa_id" : "koma_waiter_id";
+    return localStorage.getItem(key) || "";
+  });
+  const [activeWaiterNome, setActiveWaiterNome] = useState<string>(() => {
+    const key = portal === 'caixa' ? "koma_caixa_name" : "koma_waiter_name";
+    return localStorage.getItem(key) || "";
+  });
+  const activeWaiter = { id: activeWaiterId, nome: activeWaiterNome };
+  const [activeRole, setActiveRole] = useState<AppRole>(() => {
+    if (portal === 'caixa') {
+      return (localStorage.getItem("koma_caixa_role") as AppRole) || 'caixa';
+    }
+    return 'garcom';
+  });
+
+  // Listen to URL changes to switch portal dynamically
+  const [restauranteConfig, setRestauranteConfig] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/caixa/configuracoes`);
+        if (res.ok) {
+          const data = await res.json();
+          setRestauranteConfig(data);
+        }
+      } catch (err) {
+        console.error("Error fetching configs in App:", err);
+      }
+    };
+    fetchConfig();
+    const interval = setInterval(fetchConfig, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const handleUrlChange = () => {
+      const searchParams = new URLSearchParams(window.location.search);
+      const viewParam = searchParams.get('view');
+      const hash = window.location.hash;
+      const newPortal = (viewParam === 'caixa' || viewParam === 'gerencia' || hash === '#caixa' || hash === '#gerencia') ? 'caixa' : 'garcom';
+      
+      setPortal(newPortal);
+      
+      const tokenKey = newPortal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
+      const idKey = newPortal === 'caixa' ? "koma_caixa_id" : "koma_waiter_id";
+      const nameKey = newPortal === 'caixa' ? "koma_caixa_name" : "koma_waiter_name";
+      const roleKey = newPortal === 'caixa' ? "koma_caixa_role" : "koma_user_role";
+      
+      setIsAuthenticated(!!localStorage.getItem(tokenKey));
+      setActiveWaiterId(localStorage.getItem(idKey) || "");
+      setActiveWaiterNome(localStorage.getItem(nameKey) || "");
+      
+      if (newPortal === 'caixa') {
+        setActiveRole((localStorage.getItem(roleKey) as AppRole) || 'caixa');
+      } else {
+        setActiveRole('garcom');
+      }
+
+      const tableKey = `koma_${newPortal}_selected_table_v3`;
+      const savedTable = localStorage.getItem(tableKey);
+      setSelectedTableId(savedTable ? parseInt(savedTable, 10) : null);
+    };
+
+    window.addEventListener('popstate', handleUrlChange);
+    window.addEventListener('hashchange', handleUrlChange);
+    return () => {
+      window.removeEventListener('popstate', handleUrlChange);
+      window.removeEventListener('hashchange', handleUrlChange);
+    };
+  }, [portal]);
+
+  // Toast notification system
+  interface Toast { id: number; message: string; type: 'success' | 'error' | 'info'; }
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const toastIdRef = useRef(0);
+
+  const showToast = useCallback((message: string, type: Toast['type'] = 'success', duration = 3000) => {
+    const id = ++toastIdRef.current;
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), duration);
+  }, []);
+
+  // Login Form States
+  const [loginUsername, setLoginUsername] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  // Helper to get headers for API calls including JWT
+  const getAuthHeaders = (contentType = "application/json") => {
+    const headers: any = {};
+    if (contentType) {
+      headers["Content-Type"] = contentType;
+    }
+    const tokenKey = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
+    const token = localStorage.getItem(tokenKey);
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    return headers;
+  };
+
+  // Sidebar Open State
+  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
+
+  const [fontSize, setFontSize] = useState<'padrao' | 'grande' | 'gigante'>(() => {
+    return (localStorage.getItem('koma_font_size') as any) || 'padrao';
+  });
+
+  const changeFontSize = (size: 'padrao' | 'grande' | 'gigante') => {
+    localStorage.setItem('koma_font_size', size);
+    setFontSize(size);
+    window.dispatchEvent(new Event('koma_font_size_changed'));
+  };
+
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const stored = localStorage.getItem('koma_font_size') as any;
+      if (stored && ['padrao', 'grande', 'gigante'].includes(stored)) {
+        setFontSize(stored);
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('koma_font_size_changed', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('koma_font_size_changed', handleStorageChange);
+    };
+  }, []);
+
+  // 1.5. Dynamic Salon Tables State and Fetcher
+  const [salonTables, setSalonTables] = useState<Table[]>(TABLES);
+
+  const fetchTables = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/mesas`, { headers: getAuthHeaders() });
+      if (res.ok) {
+        const data = await res.json();
+        setSalonTables(data);
+      }
+    } catch (err) {
+      console.error("Error fetching tables", err);
+    }
+  };
+
+  // Create Mesa
+  const handleCreateMesa = async (id: number, capacidade: number, nome?: string) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/mesas/`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ id, capacidade, nome })
+      });
+      if (res.ok) {
+        await fetchTables();
+      } else {
+        const err = await res.json();
+        alert(`Erro ao criar mesa: ${err.detail}`);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Update Mesa
+  const handleUpdateMesa = async (id: number, capacidade?: number, nome?: string) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/mesas/${id}`, {
+        method: "PUT",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ capacidade, nome })
+      });
+      if (res.ok) {
+        await fetchTables();
+      } else {
+        const err = await res.json();
+        alert(`Erro ao atualizar mesa: ${err.detail}`);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Delete Mesa
+  const handleDeleteMesa = async (id: number) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/mesas/${id}`, {
+        method: "DELETE",
+        headers: getAuthHeaders()
+      });
+      if (res.ok) {
+        await fetchTables();
+      } else {
+        const err = await res.json();
+        alert(`Erro ao excluir mesa: ${err.detail}`);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Editable Restaurant Name State
+  const [restaurantName, setRestaurantName] = useState<string>(() => {
+    return localStorage.getItem(LOCAL_STORAGE_RESTAURANT_NAME_KEY) || RESTAURANT_CONFIG.nomePadrao;
+  });
+
+  // Table filter state
+  const [tableFilter, setTableFilter] = useState<'todos' | 'livres' | 'ocupadas' | 'prontas'>('todos');
+
+  // 2. Live products loaded from backend (includes ativo field for availability blocking)
+  const [liveProdutos, setLiveProdutos] = useState<Product[]>([]);
+
+  const fetchLiveProdutos = useCallback(async () => {
+    try {
+      const tokenKey = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
+      const token = localStorage.getItem(tokenKey);
+      const headers: any = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch(`${API_BASE_URL}/produtos`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setLiveProdutos(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error("Error fetching live products", err);
+    }
+  }, [portal]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchLiveProdutos();
+      const interval = setInterval(fetchLiveProdutos, 30000); // refresh every 30s
+      return () => clearInterval(interval);
+    }
+  }, [isAuthenticated, fetchLiveProdutos]);
+
+  // 2b. Orders loaded from API
+  const [orders, setOrders] = useState<Order[]>([]);
+
+  const [drafts, setDrafts] = useState<{ [mesaId: number]: DraftItem[] }>(() => {
+    const saved = localStorage.getItem(LOCAL_STORAGE_DRAFTS_KEY);
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error('Error loading drafts from localStorage', e);
+      }
+    }
+    return {};
+  });
+
+  // 3. App View Settings
+  const [settings, setSettings] = useState<AppSettings>(() => {
+    const saved = localStorage.getItem(LOCAL_STORAGE_SETTINGS_KEY);
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error('Error loading settings from localStorage', e);
+      }
+    }
+    return { exibirImagens: true, exibirDescricoes: true };
+  });
+
+  // 4. Modal focus state
+  const [selectedTableId, setSelectedTableId] = useState<number | null>(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const viewParam = searchParams.get('view');
+    const hash = window.location.hash;
+    const initialPortal = (viewParam === 'caixa' || viewParam === 'gerencia' || hash === '#caixa' || hash === '#gerencia') ? 'caixa' : 'garcom';
+    const saved = localStorage.getItem(`koma_${initialPortal}_selected_table_v3`);
+    return saved ? parseInt(saved, 10) : null;
+  });
+
+  const handleTableClick = useCallback((tableId: number) => {
+    setSelectedTableId(tableId);
+  }, []);
+
+  useEffect(() => {
+    const key = `koma_${portal}_selected_table_v3`;
+    if (selectedTableId !== null) {
+      localStorage.setItem(key, selectedTableId.toString());
+    } else {
+      localStorage.removeItem(key);
+    }
+  }, [selectedTableId, portal]);
+
+  // 5. Live clock tracker to update permanency timers automatically every 10 seconds
+  const [currentTime, setCurrentTime] = useState<number>(Date.now());
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // WebSocket Live Real-Time & Draft Sincronização
+  interface ActiveDraftInfo {
+    garcomNome: string;
+    timestamp: number;
+  }
+  const [activeDrafts, setActiveDrafts] = useState<{ [mesaId: number]: { [garcomId: string]: ActiveDraftInfo } }>({});
+  const wsRef = useRef<WebSocket | null>(null);
+  const [isWsConnected, setIsWsConnected] = useState<boolean>(false);
+  const lastDraftStatusesRef = useRef<{ [mesaId: number]: boolean }>({});
+
+  const notifyDraftStatus = (mesaId: number, hasDraft: boolean) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      try {
+        wsRef.current.send(JSON.stringify({
+          action: "draft_status",
+          mesa_id: mesaId,
+          garcom_nome: activeWaiterNome,
+          ativo: hasDraft
+        }));
+      } catch (err) {
+        console.error("Error sending draft status via WebSocket:", err);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (!isAuthenticated || !activeWaiterId) {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+      return;
+    }
+
+    let ws: WebSocket;
+    let reconnectTimeout: any;
+
+    const connectWS = () => {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.hostname}:8000/ws/${activeWaiterId}`;
+      ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        console.log("WebSocket connection established");
+        setIsWsConnected(true);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.event === "tables_updated") {
+            fetchOrdersFromAPI();
+          } else if (data.event === "draft_status") {
+            const { mesa_id, garcom_id, garcom_nome, ativo } = data;
+            setActiveDrafts(prev => {
+              const updated = { ...prev };
+              if (!updated[mesa_id]) {
+                updated[mesa_id] = {};
+              } else {
+                updated[mesa_id] = { ...updated[mesa_id] };
+              }
+              if (ativo) {
+                updated[mesa_id][garcom_id] = {
+                  garcomNome: garcom_nome,
+                  timestamp: Date.now()
+                };
+              } else {
+                delete updated[mesa_id][garcom_id];
+                if (Object.keys(updated[mesa_id]).length === 0) {
+                  delete updated[mesa_id];
+                }
+              }
+              return updated;
+            });
+          } else if (data.event === "waiter_connected" || data.event === "waiter_disconnected") {
+            const { garcom_id } = data;
+            setActiveDrafts(prev => {
+              const updated = { ...prev };
+              let changed = false;
+              Object.keys(updated).forEach(mId => {
+                const mesaId = Number(mId);
+                if (updated[mesaId][garcom_id]) {
+                  updated[mesaId] = { ...updated[mesaId] };
+                  delete updated[mesaId][garcom_id];
+                  changed = true;
+                  if (Object.keys(updated[mesaId]).length === 0) {
+                    delete updated[mesaId];
+                  }
+                }
+              });
+              return changed ? updated : prev;
+            });
+          }
+        } catch (err) {
+          console.error("Error handling WebSocket message:", err);
+        }
+      };
+
+      ws.onclose = () => {
+        console.log("WebSocket connection closed, scheduled reconnect in 5s");
+        setIsWsConnected(false);
+        wsRef.current = null;
+        reconnectTimeout = setTimeout(connectWS, 5000);
+      };
+
+      ws.onerror = (err) => {
+        console.error("WebSocket connection error:", err);
+        ws.close();
+      };
+    };
+
+    connectWS();
+
+    return () => {
+      if (ws) {
+        ws.close();
+      }
+      clearTimeout(reconnectTimeout);
+    };
+  }, [isAuthenticated, activeWaiterId]);
+
+  // Sync local draft changes to WebSocket
+  useEffect(() => {
+    if (!isAuthenticated || !activeWaiterId || !isWsConnected) return;
+
+    const currentStatuses: { [mesaId: number]: boolean } = {};
+    for (let mId = 1; mId <= RESTAURANT_CONFIG.totalMesas; mId++) {
+      const hasDraft = (drafts[mId] || []).length > 0;
+      const isViewing = selectedTableId === mId;
+      const isActive = hasDraft || isViewing;
+      currentStatuses[mId] = isActive;
+
+      const prev = lastDraftStatusesRef.current[mId] || false;
+      if (isActive !== prev) {
+        notifyDraftStatus(mId, isActive);
+      }
+    }
+    lastDraftStatusesRef.current = currentStatuses;
+  }, [drafts, selectedTableId, isAuthenticated, activeWaiterId, isWsConnected]);
+
+  // Reset statuses ref on disconnect to trigger fresh sync upon reconnect
+  useEffect(() => {
+    if (!isWsConnected) {
+      lastDraftStatusesRef.current = {};
+    }
+  }, [isWsConnected]);
+
+  // 6. Persistence effects
+  // Synchronized via polling instead of localStorage
+
+  useEffect(() => {
+    localStorage.setItem(LOCAL_STORAGE_DRAFTS_KEY, JSON.stringify(drafts));
+  }, [drafts]);
+
+  useEffect(() => {
+    localStorage.setItem(LOCAL_STORAGE_SETTINGS_KEY, JSON.stringify(settings));
+  }, [settings]);
+
+  useEffect(() => {
+    localStorage.setItem(LOCAL_STORAGE_RESTAURANT_NAME_KEY, restaurantName);
+  }, [restaurantName]);
+
+  // Lock body scroll when sidebar/drawer is open
+  useEffect(() => {
+    if (isSidebarOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isSidebarOpen]);
+
+  // Physical back button / swipe back closes the active modal
+  useEffect(() => {
+    const handlePopState = () => {
+      if (selectedTableId !== null) {
+        setSelectedTableId(null);
+      }
+    };
+
+    if (selectedTableId !== null) {
+      window.history.pushState({ modalOpen: true }, "");
+    }
+
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [selectedTableId]);
+
+
+  // Waiter persistence managed by login state
+
+  // Get draft items for a waiter at a specific table
+  const getDraftItems = (mesaId: number) => {
+    return drafts[mesaId] || [];
+  };
+
+  // 7. Core Order Actions
+  const handleAddToDraft = (mesaId: number, product: Product, quantity = 1, observacao = '', clienteNome = '') => {
+    setDrafts(prev => {
+      const existing = prev[mesaId] || [];
+      const defaultClientName = clienteNome || (existing.length > 0 ? existing[0].clienteNome : '');
+
+      const newItem: DraftItem = {
+        id: `draft-${Date.now()}-${Math.floor(Math.random() * 100000)}`,
+        produtoId: product.id,
+        nome: product.nome,
+        preco: product.preco,
+        observacao: observacao,
+        clienteNome: defaultClientName,
+        quantidade: quantity
+      };
+
+      return {
+        ...prev,
+        [mesaId]: [...existing, newItem]
+      };
+    });
+  };
+
+  const handleRemoveFromDraft = (mesaId: number, draftItemId: string) => {
+    setDrafts(prev => {
+      const existing = prev[mesaId] || [];
+      return {
+        ...prev,
+        [mesaId]: existing.filter(item => item.id !== draftItemId)
+      };
+    });
+  };
+
+  const handleUpdateDraftItem = (mesaId: number, draftItemId: string, fields: Partial<DraftItem>) => {
+    setDrafts(prev => {
+      const existing = prev[mesaId] || [];
+      return {
+        ...prev,
+        [mesaId]: existing.map(item => item.id === draftItemId ? { ...item, ...fields } : item)
+      };
+    });
+  };
+
+  // Load active orders from backend API
+  const fetchOrdersFromAPI = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/comandas/detalhes/todos?fechada=false`, { headers: getAuthHeaders() });
+      if (!response.ok) {
+        console.error("Failed to fetch comandas from backend");
+        return;
+      }
+      const comandas = await response.json();
+      
+      const mappedOrders = comandas.map((comanda: any) => {
+        return {
+          id: comanda.id,
+          mesaId: comanda.mesa_id || 0,
+          garcomId: comanda.garcom_id,
+          // Use name from API response (criada_por populated by SQLAlchemy relationship)
+          garcomNome: comanda.criada_por?.nome || comanda.garcom?.nome || 'Garçom',
+          timestamp: parseBackendDateTime(comanda.criado_em),
+          tipo: comanda.tipo,
+          itens: comanda.itens
+            .filter((item: any) => item.status !== 'cancelado')
+            .map((item: any) => ({
+              id: item.id,
+              produtoId: item.produto_id,
+              // Use name from API (produto populated by SQLAlchemy relationship)
+              nome: item.produto?.nome || PRODUCTS.find(p => p.id === item.produto_id)?.nome || `Item #${item.produto_id}`,
+              preco: item.preco_unit,
+              observacao: item.observacao || '',
+              clienteNome: item.cliente_nome || 'Consumo Geral',
+              status: item.status
+            }))
+        };
+      });
+      setOrders(mappedOrders);
+    } catch (err) {
+      console.error("Connection error to backend:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    fetchOrdersFromAPI();
+    fetchTables();
+    
+    if (isWsConnected) return;
+
+    const interval = setInterval(() => {
+      fetchOrdersFromAPI();
+      fetchTables();
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [isAuthenticated, isWsConnected]);
+
+  // Login handler
+  const handleLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError("");
+    setIsLoggingIn(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: loginUsername.toLowerCase(), password: loginPassword })
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        setLoginError(err.detail || "Usuário ou senha incorretos.");
+        setIsLoggingIn(false);
+        return;
+      }
+      const data = await response.json();
+      
+      // Enforce portal-specific permissions
+      const role = data.usuario.role;
+      if (portal === 'caixa' && role !== 'caixa' && role !== 'admin') {
+        setLoginError("Acesso negado. Apenas operadores de caixa ou administradores.");
+        setIsLoggingIn(false);
+        return;
+      }
+      if (portal === 'garcom' && role !== 'garcom' && role !== 'admin') {
+        setLoginError("Acesso negado. Apenas garçons.");
+        setIsLoggingIn(false);
+        return;
+      }
+
+      const tokenKey = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
+      const idKey = portal === 'caixa' ? "koma_caixa_id" : "koma_waiter_id";
+      const nameKey = portal === 'caixa' ? "koma_caixa_name" : "koma_waiter_name";
+      const roleKey = portal === 'caixa' ? "koma_caixa_role" : "koma_user_role";
+
+      localStorage.setItem(tokenKey, data.access_token);
+      localStorage.setItem(idKey, data.usuario.id);
+      localStorage.setItem(nameKey, data.usuario.nome);
+      localStorage.setItem(roleKey, role);
+      
+      setActiveWaiterId(data.usuario.id);
+      setActiveWaiterNome(data.usuario.nome);
+      setActiveRole(role);
+      setIsAuthenticated(true);
+      setLoginUsername("");
+      setLoginPassword("");
+    } catch (err) {
+      console.error(err);
+      setLoginError("Erro ao conectar ao servidor do backend.");
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  // Logout handler
+  const handleLogout = () => {
+    const tokenKey = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
+    const idKey = portal === 'caixa' ? "koma_caixa_id" : "koma_waiter_id";
+    const nameKey = portal === 'caixa' ? "koma_caixa_name" : "koma_waiter_name";
+    const roleKey = portal === 'caixa' ? "koma_caixa_role" : "koma_user_role";
+
+    localStorage.removeItem(tokenKey);
+    localStorage.removeItem(idKey);
+    localStorage.removeItem(nameKey);
+    localStorage.removeItem(roleKey);
+    
+    setIsAuthenticated(false);
+    setActiveWaiterId("");
+    setActiveWaiterNome("");
+    setActiveRole(portal === 'caixa' ? "caixa" : "garcom");
+    setIsSidebarOpen(false);
+  };
+
+  const handleSubmitDraft = async (mesaId: number, orderType: 'Consumo no Local' | 'Retirada' | 'Entrega' = 'Consumo no Local') => {
+    const items = drafts[mesaId] || [];
+    if (items.length === 0) return;
+
+    try {
+      const activeComanda = orders.find(o => o.mesaId === mesaId);
+      let comandaId = activeComanda?.id;
+
+      if (!comandaId) {
+        const openRes = await fetch(`${API_BASE_URL}/comandas/`, {
+          method: "POST",
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            mesa_id: mesaId,
+            garcom_id: activeWaiterId,
+            tipo: orderType
+          })
+        });
+        if (!openRes.ok) {
+          const errData = await openRes.json();
+          alert(`Erro ao abrir comanda: ${errData.detail || openRes.statusText}`);
+          return;
+        }
+        const newComanda = await openRes.json();
+        comandaId = newComanda.id;
+      }
+
+      const launchRes = await fetch(`${API_BASE_URL}/comandas/${comandaId}/lancamentos`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          garcom_id: activeWaiterId,
+          itens: items.flatMap(item => {
+            const expanded = [];
+            const qty = item.quantidade || 1;
+            for (let i = 0; i < qty; i++) {
+              expanded.push({
+                produto_id: item.produtoId,
+                observacao: item.observacao,
+                cliente_nome: item.clienteNome.trim() || 'Consumo Geral'
+              });
+            }
+            return expanded;
+          })
+        })
+      });
+      if (!launchRes.ok) {
+        const errData = await launchRes.json();
+        alert(`Erro ao lançar itens: ${errData.detail || launchRes.statusText}`);
+        return;
+      }
+
+      const launchData = await launchRes.json();
+      if (launchData.dispensado_impressao) {
+        showToast('✅ Pedido registrado! (Itens sem impressão física)', 'info');
+      } else {
+        showToast('✅ Pedido enviado para a cozinha!', 'success');
+      }
+
+      setDrafts(prev => {
+        const copy = { ...prev };
+        delete copy[mesaId];
+        return copy;
+      });
+
+      fetchOrdersFromAPI();
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao conectar ao servidor para enviar o pedido.");
+    }
+  };
+
+  // 8. Table Transfer (Transfers all active comandas of sourceTableId to targetTableId)
+  const handleTransferTable = async (sourceTableId: number, targetTableId: number) => {
+    const sourceComandas = orders.filter(o => o.mesaId === sourceTableId);
+    if (sourceComandas.length === 0) return;
+
+    try {
+      for (const comanda of sourceComandas) {
+        const res = await fetch(`${API_BASE_URL}/comandas/${comanda.id}/transferir/${targetTableId}`, {
+          method: "POST",
+          headers: getAuthHeaders()
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          alert(`Erro ao transferir comanda: ${errData.detail}`);
+          return;
+        }
+      }
+      setSelectedTableId(null);
+      fetchOrdersFromAPI();
+    } catch (err) {
+      console.error(err);
+      alert("Erro de conexão ao transferir mesas.");
+    }
+  };
+
+  // 9. Close Table (Settle whole balance) - Restricted to Cashier
+  const handleCloseTable = async (mesaId: number) => {
+    if (activeRole !== 'caixa') {
+      alert('Apenas o operador de Caixa possui autorização para encerrar contas.');
+      return;
+    }
+
+    const tableComandas = orders.filter(o => o.mesaId === mesaId);
+    if (tableComandas.length === 0) return;
+
+    try {
+      for (const comanda of tableComandas) {
+        const res = await fetch(`${API_BASE_URL}/comandas/${comanda.id}/fechar`, {
+          method: "PUT",
+          headers: getAuthHeaders()
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          alert(`Erro ao fechar comanda: ${errData.detail}`);
+          return;
+        }
+      }
+      setSelectedTableId(null);
+      fetchOrdersFromAPI();
+      showToast(`✅ Mesa ${mesaId} encerrada e liberada!`, 'success');
+    } catch (err) {
+      console.error(err);
+      alert("Erro de conexão ao encerrar mesa.");
+    }
+  };
+
+  // 9.5. Clear Table Orders (Direct reset - Testing only)
+  const handleClearTableOrders = async (mesaId: number) => {
+    const tableComandas = orders.filter(o => o.mesaId === mesaId);
+    try {
+      for (const comanda of tableComandas) {
+        await fetch(`${API_BASE_URL}/comandas/${comanda.id}/fechar`, {
+          method: "PUT",
+          headers: getAuthHeaders()
+        });
+      }
+      setSelectedTableId(null);
+      fetchOrdersFromAPI();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // 10. Settle single customer consumption (Partial payment) - Restricted to Cashier
+  const handleSettleCustomer = async (mesaId: number, customerName: string) => {
+    if (activeRole !== 'caixa') {
+      alert('Apenas o Caixa pode liquidar o consumo de um cliente específico.');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/comandas/?mesa_id=${mesaId}&fechada=false`, {
+        headers: getAuthHeaders()
+      });
+      if (!response.ok) return;
+      const comandas = await response.json();
+      
+      const targetComanda = comandas.find((c: any) => {
+        const normIdent = c.identificador || "Consumo Geral";
+        return normIdent === customerName;
+      });
+
+      if (!targetComanda) {
+        alert("Comanda do cliente não encontrada para liquidar.");
+        return;
+      }
+
+      const res = await fetch(`${API_BASE_URL}/comandas/${targetComanda.id}/fechar`, {
+        method: "PUT",
+        headers: getAuthHeaders()
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        alert(`Erro ao liquidar comanda do cliente: ${errData.detail}`);
+        return;
+      }
+      showToast(`✅ Consumo de "${customerName}" liquidado!`, 'success');
+      fetchOrdersFromAPI();
+    } catch (err) {
+      console.error(err);
+      alert("Erro de conexão ao liquidar cliente.");
+    }
+  };
+
+  // 11. Delivery (Waiter serves a ready dish)
+  const handleDeliverItem = async (orderId: string, itemId: string) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/comandas/itens/${itemId}/status?status=entregue`, {
+        method: "PUT",
+        headers: getAuthHeaders()
+      });
+      if (!res.ok) {
+        alert("Erro ao entregar item no backend.");
+        return;
+      }
+      fetchOrdersFromAPI();
+    } catch (err) {
+      console.error(err);
+      alert("Erro de conexão ao marcar item como entregue.");
+    }
+  };
+
+  const handlePrintReceipt = async (mesaId: number) => {
+    const printHeader = localStorage.getItem("koma_print_header") || "";
+    const printFooter = localStorage.getItem("koma_print_footer") || "";
+    let url = `${API_BASE_URL}/mesas/${mesaId}/imprimir-recibo`;
+    const params = new URLSearchParams();
+    if (printHeader) params.append("print_header", printHeader);
+    if (printFooter) params.append("print_footer", printFooter);
+    if (params.toString()) {
+      url += `?${params.toString()}`;
+    }
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.detail || "Erro ao imprimir recibo");
+    }
+  };
+
+  const handlePrintKitchenLaunch = async (lancamentoId: string) => {
+    const response = await fetch(`${API_BASE_URL}/comandas/lancamentos/${lancamentoId}/reimprimir`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.detail || "Erro ao reimprimir lote");
+    }
+  };
+
+  // 12. Kitchen - Chef completes cooking a plate
+  const handleFinishPreparation = async (orderId: string, itemId: string) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/comandas/itens/${itemId}/status?status=pronto`, {
+        method: "PUT",
+        headers: getAuthHeaders()
+      });
+      if (!res.ok) {
+        alert("Erro ao finalizar preparação no backend.");
+        return;
+      }
+      fetchOrdersFromAPI();
+    } catch (err) {
+      console.error(err);
+      alert("Erro de conexão ao finalizar preparação.");
+    }
+  };
+
+  // 13. Transfer single item to a different table
+  const handleTransferItem = async (itemId: string, targetTableId: number) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/comandas/itens/${itemId}/transferir/${targetTableId}`, {
+        method: "POST",
+        headers: getAuthHeaders()
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        alert(`Erro ao transferir item: ${errData.detail}`);
+        return;
+      }
+      alert(`Item transferido com sucesso para a Mesa ${targetTableId}!`);
+      fetchOrdersFromAPI();
+    } catch (err) {
+      console.error(err);
+      alert("Erro de conexão ao transferir item.");
+    }
+  };
+
+  const handleTransferItems = async (itemIds: string[], targetTableId: number) => {
+    try {
+      let successCount = 0;
+      let failMessage = "";
+      for (const itemId of itemIds) {
+        const res = await fetch(`${API_BASE_URL}/comandas/itens/${itemId}/transferir/${targetTableId}`, {
+          method: "POST",
+          headers: getAuthHeaders()
+        });
+        if (res.ok) {
+          successCount++;
+        } else {
+          const errData = await res.json();
+          failMessage = errData.detail || "Erro desconhecido";
+        }
+      }
+      if (successCount > 0) {
+        alert(`${successCount} item(ns) transferido(s) com sucesso para a Mesa ${targetTableId}!`);
+      }
+      if (successCount < itemIds.length) {
+        alert(`Falha ao transferir alguns itens: ${failMessage}`);
+      }
+      fetchOrdersFromAPI();
+    } catch (err) {
+      console.error(err);
+      alert("Erro de conexão ao transferir itens.");
+    }
+  };
+
+  // 14. Cancel single item
+  const handleCancelItem = async (itemId: string) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/comandas/itens/${itemId}/cancelar`, {
+        method: "PUT",
+        headers: getAuthHeaders()
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        alert(`Erro ao cancelar item: ${errData.detail}`);
+        return;
+      }
+      showToast('✅ Item cancelado!', 'success');
+      fetchOrdersFromAPI();
+    } catch (err) {
+      console.error(err);
+      alert("Erro de conexão ao cancelar item.");
+    }
+  };
+
+  // Count active tables by state
+  const tableCounts = React.useMemo(() => {
+    let libre = 0;
+    let ocupada = 0;
+    let pronto = 0;
+
+    salonTables.forEach(table => {
+      const tableOrders = orders.filter(o => o.mesaId === table.id);
+      if (tableOrders.length === 0) {
+        libre++;
+      } else {
+        const hasPronto = tableOrders.some(o => o.itens.some(i => i.status === 'pronto'));
+        if (hasPronto) {
+          pronto++;
+        } else {
+          ocupada++;
+        }
+      }
+    });
+
+    return { libre, ocupada, pronto };
+  }, [orders, salonTables]);
+
+  const selectedTable = salonTables.find(t => t.id === selectedTableId);
+  const selectedTableOrders = selectedTable ? orders.filter(o => o.mesaId === selectedTable.id) : [];
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-[#09090B] flex items-center justify-center p-4 selection:bg-[#C5A880]/30 selection:text-white relative overflow-hidden">
+        {/* Decorative backdrop gradients */}
+        <div className="absolute top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full bg-[#7A1F2D]/10 blur-[100px] pointer-events-none" />
+        <div className="absolute bottom-1/4 right-1/4 translate-x-1/2 translate-y-1/2 w-96 h-96 rounded-full bg-[#C5A880]/5 blur-[100px] pointer-events-none" />
+
+        <div className="w-full max-w-md bg-[#121214]/80 backdrop-blur-xl border border-[#27272A] rounded-3xl p-8 shadow-2xl relative z-10 animate-fade-in">
+          {/* Logo / Header */}
+          <div className="text-center space-y-4 mb-8">
+            <div className="flex justify-center">
+              <img
+                src="/src/assets/logo.png"
+                alt="Kôma Logo"
+                className="h-28 object-contain rounded-2xl shadow-lg border border-[#27272A]/40 bg-[#FAF7F2]"
+              />
+            </div>
+            <p className="text-[10px] text-[#A1A1AA] uppercase tracking-widest font-sans font-bold">
+              {portal === 'caixa' ? "Painel de Gerenciamento & Caixa" : "Portal do Garçom"}
+            </p>
+          </div>
+
+          {/* Form */}
+          <form onSubmit={handleLoginSubmit} className="space-y-5">
+            {loginError && (
+              <div className="p-3.5 bg-red-950/40 border border-red-900/50 rounded-2xl text-xs text-red-300 text-center animate-shake">
+                {loginError}
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <label htmlFor="login-username" className="text-[10px] text-[#A1A1AA] font-bold uppercase tracking-wider block">Usuário</label>
+              <input
+                id="login-username"
+                type="text"
+                required
+                value={loginUsername}
+                onChange={(e) => setLoginUsername(e.target.value)}
+                placeholder="Ex: georlan"
+                className="w-full bg-[#0E0E10] text-white border border-[#27272A] rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-[#C5A880] focus:border-[#C5A880]/50 placeholder-gray-600 transition-all"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label htmlFor="login-password" className="text-[10px] text-[#A1A1AA] font-bold uppercase tracking-wider block">Senha</label>
+              <input
+                id="login-password"
+                type="password"
+                required
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                placeholder="••••••"
+                className="w-full bg-[#0E0E10] text-white border border-[#27272A] rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-[#C5A880] focus:border-[#C5A880]/50 placeholder-gray-600 transition-all"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoggingIn}
+              className="w-full py-3.5 bg-gradient-to-r from-[#7A1F2D] to-[#8C2333] hover:from-[#8C2333] hover:to-[#9E283A] text-white rounded-xl text-sm font-bold uppercase tracking-wider shadow-lg transition-all duration-200 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2 border border-[#C5A880]/15"
+            >
+              {isLoggingIn ? "Autenticando..." : "Entrar"}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`min-h-screen bg-[#09090B] text-[#FAF7F2] font-sans flex flex-col antialiased selection:bg-[#C5A880]/30 selection:text-white ${
+      fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''
+    }`}>
+
+      {/* TOAST NOTIFICATIONS */}
+      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 pointer-events-none" aria-live="polite">
+        {toasts.map(toast => (
+          <div
+            key={toast.id}
+            className={`px-5 py-3 rounded-2xl text-sm font-semibold shadow-2xl border animate-fade-in backdrop-blur-md ${
+              toast.type === 'success' ? 'bg-emerald-900/90 border-emerald-700/50 text-emerald-100' :
+              toast.type === 'error'   ? 'bg-red-900/90 border-red-700/50 text-red-100' :
+                                         'bg-[#1C1C1F]/95 border-[#27272A] text-gray-200'
+            }`}
+          >
+            {toast.message}
+          </div>
+        ))}
+      </div>
+      
+      {/* GLOBAL TOP HEADER */}
+      <header className="bg-[#121214]/85 backdrop-blur-md border-b border-[#27272A]/50 text-white shrink-0 sticky top-0 z-30 shadow-xl">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex justify-between items-center">
+            
+            {/* Left: Menu trigger & Editable Title */}
+            <div className="flex items-center gap-3.5">
+              <button
+                id="open-sidebar-btn"
+                onClick={() => setIsSidebarOpen(true)}
+                className="p-2 bg-[#1C1C1F] hover:bg-[#27272A] text-[#C5A880] rounded-xl transition-all cursor-pointer border border-[#27272A] hover:border-[#C5A880]/30 flex items-center justify-center"
+                title="Abrir Menu e Configurações"
+              >
+                <Menu size={20} />
+              </button>
+              
+              <div className="flex items-center gap-3">
+                <div className="h-10 px-2 bg-[#FAF7F2] rounded-xl flex items-center justify-center border border-[#27272A]/20 shadow-md shrink-0">
+                  <img
+                    src="/src/assets/logo.png"
+                    alt="Kôma Logo"
+                    className="h-7 object-contain"
+                  />
+                </div>
+                <div>
+                  <h1 className="font-serif text-lg sm:text-xl font-bold tracking-tight text-white leading-tight">
+                    {restaurantName}
+                  </h1>
+                  <p className="text-[10px] text-[#A1A1AA] font-sans">
+                    Atendimento • {activeWaiter.nome}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Right: Quick actions / indicators */}
+            <div className="flex items-center gap-3">
+              {/* Connection indicator */}
+              <div
+                title={isWsConnected ? 'Conectado em tempo real' : 'Reconectando...'}
+                className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider border transition-all ${
+                  isWsConnected
+                    ? 'bg-emerald-900/20 border-emerald-800/30 text-emerald-400'
+                    : 'bg-amber-900/20 border-amber-800/30 text-amber-400 animate-pulse'
+                }`}
+              >
+                {isWsConnected ? <Wifi size={10}/> : <WifiOff size={10}/>}
+                {isWsConnected ? 'Online' : 'Reconectando'}
+              </div>
+              <button 
+                id="header-profile-btn"
+                onClick={() => setIsSidebarOpen(true)}
+                className="flex items-center gap-2 px-3 py-1.5 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-xs font-semibold hover:border-[#C5A880]/30 transition-all text-[#FAF7F2] cursor-pointer"
+              >
+                <User size={13} className="text-[#C5A880]" />
+                <span className="hidden sm:inline">{activeWaiter.nome}</span>
+              </button>
+            </div>
+
+          </div>
+        </div>
+      </header>
+
+      {/* LATERAL DRAWER MENU (Sidebar Overlays) */}
+      {isSidebarOpen && (
+        <div className="fixed inset-0 z-50 flex animate-fade-in">
+          {/* Backdrop */}
+          <div 
+            id="sidebar-backdrop"
+            onClick={() => setIsSidebarOpen(false)}
+            className="fixed inset-0 bg-black/75 backdrop-blur-xs transition-opacity"
+          />
+          
+          {/* Drawer content */}
+          <div className="relative w-80 max-w-sm bg-[#0E0E10]/95 backdrop-blur-xl border-r border-[#C5A880]/10 h-full flex flex-col justify-between shadow-2xl z-10 p-6 text-[#FAF7F2] overflow-y-auto animate-slide-in-left">
+            <div className="space-y-7">
+              
+              {/* Header inside drawer */}
+              <div className="flex items-center justify-between pb-4 border-b border-[#27272A]">
+                <div className="flex items-center gap-2">
+                  <div className="h-7 px-1.5 bg-[#FAF7F2] rounded-lg flex items-center justify-center border border-[#27272A]/20 shadow-sm shrink-0">
+                    <img
+                      src="/src/assets/logo.png"
+                      alt="Kôma Logo"
+                      className="h-5 object-contain"
+                    />
+                  </div>
+                  <span className="font-serif font-bold text-base text-[#FAF7F2]">{restaurantName}</span>
+                </div>
+                <button
+                  id="close-sidebar-btn"
+                  onClick={() => setIsSidebarOpen(false)}
+                  className="p-1.5 rounded-lg hover:bg-[#1C1C1F] text-[#A1A1AA] hover:text-white transition-colors cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* SECTION 1: MINHA CONTA */}
+              <div className="space-y-3">
+                <h3 className="text-[10px] uppercase tracking-wider font-bold text-[#C5A880] font-sans">Minha Conta (Operador)</h3>
+                <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-4 space-y-3.5">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 bg-[#C5A880]/10 border border-[#C5A880]/20 text-[#C5A880] rounded-full flex items-center justify-center font-bold">
+                      {activeWaiter.nome[0]}
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white">{activeWaiter.nome}</h4>
+                      <p className="text-[10px] text-[#A1A1AA]">Garçom em Atendimento</p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleLogout}
+                    className="w-full py-2.5 bg-[#7A1F2D]/10 hover:bg-[#7A1F2D]/20 text-rose-400 hover:text-rose-300 border border-[#7A1F2D]/35 hover:border-[#7A1F2D]/50 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    Logout / Sair
+                  </button>
+                </div>
+              </div>
+
+              {/* SECTION 2: CONFIGURAÇÕES DE VISUALIZAÇÃO */}
+              <div className="space-y-3">
+                <h3 className="text-[10px] uppercase tracking-wider font-bold text-[#C5A880] font-sans">Exibição do Cardápio</h3>
+                <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-4 space-y-3">
+                  <label className="flex items-center justify-between text-xs text-[#FAF7F2] cursor-pointer p-1.5 rounded hover:bg-[#27272A]/40">
+                    <span>Exibir Imagens dos Pratos</span>
+                    <input
+                      id="sidebar-toggle-images"
+                      type="checkbox"
+                      checked={settings.exibirImagens}
+                      onChange={(e) => setSettings({ ...settings, exibirImagens: e.target.checked })}
+                      className="rounded border-[#27272A] text-[#7A1F2D] focus:ring-[#7A1F2D] h-4 w-4 bg-[#121214]"
+                    />
+                  </label>
+                  
+                  <label className="flex items-center justify-between text-xs text-[#FAF7F2] cursor-pointer p-1.5 rounded hover:bg-[#27272A]/40">
+                    <span>Exibir Descrição dos Pratos</span>
+                    <input
+                      id="sidebar-toggle-descriptions"
+                      type="checkbox"
+                      checked={settings.exibirDescricoes}
+                      onChange={(e) => setSettings({ ...settings, exibirDescricoes: e.target.checked })}
+                      className="rounded border-[#27272A] text-[#7A1F2D] focus:ring-[#7A1F2D] h-4 w-4 bg-[#121214]"
+                    />
+                  </label>
+
+                  {/* Tamanho da Fonte */}
+                  <div className="border-t border-[#27272A]/60 pt-2.5 mt-1">
+                    <span className="text-[10px] font-bold text-gray-400 block mb-1.5 uppercase tracking-wider">Tamanho da Fonte</span>
+                    <div className="grid grid-cols-3 gap-1 bg-[#121214] p-1 rounded-xl border border-[#27272A]">
+                      {(['padrao', 'grande', 'gigante'] as const).map((sz) => (
+                        <button
+                          key={sz}
+                          type="button"
+                          onClick={() => changeFontSize(sz)}
+                          className={`py-1 rounded-lg text-[9px] font-bold uppercase transition-all cursor-pointer ${
+                            fontSize === sz
+                              ? 'bg-[#C5A880] text-[#121214]'
+                              : 'text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          {sz === 'padrao' ? 'Padrão' : sz === 'grande' ? 'Grande' : 'Gigante'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <div className="pt-6 border-t border-[#27272A] text-center text-[10px] text-[#71717A] font-sans">
+              <p>{restaurantName}</p>
+              <p className="mt-0.5 font-mono">v3.5 • Dark Engine</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MAIN CONTAINER */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-7">
+        
+        {/* VIEW 1: COZINHA (KITCHEN QUEUE) */}
+        {activeRole === 'cozinha' ? (
+          <KitchenPanel
+            orders={orders}
+            onFinishPreparation={handleFinishPreparation}
+            currentTime={currentTime}
+            modoExclusivoSalao={restauranteConfig?.modo_exclusivo_salao}
+          />
+        ) : activeRole === 'caixa' ? (
+          <CaixaPanel
+            orders={orders}
+            onRefreshOrders={fetchOrdersFromAPI}
+            apiBaseUrl={API_BASE_URL}
+            authHeaders={getAuthHeaders()}
+            activeWaiterNome={activeWaiterNome}
+            salonTables={salonTables}
+            onCreateMesa={handleCreateMesa}
+            onUpdateMesa={handleUpdateMesa}
+            onDeleteMesa={handleDeleteMesa}
+          />
+        ) : (
+          /* VIEW 2: SALÃO (WAITERS OR CASHIER DASHBOARD) */
+          <div className="space-y-6">
+            
+            {/* Table layout grid */}
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-[#27272A]">
+                <div className="flex items-center gap-3">
+                  <h3 className="font-serif text-2xl font-bold tracking-tight text-white">Mapa de Mesas</h3>
+                  {/* Legend */}
+                  <div className="hidden md:flex items-center gap-3 text-[10px] font-sans font-bold uppercase tracking-wider text-gray-400">
+                    <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500"></span> Livre</span>
+                    <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-rose-500"></span> Ocupada</span>
+                    <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-[#C5A880] animate-pulse"></span> Pronto p/ Servir</span>
+                  </div>
+                </div>
+                
+                {/* Filters */}
+                <div className="flex gap-1.5 overflow-x-auto pb-1">
+                  {(['todos', 'livres', 'ocupadas', 'prontas'] as const).map((filter) => {
+                    const label = {
+                      todos: 'Todas',
+                      livres: 'Livres',
+                      ocupadas: 'Ocupadas',
+                      prontas: 'Prontas'
+                    }[filter];
+
+                    return (
+                      <button
+                        key={filter}
+                        onClick={() => setTableFilter(filter)}
+                        className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer whitespace-nowrap border ${
+                          tableFilter === filter
+                            ? 'bg-[#7A1F2D] text-white border-transparent shadow-md'
+                            : 'bg-[#1C1C1F] hover:bg-[#27272A] text-gray-300 hover:text-white border-[#27272A]'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-3 gap-1 sm:gap-6">
+                {(() => {
+                  const filteredTables = salonTables.filter(table => {
+                    const tableOrders = orders.filter(o => o.mesaId === table.id);
+                    const status = tableOrders.length === 0
+                      ? 'livre'
+                      : tableOrders.some(o => o.itens.some(i => i.status === 'pronto'))
+                        ? 'pronto'
+                        : 'ocupada';
+
+                    if (tableFilter === 'todos') return true;
+                    if (tableFilter === 'livres') return status === 'livre';
+                    if (tableFilter === 'ocupadas') return status === 'ocupada';
+                    if (tableFilter === 'prontas') return status === 'pronto';
+                    return true;
+                  });
+
+                  if (filteredTables.length === 0) {
+                    return (
+                      <div className="col-span-full py-10 text-center text-gray-500 text-sm italic font-sans">
+                        Nenhuma mesa encontrada neste status.
+                      </div>
+                    );
+                  }
+
+                  return filteredTables.map((table) => {
+                    const tableOrders = orders.filter(o => o.mesaId === table.id);
+                    const waiterDrafts = getDraftItems(table.id);
+                    const draftQtyCount = waiterDrafts.reduce((sum, item) => sum + (item.quantidade || 1), 0);
+
+                    // Concurrency: Waiters other than active editing drafts on this table (synced via WebSockets)
+                    const otherWaitersServing = Object.keys(activeDrafts[table.id] || {})
+                      .filter(gId => gId !== activeWaiterId)
+                      .map(gId => activeDrafts[table.id][gId].garcomNome);
+
+                    return (
+                      <MesaCard
+                        key={table.id}
+                        table={table}
+                        orders={tableOrders}
+                        draftCount={draftQtyCount}
+                        otherWaitersServing={otherWaitersServing}
+                        currentTime={currentTime}
+                        activeWaiterId={activeWaiterId}
+                        onClick={handleTableClick}
+                      />
+                    );
+                  });
+                })()}
+              </div>
+            </div>
+
+          </div>
+        )}
+
+      </main>
+
+      {/* FOOTER */}
+      <footer className="bg-[#121214] text-[#71717A] border-t border-[#27272A] py-7 text-center text-xs shrink-0 font-sans">
+        <div className="max-w-7xl mx-auto px-4 space-y-1">
+          <p className="font-serif text-sm text-[#C5A880] font-medium">{restaurantName}</p>
+          <p className="text-[10px]">© 2026 Haute Cuisine Controller. Todos os direitos reservados. Sincronização API • Polling 4s.</p>
+        </div>
+      </footer>
+
+      {/* MODAL CONTROLLER */}
+      {selectedTable && (() => {
+        const selectedTableActiveClients = Array.from(new Set(
+          selectedTableOrders.flatMap(order => 
+            order.itens
+              .map(item => item.clienteNome.trim())
+              .filter(name => name !== '' && name !== 'Consumo Geral')
+          )
+        ));
+        
+        // Concurrency: Waiters other than active editing drafts on this table (synced via WebSockets)
+        const otherWaitersServing = Object.keys(activeDrafts[selectedTable.id] || {})
+          .filter(gId => gId !== activeWaiterId)
+          .map(gId => activeDrafts[selectedTable.id][gId].garcomNome);
+        
+        return (
+          <MesaDetailsModal
+            table={selectedTable}
+            orders={selectedTableOrders}
+            allOrders={orders}
+            draftItems={getDraftItems(selectedTable.id)}
+            otherWaitersServing={otherWaitersServing}
+            salonTables={salonTables}
+            settings={settings}
+            activeRole={activeRole}
+            activeWaiterId={activeWaiterId}
+            activeWaiterNome={activeWaiter.nome}
+            currentTime={currentTime}
+            onClose={() => setSelectedTableId(null)}
+            onUpdateSettings={setSettings}
+            onAddToDraft={(product, qty, obs, client) => handleAddToDraft(selectedTable.id, product, qty, obs, client)}
+            onRemoveFromDraft={(draftItemId) => handleRemoveFromDraft(selectedTable.id, draftItemId)}
+            onUpdateDraftItem={(draftItemId, fields) => handleUpdateDraftItem(selectedTable.id, draftItemId, fields)}
+            onSubmitDraft={(orderType) => handleSubmitDraft(selectedTable.id, orderType)}
+            onTransferTable={(targetTableId) => handleTransferTable(selectedTable.id, targetTableId)}
+            onTransferItem={handleTransferItem}
+            onTransferItems={handleTransferItems}
+            onCancelItem={handleCancelItem}
+            onCloseTable={() => handleCloseTable(selectedTable.id)}
+            onSettleCustomer={(customerName) => handleSettleCustomer(selectedTable.id, customerName)}
+            onDeliverItem={handleDeliverItem}
+            historicClients={selectedTableActiveClients}
+            restaurantName={restaurantName}
+            onClearTableOrders={() => handleClearTableOrders(selectedTable.id)}
+            onPrintReceipt={() => handlePrintReceipt(selectedTable.id)}
+            onPrintKitchenLaunch={handlePrintKitchenLaunch}
+            liveProdutos={liveProdutos}
+          />
+        );
+      })()}
+
+    </div>
+  );
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Kôma",
+  "description": "Sistema completo para lançamento, controle de rascunhos, divisão de conta e gestão de consumo de mesas do Kôma.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

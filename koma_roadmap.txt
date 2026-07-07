@@ -1,0 +1,137 @@
+================================================================================
+          SISTEMA KÔMA — ROADMAP E PLANEJAMENTO DE EVOLUÇÃO REAL
+================================================================================
+
+Este documento descreve detalhadamente o estado atual do sistema (o que está
+integrado e funcional no banco de dados), as telas que hoje são apenas fachadas
+interativas (simuladas no frontend) e o cronograma planejado para a programação 
+real de cada módulo nas próximas fases.
+
+--------------------------------------------------------------------------------
+1. O QUE JÁ ESTÁ PRONTO E 100% INTEGRADO (BACKEND + BANCO DE DADOS SQLite)
+--------------------------------------------------------------------------------
+[x] MODELAGEM DE BANCO DE DADOS: Tabelas prontas para Garçons, Mesas, Comandas,
+    Itens e Lançamentos Financeiros de Turno.
+[x] SISTEMA DE LOGIN SEGURO: Criptografia de senhas (bcrypt) e controle de 
+    sessões com tokens JWT diferenciados para Garçons e Operadores de Caixa.
+[x] APP DO GARÇOM (MÓVEL):
+    - Visualização do salão (Mesas Livres, Ocupadas, Aguardando prato).
+    - Cardápio interativo estruturado por categorias.
+    - Lançamento de rascunhos salvos localmente (evita perda de dados).
+    - Transferência de mesa e cancelamento de itens com validação de segurança.
+[x] WEBSOCKETS (TEMPO REAL):
+    - Sincronização automática entre aparelhos (indicação de "Mesa Sendo Editada").
+    - Atualização automática dos status dos pedidos sem necessidade de recarregar.
+[x] FRENTE DE CAIXA / PDV (ADMINISTRATIVO):
+    - Abertura de caixa digitando o fundo de troco inicial.
+    - Lançamento de despesas/saídas (Sangria) e aportes de troco (Suprimento).
+    - Fechamento de turno declarando valores em Dinheiro/Pix/Cartão com cálculo
+      de quebra/sobra de caixa.
+    - PDV Balcão para anotar pedidos rápidos no terminal.
+    - CRUD de Mesas (criar, editar capacidade e excluir mesas diretamente pelo painel).
+    - CRUD de Funcionários (cadastrar novos garçons e caixas diretamente no banco).
+    - Configuração de Taxa de Serviço (%) salva e compartilhada no banco.
+
+--------------------------------------------------------------------------------
+2. O QUE ATUALMENTE É MOCKUP / SIMULAÇÃO DE FACHADA (SÓ VISUAL NO FRONTEND)
+--------------------------------------------------------------------------------
+As telas abaixo existem no design do painel para fins de demonstração (UX/UI),
+mas ainda não estão gravando dados reais ou integradas a serviços externos:
+
+[ ] COZINHA (KDS): Exibe comandas ativas e permite dar baixa, mas ainda não se
+    comunica com o garçom para mudar o estado da mesa fisicamente.
+[ ] RECUPERADOR DE VENDAS: Exibe uma lista mockada de carrinhos abandonados. O
+    disparo no WhatsApp é simulado.
+[ ] CASHBACK: Permite configurar o percentual e exibe um extrato de exemplo. O
+    cliente não acumula saldo real na comanda.
+[ ] CUPONS DE DESCONTO: Permite criar e excluir cupons visualmente, mas o caixa 
+    ainda não aplica o desconto no valor final a pagar na comanda.
+[ ] PROGRAMA FIDELIDADE: Exibe saldo e pontuação fixa de clientes mockados.
+[ ] COMPRE E GANHE: Exibe as regras cadastradas fictícias.
+[ ] RELATÓRIO GERAL (BI): O gráfico semanal e os KPIs são gerados com dados 
+    fixos de demonstração.
+[ ] RELATÓRIO DE GARÇONS: O faturamento demonstrado de Daniel e Georlan é fixo.
+[ ] IMPRESSORAS: Permite testar comunicação e salvar cabeçalhos/rodapés locais
+    (salva no navegador), mas não imprime fisicamente via cabo USB.
+[ ] ROBÔ & IA: Chat simulado e chamados fictícios.
+[ ] FISCAL (NFC-e): Histórico de notas fiscais fictícias (sem emissão SEFAZ).
+
+--------------------------------------------------------------------------------
+3. CRONOGRAMA DE PROGRAMAÇÃO REAL (PRÓXIMAS FASES DE DESENVOLVIMENTO)
+--------------------------------------------------------------------------------
+
+Abaixo, as abas e fachadas simuladas estão divididas em fases lógicas de código
+para saírem do mock e se tornarem 100% funcionais:
+
+================================================================================
+FASE A: COZINHA DIGITAL INTEGRADA (KDS REAL)
+--------------------------------------------------------------------------------
+* Objetivo: Tornar o painel da cozinha ativo e integrado ao salão.
+* Tarefas:
+  1. Integrar as ações "Preparar" e "Pronto" do KDS aos status do banco de dados.
+  2. Disparar sinal via WebSocket para o garçom correspondente avisando que o
+     prato ficou pronto.
+  3. Mudar a cor da mesa no salão automaticamente para "Pronto p/ Servir" (cor ouro).
+
+================================================================================
+FASE B: CUPONS DE DESCONTO E CONFIGURAÇÕES DE IMPRESSÃO REAIS
+--------------------------------------------------------------------------------
+* Objetivo: Colocar cupons e impressoras para funcionar no fechamento.
+* Tarefas:
+  1. Criar a tabela `Cupom` no SQLite e rotas no backend para validar cupons.
+  2. Implementar campo "Cupom de Desconto" na tela de fechamento de comanda,
+     reduzindo o valor a pagar de forma real.
+  3. Integrar a geração dos arquivos de cupom do backend (`print_jobs/`) com a
+     impressão térmica física (porta USB) usando a biblioteca python-win32print.
+
+================================================================================
+FASE C: CASHBACK E PROGRAMA FIDELIDADE REAL
+--------------------------------------------------------------------------------
+* Objetivo: Criar banco de dados de clientes e acúmulo de benefícios.
+* Tarefas:
+  1. Criar tabela `Cliente` vinculada ao WhatsApp/CPF no banco de dados.
+  2. Toda vez que uma comanda for paga, calcular e creditar o cashback real no
+     perfil do cliente.
+  3. Permitir usar o saldo de Cashback ou pontos do Programa Fidelidade como
+     método de pagamento parcial durante a liquidação de contas no Caixa.
+
+================================================================================
+FASE D: BI, GRÁFICOS E RELATÓRIOS REAIS (MÓDULO FINANCEIRO)
+--------------------------------------------------------------------------------
+* Objetivo: Substituir dados fictícios por inteligência de negócios real.
+* Tarefas:
+  1. Substituir os gráficos SVG mockados do "Relatório Geral" por queries SQL
+     reais na tabela `Lancamento` e `Pagamento` (filtrados por período de datas).
+  2. Programar a aba "Meu Desempenho" e "Relatório de Garçons" para somar o
+     faturamento real de cada garçom com base em quem abriu/lançou as comandas.
+  3. Criar a Curva ABC real exibindo o ranking dos pratos mais vendidos.
+
+================================================================================
+FASE E: SISTEMA DE DELIVERY E GESTÃO DE MOTOBOYS REAL
+--------------------------------------------------------------------------------
+* Objetivo: Integrar o Kanban de entregas do Anota AI e controle de taxas.
+* Tarefas:
+  1. Ajustar o backend para suportar comandas sem mesa (tipo Balcão ou Delivery).
+  2. Salvar dados de entrega do cliente (nome, telefone, endereço e taxa) no banco.
+  3. Criar tabela de `Motoboy` no banco, permitindo despachar pedidos do Kanban
+     vinculando o entregador e acumulando suas comissões de entrega.
+
+================================================================================
+FASE F: INTEGRAÇÃO OFICIAL DO IFOOD
+--------------------------------------------------------------------------------
+* Objetivo: Fazer os pedidos do iFood caírem automaticamente na triagem do Caixa.
+* Tarefas:
+  1. Configurar rota de Webhook para receber os payloads JSON da API do iFood.
+  2. Criar tela de mapeamento ("De/Para") de cardápio (ex: batata do iFood = ID 12).
+  3. Inserir os pedidos aceitos automaticamente no fluxo do KDS e do Estoque local.
+
+================================================================================
+FASE G: MÓDULO FISCAL (NFC-e) E TEF INTEGRADO
+--------------------------------------------------------------------------------
+* Objetivo: Notas fiscais eletrônicas automáticas e maquininhas integradas.
+* Tarefas:
+  1. Integrar com gateway fiscal de notas (ex: FocusNFe / PlugNotas).
+  2. Ao liquidar a comanda, assinar digitalmente e transmitir a NFC-e para a SEFAZ.
+  3. Integrar com SDK de pagamento integrado (TEF/SmartPOS) para travar o valor
+     cobrado na maquininha direto pelo caixa.
+================================================================================

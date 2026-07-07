@@ -1,0 +1,213 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Cormorant Garamond", Georgia, serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+/* Luxury Fine Dining Color Palettes - Setup as Rich Dark theme */
+body {
+  background-color: #09090B;
+  color: #FAF7F2;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Keyframes */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.98) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes floatGold {
+  0%, 100% {
+    transform: translateY(0px) scale(1);
+    box-shadow: 0 4px 20px -2px rgba(197, 168, 128, 0.15);
+  }
+  50% {
+    transform: translateY(-4px) scale(1.015);
+    box-shadow: 0 12px 28px -4px rgba(197, 168, 128, 0.3);
+  }
+}
+
+@keyframes pulseGold {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(197, 168, 128, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 16px 2px rgba(197, 168, 128, 0.15);
+  }
+}
+
+@keyframes pulseRose {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 12px 2px rgba(239, 68, 68, 0.1);
+  }
+}
+
+@keyframes pulseEmerald {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 12px 2px rgba(16, 185, 129, 0.1);
+  }
+}
+
+/* Animations classes */
+.animate-fade-in {
+  animation: fadeIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-slide-in-left {
+  animation: slideInLeft 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-float-gold {
+  animation: floatGold 4s ease-in-out infinite;
+}
+
+.animate-pulse-gold {
+  animation: pulseGold 2.5s ease-in-out infinite;
+}
+
+.animate-pulse-rose {
+  animation: pulseRose 2.5s ease-in-out infinite;
+}
+
+.animate-pulse-emerald {
+  animation: pulseEmerald 2.5s ease-in-out infinite;
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 2s ease-in-out infinite;
+}
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.animate-scale-in {
+  animation: scale-in 0.2s ease-out;
+}
+@keyframes scale-in {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.animate-shake {
+  animation: shake 0.4s ease-in-out;
+}
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+
+/* Thin Elegant Scrollbar */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: rgba(18, 18, 20, 0.6);
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #C5A880;
+  border-radius: 99px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: #A88D65;
+}
+
+/* Premium Card Borders & Backgrounds */
+.glass-panel {
+  background: rgba(24, 24, 27, 0.75);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(197, 168, 128, 0.08);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+.glass-modal {
+  background: rgba(15, 15, 17, 0.95);
+  backdrop-filter: blur(24px);
+  border: 1px solid rgba(197, 168, 128, 0.15);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+/* Golden details & textures */
+.gold-border-glow:hover {
+  border-color: rgba(197, 168, 128, 0.4);
+  box-shadow: 0 0 15px rgba(197, 168, 128, 0.05);
+}
+
+/* Touch targets optimization for mobile */
+@media (max-width: 640px) {
+  button, select, input {
+    min-height: 40px; /* Comfort click/tap size */
+  }
+}
+
+/* Accessibility Font Size Scales */
+.font-large {
+  font-size: 14px !important;
+}
+.font-large .text-[8px] { font-size: 10px !important; }
+.font-large .text-[9px] { font-size: 11px !important; }
+.font-large .text-[10px] { font-size: 12px !important; }
+.font-large .text-xs { font-size: 14px !important; }
+.font-large .text-sm { font-size: 16px !important; }
+.font-large .text-base { font-size: 18px !important; }
+.font-large .text-lg { font-size: 20px !important; }
+.font-large .text-xl { font-size: 24px !important; }
+
+.font-huge {
+  font-size: 16px !important;
+}
+.font-huge .text-[8px] { font-size: 11px !important; }
+.font-huge .text-[9px] { font-size: 12px !important; }
+.font-huge .text-[10px] { font-size: 14px !important; }
+.font-huge .text-xs { font-size: 16px !important; }
+.font-huge .text-sm { font-size: 18px !important; }
+.font-huge .text-base { font-size: 20px !important; }
+.font-huge .text-lg { font-size: 22px !important; }
+.font-huge .text-xl { font-size: 28px !important; }

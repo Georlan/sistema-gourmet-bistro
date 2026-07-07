@@ -1,0 +1,26 @@
+# Dependências do Node (Frontend)
+node_modules/
+dist/
+build/
+.next/
+
+# Ambiente Virtual do Python (Backend)
+venv/
+.venv/
+env/
+__pycache__/
+*.pyc
+
+# Arquivos de log de simulação de impressão
+print_jobs/
+backend/print_jobs/
+
+# Banco de dados local
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Arquivos de variáveis de ambiente/senhas
+.env
+.env.local
