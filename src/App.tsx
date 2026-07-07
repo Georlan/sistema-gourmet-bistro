@@ -618,7 +618,8 @@ export default function App() {
               preco: item.preco_unit,
               observacao: item.observacao || '',
               clienteNome: item.cliente_nome || 'Consumo Geral',
-              status: item.status
+              status: item.status,
+              lancamentoId: item.lancamento_id
             }))
         };
       });
