@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Menu, X, User, Wifi, WifiOff } from 'lucide-react';
+import { Menu, X, User, Wifi, WifiOff, VolumeX, Volume2 } from 'lucide-react';
 import { Table, Order, DraftItem, AppSettings, AppRole, Product } from './types';
 import { TABLES, WAITERS, RESTAURANT_CONFIG, PRODUCTS } from './data';
 import { getTableTotal } from './domain';
@@ -36,6 +36,7 @@ export default function App() {
   const [showIntro, setShowIntro] = useState(() => {
     return !sessionStorage.getItem('koma_intro_played');
   });
+  const [isMuted, setIsMuted] = useState(true);
   // 1. Roles & Active user state (Strictly 'garcom')
   // 1. Detect portal (garcom or caixa/management) from URL query parameters or hashes
   const [portal, setPortal] = useState<'garcom' | 'caixa'>(() => {

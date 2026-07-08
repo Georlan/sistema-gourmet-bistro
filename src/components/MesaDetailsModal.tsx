@@ -254,7 +254,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                   <button
                     id="go-to-billing-tab-btn"
                     onClick={() => setActiveTab('lancamento')}
-                    className="mt-2 px-5 py-2.5 bg-rose-900/40 border border-rose-800/50 hover:bg-[#601823] text-white rounded-xl text-xs font-bold tracking-wider uppercase transition-colors cursor-pointer border border-rose-900/50/20"
+                    className="mt-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold tracking-wider uppercase transition-colors cursor-pointer border border-emerald-500/20 shadow-md shadow-emerald-500/5"
                   >
                     Lançar Pedidos
                   </button>
@@ -866,7 +866,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                   }, 1500);
                 }
               }}
-              className="w-full py-3 bg-rose-900/40 border border-rose-800/50 hover:bg-[#601823] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider border border-rose-900/50/20 transition-all shadow-lg shadow-[#f43f5e]/15"
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider border border-emerald-500/20 transition-all shadow-lg shadow-emerald-500/10"
             >
               <Printer size={13} className="text-white" />
               <span>Imprimir Extrato</span>
@@ -999,7 +999,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                   }, 1500);
                 }
               }}
-              className="w-full py-3 bg-rose-900/40 border border-rose-800/50 hover:bg-[#601823] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider border border-rose-900/50/20 transition-all shadow-lg shadow-[#f43f5e]/15"
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider border border-emerald-500/20 transition-all shadow-lg shadow-emerald-500/10"
             >
               <Printer size={13} className="text-white" />
               <span>Imprimir Via Cozinha</span>

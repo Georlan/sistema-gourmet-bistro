@@ -134,12 +134,12 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                 <button
                   type="button"
                   onClick={() => setView('menu')}
-                  className="px-3 py-1.5 bg-rose-900/40 border border-rose-800/50 hover:bg-[#601823] text-white text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1 border border-rose-900/50/20"
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-emerald-400 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1 border border-slate-700/50 shadow-sm"
                 >
                   <Plus size={13} />
                   <span>Adicionar Itens</span>
                 </button>
-                <span className="px-2.5 py-0.5 text-xs font-bold font-mono bg-rose-900/40 border border-rose-800/50/20 text-rose-300 rounded-full border border-rose-900/50/10">
+                <span className="px-2.5 py-0.5 text-xs font-bold font-mono bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full">
                   {totalDraftQty} {totalDraftQty === 1 ? 'item' : 'itens'}
                 </span>
               </div>
@@ -182,7 +182,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                         });
                       }}
                       placeholder="Ex: Pedro, Cláudia, Família..."
-                      className="w-full px-3 py-2 bg-[#121214] text-white border border-[#27272A] rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-[#f43f5e] focus:border-rose-900/50 transition-all"
+                      className="w-full px-3 py-2 bg-[#121214] text-white border border-[#27272A] rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 transition-all"
                     />
                   </div>
 
@@ -299,7 +299,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                           value={item.observacao}
                           onChange={(e) => onUpdateDraftItem(item.id, { observacao: e.target.value })}
                           placeholder="Ex: sem cebola, molho à parte..."
-                          className="w-full px-2.5 py-1.5 text-xs bg-[#121214] border border-[#27272A] rounded-lg focus:outline-none focus:ring-1 focus:ring-[#f43f5e] focus:border-rose-900/50 text-white"
+                          className="w-full px-2.5 py-1.5 text-xs bg-[#121214] border border-[#27272A] rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 text-white"
                         />
 
                         {/* Presets */}
@@ -350,7 +350,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                         onClick={() => setOrderType('Consumo no Local')}
                         className={`py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                           orderType === 'Consumo no Local'
-                            ? 'bg-rose-900/40 border border-rose-800/50 text-white shadow-sm font-bold'
+                            ? 'bg-emerald-600/25 border border-emerald-500/30 text-emerald-400 shadow-sm font-bold'
                             : 'text-gray-400 hover:text-white'
                         }`}
                       >
@@ -361,7 +361,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                         onClick={() => setOrderType('Retirada')}
                         className={`py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                           orderType === 'Retirada'
-                            ? 'bg-rose-900/40 border border-rose-800/50 text-white shadow-sm font-bold'
+                            ? 'bg-emerald-600/25 border border-emerald-500/30 text-emerald-400 shadow-sm font-bold'
                             : 'text-gray-400 hover:text-white'
                         }`}
                       >
@@ -388,7 +388,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                     id="submit-draft-order-btn"
                     disabled={isSubmitting}
                     onClick={() => onSubmitDraft(orderType)}
-                    className="w-full py-3 bg-rose-900/40 border border-rose-800/50 hover:bg-[#601823] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-[#f43f5e]/10 transition-all hover:translate-y-[-1px] cursor-pointer uppercase tracking-wider font-sans border border-rose-900/50/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/10 transition-all hover:translate-y-[-1px] cursor-pointer uppercase tracking-wider font-sans border border-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <span>{isSubmitting ? 'Lançando...' : 'Lançar Pedido'}</span>
                     <ArrowRight size={14} />
@@ -720,7 +720,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                   value={configObs}
                   onChange={(e) => setConfigObs(e.target.value)}
                   placeholder="Ex: sem cheddar, mal passado, sem cebola..."
-                  className="w-full px-3 py-2 bg-[#121214] text-white border border-[#27272A] rounded-xl focus:outline-none focus:ring-1 focus:ring-[#f43f5e] focus:border-rose-900/50 transition-all"
+                  className="w-full px-3 py-2 bg-[#121214] text-white border border-[#27272A] rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 transition-all"
                 />
 
                 {/* Preset shortcuts */}
@@ -767,7 +767,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                   value={configClient}
                   onChange={(e) => setConfigClient(e.target.value)}
                   placeholder="Ex: Pedro, Cláudia, Mesa Direita..."
-                  className="w-full px-3 py-2 bg-[#121214] text-white border border-[#27272A] rounded-xl focus:outline-none focus:ring-1 focus:ring-[#f43f5e] focus:border-rose-900/50 transition-all"
+                  className="w-full px-3 py-2 bg-[#121214] text-white border border-[#27272A] rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 transition-all"
                 />
 
                 {combinedSuggestions.length > 0 && (
