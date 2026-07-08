@@ -128,7 +128,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
       }}
       className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center p-0 sm:p-4 z-40 animate-fade-in overflow-y-auto"
     >
-      <div className="bg-[#0D0D10]/95 backdrop-blur-xl rounded-none sm:rounded-3xl border-0 sm:border border-[#C5A880]/15 shadow-2xl w-full max-w-5xl overflow-hidden h-full sm:h-auto max-h-full sm:max-h-[90vh] flex flex-col">
+      <div className="bg-[#0D0D10]/95 backdrop-blur-xl rounded-none sm:rounded-3xl border-0 sm:border border-[#10b981]/15 shadow-2xl w-full max-w-5xl overflow-hidden h-full sm:h-auto max-h-full sm:max-h-[90vh] flex flex-col">
         
         {/* MODAL HEADER */}
         <div className="bg-[#18181B] text-white p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shrink-0 border-b border-[#27272A]">
@@ -147,7 +147,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                 orders.length === 0 
                   ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
                   : orders.some(o => o.itens.some(i => i.status === 'pronto'))
-                    ? 'bg-[#C5A880]/15 text-[#C5A880] border-[#C5A880]/30 animate-pulse-subtle'
+                    ? 'bg-[#10b981]/15 text-[#10b981] border-[#10b981]/30 animate-pulse-subtle'
                     : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
               }`}>
                 {orders.length === 0 ? 'Livre' : orders.some(o => o.itens.some(i => i.status === 'pronto')) ? 'Pronto p/ Servir' : 'Ocupada'}
@@ -157,7 +157,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#A1A1AA] font-sans">
               {orders.length > 0 && (
                 <span className="flex items-center gap-1.5">
-                  <Clock size={12} className="text-[#C5A880]" />
+                  <Clock size={12} className="text-[#10b981]" />
                   Permanência: <strong className="text-white font-medium font-mono">{permanenceTime}</strong>
                 </span>
               )}
@@ -165,7 +165,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2.5 self-end sm:self-center">
-            <span className="text-[10px] uppercase tracking-wider bg-[#27272A] px-3.5 py-2 rounded-xl border border-[#C5A880]/10 font-sans text-[#C5A880] font-bold">
+            <span className="text-[10px] uppercase tracking-wider bg-[#27272A] px-3.5 py-2 rounded-xl border border-[#10b981]/10 font-sans text-[#10b981] font-bold">
               Atendimento: <strong className="text-white">{activeWaiterNome}</strong>
             </span>
             <button
@@ -185,11 +185,11 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
             onClick={() => setActiveTab('consumo')}
             className={`px-4.5 py-2 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider font-sans border ${
               activeTab === 'consumo' 
-                ? 'bg-[#1C1C1F] text-[#C5A880] shadow-sm border-[#27272A]' 
+                ? 'bg-[#1C1C1F] text-[#10b981] shadow-sm border-[#27272A]' 
                 : 'text-gray-400 hover:text-white border-transparent'
             }`}
           >
-            <Receipt size={14} className="text-[#C5A880]" />
+            <Receipt size={14} className="text-[#10b981]" />
             <span>Consumo Ativo</span>
           </button>
 
@@ -198,14 +198,14 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
             onClick={() => setActiveTab('lancamento')}
             className={`px-4.5 py-2 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider font-sans border ${
               activeTab === 'lancamento' 
-                ? 'bg-[#1C1C1F] text-[#C5A880] shadow-sm border-[#27272A]' 
+                ? 'bg-[#1C1C1F] text-[#10b981] shadow-sm border-[#27272A]' 
                 : 'text-gray-400 hover:text-white border-transparent'
             }`}
           >
-            <PlusCircle size={14} className="text-[#C5A880]" />
+            <PlusCircle size={14} className="text-[#10b981]" />
             <span>La Carte (Lançar)</span>
             {draftItems.length > 0 && (
-              <span className="h-2 w-2 rounded-full bg-[#7A1F2D] animate-ping"></span>
+              <span className="h-2 w-2 rounded-full bg-rose-900/40 border border-rose-800/50 animate-ping"></span>
             )}
           </button>
 
@@ -215,11 +215,11 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
               onClick={() => setActiveTab('transferir')}
               className={`px-4.5 py-2 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider font-sans border ${
                 activeTab === 'transferir' 
-                  ? 'bg-[#1C1C1F] text-[#C5A880] shadow-sm border-[#27272A]' 
+                  ? 'bg-[#1C1C1F] text-[#10b981] shadow-sm border-[#27272A]' 
                   : 'text-gray-400 hover:text-white border-transparent'
               }`}
             >
-              <Move size={14} className="text-[#C5A880]" />
+              <Move size={14} className="text-[#10b981]" />
               <span>Transferência</span>
             </button>
           )}
@@ -244,7 +244,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
             <div className="space-y-6">
               {orders.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
-                  <div className="p-4 bg-[#121214] text-[#C5A880] rounded-full border border-[#27272A]">
+                  <div className="p-4 bg-[#121214] text-[#10b981] rounded-full border border-[#27272A]">
                     <ShoppingBag size={32} />
                   </div>
                   <h3 className="font-serif text-xl font-bold text-white">Mesa sem consumo ativo</h3>
@@ -254,7 +254,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                   <button
                     id="go-to-billing-tab-btn"
                     onClick={() => setActiveTab('lancamento')}
-                    className="mt-2 px-5 py-2.5 bg-[#7A1F2D] hover:bg-[#601823] text-white rounded-xl text-xs font-bold tracking-wider uppercase transition-colors cursor-pointer border border-[#7A1F2D]/20"
+                    className="mt-2 px-5 py-2.5 bg-rose-900/40 border border-rose-800/50 hover:bg-[#601823] text-white rounded-xl text-xs font-bold tracking-wider uppercase transition-colors cursor-pointer border border-rose-900/50/20"
                   >
                     Lançar Pedidos
                   </button>
@@ -300,10 +300,10 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                               <button
                                 type="button"
                                 onClick={() => setSelectedOrderToPrint(order)}
-                                className="px-2.5 py-1 bg-[#27272A] hover:bg-[#C5A880]/20 text-gray-300 hover:text-white border border-[#27272A] hover:border-[#C5A880]/30 rounded-lg text-[10px] font-sans font-semibold transition-all cursor-pointer flex items-center gap-1 shadow-sm"
+                                className="px-2.5 py-1 bg-[#27272A] hover:bg-[#10b981]/20 text-gray-300 hover:text-white border border-[#27272A] hover:border-[#10b981]/30 rounded-lg text-[10px] font-sans font-semibold transition-all cursor-pointer flex items-center gap-1 shadow-sm"
                                 title="Reimprimir este lote de pedidos"
                               >
-                                <Printer size={11} className="text-[#C5A880]" />
+                                <Printer size={11} className="text-[#10b981]" />
                                 <span>Reimprimir</span>
                               </button>
                             </div>
@@ -321,7 +321,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                                   <div className="flex flex-wrap items-baseline gap-2">
                                     <span className="font-bold text-white">{item.nome}</span>
                                     {item.clienteNome && (
-                                      <span className="text-[9px] font-bold text-[#C5A880] bg-[#C5A880]/10 px-2 py-0.5 rounded border border-[#C5A880]/20 uppercase tracking-wider">
+                                      <span className="text-[9px] font-bold text-[#10b981] bg-[#10b981]/10 px-2 py-0.5 rounded border border-[#10b981]/20 uppercase tracking-wider">
                                         Para: {item.clienteNome}
                                       </span>
                                     )}
@@ -340,14 +340,14 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                                   <span className="font-mono font-bold text-white text-sm">R$ {item.preco.toFixed(2)}</span>
                                   
                                   {item.status === 'preparando' && (
-                                    <span className="px-2.5 py-1 text-[10px] font-bold bg-[#7A1F2D]/20 text-rose-400 rounded-md border border-[#7A1F2D]/30 animate-pulse-subtle uppercase tracking-wider">
+                                    <span className="px-2.5 py-1 text-[10px] font-bold bg-rose-900/40 border border-rose-800/50/20 text-rose-400 rounded-md border border-rose-900/50/30 animate-pulse-subtle uppercase tracking-wider">
                                       Na Cozinha
                                     </span>
                                   )}
 
                                   {item.status === 'pronto' && (
                                     <div className="flex items-center gap-1.5">
-                                      <span className="px-2.5 py-1 text-[10px] font-bold bg-[#C5A880]/15 text-[#C5A880] rounded-md border border-[#C5A880]/30 animate-pulse uppercase tracking-wider">
+                                      <span className="px-2.5 py-1 text-[10px] font-bold bg-[#10b981]/15 text-[#10b981] rounded-md border border-[#10b981]/30 animate-pulse uppercase tracking-wider">
                                         Pronto!
                                       </span>
                                       <button
@@ -404,7 +404,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                                           }
                                         }
                                       }}
-                                      className="p-1 text-gray-400 hover:text-[#C5A880] transition-colors cursor-pointer"
+                                      className="p-1 text-gray-400 hover:text-[#10b981] transition-colors cursor-pointer"
                                       title="Transferir este item para outra mesa"
                                     >
                                       <Move size={12} />
@@ -440,7 +440,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                       
                       <div className="flex items-center justify-between pb-3.5 border-b border-[#27272A]">
                         <div className="flex items-center gap-1.5 text-white">
-                          <Receipt size={16} className="text-[#C5A880]" />
+                          <Receipt size={16} className="text-[#10b981]" />
                           <h3 className="font-serif font-bold text-sm uppercase tracking-wide">Extrato por Cliente</h3>
                         </div>
                         <span className="text-[10px] font-sans font-bold text-[#A1A1AA] uppercase tracking-wider">Divisão Ativa</span>
@@ -464,7 +464,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                             </div>
 
                             <div className="flex items-center gap-3">
-                              <span className="font-mono text-xs sm:text-sm font-bold text-[#C5A880]">
+                              <span className="font-mono text-xs sm:text-sm font-bold text-[#10b981]">
                                 R$ {cust.total.toFixed(2)}
                               </span>
                             </div>
@@ -478,7 +478,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                     <div className="mt-4 pt-4 border-t border-[#27272A] space-y-3.5">
                       <div className="flex justify-between items-baseline font-sans">
                         <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Total Acumulado:</span>
-                        <span className="text-2xl font-bold font-mono text-[#C5A880]">
+                        <span className="text-2xl font-bold font-mono text-[#10b981]">
                           R$ {totalValue.toFixed(2)}
                         </span>
                       </div>
@@ -488,9 +488,9 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                         <button
                           id="print-invoice-preview-btn"
                           onClick={handlePrintPreview}
-                          className="w-full py-3 bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] hover:border-[#C5A880]/30 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer uppercase tracking-wider font-sans"
+                          className="w-full py-3 bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] hover:border-[#10b981]/30 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer uppercase tracking-wider font-sans"
                         >
-                          <Printer size={13} className="text-[#C5A880]" />
+                          <Printer size={13} className="text-[#10b981]" />
                           <span>Prévia e Extrato</span>
                         </button>
 
@@ -548,7 +548,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
           {activeTab === 'transferir' && (
             <div className="space-y-6 max-w-2xl mx-auto py-4">
               <div className="text-center space-y-2">
-                <div className="p-3 bg-[#C5A880]/10 text-[#C5A880] rounded-full inline-block border border-[#C5A880]/20">
+                <div className="p-3 bg-[#10b981]/10 text-[#10b981] rounded-full inline-block border border-[#10b981]/20">
                   <Move size={24} />
                 </div>
                 <h3 className="font-serif text-xl font-bold text-white">Transferência de Mesa</h3>
@@ -566,7 +566,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                     setSelectedItemsForTransfer([]);
                   }}
                   className={`flex-1 py-2 rounded-lg font-bold transition-all cursor-pointer ${
-                    transferType === 'total' ? 'bg-[#7A1F2D] text-white shadow-lg' : 'text-gray-400 hover:text-white'
+                    transferType === 'total' ? 'bg-rose-900/40 border border-rose-800/50 text-white shadow-lg' : 'text-gray-400 hover:text-white'
                   }`}
                 >
                   Mesa Inteira
@@ -575,7 +575,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                   type="button"
                   onClick={() => setTransferType('parcial')}
                   className={`flex-1 py-2 rounded-lg font-bold transition-all cursor-pointer ${
-                    transferType === 'parcial' ? 'bg-[#7A1F2D] text-white shadow-lg' : 'text-gray-400 hover:text-white'
+                    transferType === 'parcial' ? 'bg-rose-900/40 border border-rose-800/50 text-white shadow-lg' : 'text-gray-400 hover:text-white'
                   }`}
                 >
                   Selecionar Itens ("Pedaço")
@@ -607,10 +607,10 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                                   setSelectedItemsForTransfer(prev => [...prev, item.id]);
                                 }
                               }}
-                              className="rounded border-[#27272A] text-[#7A1F2D] focus:ring-[#7A1F2D] h-3.5 w-3.5 bg-[#121214]"
+                              className="rounded border-[#27272A] text-rose-400 focus:ring-[#f43f5e] h-3.5 w-3.5 bg-[#121214]"
                             />
                             <span>{item.nome}</span>
-                            {item.clienteNome && <span className="text-[9px] text-[#C5A880] bg-[#C5A880]/10 border border-[#C5A880]/20 px-1 rounded">Para: {item.clienteNome}</span>}
+                            {item.clienteNome && <span className="text-[9px] text-[#10b981] bg-[#10b981]/10 border border-[#10b981]/20 px-1 rounded">Para: {item.clienteNome}</span>}
                           </div>
                           <span className="font-mono text-gray-400">R$ {item.preco.toFixed(2)}</span>
                         </label>
@@ -660,11 +660,11 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                             !hasSelected
                               ? 'bg-[#1C1C1F]/40 border-[#27272A]/40 text-gray-600 cursor-not-allowed'
                               : isConfirming
-                                ? 'bg-[#7A1F2D] border-[#7A1F2D] animate-pulse text-white cursor-pointer hover:scale-102'
-                                : 'bg-[#1C1C1F] hover:bg-[#C5A880]/10 border border-[#27272A] hover:border-[#C5A880] text-white cursor-pointer hover:scale-102'
+                                ? 'bg-rose-900/40 border border-rose-800/50 border-rose-900/50 animate-pulse text-white cursor-pointer hover:scale-102'
+                                : 'bg-[#1C1C1F] hover:bg-[#10b981]/10 border border-[#27272A] hover:border-[#10b981] text-white cursor-pointer hover:scale-102'
                           }`}
                         >
-                          <span className={`text-base font-bold ${hasSelected ? 'text-white group-hover:text-[#C5A880]' : 'text-gray-600'}`}>
+                          <span className={`text-base font-bold ${hasSelected ? 'text-white group-hover:text-[#10b981]' : 'text-gray-600'}`}>
                             {isConfirming ? 'Confirmar?' : `Mesa ${t.id}`}
                           </span>
                           {isConfirming && (
@@ -706,7 +706,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
             <div className="flex-1 overflow-y-auto bg-black border border-[#27272A] rounded-2xl p-5 font-mono text-[11px] text-gray-300 space-y-4 shadow-inner max-h-[50vh] scrollbar-thin">
               <div className="text-center space-y-1 border-b border-dashed border-[#27272A] pb-3">
                 <p className="font-serif font-bold text-base text-white tracking-tight">{restaurantName.toUpperCase()}</p>
-                <p className="text-[9px] text-[#C5A880] leading-normal font-sans">Mesa de Atendimento de Excelência</p>
+                <p className="text-[9px] text-[#10b981] leading-normal font-sans">Mesa de Atendimento de Excelência</p>
               </div>
 
               <div className="space-y-1 border-b border-dashed border-[#27272A] pb-3">
@@ -777,7 +777,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
 
                           return (
                             <div key={client} className="space-y-1 border-t border-dashed border-[#27272A] pt-2 first:border-0 first:pt-0">
-                              <span className="font-bold text-[10px] text-[#C5A880] uppercase font-sans tracking-wider block">
+                              <span className="font-bold text-[10px] text-[#10b981] uppercase font-sans tracking-wider block">
                                 Cliente: {client}
                               </span>
                               {Object.values(clientGrouped).map((item, idx) => (
@@ -820,7 +820,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                           <span className="font-mono">R$ {taxVal.toFixed(2)}</span>
                         </div>
                       )}
-                      <div className="flex justify-between text-xs font-bold text-[#C5A880] border-t border-dotted border-[#27272A] pt-2.5 mt-2.5">
+                      <div className="flex justify-between text-xs font-bold text-[#10b981] border-t border-dotted border-[#27272A] pt-2.5 mt-2.5">
                         <span>TOTAL GERAL:</span>
                         <span className="font-mono">R$ {grandTotal.toFixed(2)}</span>
                       </div>
@@ -866,7 +866,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                   }, 1500);
                 }
               }}
-              className="w-full py-3 bg-[#7A1F2D] hover:bg-[#601823] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider border border-[#7A1F2D]/20 transition-all shadow-lg shadow-[#7A1F2D]/15"
+              className="w-full py-3 bg-rose-900/40 border border-rose-800/50 hover:bg-[#601823] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider border border-rose-900/50/20 transition-all shadow-lg shadow-[#f43f5e]/15"
             >
               <Printer size={13} className="text-white" />
               <span>Imprimir Extrato</span>
@@ -950,10 +950,10 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                           <span className="text-gray-400">R$ {(item.preco * qty).toFixed(2)}</span>
                         </div>
                         {item.clienteNome && item.clienteNome !== 'Consumo Geral' && (
-                          <p className="text-[9px] text-[#C5A880] uppercase font-bold">Para: {item.clienteNome}</p>
+                          <p className="text-[9px] text-[#10b981] uppercase font-bold">Para: {item.clienteNome}</p>
                         )}
                         {item.observacao && (
-                          <p className="text-[10px] text-rose-300 italic pl-2 border-l border-dashed border-[#7A1F2D]/50">
+                          <p className="text-[10px] text-rose-300 italic pl-2 border-l border-dashed border-rose-900/50/50">
                             Obs: "{item.observacao}"
                           </p>
                         )}
@@ -999,7 +999,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                   }, 1500);
                 }
               }}
-              className="w-full py-3 bg-[#7A1F2D] hover:bg-[#601823] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider border border-[#7A1F2D]/20 transition-all shadow-lg shadow-[#7A1F2D]/15"
+              className="w-full py-3 bg-rose-900/40 border border-rose-800/50 hover:bg-[#601823] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider border border-rose-900/50/20 transition-all shadow-lg shadow-[#f43f5e]/15"
             >
               <Printer size={13} className="text-white" />
               <span>Imprimir Via Cozinha</span>
@@ -1052,7 +1052,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                   type="text"
                   value={editingItem.observacao}
                   onChange={(e) => setEditingItem({ ...editingItem, observacao: e.target.value })}
-                  className="w-full px-3.5 py-2 text-xs bg-[#1C1C1F] border border-[#27272A] rounded-xl focus:outline-none focus:border-[#C5A880]/30 text-white"
+                  className="w-full px-3.5 py-2 text-xs bg-[#1C1C1F] border border-[#27272A] rounded-xl focus:outline-none focus:border-[#10b981]/30 text-white"
                   placeholder="Ex: Sem cebola, Bem frito, etc."
                 />
               </div>
@@ -1064,7 +1064,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                   type="text"
                   value={editingItem.clienteNome === 'Consumo Geral' ? '' : editingItem.clienteNome}
                   onChange={(e) => setEditingItem({ ...editingItem, clienteNome: e.target.value })}
-                  className="w-full px-3.5 py-2 text-xs bg-[#1C1C1F] border border-[#27272A] rounded-xl focus:outline-none focus:border-[#C5A880]/30 text-white"
+                  className="w-full px-3.5 py-2 text-xs bg-[#1C1C1F] border border-[#27272A] rounded-xl focus:outline-none focus:border-[#10b981]/30 text-white"
                   placeholder="Ex: Maria (Opcional)"
                 />
               </div>
@@ -1083,7 +1083,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                   }
                   setEditingItem(null);
                 }}
-                className="w-full py-2.5 bg-[#C5A880] hover:bg-[#b0936b] text-[#121214] font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center"
+                className="w-full py-2.5 bg-[#10b981] hover:bg-[#059669] text-[#121214] font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center"
               >
                 Confirmar Alterações
               </button>

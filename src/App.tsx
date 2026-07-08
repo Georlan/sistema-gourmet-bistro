@@ -33,6 +33,9 @@ const parseBackendDateTime = (dateStr: string): number => {
 };
 
 export default function App() {
+  const [showIntro, setShowIntro] = useState(() => {
+    return !sessionStorage.getItem('koma_intro_played');
+  });
   // 1. Roles & Active user state (Strictly 'garcom')
   // 1. Detect portal (garcom or caixa/management) from URL query parameters or hashes
   const [portal, setPortal] = useState<'garcom' | 'caixa'>(() => {
@@ -1141,24 +1144,58 @@ export default function App() {
   const selectedTable = salonTables.find(t => t.id === selectedTableId);
   const selectedTableOrders = selectedTable ? orders.filter(o => o.mesaId === selectedTable.id) : [];
 
+  if (showIntro) {
+    return (
+      <div className="fixed inset-0 bg-[#0B0F19] z-50 flex flex-col items-center justify-center p-4">
+        <div className="relative w-full max-w-2xl aspect-video rounded-3xl overflow-hidden shadow-2xl border border-emerald-500/25 bg-black">
+          <video
+            src="/intro.mp4"
+            autoPlay
+            muted
+            playsInline
+            onEnded={() => {
+              sessionStorage.setItem('koma_intro_played', 'true');
+              setShowIntro(false);
+            }}
+            className="w-full h-full object-cover"
+          />
+          <button
+            onClick={() => {
+              sessionStorage.setItem('koma_intro_played', 'true');
+              setShowIntro(false);
+            }}
+            className="absolute bottom-4 right-4 px-4 py-2 bg-black/65 hover:bg-black/85 text-white border border-white/10 rounded-xl text-xs font-bold transition-all backdrop-blur-md cursor-pointer uppercase tracking-wider"
+          >
+            Pular Intro
+          </button>
+        </div>
+        <p className="mt-6 text-xs text-emerald-400 font-mono tracking-widest uppercase animate-pulse">
+          Carregando Kôma...
+        </p>
+      </div>
+    );
+  }
+
   if (!isAuthenticated) {
     return (
-      <div className={clsx('min-h-screen', 'bg-[#09090B]', 'flex', 'items-center', 'justify-center', 'p-4', 'selection:bg-[#C5A880]/30', 'selection:text-white', 'relative', 'overflow-hidden')}>
+      <div className={clsx('min-h-screen', 'bg-[#0B0F19]', 'flex', 'items-center', 'justify-center', 'p-4', 'selection:bg-emerald-500/30', 'selection:text-white', 'relative', 'overflow-hidden')}>
         {/* Decorative backdrop gradients */}
-        <div className={clsx('absolute', 'top-1/4', 'left-1/4', '-translate-x-1/2', '-translate-y-1/2', 'w-96', 'h-96', 'rounded-full', 'bg-[#7A1F2D]/10', 'blur-[100px]', 'pointer-events-none')} />
-        <div className={clsx('absolute', 'bottom-1/4', 'right-1/4', 'translate-x-1/2', 'translate-y-1/2', 'w-96', 'h-96', 'rounded-full', 'bg-[#C5A880]/5', 'blur-[100px]', 'pointer-events-none')} />
+        <div className={clsx('absolute', 'top-1/4', 'left-1/4', '-translate-x-1/2', '-translate-y-1/2', 'w-96', 'h-96', 'rounded-full', 'bg-emerald-500/5', 'blur-[120px]', 'pointer-events-none')} />
+        <div className={clsx('absolute', 'bottom-1/4', 'right-1/4', 'translate-x-1/2', 'translate-y-1/2', 'w-96', 'h-96', 'rounded-full', 'bg-teal-500/5', 'blur-[120px]', 'pointer-events-none')} />
 
-        <div className={clsx('w-full', 'max-w-md', 'bg-[#121214]/80', 'backdrop-blur-xl', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-8', 'shadow-2xl', 'relative', 'z-10', 'animate-fade-in')}>
+        <div className={clsx('w-full', 'max-w-md', 'bg-[#111726]/85', 'backdrop-blur-xl', 'border', 'border-emerald-500/10', 'rounded-3xl', 'p-8', 'shadow-2xl', 'relative', 'z-10', 'animate-scale-in')}>
           {/* Logo / Header */}
           <div className={clsx('text-center', 'space-y-4', 'mb-8')}>
             <div className={clsx('flex', 'justify-center')}>
-              <img
-                src="/src/assets/logo.png"
-                alt="Kôma Logo"
-                className={clsx('h-28', 'object-contain', 'rounded-2xl', 'shadow-lg', 'border', 'border-[#27272A]/40', 'bg-[#FAF7F2]')}
-              />
+              <div className={clsx('h-24', 'px-4', 'bg-[#2f3d4a]', 'rounded-2xl', 'flex', 'items-center', 'justify-center', 'border', 'border-[#2f3d4a]', 'shadow-md', 'shrink-0')}>
+                <img
+                  src="/logo.png"
+                  alt="Kôma Logo"
+                  className={clsx('h-16', 'object-contain')}
+                />
+              </div>
             </div>
-            <p className={clsx('text-[10px]', 'text-[#A1A1AA]', 'uppercase', 'tracking-widest', 'font-sans', 'font-bold')}>
+            <p className={clsx('text-[10px]', 'text-emerald-400', 'uppercase', 'tracking-widest', 'font-sans', 'font-bold', 'bg-emerald-500/10', 'px-3', 'py-1', 'rounded-full', 'w-fit', 'mx-auto', 'border', 'border-emerald-500/15')}>
               {portal === 'caixa' ? "Painel de Gerenciamento & Caixa" : "Portal do Garçom"}
             </p>
           </div>
@@ -1172,7 +1209,7 @@ export default function App() {
             )}
 
             <div className="space-y-1.5">
-              <label htmlFor="login-username" className={clsx('text-[10px]', 'text-[#A1A1AA]', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Usuário</label>
+              <label htmlFor="login-username" className={clsx('text-[10px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Usuário</label>
               <input
                 id="login-username"
                 type="text"
@@ -1180,12 +1217,12 @@ export default function App() {
                 value={loginUsername}
                 onChange={(e) => setLoginUsername(e.target.value)}
                 placeholder="Ex: georlan"
-                className={clsx('w-full', 'bg-[#0E0E10]', 'text-white', 'border', 'border-[#27272A]', 'rounded-xl', 'px-4', 'py-3', 'text-sm', 'font-semibold', 'focus:outline-none', 'focus:ring-1', 'focus:ring-[#C5A880]', 'focus:border-[#C5A880]/50', 'placeholder-gray-600', 'transition-all')}
+                className={clsx('w-full', 'bg-[#090D16]', 'text-white', 'border', 'border-[#27272A]/40', 'rounded-xl', 'px-4', 'py-3', 'text-sm', 'font-semibold', 'focus:outline-none', 'focus:ring-1', 'focus:ring-emerald-500', 'focus:border-emerald-500/50', 'placeholder-gray-600', 'transition-all')}
               />
             </div>
 
             <div className="space-y-1.5">
-              <label htmlFor="login-password" className={clsx('text-[10px]', 'text-[#A1A1AA]', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Senha</label>
+              <label htmlFor="login-password" className={clsx('text-[10px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Senha</label>
               <input
                 id="login-password"
                 type="password"
@@ -1193,14 +1230,14 @@ export default function App() {
                 value={loginPassword}
                 onChange={(e) => setLoginPassword(e.target.value)}
                 placeholder="••••••"
-                className={clsx('w-full', 'bg-[#0E0E10]', 'text-white', 'border', 'border-[#27272A]', 'rounded-xl', 'px-4', 'py-3', 'text-sm', 'font-semibold', 'focus:outline-none', 'focus:ring-1', 'focus:ring-[#C5A880]', 'focus:border-[#C5A880]/50', 'placeholder-gray-600', 'transition-all')}
+                className={clsx('w-full', 'bg-[#090D16]', 'text-white', 'border', 'border-[#27272A]/40', 'rounded-xl', 'px-4', 'py-3', 'text-sm', 'font-semibold', 'focus:outline-none', 'focus:ring-1', 'focus:ring-emerald-500', 'focus:border-emerald-500/50', 'placeholder-gray-600', 'transition-all')}
               />
             </div>
 
             <button
               type="submit"
               disabled={isLoggingIn}
-              className={clsx('w-full', 'py-3.5', 'bg-gradient-to-r', 'from-[#7A1F2D]', 'to-[#8C2333]', 'hover:from-[#8C2333]', 'hover:to-[#9E283A]', 'text-white', 'rounded-xl', 'text-sm', 'font-bold', 'uppercase', 'tracking-wider', 'shadow-lg', 'transition-all', 'duration-200', 'cursor-pointer', 'disabled:opacity-50', 'flex', 'items-center', 'justify-center', 'gap-2', 'border', 'border-[#C5A880]/15')}
+              className={clsx('w-full', 'py-3.5', 'bg-gradient-to-r', 'from-emerald-600', 'to-teal-500', 'hover:from-emerald-500', 'hover:to-teal-400', 'text-white', 'rounded-xl', 'text-sm', 'font-bold', 'uppercase', 'tracking-wider', 'shadow-lg', 'transition-all', 'duration-200', 'cursor-pointer', 'disabled:opacity-50', 'flex', 'items-center', 'justify-center', 'gap-2', 'border', 'border-emerald-500/20')}
             >
               {isLoggingIn ? "Autenticando..." : "Entrar"}
             </button>
@@ -1211,7 +1248,7 @@ export default function App() {
   }
 
   return (
-    <div className={`min-h-screen bg-[#09090B] text-[#FAF7F2] font-sans flex flex-col antialiased selection:bg-[#C5A880]/30 selection:text-white ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''
+    <div className={`min-h-screen bg-[#0B0F19] text-[#FAF7F2] font-sans flex flex-col antialiased selection:bg-emerald-500/30 selection:text-white ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''
       }`}>
 
       {/* TOAST NOTIFICATIONS */}
@@ -1239,16 +1276,16 @@ export default function App() {
               <button
                 id="open-sidebar-btn"
                 onClick={() => setIsSidebarOpen(true)}
-                className={clsx('p-2', 'bg-[#1C1C1F]', 'hover:bg-[#27272A]', 'text-[#C5A880]', 'rounded-xl', 'transition-all', 'cursor-pointer', 'border', 'border-[#27272A]', 'hover:border-[#C5A880]/30', 'flex', 'items-center', 'justify-center')}
+                className={clsx('p-2', 'bg-[#1C1C1F]', 'hover:bg-[#27272A]', 'text-emerald-400', 'rounded-xl', 'transition-all', 'cursor-pointer', 'border', 'border-[#27272A]', 'hover:border-emerald-500/30', 'flex', 'items-center', 'justify-center')}
                 title="Abrir Menu e Configurações"
               >
                 <Menu size={20} />
               </button>
 
               <div className={clsx('flex', 'items-center', 'gap-3')}>
-                <div className={clsx('h-10', 'px-2', 'bg-[#FAF7F2]', 'rounded-xl', 'flex', 'items-center', 'justify-center', 'border', 'border-[#27272A]/20', 'shadow-md', 'shrink-0')}>
+                <div className={clsx('h-10', 'px-2.5', 'bg-[#2f3d4a]', 'rounded-xl', 'flex', 'items-center', 'justify-center', 'border', 'border-[#2f3d4a]', 'shadow-sm', 'shrink-0')}>
                   <img
-                    src="/src/assets/logo.png"
+                    src="/logo.png"
                     alt="Kôma Logo"
                     className={clsx('h-7', 'object-contain')}
                   />
@@ -1280,9 +1317,9 @@ export default function App() {
               <button
                 id="header-profile-btn"
                 onClick={() => setIsSidebarOpen(true)}
-                className={clsx('flex', 'items-center', 'gap-2', 'px-3', 'py-1.5', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-xs', 'font-semibold', 'hover:border-[#C5A880]/30', 'transition-all', 'text-[#FAF7F2]', 'cursor-pointer')}
+                className={clsx('flex', 'items-center', 'gap-2', 'px-3', 'py-1.5', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-xs', 'font-semibold', 'hover:border-emerald-500/30', 'transition-all', 'text-[#FAF7F2]', 'cursor-pointer')}
               >
-                <User size={13} className="text-[#C5A880]" />
+                <User size={13} className="text-emerald-400" />
                 <span className={clsx('hidden', 'sm:inline')}>{activeWaiter.nome}</span>
               </button>
             </div>
@@ -1301,16 +1338,16 @@ export default function App() {
             className={clsx('fixed', 'inset-0', 'bg-black/75', 'backdrop-blur-xs', 'transition-opacity')}
           />
 
-          {/* Drawer content */}
-          <div className={clsx('relative', 'w-80', 'max-w-sm', 'bg-[#0E0E10]/95', 'backdrop-blur-xl', 'border-r', 'border-[#C5A880]/10', 'h-full', 'flex', 'flex-col', 'justify-between', 'shadow-2xl', 'z-10', 'p-6', 'text-[#FAF7F2]', 'overflow-y-auto', 'animate-slide-in-left')}>
+           {/* Drawer content */}
+          <div className={clsx('relative', 'w-80', 'max-w-sm', 'bg-[#0E0E10]/95', 'backdrop-blur-xl', 'border-r', 'border-emerald-500/10', 'h-full', 'flex', 'flex-col', 'justify-between', 'shadow-2xl', 'z-10', 'p-6', 'text-[#FAF7F2]', 'overflow-y-auto', 'animate-slide-in-left')}>
             <div className="space-y-7">
 
               {/* Header inside drawer */}
               <div className={clsx('flex', 'items-center', 'justify-between', 'pb-4', 'border-b', 'border-[#27272A]')}>
                 <div className={clsx('flex', 'items-center', 'gap-2')}>
-                  <div className={clsx('h-7', 'px-1.5', 'bg-[#FAF7F2]', 'rounded-lg', 'flex', 'items-center', 'justify-center', 'border', 'border-[#27272A]/20', 'shadow-sm', 'shrink-0')}>
+                  <div className={clsx('h-8', 'px-1.5', 'bg-[#2f3d4a]', 'rounded-lg', 'flex', 'items-center', 'justify-center', 'border', 'border-[#2f3d4a]', 'shadow-sm', 'shrink-0')}>
                     <img
-                      src="/src/assets/logo.png"
+                      src="/logo.png"
                       alt="Kôma Logo"
                       className={clsx('h-5', 'object-contain')}
                     />
@@ -1328,10 +1365,10 @@ export default function App() {
 
               {/* SECTION 1: MINHA CONTA */}
               <div className="space-y-3">
-                <h3 className={clsx('text-[10px]', 'uppercase', 'tracking-wider', 'font-bold', 'text-[#C5A880]', 'font-sans')}>Minha Conta (Operador)</h3>
+                <h3 className={clsx('text-[10px]', 'uppercase', 'tracking-wider', 'font-bold', 'text-emerald-400', 'font-sans')}>Minha Conta (Operador)</h3>
                 <div className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-2xl', 'p-4', 'space-y-3.5')}>
                   <div className={clsx('flex', 'items-center', 'gap-3')}>
-                    <div className={clsx('h-10', 'w-10', 'bg-[#C5A880]/10', 'border', 'border-[#C5A880]/20', 'text-[#C5A880]', 'rounded-full', 'flex', 'items-center', 'justify-center', 'font-bold')}>
+                    <div className={clsx('h-10', 'w-10', 'bg-emerald-500/10', 'border', 'border-emerald-500/20', 'text-emerald-400', 'rounded-full', 'flex', 'items-center', 'justify-center', 'font-bold')}>
                       {activeWaiter.nome[0]}
                     </div>
                     <div>
@@ -1342,7 +1379,7 @@ export default function App() {
 
                   <button
                     onClick={handleLogout}
-                    className={clsx('w-full', 'py-2.5', 'bg-[#7A1F2D]/10', 'hover:bg-[#7A1F2D]/20', 'text-rose-400', 'hover:text-rose-300', 'border', 'border-[#7A1F2D]/35', 'hover:border-[#7A1F2D]/50', 'rounded-xl', 'text-xs', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'justify-center', 'gap-2')}
+                    className={clsx('w-full', 'py-2.5', 'bg-red-950/10', 'hover:bg-red-950/20', 'text-rose-400', 'hover:text-rose-300', 'border', 'border-red-900/35', 'hover:border-red-900/50', 'rounded-xl', 'text-xs', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'justify-center', 'gap-2')}
                   >
                     Logout / Sair
                   </button>
@@ -1351,7 +1388,7 @@ export default function App() {
 
               {/* SECTION 2: CONFIGURAÇÕES DE VISUALIZAÇÃO */}
               <div className="space-y-3">
-                <h3 className={clsx('text-[10px]', 'uppercase', 'tracking-wider', 'font-bold', 'text-[#C5A880]', 'font-sans')}>Exibição do Cardápio</h3>
+                <h3 className={clsx('text-[10px]', 'uppercase', 'tracking-wider', 'font-bold', 'text-emerald-400', 'font-sans')}>Exibição do Cardápio</h3>
                 <div className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-2xl', 'p-4', 'space-y-3')}>
                   <label className={clsx('flex', 'items-center', 'justify-between', 'text-xs', 'text-[#FAF7F2]', 'cursor-pointer', 'p-1.5', 'rounded', 'hover:bg-[#27272A]/40')}>
                     <span>Exibir Imagens dos Pratos</span>
@@ -1360,7 +1397,7 @@ export default function App() {
                       type="checkbox"
                       checked={settings.exibirImagens}
                       onChange={(e) => setSettings({ ...settings, exibirImagens: e.target.checked })}
-                      className={clsx('rounded', 'border-[#27272A]', 'text-[#7A1F2D]', 'focus:ring-[#7A1F2D]', 'h-4', 'w-4', 'bg-[#121214]')}
+                      className={clsx('rounded', 'border-[#27272A]', 'text-emerald-500', 'focus:ring-emerald-500', 'h-4', 'w-4', 'bg-[#121214]')}
                     />
                   </label>
 
@@ -1371,12 +1408,12 @@ export default function App() {
                       type="checkbox"
                       checked={settings.exibirDescricoes}
                       onChange={(e) => setSettings({ ...settings, exibirDescricoes: e.target.checked })}
-                      className={clsx('rounded', 'border-[#27272A]', 'text-[#7A1F2D]', 'focus:ring-[#7A1F2D]', 'h-4', 'w-4', 'bg-[#121214]')}
+                      className={clsx('rounded', 'border-[#27272A]', 'text-emerald-500', 'focus:ring-emerald-500', 'h-4', 'w-4', 'bg-[#121214]')}
                     />
                   </label>
 
                   {/* Tamanho da Fonte */}
-                  <div className={clsx('border-t', 'border-[#27272A]/60', 'pt-2.5', 'mt-1')}>
+                  <div className={clsx('border-t', 'pt-2.5', 'mt-1', 'border-[#27272A]/60')}>
                     <span className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'block', 'mb-1.5', 'uppercase', 'tracking-wider')}>Tamanho da Fonte</span>
                     <div className={clsx('grid', 'grid-cols-3', 'gap-1', 'bg-[#121214]', 'p-1', 'rounded-xl', 'border', 'border-[#27272A]')}>
                       {(['padrao', 'grande', 'gigante'] as const).map((sz) => (
@@ -1385,7 +1422,7 @@ export default function App() {
                           type="button"
                           onClick={() => changeFontSize(sz)}
                           className={`py-1 rounded-lg text-[9px] font-bold uppercase transition-all cursor-pointer ${fontSize === sz
-                            ? 'bg-[#C5A880] text-[#121214]'
+                            ? 'bg-emerald-500 text-[#121214]'
                             : 'text-gray-400 hover:text-white'
                             }`}
                         >
@@ -1445,7 +1482,7 @@ export default function App() {
                   <div className={clsx('hidden', 'md:flex', 'items-center', 'gap-3', 'text-[10px]', 'font-sans', 'font-bold', 'uppercase', 'tracking-wider', 'text-gray-400')}>
                     <span className={clsx('flex', 'items-center', 'gap-1')}><span className={clsx('h-2.5', 'w-2.5', 'rounded-full', 'bg-emerald-500')}></span> Livre</span>
                     <span className={clsx('flex', 'items-center', 'gap-1')}><span className={clsx('h-2.5', 'w-2.5', 'rounded-full', 'bg-rose-500')}></span> Ocupada</span>
-                    <span className={clsx('flex', 'items-center', 'gap-1')}><span className={clsx('h-2.5', 'w-2.5', 'rounded-full', 'bg-[#C5A880]', 'animate-pulse')}></span> Pronto p/ Servir</span>
+                    <span className={clsx('flex', 'items-center', 'gap-1')}><span className={clsx('h-2.5', 'w-2.5', 'rounded-full', 'bg-amber-500', 'animate-pulse')}></span> Pronto p/ Servir</span>
                   </div>
                 </div>
 
@@ -1464,7 +1501,7 @@ export default function App() {
                         key={filter}
                         onClick={() => setTableFilter(filter)}
                         className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer whitespace-nowrap border ${tableFilter === filter
-                          ? 'bg-[#7A1F2D] text-white border-transparent shadow-md'
+                          ? 'bg-rose-900/40 border border-rose-800/50 text-white border-transparent shadow-md'
                           : 'bg-[#1C1C1F] hover:bg-[#27272A] text-gray-300 hover:text-white border-[#27272A]'
                           }`}
                       >
@@ -1541,7 +1578,7 @@ export default function App() {
       {/* FOOTER */}
       <footer className={clsx('bg-[#121214]', 'text-[#71717A]', 'border-t', 'border-[#27272A]', 'py-7', 'text-center', 'text-xs', 'shrink-0', 'font-sans')}>
         <div className={clsx('max-w-7xl', 'mx-auto', 'px-4', 'space-y-1')}>
-          <p className={clsx('font-serif', 'text-sm', 'text-[#C5A880]', 'font-medium')}>{restaurantName}</p>
+          <p className={clsx('font-serif', 'text-sm', 'text-[#10b981]', 'font-medium')}>{restaurantName}</p>
           <p className="text-[10px]">© 2026 Haute Cuisine Controller. Todos os direitos reservados. Sincronização API • Polling 4s.</p>
         </div>
       </footer>

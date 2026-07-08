@@ -9,7 +9,7 @@
 
 /* Luxury Fine Dining Color Palettes - Setup as Rich Dark theme */
 body {
-  background-color: #09090B;
+  background-color: #0B0F19;
   color: #FAF7F2;
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
@@ -151,33 +151,33 @@ body {
 }
 
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  background: #C5A880;
+  background: #10B981;
   border-radius: 99px;
 }
 
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background: #A88D65;
+  background: #059669;
 }
 
 /* Premium Card Borders & Backgrounds */
 .glass-panel {
-  background: rgba(24, 24, 27, 0.75);
+  background: rgba(15, 23, 42, 0.75);
   backdrop-filter: blur(16px);
-  border: 1px solid rgba(197, 168, 128, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.08);
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
 }
 
 .glass-modal {
-  background: rgba(15, 15, 17, 0.95);
+  background: rgba(11, 15, 25, 0.95);
   backdrop-filter: blur(24px);
-  border: 1px solid rgba(197, 168, 128, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.15);
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
 }
 
-/* Golden details & textures */
-.gold-border-glow:hover {
-  border-color: rgba(197, 168, 128, 0.4);
-  box-shadow: 0 0 15px rgba(197, 168, 128, 0.05);
+/* Emerald details & textures */
+.emerald-border-glow:hover {
+  border-color: rgba(16, 185, 129, 0.4);
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.05);
 }
 
 /* Touch targets optimization for mobile */

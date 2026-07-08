@@ -127,19 +127,19 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
             {/* Cart Header */}
             <div className="flex items-center justify-between pb-3.5 border-b border-[#27272A]">
               <div className="flex items-center gap-1.5 text-white">
-                <ShoppingCart size={18} className="text-[#C5A880]" />
+                <ShoppingCart size={18} className="text-[#10b981]" />
                 <h3 className="font-serif font-bold text-base">Carrinho de Lançamento</h3>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setView('menu')}
-                  className="px-3 py-1.5 bg-[#7A1F2D] hover:bg-[#601823] text-white text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1 border border-[#7A1F2D]/20"
+                  className="px-3 py-1.5 bg-rose-900/40 border border-rose-800/50 hover:bg-[#601823] text-white text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1 border border-rose-900/50/20"
                 >
                   <Plus size={13} />
                   <span>Adicionar Itens</span>
                 </button>
-                <span className="px-2.5 py-0.5 text-xs font-bold font-mono bg-[#7A1F2D]/20 text-[#C46A74] rounded-full border border-[#7A1F2D]/10">
+                <span className="px-2.5 py-0.5 text-xs font-bold font-mono bg-rose-900/40 border border-rose-800/50/20 text-rose-300 rounded-full border border-rose-900/50/10">
                   {totalDraftQty} {totalDraftQty === 1 ? 'item' : 'itens'}
                 </span>
               </div>
@@ -148,7 +148,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
             {/* Cart Body */}
             {draftItems.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-24 text-center space-y-4 flex-1">
-                <div className="p-4 bg-[#1C1C1F] rounded-full text-[#C5A880]/50 border border-[#27272A]">
+                <div className="p-4 bg-[#1C1C1F] rounded-full text-[#10b981]/50 border border-[#27272A]">
                   <ShoppingCart size={32} />
                 </div>
                 <div className="text-sm text-white font-semibold font-sans uppercase tracking-wider">Carrinho Vazio</div>
@@ -182,7 +182,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                         });
                       }}
                       placeholder="Ex: Pedro, Cláudia, Família..."
-                      className="w-full px-3 py-2 bg-[#121214] text-white border border-[#27272A] rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-[#7A1F2D] focus:border-[#7A1F2D] transition-all"
+                      className="w-full px-3 py-2 bg-[#121214] text-white border border-[#27272A] rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-[#f43f5e] focus:border-rose-900/50 transition-all"
                     />
                   </div>
 
@@ -199,7 +199,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                                 onUpdateDraftItem(item.id, { clienteNome: name });
                               });
                             }}
-                            className="px-2 py-0.5 text-[9px] bg-[#27272A] hover:bg-[#C5A880]/15 text-gray-300 hover:text-white border border-[#27272A] rounded transition-colors font-medium cursor-pointer"
+                            className="px-2 py-0.5 text-[9px] bg-[#27272A] hover:bg-[#10b981]/15 text-gray-300 hover:text-white border border-[#27272A] rounded transition-colors font-medium cursor-pointer"
                           >
                             {name}
                           </button>
@@ -226,13 +226,13 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                           <div>
                             <span className="text-xs font-bold text-white block">{item.nome}</span>
                             {item.clienteNome && (
-                              <span className="text-[9px] font-bold text-[#C5A880] uppercase block">Para: {item.clienteNome}</span>
+                              <span className="text-[9px] font-bold text-[#10b981] uppercase block">Para: {item.clienteNome}</span>
                             )}
                           </div>
                         </div>
 
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-mono font-bold text-[#C5A880] mr-1">
+                          <span className="text-xs font-mono font-bold text-[#10b981] mr-1">
                             R$ {(item.preco * (item.quantidade || 1)).toFixed(2)}
                           </span>
                           
@@ -280,13 +280,13 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                       <div className="space-y-1.5 pt-1.5 border-t border-[#27272A]">
                         <div className="flex items-center justify-between text-[10px] text-gray-300 font-sans font-medium">
                           <div className="flex items-center gap-1">
-                            <FileText size={10} className="text-[#C5A880]" />
+                            <FileText size={10} className="text-[#10b981]" />
                             <span>Observação de Preparo:</span>
                           </div>
                           {item.observacao && (
                             <button
                               onClick={() => onUpdateDraftItem(item.id, { observacao: '' })}
-                              className="text-[9px] text-[#C5A880] hover:underline"
+                              className="text-[9px] text-[#10b981] hover:underline"
                             >
                               Limpar
                             </button>
@@ -299,7 +299,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                           value={item.observacao}
                           onChange={(e) => onUpdateDraftItem(item.id, { observacao: e.target.value })}
                           placeholder="Ex: sem cebola, molho à parte..."
-                          className="w-full px-2.5 py-1.5 text-xs bg-[#121214] border border-[#27272A] rounded-lg focus:outline-none focus:ring-1 focus:ring-[#7A1F2D] focus:border-[#7A1F2D] text-white"
+                          className="w-full px-2.5 py-1.5 text-xs bg-[#121214] border border-[#27272A] rounded-lg focus:outline-none focus:ring-1 focus:ring-[#f43f5e] focus:border-rose-900/50 text-white"
                         />
 
                         {/* Presets */}
@@ -323,8 +323,8 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                                   }}
                                   className={`px-2 py-0.5 text-[9px] rounded border transition-colors font-medium cursor-pointer ${
                                     isActive 
-                                      ? 'bg-[#C5A880]/20 border-[#C5A880]/40 text-[#C5A880]'
-                                      : 'bg-[#27272A] hover:bg-[#C5A880]/15 text-gray-300 hover:text-white border-[#27272A]'
+                                      ? 'bg-[#10b981]/20 border-[#10b981]/40 text-[#10b981]'
+                                      : 'bg-[#27272A] hover:bg-[#10b981]/15 text-gray-300 hover:text-white border-[#27272A]'
                                   }`}
                                 >
                                   {isActive ? preset : `+${preset}`}
@@ -350,7 +350,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                         onClick={() => setOrderType('Consumo no Local')}
                         className={`py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                           orderType === 'Consumo no Local'
-                            ? 'bg-[#7A1F2D] text-white shadow-sm font-bold'
+                            ? 'bg-rose-900/40 border border-rose-800/50 text-white shadow-sm font-bold'
                             : 'text-gray-400 hover:text-white'
                         }`}
                       >
@@ -361,7 +361,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                         onClick={() => setOrderType('Retirada')}
                         className={`py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                           orderType === 'Retirada'
-                            ? 'bg-[#7A1F2D] text-white shadow-sm font-bold'
+                            ? 'bg-rose-900/40 border border-rose-800/50 text-white shadow-sm font-bold'
                             : 'text-gray-400 hover:text-white'
                         }`}
                       >
@@ -372,13 +372,13 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
 
                   <div className="flex justify-between items-baseline font-sans pt-1">
                     <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Subtotal Rascunho:</span>
-                    <span className="text-2xl font-bold font-mono text-[#C5A880]">
+                    <span className="text-2xl font-bold font-mono text-[#10b981]">
                       R$ {draftTotal.toFixed(2)}
                     </span>
                   </div>
 
                   <div className="bg-[#1C1C1F] border border-[#27272A] rounded-xl p-3 flex items-start gap-2">
-                    <Info size={14} className="text-[#C5A880] shrink-0 mt-0.5" />
+                    <Info size={14} className="text-[#10b981] shrink-0 mt-0.5" />
                     <p className="text-[10px] text-gray-300 leading-normal font-sans">
                       Esses rascunhos são <strong>individuais e persistentes</strong>. Ao clicar em <strong>Lançar Pedido</strong>, eles serão consolidados na conta e encaminhados imediatamente para a cozinha.
                     </p>
@@ -388,7 +388,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                     id="submit-draft-order-btn"
                     disabled={isSubmitting}
                     onClick={() => onSubmitDraft(orderType)}
-                    className="w-full py-3 bg-[#7A1F2D] hover:bg-[#601823] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-[#7A1F2D]/10 transition-all hover:translate-y-[-1px] cursor-pointer uppercase tracking-wider font-sans border border-[#7A1F2D]/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full py-3 bg-rose-900/40 border border-rose-800/50 hover:bg-[#601823] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-[#f43f5e]/10 transition-all hover:translate-y-[-1px] cursor-pointer uppercase tracking-wider font-sans border border-rose-900/50/20 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <span>{isSubmitting ? 'Lançando...' : 'Lançar Pedido'}</span>
                     <ArrowRight size={14} />
@@ -428,9 +428,9 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                   onClick={() => setView('cart')}
                   className="px-3.5 py-2 bg-[#1C1C1F] hover:bg-[#27272A] text-white border border-[#27272A] text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
                 >
-                  <ShoppingCart size={13} className="text-[#C5A880]" />
+                  <ShoppingCart size={13} className="text-[#10b981]" />
                   <span>Ver Carrinho</span>
-                  <span className="bg-[#7A1F2D] text-white font-mono text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-[#7A1F2D]/30 ml-0.5">
+                  <span className="bg-rose-900/40 border border-rose-800/50 text-white font-mono text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-rose-900/50/30 ml-0.5">
                     {totalDraftQty}
                   </span>
                 </button>
@@ -456,7 +456,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                           type="checkbox"
                           checked={settings.exibirImagens}
                           onChange={(e) => onUpdateSettings({ ...settings, exibirImagens: e.target.checked })}
-                          className="rounded border-[#27272A] text-[#7A1F2D] focus:ring-[#7A1F2D] h-4 w-4 bg-[#121214]"
+                          className="rounded border-[#27272A] text-rose-400 focus:ring-[#f43f5e] h-4 w-4 bg-[#121214]"
                         />
                       </label>
                       <label className="flex items-center justify-between text-xs text-gray-300 cursor-pointer p-1.5 rounded hover:bg-[#27272A]">
@@ -466,7 +466,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                           type="checkbox"
                           checked={settings.exibirDescricoes}
                           onChange={(e) => onUpdateSettings({ ...settings, exibirDescricoes: e.target.checked })}
-                          className="rounded border-[#27272A] text-[#7A1F2D] focus:ring-[#7A1F2D] h-4 w-4 bg-[#121214]"
+                          className="rounded border-[#27272A] text-rose-400 focus:ring-[#f43f5e] h-4 w-4 bg-[#121214]"
                         />
                       </label>
                     </div>
@@ -485,7 +485,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Buscar no cardápio..."
-                  className="w-full pl-10 pr-4 py-2.5 text-sm bg-[#121214] border border-[#27272A] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#C5A880]/20 focus:border-[#C5A880] transition-all text-white placeholder:text-gray-500"
+                  className="w-full pl-10 pr-4 py-2.5 text-sm bg-[#121214] border border-[#27272A] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#10b981]/20 focus:border-[#10b981] transition-all text-white placeholder:text-gray-500"
                 />
               </div>
 
@@ -507,7 +507,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                     }}
                     className={`px-4 py-2 text-xs font-semibold rounded-lg whitespace-nowrap transition-all cursor-pointer ${
                       selectedCategory === cat
-                        ? 'bg-[#7A1F2D] text-white shadow-md'
+                        ? 'bg-rose-900/40 border border-rose-800/50 text-white shadow-md'
                         : 'bg-[#1C1C1F] hover:bg-[#27272A] text-gray-300 hover:text-white border border-[#27272A]'
                     }`}
                   >
@@ -539,7 +539,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                       id={`category-sec-${cat.toLowerCase().replace(/\s+/g, '-')}`}
                       className="space-y-3 scroll-mt-2 pt-2"
                     >
-                      <h4 className="font-serif text-xs font-bold text-[#C5A880] uppercase tracking-wider border-b border-[#27272A] pb-1.5 pt-1">
+                      <h4 className="font-serif text-xs font-bold text-[#10b981] uppercase tracking-wider border-b border-[#27272A] pb-1.5 pt-1">
                         {cat}
                       </h4>
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
@@ -551,7 +551,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                             id={`product-card-${product.id}`}
                             className={`bg-[#121214]/60 border rounded-2xl p-4 flex flex-col justify-between transition-all ${
                               available
-                                ? 'border-[#27272A] hover:border-[#C5A880]/30 hover:shadow-lg group cursor-pointer'
+                                ? 'border-[#27272A] hover:border-[#10b981]/30 hover:shadow-lg group cursor-pointer'
                                 : 'border-red-900/30 opacity-60 cursor-not-allowed'
                             }`}
                             onClick={() => available && handleOpenConfig(product)}
@@ -575,13 +575,13 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                                 <div className="flex justify-between items-start gap-2">
                                   <h4 
                                     className={`font-serif font-bold leading-tight text-sm transition-colors ${
-                                      available ? 'text-white group-hover:text-[#C5A880]' : 'text-gray-500 line-through'
+                                      available ? 'text-white group-hover:text-[#10b981]' : 'text-gray-500 line-through'
                                     }`}
                                   >
                                     {product.nome}
                                   </h4>
                                   <div className="flex flex-col items-end gap-1 shrink-0">
-                                    <span className="font-mono text-xs font-bold text-[#C5A880] whitespace-nowrap">
+                                    <span className="font-mono text-xs font-bold text-[#10b981] whitespace-nowrap">
                                       R$ {product.preco.toFixed(2)}
                                     </span>
                                     {!available && (
@@ -610,7 +610,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                               }}
                               className={`mt-4 w-full flex items-center justify-center gap-1 py-2 text-xs font-bold rounded-xl transition-all border ${
                                 available
-                                  ? 'bg-[#1C1C1F] hover:bg-[#C5A880]/20 text-[#C5A880] cursor-pointer border-[#27272A]'
+                                  ? 'bg-[#1C1C1F] hover:bg-[#10b981]/20 text-[#10b981] cursor-pointer border-[#27272A]'
                                   : 'bg-red-900/10 text-red-500/50 cursor-not-allowed border-red-900/20'
                               }`}
                             >
@@ -651,7 +651,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
             {/* Modal Header */}
             <div className="flex justify-between items-start border-b border-[#27272A] pb-3">
               <div>
-                <span className="text-[10px] font-bold text-[#C5A880] uppercase tracking-wider">{selectedProductToConfigure.categoria}</span>
+                <span className="text-[10px] font-bold text-[#10b981] uppercase tracking-wider">{selectedProductToConfigure.categoria}</span>
                 <h4 className="font-serif font-bold text-lg text-white mt-0.5">{selectedProductToConfigure.nome}</h4>
               </div>
               <button
@@ -694,7 +694,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                       <Plus size={14} />
                     </button>
                   </div>
-                  <span className="font-mono text-sm font-bold text-[#C5A880] ml-2">
+                  <span className="font-mono text-sm font-bold text-[#10b981] ml-2">
                     Valor total: R$ {(selectedProductToConfigure.preco * configQty).toFixed(2)}
                   </span>
                 </div>
@@ -708,7 +708,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                     <button
                       type="button"
                       onClick={() => setConfigObs('')}
-                      className="text-[9px] text-[#C5A880] hover:underline"
+                      className="text-[9px] text-[#10b981] hover:underline"
                     >
                       Limpar
                     </button>
@@ -720,7 +720,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                   value={configObs}
                   onChange={(e) => setConfigObs(e.target.value)}
                   placeholder="Ex: sem cheddar, mal passado, sem cebola..."
-                  className="w-full px-3 py-2 bg-[#121214] text-white border border-[#27272A] rounded-xl focus:outline-none focus:ring-1 focus:ring-[#7A1F2D] focus:border-[#7A1F2D] transition-all"
+                  className="w-full px-3 py-2 bg-[#121214] text-white border border-[#27272A] rounded-xl focus:outline-none focus:ring-1 focus:ring-[#f43f5e] focus:border-rose-900/50 transition-all"
                 />
 
                 {/* Preset shortcuts */}
@@ -744,8 +744,8 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                           }}
                           className={`px-2.5 py-1 text-[9px] rounded-lg border transition-colors font-medium cursor-pointer ${
                             isActive
-                              ? 'bg-[#C5A880]/20 border-[#C5A880]/40 text-[#C5A880]'
-                              : 'bg-[#27272A] hover:bg-[#C5A880]/25 text-gray-300 hover:text-white border-[#27272A]'
+                              ? 'bg-[#10b981]/20 border-[#10b981]/40 text-[#10b981]'
+                              : 'bg-[#27272A] hover:bg-[#10b981]/25 text-gray-300 hover:text-white border-[#27272A]'
                           }`}
                         >
                           {isActive ? preset : `+${preset}`}
@@ -767,7 +767,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                   value={configClient}
                   onChange={(e) => setConfigClient(e.target.value)}
                   placeholder="Ex: Pedro, Cláudia, Mesa Direita..."
-                  className="w-full px-3 py-2 bg-[#121214] text-white border border-[#27272A] rounded-xl focus:outline-none focus:ring-1 focus:ring-[#7A1F2D] focus:border-[#7A1F2D] transition-all"
+                  className="w-full px-3 py-2 bg-[#121214] text-white border border-[#27272A] rounded-xl focus:outline-none focus:ring-1 focus:ring-[#f43f5e] focus:border-rose-900/50 transition-all"
                 />
 
                 {combinedSuggestions.length > 0 && (
@@ -781,8 +781,8 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                           onClick={() => setConfigClient(name)}
                           className={`px-2 py-0.5 text-[9px] border rounded transition-colors font-medium cursor-pointer ${
                             configClient === name
-                              ? 'bg-[#C5A880]/20 text-[#C5A880] border-[#C5A880]/40'
-                              : 'bg-[#27272A] hover:bg-[#C5A880]/15 text-gray-300 hover:text-white border-[#27272A]'
+                              ? 'bg-[#10b981]/20 text-[#10b981] border-[#10b981]/40'
+                              : 'bg-[#27272A] hover:bg-[#10b981]/15 text-gray-300 hover:text-white border-[#27272A]'
                           }`}
                         >
                           {name}
@@ -807,7 +807,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
               <button
                 type="button"
                 onClick={handleConfirmAdd}
-                className="flex-1 py-2.5 bg-[#7A1F2D] hover:bg-[#601823] text-white text-xs font-bold rounded-xl transition-all cursor-pointer text-center shadow-lg shadow-[#7A1F2D]/10"
+                className="flex-1 py-2.5 bg-rose-900/40 border border-rose-800/50 hover:bg-[#601823] text-white text-xs font-bold rounded-xl transition-all cursor-pointer text-center shadow-lg shadow-[#f43f5e]/10"
               >
                 Confirmar
               </button>

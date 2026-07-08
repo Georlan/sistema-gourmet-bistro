@@ -110,7 +110,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
     <button
       id={`mesa-card-${table.id}`}
       onClick={() => onClick(table.id)}
-      className={`relative flex flex-col justify-between p-3 sm:p-5 lg:p-6 rounded-2xl border ${currentConfig.borderColor} ${currentConfig.bgColor} ${currentConfig.glow} transition-all duration-300 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-[#C5A880] w-full`}
+      className={`relative flex flex-col justify-between p-3 sm:p-5 lg:p-6 rounded-2xl border ${currentConfig.borderColor} ${currentConfig.bgColor} ${currentConfig.glow} transition-all duration-300 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full`}
     >
       {/* Top Section */}
       <div className="w-full">
@@ -127,7 +127,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
           <div className="flex items-center gap-1.5">
             <span>Livre</span>
             {draftCount > 0 && (
-              <span className="bg-[#C5A880]/20 text-[#C5A880] border border-[#C5A880]/30 rounded px-1.5 py-0.5 text-[8px] font-bold tracking-normal uppercase normal-case shrink-0">
+              <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded px-1.5 py-0.5 text-[8px] font-bold tracking-normal uppercase normal-case shrink-0">
                 Rascunho ({draftCount})
               </span>
             )}
@@ -139,7 +139,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
           <div className="flex items-center justify-between text-[10px] sm:text-xs text-[#A1A1AA] mb-2 sm:mb-3 font-sans">
             {/* Timer since first order */}
             <div className="flex items-center gap-1 sm:gap-1.5">
-              <Clock size={11} className="text-[#C5A880] shrink-0 sm:w-3 sm:h-3" />
+              <Clock size={11} className="text-emerald-400 shrink-0 sm:w-3 sm:h-3" />
               <span className="truncate">
                 <strong className={status === 'entregue' ? 'text-blue-300 font-medium font-mono' : 'text-rose-400 font-medium font-mono'}>{elapsed}</strong>
               </span>
@@ -147,7 +147,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
 
             {/* Draft count */}
             {draftCount > 0 && (
-              <div className="flex items-center gap-0.5 px-1 bg-[#C5A880]/10 text-[#C5A880] rounded border border-[#C5A880]/20 font-bold text-[8px] sm:text-[10px]" title={`Rascunho: ${draftCount}`}>
+              <div className="flex items-center gap-0.5 px-1 bg-emerald-500/10 text-emerald-400 rounded border border-emerald-500/20 font-bold text-[8px] sm:text-[10px]" title={`Rascunho: ${draftCount}`}>
                 <span className="sm:inline hidden">Rascunho</span>
                 <span>({draftCount})</span>
               </div>
@@ -176,7 +176,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
           {/* Total Active Consumption */}
           <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mt-1 sm:mt-2 font-sans">
             <span className="text-[8px] sm:text-[10px] text-[#A1A1AA] uppercase tracking-wider font-semibold">Total:</span>
-            <span className={`text-xs sm:text-lg lg:text-xl font-bold font-mono ${totalValue > 0 ? 'text-[#C5A880]' : 'text-[#71717A]'}`}>
+            <span className={`text-xs sm:text-lg lg:text-xl font-bold font-mono ${totalValue > 0 ? 'text-emerald-400' : 'text-[#71717A]'}`}>
               R$ {totalValue.toFixed(2)}
             </span>
           </div>

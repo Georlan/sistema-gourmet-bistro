@@ -72,32 +72,37 @@ def get_sugestoes_compra(db: Session = Depends(get_db)):
 
 # ----------------- GRÁFICO DE HORÁRIOS DE PICO (SQL) -----------------
 
-@router.get("/comandas/estatisticas/pico")
-def get_horarios_pico(db: Session = Depends(get_db)):
-    """
-    Query SQL pura otimizada no SQLite que agrupa o histórico de comandas fechadas 
-    por dia da semana e hora de fechamento.
-    """
-    sql = """
-        SELECT 
-            strftime('%w', fechado_em) as dia_semana, 
-            strftime('%H', fechado_em) as hora, 
-            count(id) as total_pedidos
-        FROM comandas
-        WHERE fechada = 1 AND fechado_em IS NOT NULL
-        GROUP BY dia_semana, hora
-        ORDER BY total_pedidos DESC;
-    """
-    query = db.execute(text(sql)).fetchall()
-    
+    # Use SQLAlchemy expression language to be database-agnostic (works on both SQLite and PostgreSQL)
+    from sqlalchemy import func, extract
+    from ..models import Comanda
+
+    # Extract day of week (0=Sunday to 6=Saturday) and hour of day
+    # Note: SQLite and PostgreSQL differ slightly in exact representation,
+    # but SQLAlchemy's extract handles the translation.
+    query_obj = db.query(
+        extract('dow', Comanda.fechado_em).label('dia_semana'),
+        extract('hour', Comanda.fechado_em).label('hora'),
+        func.count(Comanda.id).label('total_pedidos')
+    ).filter(
+        Comanda.fechada == True,
+        Comanda.fechado_em.isnot(None)
+    ).group_by(
+        'dia_semana', 'hora'
+    ).order_by(
+        func.count(Comanda.id).desc()
+    ).all()
+
     results = []
     dias = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"]
-    for row in query:
+    for row in query_obj:
+        # PostgreSQL extract('dow') returns float/numeric, SQLite returns int/string.
+        # Cast to integer safely.
         dia_idx = int(row[0]) if row[0] is not None else 0
+        hora_val = int(row[1]) if row[1] is not None else 0
         results.append({
-            "dia_semana_label": dias[dia_idx],
-            "dia_semana": dia_idx,
-            "hora": f"{row[1]}h" if row[1] is not None else "00h",
+            "dia_semana_label": dias[dia_idx % 7],
+            "dia_semana": dia_idx % 7,
+            "hora": f"{hora_val:02d}h",
             "total_pedidos": row[2]
         })
     return results

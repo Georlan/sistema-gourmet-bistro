@@ -57,7 +57,7 @@ export const KitchenPanel: React.FC<KitchenPanelProps> = ({
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 pb-5 border-b border-[#2E2A25]">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-[#C5A880]/15 text-[#C5A880] rounded-2xl border border-[#C5A880]/20">
+          <div className="p-2.5 bg-[#10b981]/15 text-[#10b981] rounded-2xl border border-[#10b981]/20">
             <ChefHat size={22} />
           </div>
           <div>
@@ -66,7 +66,7 @@ export const KitchenPanel: React.FC<KitchenPanelProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 bg-[#2E2A25] px-3 py-1.5 rounded-full border border-[#C5A880]/10">
+        <div className="flex items-center gap-2 bg-[#2E2A25] px-3 py-1.5 rounded-full border border-[#10b981]/10">
           <span className="flex h-2 w-2 relative">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#4E6E58] opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-[#4E6E58]"></span>
@@ -78,7 +78,7 @@ export const KitchenPanel: React.FC<KitchenPanelProps> = ({
       {/* Grid showing cooking list */}
       {activeKitchenItems.length === 0 ? (
         <div className="py-20 text-center space-y-4 max-w-md mx-auto">
-          <div className="p-4 bg-[#2E2A25] text-[#C5A880]/40 rounded-full inline-block">
+          <div className="p-4 bg-[#2E2A25] text-[#10b981]/40 rounded-full inline-block">
             <Utensils size={32} />
           </div>
           <div className="space-y-1">
@@ -102,8 +102,8 @@ export const KitchenPanel: React.FC<KitchenPanelProps> = ({
                 id={`kitchen-card-${item.id}`}
                 className={`bg-[#2E2A25]/40 border rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 ${
                   isDelayed 
-                    ? 'border-[#7A1F2D]/50 bg-[#7A1F2D]/5 shadow-lg shadow-[#7A1F2D]/10' 
-                    : 'border-[#2E2A25] hover:border-[#C5A880]/30'
+                    ? 'border-rose-900/50/50 bg-rose-900/40 border border-rose-800/50/5 shadow-lg shadow-[#f43f5e]/10' 
+                    : 'border-[#2E2A25] hover:border-[#10b981]/30'
                 }`}
               >
                 <div className="space-y-4">
@@ -112,8 +112,8 @@ export const KitchenPanel: React.FC<KitchenPanelProps> = ({
                     <span className="font-serif font-bold text-lg text-white">Mesa {mesaId}</span>
                     
                     <div className="flex items-center gap-1.5 bg-[#1C1917] px-2.5 py-1 rounded-full border border-[#2E2A25]">
-                      <Clock size={12} className={isDelayed ? 'text-[#7A1F2D]' : 'text-[#C5A880]'} />
-                      <span className={`font-mono text-xs font-semibold ${isDelayed ? 'text-[#7A1F2D] font-bold' : 'text-[#C5A880]'}`}>
+                      <Clock size={12} className={isDelayed ? 'text-rose-400' : 'text-[#10b981]'} />
+                      <span className={`font-mono text-xs font-semibold ${isDelayed ? 'text-rose-400 font-bold' : 'text-[#10b981]'}`}>
                         {minutesElapsed}m atrás
                       </span>
                     </div>
@@ -124,7 +124,7 @@ export const KitchenPanel: React.FC<KitchenPanelProps> = ({
                     <div className="flex justify-between items-start gap-2">
                       <h4 className="font-sans font-bold text-sm text-[#FAF7F2]">{item.nome}</h4>
                       {item.clienteNome && (
-                        <span className="px-2 py-0.5 bg-[#C5A880]/15 border border-[#C5A880]/20 text-[#C5A880] rounded text-[9px] font-bold uppercase tracking-wider">
+                        <span className="px-2 py-0.5 bg-[#10b981]/15 border border-[#10b981]/20 text-[#10b981] rounded text-[9px] font-bold uppercase tracking-wider">
                           {item.clienteNome}
                         </span>
                       )}
@@ -132,8 +132,8 @@ export const KitchenPanel: React.FC<KitchenPanelProps> = ({
 
                     {/* Unit observation - Crucial for kitchen */}
                     {item.observacao ? (
-                      <div className="flex items-start gap-1.5 p-3 bg-[#7A1F2D]/5 border border-dashed border-[#7A1F2D]/20 rounded-xl text-xs text-[#E5C79E] leading-normal font-sans">
-                        <MessageSquare size={12} className="shrink-0 mt-0.5 text-[#C5A880]" />
+                      <div className="flex items-start gap-1.5 p-3 bg-rose-900/40 border border-rose-800/50/5 border border-dashed border-rose-900/50/20 rounded-xl text-xs text-[#E5C79E] leading-normal font-sans">
+                        <MessageSquare size={12} className="shrink-0 mt-0.5 text-[#10b981]" />
                         <span>"{item.observacao}"</span>
                       </div>
                     ) : (
