@@ -104,7 +104,7 @@ def get_db(request: Request = None):
                 conn.execute(text("ALTER TABLE configuracoes_restaurante ADD COLUMN perm_garcom_ociosas BOOLEAN DEFAULT 1"))
             conn.commit()
 
-            # Migrations for pagamentos table
+            # Migrations for pagamentos tablea
             res_pag = conn.execute(text("PRAGMA table_info(pagamentos)"))
             columns_pag = [row[1] for row in res_pag.fetchall()]
             if "status" not in columns_pag:
