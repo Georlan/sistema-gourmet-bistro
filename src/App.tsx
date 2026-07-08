@@ -20,7 +20,9 @@ const LOCAL_STORAGE_SETTINGS_KEY = 'koma_settings_vFinal_v3';
 const LOCAL_STORAGE_RESTAURANT_NAME_KEY = 'koma_restaurant_name_v3';
 const LOCAL_STORAGE_HIST_CLIENTS_KEY = 'koma_historic_clients_v3';
 
-const API_BASE_URL = `http://${window.location.hostname}:8000`;
+const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? 'http://localhost:8000'
+  : 'https://sistema-gourmet-bistro-production.up.railway.app';
 
 const parseBackendDateTime = (dateStr: string): number => {
   if (!dateStr) return Date.now();
@@ -1497,7 +1499,7 @@ export default function App() {
                       .map(gId => activeDrafts[table.id][gId].garcomNome);
 
                     const tableComandas = orders.filter(o => o.mesaId === table.id);
-                    const hasPendingPayment = pagamentosPendentes.some(pag => 
+                    const hasPendingPayment = pagamentosPendentes.some(pag =>
                       tableComandas.some(o => o.id === pag.comanda_id)
                     );
 
