@@ -4,8 +4,12 @@ from fastapi import Request
 import os
 from .config import settings
 
-# Default engine and SessionLocal compatibility exports (for tests and scripts)
-engine = create_engine(settings.DATABASE_URL, connect_args={"check_same_thread": False, "timeout": 30.0})
+# AJUSTADO: connect_args agora é condicional para não travar no PostgreSQL (Supabase)
+connect_args = {}
+if settings.DATABASE_URL.startswith("sqlite"):
+    connect_args = {"check_same_thread": False, "timeout": 30.0}
+
+engine = create_engine(settings.DATABASE_URL, connect_args=connect_args)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 @event.listens_for(engine, "connect")
@@ -126,4 +130,3 @@ def get_db(request: Request = None):
         yield db
     finally:
         db.close()
-
