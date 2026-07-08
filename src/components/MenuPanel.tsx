@@ -21,6 +21,7 @@ interface MenuPanelProps {
   onSubmitDraft: (orderType: 'Consumo no Local' | 'Retirada' | 'Entrega') => void;
   historicClients?: string[];
   liveProdutos?: Product[];
+  isSubmitting?: boolean;
 }
 
 export const MenuPanel: React.FC<MenuPanelProps> = ({
@@ -35,6 +36,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
   onSubmitDraft,
   historicClients = [],
   liveProdutos = [],
+  isSubmitting = false,
 }) => {
   // Build availability map: productId -> boolean (true = available)
   // If liveProdutos is empty (not yet loaded), default all to available
@@ -384,10 +386,11 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
 
                   <button
                     id="submit-draft-order-btn"
+                    disabled={isSubmitting}
                     onClick={() => onSubmitDraft(orderType)}
-                    className="w-full py-3 bg-[#7A1F2D] hover:bg-[#601823] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-[#7A1F2D]/10 transition-all hover:translate-y-[-1px] cursor-pointer uppercase tracking-wider font-sans border border-[#7A1F2D]/20"
+                    className="w-full py-3 bg-[#7A1F2D] hover:bg-[#601823] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-[#7A1F2D]/10 transition-all hover:translate-y-[-1px] cursor-pointer uppercase tracking-wider font-sans border border-[#7A1F2D]/20 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <span>Lançar Pedido</span>
+                    <span>{isSubmitting ? 'Lançando...' : 'Lançar Pedido'}</span>
                     <ArrowRight size={14} />
                   </button>
                 </div>

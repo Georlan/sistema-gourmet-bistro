@@ -52,7 +52,7 @@ def get_db(request: Request = None):
             
         tenant_engine = create_engine(db_url, connect_args=connect_args)
         
-        # Apply performance WAL pragmas for SQLite
+        # Apply performance WAL pragmas for SQLite only
         @event.listens_for(tenant_engine, "connect")
         def set_sqlite_pragma(dbapi_connection, connection_record):
             if db_url.startswith("sqlite"):
@@ -65,61 +65,56 @@ def get_db(request: Request = None):
         # Automatically initialize tables on new tenant database creation
         Base.metadata.create_all(bind=tenant_engine)
         
-        # Check and add modo_exclusivo_salao if missing (migration)
-        from sqlalchemy import text
-        with tenant_engine.connect() as conn:
-            res = conn.execute(text("PRAGMA table_info(configuracoes_restaurante)"))
-            columns = [row[1] for row in res.fetchall()]
-            if "modo_exclusivo_salao" not in columns:
-                conn.execute(text("ALTER TABLE configuracoes_restaurante ADD COLUMN modo_exclusivo_salao BOOLEAN DEFAULT 1"))
-            if "perm_garcom_delivery" not in columns:
-                conn.execute(text("ALTER TABLE configuracoes_restaurante ADD COLUMN perm_garcom_delivery BOOLEAN DEFAULT 1"))
-            if "perm_garcom_editar" not in columns:
-                conn.execute(text("ALTER TABLE configuracoes_restaurante ADD COLUMN perm_garcom_editar BOOLEAN DEFAULT 1"))
-            if "perm_garcom_taxas" not in columns:
-                conn.execute(text("ALTER TABLE configuracoes_restaurante ADD COLUMN perm_garcom_taxas BOOLEAN DEFAULT 0"))
-            if "perm_garcom_cancelar" not in columns:
-                conn.execute(text("ALTER TABLE configuracoes_restaurante ADD COLUMN perm_garcom_cancelar BOOLEAN DEFAULT 0"))
-            if "perm_garcom_status" not in columns:
-                conn.execute(text("ALTER TABLE configuracoes_restaurante ADD COLUMN perm_garcom_status BOOLEAN DEFAULT 1"))
-            if "perm_garcom_abrir_vazia" not in columns:
-                conn.execute(text("ALTER TABLE configuracoes_restaurante ADD COLUMN perm_garcom_abrir_vazia BOOLEAN DEFAULT 0"))
-            if "perm_garcom_print" not in columns:
-                conn.execute(text("ALTER TABLE configuracoes_restaurante ADD COLUMN perm_garcom_print BOOLEAN DEFAULT 1"))
-            if "perm_garcom_fechar" not in columns:
-                conn.execute(text("ALTER TABLE configuracoes_restaurante ADD COLUMN perm_garcom_fechar BOOLEAN DEFAULT 0"))
-            if "perm_garcom_desconto" not in columns:
-                conn.execute(text("ALTER TABLE configuracoes_restaurante ADD COLUMN perm_garcom_desconto BOOLEAN DEFAULT 0"))
-            if "perm_garcom_acrescimo" not in columns:
-                conn.execute(text("ALTER TABLE configuracoes_restaurante ADD COLUMN perm_garcom_acrescimo BOOLEAN DEFAULT 0"))
-            if "perm_garcom_pessoas" not in columns:
-                conn.execute(text("ALTER TABLE configuracoes_restaurante ADD COLUMN perm_garcom_pessoas BOOLEAN DEFAULT 1"))
-            if "perm_garcom_transferir_mesa" not in columns:
-                conn.execute(text("ALTER TABLE configuracoes_restaurante ADD COLUMN perm_garcom_transferir_mesa BOOLEAN DEFAULT 1"))
-            if "perm_garcom_transferir_item" not in columns:
-                conn.execute(text("ALTER TABLE configuracoes_restaurante ADD COLUMN perm_garcom_transferir_item BOOLEAN DEFAULT 1"))
-            if "perm_garcom_chamar" not in columns:
-                conn.execute(text("ALTER TABLE configuracoes_restaurante ADD COLUMN perm_garcom_chamar BOOLEAN DEFAULT 1"))
-            if "perm_garcom_ociosas" not in columns:
-                conn.execute(text("ALTER TABLE configuracoes_restaurante ADD COLUMN perm_garcom_ociosas BOOLEAN DEFAULT 1"))
-            conn.commit()
+        # Inline column migrations — SQLite only (PostgreSQL gets full schema via create_all)
+        if db_url.startswith("sqlite"):
+            from sqlalchemy import text, inspect
+            insp = inspect(tenant_engine)
+            with tenant_engine.connect() as conn:
+                # configuracoes_restaurante migrations
+                try:
+                    existing_cols = {c["name"] for c in insp.get_columns("configuracoes_restaurante")}
+                    sqlite_migrations = [
+                        ("modo_exclusivo_salao", "BOOLEAN DEFAULT 1"),
+                        ("perm_garcom_delivery", "BOOLEAN DEFAULT 1"),
+                        ("perm_garcom_editar", "BOOLEAN DEFAULT 1"),
+                        ("perm_garcom_taxas", "BOOLEAN DEFAULT 0"),
+                        ("perm_garcom_cancelar", "BOOLEAN DEFAULT 0"),
+                        ("perm_garcom_status", "BOOLEAN DEFAULT 1"),
+                        ("perm_garcom_abrir_vazia", "BOOLEAN DEFAULT 0"),
+                        ("perm_garcom_print", "BOOLEAN DEFAULT 1"),
+                        ("perm_garcom_fechar", "BOOLEAN DEFAULT 0"),
+                        ("perm_garcom_desconto", "BOOLEAN DEFAULT 0"),
+                        ("perm_garcom_acrescimo", "BOOLEAN DEFAULT 0"),
+                        ("perm_garcom_pessoas", "BOOLEAN DEFAULT 1"),
+                        ("perm_garcom_transferir_mesa", "BOOLEAN DEFAULT 1"),
+                        ("perm_garcom_transferir_item", "BOOLEAN DEFAULT 1"),
+                        ("perm_garcom_chamar", "BOOLEAN DEFAULT 1"),
+                        ("perm_garcom_ociosas", "BOOLEAN DEFAULT 1"),
+                    ]
+                    for col, col_def in sqlite_migrations:
+                        if col not in existing_cols:
+                            conn.execute(text(f"ALTER TABLE configuracoes_restaurante ADD COLUMN {col} {col_def}"))
+                    conn.commit()
+                except Exception:
+                    pass  # Table may not exist yet — create_all handles it
 
-            # Migrations for pagamentos tablea
-            res_pag = conn.execute(text("PRAGMA table_info(pagamentos)"))
-            columns_pag = [row[1] for row in res_pag.fetchall()]
-            if "status" not in columns_pag:
-                conn.execute(text("ALTER TABLE pagamentos ADD COLUMN status VARCHAR DEFAULT 'aprovado'"))
-            if "idempotency_key" not in columns_pag:
-                conn.execute(text("ALTER TABLE pagamentos ADD COLUMN idempotency_key VARCHAR"))
-            if "cpf_cliente" not in columns_pag:
-                conn.execute(text("ALTER TABLE pagamentos ADD COLUMN cpf_cliente VARCHAR"))
-            if "nome_cliente" not in columns_pag:
-                conn.execute(text("ALTER TABLE pagamentos ADD COLUMN nome_cliente VARCHAR"))
-            if "nsu_cartao" not in columns_pag:
-                conn.execute(text("ALTER TABLE pagamentos ADD COLUMN nsu_cartao VARCHAR"))
-            if "chave_nfe_emitida" not in columns_pag:
-                conn.execute(text("ALTER TABLE pagamentos ADD COLUMN chave_nfe_emitida VARCHAR"))
-            conn.commit()
+                # pagamentos migrations
+                try:
+                    pag_cols = {c["name"] for c in insp.get_columns("pagamentos")}
+                    pag_migrations = [
+                        ("status", "VARCHAR DEFAULT 'aprovado'"),
+                        ("idempotency_key", "VARCHAR"),
+                        ("cpf_cliente", "VARCHAR"),
+                        ("nome_cliente", "VARCHAR"),
+                        ("nsu_cartao", "VARCHAR"),
+                        ("chave_nfe_emitida", "VARCHAR"),
+                    ]
+                    for col, col_def in pag_migrations:
+                        if col not in pag_cols:
+                            conn.execute(text(f"ALTER TABLE pagamentos ADD COLUMN {col} {col_def}"))
+                    conn.commit()
+                except Exception:
+                    pass  # Table may not exist yet
         
         engines[tenant_id] = tenant_engine
         sessionmakers[tenant_id] = sessionmaker(autocommit=False, autoflush=False, bind=tenant_engine)

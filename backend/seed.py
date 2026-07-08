@@ -49,7 +49,7 @@ def seed_database():
 
         # Mapeamento estático de ID para as categorias do frontend
         category_mapping = {
-            "Hambúrgueres Bovinos": "cat-bovinos",
+            "Hambúrgueres Bovinos": "cat-hamburgueres-bovinos",
             "Hambúrgueres de Frango": "cat-frango",
             "Hambúrgueres Suínos": "cat-suinos",
             "Baguetes": "cat-baguetes",
@@ -77,7 +77,7 @@ def seed_database():
 
         # 4. Cadastrar Observações Predefinidas por Categoria
         observacoes_por_categoria = {
-            "cat-bovinos": ["Sem cebola", "Sem cheddar", "Sem molhos", "Pra viagem", "Sem salada"],
+            "cat-hamburgueres-bovinos": ["Sem cebola", "Sem cheddar", "Sem molhos", "Pra viagem", "Sem salada"],
             "cat-frango": ["Sem cebola", "Sem cheddar", "Sem molhos", "Pra viagem", "Sem salada"],
             "cat-suinos": ["Sem cebola", "Sem cheddar", "Sem molhos", "Pra viagem", "Sem salada"],
             "cat-baguetes": ["Sem salada", "Sem maionese", "Sem queijo", "Bem quente", "Pão extra crocante"],

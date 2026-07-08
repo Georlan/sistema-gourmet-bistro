@@ -103,13 +103,14 @@ export function CaixaPanel({
   // active sub-tab under each main tab
   // active sub-tab under each main tab
   const [activeSubTab, setActiveSubTab] = useState<string>('pedidos');
+  const [selectedKanbanOrder, setSelectedKanbanOrder] = useState<any>(null);
 
   // ============================================================================
   // ⚡ FILTRAGEM DINÂMICA DAS COMANDAS DE MESA PARA O KANBAN
   // ============================================================================
   const tableOrdersInProduction = (() => {
     const list: any[] = [];
-    orders.filter(o => o.mesaId && o.mesaId > 0).forEach(comanda => {
+    orders.forEach(comanda => {
       const itemsByLancamento: Record<string, OrderItem[]> = {};
       comanda.itens.forEach(item => {
         const lid = item.lancamentoId || comanda.id;
@@ -135,7 +136,7 @@ export function CaixaPanel({
 
   const tableOrdersReady = (() => {
     const list: any[] = [];
-    orders.filter(o => o.mesaId && o.mesaId > 0).forEach(comanda => {
+    orders.forEach(comanda => {
       const itemsByLancamento: Record<string, OrderItem[]> = {};
       comanda.itens.forEach(item => {
         const lid = item.lancamentoId || comanda.id;
@@ -280,6 +281,7 @@ export function CaixaPanel({
 
   // Otimizações / Estoque / Desempenho States
   const [waitersPerformance, setWaitersPerformance] = useState<{ nome_garcon: string, pedidos_atendidos: number, comissao_acumulada: number }[]>([]);
+  const [generalStats, setGeneralStats] = useState<any>(null);
   const [estoqueInsumos, setEstoqueInsumos] = useState<{ id: string, nome: string, estoque_atual: number, estoque_minimo: number, estoque_maximo: number, unidade_medida: string, preco_medio_custo: number }[]>([]);
   const [estoqueSugestoes, setEstoqueSugestoes] = useState<{ id: string, nome: string, estoque_atual: number, estoque_minimo: number, estoque_maximo: number, unidade_medida: string, quantidade_sugerida: number }[]>([]);
   const [horariosPico, setHorariosPico] = useState<{ dia_semana_label: string, dia_semana: number, hora: string, total_pedidos: number }[]>([]);
@@ -818,6 +820,14 @@ export function CaixaPanel({
         })
         .catch(err => console.error('Error fetching waiter report:', err));
     }
+    if (activeTab === 'relatorios' && activeSubTab === 'relatorio_geral') {
+      fetch(`${apiBaseUrl}/comandas/estatisticas/geral`, { headers: authHeaders })
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.faturamento !== undefined) setGeneralStats(data);
+        })
+        .catch(err => console.error('Error fetching general stats report:', err));
+    }
     if (activeTab === 'estoque') {
       fetch(`${apiBaseUrl}/estoque/insumos`, { headers: authHeaders })
         .then(res => res.json())
@@ -1199,7 +1209,7 @@ export function CaixaPanel({
   // KDS Kitchen actions (status updates)
   const handleUpdateItemStatus = async (itemId: string, newStatus: 'preparando' | 'pronto' | 'entregue') => {
     try {
-      const res = await fetch(`${apiBaseUrl}/itens/${itemId}/status?status=${newStatus}`, {
+      const res = await fetch(`${apiBaseUrl}/comandas/itens/${itemId}/status?status=${newStatus}`, {
         method: "PUT",
         headers: authHeaders
       });
@@ -1999,14 +2009,18 @@ export function CaixaPanel({
                             .join(' + ');
 
                           return (
-                            <div key={`table-prod-${order.id}`} className={clsx('bg-[#121214]', 'border', 'border-[#27272A]/60', 'hover:border-[#C5A880]/30', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all', 'text-left')}>
+                            <div 
+                              key={`table-prod-${order.id}`} 
+                              onClick={() => setSelectedKanbanOrder(order)}
+                              className={clsx('bg-[#121214]', 'border', 'border-[#27272A]/60', 'hover:border-[#C5A880]/30', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all', 'text-left', 'cursor-pointer')}
+                            >
                               <div className={clsx('flex', 'justify-between', 'items-start')}>
                                 <div>
                                   <span className={clsx('px-1.5', 'py-0.5', 'text-[8px]', 'uppercase', 'tracking-wider', 'font-bold', 'bg-[#C5A880]/15', 'text-[#C5A880]', 'rounded', 'font-mono', 'block', 'w-fit', 'mb-1')}>
-                                    Mesa {order.mesaId}
+                                    {order.mesaId && order.mesaId > 0 ? `Mesa ${order.mesaId}` : 'Balcão'}
                                   </span>
                                   <strong className={clsx('text-white', 'text-xs', 'block')}>
-                                    {(order as any).identificador || `Consumo Mesa ${order.mesaId}`}
+                                    {(order as any).identificador || (order.mesaId && order.mesaId > 0 ? `Consumo Mesa ${order.mesaId}` : 'Consumo Balcão')}
                                   </strong>
                                   <span className={clsx('text-[9px]', 'text-gray-500', 'block')}>Atendente: {order.garcomNome || 'Garçom'}</span>
                                 </div>
@@ -2019,10 +2033,11 @@ export function CaixaPanel({
 
                               <button
                                 type="button"
-                                onClick={async () => {
+                                onClick={async (e) => {
+                                  e.stopPropagation();
                                   try {
                                     await Promise.all(preparingItems.map(item =>
-                                      fetch(`${apiBaseUrl}/itens/${item.id}/status?status=pronto`, {
+                                      fetch(`${apiBaseUrl}/comandas/itens/${item.id}/status?status=pronto`, {
                                         method: "PUT",
                                         headers: authHeaders
                                       })
@@ -2036,7 +2051,7 @@ export function CaixaPanel({
                                 className={clsx('w-full', 'py-1.5', 'bg-[#C5A880]', 'hover:bg-[#b0936b]', 'text-[#121214]', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1')}
                               >
                                 <Check size={11} />
-                                <span>Pronto (Mesa)</span>
+                                <span>Pronto</span>
                               </button>
                             </div>
                           );
@@ -2049,7 +2064,7 @@ export function CaixaPanel({
                 {/* COLUMN 3: Prontos para entrega */}
                 <div className={clsx('bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden')}>
                   <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
-                    <span className={clsx('font-bold', 'text-gray-300', 'font-serif')}>Prontos / Em trânsito</span>
+                    <span className={clsx('font-bold', 'text-gray-300', 'font-serif')}>Prontos / Fechar Conta</span>
                     <span className={clsx('bg-emerald-500/10', 'text-emerald-400', 'font-bold', 'px-2', 'py-0.5', 'rounded-full', 'font-mono', 'text-[9px]')}>
                       {(modoExclusivoSalao ? 0 : simulatedOrders.filter(o => o.status === 'pronto').length) + tableOrdersReady.length}
                     </span>
@@ -2100,45 +2115,72 @@ export function CaixaPanel({
                             .join(' + ');
 
                           return (
-                            <div key={`table-ready-${order.id}`} className={clsx('bg-[#121214]', 'border', 'border-emerald-500/20', 'hover:border-emerald-500/40', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all', 'text-left')}>
-                              <div className={clsx('flex', 'justify-between', 'items-start')}>
-                                <div>
-                                  <span className={clsx('px-1.5', 'py-0.5', 'text-[8px]', 'uppercase', 'tracking-wider', 'font-bold', 'bg-emerald-500/10', 'text-emerald-400', 'rounded', 'font-mono', 'block', 'w-fit', 'mb-1')}>
-                                    Mesa {order.mesaId} - Pronto
-                                  </span>
-                                  <strong className={clsx('text-white', 'text-xs', 'block')}>
-                                    {(order as any).identificador || `Consumo Mesa ${order.mesaId}`}
-                                  </strong>
-                                </div>
-                                <span className={clsx('text-[9px]', 'text-gray-500', 'font-mono')}>#{order.id.slice(-4)}</span>
-                              </div>
+                             <div 
+                               key={`table-ready-${order.id}`} 
+                               onClick={() => setSelectedKanbanOrder(order)}
+                               className={clsx('bg-[#121214]', 'border', 'border-emerald-500/20', 'hover:border-emerald-500/40', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all', 'text-left', 'cursor-pointer')}
+                             >
+                               <div className={clsx('flex', 'justify-between', 'items-start')}>
+                                 <div>
+                                   <span className={clsx('px-1.5', 'py-0.5', 'text-[8px]', 'uppercase', 'tracking-wider', 'font-bold', 'bg-emerald-500/10', 'text-emerald-400', 'rounded', 'font-mono', 'block', 'w-fit', 'mb-1')}>
+                                     {order.mesaId && order.mesaId > 0 ? `Mesa ${order.mesaId} - Pronto` : 'Balcão - Pronto'}
+                                   </span>
+                                   <strong className={clsx('text-white', 'text-xs', 'block')}>
+                                     {(order as any).identificador || (order.mesaId && order.mesaId > 0 ? `Consumo Mesa ${order.mesaId}` : 'Consumo Balcão')}
+                                   </strong>
+                                 </div>
+                                 <span className={clsx('text-[9px]', 'text-gray-500', 'font-mono')}>#{order.id.slice(-4)}</span>
+                               </div>
 
-                              <p className={clsx('text-[10px]', 'text-emerald-400', 'bg-[#09090B]', 'p-1.5', 'rounded', 'border', 'border-[#27272A]/10', 'leading-relaxed', 'font-mono')}>
-                                {itemsStr}
-                              </p>
+                               <p className={clsx('text-[10px]', 'text-emerald-400', 'bg-[#09090B]', 'p-1.5', 'rounded', 'border', 'border-[#27272A]/10', 'leading-relaxed', 'font-mono')}>
+                                 {itemsStr}
+                               </p>
 
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  try {
-                                    await Promise.all(readyItems.map(item =>
-                                      fetch(`${apiBaseUrl}/itens/${item.id}/status?status=entregue`, {
-                                        method: "PUT",
-                                        headers: authHeaders
-                                      })
-                                    ));
-                                    onRefreshOrders();
-                                  } catch (e) {
-                                    console.error(e);
-                                    alert("Erro ao atualizar status dos pratos.");
-                                  }
-                                }}
-                                className={clsx('w-full', 'py-1.5', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1')}
-                              >
-                                <Check size={11} />
-                                <span>Entregar na Mesa</span>
-                              </button>
-                            </div>
+                               <button
+                                 type="button"
+                                 onClick={async (e) => {
+                                   e.stopPropagation();
+                                   try {
+                                     await Promise.all(readyItems.map(item =>
+                                       fetch(`${apiBaseUrl}/comandas/itens/${item.id}/status?status=entregue`, {
+                                         method: "PUT",
+                                         headers: authHeaders
+                                       })
+                                     ));
+                                     // Find the full order from orders list to open checkout
+                                     const fullOrder = orders.find(o => o.id === order.comandaId) || orders.find(o => o.mesaId === order.mesaId);
+                                     if (fullOrder) {
+                                       setSelectedOrder({
+                                         ...fullOrder,
+                                         itens: fullOrder.itens.map((item: any) => ({
+                                           id: item.id,
+                                           produtoId: item.produto_id || item.produtoId,
+                                           nome: item.nome || `Item ${item.produtoId}`,
+                                           preco: item.preco_unit || item.preco,
+                                           observacao: item.observacao || '',
+                                           clienteNome: item.cliente_nome || item.clienteNome || 'Consumo Geral',
+                                           status: item.status,
+                                           pago: item.pago
+                                         }))
+                                       });
+                                       setCheckoutServiceTax(true);
+                                       setSplitPeople('1');
+                                       setSelectedItemIds([]);
+                                       const sub = fullOrder.itens.filter((item: any) => !item.pago).reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
+                                       setPaymentValor((sub * (1.0 + (checkoutServiceTax ? serviceTaxRate / 100 : 0))).toFixed(2));
+                                     }
+                                     onRefreshOrders();
+                                   } catch (e) {
+                                     console.error(e);
+                                     alert("Erro ao atualizar status dos pratos.");
+                                   }
+                                 }}
+                                 className={clsx('w-full', 'py-1.5', 'bg-blue-600', 'hover:bg-blue-700', 'text-white', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1')}
+                               >
+                                 <Check size={11} />
+                                 <span>Fechar Conta</span>
+                               </button>
+                             </div>
                           );
                         })}
                       </>
@@ -2444,9 +2486,12 @@ export function CaixaPanel({
                           <div className={clsx('flex', 'gap-1', 'opacity-0', 'group-hover:opacity-100', 'transition-opacity')}>
                             <button
                               onClick={() => {
-                                const newCap = prompt(`Nova capacidade para Mesa ${table.id}?`, table.capacidade.toString());
+                                const newName = prompt(`Novo nome/identificação para Mesa ${table.id} (Deixe em branco para padrão):`, table.nome || '');
+                                const newCap = prompt(`Nova capacidade (lugares) para Mesa ${table.id}?`, table.capacidade.toString());
                                 if (newCap && !isNaN(parseInt(newCap))) {
-                                  onUpdateMesa(table.id, parseInt(newCap), undefined);
+                                  onUpdateMesa(table.id, parseInt(newCap), newName !== null ? (newName.trim() || `Mesa ${table.id}`) : undefined);
+                                } else if (newName !== null) {
+                                  onUpdateMesa(table.id, table.capacidade, newName.trim() || `Mesa ${table.id}`);
                                 }
                               }}
                               className={clsx('p-1', 'text-gray-400', 'hover:text-[#C5A880]')}
@@ -3760,10 +3805,10 @@ export function CaixaPanel({
               {/* Grid of KPI cards */}
               <div className={clsx('grid', 'grid-cols-2', 'md:grid-cols-4', 'gap-4')}>
                 {[
-                  { label: "Faturamento", value: "R$ 21.806,62", color: "text-[#C5A880]" },
-                  { label: "Ticket médio", value: "R$ 36,59", color: "text-white" },
-                  { label: "Total de pedidos", value: "596", color: "text-white" },
-                  { label: "Clientes ativos", value: "301", color: "text-white" }
+                  { label: "Faturamento", value: `R$ ${(generalStats?.faturamento ?? 0.00).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, color: "text-[#C5A880]" },
+                  { label: "Ticket médio", value: `R$ ${(generalStats?.ticket_medio ?? 0.00).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, color: "text-white" },
+                  { label: "Total de pedidos", value: String(generalStats?.total_pedidos ?? 0), color: "text-white" },
+                  { label: "Clientes ativos", value: String(generalStats?.clientes_ativos ?? 0), color: "text-white" }
                 ].map((card, idx) => (
                   <div key={idx} className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-2xl', 'p-4.5', 'space-y-1', 'flex', 'flex-col', 'justify-center')}>
                     <span className={clsx('text-[9px]', 'text-gray-400', 'uppercase', 'tracking-widest', 'font-bold', 'block')}>{card.label}</span>
@@ -3790,16 +3835,16 @@ export function CaixaPanel({
 
                 <div className={clsx('pt-2', 'relative', 'h-48', 'w-full', 'flex', 'items-end', 'justify-between', 'px-4', 'border-b', 'border-[#27272A]', 'pb-4')}>
                   {/* SVG Bar graphs */}
-                  {[
-                    { label: "Dom", delivery: 98, local: 82 },
-                    { label: "Seg", delivery: 45, local: 38 },
-                    { label: "Ter", delivery: 60, local: 52 },
-                    { label: "Qua", delivery: 65, local: 55 },
-                    { label: "Qui", delivery: 72, local: 64 },
-                    { label: "Sex", delivery: 110, local: 88 },
-                    { label: "Sab", delivery: 125, local: 95 }
-                  ].map((day, idx) => {
-                    const maxScale = 150;
+                  {(generalStats?.weekly_chart ?? [
+                    { label: "Dom", delivery: 0, local: 0 },
+                    { label: "Seg", delivery: 0, local: 0 },
+                    { label: "Ter", delivery: 0, local: 0 },
+                    { label: "Qua", delivery: 0, local: 0 },
+                    { label: "Qui", delivery: 0, local: 0 },
+                    { label: "Sex", delivery: 0, local: 0 },
+                    { label: "Sab", delivery: 0, local: 0 }
+                  ]).map((day: any, idx: number) => {
+                    const maxScale = Math.max(10, ...((generalStats?.weekly_chart ?? []).flatMap((d: any) => [d.delivery, d.local])), 150);
                     const delHeight = `${(day.delivery / maxScale) * 100}%`;
                     const locHeight = `${(day.local / maxScale) * 100}%`;
 
@@ -4121,6 +4166,33 @@ export function CaixaPanel({
           {/* DISPONIBILIDADE CARDAPIO — REAL API com busca e categorias */}
           {activeTab === 'cardapio' && activeSubTab === 'disponibilidade' && (() => {
             const source = apiProdutos.length > 0 ? apiProdutos : PRODUCTS;
+            const handleBatchAvailability = async (keyword: string, active: boolean) => {
+              const targetProducts = source.filter(p => {
+                const name = p.nome.toLowerCase();
+                const catObj = (p as any).categoria;
+                const cat = typeof catObj === 'object' && catObj ? catObj.nome.toLowerCase() : (typeof catObj === 'string' ? catObj.toLowerCase() : '');
+                return name.includes(keyword) || cat.includes(keyword);
+              });
+
+              if (targetProducts.length === 0) return;
+
+              if (confirm(`Deseja realmente ${active ? 'disponibilizar' : 'esgotar'} todos os itens relacionados a "${keyword}" (${targetProducts.length} itens)?`)) {
+                try {
+                  await Promise.all(targetProducts.map(prod =>
+                    fetch(`${apiBaseUrl}/produtos/${prod.id}`, {
+                      method: 'PUT',
+                      headers: { ...authHeaders, 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ ativo: active })
+                    })
+                  ));
+                  await fetchProdutos();
+                } catch (e) {
+                  console.error(e);
+                  alert('Erro ao processar alteração em massa.');
+                }
+              }
+            };
+
             const filtered = disponibilidadeSearch.trim()
               ? source.filter(p => p.nome.toLowerCase().includes(disponibilidadeSearch.toLowerCase()))
               : source;
@@ -4158,6 +4230,25 @@ export function CaixaPanel({
                       <X size={11} />
                     </button>
                   )}
+                </div>
+
+                {/* Atalhos Rápidos em Massa */}
+                <div className="space-y-2 bg-[#121214]/40 p-3 rounded-xl border border-[#27272A]/50 text-left">
+                  <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Atalhos de Pausa em Lote:</span>
+                  <div className="flex flex-wrap gap-2 text-[8px] font-bold">
+                    <div className="flex gap-1.5 border-r border-[#27272A]/80 pr-2">
+                      <button type="button" onClick={() => handleBatchAvailability('pastel', false)} className="px-2 py-1 bg-red-950/30 hover:bg-red-900/40 text-red-400 hover:text-white rounded border border-red-900/50 cursor-pointer">Esgotar Pastéis</button>
+                      <button type="button" onClick={() => handleBatchAvailability('pastel', true)} className="px-2 py-1 bg-emerald-950/30 hover:bg-emerald-900/40 text-emerald-400 hover:text-white rounded border border-emerald-900/50 cursor-pointer">Liberar Pastéis</button>
+                    </div>
+                    <div className="flex gap-1.5 border-r border-[#27272A]/80 pr-2">
+                      <button type="button" onClick={() => handleBatchAvailability('baguete', false)} className="px-2 py-1 bg-red-950/30 hover:bg-red-900/40 text-red-400 hover:text-white rounded border border-red-900/50 cursor-pointer">Esgotar Baguetes</button>
+                      <button type="button" onClick={() => handleBatchAvailability('baguete', true)} className="px-2 py-1 bg-emerald-950/30 hover:bg-emerald-900/40 text-emerald-400 hover:text-white rounded border border-emerald-900/50 cursor-pointer">Liberar Baguetes</button>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <button type="button" onClick={() => handleBatchAvailability('hambúrguer', false)} className="px-2 py-1 bg-red-950/30 hover:bg-red-900/40 text-red-400 hover:text-white rounded border border-red-900/50 cursor-pointer">Esgotar Burgers</button>
+                      <button type="button" onClick={() => handleBatchAvailability('hambúrguer', true)} className="px-2 py-1 bg-emerald-950/30 hover:bg-emerald-900/40 text-emerald-400 hover:text-white rounded border border-emerald-900/50 cursor-pointer">Liberar Burgers</button>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Categories */}
@@ -5557,6 +5648,79 @@ export function CaixaPanel({
           </div>
         )
       }
+
+      {/* 6. MODAL: INSPECIONAR E REIMPRIMIR PEDIDO DO KANBAN */}
+      {selectedKanbanOrder && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in">
+            <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
+              <div>
+                <h3 className="font-serif text-sm font-bold text-white">
+                  {selectedKanbanOrder.mesaId && selectedKanbanOrder.mesaId > 0 ? `Detalhes: Mesa ${selectedKanbanOrder.mesaId}` : 'Detalhes: Balcão'}
+                </h3>
+                <span className="text-[9px] text-gray-500 font-mono block mt-0.5">Lote: #{selectedKanbanOrder.id.slice(-4)}</span>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setSelectedKanbanOrder(null)} 
+                className="p-1 text-gray-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {selectedKanbanOrder.identificador && (
+                <div className="bg-[#1C1C1F] p-2.5 rounded-xl border border-[#27272A] text-xs text-gray-300">
+                  <strong className="text-white block text-[10px] uppercase tracking-wider text-gray-400">Cliente:</strong>
+                  {selectedKanbanOrder.identificador}
+                </div>
+              )}
+
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Itens do Lote:</span>
+                {selectedKanbanOrder.itens.map((item: any, idx: number) => (
+                  <div key={idx} className="flex justify-between items-start bg-[#1C1C1F]/40 p-2.5 rounded-xl border border-[#27272A]/40 text-xs">
+                    <div>
+                      <strong className="text-white">{item.nome || item.produto?.nome}</strong>
+                      {item.observacao && <span className="block text-[10px] text-amber-500/90 mt-0.5">Obs: {item.observacao}</span>}
+                      {item.cliente_nome && item.cliente_nome !== 'Consumo Geral' && <span className="block text-[9px] text-gray-400 mt-0.5">Para: {item.cliente_nome}</span>}
+                    </div>
+                    <span className="text-[10px] font-mono bg-[#27272A] text-gray-300 px-1.5 py-0.5 rounded capitalize">{item.status}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const res = await fetch(`${apiBaseUrl}/comandas/lancamentos/${selectedKanbanOrder.id}/reimprimir`, {
+                        method: "POST",
+                        headers: authHeaders
+                      });
+                      if (res.ok) {
+                        alert("Pedido reenviado para a impressora com sucesso!");
+                        setSelectedKanbanOrder(null);
+                      } else {
+                        alert("Erro ao solicitar reimpressão.");
+                      }
+                    } catch (err) {
+                      console.error(err);
+                      alert("Erro ao solicitar reimpressão.");
+                    }
+                  }}
+                  className="flex-1 py-2.5 bg-[#7A1F2D] hover:bg-[#601823] text-white font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-[#7A1F2D]/20 shadow-lg"
+                >
+                  <Printer size={13} />
+                  <span>Reimprimir na Cozinha</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

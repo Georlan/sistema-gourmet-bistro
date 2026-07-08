@@ -113,6 +113,7 @@ class MesaResponse(MesaBase):
 class ItemUpdate(BaseModel):
     observacao: Optional[str] = None
     cliente_nome: Optional[str] = None
+    quantidade_adicional: Optional[int] = None
 
 class ItemResponse(BaseModel):
     id: str

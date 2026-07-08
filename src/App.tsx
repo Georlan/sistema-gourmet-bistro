@@ -309,6 +309,7 @@ export default function App() {
 
   // 2b. Orders loaded from API
   const [orders, setOrders] = useState<Order[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   const [drafts, setDrafts] = useState<{ [mesaId: number]: DraftItem[] }>(() => {
     const saved = localStorage.getItem(LOCAL_STORAGE_DRAFTS_KEY);
@@ -491,10 +492,14 @@ export default function App() {
     connectWS();
 
     return () => {
+      clearTimeout(reconnectTimeout);
       if (ws) {
+        ws.onopen = null;
+        ws.onmessage = null;
+        ws.onclose = null;
+        ws.onerror = null;
         ws.close();
       }
-      clearTimeout(reconnectTimeout);
     };
   }, [isAuthenticated, activeWaiterId]);
 
@@ -756,9 +761,11 @@ export default function App() {
   };
 
   const handleSubmitDraft = async (mesaId: number, orderType: 'Consumo no Local' | 'Retirada' | 'Entrega' = 'Consumo no Local') => {
+    if (isSubmitting) return;
     const items = drafts[mesaId] || [];
     if (items.length === 0) return;
 
+    setIsSubmitting(true);
     try {
       const activeComanda = orders.find(o => o.mesaId === mesaId);
       let comandaId = activeComanda?.id;
@@ -776,6 +783,7 @@ export default function App() {
         if (!openRes.ok) {
           const errData = await openRes.json();
           alert(`Erro ao abrir comanda: ${errData.detail || openRes.statusText}`);
+          setIsSubmitting(false);
           return;
         }
         const newComanda = await openRes.json();
@@ -804,6 +812,7 @@ export default function App() {
       if (!launchRes.ok) {
         const errData = await launchRes.json();
         alert(`Erro ao lançar itens: ${errData.detail || launchRes.statusText}`);
+        setIsSubmitting(false);
         return;
       }
 
@@ -824,6 +833,8 @@ export default function App() {
     } catch (err) {
       console.error(err);
       alert("Erro ao conectar ao servidor para enviar o pedido.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -1077,7 +1088,7 @@ export default function App() {
     }
   };
 
-  const handleUpdateItemDetails = async (itemId: string, observacao: string, clienteNome: string) => {
+  const handleUpdateItemDetails = async (itemId: string, observacao: string, clienteNome: string, quantidadeAdicional?: number) => {
     try {
       const res = await fetch(`${API_BASE_URL}/comandas/itens/${itemId}`, {
         method: "PUT",
@@ -1087,7 +1098,8 @@ export default function App() {
         },
         body: JSON.stringify({
           observacao,
-          cliente_nome: clienteNome
+          cliente_nome: clienteNome,
+          quantidade_adicional: quantidadeAdicional || undefined
         })
       });
       if (!res.ok) {
@@ -1555,6 +1567,7 @@ export default function App() {
             orders={selectedTableOrders}
             allOrders={orders}
             draftItems={getDraftItems(selectedTable.id)}
+            isSubmitting={isSubmitting}
             otherWaitersServing={otherWaitersServing}
             salonTables={salonTables}
             settings={settings}

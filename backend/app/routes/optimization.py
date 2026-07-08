@@ -102,6 +102,57 @@ def get_horarios_pico(db: Session = Depends(get_db)):
         })
     return results
 
+@router.get("/comandas/estatisticas/geral")
+def get_estatisticas_geral(db: Session = Depends(get_db)):
+    """
+    Retorna estatísticas consolidadas de vendas para o painel de BI (dashboard financeiro).
+    """
+    # 1. Total faturamento
+    from ..models import Pagamento
+    pags = db.query(Pagamento).filter(Pagamento.status == "aprovado").all()
+    faturamento = sum(p.valor for p in pags)
+    
+    # 2. Total de comandas fechadas
+    total_pedidos = db.query(Comanda).filter(Comanda.fechada == True).count()
+    
+    # 3. Ticket médio
+    ticket_medio = faturamento / total_pedidos if total_pedidos > 0 else 0.0
+    
+    # 4. Clientes únicos
+    cpfs = db.query(Pagamento.cpf_cliente).filter(Pagamento.cpf_cliente.isnot(None), Pagamento.status == "aprovado").distinct().all()
+    clientes_ativos = len(cpfs) if cpfs else total_pedidos
+    
+    # 5. Pedidos e entregas semanal
+    import datetime
+    dias = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"]
+    chart_data = {dia: {"delivery": 0, "local": 0} for dia in dias}
+    
+    comandas_fechadas = db.query(Comanda).filter(Comanda.fechada == True, Comanda.fechado_em.isnot(None)).all()
+    for c in comandas_fechadas:
+        wday = c.fechado_em.strftime('%w')
+        dia_label = dias[int(wday)]
+        is_delivery = c.mesa_id is None or c.mesa_id <= 0
+        if is_delivery:
+            chart_data[dia_label]["delivery"] += 1
+        else:
+            chart_data[dia_label]["local"] += 1
+            
+    weekly_chart = []
+    for dia in dias:
+        weekly_chart.append({
+            "label": dia,
+            "delivery": chart_data[dia]["delivery"],
+            "local": chart_data[dia]["local"]
+        })
+        
+    return {
+        "faturamento": round(faturamento, 2),
+        "ticket_medio": round(ticket_medio, 2),
+        "total_pedidos": total_pedidos,
+        "clientes_ativos": clientes_ativos,
+        "weekly_chart": weekly_chart
+    }
+
 
 # ----------------- PROGRAMA DE FIDELIDADE UNIFICADO -----------------
 

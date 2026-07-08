@@ -31,10 +31,11 @@ export const MesaCard = React.memo<MesaCardProps>(({
   const totalValue = getTableTotal(orders);
   
   // Calculate dynamic status:
-  // - Verde (Livre): No orders
-  // - Azul (Pronto): At least one item in 'pronto' status
-  // - Vermelho (Ocupada): Has orders, but none is 'pronto' (all either 'preparando' or 'entregue')
-  let status: 'livre' | 'ocupada' | 'pronto' = 'livre';
+  // - Verde (Livre): No active orders
+  // - Amarelo (Pronto): At least one item in 'pronto' status (ready to serve)
+  // - Vermelho (Ocupada): Has orders in 'preparando' (kitchen working)
+  // - Azul (Entregue): All items served/entregue — awaiting cashier payment
+  let status: 'livre' | 'ocupada' | 'pronto' | 'entregue' = 'livre';
   let firstOrderTimestamp: number | undefined;
 
   if (orders.length > 0) {
@@ -42,11 +43,20 @@ export const MesaCard = React.memo<MesaCardProps>(({
     const timestamps = orders.map(o => o.timestamp);
     firstOrderTimestamp = Math.min(...timestamps);
 
-    const hasPronto = orders.some(order => 
-      order.itens.some(item => item.status === 'pronto')
-    );
-    
-    status = hasPronto ? 'pronto' : 'ocupada';
+    const allActiveItems = orders.flatMap(o => o.itens.filter(i => i.status !== 'cancelado'));
+    const hasPronto = allActiveItems.some(item => item.status === 'pronto');
+    const hasPreparando = allActiveItems.some(item => item.status === 'preparando');
+    const allEntregue = allActiveItems.length > 0 && !hasPronto && !hasPreparando;
+
+    if (hasPronto) {
+      status = 'pronto';
+    } else if (hasPreparando) {
+      status = 'ocupada';
+    } else if (allEntregue) {
+      status = 'entregue';
+    } else {
+      status = 'ocupada';
+    }
   }
 
   // Visual classes based on state
@@ -82,6 +92,14 @@ export const MesaCard = React.memo<MesaCardProps>(({
       label: 'Pronto p/ Servir',
       textColor: 'text-amber-400',
       glow: 'animate-pulse-subtle hover:translate-y-[-2px] hover:shadow-[0_0_25px_rgba(245,158,11,0.15)] active:translate-y-[0px]',
+    },
+    entregue: {
+      borderColor: 'border-blue-500/40 hover:border-blue-500/70 focus:ring-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.12)]',
+      bgColor: 'bg-blue-950/15 hover:bg-blue-950/25 backdrop-blur-md',
+      badgeColor: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
+      label: 'Aguardando Pgto.',
+      textColor: 'text-blue-300',
+      glow: 'hover:translate-y-[-2px] hover:shadow-[0_0_25px_rgba(59,130,246,0.15)] active:translate-y-[0px]',
     },
   };
 
@@ -123,7 +141,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
             <div className="flex items-center gap-1 sm:gap-1.5">
               <Clock size={11} className="text-[#C5A880] shrink-0 sm:w-3 sm:h-3" />
               <span className="truncate">
-                <strong className="text-rose-400 font-medium font-mono">{elapsed}</strong>
+                <strong className={status === 'entregue' ? 'text-blue-300 font-medium font-mono' : 'text-rose-400 font-medium font-mono'}>{elapsed}</strong>
               </span>
             </div>
 
@@ -144,6 +162,14 @@ export const MesaCard = React.memo<MesaCardProps>(({
             >
               <span>⚠️</span>
               <span className="truncate">Editando: {otherWaitersServing.join(', ')}</span>
+            </div>
+          )}
+
+          {/* Entregue — aguardando pagamento badge */}
+          {status === 'entregue' && (
+            <div className="flex items-center gap-1 px-1.5 py-1 bg-blue-500/10 text-blue-300 rounded-lg border border-blue-500/20 font-bold text-[8px] sm:text-[9px] mb-2 mt-1 w-full justify-center tracking-wider uppercase">
+              <span>💳</span>
+              <span>Aguardando Pagamento</span>
             </div>
           )}
 

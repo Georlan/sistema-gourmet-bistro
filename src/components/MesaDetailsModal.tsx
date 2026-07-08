@@ -42,7 +42,8 @@ interface MesaDetailsModalProps {
   salonTables?: Table[];
   liveProdutos?: Product[];
   restauranteConfig?: any;
-  onUpdateItemDetails?: (itemId: string, observacao: string, clienteNome: string) => Promise<void>;
+  onUpdateItemDetails?: (itemId: string, observacao: string, clienteNome: string, quantidadeAdicional?: number) => Promise<void>;
+  isSubmitting?: boolean;
 }
 
 export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
@@ -50,6 +51,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
   orders,
   allOrders = [],
   draftItems,
+  isSubmitting = false,
   settings,
   activeRole,
   activeWaiterId,
@@ -90,6 +92,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
   const [transferType, setTransferType] = useState<'total' | 'parcial'>('total');
   const [printSuccess, setPrintSuccess] = useState<boolean>(false);
   const [confirmClear, setConfirmClear] = useState<boolean>(false);
+  const [editingItem, setEditingItem] = useState<any>(null);
 
   // Lock background scroll when modal is active
   React.useEffect(() => {
@@ -370,14 +373,15 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                                     {((activeRole !== 'garcom' || restauranteConfig?.perm_garcom_editar)) && (
                                       <button
                                         type="button"
-                                        onClick={async () => {
-                                          const newObs = prompt(`Editar observações para "${item.nome}":`, item.observacao);
-                                          if (newObs !== null) {
-                                            const newClient = prompt(`Identificar cliente para "${item.nome}":`, item.clienteNome === 'Consumo Geral' ? '' : item.clienteNome);
-                                            if (newClient !== null && onUpdateItemDetails) {
-                                              await onUpdateItemDetails(item.id, newObs, newClient || 'Consumo Geral');
-                                            }
-                                          }
+                                        onClick={() => {
+                                          setEditingItem({
+                                            id: item.id,
+                                            produtoId: item.produtoId,
+                                            nome: item.nome,
+                                            observacao: item.observacao,
+                                            clienteNome: item.clienteNome,
+                                            quantidade: 1
+                                          });
                                         }}
                                         className="p-1 text-gray-400 hover:text-amber-500 transition-colors cursor-pointer"
                                         title="Editar observações / cliente do item"
@@ -536,6 +540,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
               onSubmitDraft={onSubmitDraft}
               historicClients={historicClients}
               liveProdutos={liveProdutos}
+              isSubmitting={isSubmitting}
             />
           )}
 
@@ -999,6 +1004,90 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
               <Printer size={13} className="text-white" />
               <span>Imprimir Via Cozinha</span>
             </button>
+          </div>
+        </div>
+      )}
+
+      {editingItem && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in">
+            <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
+              <h3 className="font-serif text-sm font-bold text-white">Editar Item: {editingItem.nome}</h3>
+              <button 
+                type="button"
+                onClick={() => setEditingItem(null)} 
+                className="p-1 text-gray-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Quantity Selector */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Quantidade:</label>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setEditingItem({ ...editingItem, quantidade: Math.max(1, editingItem.quantidade - 1) })}
+                    className="w-8 h-8 rounded-xl bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] flex items-center justify-center text-white font-bold cursor-pointer transition-colors"
+                  >
+                    -
+                  </button>
+                  <span className="text-sm font-bold text-white font-mono w-6 text-center">{editingItem.quantidade}</span>
+                  <button
+                    type="button"
+                    onClick={() => setEditingItem({ ...editingItem, quantidade: editingItem.quantidade + 1 })}
+                    className="w-8 h-8 rounded-xl bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] flex items-center justify-center text-white font-bold cursor-pointer transition-colors"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              {/* Observations Input */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Observações de Preparo:</label>
+                <input
+                  type="text"
+                  value={editingItem.observacao}
+                  onChange={(e) => setEditingItem({ ...editingItem, observacao: e.target.value })}
+                  className="w-full px-3.5 py-2 text-xs bg-[#1C1C1F] border border-[#27272A] rounded-xl focus:outline-none focus:border-[#C5A880]/30 text-white"
+                  placeholder="Ex: Sem cebola, Bem frito, etc."
+                />
+              </div>
+
+              {/* Customer Name Input */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Nome do Cliente:</label>
+                <input
+                  type="text"
+                  value={editingItem.clienteNome === 'Consumo Geral' ? '' : editingItem.clienteNome}
+                  onChange={(e) => setEditingItem({ ...editingItem, clienteNome: e.target.value })}
+                  className="w-full px-3.5 py-2 text-xs bg-[#1C1C1F] border border-[#27272A] rounded-xl focus:outline-none focus:border-[#C5A880]/30 text-white"
+                  placeholder="Ex: Maria (Opcional)"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  const finalClient = editingItem.clienteNome.trim() || 'Consumo Geral';
+                  if (onUpdateItemDetails) {
+                    await onUpdateItemDetails(
+                      editingItem.id, 
+                      editingItem.observacao, 
+                      finalClient,
+                      editingItem.quantidade
+                    );
+                  }
+                  setEditingItem(null);
+                }}
+                className="w-full py-2.5 bg-[#C5A880] hover:bg-[#b0936b] text-[#121214] font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center"
+              >
+                Confirmar Alterações
+              </button>
+            </div>
           </div>
         </div>
       )}

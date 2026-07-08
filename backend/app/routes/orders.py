@@ -37,8 +37,14 @@ def gerar_novo_numero_pedido(db: Session) -> int:
         Comanda.criado_em >= start_of_month,
         Comanda.criado_em < start_of_next_month
     ).scalar()
-    
     return (max_pedido or 0) + 1
+
+def print_in_background(printer_name: str, ticket_text: str):
+    try:
+        from ..printer_service import printer_service
+        printer_service.send_to_printer(printer_name, ticket_text)
+    except Exception as e:
+        print(f"Background print error for {printer_name}: {e}")
 
 # ----------------- READ ENDPOINTS -----------------
 
@@ -158,12 +164,26 @@ def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_ta
             detail="Comanda não encontrada"
         )
         
-    # 2. Regras de comanda fechada
+    # 2. Regras de comanda fechada (Se estiver fechada, cria nova comanda automaticamente para a mesa)
     if comanda.fechada:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Comanda já fechada. Reabra antes de lançar novos itens."
-        )
+        if comanda.mesa_id:
+            nova_comanda = Comanda(
+                id=f"c-{uuid.uuid4().hex[:8]}",
+                mesa_id=comanda.mesa_id,
+                garcom_id=lancamento_in.garcom_id,
+                tipo="Consumo no Local",
+                numero_pedido=gerar_novo_numero_pedido(db),
+                fechada=False
+            )
+            db.add(nova_comanda)
+            db.flush()
+            comanda_id = nova_comanda.id
+            comanda = nova_comanda
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Comanda já fechada. Reabra antes de lançar novos itens."
+            )
 
     # 3. Validar se o garçom existe
     garcom = db.query(Usuario).filter(Usuario.id == lancamento_in.garcom_id).first()
@@ -244,7 +264,7 @@ def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_ta
                 items=items_payload,
                 is_reprint=False
             )
-            printer_service.send_to_printer("cozinha", ticket_text)
+            background_tasks.add_task(print_in_background, "cozinha", ticket_text)
             
             # Mark items as printed
             print_time = datetime.datetime.now(datetime.timezone.utc)
@@ -596,9 +616,51 @@ def update_item_details(
         item.observacao = update_data.observacao
     if update_data.cliente_nome is not None:
         item.cliente_nome = update_data.cliente_nome
+
+    added_count = 0
+    if update_data.quantidade_adicional and update_data.quantidade_adicional > 1:
+        import uuid
+        additional_qty = update_data.quantidade_adicional - 1
+        for _ in range(additional_qty):
+            new_item = Item(
+                id=f"i-{uuid.uuid4().hex[:8]}",
+                comanda_id=item.comanda_id,
+                lancamento_id=item.lancamento_id,
+                produto_id=item.produto_id,
+                preco_unit=item.preco_unit,
+                observacao=item.observacao,
+                cliente_nome=item.cliente_nome,
+                status="preparando",
+                cancelado_por=None,
+                impresso_em=None
+            )
+            db.add(new_item)
+            added_count += 1
         
     db.commit()
     db.refresh(item)
+
+    # Imprimir via de comanda indicando edição/alteração
+    try:
+        from ..printer_service import printer_service
+        dest = item.produto.categoria.destino_impressao if (item.produto and item.produto.categoria) else "COZINHA"
+        if dest != "NENHUM":
+            header = "=== ITEM ALTERADO/ADICIONADO ==="
+            lines = [
+                header.center(32),
+                f"MESA: {comanda.mesa_id if comanda.mesa_id else 'BALCAO'}",
+                f"PRODUTO: {item.produto.nome}",
+                f"OBS (EDITADO): {item.observacao}",
+                f"CLIENTE: {item.cliente_nome}",
+            ]
+            if added_count > 0:
+                lines.append(f"QTD ADICIONADA: +{added_count}")
+            lines.append("="*32)
+            ticket_text = "\n".join(lines) + "\n\n\n"
+            background_tasks.add_task(print_in_background, "cozinha", ticket_text)
+    except Exception as e:
+        print(f"Error printing edited item ticket: {e}")
+
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
     return item
 
@@ -701,7 +763,7 @@ def reimprimir_lancamento_cozinha(
             items=items_payload,
             is_reprint=True
         )
-        printer_service.send_to_printer("cozinha_reimpressao", ticket_text)
+        background_tasks.add_task(print_in_background, "cozinha_reimpressao", ticket_text)
         
         # Mark items as printed and commit
         print_time = datetime.datetime.now(datetime.timezone.utc)
@@ -785,12 +847,12 @@ def despachar_delivery(
         
         if unificar:
             unified_text = printer_service.generate_delivery_unified_ticket(comanda, motoboy.nome)
-            printer_service.send_to_printer("delivery_unico", unified_text)
+            background_tasks.add_task(print_in_background, "delivery_unico", unified_text)
         else:
             kitchen_text = printer_service.generate_delivery_kitchen_ticket(comanda)
             motoboy_text = printer_service.generate_delivery_motoboy_ticket(comanda, motoboy.nome)
-            printer_service.send_to_printer("delivery_cozinha", kitchen_text)
-            printer_service.send_to_printer("delivery_motoboy", motoboy_text)
+            background_tasks.add_task(print_in_background, "delivery_cozinha", kitchen_text)
+            background_tasks.add_task(print_in_background, "delivery_motoboy", motoboy_text)
     except Exception as print_err:
         print(f"Error printing delivery tickets: {print_err}")
         
