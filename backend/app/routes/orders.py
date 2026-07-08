@@ -6,10 +6,10 @@ from sqlalchemy import func
 from typing import List, Optional
 
 from ..database import get_db
-from ..models import Comanda, Mesa, Usuario, Produto, Lancamento, Item, ActivityLog, Motoboy
+from ..models import Comanda, Mesa, Usuario, Produto, Lancamento, Item, ActivityLog, Motoboy, ConfiguracaoRestaurante
 from ..schemas import (
     ComandaResponse, ComandaDetail, ComandaCreate,
-    LancamentoResponse, LancamentoCreate, ItemResponse,
+    LancamentoResponse, LancamentoCreate, ItemResponse, ItemUpdate,
     MotoboyCreate, MotoboyResponse
 )
 from ..security import get_current_garcom_optional
@@ -364,6 +364,12 @@ def fechar_comanda(
     Fecha a comanda. Aceita qualquer operador autenticado (garçom ou caixa).
     """
 
+    if current_garcom is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token obrigatório"
+        )
+
     comanda = db.query(Comanda).filter(Comanda.id == comanda_id).first()
     if not comanda:
         raise HTTPException(
@@ -540,6 +546,57 @@ def transferir_item(item_id: str, nova_mesa_id: int, background_tasks: Backgroun
 
     # 4. Atualizar comanda_id
     item.comanda_id = comanda_destino.id
+    db.commit()
+    db.refresh(item)
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
+    return item
+
+@router.put("/itens/{item_id}", response_model=ItemResponse)
+def update_item_details(
+    item_id: str,
+    update_data: ItemUpdate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_garcom: Optional[Usuario] = Depends(get_current_garcom_optional)
+):
+    """
+    Permite atualizar as observações ou o nome do cliente de um item na comanda ativa.
+    Respeita a permissão 'perm_garcom_editar' configurada na retaguarda.
+    """
+    if current_garcom is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token obrigatório"
+        )
+        
+    item = db.query(Item).filter(Item.id == item_id).first()
+    if not item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Item não encontrado"
+        )
+        
+    # Verificar se a comanda já está fechada
+    comanda = db.query(Comanda).filter(Comanda.id == item.comanda_id).first()
+    if comanda and comanda.fechada:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Não é possível editar itens de uma comanda já fechada"
+        )
+        
+    # Verificar permissão do garçom
+    config = db.query(ConfiguracaoRestaurante).first()
+    if config and not config.perm_garcom_editar and current_garcom.cargo == "garcom":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permissão negada para editar itens na comanda. Contate o Gerente."
+        )
+
+    if update_data.observacao is not None:
+        item.observacao = update_data.observacao
+    if update_data.cliente_nome is not None:
+        item.cliente_nome = update_data.cliente_nome
+        
     db.commit()
     db.refresh(item)
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})

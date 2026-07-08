@@ -128,6 +128,46 @@ def get_fidelidade_config(db: Session = Depends(get_db)):
         db.refresh(config)
     return config
 
+@router.get("/fidelidade/clientes")
+def get_loyalty_clients(db: Session = Depends(get_db)):
+    """
+    Retorna a lista de saldos reais de fidelidade agregados por cliente a partir do histórico.
+    """
+    historico = db.query(HistoricoFidelidade).all()
+    saldos = {}
+    for h in historico:
+        tel = h.cliente_telefone.strip()
+        if tel not in saldos:
+            saldos[tel] = {"pontos": 0.0, "cashback": 0.0}
+        if h.tipo_movimentacao == "ACUMULO":
+            saldos[tel]["pontos"] += h.valor_delta
+            saldos[tel]["cashback"] += h.valor_delta
+        else:
+            saldos[tel]["pontos"] -= h.valor_delta
+            saldos[tel]["cashback"] -= h.valor_delta
+            
+    result = []
+    # Search for customer name from past Pagamentos
+    from ..models import Pagamento
+    for idx, (tel, balance) in enumerate(saldos.items()):
+        p_name = None
+        # Try finding a name associated with this CPF/phone in pagamentos
+        pag = db.query(Pagamento).filter(Pagamento.cpf_cliente == tel).first()
+        if pag and pag.nome_cliente:
+            p_name = pag.nome_cliente
+        else:
+            # Fallback to general name format
+            p_name = f"Cliente {tel[-4:] if len(tel) >= 4 else tel}"
+            
+        result.append({
+            "id": idx + 1,
+            "cliente": p_name,
+            "telefone": tel,
+            "pontos": max(0, int(balance["pontos"])),
+            "saldoCashback": max(0.0, balance["cashback"])
+        })
+    return result
+
 @router.post("/fidelidade/config", response_model=ConfigFidelizacaoResponse)
 def update_fidelidade_config(config_in: ConfigFidelizacaoCreate, db: Session = Depends(get_db)):
     """Atualiza as configurações do programa de fidelidade."""

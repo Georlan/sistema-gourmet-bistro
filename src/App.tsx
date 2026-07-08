@@ -66,19 +66,39 @@ export default function App() {
 
   // Listen to URL changes to switch portal dynamically
   const [restauranteConfig, setRestauranteConfig] = useState<any>(null);
+  const [pagamentosPendentes, setPagamentosPendentes] = useState<any[]>([]);
+
+  const fetchPagamentosPendentes = async () => {
+    try {
+      const tokenKey = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
+      const token = localStorage.getItem(tokenKey);
+      if (!token) return;
+
+      const res = await fetch(`${API_BASE_URL}/caixa/pagamentos/pendentes`, {
+        headers: getAuthHeaders()
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPagamentosPendentes(data);
+      }
+    } catch (err) {
+      console.error("Error fetching pending payments:", err);
+    }
+  };
+
+  const fetchConfig = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/caixa/configuracoes`);
+      if (res.ok) {
+        const data = await res.json();
+        setRestauranteConfig(data);
+      }
+    } catch (err) {
+      console.error("Error fetching configs in App:", err);
+    }
+  };
 
   useEffect(() => {
-    const fetchConfig = async () => {
-      try {
-        const res = await fetch(`${API_BASE_URL}/caixa/configuracoes`);
-        if (res.ok) {
-          const data = await res.json();
-          setRestauranteConfig(data);
-        }
-      } catch (err) {
-        console.error("Error fetching configs in App:", err);
-      }
-    };
     fetchConfig();
     const interval = setInterval(fetchConfig, 10000);
     return () => clearInterval(interval);
@@ -398,6 +418,15 @@ export default function App() {
           const data = JSON.parse(event.data);
           if (data.event === "tables_updated") {
             fetchOrdersFromAPI();
+            fetchTables();
+            fetchLiveProdutos();
+            fetchConfig();
+            if (activeRole === 'caixa' || activeRole === 'admin') {
+              fetchPagamentosPendentes();
+            }
+            if (data.detail && data.detail.type === "pagamento_registrado" && data.detail.status === "pendente") {
+              showToast(`💵 CONFIRMAR DINHEIRO: R$ ${data.detail.valor.toFixed(2)} - Garçom ${data.detail.garcom_nome}`, 'info', 5000);
+            }
           } else if (data.event === "draft_status") {
             const { mesa_id, garcom_id, garcom_nome, ativo } = data;
             setActiveDrafts(prev => {
@@ -633,15 +662,21 @@ export default function App() {
     if (!isAuthenticated) return;
     fetchOrdersFromAPI();
     fetchTables();
+    if (activeRole === 'caixa' || activeRole === 'admin') {
+      fetchPagamentosPendentes();
+    }
 
     if (isWsConnected) return;
 
     const interval = setInterval(() => {
       fetchOrdersFromAPI();
       fetchTables();
+      if (activeRole === 'caixa' || activeRole === 'admin') {
+        fetchPagamentosPendentes();
+      }
     }, 4000);
     return () => clearInterval(interval);
-  }, [isAuthenticated, isWsConnected]);
+  }, [isAuthenticated, isWsConnected, activeRole]);
 
   // Login handler
   const handleLoginSubmit = async (e: React.FormEvent) => {
@@ -1040,6 +1075,32 @@ export default function App() {
     }
   };
 
+  const handleUpdateItemDetails = async (itemId: string, observacao: string, clienteNome: string) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/comandas/itens/${itemId}`, {
+        method: "PUT",
+        headers: {
+          ...getAuthHeaders(),
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          observacao,
+          cliente_nome: clienteNome
+        })
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        alert(`Erro ao editar item: ${errData.detail}`);
+        return;
+      }
+      showToast('✅ Item atualizado!', 'success');
+      fetchOrdersFromAPI();
+    } catch (err) {
+      console.error(err);
+      alert("Erro de conexão ao atualizar item.");
+    }
+  };
+
   // Count active tables by state
   const tableCounts = React.useMemo(() => {
     let libre = 0;
@@ -1354,6 +1415,8 @@ export default function App() {
             onCreateMesa={handleCreateMesa}
             onUpdateMesa={handleUpdateMesa}
             onDeleteMesa={handleDeleteMesa}
+            pagamentosPendentes={pagamentosPendentes}
+            onRefreshPagamentosPendentes={fetchPagamentosPendentes}
           />
         ) : (
           /* VIEW 2: SALÃO (WAITERS OR CASHIER DASHBOARD) */
@@ -1433,6 +1496,11 @@ export default function App() {
                       .filter(gId => gId !== activeWaiterId)
                       .map(gId => activeDrafts[table.id][gId].garcomNome);
 
+                    const tableComandas = orders.filter(o => o.mesaId === table.id);
+                    const hasPendingPayment = pagamentosPendentes.some(pag => 
+                      tableComandas.some(o => o.id === pag.comanda_id)
+                    );
+
                     return (
                       <MesaCard
                         key={table.id}
@@ -1443,6 +1511,7 @@ export default function App() {
                         currentTime={currentTime}
                         activeWaiterId={activeWaiterId}
                         onClick={handleTableClick}
+                        hasPendingPayment={hasPendingPayment}
                       />
                     );
                   });
@@ -1510,6 +1579,8 @@ export default function App() {
             onPrintReceipt={() => handlePrintReceipt(selectedTable.id)}
             onPrintKitchenLaunch={handlePrintKitchenLaunch}
             liveProdutos={liveProdutos}
+            restauranteConfig={restauranteConfig}
+            onUpdateItemDetails={handleUpdateItemDetails}
           />
         );
       })()}

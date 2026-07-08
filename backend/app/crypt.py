@@ -9,11 +9,30 @@ if key_str.startswith("b'") or key_str.startswith('b"'):
     key_str = key_str[2:-1]
 
 try:
+    if not key_str:
+        raise ValueError("Empty key")
     cipher = Fernet(key_str.encode("utf-8"))
 except Exception:
-    # Fallback to a freshly generated key if the configured one is invalid
-    fallback_key = Fernet.generate_key()
-    cipher = Fernet(fallback_key)
+    # Fallback autocurativo com persistência em arquivo local bistro.key
+    import os
+    key_file = "bistro.key"
+    fallback_key = None
+    if os.path.exists(key_file):
+        try:
+            with open(key_file, "rb") as f:
+                fallback_key = f.read().strip()
+            cipher = Fernet(fallback_key)
+        except Exception:
+            fallback_key = None
+            
+    if not fallback_key:
+        fallback_key = Fernet.generate_key()
+        try:
+            with open(key_file, "wb") as f:
+                f.write(fallback_key)
+        except Exception as e:
+            print(f"[WARNING] Não foi possível persistir a chave de backup: {e}")
+        cipher = Fernet(fallback_key)
 
 def encrypt_field(plain_text: Optional[str]) -> Optional[str]:
     """Encrypts plain text string using AES-256 (Fernet) if not empty."""

@@ -16,6 +16,7 @@ interface MesaCardProps {
   currentTime: number;
   activeWaiterId: string;
   onClick: (tableId: number) => void;
+  hasPendingPayment?: boolean;
 }
 
 export const MesaCard = React.memo<MesaCardProps>(({
@@ -25,6 +26,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
   otherWaitersServing = [],
   currentTime,
   onClick,
+  hasPendingPayment = false,
 }) => {
   const totalValue = getTableTotal(orders);
   
@@ -58,18 +60,26 @@ export const MesaCard = React.memo<MesaCardProps>(({
       glow: 'hover:translate-y-[-2px] hover:shadow-[0_0_20px_rgba(16,185,129,0.08)] active:translate-y-[0px]',
     },
     ocupada: {
-      borderColor: 'border-rose-950 hover:border-rose-500/50 focus:ring-rose-500',
-      bgColor: 'bg-rose-950/10 hover:bg-rose-950/20 backdrop-blur-md',
-      badgeColor: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
-      label: 'Ocupada',
-      textColor: 'text-rose-400',
-      glow: 'hover:translate-y-[-2px] hover:shadow-[0_0_20px_rgba(244,63,94,0.08)] active:translate-y-[0px]',
+      borderColor: hasPendingPayment 
+        ? 'border-amber-500 hover:border-amber-600 focus:ring-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.2)]'
+        : 'border-rose-950 hover:border-rose-500/50 focus:ring-rose-500',
+      bgColor: hasPendingPayment
+        ? 'bg-amber-950/20 hover:bg-amber-950/30 backdrop-blur-md'
+        : 'bg-rose-950/10 hover:bg-rose-950/20 backdrop-blur-md',
+      badgeColor: hasPendingPayment
+        ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+        : 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+      label: hasPendingPayment ? 'Aprovar Dinheiro' : 'Ocupada',
+      textColor: hasPendingPayment ? 'text-amber-400' : 'text-rose-400',
+      glow: hasPendingPayment 
+        ? 'animate-pulse hover:translate-y-[-2px] active:translate-y-[0px]'
+        : 'hover:translate-y-[-2px] hover:shadow-[0_0_20px_rgba(244,63,94,0.08)] active:translate-y-[0px]',
     },
     pronto: {
       borderColor: 'border-amber-500/30 hover:border-amber-500/60 focus:ring-amber-500',
       bgColor: 'bg-amber-950/10 hover:bg-amber-950/20 backdrop-blur-md',
       badgeColor: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-      label: 'Pediu a Conta',
+      label: 'Pronto p/ Servir',
       textColor: 'text-amber-400',
       glow: 'animate-pulse-subtle hover:translate-y-[-2px] hover:shadow-[0_0_25px_rgba(245,158,11,0.15)] active:translate-y-[0px]',
     },
@@ -88,7 +98,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
       <div className="w-full">
         <div className="flex items-center justify-between mb-2 sm:mb-4">
           <span className="font-serif text-base sm:text-2xl font-bold text-white tracking-tight">
-            Mesa {table.id}
+            {table.nome && table.nome !== `Mesa ${table.id}` ? table.nome : `Mesa ${table.id}`}
           </span>
         </div>
       </div>

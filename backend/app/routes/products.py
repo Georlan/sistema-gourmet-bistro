@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List
 from ..database import get_db
 from ..models import Produto, Categoria
 from ..schemas import ProdutoResponse, ProdutoCreate, ProdutoUpdate, CategoriaResponse
+from ..websocket_manager import manager
 
 router = APIRouter(
     prefix="/produtos",
@@ -60,7 +61,12 @@ def create_produto(produto_data: ProdutoCreate, db: Session = Depends(get_db)):
     return novo_produto
 
 @router.put("/{produto_id}", response_model=ProdutoResponse)
-def update_produto(produto_id: str, update_data: ProdutoUpdate, db: Session = Depends(get_db)):
+def update_produto(
+    produto_id: str, 
+    update_data: ProdutoUpdate, 
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
     """Atualiza as informações de um produto, incluindo seu preço ou status de ativação."""
     db_produto = db.query(Produto).filter(Produto.id == produto_id).first()
     if not db_produto:
@@ -85,6 +91,7 @@ def update_produto(produto_id: str, update_data: ProdutoUpdate, db: Session = De
         
     db.commit()
     db.refresh(db_produto)
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
     return db_produto
 
 @router.delete("/{produto_id}", status_code=status.HTTP_204_NO_CONTENT)

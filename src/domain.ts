@@ -96,7 +96,22 @@ export function getProductPresets(product: { nome: string; descricao: string; ca
   if (desc.includes('abacaxi') || name.includes('abacaxi')) presets.push('sem abacaxi');
 
   // Beverage specific options
-  if (cat.includes('bebida') || cat.includes('suco') || cat.includes('refrigerante') || cat.includes('cerveja') || name.includes('suco') || name.includes('refrigerante') || name.includes('heineken') || name.includes('spaten')) {
+  const catId = (product as any).categoria_id || (product as any).categoriaId || '';
+  const isBeverage = 
+    catId === 'cat-refri' || 
+    catId === 'cat-sucos' || 
+    catId === 'cat-cervejas' || 
+    catId === 'cat-quentes' ||
+    cat.includes('bebida') || 
+    cat.includes('suco') || 
+    cat.includes('refrigerante') || 
+    cat.includes('cerveja') || 
+    name.includes('suco') || 
+    name.includes('refrigerante') || 
+    name.includes('heineken') || 
+    name.includes('spaten');
+
+  if (isBeverage) {
     presets.push('com gelo', 'sem gelo', 'com açúcar', 'sem açúcar', 'com limão');
   }
 

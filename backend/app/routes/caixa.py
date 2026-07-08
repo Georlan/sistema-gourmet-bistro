@@ -190,9 +190,19 @@ def registrar_pagamento_comanda(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
-    """Registra o recebimento financeiro parcial ou total de uma comanda no caixa."""
-    check_caixa_permission(current_user)
-    
+    """Registra o recebimento financeiro parcial ou total de uma comanda."""
+    if not current_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token obrigatório"
+        )
+        
+    # Idempotency Check
+    if pag_in.idempotency_key:
+        existing = db.query(Pagamento).filter(Pagamento.idempotency_key == pag_in.idempotency_key).first()
+        if existing:
+            return existing
+
     # 1. Check if there is an active shift
     turno = db.query(CaixaTurno).filter(CaixaTurno.status == "aberto").first()
     if not turno:
@@ -222,29 +232,31 @@ def registrar_pagamento_comanda(
             detail="Método de pagamento inválido. Use 'dinheiro', 'pix' ou 'cartao'."
         )
 
-    # 3. Process payment
-    if pag_in.item_ids:
-        # Pay by item selection
-        itens_selecionados = db.query(Item).filter(
-            Item.comanda_id == comanda_id,
-            Item.id.in_(pag_in.item_ids),
-            Item.status != 'cancelado',
-            Item.pago == False
-        ).all()
-        
-        if not itens_selecionados:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Nenhum item válido pendente de pagamento foi selecionado."
-            )
+    # Determine if payment should be pending confirmation (Garçom + Dinheiro)
+    is_pending = (current_user.role == "garcom" and pag_in.metodo == "dinheiro")
+    pag_status = "pendente" if is_pending else "aprovado"
+
+    # 3. Process payment if approved immediately
+    if not is_pending:
+        if pag_in.item_ids:
+            # Pay by item selection
+            itens_selecionados = db.query(Item).filter(
+                Item.comanda_id == comanda_id,
+                Item.id.in_(pag_in.item_ids),
+                Item.status != 'cancelado',
+                Item.pago == False
+            ).all()
             
-        # Settle selected items
-        for item in itens_selecionados:
-            item.pago = True
-            
-        # The payment value is defined by the sum of these items (plus 10% optional tax, let's keep the value passed)
-        # Note: If the front end calculates the value, we trust the value passed to register the payment
-    
+            if not itens_selecionados:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Nenhum item válido pendente de pagamento foi selecionado."
+                )
+                
+            # Settle selected items
+            for item in itens_selecionados:
+                item.pago = True
+
     # Create the Pagamento transaction
     novo_pagamento = Pagamento(
         id=f"p-{uuid.uuid4().hex[:8]}",
@@ -252,41 +264,151 @@ def registrar_pagamento_comanda(
         turno_id=turno.id,
         valor=pag_in.valor,
         metodo=pag_in.metodo,
+        status=pag_status,
+        idempotency_key=pag_in.idempotency_key,
+        cpf_cliente=pag_in.cpf_cliente,
+        nome_cliente=pag_in.nome_cliente,
         criado_em=datetime.datetime.now(datetime.timezone.utc)
     )
     db.add(novo_pagamento)
     
-    # Increment the comanda's general paid value
-    comanda.valor_pago += pag_in.valor
-    
-    # 4. Check if comanda is fully settled
-    # Calculate remaining total: sum of items not paid, not canceled (plus 10% tax)
-    subtotal_restante = sum(i.preco_unit for i in comanda.itens if i.status != 'cancelado' and not i.pago)
-    
-    # A comanda is fully paid if either:
-    # (a) No more active unpaid items remain (meaning all items were explicitly paid)
-    # (b) The total general value paid covers the subtotal plus service tax (1.10)
-    total_de_itens_pendentes = len([i for i in comanda.itens if i.status != 'cancelado' and not i.pago])
-    
-    subtotal_total = sum(i.preco_unit for i in comanda.itens if i.status != 'cancelado')
-    total_com_taxa = subtotal_total * 1.10
-    
-    if total_de_itens_pendentes == 0 or comanda.valor_pago >= subtotal_total or comanda.valor_pago >= total_com_taxa:
-        # Mark all active items as paid just in case
-        for i in comanda.itens:
-            if i.status != 'cancelado':
-                i.pago = True
-        # Close comanda
-        comanda.fechada = True
-        comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
+    if not is_pending:
+        # Increment the comanda's general paid value
+        comanda.valor_pago += pag_in.valor
         
+        # 4. Check if comanda is fully settled
+        total_de_itens_pendentes = len([i for i in comanda.itens if i.status != 'cancelado' and not i.pago])
+        subtotal_total = sum(i.preco_unit for i in comanda.itens if i.status != 'cancelado')
+        total_com_taxa = subtotal_total * 1.10
+        
+        if total_de_itens_pendentes == 0 or comanda.valor_pago >= subtotal_total or comanda.valor_pago >= total_com_taxa:
+            # Mark all active items as paid just in case
+            for i in comanda.itens:
+                if i.status != 'cancelado':
+                    i.pago = True
+            # Close comanda
+            comanda.fechada = True
+            comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
+            
+            # Process loyalty points/cashback if client CPF/phone is present
+            from ..models import ConfigFidelizacao, HistoricoFidelidade
+            client_cpf = None
+            if pag_in.cpf_cliente:
+                client_cpf = pag_in.cpf_cliente.strip()
+            else:
+                past_pags = db.query(Pagamento).filter(Pagamento.comanda_id == comanda_id).all()
+                for p_pag in past_pags:
+                    if p_pag.cpf_cliente:
+                        client_cpf = p_pag.cpf_cliente.strip()
+                        break
+            
+            if client_cpf:
+                fidel_config = db.query(ConfigFidelizacao).first()
+                if fidel_config and fidel_config.ativo:
+                    total_pago = comanda.valor_pago
+                    if fidel_config.tipo_recompensa == "PONTOS":
+                        delta_val = total_pago * fidel_config.taxa_conversao
+                    else: # CASHBACK
+                        delta_val = total_pago * (fidel_config.taxa_conversao / 100.0)
+                    
+                    # Create loyalty log
+                    mov_fidel = HistoricoFidelidade(
+                        cliente_telefone=client_cpf,
+                        tipo_movimentacao="ACUMULO",
+                        valor_delta=delta_val
+                    )
+                    db.add(mov_fidel)
+                    
     db.commit()
     db.refresh(novo_pagamento)
     db.refresh(comanda)
     
     # Trigger WebSocket sync update
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
+    background_tasks.add_task(manager.broadcast, {
+        "event": "tables_updated",
+        "detail": {
+            "type": "pagamento_registrado",
+            "comanda_id": comanda_id,
+            "metodo": pag_in.metodo,
+            "valor": pag_in.valor,
+            "status": pag_status,
+            "garcom_nome": current_user.nome,
+            "mesa_id": comanda.mesa_id
+        }
+    })
     return novo_pagamento
+
+
+@router.get("/pagamentos/pendentes", response_model=List[PagamentoResponse])
+def listar_pagamentos_pendentes(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_garcom_optional)
+):
+    """Lista todos os pagamentos em dinheiro pendentes de aprovação pelo caixa."""
+    check_caixa_permission(current_user)
+    return db.query(Pagamento).filter(Pagamento.status == "pendente").all()
+
+
+@router.post("/pagamentos/{pagamento_id}/aprovar", response_model=PagamentoResponse)
+def aprovar_pagamento(
+    pagamento_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_garcom_optional)
+):
+    """Aprova um pagamento pendente em dinheiro, debitando os valores e liquidando a comanda."""
+    check_caixa_permission(current_user)
+    pagamento = db.query(Pagamento).filter(Pagamento.id == pagamento_id).first()
+    if not pagamento:
+        raise HTTPException(status_code=404, detail="Pagamento não encontrado")
+    if pagamento.status != "pendente":
+        raise HTTPException(status_code=400, detail="Pagamento já processado")
+        
+    pagamento.status = "aprovado"
+    comanda = pagamento.comanda
+    comanda.valor_pago += pagamento.valor
+    
+    # Check if comanda is fully settled
+    total_de_itens_pendentes = len([i for i in comanda.itens if i.status != 'cancelado' and not i.pago])
+    subtotal_total = sum(i.preco_unit for i in comanda.itens if i.status != 'cancelado')
+    total_com_taxa = subtotal_total * 1.10
+    
+    if total_de_itens_pendentes == 0 or comanda.valor_pago >= subtotal_total or comanda.valor_pago >= total_com_taxa:
+        for i in comanda.itens:
+            if i.status != 'cancelado':
+                i.pago = True
+        comanda.fechada = True
+        comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
+        
+    db.commit()
+    db.refresh(pagamento)
+    db.refresh(comanda)
+    
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
+    return pagamento
+
+
+@router.post("/pagamentos/{pagamento_id}/recusar", response_model=PagamentoResponse)
+def recusar_pagamento(
+    pagamento_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_garcom_optional)
+):
+    """Rejeita e cancela um pagamento pendente em dinheiro."""
+    check_caixa_permission(current_user)
+    pagamento = db.query(Pagamento).filter(Pagamento.id == pagamento_id).first()
+    if not pagamento:
+        raise HTTPException(status_code=404, detail="Pagamento não encontrado")
+    if pagamento.status != "pendente":
+        raise HTTPException(status_code=400, detail="Pagamento já processado")
+        
+    pagamento.status = "cancelado"
+    db.commit()
+    db.refresh(pagamento)
+    
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
+    return pagamento
 
 
 from ..models import ConfiguracaoRestaurante
@@ -303,7 +425,22 @@ def obter_configuracoes(db: Session = Depends(get_db)):
             taxa_servico_ativa=True,
             taxa_servico_padrao=10.0,
             unificar_vias_delivery=False,
-            modo_exclusivo_salao=True
+            modo_exclusivo_salao=True,
+            perm_garcom_delivery=True,
+            perm_garcom_editar=True,
+            perm_garcom_taxas=False,
+            perm_garcom_cancelar=False,
+            perm_garcom_status=True,
+            perm_garcom_abrir_vazia=False,
+            perm_garcom_print=True,
+            perm_garcom_fechar=False,
+            perm_garcom_desconto=False,
+            perm_garcom_acrescimo=False,
+            perm_garcom_pessoas=True,
+            perm_garcom_transferir_mesa=True,
+            perm_garcom_transferir_item=True,
+            perm_garcom_chamar=True,
+            perm_garcom_ociosas=True
         )
         db.add(config)
         db.commit()
@@ -313,6 +450,7 @@ def obter_configuracoes(db: Session = Depends(get_db)):
 @router.put("/configuracoes", response_model=ConfiguracaoRestauranteResponse)
 def atualizar_configuracoes(
     config_in: ConfiguracaoRestauranteUpdate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     config = db.query(ConfiguracaoRestaurante).first()
@@ -337,6 +475,38 @@ def atualizar_configuracoes(
     if config_in.modo_exclusivo_salao is not None:
         config.modo_exclusivo_salao = config_in.modo_exclusivo_salao
         
+    if config_in.perm_garcom_delivery is not None:
+        config.perm_garcom_delivery = config_in.perm_garcom_delivery
+    if config_in.perm_garcom_editar is not None:
+        config.perm_garcom_editar = config_in.perm_garcom_editar
+    if config_in.perm_garcom_taxas is not None:
+        config.perm_garcom_taxas = config_in.perm_garcom_taxas
+    if config_in.perm_garcom_cancelar is not None:
+        config.perm_garcom_cancelar = config_in.perm_garcom_cancelar
+    if config_in.perm_garcom_status is not None:
+        config.perm_garcom_status = config_in.perm_garcom_status
+    if config_in.perm_garcom_abrir_vazia is not None:
+        config.perm_garcom_abrir_vazia = config_in.perm_garcom_abrir_vazia
+    if config_in.perm_garcom_print is not None:
+        config.perm_garcom_print = config_in.perm_garcom_print
+    if config_in.perm_garcom_fechar is not None:
+        config.perm_garcom_fechar = config_in.perm_garcom_fechar
+    if config_in.perm_garcom_desconto is not None:
+        config.perm_garcom_desconto = config_in.perm_garcom_desconto
+    if config_in.perm_garcom_acrescimo is not None:
+        config.perm_garcom_acrescimo = config_in.perm_garcom_acrescimo
+    if config_in.perm_garcom_pessoas is not None:
+        config.perm_garcom_pessoas = config_in.perm_garcom_pessoas
+    if config_in.perm_garcom_transferir_mesa is not None:
+        config.perm_garcom_transferir_mesa = config_in.perm_garcom_transferir_mesa
+    if config_in.perm_garcom_transferir_item is not None:
+        config.perm_garcom_transferir_item = config_in.perm_garcom_transferir_item
+    if config_in.perm_garcom_chamar is not None:
+        config.perm_garcom_chamar = config_in.perm_garcom_chamar
+    if config_in.perm_garcom_ociosas is not None:
+        config.perm_garcom_ociosas = config_in.perm_garcom_ociosas
+        
     db.commit()
     db.refresh(config)
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
     return config

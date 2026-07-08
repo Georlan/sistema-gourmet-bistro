@@ -21,6 +21,8 @@ interface CaixaPanelProps {
   onCreateMesa: (id: number, capacidade: number, nome?: string) => Promise<void>;
   onUpdateMesa: (id: number, capacidade?: number, nome?: string) => Promise<void>;
   onDeleteMesa: (id: number) => Promise<void>;
+  pagamentosPendentes?: any[];
+  onRefreshPagamentosPendentes?: () => Promise<void>;
 }
 
 // Simulated dynamic lists for tabs that don't need real backend persistence yet
@@ -83,12 +85,15 @@ export function CaixaPanel({
   salonTables,
   onCreateMesa,
   onUpdateMesa,
-  onDeleteMesa
+  onDeleteMesa,
+  pagamentosPendentes = [],
+  onRefreshPagamentosPendentes
 }: CaixaPanelProps) {
   // Turno & Sync state
   const [turno, setTurno] = useState<CaixaTurno | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [idempotencyKey, setIdempotencyKey] = useState('');
 
   // active sidebar tab (the 9 main sections)
   const [activeTab, setActiveTab] = useState<
@@ -102,13 +107,57 @@ export function CaixaPanel({
   // ============================================================================
   // ⚡ FILTRAGEM DINÂMICA DAS COMANDAS DE MESA PARA O KANBAN
   // ============================================================================
-  const tableOrdersInProduction = orders.filter(order =>
-    order.mesaId && order.mesaId > 0 && order.itens.some(item => item.status === 'preparando')
-  );
+  const tableOrdersInProduction = (() => {
+    const list: any[] = [];
+    orders.filter(o => o.mesaId && o.mesaId > 0).forEach(comanda => {
+      const itemsByLancamento: Record<string, OrderItem[]> = {};
+      comanda.itens.forEach(item => {
+        const lid = item.lancamentoId || comanda.id;
+        if (!itemsByLancamento[lid]) itemsByLancamento[lid] = [];
+        itemsByLancamento[lid].push(item);
+      });
+      Object.entries(itemsByLancamento).forEach(([lid, items]) => {
+        const preparingItems = items.filter(i => i.status === 'preparando');
+        if (preparingItems.length > 0) {
+          list.push({
+            id: lid,
+            comandaId: comanda.id,
+            mesaId: comanda.mesaId,
+            identificador: comanda.identificador,
+            garcomNome: comanda.garcomNome,
+            itens: preparingItems
+          });
+        }
+      });
+    });
+    return list;
+  })();
 
-  const tableOrdersReady = orders.filter(order =>
-    order.mesaId && order.mesaId > 0 && order.itens.some(item => item.status === 'pronto')
-  );
+  const tableOrdersReady = (() => {
+    const list: any[] = [];
+    orders.filter(o => o.mesaId && o.mesaId > 0).forEach(comanda => {
+      const itemsByLancamento: Record<string, OrderItem[]> = {};
+      comanda.itens.forEach(item => {
+        const lid = item.lancamentoId || comanda.id;
+        if (!itemsByLancamento[lid]) itemsByLancamento[lid] = [];
+        itemsByLancamento[lid].push(item);
+      });
+      Object.entries(itemsByLancamento).forEach(([lid, items]) => {
+        const readyItems = items.filter(i => i.status === 'pronto');
+        if (readyItems.length > 0) {
+          list.push({
+            id: lid,
+            comandaId: comanda.id,
+            mesaId: comanda.mesaId,
+            identificador: comanda.identificador,
+            garcomNome: comanda.garcomNome,
+            itens: readyItems
+          });
+        }
+      });
+    });
+    return list;
+  })();
 
   const handleTabChange = (tabId: 'dashboard' | 'operacao' | 'cardapio' | 'estoque' | 'financeiro' | 'clientes' | 'relatorios' | 'robo_ia' | 'configuracoes') => {
     setActiveTab(tabId);
@@ -274,9 +323,24 @@ export function CaixaPanel({
     taxa_servico_padrao?: number;
     unificar_vias_delivery?: boolean;
     modo_exclusivo_salao?: boolean;
+    perm_garcom_delivery?: boolean;
+    perm_garcom_editar?: boolean;
+    perm_garcom_taxas?: boolean;
+    perm_garcom_cancelar?: boolean;
+    perm_garcom_status?: boolean;
+    perm_garcom_abrir_vazia?: boolean;
+    perm_garcom_print?: boolean;
+    perm_garcom_fechar?: boolean;
+    perm_garcom_desconto?: boolean;
+    perm_garcom_acrescimo?: boolean;
+    perm_garcom_pessoas?: boolean;
+    perm_garcom_transferir_mesa?: boolean;
+    perm_garcom_transferir_item?: boolean;
+    perm_garcom_chamar?: boolean;
+    perm_garcom_ociosas?: boolean;
   }) => {
     try {
-      await fetch(`${apiBaseUrl}/caixa/configuracoes`, {
+      const res = await fetch(`${apiBaseUrl}/caixa/configuracoes`, {
         method: 'PUT',
         headers: {
           ...authHeaders,
@@ -284,6 +348,28 @@ export function CaixaPanel({
         },
         body: JSON.stringify(updates)
       });
+      if (res.ok) {
+        const data = await res.json();
+        setCheckoutServiceTax(data.taxa_servico_ativa);
+        setServiceTaxRate(data.taxa_servico_padrao);
+        setUnificarViasDelivery(data.unificar_vias_delivery);
+        setModoExclusivoSalao(data.modo_exclusivo_salao);
+        setPermDelivery(data.perm_garcom_delivery);
+        setPermEdit(data.perm_garcom_editar);
+        setPermAddCharges(data.perm_garcom_taxas);
+        setPermCancel(data.perm_garcom_cancelar);
+        setPermShowStatus(data.perm_garcom_status);
+        setPermOpenEmpty(data.perm_garcom_abrir_vazia);
+        setPermAutoPrint(data.perm_garcom_print);
+        setPermCloseAccount(data.perm_garcom_fechar);
+        setPermDiscount(data.perm_garcom_desconto);
+        setPermSurcharge(data.perm_garcom_acrescimo);
+        setPermPeopleCount(data.perm_garcom_pessoas);
+        setPermTransferTables(data.perm_garcom_transferir_mesa);
+        setPermTransferItems(data.perm_garcom_transferir_item);
+        setPermClientCall(data.perm_garcom_chamar);
+        setPermShowIdleTables(data.perm_garcom_ociosas);
+      }
     } catch (e) {
       console.error('Error saving configurations:', e);
     }
@@ -301,8 +387,25 @@ export function CaixaPanel({
   const [pdvCustomerName, setPdvCustomerName] = useState('');
   const [pdvCustomerPhone, setPdvCustomerPhone] = useState('');
   const [pdvCustomerCPF, setPdvCustomerCPF] = useState('');
+  const [paymentCPF, setPaymentCPF] = useState('');
   const [pdvOrderType, setPdvOrderType] = useState<'balcao' | 'mesa'>('balcao');
   const [pdvTargetMesaId, setPdvTargetMesaId] = useState<number>(0);
+
+  // Force pdvOrderType to mesa if salon mode is active
+  useEffect(() => {
+    if (modoExclusivoSalao) {
+      setPdvOrderType('mesa');
+    }
+  }, [modoExclusivoSalao]);
+
+  // Generate idempotency key when checkout order changes
+  useEffect(() => {
+    if (selectedOrder) {
+      setIdempotencyKey(`idem-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
+    } else {
+      setIdempotencyKey('');
+    }
+  }, [selectedOrder]);
 
   // Date filters for Meu Desempenho
   const [desempenhoRange, setDesempenhoRange] = useState<'7' | '15' | '30'>('7');
@@ -657,6 +760,21 @@ export function CaixaPanel({
         setServiceTaxRate(data.taxa_servico_padrao);
         setUnificarViasDelivery(data.unificar_vias_delivery);
         setModoExclusivoSalao(data.modo_exclusivo_salao);
+        setPermDelivery(data.perm_garcom_delivery);
+        setPermEdit(data.perm_garcom_editar);
+        setPermAddCharges(data.perm_garcom_taxas);
+        setPermCancel(data.perm_garcom_cancelar);
+        setPermShowStatus(data.perm_garcom_status);
+        setPermOpenEmpty(data.perm_garcom_abrir_vazia);
+        setPermAutoPrint(data.perm_garcom_print);
+        setPermCloseAccount(data.perm_garcom_fechar);
+        setPermDiscount(data.perm_garcom_desconto);
+        setPermSurcharge(data.perm_garcom_acrescimo);
+        setPermPeopleCount(data.perm_garcom_pessoas);
+        setPermTransferTables(data.perm_garcom_transferir_mesa);
+        setPermTransferItems(data.perm_garcom_transferir_item);
+        setPermClientCall(data.perm_garcom_chamar);
+        setPermShowIdleTables(data.perm_garcom_ociosas);
       }
     } catch (e) {
       console.error('Error fetching configurations', e);
@@ -730,6 +848,13 @@ export function CaixaPanel({
           if (data && data.tipo_recompensa) setFidelidadeConfig(data);
         })
         .catch(err => console.error('Error fetching fidelity config:', err));
+
+      fetch(`${apiBaseUrl}/fidelidade/clientes`, { headers: authHeaders })
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data)) setLoyaltyUsers(data);
+        })
+        .catch(err => console.error('Error fetching loyalty clients:', err));
     }
     if (activeTab === 'cardapio') {
       fetchProdutos();
@@ -936,12 +1061,16 @@ export function CaixaPanel({
         body: JSON.stringify({
           valor: parseFloat(paymentValor),
           metodo: paymentMetodo,
-          item_ids: selectedItemIds.length > 0 ? selectedItemIds : null
+          item_ids: selectedItemIds.length > 0 ? selectedItemIds : null,
+          idempotency_key: idempotencyKey,
+          cpf_cliente: paymentCPF || null
         })
       });
       if (res.ok) {
         setPaymentValor('');
+        setPaymentCPF('');
         setSelectedItemIds([]);
+        setIdempotencyKey(`idem-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
 
         // Refresh local details modal state
         const updatedOrdersRes = await fetch(`${apiBaseUrl}/comandas/detalhes/todos?fechada=false`, { headers: authHeaders });
@@ -1670,92 +1799,164 @@ export function CaixaPanel({
           {activeSubTab === 'pedidos' && (
             <div className={clsx('h-full', 'flex', 'flex-col', 'space-y-4')}>
 
-              {/* Controls bar */}
-              <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-3', 'rounded-2xl', 'flex', 'flex-col', 'sm:flex-row', 'justify-between', 'items-start', 'sm:items-center', 'gap-3')}>
-                <div className={clsx('flex', 'items-center', 'gap-4')}>
-                  <label className={clsx('flex', 'items-center', 'gap-2', 'cursor-pointer', 'font-semibold', 'text-gray-300')}>
-                    <input
-                      type="checkbox"
-                      checked={autoAccept}
-                      onChange={(e) => setAutoAccept(e.target.checked)}
-                      className={clsx('rounded', 'border-[#27272A]', 'text-[#7A1F2D]', 'focus:ring-[#7A1F2D]', 'h-3.5', 'w-3.5', 'bg-[#121214]')}
-                    />
-                    <span>Aceitar os pedidos automaticamente (iFood/Apps)</span>
-                  </label>
-                </div>
-                <div className={clsx('text-[10px]', 'text-gray-400')}>
-                  Total Delivery hoje: <strong className="text-white">R$ {simulatedOrders.reduce((s, o) => s + o.total, 0).toFixed(2)}</strong>
-                </div>
-              </div>
-
-              {/* Kanban columns */}
-              <div className={clsx('flex-1', 'grid', 'grid-cols-1', 'md:grid-cols-3', 'gap-4')}>
-
-                {/* COLUMN 1: Em análise */}
-                {/* COLUMN 1: Em análise */}
-                <div className={clsx('bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden')}>
-                  <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
-                    <span className={clsx('font-bold', 'text-gray-300', 'font-serif')}>Em análise</span>
-                    <span className={clsx('bg-amber-500/10', 'text-amber-400', 'font-bold', 'px-2', 'py-0.5', 'rounded-full', 'font-mono', 'text-[9px]')}>
-                      {simulatedOrders.filter(o => o.status === 'analise').length}
-                    </span>
+              {/* ALERTA DE PAGAMENTO PENDENTE EM DINHEIRO (GARÇOM) */}
+              {pagamentosPendentes.length > 0 && (
+                <div className="bg-[#1C1C1F] border-2 border-amber-500/40 p-4 rounded-2xl space-y-3 animate-pulse-subtle">
+                  <div className="flex items-center gap-2 text-amber-500 font-bold uppercase tracking-wider text-[10px]">
+                    <AlertTriangle size={14} />
+                    <span>Confirmação de Dinheiro Pendente ({pagamentosPendentes.length})</span>
                   </div>
-
-                  <div className={clsx('p-3', 'flex-1', 'overflow-y-auto', 'space-y-3')}>
-                    {simulatedOrders.filter(o => o.status === 'analise').length === 0 ? (
-                      <div className={clsx('py-20', 'text-center', 'text-gray-500', 'italic', 'text-[10px]')}>Nenhum pedido pendente</div>
-                    ) : (
-                      simulatedOrders.filter(o => o.status === 'analise').map((order) => (
-                        <div key={order.id} className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'hover:border-amber-500/30', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all')}>
-                          <div className={clsx('flex', 'justify-between', 'items-start')}>
-                            <div>
-                              <span className={clsx('px-1.5', 'py-0.5', 'text-[8px]', 'uppercase', 'tracking-wider', 'font-bold', 'bg-[#7A1F2D]/20', 'text-[#C46A74]', 'rounded', 'font-mono', 'block', 'w-fit', 'mb-1')}>{order.canal}</span>
-                              <strong className={clsx('text-white', 'text-xs', 'block')}>{order.cliente}</strong>
-                              <span className={clsx('text-[9px]', 'text-gray-400', 'block')}>{order.telefone}</span>
-                            </div>
-                            <span className={clsx('font-bold', 'text-amber-400', 'font-mono', 'text-[11px]', 'shrink-0')}>R$ {order.total.toFixed(2)}</span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {pagamentosPendentes.map((pag) => {
+                      const comandaMesa = orders.find(o => o.id === pag.comanda_id);
+                      const mesaNum = comandaMesa ? comandaMesa.mesaId : '?';
+                      return (
+                        <div key={pag.id} className="bg-[#09090B] border border-[#27272A] p-3 rounded-xl flex justify-between items-center gap-4 text-[11px] text-left">
+                          <div>
+                            <span className="text-gray-400 block">Mesa {mesaNum}</span>
+                            <span className="font-bold text-white block">R$ {pag.valor.toFixed(2)} em Dinheiro</span>
+                            <span className="text-[9.5px] text-[#C5A880] block font-mono">Garçom solicitante: {pag.nome_cliente || 'Garçom'}</span>
                           </div>
-
-                          <p className={clsx('text-[10px]', 'text-gray-300', 'bg-[#09090B]', 'p-1.5', 'rounded', 'border', 'border-[#27272A]/30', 'leading-relaxed', 'font-mono')}>
-                            {order.itens}
-                          </p>
-
-                          <div className={clsx('flex', 'gap-1.5', 'pt-1')}>
+                          <div className="flex gap-2">
                             <button
-                              onClick={() => handleUpdateDeliveryStatus(order.id, 'producao')}
-                              className={clsx('flex-1', 'py-1.5', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider')}
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  const res = await fetch(`${apiBaseUrl}/caixa/pagamentos/${pag.id}/aprovar`, {
+                                    method: 'POST',
+                                    headers: authHeaders
+                                  });
+                                  if (res.ok) {
+                                    alert("Pagamento em dinheiro confirmado com sucesso!");
+                                    onRefreshOrders();
+                                    if (onRefreshPagamentosPendentes) onRefreshPagamentosPendentes();
+                                  }
+                                } catch (e) {
+                                  console.error(e);
+                                }
+                              }}
+                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[9px] uppercase tracking-wider transition-all cursor-pointer"
                             >
-                              Aceitar Pedido
+                              Confirmar Recebimento
                             </button>
                             <button
-                              onClick={() => handleRecusarPedido(order.id)}
-                              className={clsx('px-2', 'py-1.5', 'bg-[#7A1F2D]/20', 'hover:bg-[#7A1F2D]', 'text-[#C46A74]', 'hover:text-white', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer')}
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  const res = await fetch(`${apiBaseUrl}/caixa/pagamentos/${pag.id}/recusar`, {
+                                    method: 'POST',
+                                    headers: authHeaders
+                                  });
+                                  if (res.ok) {
+                                    alert("Pagamento recusado.");
+                                    onRefreshOrders();
+                                    if (onRefreshPagamentosPendentes) onRefreshPagamentosPendentes();
+                                  }
+                                } catch (e) {
+                                  console.error(e);
+                                }
+                              }}
+                              className="px-3 py-1.5 bg-[#7A1F2D]/20 hover:bg-[#7A1F2D] text-[#C46A74] hover:text-white rounded-lg font-bold text-[9px] transition-all cursor-pointer"
                             >
-                              Recusar
+                              Rejeitar
                             </button>
                           </div>
                         </div>
-                      ))
-                    )}
+                      );
+                    })}
                   </div>
                 </div>
+              )}
+
+              {/* Controls bar */}
+              {!modoExclusivoSalao && (
+                <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-3', 'rounded-2xl', 'flex', 'flex-col', 'sm:flex-row', 'justify-between', 'items-start', 'sm:items-center', 'gap-3')}>
+                  <div className={clsx('flex', 'items-center', 'gap-4')}>
+                    <label className={clsx('flex', 'items-center', 'gap-2', 'cursor-pointer', 'font-semibold', 'text-gray-300')}>
+                      <input
+                        type="checkbox"
+                        checked={autoAccept}
+                        onChange={(e) => setAutoAccept(e.target.checked)}
+                        className={clsx('rounded', 'border-[#27272A]', 'text-[#7A1F2D]', 'focus:ring-[#7A1F2D]', 'h-3.5', 'w-3.5', 'bg-[#121214]')}
+                      />
+                      <span>Aceitar os pedidos automaticamente (iFood/Apps)</span>
+                    </label>
+                  </div>
+                  <div className={clsx('text-[10px]', 'text-gray-400')}>
+                    Total Delivery hoje: <strong className="text-white">R$ {simulatedOrders.reduce((s, o) => s + o.total, 0).toFixed(2)}</strong>
+                  </div>
+                </div>
+              )}
+
+              {/* Kanban columns */}
+              <div className={clsx('flex-1', 'grid', 'grid-cols-1', modoExclusivoSalao ? 'md:grid-cols-2' : 'md:grid-cols-3', 'gap-4')}>
+
+                {/* COLUMN 1: Em análise */}
+                {!modoExclusivoSalao && (
+                  <div className={clsx('bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden')}>
+                    <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
+                      <span className={clsx('font-bold', 'text-gray-300', 'font-serif')}>Em análise</span>
+                      <span className={clsx('bg-amber-500/10', 'text-amber-400', 'font-bold', 'px-2', 'py-0.5', 'rounded-full', 'font-mono', 'text-[9px]')}>
+                        {simulatedOrders.filter(o => o.status === 'analise').length}
+                      </span>
+                    </div>
+
+                    <div className={clsx('p-3', 'flex-1', 'overflow-y-auto', 'space-y-3')}>
+                      {simulatedOrders.filter(o => o.status === 'analise').length === 0 ? (
+                        <div className={clsx('py-20', 'text-center', 'text-gray-500', 'italic', 'text-[10px]')}>Nenhum pedido pendente</div>
+                      ) : (
+                        simulatedOrders.filter(o => o.status === 'analise').map((order) => (
+                          <div key={order.id} className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'hover:border-amber-500/30', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all')}>
+                            <div className={clsx('flex', 'justify-between', 'items-start')}>
+                              <div>
+                                <span className={clsx('px-1.5', 'py-0.5', 'text-[8px]', 'uppercase', 'tracking-wider', 'font-bold', 'bg-[#7A1F2D]/20', 'text-[#C46A74]', 'rounded', 'font-mono', 'block', 'w-fit', 'mb-1')}>{order.canal}</span>
+                                <strong className={clsx('text-white', 'text-xs', 'block')}>{order.cliente}</strong>
+                                <span className={clsx('text-[9px]', 'text-gray-400', 'block')}>{order.telefone}</span>
+                              </div>
+                              <span className={clsx('font-bold', 'text-amber-400', 'font-mono', 'text-[11px]', 'shrink-0')}>R$ {order.total.toFixed(2)}</span>
+                            </div>
+
+                            <p className={clsx('text-[10px]', 'text-gray-300', 'bg-[#09090B]', 'p-1.5', 'rounded', 'border', 'border-[#27272A]/30', 'leading-relaxed', 'font-mono')}>
+                              {order.itens}
+                            </p>
+
+                            <div className={clsx('flex', 'gap-1.5', 'pt-1')}>
+                              <button
+                                onClick={() => handleUpdateDeliveryStatus(order.id, 'producao')}
+                                className={clsx('flex-1', 'py-1.5', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider')}
+                              >
+                                Aceitar Pedido
+                              </button>
+                              <button
+                                onClick={() => handleRecusarPedido(order.id)}
+                                className={clsx('px-2', 'py-1.5', 'bg-[#7A1F2D]/20', 'hover:bg-[#7A1F2D]', 'text-[#C46A74]', 'hover:text-white', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer')}
+                              >
+                                Recusar
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* COLUMN 2: Em produção */}
                 <div className={clsx('bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden')}>
                   <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
                     <span className={clsx('font-bold', 'text-gray-300', 'font-serif')}>Em produção</span>
                     <span className={clsx('bg-[#C5A880]/10', 'text-[#C5A880]', 'font-bold', 'px-2', 'py-0.5', 'rounded-full', 'font-mono', 'text-[9px]')}>
-                      {simulatedOrders.filter(o => o.status === 'producao').length + tableOrdersInProduction.length}
+                      {(modoExclusivoSalao ? 0 : simulatedOrders.filter(o => o.status === 'producao').length) + tableOrdersInProduction.length}
                     </span>
                   </div>
 
                   <div className={clsx('p-3', 'flex-1', 'overflow-y-auto', 'space-y-3')}>
-                    {simulatedOrders.filter(o => o.status === 'producao').length === 0 && tableOrdersInProduction.length === 0 ? (
+                    {(modoExclusivoSalao ? 0 : simulatedOrders.filter(o => o.status === 'producao').length) === 0 && tableOrdersInProduction.length === 0 ? (
                       <div className={clsx('py-20', 'text-center', 'text-gray-500', 'italic', 'text-[10px]')}>Nenhum pedido em produção</div>
                     ) : (
                       <>
                         {/* Pedidos Delivery em Produção */}
-                        {simulatedOrders.filter(o => o.status === 'producao').map((order) => (
+                        {!modoExclusivoSalao && simulatedOrders.filter(o => o.status === 'producao').map((order) => (
                           <div key={order.id} className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'hover:border-[#C5A880]/30', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all')}>
                             <div className={clsx('flex', 'justify-between', 'items-start')}>
                               <div>
@@ -1820,13 +2021,12 @@ export function CaixaPanel({
                                 type="button"
                                 onClick={async () => {
                                   try {
-                                    for (const item of preparingItems) {
-                                      await fetch(`${apiBaseUrl}/itens/${item.id}/status?status=pronto`, {
+                                    await Promise.all(preparingItems.map(item =>
+                                      fetch(`${apiBaseUrl}/itens/${item.id}/status?status=pronto`, {
                                         method: "PUT",
                                         headers: authHeaders
-                                      });
-                                    }
-                                    alert(`Mesa ${order.mesaId}: Itens marcados como prontos!`);
+                                      })
+                                    ));
                                     onRefreshOrders();
                                   } catch (e) {
                                     console.error(e);
@@ -1851,17 +2051,17 @@ export function CaixaPanel({
                   <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
                     <span className={clsx('font-bold', 'text-gray-300', 'font-serif')}>Prontos / Em trânsito</span>
                     <span className={clsx('bg-emerald-500/10', 'text-emerald-400', 'font-bold', 'px-2', 'py-0.5', 'rounded-full', 'font-mono', 'text-[9px]')}>
-                      {simulatedOrders.filter(o => o.status === 'pronto').length + tableOrdersReady.length}
+                      {(modoExclusivoSalao ? 0 : simulatedOrders.filter(o => o.status === 'pronto').length) + tableOrdersReady.length}
                     </span>
                   </div>
 
                   <div className={clsx('p-3', 'flex-1', 'overflow-y-auto', 'space-y-3')}>
-                    {simulatedOrders.filter(o => o.status === 'pronto').length === 0 && tableOrdersReady.length === 0 ? (
+                    {(modoExclusivoSalao ? 0 : simulatedOrders.filter(o => o.status === 'pronto').length) === 0 && tableOrdersReady.length === 0 ? (
                       <div className={clsx('py-20', 'text-center', 'text-gray-500', 'italic', 'text-[10px]')}>Nenhum pedido pronto</div>
                     ) : (
                       <>
                         {/* Pedidos Delivery Prontos */}
-                        {simulatedOrders.filter(o => o.status === 'pronto').map((order) => (
+                        {!modoExclusivoSalao && simulatedOrders.filter(o => o.status === 'pronto').map((order) => (
                           <div key={order.id} className={clsx('bg-[#1C1C1F]', 'border', 'border-emerald-500/30', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all')}>
                             <div className={clsx('flex', 'justify-between', 'items-start')}>
                               <div>
@@ -1921,13 +2121,12 @@ export function CaixaPanel({
                                 type="button"
                                 onClick={async () => {
                                   try {
-                                    for (const item of readyItems) {
-                                      await fetch(`${apiBaseUrl}/itens/${item.id}/status?status=entregue`, {
+                                    await Promise.all(readyItems.map(item =>
+                                      fetch(`${apiBaseUrl}/itens/${item.id}/status?status=entregue`, {
                                         method: "PUT",
                                         headers: authHeaders
-                                      });
-                                    }
-                                    alert(`Mesa ${order.mesaId}: Pratos servidos com sucesso!`);
+                                      })
+                                    ));
                                     onRefreshOrders();
                                   } catch (e) {
                                     console.error(e);
@@ -2104,27 +2303,29 @@ export function CaixaPanel({
                 </div>
 
                 <form onSubmit={handlePdvSubmitOrder} className={clsx('bg-[#18181B]', 'p-3', 'border-t', 'border-[#27272A]', 'space-y-3', 'shrink-0')}>
-                  <div className="space-y-1">
-                    <div className={clsx('flex', 'gap-2', 'p-0.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'shrink-0')}>
-                      <button
-                        type="button"
-                        onClick={() => setPdvOrderType('balcao')}
-                        className={`flex-1 py-1 text-[9px] font-bold rounded transition-all cursor-pointer ${pdvOrderType === 'balcao' ? 'bg-[#7A1F2D] text-white shadow-sm' : 'text-gray-400 hover:text-white'
-                          }`}
-                      >
-                        Balcão/Delivery
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPdvOrderType('mesa')}
-                        className={`flex-1 py-1 text-[9px] font-bold rounded transition-all cursor-pointer ${pdvOrderType === 'mesa' ? 'bg-[#7A1F2D] text-white shadow-sm' : 'text-gray-400 hover:text-white'
-                          }`}
-                      >
-                        Salão/Mesa
-                      </button>
+                  {!modoExclusivoSalao && (
+                    <div className="space-y-1">
+                      <div className={clsx('flex', 'gap-2', 'p-0.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'shrink-0')}>
+                        <button
+                          type="button"
+                          onClick={() => setPdvOrderType('balcao')}
+                          className={`flex-1 py-1 text-[9px] font-bold rounded transition-all cursor-pointer ${pdvOrderType === 'balcao' ? 'bg-[#7A1F2D] text-white shadow-sm' : 'text-gray-400 hover:text-white'
+                            }`}
+                        >
+                          Balcão/Delivery
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPdvOrderType('mesa')}
+                          className={`flex-1 py-1 text-[9px] font-bold rounded transition-all cursor-pointer ${pdvOrderType === 'mesa' ? 'bg-[#7A1F2D] text-white shadow-sm' : 'text-gray-400 hover:text-white'
+                            }`}
+                        >
+                          Salão/Mesa
+                        </button>
+                      </div>
+                      <span className={clsx('text-[7.5px]', 'text-gray-500', 'font-mono', 'block', 'text-left')}>Atalhos de Tipo: [F2] Balcão • [F3] Salão</span>
                     </div>
-                    <span className={clsx('text-[7.5px]', 'text-gray-500', 'font-mono', 'block', 'text-left')}>Atalhos de Tipo: [F2] Balcão • [F3] Salão</span>
-                  </div>
+                  )}
 
                   {pdvOrderType === 'mesa' ? (
                     <div className="space-y-1">
@@ -2218,11 +2419,18 @@ export function CaixaPanel({
                   {salonTables.map((table) => {
                     const tableOrders = orders.filter(o => o.mesaId === table.id);
                     const isOcupada = tableOrders.length > 0;
+                    const hasPendingPayment = pagamentosPendentes.some(pag => 
+                      tableOrders.some(o => o.id === pag.comanda_id)
+                    );
 
                     return (
                       <div
                         key={table.id}
-                        className={`bg-[#121214] border rounded-2xl p-3 flex flex-col justify-between gap-3 transition-all relative group ${isOcupada ? 'border-rose-500/40 hover:border-rose-500' : 'border-[#27272A] hover:border-[#C5A880]/30'
+                        className={`bg-[#121214] border rounded-2xl p-3 flex flex-col justify-between gap-3 transition-all relative group ${hasPendingPayment
+                          ? 'border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.2)] animate-pulse'
+                          : isOcupada
+                            ? 'border-rose-500/40 hover:border-rose-500'
+                            : 'border-[#27272A] hover:border-[#C5A880]/30'
                           }`}
                       >
                         <div className={clsx('flex', 'justify-between', 'items-start')}>
@@ -2257,7 +2465,9 @@ export function CaixaPanel({
                         </div>
 
                         <div>
-                          {isOcupada ? (
+                          {hasPendingPayment ? (
+                            <span className={clsx('px-2', 'py-0.5', 'text-[8px]', 'bg-amber-500/10', 'text-amber-400', 'font-bold', 'rounded-md', 'block', 'w-fit', 'border', 'border-amber-500/20', 'uppercase', 'tracking-wider animate-pulse')}>Confirmar Dinheiro</span>
+                          ) : isOcupada ? (
                             <span className={clsx('px-2', 'py-0.5', 'text-[8px]', 'bg-rose-500/10', 'text-rose-400', 'font-bold', 'rounded-md', 'block', 'w-fit', 'border', 'border-rose-500/10', 'uppercase', 'tracking-wider')}>Ocupada</span>
                           ) : (
                             <span className={clsx('px-2', 'py-0.5', 'text-[8px]', 'bg-emerald-500/10', 'text-emerald-400', 'rounded-md', 'block', 'w-fit', 'border', 'border-emerald-500/10', 'uppercase', 'tracking-wider')}>Livre</span>
@@ -2727,13 +2937,13 @@ export function CaixaPanel({
                   {configSalSubTab === 'pedido' && (
                     <div className={clsx('space-y-3.5', 'animate-scale-in')}>
                       {[
-                        { title: "Permitir que garçom faça lançamentos de pedidos de delivery", desc: "Ao ativar, garçons podem criar comandas com canais externos no salão.", checked: permDelivery, setChecked: setPermDelivery },
-                        { title: "Permitir que Garçons editem pedidos", desc: "Permite atualizar observações ou acrescentar itens em comandas já enviadas.", checked: permEdit, setChecked: setPermEdit },
-                        { title: "Permitir que Garçons editem cobranças adicionais", desc: "Permite retirar/colocar taxas extras, como couvert artístico ou consumação mínima.", checked: permAddCharges, setChecked: setPermAddCharges },
-                        { title: "Permitir que garçons cancelem pedidos", desc: "Permite a exclusão direta de itens ou comandas pelo aplicativo sem aprovação do gerente.", checked: permCancel, setChecked: setPermCancel },
-                        { title: "Permitir exibição de status de pedidos no mapa de mesas", desc: "Gera ícones de produção ('Em preparo', 'Pronto') sobre as mesas no mapa.", checked: permShowStatus, setChecked: setPermShowStatus },
-                        { title: "Permitir que garçons abram comandas sem pedido", desc: "Permite reservar uma mesa com status 'ocupada' sem lançar nenhum item.", checked: permOpenEmpty, setChecked: setPermOpenEmpty },
-                        { title: "Permitir impressão automática dos pedidos feitos pelo Garçom", desc: "Dispara a via térmica de produção no balcão imediatamente após o garçom confirmar.", checked: permAutoPrint, setChecked: setPermAutoPrint }
+                        { title: "Permitir que garçom faça lançamentos de pedidos de delivery", desc: "Ao ativar, garçons podem criar comandas com canais externos no salão.", checked: permDelivery, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_delivery: val }) },
+                        { title: "Permitir que Garçons editem pedidos", desc: "Permite atualizar observações ou acrescentar itens em comandas já enviadas.", checked: permEdit, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_editar: val }) },
+                        { title: "Permitir que Garçons editem cobranças adicionais", desc: "Permite retirar/colocar taxas extras, como couvert artístico ou consumação mínima.", checked: permAddCharges, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_taxas: val }) },
+                        { title: "Permitir que garçons cancelem pedidos", desc: "Permite a exclusão direta de itens ou comandas pelo aplicativo sem aprovação do gerente.", checked: permCancel, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_cancelar: val }) },
+                        { title: "Permitir exibição de status de pedidos no mapa de mesas", desc: "Gera ícones de produção ('Em preparo', 'Pronto') sobre as mesas no mapa.", checked: permShowStatus, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_status: val }) },
+                        { title: "Permitir que garçons abram comandas sem pedido", desc: "Permite reservar uma mesa com status 'ocupada' sem lançar nenhum item.", checked: permOpenEmpty, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_abrir_vazia: val }) },
+                        { title: "Permitir impressão automática dos pedidos feitos pelo Garçom", desc: "Dispara a via térmica de produção no balcão imediatamente após o garçom confirmar.", checked: permAutoPrint, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_print: val }) }
                       ].map((item, idx) => (
                         <div key={idx} className={clsx('flex', 'justify-between', 'items-start', 'gap-4')}>
                           <div className="space-y-0.5">
@@ -2741,7 +2951,7 @@ export function CaixaPanel({
                             <span className={clsx('text-[9px]', 'text-gray-500', 'block', 'leading-relaxed')}>{item.desc}</span>
                           </div>
                           <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer', 'shrink-0', 'mt-0.5')}>
-                            <input type="checkbox" checked={item.checked} onChange={(e) => item.setChecked(e.target.checked)} className={clsx('sr-only', 'peer')} />
+                            <input type="checkbox" checked={item.checked} onChange={(e) => item.onChange(e.target.checked)} className={clsx('sr-only', 'peer')} />
                             <div className={clsx('w-8', 'h-4.5', 'bg-[#27272A]', 'peer-focus:outline-none', 'rounded-full', 'peer', 'peer-checked:after:translate-x-full', 'peer-checked:after:border-white', "after:content-['']", 'after:absolute', 'after:top-[2px]', 'after:left-[2px]', 'after:bg-white', 'after:border-gray-300', 'after:border', 'after:rounded-full', 'after:h-3.5', 'after:w-3.5', 'after:transition-all', 'peer-checked:bg-emerald-600')}></div>
                           </label>
                         </div>
@@ -2752,9 +2962,9 @@ export function CaixaPanel({
                   {configSalSubTab === 'fechamento' && (
                     <div className={clsx('space-y-3.5', 'animate-scale-in')}>
                       {[
-                        { title: "Permitir que Garçom feche a conta", desc: "Autoriza o garçom a encerrar a mesa e dar a baixa definitiva no consumo.", checked: permCloseAccount, setChecked: setPermCloseAccount },
-                        { title: "Permitir que Garçom aplique desconto", desc: "Habilita a aplicação de porcentagem de desconto na conta final direto pelo aplicativo.", checked: permDiscount, setChecked: setPermDiscount },
-                        { title: "Permitir que Garçom aplique acréscimo", desc: "Habilita a adição de valores extras ou gorjetas no fechamento da conta pelo app.", checked: permSurcharge, setChecked: setPermSurcharge }
+                        { title: "Permitir que Garçom feche a conta", desc: "Autoriza o garçom a encerrar a mesa e dar a baixa definitiva no consumo.", checked: permCloseAccount, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_fechar: val }) },
+                        { title: "Permitir que Garçom aplique desconto", desc: "Habilita a aplicação de porcentagem de desconto na conta final direto pelo aplicativo.", checked: permDiscount, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_desconto: val }) },
+                        { title: "Permitir que Garçom aplique acréscimo", desc: "Habilita a adição de valores extras ou gorjetas no fechamento da conta pelo app.", checked: permSurcharge, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_acrescimo: val }) }
                       ].map((item, idx) => (
                         <div key={idx} className={clsx('flex', 'justify-between', 'items-start', 'gap-4')}>
                           <div className="space-y-0.5">
@@ -2762,7 +2972,7 @@ export function CaixaPanel({
                             <span className={clsx('text-[9px]', 'text-gray-500', 'block', 'leading-relaxed')}>{item.desc}</span>
                           </div>
                           <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer', 'shrink-0', 'mt-0.5')}>
-                            <input type="checkbox" checked={item.checked} onChange={(e) => item.setChecked(e.target.checked)} className={clsx('sr-only', 'peer')} />
+                            <input type="checkbox" checked={item.checked} onChange={(e) => item.onChange(e.target.checked)} className={clsx('sr-only', 'peer')} />
                             <div className={clsx('w-8', 'h-4.5', 'bg-[#27272A]', 'peer-focus:outline-none', 'rounded-full', 'peer', 'peer-checked:after:translate-x-full', 'peer-checked:after:border-white', "after:content-['']", 'after:absolute', 'after:top-[2px]', 'after:left-[2px]', 'after:bg-white', 'after:border-gray-300', 'after:border', 'after:rounded-full', 'after:h-3.5', 'after:w-3.5', 'after:transition-all', 'peer-checked:bg-emerald-600')}></div>
                           </label>
                         </div>
@@ -2773,11 +2983,11 @@ export function CaixaPanel({
                   {configSalSubTab === 'atendimento' && (
                     <div className={clsx('space-y-3.5', 'animate-scale-in')}>
                       {[
-                        { title: "Permitir que o garçom informe quantas pessoas vão sentar à mesa", desc: "Abre pergunta inicial na abertura da mesa para cálculo automático do consumo/taxa individual.", checked: permPeopleCount, setChecked: setPermPeopleCount },
-                        { title: "Permitir que Garçom transfira mesas e comandas", desc: "Permite realocar todo o consumo de uma mesa para outra mesa vazia.", checked: permTransferTables, setChecked: setPermTransferTables },
-                        { title: "Permitir que Garçom transfira pedidos e pagamentos para mesas ocupadas", desc: "Mover itens isolados ou repassar contas a pagar entre comanda de clientes sentados.", checked: permTransferItems, setChecked: setPermTransferItems },
-                        { title: "Permitir que Cliente chame Garçom na mesa", desc: "Dispara notificações no painel do garçom se o cliente apertar o botão no cardápio digital QR Code.", checked: permClientCall, setChecked: setPermClientCall },
-                        { title: "Permitir exibição de mesas ociosas", desc: "Destaca no mapa mesas sem novos pedidos há mais tempo.", checked: permShowIdleTables, setChecked: setPermShowIdleTables }
+                        { title: "Permitir que o garçom informe quantas pessoas vão sentar à mesa", desc: "Abre pergunta inicial na abertura da mesa para cálculo automático do consumo/taxa individual.", checked: permPeopleCount, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_pessoas: val }) },
+                        { title: "Permitir que Garçom transfira mesas e comandas", desc: "Permite realocar todo o consumo de uma mesa para outra mesa vazia.", checked: permTransferTables, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_transferir_mesa: val }) },
+                        { title: "Permitir que Garçom transfira pedidos e pagamentos para mesas ocupadas", desc: "Mover itens isolados ou repassar contas a pagar entre comanda de clientes sentados.", checked: permTransferItems, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_transferir_item: val }) },
+                        { title: "Permitir que Cliente chame Garçom na mesa", desc: "Dispara notificações no painel do garçom se o cliente apertar o botão no cardápio digital QR Code.", checked: permClientCall, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_chamar: val }) },
+                        { title: "Permitir exibição de mesas ociosas", desc: "Destaca no mapa mesas sem novos pedidos há mais tempo.", checked: permShowIdleTables, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_ociosas: val }) }
                       ].map((item, idx) => (
                         <div key={idx} className={clsx('flex', 'justify-between', 'items-start', 'gap-4')}>
                           <div className="space-y-0.5">
@@ -2785,7 +2995,7 @@ export function CaixaPanel({
                             <span className={clsx('text-[9px]', 'text-gray-500', 'block', 'leading-relaxed')}>{item.desc}</span>
                           </div>
                           <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer', 'shrink-0', 'mt-0.5')}>
-                            <input type="checkbox" checked={item.checked} onChange={(e) => item.setChecked(e.target.checked)} className={clsx('sr-only', 'peer')} />
+                            <input type="checkbox" checked={item.checked} onChange={(e) => item.onChange(e.target.checked)} className={clsx('sr-only', 'peer')} />
                             <div className={clsx('w-8', 'h-4.5', 'bg-[#27272A]', 'peer-focus:outline-none', 'rounded-full', 'peer', 'peer-checked:after:translate-x-full', 'peer-checked:after:border-white', "after:content-['']", 'after:absolute', 'after:top-[2px]', 'after:left-[2px]', 'after:bg-white', 'after:border-gray-300', 'after:border', 'after:rounded-full', 'after:h-3.5', 'after:w-3.5', 'after:transition-all', 'peer-checked:bg-emerald-600')}></div>
                           </label>
                         </div>
@@ -3916,7 +4126,8 @@ export function CaixaPanel({
               : source;
             const byCat: Record<string, typeof source> = {};
             filtered.forEach(p => {
-              const cat = (p as any).categoria?.nome || 'Geral';
+              const catObj = (p as any).categoria;
+              const cat = typeof catObj === 'object' && catObj ? catObj.nome : (typeof catObj === 'string' ? catObj : 'Geral');
               if (!byCat[cat]) byCat[cat] = [];
               byCat[cat].push(p);
             });
@@ -3952,9 +4163,60 @@ export function CaixaPanel({
                 {/* Categories */}
                 {Object.entries(byCat).map(([cat, prods]) => (
                   <div key={cat} className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-2xl', 'overflow-hidden')}>
-                    <div className={clsx('bg-[#18181B]', 'px-4', 'py-2', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center')}>
-                      <span className={clsx('font-bold', 'text-[#C5A880]', 'text-[10px]', 'uppercase', 'tracking-wider')}>{cat}</span>
-                      <span className={clsx('text-[8px]', 'text-gray-500')}>{prods.length} item{prods.length !== 1 ? 's' : ''}</span>
+                    <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'gap-3')}>
+                      <div className="flex items-baseline gap-2">
+                        <span className={clsx('font-bold', 'text-[#C5A880]', 'text-[10px]', 'uppercase', 'tracking-wider')}>{cat}</span>
+                        <span className={clsx('text-[8px]', 'text-gray-500')}>{prods.length} item{prods.length !== 1 ? 's' : ''}</span>
+                      </div>
+                      
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (confirm(`Deseja realmente esgotar todos os itens da categoria "${cat}"?`)) {
+                              try {
+                                await Promise.all(prods.map(prod => 
+                                  fetch(`${apiBaseUrl}/produtos/${prod.id}`, {
+                                    method: 'PUT',
+                                    headers: { ...authHeaders, 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ ativo: false })
+                                  })
+                                ));
+                                await fetchProdutos();
+                              } catch (e) {
+                                console.error(e);
+                                alert('Erro ao atualizar categoria.');
+                              }
+                            }
+                          }}
+                          className="px-2 py-0.5 border border-red-900/40 hover:border-red-600/30 bg-red-950/20 hover:bg-red-900/25 text-red-400 hover:text-white text-[8px] font-bold rounded transition-all cursor-pointer uppercase tracking-wide"
+                        >
+                          Esgotar Todos
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (confirm(`Deseja realmente disponibilizar todos os itens da categoria "${cat}"?`)) {
+                              try {
+                                await Promise.all(prods.map(prod => 
+                                  fetch(`${apiBaseUrl}/produtos/${prod.id}`, {
+                                    method: 'PUT',
+                                    headers: { ...authHeaders, 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ ativo: true })
+                                  })
+                                ));
+                                await fetchProdutos();
+                              } catch (e) {
+                                console.error(e);
+                                alert('Erro ao atualizar categoria.');
+                              }
+                            }
+                          }}
+                          className="px-2 py-0.5 border border-emerald-900/40 hover:border-emerald-600/30 bg-emerald-950/20 hover:bg-emerald-900/25 text-emerald-400 hover:text-white text-[8px] font-bold rounded transition-all cursor-pointer uppercase tracking-wide"
+                        >
+                          Disponibilizar Todos
+                        </button>
+                      </div>
                     </div>
                     <div className={clsx('divide-y', 'divide-[#27272A]/40')}>
                       {prods.map(prod => {
@@ -5152,7 +5414,7 @@ export function CaixaPanel({
                       </div>
                     </div>
 
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 font-sans">
                       <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Valor a Lançar (R$):</label>
                       <div className="relative">
                         <span className={clsx('absolute', 'left-3.5', 'top-2.5', 'text-gray-400', 'font-mono', 'text-[11px]')}>R$</span>
@@ -5166,6 +5428,63 @@ export function CaixaPanel({
                         />
                       </div>
                     </div>
+                    <div className="space-y-1.5 font-sans">
+                      <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>CPF/Telefone (Opcional - Fidelidade):</label>
+                      <input
+                        type="text"
+                        value={paymentCPF}
+                        onChange={(e) => setPaymentCPF(e.target.value)}
+                        placeholder="Ex: 123.456.789-00 ou Celular"
+                        className={clsx('w-full', 'px-3', 'py-2', 'text-xs', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'focus:outline-none', 'focus:border-[#C5A880]', 'text-white')}
+                      />
+                    </div>
+
+                    {/* CÉDULAS BRASILEIRAS E TOTAL RESTANTE ATALHOS */}
+                    {paymentMetodo === 'dinheiro' && (
+                      <div className="space-y-1">
+                        <label className="text-[8px] font-bold text-gray-500 uppercase tracking-wider block">Atalhos de Cédulas:</label>
+                        <div className="flex flex-wrap gap-1">
+                          {[2, 5, 10, 20, 50, 100, 200].map((val) => (
+                            <button
+                              key={val}
+                              type="button"
+                              onClick={() => setPaymentValor(val.toFixed(2))}
+                              className="px-2 py-0.5 bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] rounded text-[8px] font-bold text-gray-300 font-mono transition-all cursor-pointer"
+                            >
+                              R$ {val}
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const { total } = getCheckoutTotals(selectedOrder);
+                              const restante = Math.max(0, total - (selectedOrder.valorPago || 0));
+                              setPaymentValor(restante.toFixed(2));
+                            }}
+                            className="px-2 py-0.5 bg-[#C5A880]/15 hover:bg-[#C5A880]/25 border border-[#C5A880]/30 rounded text-[8px] font-bold text-[#C5A880] transition-all cursor-pointer"
+                          >
+                            Total Restante
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* TROCO EM TEMPO REAL */}
+                    {(() => {
+                      const { total } = getCheckoutTotals(selectedOrder);
+                      const restante = Math.max(0, total - (selectedOrder.valorPago || 0));
+                      const inputVal = parseFloat(paymentValor) || 0;
+                      if (paymentMetodo === 'dinheiro' && inputVal > restante) {
+                        const troco = inputVal - restante;
+                        return (
+                          <div className="bg-emerald-950/40 border border-emerald-800/30 text-emerald-300 p-2.5 rounded-xl text-[10px] font-mono flex justify-between items-center animate-pulse-subtle">
+                            <span>Troco a devolver:</span>
+                            <strong className="text-xs">R$ {troco.toFixed(2)}</strong>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
 
                     {selectedItemIds.length > 0 && (
                       <div className={clsx('bg-[#C5A880]/15', 'border', 'border-[#C5A880]/30', 'text-[#C5A880]', 'p-2.5', 'rounded-xl', 'text-[10px]')}>

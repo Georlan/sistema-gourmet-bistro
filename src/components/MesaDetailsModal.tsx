@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { X, Clock, Receipt, PlusCircle, Move, ShoppingBag, Printer, Trash2, ArrowLeft } from 'lucide-react';
+import { X, Clock, Receipt, PlusCircle, Move, ShoppingBag, Printer, Trash2, ArrowLeft, Edit2 } from 'lucide-react';
 import { Table, Order, DraftItem, AppSettings, Product, AppRole, OrderItem } from '../types';
 import { getTableTotal, getCustomerSubtotals, formatElapsedTime } from '../domain';
 import { MenuPanel } from './MenuPanel';
@@ -41,6 +41,8 @@ interface MesaDetailsModalProps {
   onPrintKitchenLaunch?: (lancamentoId: string) => Promise<void>;
   salonTables?: Table[];
   liveProdutos?: Product[];
+  restauranteConfig?: any;
+  onUpdateItemDetails?: (itemId: string, observacao: string, clienteNome: string) => Promise<void>;
 }
 
 export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
@@ -73,7 +75,9 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
   onPrintReceipt,
   onPrintKitchenLaunch,
   salonTables,
-  liveProdutos = []
+  liveProdutos = [],
+  restauranteConfig,
+  onUpdateItemDetails,
 }) => {
   // Dynamic default tab based on whether table is active or empty
   const [activeTab, setActiveTab] = useState<'consumo' | 'lancamento' | 'transferir'>(
@@ -363,6 +367,24 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
 
                                   {/* Ações de Cancelamento e Transferência Individual de Item */}
                                   <div className="flex items-center gap-1.5 border-l border-[#27272A] pl-2 ml-1">
+                                    {((activeRole !== 'garcom' || restauranteConfig?.perm_garcom_editar)) && (
+                                      <button
+                                        type="button"
+                                        onClick={async () => {
+                                          const newObs = prompt(`Editar observações para "${item.nome}":`, item.observacao);
+                                          if (newObs !== null) {
+                                            const newClient = prompt(`Identificar cliente para "${item.nome}":`, item.clienteNome === 'Consumo Geral' ? '' : item.clienteNome);
+                                            if (newClient !== null && onUpdateItemDetails) {
+                                              await onUpdateItemDetails(item.id, newObs, newClient || 'Consumo Geral');
+                                            }
+                                          }
+                                        }}
+                                        className="p-1 text-gray-400 hover:text-amber-500 transition-colors cursor-pointer"
+                                        title="Editar observações / cliente do item"
+                                      >
+                                        <Edit2 size={12} />
+                                      </button>
+                                    )}
                                     <button
                                       type="button"
                                       onClick={() => {
@@ -384,18 +406,20 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                                       <Move size={12} />
                                     </button>
                                     
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        if (confirm(`Deseja realmente cancelar o item "${item.nome}"?`)) {
-                                          onCancelItem(item.id);
-                                        }
-                                      }}
-                                      className="p-1 text-gray-400 hover:text-red-400 transition-colors cursor-pointer"
-                                      title="Cancelar este item"
-                                    >
-                                      <Trash2 size={12} />
-                                    </button>
+                                    {(!(activeRole === 'garcom' && !restauranteConfig?.perm_garcom_cancelar)) && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          if (confirm(`Deseja realmente cancelar o item "${item.nome}"?`)) {
+                                            onCancelItem(item.id);
+                                          }
+                                        }}
+                                        className="p-1 text-gray-400 hover:text-red-400 transition-colors cursor-pointer"
+                                        title="Cancelar este item"
+                                      >
+                                        <Trash2 size={12} />
+                                      </button>
+                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -769,16 +793,32 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                 })()}
               </div>
 
-              {/* Math totals - SEM TAXA DE SERVIÇO */}
+              {/* Math totals */}
               <div className="space-y-1 pt-1 text-right">
                 {(() => {
                   const itemsFiltered = orders.flatMap(o => o.itens);
-                  const grandTotal = itemsFiltered.reduce((s, i) => s + i.preco, 0);
+                  const subTotal = itemsFiltered.reduce((s, i) => s + i.preco, 0);
+                  const hasTax = restauranteConfig?.taxa_servico_ativa ?? true;
+                  const taxRate = restauranteConfig?.taxa_servico_padrao ?? 10;
+                  const taxVal = hasTax ? subTotal * (taxRate / 100) : 0;
+                  const grandTotal = subTotal + taxVal;
 
                   return (
-                    <div className="flex justify-between text-xs font-bold text-[#C5A880] border-t border-dotted border-[#27272A] pt-2.5 mt-2.5">
-                      <span>TOTAL GERAL:</span>
-                      <span>R$ {grandTotal.toFixed(2)}</span>
+                    <div className="space-y-1 text-right text-[10px] text-gray-400 font-sans">
+                      <div className="flex justify-between">
+                        <span>Subtotal Consumo:</span>
+                        <span className="font-mono">R$ {subTotal.toFixed(2)}</span>
+                      </div>
+                      {hasTax && (
+                        <div className="flex justify-between">
+                          <span>Taxa Serviço ({taxRate}%):</span>
+                          <span className="font-mono">R$ {taxVal.toFixed(2)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-xs font-bold text-[#C5A880] border-t border-dotted border-[#27272A] pt-2.5 mt-2.5">
+                        <span>TOTAL GERAL:</span>
+                        <span className="font-mono">R$ {grandTotal.toFixed(2)}</span>
+                      </div>
                     </div>
                   );
                 })()}

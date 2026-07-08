@@ -110,6 +110,10 @@ class MesaResponse(MesaBase):
 
 
 # ----------------- ITEM -----------------
+class ItemUpdate(BaseModel):
+    observacao: Optional[str] = None
+    cliente_nome: Optional[str] = None
+
 class ItemResponse(BaseModel):
     id: str
     comanda_id: str
@@ -236,6 +240,9 @@ class PagamentoRequest(BaseModel):
     valor: float
     metodo: str  # "dinheiro" | "pix" | "cartao"
     item_ids: Optional[List[str]] = None  # Specific item IDs to settle if paying by item
+    idempotency_key: Optional[str] = None
+    cpf_cliente: Optional[str] = None
+    nome_cliente: Optional[str] = None
 
 class PagamentoResponse(BaseModel):
     id: str
@@ -243,6 +250,12 @@ class PagamentoResponse(BaseModel):
     turno_id: int
     valor: float
     metodo: str
+    status: str
+    idempotency_key: Optional[str] = None
+    cpf_cliente: Optional[str] = None
+    nome_cliente: Optional[str] = None
+    nsu_cartao: Optional[str] = None
+    chave_nfe_emitida: Optional[str] = None
     criado_em: datetime
 
     class Config:
@@ -266,6 +279,21 @@ class ConfiguracaoRestauranteResponse(BaseModel):
     taxa_servico_padrao: float
     unificar_vias_delivery: bool
     modo_exclusivo_salao: bool
+    perm_garcom_delivery: bool
+    perm_garcom_editar: bool
+    perm_garcom_taxas: bool
+    perm_garcom_cancelar: bool
+    perm_garcom_status: bool
+    perm_garcom_abrir_vazia: bool
+    perm_garcom_print: bool
+    perm_garcom_fechar: bool
+    perm_garcom_desconto: bool
+    perm_garcom_acrescimo: bool
+    perm_garcom_pessoas: bool
+    perm_garcom_transferir_mesa: bool
+    perm_garcom_transferir_item: bool
+    perm_garcom_chamar: bool
+    perm_garcom_ociosas: bool
 
     class Config:
         from_attributes = True
@@ -279,6 +307,21 @@ class ConfiguracaoRestauranteUpdate(BaseModel):
     taxa_servico_padrao: Optional[float] = None
     unificar_vias_delivery: Optional[bool] = None
     modo_exclusivo_salao: Optional[bool] = None
+    perm_garcom_delivery: Optional[bool] = None
+    perm_garcom_editar: Optional[bool] = None
+    perm_garcom_taxas: Optional[bool] = None
+    perm_garcom_cancelar: Optional[bool] = None
+    perm_garcom_status: Optional[bool] = None
+    perm_garcom_abrir_vazia: Optional[bool] = None
+    perm_garcom_print: Optional[bool] = None
+    perm_garcom_fechar: Optional[bool] = None
+    perm_garcom_desconto: Optional[bool] = None
+    perm_garcom_acrescimo: Optional[bool] = None
+    perm_garcom_pessoas: Optional[bool] = None
+    perm_garcom_transferir_mesa: Optional[bool] = None
+    perm_garcom_transferir_item: Optional[bool] = None
+    perm_garcom_chamar: Optional[bool] = None
+    perm_garcom_ociosas: Optional[bool] = None
 
 
 class ConfiguracaoIAResponse(BaseModel):

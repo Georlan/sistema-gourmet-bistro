@@ -199,7 +199,16 @@ class Pagamento(Base):
     turno_id = Column(Integer, ForeignKey("caixa_turnos.id"), nullable=False)
     valor = Column(Float, nullable=False)
     metodo = Column(String, nullable=False)  # "dinheiro" | "pix" | "cartao"
+    status = Column(String, default="aprovado") # "pendente" | "aprovado" | "cancelado"
+    idempotency_key = Column(String, unique=True, nullable=True, index=True)
+    cpf_cliente = Column(String, nullable=True)
+    nome_cliente = Column(String, nullable=True)
+    nsu_cartao = Column(String, nullable=True)
+    chave_nfe_emitida = Column(String, nullable=True)
     criado_em = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+    # Relationships
+    comanda = relationship("Comanda")
 
 # Alias compatibility
 Garcom = Usuario
@@ -216,6 +225,21 @@ class ConfiguracaoRestaurante(Base):
     taxa_servico_padrao = Column(Float, default=10.0)
     unificar_vias_delivery = Column(Boolean, default=False)
     modo_exclusivo_salao = Column(Boolean, default=True)
+    perm_garcom_delivery = Column(Boolean, default=True)
+    perm_garcom_editar = Column(Boolean, default=True)
+    perm_garcom_taxas = Column(Boolean, default=False)
+    perm_garcom_cancelar = Column(Boolean, default=False)
+    perm_garcom_status = Column(Boolean, default=True)
+    perm_garcom_abrir_vazia = Column(Boolean, default=False)
+    perm_garcom_print = Column(Boolean, default=True)
+    perm_garcom_fechar = Column(Boolean, default=False)
+    perm_garcom_desconto = Column(Boolean, default=False)
+    perm_garcom_acrescimo = Column(Boolean, default=False)
+    perm_garcom_pessoas = Column(Boolean, default=True)
+    perm_garcom_transferir_mesa = Column(Boolean, default=True)
+    perm_garcom_transferir_item = Column(Boolean, default=True)
+    perm_garcom_chamar = Column(Boolean, default=True)
+    perm_garcom_ociosas = Column(Boolean, default=True)
 
 
 class ConfiguracaoIA(Base):

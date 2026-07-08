@@ -697,46 +697,9 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                 </div>
               </div>
 
-              {/* Client Identifier */}
-              <div className="space-y-1.5">
-                <label htmlFor="config-client-name" className="text-[10px] font-bold text-gray-300 uppercase tracking-wider block">
-                  Identificar Cliente (Opcional):
-                </label>
-                <input
-                  id="config-client-name"
-                  type="text"
-                  value={configClient}
-                  onChange={(e) => setConfigClient(e.target.value)}
-                  placeholder="Ex: Pedro, Cláudia, Mesa Direita..."
-                  className="w-full px-3 py-2 bg-[#121214] text-white border border-[#27272A] rounded-xl focus:outline-none focus:ring-1 focus:ring-[#7A1F2D] focus:border-[#7A1F2D] transition-all"
-                />
-
-                {combinedSuggestions.length > 0 && (
-                  <div className="space-y-1 pt-0.5">
-                    <span className="text-[9px] text-gray-500 block">Escolher do atendimento atual:</span>
-                    <div className="flex flex-wrap gap-1">
-                      {combinedSuggestions.map((name) => (
-                        <button
-                          key={name}
-                          type="button"
-                          onClick={() => setConfigClient(name)}
-                          className={`px-2 py-0.5 text-[9px] border rounded transition-colors font-medium cursor-pointer ${
-                            configClient === name
-                              ? 'bg-[#C5A880]/20 text-[#C5A880] border-[#C5A880]/40'
-                              : 'bg-[#27272A] hover:bg-[#C5A880]/15 text-gray-300 hover:text-white border-[#27272A]'
-                          }`}
-                        >
-                          {name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
               {/* Observations */}
               <div className="space-y-1.5">
-                <div className="flex items-center justify-between text-[10px] font-bold text-gray-300 uppercase tracking-wider block">
+                <div className="flex items-center justify-between text-[10px] font-bold text-gray-300 uppercase tracking-wider block font-sans">
                   <span>Observações de preparo (Cozinha):</span>
                   {configObs && (
                     <button
@@ -788,6 +751,43 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                     })}
                   </div>
                 </div>
+              </div>
+
+              {/* Client Identifier */}
+              <div className="space-y-1.5">
+                <label htmlFor="config-client-name" className="text-[10px] font-bold text-gray-300 uppercase tracking-wider block font-sans">
+                  Identificar Cliente (Opcional):
+                </label>
+                <input
+                  id="config-client-name"
+                  type="text"
+                  value={configClient}
+                  onChange={(e) => setConfigClient(e.target.value)}
+                  placeholder="Ex: Pedro, Cláudia, Mesa Direita..."
+                  className="w-full px-3 py-2 bg-[#121214] text-white border border-[#27272A] rounded-xl focus:outline-none focus:ring-1 focus:ring-[#7A1F2D] focus:border-[#7A1F2D] transition-all"
+                />
+
+                {combinedSuggestions.length > 0 && (
+                  <div className="space-y-1 pt-0.5">
+                    <span className="text-[9px] text-gray-500 block">Escolher do atendimento atual:</span>
+                    <div className="flex flex-wrap gap-1">
+                      {combinedSuggestions.map((name) => (
+                        <button
+                          key={name}
+                          type="button"
+                          onClick={() => setConfigClient(name)}
+                          className={`px-2 py-0.5 text-[9px] border rounded transition-colors font-medium cursor-pointer ${
+                            configClient === name
+                              ? 'bg-[#C5A880]/20 text-[#C5A880] border-[#C5A880]/40'
+                              : 'bg-[#27272A] hover:bg-[#C5A880]/15 text-gray-300 hover:text-white border-[#27272A]'
+                          }`}
+                        >
+                          {name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
             </div>

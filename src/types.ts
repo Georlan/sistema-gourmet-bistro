@@ -31,6 +31,7 @@ export interface OrderItem {
   clienteNome: string;
   status: 'preparando' | 'pronto' | 'entregue';
   pago?: boolean;
+  lancamentoId?: string;
 }
 
 export interface Order {
@@ -42,6 +43,7 @@ export interface Order {
   itens: OrderItem[];
   tipo?: 'Consumo no Local' | 'Retirada' | 'Entrega'; // Order type
   valorPago?: number;
+  identificador?: string;
 }
 
 export interface TableDraft {

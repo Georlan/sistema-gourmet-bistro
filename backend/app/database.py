@@ -68,7 +68,54 @@ def get_db(request: Request = None):
             columns = [row[1] for row in res.fetchall()]
             if "modo_exclusivo_salao" not in columns:
                 conn.execute(text("ALTER TABLE configuracoes_restaurante ADD COLUMN modo_exclusivo_salao BOOLEAN DEFAULT 1"))
-                conn.commit()
+            if "perm_garcom_delivery" not in columns:
+                conn.execute(text("ALTER TABLE configuracoes_restaurante ADD COLUMN perm_garcom_delivery BOOLEAN DEFAULT 1"))
+            if "perm_garcom_editar" not in columns:
+                conn.execute(text("ALTER TABLE configuracoes_restaurante ADD COLUMN perm_garcom_editar BOOLEAN DEFAULT 1"))
+            if "perm_garcom_taxas" not in columns:
+                conn.execute(text("ALTER TABLE configuracoes_restaurante ADD COLUMN perm_garcom_taxas BOOLEAN DEFAULT 0"))
+            if "perm_garcom_cancelar" not in columns:
+                conn.execute(text("ALTER TABLE configuracoes_restaurante ADD COLUMN perm_garcom_cancelar BOOLEAN DEFAULT 0"))
+            if "perm_garcom_status" not in columns:
+                conn.execute(text("ALTER TABLE configuracoes_restaurante ADD COLUMN perm_garcom_status BOOLEAN DEFAULT 1"))
+            if "perm_garcom_abrir_vazia" not in columns:
+                conn.execute(text("ALTER TABLE configuracoes_restaurante ADD COLUMN perm_garcom_abrir_vazia BOOLEAN DEFAULT 0"))
+            if "perm_garcom_print" not in columns:
+                conn.execute(text("ALTER TABLE configuracoes_restaurante ADD COLUMN perm_garcom_print BOOLEAN DEFAULT 1"))
+            if "perm_garcom_fechar" not in columns:
+                conn.execute(text("ALTER TABLE configuracoes_restaurante ADD COLUMN perm_garcom_fechar BOOLEAN DEFAULT 0"))
+            if "perm_garcom_desconto" not in columns:
+                conn.execute(text("ALTER TABLE configuracoes_restaurante ADD COLUMN perm_garcom_desconto BOOLEAN DEFAULT 0"))
+            if "perm_garcom_acrescimo" not in columns:
+                conn.execute(text("ALTER TABLE configuracoes_restaurante ADD COLUMN perm_garcom_acrescimo BOOLEAN DEFAULT 0"))
+            if "perm_garcom_pessoas" not in columns:
+                conn.execute(text("ALTER TABLE configuracoes_restaurante ADD COLUMN perm_garcom_pessoas BOOLEAN DEFAULT 1"))
+            if "perm_garcom_transferir_mesa" not in columns:
+                conn.execute(text("ALTER TABLE configuracoes_restaurante ADD COLUMN perm_garcom_transferir_mesa BOOLEAN DEFAULT 1"))
+            if "perm_garcom_transferir_item" not in columns:
+                conn.execute(text("ALTER TABLE configuracoes_restaurante ADD COLUMN perm_garcom_transferir_item BOOLEAN DEFAULT 1"))
+            if "perm_garcom_chamar" not in columns:
+                conn.execute(text("ALTER TABLE configuracoes_restaurante ADD COLUMN perm_garcom_chamar BOOLEAN DEFAULT 1"))
+            if "perm_garcom_ociosas" not in columns:
+                conn.execute(text("ALTER TABLE configuracoes_restaurante ADD COLUMN perm_garcom_ociosas BOOLEAN DEFAULT 1"))
+            conn.commit()
+
+            # Migrations for pagamentos table
+            res_pag = conn.execute(text("PRAGMA table_info(pagamentos)"))
+            columns_pag = [row[1] for row in res_pag.fetchall()]
+            if "status" not in columns_pag:
+                conn.execute(text("ALTER TABLE pagamentos ADD COLUMN status VARCHAR DEFAULT 'aprovado'"))
+            if "idempotency_key" not in columns_pag:
+                conn.execute(text("ALTER TABLE pagamentos ADD COLUMN idempotency_key VARCHAR"))
+            if "cpf_cliente" not in columns_pag:
+                conn.execute(text("ALTER TABLE pagamentos ADD COLUMN cpf_cliente VARCHAR"))
+            if "nome_cliente" not in columns_pag:
+                conn.execute(text("ALTER TABLE pagamentos ADD COLUMN nome_cliente VARCHAR"))
+            if "nsu_cartao" not in columns_pag:
+                conn.execute(text("ALTER TABLE pagamentos ADD COLUMN nsu_cartao VARCHAR"))
+            if "chave_nfe_emitida" not in columns_pag:
+                conn.execute(text("ALTER TABLE pagamentos ADD COLUMN chave_nfe_emitida VARCHAR"))
+            conn.commit()
         
         engines[tenant_id] = tenant_engine
         sessionmakers[tenant_id] = sessionmaker(autocommit=False, autoflush=False, bind=tenant_engine)

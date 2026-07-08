@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from ..database import get_db
 from ..models import Mesa, ObservacaoPredefinida, Comanda, Item, Usuario
 from ..schemas import MesaResponse, MesaUpdate, MesaCreate, ObservacaoPredefinidaResponse
 from ..security import get_current_garcom_optional
+from ..websocket_manager import manager
 
 router = APIRouter(
     prefix="/mesas",
@@ -29,7 +30,12 @@ def get_mesa(mesa_id: int, db: Session = Depends(get_db)):
     return mesa
 
 @router.put("/{mesa_id}", response_model=MesaResponse)
-def update_mesa(mesa_id: int, update_data: MesaUpdate, db: Session = Depends(get_db)):
+def update_mesa(
+    mesa_id: int, 
+    update_data: MesaUpdate, 
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
     """Permite alterar a capacidade ou o nome personalizado da mesa."""
     db_mesa = db.query(Mesa).filter(Mesa.id == mesa_id).first()
     if not db_mesa:
@@ -45,10 +51,15 @@ def update_mesa(mesa_id: int, update_data: MesaUpdate, db: Session = Depends(get
         
     db.commit()
     db.refresh(db_mesa)
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
     return db_mesa
 
 @router.post("/", response_model=MesaResponse, status_code=status.HTTP_201_CREATED)
-def create_mesa(mesa_in: MesaCreate, db: Session = Depends(get_db)):
+def create_mesa(
+    mesa_in: MesaCreate, 
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
     """Cria uma nova mesa dinamicamente no salão."""
     existing = db.query(Mesa).filter(Mesa.id == mesa_in.id).first()
     if existing:
@@ -64,10 +75,15 @@ def create_mesa(mesa_in: MesaCreate, db: Session = Depends(get_db)):
     db.add(nova_mesa)
     db.commit()
     db.refresh(nova_mesa)
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
     return nova_mesa
 
 @router.delete("/{mesa_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_mesa(mesa_id: int, db: Session = Depends(get_db)):
+def delete_mesa(
+    mesa_id: int, 
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
     """Remove uma mesa do salão se ela não tiver nenhuma comanda ativa aberta."""
     mesa = db.query(Mesa).filter(Mesa.id == mesa_id).first()
     if not mesa:
@@ -83,6 +99,7 @@ def delete_mesa(mesa_id: int, db: Session = Depends(get_db)):
         )
     db.delete(mesa)
     db.commit()
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
     return
 
 
