@@ -110,11 +110,11 @@ export function CaixaPanel({
   // ⚡ FILTRAGEM DINÂMICA DAS COMANDAS DE MESA PARA O KANBAN
   // ============================================================================
 
-  // Col 1 — Preparo: itens 'preparando' apenas de mesas/consumo local (delivery/retirada ignorados aqui)
+  // Col 1 — Preparo: itens 'preparando' apenas de mesas/consumo local (delivery/retirada/balcão ignorados aqui)
   const tableOrdersInProduction = (() => {
     const list: any[] = [];
     orders.forEach(comanda => {
-      if (comanda.tipo === 'Entrega' || comanda.tipo === 'Retirada' || comanda.tipo === 'Delivery') return;
+      if (comanda.tipo !== 'Consumo no Local' || !comanda.mesaId || comanda.mesaId <= 0) return;
       if ((comanda as any).statusComanda === 'aguardando_pagamento') return;
       const itemsByLancamento: Record<string, OrderItem[]> = {};
       comanda.itens.forEach(item => {
@@ -144,7 +144,7 @@ export function CaixaPanel({
   const tableOrdersReady = (() => {
     const list: any[] = [];
     orders.forEach(comanda => {
-      if (comanda.tipo === 'Entrega' || comanda.tipo === 'Retirada' || comanda.tipo === 'Delivery') return;
+      if (comanda.tipo !== 'Consumo no Local' || !comanda.mesaId || comanda.mesaId <= 0) return;
       // Mesas aguardando pagamento → col 3 diretamente
       if ((comanda as any).statusComanda === 'aguardando_pagamento') {
         list.push({
