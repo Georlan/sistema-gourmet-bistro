@@ -759,6 +759,38 @@ def reimprimir_lancamento_cozinha(
                 status_code=404,
                 detail="Comanda não encontrada"
             )
+            
+        # If it's a Delivery or Retirada, trigger delivery/takeout print tickets!
+        if comanda.tipo in ["Delivery", "Entrega", "Retirada"]:
+            try:
+                from ..printer_service import printer_service
+                from ..models import ConfiguracaoRestaurante, Motoboy
+                
+                motoboy_nome = "Balcão"
+                if comanda.motoboy_id:
+                    mb = db.query(Motoboy).filter(Motoboy.id == comanda.motoboy_id).first()
+                    if mb:
+                        motoboy_nome = mb.nome
+                        
+                config = db.query(ConfiguracaoRestaurante).first()
+                unificar = config.unificar_vias_delivery if config else False
+                
+                if unificar:
+                    unified_text = printer_service.generate_delivery_unified_ticket(comanda, motoboy_nome)
+                    background_tasks.add_task(print_in_background, "delivery_unico", unified_text)
+                else:
+                    kitchen_text = printer_service.generate_delivery_kitchen_ticket(comanda)
+                    motoboy_text = printer_service.generate_delivery_motoboy_ticket(comanda, motoboy_nome)
+                    background_tasks.add_task(print_in_background, "delivery_cozinha", kitchen_text)
+                    background_tasks.add_task(print_in_background, "delivery_motoboy", motoboy_text)
+                    
+                return {"status": "success", "detail": "Reimpressão de Delivery enviada com sucesso"}
+            except Exception as print_err:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Erro na impressora de delivery: {print_err}"
+                )
+
         active_items = [i for i in comanda.itens if i.status != "cancelado"]
         garcom_nome = comanda.criada_por.nome if comanda.criada_por else "Garçom"
     else:

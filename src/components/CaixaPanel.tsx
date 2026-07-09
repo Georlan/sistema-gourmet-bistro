@@ -617,6 +617,34 @@ export function CaixaPanel({
     }
   };
 
+  const openSimulatedOrderDetails = (order: SimulatedDeliveryOrder) => {
+    const fullComanda = orders.find(o => o.id === order.id);
+    const itemsMapped = fullComanda
+      ? fullComanda.itens.map((it: any) => ({
+          nome: it.produto?.nome || it.nome || 'Item',
+          observacao: it.observacao || '',
+          cliente_nome: it.cliente_nome || it.clienteNome || 'Consumo Geral',
+          status: it.status
+        }))
+      : order.itens.split(' + ').map((itStr: string) => {
+          const match = itStr.match(/^(\d+)x\s+(.+)$/);
+          return {
+            nome: match ? match[2] : itStr,
+            observacao: '',
+            cliente_nome: 'Consumo Geral',
+            status: order.status === 'pronto' ? 'pronto' : (order.status === 'transito' ? 'entregue' : 'preparando')
+          };
+        });
+
+    setSelectedKanbanOrder({
+      id: order.id,
+      mesaId: 0,
+      identificador: order.cliente,
+      itens: itemsMapped,
+      total: order.total
+    });
+  };
+
   const handleUpdateDeliveryStatus = async (orderId: string, statusNovo: string) => {
     if (isLoading) return;
     setIsLoading(true);
@@ -2123,7 +2151,11 @@ export function CaixaPanel({
                           }
 
                           return (
-                            <div key={order.id} className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'hover:border-[#10b981]/30', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all')}>
+                            <div 
+                              key={order.id} 
+                              onClick={() => openSimulatedOrderDetails(order)}
+                              className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'hover:border-[#10b981]/30', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all', 'cursor-pointer')}
+                            >
                               <div className={clsx('flex', 'justify-between', 'items-start')}>
                                 <div>
                                   <span className={clsx('px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold rounded font-mono block w-fit mb-1', badgeColor)}>
@@ -2147,7 +2179,10 @@ export function CaixaPanel({
                             )}
 
                             <button
-                              onClick={() => handleUpdateDeliveryStatus(order.id, 'pronto')}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleUpdateDeliveryStatus(order.id, 'pronto');
+                              }}
                               className={clsx('w-full', 'py-1.5', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider')}
                             >
                               Marcar como Pronto
@@ -2252,7 +2287,11 @@ export function CaixaPanel({
                           const buttonColor = hasAddress ? 'bg-orange-600 hover:bg-orange-700 text-white' : 'bg-amber-600 hover:bg-amber-700 text-white';
 
                           return (
-                            <div key={order.id} className={clsx('bg-[#1C1C1F]', 'border', 'border-emerald-500/30', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all')}>
+                            <div 
+                              key={order.id} 
+                              onClick={() => openSimulatedOrderDetails(order)}
+                              className={clsx('bg-[#1C1C1F]', 'border', 'border-emerald-500/30', 'hover:border-emerald-500/50', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all', 'cursor-pointer')}
+                            >
                               <div className={clsx('flex', 'justify-between', 'items-start')}>
                                 <div>
                                   <span className={clsx('px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold rounded font-mono block w-fit mb-1', badgeColor)}>{badgeText}</span>
@@ -2274,7 +2313,8 @@ export function CaixaPanel({
                               )}
 
                               <button
-                                onClick={async () => {
+                                onClick={async (e) => {
+                                  e.stopPropagation();
                                   if (isLoading) return;
                                   handleUpdateDeliveryStatus(order.id, 'transito');
                                 }}
@@ -2363,7 +2403,11 @@ export function CaixaPanel({
                           const badgeText = hasAddress ? 'DELIVERY - EM ROTA' : 'RETIRADA - NÃO PAGO';
                           const badgeColor = 'bg-blue-500/10 text-blue-300';
                           return (
-                            <div key={`transito-${order.id}`} className={clsx('bg-[#121214]', 'border', 'border-blue-500/20', 'hover:border-blue-500/40', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all')}>
+                            <div 
+                              key={`transito-${order.id}`} 
+                              onClick={() => openSimulatedOrderDetails(order)}
+                              className={clsx('bg-[#121214]', 'border', 'border-blue-500/20', 'hover:border-blue-500/40', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all', 'cursor-pointer')}
+                            >
                               <div className={clsx('flex', 'justify-between', 'items-start')}>
                                 <div>
                                   <span className={clsx('px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold rounded font-mono block w-fit mb-1', badgeColor)}>{badgeText}</span>
@@ -2385,7 +2429,8 @@ export function CaixaPanel({
                               )}
 
                               <button
-                                onClick={async () => {
+                                onClick={async (e) => {
+                                  e.stopPropagation();
                                   if (isLoading) return;
                                   const fullOrder = orders.find(o => o.id === order.id);
                                   if (fullOrder) {
