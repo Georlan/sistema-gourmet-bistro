@@ -59,7 +59,7 @@ interface SimulatedDeliveryOrder {
   itens: string;
   total: number;
   canal: 'ifood' | 'site' | 'whats';
-  status: 'analise' | 'producao' | 'pronto';
+  status: 'pendente' | 'analise' | 'producao' | 'pronto' | 'transito';
   endereco?: string;
   criadoEm: string;
 }
