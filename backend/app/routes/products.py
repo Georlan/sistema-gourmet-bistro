@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from ..database import get_db
 from ..models import Produto, Categoria, ObservacaoPredefinida
@@ -163,7 +163,7 @@ def retry_print_queue():
 @router.get("/", response_model=List[ProdutoResponse])
 def get_produtos(db: Session = Depends(get_db)):
     """Retorna todos os produtos cadastrados no cardápio."""
-    return db.query(Produto).all()
+    return db.query(Produto).options(joinedload(Produto.categoria)).all()
 
 @router.get("/{produto_id}", response_model=ProdutoResponse)
 def get_produto(produto_id: str, db: Session = Depends(get_db)):
