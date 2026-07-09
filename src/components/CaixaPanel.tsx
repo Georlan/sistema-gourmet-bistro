@@ -1402,6 +1402,7 @@ export function CaixaPanel({
         setPdvDeliveryAddress('');
         setPdvDeliveryTaxa('0.00');
         onRefreshOrders();
+        fetchDeliveryOrders();
         alert("Pedido lançado com sucesso!");
         if (pdvOrderType === 'mesa') {
           setActiveTab('operacao');
@@ -2273,37 +2274,7 @@ export function CaixaPanel({
                               <button
                                 onClick={async () => {
                                   if (isLoading) return;
-                                  if (hasAddress) {
-                                    // Delivery -> Mover para Fechar Conta (Column 3) em trânsito
-                                    handleUpdateDeliveryStatus(order.id, 'transito');
-                                  } else {
-                                    // Retirada -> Perguntar se já pagou
-                                    if (confirm("O cliente já efetuou o pagamento deste pedido? (OK: Sim, Pagar Agora. Cancelar: Não, Pagar Depois)")) {
-                                      const fullOrder = orders.find(o => o.id === order.id);
-                                      if (fullOrder) {
-                                        setSelectedOrder({
-                                          ...fullOrder,
-                                          itens: fullOrder.itens.map((item: any) => ({
-                                            id: item.id, produtoId: item.produto_id || item.produtoId,
-                                            nome: item.nome || `Item ${item.produtoId}`, preco: item.preco_unit || item.preco,
-                                            observacao: item.observacao || '', clienteNome: item.cliente_nome || item.clienteNome || 'Consumo Geral',
-                                            status: item.status, pago: item.pago
-                                          }))
-                                        });
-                                        setShowCheckoutModal(true);
-                                        setCheckoutServiceTax(false);
-                                        setSplitPeople('1');
-                                        setSelectedItemIds([]);
-                                        const sub = fullOrder.itens.filter((item: any) => !item.pago).reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
-                                        setPaymentValor(sub.toFixed(2));
-                                      } else {
-                                        handleFinalizarPedido(order.id);
-                                      }
-                                    } else {
-                                      // Mover para Fechar Conta
-                                      handleUpdateDeliveryStatus(order.id, 'transito');
-                                    }
-                                  }
+                                  handleUpdateDeliveryStatus(order.id, 'transito');
                                 }}
                                 className={clsx('w-full', 'py-1.5', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1', buttonColor)}
                               >
