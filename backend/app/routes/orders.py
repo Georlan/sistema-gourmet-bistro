@@ -437,6 +437,15 @@ def fechar_comanda(
     db.commit()
     db.refresh(comanda)
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
+    if comanda.mesa_id:
+        background_tasks.add_task(manager.broadcast, {
+            "event": "MESA_ATUALIZADA",
+            "data": {
+                "mesa_id": comanda.mesa_id,
+                "status": "livre",
+                "comanda_id": None
+            }
+        })
     return comanda
 
 @router.put("/{comanda_id}/reabrir", response_model=ComandaResponse)

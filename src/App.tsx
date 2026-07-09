@@ -455,6 +455,8 @@ export default function App() {
       ws.onopen = () => {
         console.log("WebSocket connection established");
         setIsWsConnected(true);
+        fetchTables();
+        fetchOrdersFromAPI();
       };
 
       ws.onmessage = (event) => {
@@ -470,6 +472,17 @@ export default function App() {
             }
             if (data.detail && data.detail.type === "pagamento_registrado" && data.detail.status === "pendente") {
               showToast(`💵 CONFIRMAR DINHEIRO: R$ ${data.detail.valor.toFixed(2)} - Garçom ${data.detail.garcom_nome}`, 'info', 5000);
+            }
+          } else if (data.event === "MESA_ATUALIZADA") {
+            const { mesa_id, status, comanda_id } = data.data;
+            if (status === 'livre') {
+              setOrders(prevOrders => prevOrders.filter(o => o.mesaId !== mesa_id));
+            }
+            setSalonTables(prevTables =>
+              prevTables.map(t => t.id === mesa_id ? { ...t, status: status, comanda_id: comanda_id } : t)
+            );
+            if (status === 'livre' && portal === 'garcom' && navigator.vibrate) {
+              navigator.vibrate(100);
             }
           } else if (data.event === "draft_status") {
             const { mesa_id, garcom_id, garcom_nome, ativo } = data;

@@ -289,6 +289,15 @@ def registrar_pagamento_comanda(
             # Close comanda
             comanda.fechada = True
             comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
+            if comanda.mesa_id:
+                background_tasks.add_task(manager.broadcast, {
+                    "event": "MESA_ATUALIZADA",
+                    "data": {
+                        "mesa_id": comanda.mesa_id,
+                        "status": "livre",
+                        "comanda_id": None
+                    }
+                })
             
             # Process loyalty points/cashback if client CPF/phone is present
             from ..models import ConfigFidelizacao, HistoricoFidelidade
@@ -379,6 +388,15 @@ def aprovar_pagamento(
                 i.pago = True
         comanda.fechada = True
         comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
+        if comanda.mesa_id:
+            background_tasks.add_task(manager.broadcast, {
+                "event": "MESA_ATUALIZADA",
+                "data": {
+                    "mesa_id": comanda.mesa_id,
+                    "status": "livre",
+                    "comanda_id": None
+                }
+            })
         
     db.commit()
     db.refresh(pagamento)
