@@ -78,6 +78,16 @@ try:
                 if col not in pag_cols:
                     conn.execute(text(f"ALTER TABLE pagamentos ADD COLUMN {col} {col_def}"))
             conn.commit()
+
+            # comandas — new Kanban flow fields
+            cmd_cols = {c["name"] for c in insp.get_columns("comandas")}
+            cmd_migrations = [
+                ("status_comanda", "VARCHAR"),  # null | aguardando_pagamento
+            ]
+            for col, col_def in cmd_migrations:
+                if col not in cmd_cols:
+                    conn.execute(text(f"ALTER TABLE comandas ADD COLUMN {col} {col_def}"))
+            conn.commit()
 except Exception as e:
     print(f"Error running database migrations: {e}")
 

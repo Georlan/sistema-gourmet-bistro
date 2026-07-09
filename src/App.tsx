@@ -690,6 +690,9 @@ export default function App() {
           timestamp: parseBackendDateTime(comanda.criado_em),
           tipo: comanda.tipo,
           valorPago: comanda.valor_pago || 0,
+          identificador: comanda.identificador || null,
+          statusComanda: comanda.status_comanda || null,       // aguardando_pagamento | null
+          deliveryStatus: comanda.delivery_status || null,    // pendente | producao | pronto | transito | finalizado
           itens: comanda.itens
             .filter((item: any) => item.status !== 'cancelado')
             .map((item: any) => ({

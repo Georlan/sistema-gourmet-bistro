@@ -155,6 +155,9 @@ class ComandaResponse(BaseModel):
     delivery_taxa: float = 0.0
     motoboy_id: Optional[int] = None
 
+    # Cashier flow
+    status_comanda: Optional[str] = None  # null | aguardando_pagamento
+
     class Config:
         from_attributes = True
 

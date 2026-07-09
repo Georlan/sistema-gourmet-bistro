@@ -130,6 +130,13 @@ def abrir_comanda(comanda_in: ComandaCreate, background_tasks: BackgroundTasks, 
         )
 
     # 4. Criar comanda
+    # Auto-define delivery_status: Entrega começa como 'pendente' (gaveta de aceite), Retirada já entra como 'producao'
+    auto_delivery_status = comanda_in.delivery_status
+    if comanda_in.tipo == "Entrega" and auto_delivery_status is None:
+        auto_delivery_status = "pendente"
+    elif comanda_in.tipo == "Retirada" and auto_delivery_status is None:
+        auto_delivery_status = "producao"
+
     nova_comanda = Comanda(
         id=f"c-{uuid.uuid4().hex[:8]}",
         mesa_id=comanda_in.mesa_id,
@@ -139,7 +146,7 @@ def abrir_comanda(comanda_in: ComandaCreate, background_tasks: BackgroundTasks, 
         numero_pedido=numero_pedido,
         fechada=False,
         criado_em=datetime.datetime.now(datetime.timezone.utc),
-        delivery_status=comanda_in.delivery_status,
+        delivery_status=auto_delivery_status,
         delivery_telefone=comanda_in.delivery_telefone,
         delivery_endereco=comanda_in.delivery_endereco,
         delivery_taxa=comanda_in.delivery_taxa,
@@ -150,6 +157,31 @@ def abrir_comanda(comanda_in: ComandaCreate, background_tasks: BackgroundTasks, 
     db.refresh(nova_comanda)
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
     return nova_comanda
+
+
+@router.put("/{comanda_id}/pedir-conta", response_model=ComandaResponse)
+def pedir_conta(
+    comanda_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_garcom=Depends(get_current_garcom_optional)
+):
+    """
+    Garçom solicita a conta para a mesa. Altera status_comanda para 'aguardando_pagamento',
+    movendo a mesa para a coluna 3 do Kanban (Fechar Conta) sem passar pela coluna 2.
+    """
+    if current_garcom is None:
+        raise HTTPException(status_code=401, detail="Token obrigatório")
+    comanda = db.query(Comanda).filter(Comanda.id == comanda_id).first()
+    if not comanda:
+        raise HTTPException(status_code=404, detail="Comanda não encontrada")
+    if comanda.fechada:
+        raise HTTPException(status_code=400, detail="Comanda já está fechada")
+    comanda.status_comanda = "aguardando_pagamento"
+    db.commit()
+    db.refresh(comanda)
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
+    return comanda
 
 @router.post("/{comanda_id}/lancamentos", response_model=LancamentoResponse, status_code=status.HTTP_201_CREATED)
 def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
@@ -785,9 +817,10 @@ def reimprimir_lancamento_cozinha(
 def listar_delivery_ativos(db: Session = Depends(get_db)):
     """
     Retorna todas as comandas de delivery ou retirada que não estejam finalizadas/fechadas.
+    Inclui as pendentes (na gaveta de aceite) e as em produção/trânsito.
     """
     return db.query(Comanda).filter(
-        Comanda.tipo.in_(["Delivery", "Retirada"]),
+        Comanda.tipo.in_(["Entrega", "Retirada"]),
         Comanda.fechada == False
     ).all()
 

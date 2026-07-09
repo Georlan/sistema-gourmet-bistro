@@ -103,11 +103,14 @@ class Comanda(Base):
     valor_pago = Column(Float, default=0.0, nullable=False)  # Sum of generic partial payments made
     
     # Delivery operational fields
-    delivery_status = Column(String, nullable=True)  # analise, producao, transito, finalizado
+    delivery_status = Column(String, nullable=True)  # pendente | producao | pronto | transito | finalizado
     delivery_taxa = Column(Float, default=0.0)
     _delivery_telefone = Column("delivery_telefone", String, nullable=True)
     _delivery_endereco = Column("delivery_endereco", String, nullable=True)
     motoboy_id = Column(Integer, ForeignKey("motoboys.id"), nullable=True)
+
+    # Cashier flow field
+    status_comanda = Column(String, nullable=True)  # null (normal) | aguardando_pagamento (table requested bill)
 
     @hybrid_property
     def delivery_telefone(self):
