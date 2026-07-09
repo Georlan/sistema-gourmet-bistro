@@ -410,8 +410,8 @@ export default function App() {
     let reconnectTimeout: any;
 
     const connectWS = () => {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.hostname}:8000/ws/${activeWaiterId}`;
+      const wsBase = API_BASE_URL.replace(/^http/, 'ws');
+      const wsUrl = `${wsBase}/ws/${activeWaiterId}`;
       ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
@@ -1147,30 +1147,37 @@ export default function App() {
 
   if (showIntro) {
     return (
-      <div className="fixed inset-0 bg-[#0B0F19] z-50 flex flex-col items-center justify-center p-4">
-        <div className="relative w-full max-w-2xl aspect-video rounded-3xl overflow-hidden shadow-2xl border border-emerald-500/25 bg-black">
+      <div className={clsx('fixed', 'inset-0', 'bg-[#0B0F19]', 'z-50', 'flex', 'flex-col', 'items-center', 'justify-center', 'p-4')}>
+        <div className={clsx('relative', 'w-full', 'max-w-2xl', 'aspect-video', 'rounded-3xl', 'overflow-hidden', 'shadow-2xl', 'border', 'border-emerald-500/25', 'bg-black')}>
           <video
             src="/intro.mp4"
             autoPlay
-            muted
+            muted={isMuted}
             playsInline
             onEnded={() => {
               sessionStorage.setItem('koma_intro_played', 'true');
               setShowIntro(false);
             }}
-            className="w-full h-full object-cover"
+            className={clsx('w-full', 'h-full', 'object-cover')}
           />
+          <button
+            onClick={() => setIsMuted(!isMuted)}
+            className={clsx('absolute', 'top-4', 'right-4', 'p-2', 'bg-black/60', 'hover:bg-black/80', 'text-white', 'border', 'border-white/10', 'rounded-xl', 'transition-all', 'backdrop-blur-md', 'cursor-pointer', 'flex', 'items-center', 'justify-center')}
+            title={isMuted ? "Ativar Som" : "Desativar Som"}
+          >
+            {isMuted ? <VolumeX size={15} /> : <Volume2 size={15} />}
+          </button>
           <button
             onClick={() => {
               sessionStorage.setItem('koma_intro_played', 'true');
               setShowIntro(false);
             }}
-            className="absolute bottom-4 right-4 px-4 py-2 bg-black/65 hover:bg-black/85 text-white border border-white/10 rounded-xl text-xs font-bold transition-all backdrop-blur-md cursor-pointer uppercase tracking-wider"
+            className={clsx('absolute', 'bottom-4', 'right-4', 'px-4', 'py-2', 'bg-black/65', 'hover:bg-black/85', 'text-white', 'border', 'border-white/10', 'rounded-xl', 'text-xs', 'font-bold', 'transition-all', 'backdrop-blur-md', 'cursor-pointer', 'uppercase', 'tracking-wider')}
           >
             Pular Intro
           </button>
         </div>
-        <p className="mt-6 text-xs text-emerald-400 font-mono tracking-widest uppercase animate-pulse">
+        <p className={clsx('mt-6', 'text-xs', 'text-emerald-400', 'font-mono', 'tracking-widest', 'uppercase', 'animate-pulse')}>
           Carregando Kôma...
         </p>
       </div>
@@ -1339,7 +1346,7 @@ export default function App() {
             className={clsx('fixed', 'inset-0', 'bg-black/75', 'backdrop-blur-xs', 'transition-opacity')}
           />
 
-           {/* Drawer content */}
+          {/* Drawer content */}
           <div className={clsx('relative', 'w-80', 'max-w-sm', 'bg-[#0E0E10]/95', 'backdrop-blur-xl', 'border-r', 'border-emerald-500/10', 'h-full', 'flex', 'flex-col', 'justify-between', 'shadow-2xl', 'z-10', 'p-6', 'text-[#FAF7F2]', 'overflow-y-auto', 'animate-slide-in-left')}>
             <div className="space-y-7">
 
