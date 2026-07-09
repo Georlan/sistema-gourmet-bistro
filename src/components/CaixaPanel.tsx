@@ -110,12 +110,11 @@ export function CaixaPanel({
   // ⚡ FILTRAGEM DINÂMICA DAS COMANDAS DE MESA PARA O KANBAN
   // ============================================================================
 
-  // Col 1 — Preparo: itens 'preparando' de mesas e delivery/retirada já aceitos (não pendentes)
+  // Col 1 — Preparo: itens 'preparando' apenas de mesas/consumo local (delivery/retirada ignorados aqui)
   const tableOrdersInProduction = (() => {
     const list: any[] = [];
     orders.forEach(comanda => {
-      // Skip deliveries still pending (in drawer), and mesas waiting for bill
-      if ((comanda as any).deliveryStatus === 'pendente') return;
+      if (comanda.tipo === 'Entrega' || comanda.tipo === 'Retirada' || comanda.tipo === 'Delivery') return;
       if ((comanda as any).statusComanda === 'aguardando_pagamento') return;
       const itemsByLancamento: Record<string, OrderItem[]> = {};
       comanda.itens.forEach(item => {
@@ -141,33 +140,11 @@ export function CaixaPanel({
     return list;
   })();
 
-  // Col 2 — Prontos p/ despacho: APENAS Delivery e Retirada com itens prontos (mesas NÃO entram aqui)
-  const tableOrdersReadyForPickup = (() => {
-    const list: any[] = [];
-    orders.forEach(comanda => {
-      if (comanda.tipo !== 'Retirada' && comanda.tipo !== 'Entrega') return;
-      if ((comanda as any).deliveryStatus === 'pendente') return;
-      const readyItems = comanda.itens.filter(i => i.status === 'pronto');
-      if (readyItems.length > 0) {
-        list.push({
-          id: comanda.id,
-          comandaId: comanda.id,
-          mesaId: comanda.mesaId,
-          identificador: (comanda as any).identificador,
-          garcomNome: comanda.garcomNome,
-          tipo: comanda.tipo,
-          valorPago: (comanda as any).valorPago || 0,
-          itens: readyItems
-        });
-      }
-    });
-    return list;
-  })();
-
-  // Col 3 — Fechar conta: mesas com aguardando_pagamento OU qualquer comanda com itens prontos que não é delivery/retirada
+  // Col 3 — Fechar conta: apenas mesas/consumo local com status_comanda='aguardando_pagamento' ou itens prontos
   const tableOrdersReady = (() => {
     const list: any[] = [];
     orders.forEach(comanda => {
+      if (comanda.tipo === 'Entrega' || comanda.tipo === 'Retirada' || comanda.tipo === 'Delivery') return;
       // Mesas aguardando pagamento → col 3 diretamente
       if ((comanda as any).statusComanda === 'aguardando_pagamento') {
         list.push({
@@ -182,8 +159,6 @@ export function CaixaPanel({
         });
         return;
       }
-      // Delivery/Retirada já foram tratados em col 2 — skip
-      if (comanda.tipo === 'Retirada' || comanda.tipo === 'Entrega') return;
       // Mesas com itens prontos normalmente → col 3 (fechar conta)
       const readyItems = comanda.itens.filter(i => i.status === 'pronto');
       if (readyItems.length > 0) {
@@ -195,7 +170,7 @@ export function CaixaPanel({
           garcomNome: comanda.garcomNome,
           tipo: comanda.tipo,
           valorPago: (comanda as any).valorPago || 0,
-          itens: readyItems
+          itens: comanda.itens
         });
       }
     });
@@ -2252,121 +2227,111 @@ export function CaixaPanel({
                   </div>
                 </div>
 
-                {/* COLUMN 2: Prontos p/ Retirada/Despacho — APENAS Delivery e Retirada */}
+                {/* COLUMN 2: Pronto p/ Despacho (Delivery e Retirada) */}
                 <div className={clsx('bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden')}>
                   <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
                     <span className={clsx('font-bold', 'text-gray-300', 'font-serif')}>Pronto p/ Despacho</span>
                     <span className={clsx('bg-orange-500/10', 'text-orange-400', 'font-bold', 'px-2', 'py-0.5', 'rounded-full', 'font-mono', 'text-[9px]')}>
-                      {(modoExclusivoSalao ? 0 : simulatedOrders.filter(o => o.status === 'pronto').length) + tableOrdersReadyForPickup.length}
+                      {modoExclusivoSalao ? 0 : simulatedOrders.filter(o => o.status === 'pronto').length}
                     </span>
                   </div>
 
                   <div className={clsx('p-3', 'flex-1', 'overflow-y-auto', 'space-y-3')}>
-                    {(modoExclusivoSalao ? 0 : simulatedOrders.filter(o => o.status === 'pronto').length) === 0 && tableOrdersReadyForPickup.length === 0 ? (
+                    {(modoExclusivoSalao ? 0 : simulatedOrders.filter(o => o.status === 'pronto').length) === 0 ? (
                       <div className={clsx('py-20', 'text-center', 'text-gray-500', 'italic', 'text-[10px]')}>Nenhum pedido pronto para despacho</div>
                     ) : (
                       <>
-                        {/* Pedidos Delivery Prontos (simulatedOrders) */}
-                        {!modoExclusivoSalao && simulatedOrders.filter(o => o.status === 'pronto').map((order) => (
-                          <div key={order.id} className={clsx('bg-[#1C1C1F]', 'border', 'border-emerald-500/30', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all')}>
-                            <div className={clsx('flex', 'justify-between', 'items-start')}>
-                              <div>
-                                <strong className={clsx('text-white', 'text-xs', 'block')}>{order.cliente}</strong>
-                                <span className={clsx('text-[9px]', 'text-gray-400', 'block')}>{order.telefone}</span>
+                        {!modoExclusivoSalao && simulatedOrders.filter(o => o.status === 'pronto').map((order) => {
+                          const hasAddress = !!order.endereco;
+                          const badgeText = hasAddress ? 'DELIVERY - PRONTO' : 'RETIRADA - PRONTO';
+                          const badgeColor = hasAddress ? 'bg-orange-500/10 text-orange-400' : 'bg-amber-500/10 text-amber-400';
+                          const buttonText = hasAddress ? 'SAIU PARA ENTREGA' : '✓ RETIROU';
+                          const buttonColor = hasAddress ? 'bg-orange-600 hover:bg-orange-700 text-white' : 'bg-amber-600 hover:bg-amber-700 text-white';
+
+                          return (
+                            <div key={order.id} className={clsx('bg-[#1C1C1F]', 'border', 'border-emerald-500/30', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all')}>
+                              <div className={clsx('flex', 'justify-between', 'items-start')}>
+                                <div>
+                                  <span className={clsx('px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold rounded font-mono block w-fit mb-1', badgeColor)}>{badgeText}</span>
+                                  <strong className={clsx('text-white', 'text-xs', 'block')}>{order.cliente}</strong>
+                                  <span className={clsx('text-[9px]', 'text-gray-400', 'block')}>{order.telefone}</span>
+                                </div>
+                                <span className={clsx('font-bold', 'text-emerald-400', 'font-mono', 'text-[11px]', 'shrink-0')}>R$ {order.total.toFixed(2)}</span>
                               </div>
-                              <span className={clsx('font-bold', 'text-emerald-400', 'font-mono', 'text-[11px]', 'shrink-0')}>R$ {order.total.toFixed(2)}</span>
+
+                              <p className={clsx('text-[10px]', 'text-gray-300', 'bg-[#09090B]', 'p-1.5', 'rounded', 'border', 'border-[#27272A]/30', 'leading-relaxed', 'font-mono')}>
+                                {order.itens}
+                              </p>
+
+                              {order.endereco && (
+                                <span className={clsx('text-[9px]', 'text-gray-400', 'flex', 'items-start', 'gap-1', 'block')}>
+                                  <MapPin size={10} className={clsx('shrink-0', 'text-rose-500', 'mt-0.5')} />
+                                  <span className="leading-relaxed">{order.endereco}</span>
+                                </span>
+                              )}
+
+                              <button
+                                onClick={async () => {
+                                  if (isLoading) return;
+                                  if (hasAddress) {
+                                    // Delivery -> Mover para Fechar Conta (Column 3) em trânsito
+                                    handleUpdateDeliveryStatus(order.id, 'transito');
+                                  } else {
+                                    // Retirada -> Perguntar se já pagou
+                                    if (confirm("O cliente já efetuou o pagamento deste pedido? (OK: Sim, Pagar Agora. Cancelar: Não, Pagar Depois)")) {
+                                      const fullOrder = orders.find(o => o.id === order.id);
+                                      if (fullOrder) {
+                                        setSelectedOrder({
+                                          ...fullOrder,
+                                          itens: fullOrder.itens.map((item: any) => ({
+                                            id: item.id, produtoId: item.produto_id || item.produtoId,
+                                            nome: item.nome || `Item ${item.produtoId}`, preco: item.preco_unit || item.preco,
+                                            observacao: item.observacao || '', clienteNome: item.cliente_nome || item.clienteNome || 'Consumo Geral',
+                                            status: item.status, pago: item.pago
+                                          }))
+                                        });
+                                        setShowCheckoutModal(true);
+                                        setCheckoutServiceTax(false);
+                                        setSplitPeople('1');
+                                        setSelectedItemIds([]);
+                                        const sub = fullOrder.itens.filter((item: any) => !item.pago).reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
+                                        setPaymentValor(sub.toFixed(2));
+                                      } else {
+                                        handleFinalizarPedido(order.id);
+                                      }
+                                    } else {
+                                      // Mover para Fechar Conta
+                                      handleUpdateDeliveryStatus(order.id, 'transito');
+                                    }
+                                  }
+                                }}
+                                className={clsx('w-full', 'py-1.5', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1', buttonColor)}
+                              >
+                                <span>{buttonText}</span>
+                              </button>
                             </div>
-
-                            {order.endereco && (
-                              <span className={clsx('text-[9px]', 'text-gray-400', 'flex', 'items-start', 'gap-1', 'block')}>
-                                <MapPin size={10} className={clsx('shrink-0', 'text-rose-500', 'mt-0.5')} />
-                                <span className="leading-relaxed">{order.endereco}</span>
-                              </span>
-                            )}
-
-                            <button
-                              onClick={() => handleFinalizarPedido(order.id)}
-                              className={clsx('w-full', 'py-1.5', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider')}
-                            >
-                              Finalizar Pedido
-                            </button>
-                          </div>
-                        ))}
-
-                        {/* Delivery/Retirada prontos via `orders` state */}
-                        {tableOrdersReadyForPickup.map((order) => {
-                           const itemCounts: Record<string, number> = {};
-                           const readyItems = order.itens.filter(item => item.status === 'pronto');
-                           readyItems.forEach(item => {
-                             const name = item.nome || 'Item';
-                             itemCounts[name] = (itemCounts[name] || 0) + 1;
-                           });
-                           const itemsStr = Object.entries(itemCounts)
-                             .map(([name, qty]) => `${qty}x ${name}`)
-                             .join(' + ');
-
-                           const isTakeout = order.tipo === 'Retirada';
-                           const badgeText = isTakeout ? 'Retirada - Pronto' : 'Delivery - Pronto';
-                           const badgeColor = isTakeout ? 'bg-amber-500/10 text-amber-400' : 'bg-orange-500/10 text-orange-400';
-                           const buttonText = isTakeout ? 'Retirou' : 'Saiu para Entrega';
-                           const buttonColor = isTakeout ? 'bg-amber-600 hover:bg-amber-700 text-white' : 'bg-orange-600 hover:bg-orange-700 text-white';
-
-                           return (
-                             <div key={`pickup-${order.id}`} onClick={() => setSelectedKanbanOrder(order)} className="bg-[#121214] border border-orange-500/20 hover:border-orange-500/40 p-3 rounded-xl space-y-2.5 transition-all cursor-pointer">
-                               <div className="flex justify-between items-start">
-                                 <div>
-                                   <span className={clsx('px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold rounded font-mono block w-fit mb-1', badgeColor)}>{badgeText}</span>
-                                   <strong className="text-white text-xs block">{order.identificador || (isTakeout ? 'Pedido Retirada' : 'Pedido Entrega')}</strong>
-                                 </div>
-                                 <span className="text-[9px] text-gray-500 font-mono">#{order.id.slice(-4)}</span>
-                               </div>
-                               <p className="text-[10px] text-orange-400 bg-[#09090B] p-1.5 rounded border border-[#27272A]/30 leading-relaxed font-mono">{itemsStr}</p>
-                               <button
-                                 type="button"
-                                 onClick={async (e) => {
-                                   e.stopPropagation();
-                                   if (isLoading) return;
-                                   if (!isTakeout && !confirm('Confirmar que o pedido saiu para entrega?')) return;
-                                   setIsLoading(true);
-                                   try {
-                                     await Promise.all(readyItems.map(item =>
-                                       fetch(`${apiBaseUrl}/comandas/itens/${item.id}/status?status=entregue`, { method: 'PUT', headers: authHeaders })
-                                     ));
-                                     if (!isTakeout) {
-                                       await fetch(`${apiBaseUrl}/comandas/${order.comandaId}/delivery/status?status_novo=finalizado`, { method: 'PUT', headers: authHeaders });
-                                     }
-                                     await fetch(`${apiBaseUrl}/comandas/${order.comandaId}/fechar`, { method: 'PUT', headers: authHeaders });
-                                     onRefreshOrders();
-                                     fetchDeliveryOrders();
-                                   } catch (err) { console.error(err); }
-                                   finally { setIsLoading(false); }
-                                 }}
-                                 className={clsx('w-full py-1.5 rounded-lg font-bold text-[9px] transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1', buttonColor)}
-                               >
-                                 <Check size={11} /><span>{buttonText}</span>
-                               </button>
-                             </div>
-                           );
+                          );
                         })}
                       </>
                     )}
                   </div>
                 </div>
 
-                {/* COLUMN 3: Fechar Conta — mesas aguardando pagamento */}
+                {/* COLUMN 3: Fechar Conta (Mesas + Delivery/Retirada em trânsito) */}
                 <div className={clsx('bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden')}>
                   <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
                     <span className={clsx('font-bold', 'text-gray-300', 'font-serif')}>Fechar Conta</span>
                     <span className={clsx('bg-blue-500/10', 'text-blue-400', 'font-bold', 'px-2', 'py-0.5', 'rounded-full', 'font-mono', 'text-[9px]')}>
-                      {tableOrdersReady.length}
+                      {tableOrdersReady.length + (modoExclusivoSalao ? 0 : simulatedOrders.filter(o => o.status === 'transito').length)}
                     </span>
                   </div>
 
                   <div className={clsx('p-3', 'flex-1', 'overflow-y-auto', 'space-y-3')}>
-                    {tableOrdersReady.length === 0 ? (
-                      <div className={clsx('py-20', 'text-center', 'text-gray-500', 'italic', 'text-[10px]')}>Nenhuma mesa aguardando fechamento</div>
+                    {tableOrdersReady.length === 0 && (modoExclusivoSalao || simulatedOrders.filter(o => o.status === 'transito').length === 0) ? (
+                      <div className={clsx('py-20', 'text-center', 'text-gray-500', 'italic', 'text-[10px]')}>Nenhuma conta ou entrega pendente</div>
                     ) : (
                       <>
+                        {/* 1. Mesas/Consumo Local aguardando pagamento */}
                         {tableOrdersReady.map((order) => {
                           const itemCounts: Record<string, number> = {};
                           order.itens.forEach(item => {
@@ -2414,6 +2379,65 @@ export function CaixaPanel({
                                 className="w-full py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-[9px] transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1"
                               >
                                 <Check size={11} /><span>Fechar Conta</span>
+                              </button>
+                            </div>
+                          );
+                        })}
+
+                        {/* 2. Delivery/Retirada em trânsito (aguardando retorno/pagamento) */}
+                        {!modoExclusivoSalao && simulatedOrders.filter(o => o.status === 'transito').map((order) => {
+                          const hasAddress = !!order.endereco;
+                          const badgeText = hasAddress ? 'DELIVERY - EM ROTA' : 'RETIRADA - NÃO PAGO';
+                          const badgeColor = 'bg-blue-500/10 text-blue-300';
+                          return (
+                            <div key={`transito-${order.id}`} className={clsx('bg-[#121214]', 'border', 'border-blue-500/20', 'hover:border-blue-500/40', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all')}>
+                              <div className={clsx('flex', 'justify-between', 'items-start')}>
+                                <div>
+                                  <span className={clsx('px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold rounded font-mono block w-fit mb-1', badgeColor)}>{badgeText}</span>
+                                  <strong className={clsx('text-white', 'text-xs', 'block')}>{order.cliente}</strong>
+                                  <span className={clsx('text-[9px]', 'text-gray-400', 'block')}>{order.telefone}</span>
+                                </div>
+                                <span className={clsx('font-bold', 'text-blue-300', 'font-mono', 'text-[11px]', 'shrink-0')}>R$ {order.total.toFixed(2)}</span>
+                              </div>
+
+                              <p className={clsx('text-[10px]', 'text-gray-300', 'bg-[#09090B]', 'p-1.5', 'rounded', 'border', 'border-[#27272A]/30', 'leading-relaxed', 'font-mono')}>
+                                {order.itens}
+                              </p>
+
+                              {order.endereco && (
+                                <span className={clsx('text-[9px]', 'text-gray-400', 'flex', 'items-start', 'gap-1', 'block')}>
+                                  <MapPin size={10} className={clsx('shrink-0', 'text-rose-500', 'mt-0.5')} />
+                                  <span className="leading-relaxed">{order.endereco}</span>
+                                </span>
+                              )}
+
+                              <button
+                                onClick={async () => {
+                                  if (isLoading) return;
+                                  const fullOrder = orders.find(o => o.id === order.id);
+                                  if (fullOrder) {
+                                    setSelectedOrder({
+                                      ...fullOrder,
+                                      itens: fullOrder.itens.map((item: any) => ({
+                                        id: item.id, produtoId: item.produto_id || item.produtoId,
+                                        nome: item.nome || `Item ${item.produtoId}`, preco: item.preco_unit || item.preco,
+                                        observacao: item.observacao || '', clienteNome: item.cliente_nome || item.clienteNome || 'Consumo Geral',
+                                        status: item.status, pago: item.pago
+                                      }))
+                                    });
+                                    setShowCheckoutModal(true);
+                                    setCheckoutServiceTax(false);
+                                    setSplitPeople('1');
+                                    setSelectedItemIds([]);
+                                    const sub = fullOrder.itens.filter((item: any) => !item.pago).reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
+                                    setPaymentValor(sub.toFixed(2));
+                                  } else {
+                                    handleFinalizarPedido(order.id);
+                                  }
+                                }}
+                                className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[9px] transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1"
+                              >
+                                <Check size={11} /><span>Receber / Finalizar</span>
                               </button>
                             </div>
                           );
