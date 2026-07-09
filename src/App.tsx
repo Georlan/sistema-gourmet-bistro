@@ -20,8 +20,12 @@ const LOCAL_STORAGE_SETTINGS_KEY = 'koma_settings_vFinal_v3';
 const LOCAL_STORAGE_RESTAURANT_NAME_KEY = 'koma_restaurant_name_v3';
 const LOCAL_STORAGE_HIST_CLIENTS_KEY = 'koma_historic_clients_v3';
 
-const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  ? 'http://localhost:8000'
+const isLocalHost = window.location.hostname === 'localhost' || 
+                    window.location.hostname === '127.0.0.1' || 
+                    /^(\d{1,3}\.){3}\d{1,3}$/.test(window.location.hostname);
+
+const API_BASE_URL = isLocalHost
+  ? `${window.location.protocol}//${window.location.hostname}:8000`
   : 'https://sistema-gourmet-bistro-production.up.railway.app';
 
 const parseBackendDateTime = (dateStr: string): number => {
