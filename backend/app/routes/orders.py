@@ -132,7 +132,7 @@ def abrir_comanda(comanda_in: ComandaCreate, background_tasks: BackgroundTasks, 
     # 4. Criar comanda
     # Auto-define delivery_status: Entrega começa como 'pendente' (gaveta de aceite), Retirada já entra como 'producao'
     auto_delivery_status = comanda_in.delivery_status
-    if comanda_in.tipo == "Entrega" and auto_delivery_status is None:
+    if comanda_in.tipo in ("Entrega", "Delivery") and auto_delivery_status is None:
         auto_delivery_status = "pendente"
     elif comanda_in.tipo == "Retirada" and auto_delivery_status is None:
         auto_delivery_status = "producao"
@@ -820,7 +820,7 @@ def listar_delivery_ativos(db: Session = Depends(get_db)):
     Inclui as pendentes (na gaveta de aceite) e as em produção/trânsito.
     """
     return db.query(Comanda).filter(
-        Comanda.tipo.in_(["Entrega", "Retirada"]),
+        Comanda.tipo.in_(["Delivery", "Entrega", "Retirada"]),
         Comanda.fechada == False
     ).all()
 
