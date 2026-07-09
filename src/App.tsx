@@ -689,6 +689,7 @@ export default function App() {
           garcomNome: comanda.criada_por?.nome || comanda.garcom?.nome || 'Garçom',
           timestamp: parseBackendDateTime(comanda.criado_em),
           tipo: comanda.tipo,
+          valorPago: comanda.valor_pago || 0,
           itens: comanda.itens
             .filter((item: any) => item.status !== 'cancelado')
             .map((item: any) => ({
