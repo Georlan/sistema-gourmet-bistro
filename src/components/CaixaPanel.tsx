@@ -2140,42 +2140,31 @@ export function CaixaPanel({
 
                                <button
                                  type="button"
-                                 onClick={async (e) => {
+                                 onClick={(e) => {
                                    e.stopPropagation();
-                                   try {
-                                     await Promise.all(readyItems.map(item =>
-                                       fetch(`${apiBaseUrl}/comandas/itens/${item.id}/status?status=entregue`, {
-                                         method: "PUT",
-                                         headers: authHeaders
-                                       })
-                                     ));
-                                     // Find the full order from orders list to open checkout
-                                     const fullOrder = orders.find(o => o.id === order.comandaId) || orders.find(o => o.mesaId === order.mesaId);
-                                     if (fullOrder) {
-                                       setSelectedOrder({
-                                         ...fullOrder,
-                                         itens: fullOrder.itens.map((item: any) => ({
-                                           id: item.id,
-                                           produtoId: item.produto_id || item.produtoId,
-                                           nome: item.nome || `Item ${item.produtoId}`,
-                                           preco: item.preco_unit || item.preco,
-                                           observacao: item.observacao || '',
-                                           clienteNome: item.cliente_nome || item.clienteNome || 'Consumo Geral',
-                                           status: item.status,
-                                           pago: item.pago
-                                         }))
-                                       });
-                                       setShowCheckoutModal(true);
-                                       setCheckoutServiceTax(true);
-                                       setSplitPeople('1');
-                                       setSelectedItemIds([]);
-                                       const sub = fullOrder.itens.filter((item: any) => !item.pago).reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
-                                       setPaymentValor((sub * (1.0 + (checkoutServiceTax ? serviceTaxRate / 100 : 0))).toFixed(2));
-                                     }
-                                     onRefreshOrders();
-                                   } catch (e) {
-                                     console.error(e);
-                                     alert("Erro ao atualizar status dos pratos.");
+                                   // Just open the checkout modal — do NOT change item status here.
+                                   // The card must stay visible in the Kanban until payment is done.
+                                   const fullOrder = orders.find(o => o.id === order.comandaId) || orders.find(o => o.mesaId === order.mesaId);
+                                   if (fullOrder) {
+                                     setSelectedOrder({
+                                       ...fullOrder,
+                                       itens: fullOrder.itens.map((item: any) => ({
+                                         id: item.id,
+                                         produtoId: item.produto_id || item.produtoId,
+                                         nome: item.nome || `Item ${item.produtoId}`,
+                                         preco: item.preco_unit || item.preco,
+                                         observacao: item.observacao || '',
+                                         clienteNome: item.cliente_nome || item.clienteNome || 'Consumo Geral',
+                                         status: item.status,
+                                         pago: item.pago
+                                       }))
+                                     });
+                                     setShowCheckoutModal(true);
+                                     setCheckoutServiceTax(true);
+                                     setSplitPeople('1');
+                                     setSelectedItemIds([]);
+                                     const sub = fullOrder.itens.filter((item: any) => !item.pago).reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
+                                     setPaymentValor((sub * (1.0 + (checkoutServiceTax ? serviceTaxRate / 100 : 0))).toFixed(2));
                                    }
                                  }}
                                  className={clsx('w-full', 'py-1.5', 'bg-blue-600', 'hover:bg-blue-700', 'text-white', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1')}
@@ -5386,8 +5375,14 @@ export function CaixaPanel({
       {/* 4. MODAL: LIQUIDAÇÃO DE CONTA */}
       {
         selectedOrder && showCheckoutModal && (
-          <div className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4', 'overflow-y-auto')}>
-            <div className={clsx('bg-[#0D0D10]/95', 'backdrop-blur-xl', 'rounded-3xl', 'border', 'border-[#10b981]/15', 'shadow-2xl', 'w-full', 'max-w-3xl', 'overflow-hidden', 'max-h-[90vh]', 'flex', 'flex-col', 'my-4')}>
+          <div
+            className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4', 'overflow-y-auto')}
+            onClick={() => setShowCheckoutModal(false)}
+          >
+            <div
+              className={clsx('bg-[#0D0D10]/95', 'backdrop-blur-xl', 'rounded-3xl', 'border', 'border-[#10b981]/15', 'shadow-2xl', 'w-full', 'max-w-3xl', 'overflow-hidden', 'max-h-[90vh]', 'flex', 'flex-col', 'my-4')}
+              onClick={(e) => e.stopPropagation()}
+            >
 
               <div className={clsx('bg-[#18181B]', 'text-white', 'p-5', 'flex', 'justify-between', 'items-center', 'shrink-0', 'border-b', 'border-[#27272A]')}>
                 <div>
