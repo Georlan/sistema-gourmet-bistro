@@ -546,7 +546,7 @@ export default function App() {
 
   // Sync local draft changes to WebSocket
   useEffect(() => {
-    if (!isAuthenticated || !activeWaiterId || !isWsConnected) return;
+    if (!isAuthenticated || !activeWaiterId || !isWsConnected || activeRole !== 'garcom') return;
 
     const currentStatuses: { [mesaId: number]: boolean } = {};
     for (let mId = 1; mId <= RESTAURANT_CONFIG.totalMesas; mId++) {
@@ -561,7 +561,7 @@ export default function App() {
       }
     }
     lastDraftStatusesRef.current = currentStatuses;
-  }, [drafts, selectedTableId, isAuthenticated, activeWaiterId, isWsConnected]);
+  }, [drafts, selectedTableId, isAuthenticated, activeWaiterId, isWsConnected, activeRole]);
 
   // Reset statuses ref on disconnect to trigger fresh sync upon reconnect
   useEffect(() => {
