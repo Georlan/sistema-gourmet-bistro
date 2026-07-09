@@ -9,6 +9,9 @@ class Settings:
     SQLITE_DB_FILE: str = "bistro.db"
     DATABASE_URL: str = os.getenv("DATABASE_URL", f"sqlite:///./{SQLITE_DB_FILE}")
     
+    # Sentry DSN
+    SENTRY_DSN: str = os.getenv("SENTRY_DSN", "https://2c4cca573d3eb6bdf81afbcdbae24426@o4511694598176769.ingest.us.sentry.io/4511783030038528")
+    
     # Security
     SECRET_KEY: str = os.getenv("SECRET_KEY", secrets.token_hex(32))
     ALGORITHM: str = "HS256"

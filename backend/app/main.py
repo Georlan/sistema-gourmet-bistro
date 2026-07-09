@@ -7,7 +7,7 @@ from .routes import auth, products, tables, orders, websocket, caixa, optimizati
 
 # Inicializa o Sentry antes de qualquer coisa no app
 sentry_sdk.init(
-    dsn="https://298c42464a104e9431003d2d1308672c@o4511694598176769.ingest.us.sentry.io/4511695058042880",
+    dsn=settings.SENTRY_DSN,
     send_default_pii=True,  # Envia dados adicionais como IP para ajudar no diagnóstico
     traces_sample_rate=1.0,  # Captura transações para monitorar lentidão
 )
