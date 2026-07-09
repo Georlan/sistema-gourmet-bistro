@@ -20,22 +20,27 @@ class TenantSession(Session):
         super().__init__(*args, **kwargs)
         self.restaurante_id = 1
 
-    def execute(self, statement, *args, **kwargs):
-        # Allow bypassing the filter if ContextVar is explicitly set to None (e.g. login/seeding)
+@event.listens_for(Session, "do_orm_execute")
+def _add_tenant_id_filtering_criteria(execute_state):
+    if (
+        execute_state.is_select
+        and not execute_state.is_column_load
+        and not execute_state.is_relationship_load
+    ):
         context_override = current_restaurante_id.get()
         if context_override is not None:
-            tenant_id = getattr(self, "restaurante_id", 1)
+            session = execute_state.session
+            tenant_id = getattr(session, "restaurante_id", 1)
             for mapper in Base.registry.mappers:
                 cls = mapper.class_
                 if hasattr(cls, "restaurante_id"):
-                    statement = statement.options(
+                    execute_state.statement = execute_state.statement.options(
                         with_loader_criteria(
                             cls,
                             lambda target_cls: target_cls.restaurante_id == tenant_id,
                             track_closure_variables=False
                         )
                     )
-        return super().execute(statement, *args, **kwargs)
 
 engine = create_engine(settings.DATABASE_URL, connect_args=connect_args)
 SessionLocal = sessionmaker(class_=TenantSession, autocommit=False, autoflush=False, bind=engine)

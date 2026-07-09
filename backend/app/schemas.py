@@ -69,6 +69,7 @@ class ProdutoUpdate(BaseModel):
     ativo: Optional[bool] = None
 
 class ProdutoResponse(ProdutoBase):
+    categoria: Optional[CategoriaResponse] = None
     class Config:
         from_attributes = True
 
