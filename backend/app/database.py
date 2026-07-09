@@ -42,8 +42,23 @@ def _add_tenant_id_filtering_criteria(execute_state):
                         )
                     )
 
-engine = create_engine(settings.DATABASE_URL, connect_args=connect_args)
+
+# Connection pool tuning for PostgreSQL (Supabase/Railway)
+# SQLite uses StaticPool internally and doesn't accept these args
+if settings.DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(settings.DATABASE_URL, connect_args=connect_args)
+else:
+    engine = create_engine(
+        settings.DATABASE_URL,
+        pool_size=10,          # base pool: up to 10 persistent connections
+        max_overflow=20,       # allow up to 20 extra when busy (total: 30)
+        pool_timeout=15,       # raise after 15s instead of default 30s (fail fast)
+        pool_recycle=1800,     # recycle connections every 30 min (avoids stale handles)
+        pool_pre_ping=True,    # test connection health before handing it to a request
+        connect_args=connect_args,
+    )
 SessionLocal = sessionmaker(class_=TenantSession, autocommit=False, autoflush=False, bind=engine)
+
 
 @event.listens_for(engine, "connect")
 def set_default_sqlite_pragma(dbapi_connection, connection_record):

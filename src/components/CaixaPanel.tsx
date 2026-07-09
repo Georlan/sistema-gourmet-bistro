@@ -279,6 +279,7 @@ export function CaixaPanel({
   const [holdProgress, setHoldProgress] = useState(0);
   const holdIntervalRef = useRef<number | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [showCheckoutModal, setShowCheckoutModal] = useState(false);
 
   // Otimizações / Estoque / Desempenho States
   const [waitersPerformance, setWaitersPerformance] = useState<{ nome_garcon: string, pedidos_atendidos: number, comissao_acumulada: number }[]>([]);
@@ -806,7 +807,7 @@ export function CaixaPanel({
     const interval = setInterval(() => {
       fetchTurno();
       fetchDeliveryOrders();
-    }, 4000);
+    }, 8000); // 8s is enough — WS handles real-time, polling is fallback only
 
     return () => clearInterval(interval);
   }, []);
@@ -1104,6 +1105,7 @@ export function CaixaPanel({
             });
           } else {
             setSelectedOrder(null);
+            setShowCheckoutModal(false);
           }
         }
         onRefreshOrders();
@@ -1130,6 +1132,7 @@ export function CaixaPanel({
       }
       onRefreshOrders();
       setSelectedOrder(null);
+      setShowCheckoutModal(false);
     } catch (err) {
       console.error(err);
       alert("Erro ao liberar mesa.");
@@ -2036,18 +2039,16 @@ export function CaixaPanel({
                                 type="button"
                                 onClick={async (e) => {
                                   e.stopPropagation();
-                                  try {
-                                    await Promise.all(preparingItems.map(item =>
-                                      fetch(`${apiBaseUrl}/comandas/itens/${item.id}/status?status=pronto`, {
-                                        method: "PUT",
-                                        headers: authHeaders
-                                      })
-                                    ));
-                                    onRefreshOrders();
-                                  } catch (e) {
-                                    console.error(e);
-                                    alert("Erro ao atualizar status dos pratos.");
-                                  }
+                                  // Fire-and-forget: update UI immediately without waiting for all API calls
+                                  onRefreshOrders();
+                                  Promise.all(preparingItems.map(item =>
+                                    fetch(`${apiBaseUrl}/comandas/itens/${item.id}/status?status=pronto`, {
+                                      method: "PUT",
+                                      headers: authHeaders
+                                    })
+                                  )).then(() => onRefreshOrders()).catch(err => {
+                                    console.error(err);
+                                  });
                                 }}
                                 className={clsx('w-full', 'py-1.5', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1')}
                               >
@@ -2164,6 +2165,7 @@ export function CaixaPanel({
                                            pago: item.pago
                                          }))
                                        });
+                                       setShowCheckoutModal(true);
                                        setCheckoutServiceTax(true);
                                        setSplitPeople('1');
                                        setSelectedItemIds([]);
@@ -2565,24 +2567,25 @@ export function CaixaPanel({
                           <div className={clsx('flex', 'gap-1', 'pt-1.5', 'border-t', 'border-[#27272A]')}>
                             <button
                               onClick={() => {
-                                const o = tableOrders[0];
+                                const order = tableOrders[0];
                                 setSelectedOrder({
-                                  ...o,
-                                  itens: o.itens.map((item: any) => ({
+                                  ...order,
+                                  itens: order.itens.map((item: any) => ({
                                     id: item.id,
-                                    produtoId: item.produto_id,
-                                    nome: item.nome || `Item ${item.produto_id}`,
-                                    preco: item.preco_unit,
+                                    produtoId: item.produto_id || item.produtoId,
+                                    nome: item.nome || `Item ${item.produtoId}`,
+                                    preco: item.preco_unit || item.preco,
                                     observacao: item.observacao || '',
                                     clienteNome: item.cliente_nome || 'Consumo Geral',
                                     status: item.status,
                                     pago: item.pago
                                   }))
                                 });
+                                setShowCheckoutModal(true);
                                 setCheckoutServiceTax(true);
                                 setSplitPeople('1');
                                 setSelectedItemIds([]);
-                                const sub = o.itens.filter((item: any) => !item.pago).reduce((s: number, it: any) => s + it.preco_unit, 0);
+                                const sub = order.itens.filter((item: any) => !item.pago).reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
                                 setPaymentValor((sub * (1.0 + (checkoutServiceTax ? serviceTaxRate / 100 : 0))).toFixed(2));
                               }}
                               className={clsx('flex-1', 'py-1', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'rounded', 'font-bold', 'text-[8px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider')}
@@ -5382,7 +5385,7 @@ export function CaixaPanel({
 
       {/* 4. MODAL: LIQUIDAÇÃO DE CONTA */}
       {
-        selectedOrder && (
+        selectedOrder && showCheckoutModal && (
           <div className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4', 'overflow-y-auto')}>
             <div className={clsx('bg-[#0D0D10]/95', 'backdrop-blur-xl', 'rounded-3xl', 'border', 'border-[#10b981]/15', 'shadow-2xl', 'w-full', 'max-w-3xl', 'overflow-hidden', 'max-h-[90vh]', 'flex', 'flex-col', 'my-4')}>
 
@@ -5395,8 +5398,9 @@ export function CaixaPanel({
                 </div>
                 <button
                   type="button"
-                  onClick={() => setSelectedOrder(null)}
+                  onClick={() => setShowCheckoutModal(false)}
                   className={clsx('p-1.5', 'hover:bg-[#27272A]', 'rounded-full', 'text-gray-400', 'hover:text-white', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}
+                  title="Fechar (o pedido permanece na fila)"
                 >
                   <X size={18} />
                 </button>
