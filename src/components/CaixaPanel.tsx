@@ -2101,16 +2101,39 @@ export function CaixaPanel({
                       <div className={clsx('py-20', 'text-center', 'text-gray-500', 'italic', 'text-[10px]')}>Nenhum pedido em produção</div>
                     ) : (
                       <>
-                        {/* Pedidos Delivery em Produção */}
-                        {!modoExclusivoSalao && simulatedOrders.filter(o => o.status === 'producao').map((order) => (
-                          <div key={order.id} className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'hover:border-[#10b981]/30', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all')}>
-                            <div className={clsx('flex', 'justify-between', 'items-start')}>
-                              <div>
-                                <strong className={clsx('text-white', 'text-xs', 'block')}>{order.cliente}</strong>
-                                <span className={clsx('text-[9px]', 'text-gray-400', 'block')}>{order.telefone}</span>
+                        {!modoExclusivoSalao && simulatedOrders.filter(o => o.status === 'producao').map((order) => {
+                          const isIFood = order.canal === 'ifood';
+                          const isWhats = order.canal === 'whats';
+                          const hasAddress = !!order.endereco;
+                          let badgeText = 'BALCÃO';
+                          let badgeColor = 'bg-zinc-500/15 text-zinc-400';
+
+                          if (isIFood) {
+                            badgeText = 'IFOOD';
+                            badgeColor = 'bg-red-500/15 text-red-400';
+                          } else if (isWhats) {
+                            badgeText = 'WHATSAPP';
+                            badgeColor = 'bg-emerald-500/15 text-emerald-400';
+                          } else if (hasAddress) {
+                            badgeText = 'DELIVERY';
+                            badgeColor = 'bg-orange-500/15 text-orange-400';
+                          } else {
+                            badgeText = 'BALCÃO / RETIRADA';
+                            badgeColor = 'bg-amber-500/15 text-amber-400';
+                          }
+
+                          return (
+                            <div key={order.id} className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'hover:border-[#10b981]/30', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all')}>
+                              <div className={clsx('flex', 'justify-between', 'items-start')}>
+                                <div>
+                                  <span className={clsx('px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold rounded font-mono block w-fit mb-1', badgeColor)}>
+                                    {badgeText}
+                                  </span>
+                                  <strong className={clsx('text-white', 'text-xs', 'block')}>{order.cliente}</strong>
+                                  <span className={clsx('text-[9px]', 'text-gray-400', 'block')}>{order.telefone}</span>
+                                </div>
+                                <span className={clsx('font-bold', 'text-white', 'font-mono', 'text-[11px]', 'shrink-0')}>R$ {order.total.toFixed(2)}</span>
                               </div>
-                              <span className={clsx('font-bold', 'text-white', 'font-mono', 'text-[11px]', 'shrink-0')}>R$ {order.total.toFixed(2)}</span>
-                            </div>
 
                             <p className={clsx('text-[10px]', 'text-gray-300', 'bg-[#09090B]', 'p-1.5', 'rounded', 'border', 'border-[#27272A]/30', 'leading-relaxed', 'font-mono')}>
                               {order.itens}
@@ -2129,8 +2152,9 @@ export function CaixaPanel({
                             >
                               Marcar como Pronto
                             </button>
-                          </div>
-                        ))}
+                            </div>
+                          );
+                        })}
 
                         {/* Pedidos do Salão (Mesa) em Produção */}
                         {tableOrdersInProduction.map((order) => {
