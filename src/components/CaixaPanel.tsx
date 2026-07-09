@@ -146,6 +146,8 @@ export function CaixaPanel({
           mesaId: comanda.mesaId,
           identificador: comanda.identificador,
           garcomNome: comanda.garcomNome,
+          tipo: comanda.tipo,
+          valorPago: (comanda as any).valorPago || 0,
           itens: readyItems
         });
       }
@@ -2097,76 +2099,162 @@ export function CaixaPanel({
                         ))}
 
                         {/* Pedidos do Salão (Mesa) Prontos para Servir */}
-                        {tableOrdersReady.map((order) => {
-                          const itemCounts: Record<string, number> = {};
-                          const readyItems = order.itens.filter(item => item.status === 'pronto');
-                          readyItems.forEach(item => {
-                            const name = item.nome || 'Item';
-                            itemCounts[name] = (itemCounts[name] || 0) + 1;
-                          });
-                          const itemsStr = Object.entries(itemCounts)
-                            .map(([name, qty]) => `${qty}x ${name}`)
-                            .join(' + ');
+                         {tableOrdersReady.map((order) => {
+                           const itemCounts: Record<string, number> = {};
+                           const readyItems = order.itens.filter(item => item.status === 'pronto');
+                           readyItems.forEach(item => {
+                             const name = item.nome || 'Item';
+                             itemCounts[name] = (itemCounts[name] || 0) + 1;
+                           });
+                           const itemsStr = Object.entries(itemCounts)
+                             .map(([name, qty]) => `${qty}x ${name}`)
+                             .join(' + ');
 
-                          return (
-                             <div 
-                               key={`table-ready-${order.id}`} 
-                               onClick={() => setSelectedKanbanOrder(order)}
-                               className={clsx('bg-[#121214]', 'border', 'border-emerald-500/20', 'hover:border-emerald-500/40', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all', 'text-left', 'cursor-pointer')}
-                             >
-                               <div className={clsx('flex', 'justify-between', 'items-start')}>
-                                 <div>
-                                   <span className={clsx('px-1.5', 'py-0.5', 'text-[8px]', 'uppercase', 'tracking-wider', 'font-bold', 'bg-emerald-500/10', 'text-emerald-400', 'rounded', 'font-mono', 'block', 'w-fit', 'mb-1')}>
-                                     {order.mesaId && order.mesaId > 0 ? `Mesa ${order.mesaId} - Pronto` : 'Balcão - Pronto'}
-                                   </span>
-                                   <strong className={clsx('text-white', 'text-xs', 'block')}>
-                                     {(order as any).identificador || (order.mesaId && order.mesaId > 0 ? `Consumo Mesa ${order.mesaId}` : 'Consumo Balcão')}
-                                   </strong>
-                                 </div>
-                                 <span className={clsx('text-[9px]', 'text-gray-500', 'font-mono')}>#{order.id.slice(-4)}</span>
-                               </div>
+                           const isDelivery = order.tipo === 'Entrega';
+                           const isTakeout = order.tipo === 'Retirada';
 
-                               <p className={clsx('text-[10px]', 'text-emerald-400', 'bg-[#09090B]', 'p-1.5', 'rounded', 'border', 'border-[#27272A]/10', 'leading-relaxed', 'font-mono')}>
-                                 {itemsStr}
-                               </p>
+                           const badgeText = isDelivery ? 'Delivery - Pronto' : isTakeout ? 'Retirada - Pronto' : (order.mesaId && order.mesaId > 0 ? `Mesa ${order.mesaId} - Pronto` : 'Balcão - Pronto');
+                           const badgeColorClass = isDelivery ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' : isTakeout ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
 
-                               <button
-                                 type="button"
-                                 onClick={(e) => {
-                                   e.stopPropagation();
-                                   // Just open the checkout modal — do NOT change item status here.
-                                   // The card must stay visible in the Kanban until payment is done.
-                                   const fullOrder = orders.find(o => o.id === order.comandaId) || orders.find(o => o.mesaId === order.mesaId);
-                                   if (fullOrder) {
-                                     setSelectedOrder({
-                                       ...fullOrder,
-                                       itens: fullOrder.itens.map((item: any) => ({
-                                         id: item.id,
-                                         produtoId: item.produto_id || item.produtoId,
-                                         nome: item.nome || `Item ${item.produtoId}`,
-                                         preco: item.preco_unit || item.preco,
-                                         observacao: item.observacao || '',
-                                         clienteNome: item.cliente_nome || item.clienteNome || 'Consumo Geral',
-                                         status: item.status,
-                                         pago: item.pago
-                                       }))
-                                     });
-                                     setShowCheckoutModal(true);
-                                     setCheckoutServiceTax(true);
-                                     setSplitPeople('1');
-                                     setSelectedItemIds([]);
-                                     const sub = fullOrder.itens.filter((item: any) => !item.pago).reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
-                                     setPaymentValor((sub * (1.0 + (checkoutServiceTax ? serviceTaxRate / 100 : 0))).toFixed(2));
-                                   }
-                                 }}
-                                 className={clsx('w-full', 'py-1.5', 'bg-blue-600', 'hover:bg-blue-700', 'text-white', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1')}
-                               >
-                                 <Check size={11} />
-                                 <span>Fechar Conta</span>
-                               </button>
-                             </div>
-                          );
-                        })}
+                           const cardTitle = order.identificador || (isDelivery ? 'Pedido Entrega' : isTakeout ? 'Pedido Retirada' : (order.mesaId && order.mesaId > 0 ? `Consumo Mesa ${order.mesaId}` : 'Consumo Balcão'));
+
+                           let buttonText = 'Fechar Conta';
+                           let buttonColorClass = 'bg-blue-600 hover:bg-blue-700 text-white';
+                           
+                           if (isDelivery) {
+                             buttonText = 'Saiu para Entrega';
+                             buttonColorClass = 'bg-orange-600 hover:bg-orange-700 text-white';
+                           } else if (isTakeout) {
+                             buttonText = 'Retirou';
+                             buttonColorClass = 'bg-amber-600 hover:bg-amber-700 text-white';
+                           }
+
+                           return (
+                              <div 
+                                key={`table-ready-${order.id}`} 
+                                onClick={() => setSelectedKanbanOrder(order)}
+                                className={clsx('bg-[#121214]', 'border', 'border-emerald-500/20', 'hover:border-emerald-500/40', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all', 'text-left', 'cursor-pointer')}
+                              >
+                                <div className={clsx('flex', 'justify-between', 'items-start')}>
+                                  <div>
+                                    <span className={clsx('px-1.5', 'py-0.5', 'text-[8px]', 'uppercase', 'tracking-wider', 'font-bold', 'rounded', 'font-mono', 'block', 'w-fit', 'mb-1', badgeColorClass)}>
+                                      {badgeText}
+                                    </span>
+                                    <strong className={clsx('text-white', 'text-xs', 'block')}>
+                                      {cardTitle}
+                                    </strong>
+                                  </div>
+                                  <span className={clsx('text-[9px]', 'text-gray-500', 'font-mono')}>#{order.id.slice(-4)}</span>
+                                </div>
+
+                                <p className={clsx('text-[10px]', 'text-emerald-400', 'bg-[#09090B]', 'p-1.5', 'rounded', 'border', 'border-[#27272A]/10', 'leading-relaxed', 'font-mono')}>
+                                  {itemsStr}
+                                </p>
+
+                                <button
+                                  type="button"
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    const fullOrder = orders.find(o => o.id === order.comandaId) || orders.find(o => o.mesaId === order.mesaId);
+                                    if (!fullOrder) return;
+
+                                    if (isDelivery) {
+                                      if (confirm("Confirmar que o pedido saiu para entrega? Isso atualizará o status no iFood/plataformas.")) {
+                                        try {
+                                          await Promise.all(readyItems.map(item =>
+                                            fetch(`${apiBaseUrl}/comandas/itens/${item.id}/status?status=entregue`, {
+                                              method: "PUT",
+                                              headers: authHeaders
+                                            })
+                                          ));
+                                          await fetch(`${apiBaseUrl}/comandas/${order.comandaId}/delivery/status?status_novo=finalizado`, {
+                                            method: 'PUT',
+                                            headers: authHeaders
+                                          });
+                                          await fetch(`${apiBaseUrl}/comandas/${order.comandaId}/fechar`, {
+                                            method: 'PUT',
+                                            headers: authHeaders
+                                          });
+                                          onRefreshOrders();
+                                          alert("Pedido despachado e finalizado com sucesso!");
+                                        } catch (err) {
+                                          console.error(err);
+                                          alert("Erro ao despachar entrega.");
+                                        }
+                                      }
+                                    } else if (isTakeout) {
+                                      const { total } = getCheckoutTotals(fullOrder);
+                                      const isFullyPaid = fullOrder.valorPago >= total;
+
+                                      if (isFullyPaid) {
+                                        try {
+                                          await Promise.all(readyItems.map(item =>
+                                            fetch(`${apiBaseUrl}/comandas/itens/${item.id}/status?status=entregue`, {
+                                              method: "PUT",
+                                              headers: authHeaders
+                                            })
+                                          ));
+                                          await fetch(`${apiBaseUrl}/comandas/${order.comandaId}/fechar`, {
+                                            method: "PUT",
+                                            headers: authHeaders
+                                          });
+                                          onRefreshOrders();
+                                          alert("Retirada finalizada com sucesso!");
+                                        } catch (err) {
+                                          console.error(err);
+                                          alert("Erro ao finalizar retirada.");
+                                        }
+                                      } else {
+                                        setSelectedOrder({
+                                          ...fullOrder,
+                                          itens: fullOrder.itens.map((item: any) => ({
+                                            id: item.id,
+                                            produtoId: item.produto_id || item.produtoId,
+                                            nome: item.nome || `Item ${item.produtoId}`,
+                                            preco: item.preco_unit || item.preco,
+                                            observacao: item.observacao || '',
+                                            clienteNome: item.cliente_nome || item.clienteNome || 'Consumo Geral',
+                                            status: item.status,
+                                            pago: item.pago
+                                          }))
+                                        });
+                                        setShowCheckoutModal(true);
+                                        setCheckoutServiceTax(false);
+                                        setSplitPeople('1');
+                                        setSelectedItemIds([]);
+                                        const sub = fullOrder.itens.filter((item: any) => !item.pago).reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
+                                        setPaymentValor(sub.toFixed(2));
+                                      }
+                                    } else {
+                                      setSelectedOrder({
+                                        ...fullOrder,
+                                        itens: fullOrder.itens.map((item: any) => ({
+                                          id: item.id,
+                                          produtoId: item.produto_id || item.produtoId,
+                                          nome: item.nome || `Item ${item.produtoId}`,
+                                          preco: item.preco_unit || item.preco,
+                                          observacao: item.observacao || '',
+                                          clienteNome: item.cliente_nome || item.clienteNome || 'Consumo Geral',
+                                          status: item.status,
+                                          pago: item.pago
+                                        }))
+                                      });
+                                      setShowCheckoutModal(true);
+                                      setCheckoutServiceTax(true);
+                                      setSplitPeople('1');
+                                      setSelectedItemIds([]);
+                                      const sub = fullOrder.itens.filter((item: any) => !item.pago).reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
+                                      setPaymentValor((sub * (1.0 + (checkoutServiceTax ? serviceTaxRate / 100 : 0))).toFixed(2));
+                                    }
+                                  }}
+                                  className={clsx('w-full', 'py-1.5', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1', buttonColorClass)}
+                                >
+                                  <Check size={11} />
+                                  <span>{buttonText}</span>
+                                </button>
+                              </div>
+                           );
+                         })}
                       </>
                     )}
                   </div>
