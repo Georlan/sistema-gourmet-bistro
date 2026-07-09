@@ -2,7 +2,7 @@ import json
 import uuid
 import datetime
 from app.database import engine, Base, SessionLocal
-from app.models import Usuario, Categoria, Produto, Mesa, ObservacaoPredefinida, Motoboy, Comanda, Item, Lancamento, ConfiguracaoRestaurante, ConfiguracaoIA
+from app.models import Restaurante, Usuario, Categoria, Produto, Mesa, ObservacaoPredefinida, Motoboy, Comanda, Item, Lancamento, ConfiguracaoRestaurante, ConfiguracaoIA
 from app.security import get_password_hash
 
 def seed_database():
@@ -19,6 +19,11 @@ def seed_database():
             dump_data = json.load(f)
             
         print("Semeando Banco de Dados...")
+        
+        # 0. Cadastrar Restaurante Padrão (ID=1)
+        restaurante = Restaurante(id=1, nome="Kôma Bistrô", plano="pocket")
+        db.add(restaurante)
+        db.commit()
 
         # 1. Cadastrar Usuários (Garçons, Caixas e Administradores)
         usuarios_data = [
@@ -33,6 +38,7 @@ def seed_database():
         for u in usuarios_data:
             novo_usuario = Usuario(
                 id=u["id"],
+                restaurante_id=1,
                 nome=u["nome"],
                 usuario=u["usuario"],
                 senha_hash=get_password_hash(u["senha"]),
@@ -43,7 +49,7 @@ def seed_database():
 
         # 2. Cadastrar Mesas (1 a 30)
         for i in range(1, 31):
-            nova_mesa = Mesa(id=i, capacidade=4, nome=None)
+            nova_mesa = Mesa(id=i, restaurante_id=1, capacidade=4, nome=None)
             db.add(nova_mesa)
         print("30 Mesas cadastradas com sucesso.")
 
@@ -71,7 +77,7 @@ def seed_database():
                 destino = "COZINHA"
                 if cat_id in ["cat-refri", "cat-cervejas"]:
                     destino = "NENHUM"
-                nova_categoria = Categoria(id=cat_id, nome=cat_name, destino_impressao=destino)
+                nova_categoria = Categoria(id=cat_id, restaurante_id=1, nome=cat_name, destino_impressao=destino)
                 db.add(nova_categoria)
         print(f"{len(dump_data['categories'])} Categorias cadastradas com sucesso.")
 
@@ -106,6 +112,7 @@ def seed_database():
             
             novo_produto = Produto(
                 id=p["id"],
+                restaurante_id=1,
                 nome=p["nome"],
                 categoria_id=cat_id,
                 preco=float(p["preco"]),
@@ -128,6 +135,7 @@ def seed_database():
 
         # 7. Configurações padrão do Restaurante (modo bistrô — salão sem delivery)
         config_restaurante = ConfiguracaoRestaurante(
+            restaurante_id=1,
             nicho="hamburgueria",
             mapa_mesas_ativo=True,
             delivery_ativo=False,           # Modo bistrô: sem delivery
@@ -155,6 +163,7 @@ def seed_database():
         # 9. Semeando comanda de exemplo na Mesa 1 para demonstração
         comanda_del = Comanda(
             id=f"c-{uuid.uuid4().hex[:8]}",
+            restaurante_id=1,
             mesa_id=None,
             garcom_id="c-01",
             tipo="Delivery",

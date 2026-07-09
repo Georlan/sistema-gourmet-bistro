@@ -1,5 +1,6 @@
 from sqlalchemy import create_engine, event
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.orm import sessionmaker, declarative_base, Session, with_loader_criteria
+from contextvars import ContextVar
 from fastapi import Request
 import os
 from .config import settings
@@ -9,8 +10,35 @@ connect_args = {}
 if settings.DATABASE_URL.startswith("sqlite"):
     connect_args = {"check_same_thread": False, "timeout": 30.0}
 
+Base = declarative_base()
+
+# ContextVar to track the logical restaurante_id for the current request context
+current_restaurante_id: ContextVar[int] = ContextVar("current_restaurante_id", default=1)
+
+class TenantSession(Session):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.restaurante_id = 1
+
+    def execute(self, statement, *args, **kwargs):
+        # Allow bypassing the filter if ContextVar is explicitly set to None (e.g. login/seeding)
+        context_override = current_restaurante_id.get()
+        if context_override is not None:
+            tenant_id = getattr(self, "restaurante_id", 1)
+            for mapper in Base.registry.mappers:
+                cls = mapper.class_
+                if hasattr(cls, "restaurante_id"):
+                    statement = statement.options(
+                        with_loader_criteria(
+                            cls,
+                            lambda target_cls: target_cls.restaurante_id == tenant_id,
+                            track_closure_variables=False
+                        )
+                    )
+        return super().execute(statement, *args, **kwargs)
+
 engine = create_engine(settings.DATABASE_URL, connect_args=connect_args)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+SessionLocal = sessionmaker(class_=TenantSession, autocommit=False, autoflush=False, bind=engine)
 
 @event.listens_for(engine, "connect")
 def set_default_sqlite_pragma(dbapi_connection, connection_record):
@@ -25,7 +53,12 @@ def set_default_sqlite_pragma(dbapi_connection, connection_record):
 engines = {"default": engine}
 sessionmakers = {"default": SessionLocal}
 
-Base = declarative_base()
+from sqlalchemy import text
+@event.listens_for(Base.metadata, "after_create")
+def insert_default_restaurant(target, connection, **kw):
+    connection.execute(
+        text("INSERT INTO restaurantes (id, nome, plano) VALUES (1, 'Kôma Bistrô', 'pocket') ON CONFLICT (id) DO NOTHING")
+    )
 
 def get_tenant_db_url(tenant_id: str) -> str:
     """Sanitizes tenant ID and returns the SQLite file URL path."""
@@ -35,8 +68,22 @@ def get_tenant_db_url(tenant_id: str) -> str:
 # DB Session dependency generator supporting dynamic tenant databases
 def get_db(request: Request = None):
     tenant_id = "default"
+    restaurante_id = 1
+    
     if request:
         tenant_id = request.headers.get("X-Tenant-ID", "default")
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.split(" ")[1]
+            try:
+                import jwt
+                from .config import settings
+                payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+                restaurante_id = int(payload.get("restaurante_id", 1))
+            except Exception:
+                pass
+
+    token_var = current_restaurante_id.set(restaurante_id)
 
     if tenant_id not in engines:
         db_url = settings.DATABASE_URL
@@ -117,10 +164,11 @@ def get_db(request: Request = None):
                     pass  # Table may not exist yet
         
         engines[tenant_id] = tenant_engine
-        sessionmakers[tenant_id] = sessionmaker(autocommit=False, autoflush=False, bind=tenant_engine)
+        sessionmakers[tenant_id] = sessionmaker(class_=TenantSession, autocommit=False, autoflush=False, bind=tenant_engine)
 
     session_factory = sessionmakers[tenant_id]
     db = session_factory()
+    db.restaurante_id = restaurante_id
     try:
         yield db
     finally:

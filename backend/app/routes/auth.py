@@ -18,7 +18,13 @@ def login(login_data: LoginRequest, db: Session = Depends(get_db)):
     Realiza a autenticação do usuário.
     Retorna o token JWT e as informações do usuário.
     """
-    usuario = db.query(Usuario).filter(Usuario.usuario == login_data.username).first()
+    from ..database import current_restaurante_id
+    token_var = current_restaurante_id.set(None)
+    try:
+        usuario = db.query(Usuario).filter(Usuario.usuario == login_data.username).first()
+    finally:
+        current_restaurante_id.reset(token_var)
+
     if not usuario:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -31,7 +37,7 @@ def login(login_data: LoginRequest, db: Session = Depends(get_db)):
             detail="Usuário ou senha incorretos"
         )
         
-    access_token = create_access_token(subject=usuario.id)
+    access_token = create_access_token(subject=usuario.id, restaurante_id=usuario.restaurante_id)
     
     user_data = {
         "id": usuario.id,

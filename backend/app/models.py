@@ -2,13 +2,22 @@ from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Foreig
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.hybrid import hybrid_property
 import datetime
-from .database import Base
+from .database import Base, current_restaurante_id
 from .crypt import encrypt_field, decrypt_field
+
+class Restaurante(Base):
+    __tablename__ = "restaurantes"
+    
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    nome = Column(String, nullable=False)
+    plano = Column(String, default="pocket", nullable=False)
+
 
 class Usuario(Base):
     __tablename__ = "usuarios"
     
     id = Column(String, primary_key=True, index=True)  # ex: "g-01", "c-01"
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False)
     nome = Column(String, nullable=False)
     usuario = Column(String, unique=True, index=True, nullable=False)  # Login handle
     senha_hash = Column(String, nullable=False)  # bcrypt hashed password
@@ -23,6 +32,7 @@ class Categoria(Base):
     __tablename__ = "categorias"
     
     id = Column(String, primary_key=True, index=True)  # ex: "cat-hamburgueres-bovinos"
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False)
     nome = Column(String, unique=True, nullable=False)
     destino_impressao = Column(String, default="COZINHA")  # "COZINHA" | "BAR" | "NENHUM"
     
@@ -35,6 +45,7 @@ class Produto(Base):
     __tablename__ = "produtos"
     
     id = Column(String, primary_key=True, index=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False)
     nome = Column(String, nullable=False)
     categoria_id = Column(String, ForeignKey("categorias.id"), nullable=False)
     preco = Column(Float, nullable=False)
@@ -50,6 +61,7 @@ class Mesa(Base):
     __tablename__ = "mesas"
     
     id = Column(Integer, primary_key=True, index=True)  # Fixed ID: 1, 2, 3...
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False)
     capacidade = Column(Integer, nullable=False, default=4)
     nome = Column(String, nullable=True)  # Editable custom name (e.g. "Mesa VIP", "Varanda 1")
 
@@ -69,6 +81,7 @@ class Comanda(Base):
     __tablename__ = "comandas"
     
     id = Column(String, primary_key=True, index=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False)
     mesa_id = Column(Integer, ForeignKey("mesas.id"), nullable=True)  # Null for takeout
     garcom_id = Column(String, ForeignKey("usuarios.id"), nullable=False)
     
@@ -195,6 +208,7 @@ class Pagamento(Base):
     __tablename__ = "pagamentos"
     
     id = Column(String, primary_key=True, index=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False)
     comanda_id = Column(String, ForeignKey("comandas.id"), nullable=False)
     turno_id = Column(Integer, ForeignKey("caixa_turnos.id"), nullable=False)
     valor = Column(Float, nullable=False)
@@ -218,6 +232,7 @@ class ConfiguracaoRestaurante(Base):
     __tablename__ = "configuracoes_restaurante"
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False)
     nicho = Column(String, default="hamburgueria")  # "hamburgueria" | "pizzaria" | "doceria" | "alacarte" | "selfservice"
     mapa_mesas_ativo = Column(Boolean, default=True)
     delivery_ativo = Column(Boolean, default=True)

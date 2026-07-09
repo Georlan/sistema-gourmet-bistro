@@ -72,6 +72,11 @@ def get_sugestoes_compra(db: Session = Depends(get_db)):
 
 # ----------------- GRÁFICO DE HORÁRIOS DE PICO (SQL) -----------------
 
+@router.get("/comandas/estatisticas/pico")
+def get_pico_horarios(db: Session = Depends(get_db)):
+    """
+    Retorna os horários de pico de comandas do restaurante.
+    """
     # Use SQLAlchemy expression language to be database-agnostic (works on both SQLite and PostgreSQL)
     from sqlalchemy import func, extract
     from ..models import Comanda

@@ -415,7 +415,9 @@ export default function App() {
 
     const connectWS = () => {
       const wsBase = API_BASE_URL.replace(/^http/, 'ws');
-      const wsUrl = `${wsBase}/ws/${activeWaiterId}`;
+      const tokenKey = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
+      const token = localStorage.getItem(tokenKey) || "";
+      const wsUrl = `${wsBase}/ws/${activeWaiterId}?token=${token}`;
       ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
