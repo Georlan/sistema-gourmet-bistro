@@ -386,7 +386,9 @@ export function CaixaPanel({
   const [pdvCustomerPhone, setPdvCustomerPhone] = useState('');
   const [pdvCustomerCPF, setPdvCustomerCPF] = useState('');
   const [paymentCPF, setPaymentCPF] = useState('');
-  const [pdvOrderType, setPdvOrderType] = useState<'balcao' | 'mesa'>('balcao');
+  const [pdvOrderType, setPdvOrderType] = useState<'balcao' | 'entrega' | 'mesa'>('balcao');
+  const [pdvDeliveryAddress, setPdvDeliveryAddress] = useState('');
+  const [pdvDeliveryTaxa, setPdvDeliveryTaxa] = useState('0.00');
   const [pdvTargetMesaId, setPdvTargetMesaId] = useState<number>(0);
 
   // Force pdvOrderType to mesa if salon mode is active
@@ -897,6 +899,13 @@ export function CaixaPanel({
           const mesaSelect = document.getElementById('pdv-mesa-select');
           if (mesaSelect) mesaSelect.focus();
         }, 50);
+      } else if (e.key === 'F8') {
+        e.preventDefault();
+        setPdvOrderType('entrega');
+        setTimeout(() => {
+          const nameInput = document.getElementById('pdv-customer-name-input');
+          if (nameInput) nameInput.focus();
+        }, 50);
       } else if (e.key === 'F4') {
         e.preventDefault();
         if (pdvCart.length > 0) {
@@ -1276,8 +1285,12 @@ export function CaixaPanel({
         body: JSON.stringify({
           mesa_id: pdvOrderType === 'mesa' ? pdvTargetMesaId : null,
           garcom_id: 'c-01', // Cashier operator ID
-          tipo: pdvOrderType === 'mesa' ? 'Consumo no Local' : 'Retirada',
-          identificador: pdvCustomerName || undefined
+          tipo: pdvOrderType === 'mesa' ? 'Consumo no Local' : (pdvOrderType === 'entrega' ? 'Entrega' : 'Retirada'),
+          identificador: pdvCustomerName || undefined,
+          delivery_status: pdvOrderType === 'entrega' ? 'producao' : undefined,
+          delivery_telefone: pdvOrderType === 'entrega' ? pdvCustomerPhone : undefined,
+          delivery_endereco: pdvOrderType === 'entrega' ? pdvDeliveryAddress : undefined,
+          delivery_taxa: pdvOrderType === 'entrega' ? parseFloat(pdvDeliveryTaxa) || 0.0 : 0.0
         })
       });
       if (!openRes.ok) {
@@ -1309,6 +1322,8 @@ export function CaixaPanel({
         setPdvCustomerName('');
         setPdvCustomerPhone('');
         setPdvCustomerCPF('');
+        setPdvDeliveryAddress('');
+        setPdvDeliveryTaxa('0.00');
         onRefreshOrders();
         alert("Pedido lançado com sucesso!");
         if (pdvOrderType === 'mesa') {
@@ -1317,19 +1332,6 @@ export function CaixaPanel({
         } else {
           setActiveTab('operacao');
           setActiveSubTab('pedidos');
-          setSimulatedOrders(prev => [
-            ...prev,
-            {
-              id: `d-${Math.floor(Math.random() * 900) + 100}`,
-              cliente: pdvCustomerName || "Balcão Geral",
-              telefone: pdvCustomerPhone || "Sem telefone",
-              itens: pdvCart.map(i => `${i.quantity}x ${i.product.nome}`).join(' + '),
-              total: pdvCart.reduce((s, i) => s + (i.product.preco * i.quantity), 0),
-              canal: 'site',
-              status: 'analise',
-              criadoEm: "Agora"
-            }
-          ]);
         }
       } else {
         const err = await launchRes.json();
@@ -2460,29 +2462,37 @@ export function CaixaPanel({
                 <form onSubmit={handlePdvSubmitOrder} className={clsx('bg-[#18181B]', 'p-3', 'border-t', 'border-[#27272A]', 'space-y-3', 'shrink-0')}>
                   {!modoExclusivoSalao && (
                     <div className="space-y-1">
-                      <div className={clsx('flex', 'gap-2', 'p-0.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'shrink-0')}>
+                      <div className={clsx('flex', 'gap-1', 'p-0.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'shrink-0')}>
                         <button
                           type="button"
                           onClick={() => setPdvOrderType('balcao')}
-                          className={`flex-1 py-1 text-[9px] font-bold rounded transition-all cursor-pointer ${pdvOrderType === 'balcao' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'
+                          className={`flex-1 py-1 text-[8.5px] font-bold rounded transition-all cursor-pointer ${pdvOrderType === 'balcao' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'
                             }`}
                         >
-                          Balcão/Delivery
+                          Balcão
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPdvOrderType('entrega')}
+                          className={`flex-1 py-1 text-[8.5px] font-bold rounded transition-all cursor-pointer ${pdvOrderType === 'entrega' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'
+                            }`}
+                        >
+                          Delivery
                         </button>
                         <button
                           type="button"
                           onClick={() => setPdvOrderType('mesa')}
-                          className={`flex-1 py-1 text-[9px] font-bold rounded transition-all cursor-pointer ${pdvOrderType === 'mesa' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'
+                          className={`flex-1 py-1 text-[8.5px] font-bold rounded transition-all cursor-pointer ${pdvOrderType === 'mesa' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'
                             }`}
                         >
-                          Salão/Mesa
+                          Mesa
                         </button>
                       </div>
-                      <span className={clsx('text-[7.5px]', 'text-gray-500', 'font-mono', 'block', 'text-left')}>Atalhos de Tipo: [F2] Balcão • [F3] Salão</span>
+                      <span className={clsx('text-[7.5px]', 'text-gray-500', 'font-mono', 'block', 'text-left')}>Atalhos de Tipo: [F2] Balcão • [F3] Mesa • [F8] Delivery</span>
                     </div>
                   )}
 
-                  {pdvOrderType === 'mesa' ? (
+                  {pdvOrderType === 'mesa' && (
                     <div className="space-y-1">
                       <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Mesa Destino:</label>
                       <select
@@ -2497,7 +2507,9 @@ export function CaixaPanel({
                         ))}
                       </select>
                     </div>
-                  ) : (
+                  )}
+
+                  {pdvOrderType === 'balcao' && (
                     <div className={clsx('grid', 'grid-cols-2', 'gap-1.5')}>
                       <div className="space-y-1">
                         <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Nome Cliente:</label>
@@ -2524,10 +2536,64 @@ export function CaixaPanel({
                     </div>
                   )}
 
+                  {pdvOrderType === 'entrega' && (
+                    <div className="space-y-2.5">
+                      <div className={clsx('grid', 'grid-cols-2', 'gap-1.5')}>
+                        <div className="space-y-1">
+                          <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Nome Cliente:</label>
+                          <input
+                            id="pdv-customer-name-input"
+                            type="text"
+                            placeholder="Ex: Maria"
+                            required={pdvCart.length > 0}
+                            value={pdvCustomerName}
+                            onChange={(e) => setPdvCustomerName(e.target.value)}
+                            className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'text-white', 'text-[10px]')}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Telefone:</label>
+                          <input
+                            type="text"
+                            placeholder="(81) 9..."
+                            value={pdvCustomerPhone}
+                            onChange={(e) => setPdvCustomerPhone(e.target.value)}
+                            className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'text-white', 'text-[10px]')}
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Endereço de Entrega:</label>
+                        <input
+                          type="text"
+                          placeholder="Rua, Número, Bairro, Complemento"
+                          required={pdvCart.length > 0}
+                          value={pdvDeliveryAddress}
+                          onChange={(e) => setPdvDeliveryAddress(e.target.value)}
+                          className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'text-white', 'text-[10px]')}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Taxa de Entrega (R$):</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          placeholder="5.00"
+                          value={pdvDeliveryTaxa}
+                          onChange={(e) => setPdvDeliveryTaxa(e.target.value)}
+                          className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'text-white', 'text-[10px]')}
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   <div className={clsx('flex', 'justify-between', 'items-center', 'font-mono', 'border-t', 'border-[#27272A]', 'pt-2', 'text-[11px]', 'font-bold', 'text-white')}>
                     <span>Total Pedido:</span>
                     <span className={clsx('text-[#10b981]', 'text-sm')}>
-                      R$ {pdvCart.reduce((sum, item) => sum + (item.product.preco * item.quantity), 0).toFixed(2)}
+                      R$ {(
+                        pdvCart.reduce((sum, item) => sum + (item.product.preco * item.quantity), 0) +
+                        (pdvOrderType === 'entrega' ? parseFloat(pdvDeliveryTaxa) || 0 : 0)
+                      ).toFixed(2)}
                     </span>
                   </div>
 
