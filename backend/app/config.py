@@ -13,7 +13,7 @@ class Settings:
     SENTRY_DSN: str = os.getenv("SENTRY_DSN", "https://2c4cca573d3eb6bdf81afbcdbae24426@o4511694598176769.ingest.us.sentry.io/4511783030038528")
     
     # Security
-    SECRET_KEY: str = os.getenv("SECRET_KEY", secrets.token_hex(32))
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "koma_cuisine_bistro_stable_default_secret_key_18273645")
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 43200  # 30 days (43200 minutes) to keep waiters logged in
     

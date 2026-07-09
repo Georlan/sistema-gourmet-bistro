@@ -138,25 +138,17 @@ export function CaixaPanel({
   const tableOrdersReady = (() => {
     const list: any[] = [];
     orders.forEach(comanda => {
-      const itemsByLancamento: Record<string, OrderItem[]> = {};
-      comanda.itens.forEach(item => {
-        const lid = item.lancamentoId || comanda.id;
-        if (!itemsByLancamento[lid]) itemsByLancamento[lid] = [];
-        itemsByLancamento[lid].push(item);
-      });
-      Object.entries(itemsByLancamento).forEach(([lid, items]) => {
-        const readyItems = items.filter(i => i.status === 'pronto');
-        if (readyItems.length > 0) {
-          list.push({
-            id: lid,
-            comandaId: comanda.id,
-            mesaId: comanda.mesaId,
-            identificador: comanda.identificador,
-            garcomNome: comanda.garcomNome,
-            itens: readyItems
-          });
-        }
-      });
+      const readyItems = comanda.itens.filter(i => i.status === 'pronto');
+      if (readyItems.length > 0) {
+        list.push({
+          id: comanda.id,
+          comandaId: comanda.id,
+          mesaId: comanda.mesaId,
+          identificador: comanda.identificador,
+          garcomNome: comanda.garcomNome,
+          itens: readyItems
+        });
+      }
     });
     return list;
   })();

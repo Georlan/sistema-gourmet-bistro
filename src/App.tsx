@@ -87,6 +87,10 @@ export default function App() {
       const res = await fetch(`${API_BASE_URL}/caixa/pagamentos/pendentes`, {
         headers: getAuthHeaders()
       });
+      if (res.status === 401) {
+        handleLogout();
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
         setPagamentosPendentes(data);
@@ -168,6 +172,25 @@ export default function App() {
   const [loginError, setLoginError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
+  // Logout handler
+  const handleLogout = useCallback(() => {
+    const tokenKey = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
+    const idKey = portal === 'caixa' ? "koma_caixa_id" : "koma_waiter_id";
+    const nameKey = portal === 'caixa' ? "koma_caixa_name" : "koma_waiter_name";
+    const roleKey = portal === 'caixa' ? "koma_caixa_role" : "koma_user_role";
+
+    localStorage.removeItem(tokenKey);
+    localStorage.removeItem(idKey);
+    localStorage.removeItem(nameKey);
+    localStorage.removeItem(roleKey);
+
+    setIsAuthenticated(false);
+    setActiveWaiterId("");
+    setActiveWaiterNome("");
+    setActiveRole(portal === 'caixa' ? "caixa" : "garcom");
+    setIsSidebarOpen(false);
+  }, [portal]);
+
   // Helper to get headers for API calls including JWT
   const getAuthHeaders = (contentType = "application/json") => {
     const headers: any = {};
@@ -216,6 +239,10 @@ export default function App() {
   const fetchTables = async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/mesas`, { headers: getAuthHeaders() });
+      if (res.status === 401) {
+        handleLogout();
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
         setSalonTables(data);
@@ -298,6 +325,10 @@ export default function App() {
       const token = localStorage.getItem(tokenKey);
       const headers: any = token ? { Authorization: `Bearer ${token}` } : {};
       const res = await fetch(`${API_BASE_URL}/produtos`, { headers });
+      if (res.status === 401) {
+        handleLogout();
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
         setLiveProdutos(Array.isArray(data) ? data : []);
@@ -639,6 +670,10 @@ export default function App() {
   const fetchOrdersFromAPI = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/comandas/detalhes/todos?fechada=false`, { headers: getAuthHeaders() });
+      if (response.status === 401) {
+        handleLogout();
+        return;
+      }
       if (!response.ok) {
         console.error("Failed to fetch comandas from backend");
         return;
@@ -751,24 +786,7 @@ export default function App() {
     }
   };
 
-  // Logout handler
-  const handleLogout = () => {
-    const tokenKey = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
-    const idKey = portal === 'caixa' ? "koma_caixa_id" : "koma_waiter_id";
-    const nameKey = portal === 'caixa' ? "koma_caixa_name" : "koma_waiter_name";
-    const roleKey = portal === 'caixa' ? "koma_caixa_role" : "koma_user_role";
 
-    localStorage.removeItem(tokenKey);
-    localStorage.removeItem(idKey);
-    localStorage.removeItem(nameKey);
-    localStorage.removeItem(roleKey);
-
-    setIsAuthenticated(false);
-    setActiveWaiterId("");
-    setActiveWaiterNome("");
-    setActiveRole(portal === 'caixa' ? "caixa" : "garcom");
-    setIsSidebarOpen(false);
-  };
 
   const handleSubmitDraft = async (mesaId: number, orderType: 'Consumo no Local' | 'Retirada' | 'Entrega' = 'Consumo no Local') => {
     if (isSubmitting) return;
