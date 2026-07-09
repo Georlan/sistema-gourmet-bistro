@@ -558,6 +558,8 @@ export function CaixaPanel({
   };
 
   const handleUpdateDeliveryStatus = async (orderId: string, statusNovo: string) => {
+    if (isLoading) return;
+    setIsLoading(true);
     try {
       const res = await fetch(`${apiBaseUrl}/comandas/${orderId}/delivery/status?status_novo=${statusNovo}`, {
         method: 'PUT',
@@ -571,11 +573,15 @@ export function CaixaPanel({
     } catch (e) {
       console.error(e);
       alert('Erro de conexão ao atualizar status.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleRecusarPedido = async (orderId: string) => {
+    if (isLoading) return;
     if (!confirm('Deseja realmente recusar e cancelar este pedido?')) return;
+    setIsLoading(true);
     try {
       await fetch(`${apiBaseUrl}/comandas/${orderId}/delivery/status?status_novo=finalizado`, {
         method: 'PUT',
@@ -589,10 +595,14 @@ export function CaixaPanel({
       onRefreshOrders();
     } catch (e) {
       console.error(e);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleDespacharPedido = async (orderId: string, motoboyId: number) => {
+    if (isLoading) return;
+    setIsLoading(true);
     try {
       const res = await fetch(`${apiBaseUrl}/comandas/${orderId}/delivery/despachar`, {
         method: 'POST',
@@ -609,10 +619,14 @@ export function CaixaPanel({
     } catch (e) {
       console.error(e);
       alert('Erro de conexão ao despachar.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleFinalizarPedido = async (orderId: string) => {
+    if (isLoading) return;
+    setIsLoading(true);
     try {
       await fetch(`${apiBaseUrl}/comandas/${orderId}/delivery/status?status_novo=finalizado`, {
         method: 'PUT',
@@ -632,6 +646,8 @@ export function CaixaPanel({
     } catch (e) {
       console.error(e);
       alert('Erro de conexão ao finalizar pedido.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -1267,6 +1283,7 @@ export function CaixaPanel({
   // Submit Order from PDV Counter
   const handlePdvSubmitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading) return;
     if (pdvCart.length === 0) {
       alert("Seu carrinho de vendas está vazio.");
       return;
@@ -2035,6 +2052,8 @@ export function CaixaPanel({
                                 type="button"
                                 onClick={async (e) => {
                                   e.stopPropagation();
+                                  if (isLoading) return;
+                                  setIsLoading(true);
                                   // Fire-and-forget: update UI immediately without waiting for all API calls
                                   onRefreshOrders();
                                   Promise.all(preparingItems.map(item =>
@@ -2042,8 +2061,12 @@ export function CaixaPanel({
                                       method: "PUT",
                                       headers: authHeaders
                                     })
-                                  )).then(() => onRefreshOrders()).catch(err => {
+                                  )).then(() => {
+                                    onRefreshOrders();
+                                    setIsLoading(false);
+                                  }).catch(err => {
                                     console.error(err);
+                                    setIsLoading(false);
                                   });
                                 }}
                                 className={clsx('w-full', 'py-1.5', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1')}
@@ -2157,11 +2180,13 @@ export function CaixaPanel({
                                   type="button"
                                   onClick={async (e) => {
                                     e.stopPropagation();
+                                    if (isLoading) return;
                                     const fullOrder = orders.find(o => o.id === order.comandaId) || orders.find(o => o.mesaId === order.mesaId);
                                     if (!fullOrder) return;
 
                                     if (isDelivery) {
                                       if (confirm("Confirmar que o pedido saiu para entrega? Isso atualizará o status no iFood/plataformas.")) {
+                                        setIsLoading(true);
                                         try {
                                           await Promise.all(readyItems.map(item =>
                                             fetch(`${apiBaseUrl}/comandas/itens/${item.id}/status?status=entregue`, {
@@ -2182,6 +2207,8 @@ export function CaixaPanel({
                                         } catch (err) {
                                           console.error(err);
                                           alert("Erro ao despachar entrega.");
+                                        } finally {
+                                          setIsLoading(false);
                                         }
                                       }
                                     } else if (isTakeout) {
@@ -2189,6 +2216,7 @@ export function CaixaPanel({
                                       const isFullyPaid = fullOrder.valorPago >= total;
 
                                       if (isFullyPaid) {
+                                        setIsLoading(true);
                                         try {
                                           await Promise.all(readyItems.map(item =>
                                             fetch(`${apiBaseUrl}/comandas/itens/${item.id}/status?status=entregue`, {
@@ -2205,6 +2233,8 @@ export function CaixaPanel({
                                         } catch (err) {
                                           console.error(err);
                                           alert("Erro ao finalizar retirada.");
+                                        } finally {
+                                          setIsLoading(false);
                                         }
                                       } else {
                                         setSelectedOrder({
