@@ -177,7 +177,11 @@ def get_produto(produto_id: str, db: Session = Depends(get_db)):
     return produto
 
 @router.post("/", response_model=ProdutoResponse, status_code=status.HTTP_201_CREATED)
-def create_produto(produto_data: ProdutoCreate, db: Session = Depends(get_db)):
+def create_produto(
+    produto_data: ProdutoCreate, 
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
     """Cadastra um novo produto no cardápio."""
     # Check if category exists
     categoria = db.query(Categoria).filter(Categoria.id == produto_data.categoria_id).first()
@@ -199,6 +203,7 @@ def create_produto(produto_data: ProdutoCreate, db: Session = Depends(get_db)):
     db.add(novo_produto)
     db.commit()
     db.refresh(novo_produto)
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
     return novo_produto
 
 @router.put("/{produto_id}", response_model=ProdutoResponse)
@@ -236,7 +241,11 @@ def update_produto(
     return db_produto
 
 @router.delete("/{produto_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_produto(produto_id: str, db: Session = Depends(get_db)):
+def delete_produto(
+    produto_id: str, 
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
     """Remove definitivamente um produto do cardápio."""
     db_produto = db.query(Produto).filter(Produto.id == produto_id).first()
     if not db_produto:
@@ -246,4 +255,5 @@ def delete_produto(produto_id: str, db: Session = Depends(get_db)):
         )
     db.delete(db_produto)
     db.commit()
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
     return

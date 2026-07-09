@@ -317,6 +317,20 @@ export function CaixaPanel({
   const [newMesaCap, setNewMesaCap] = useState('4');
   const [newMesaNome, setNewMesaNome] = useState('');
 
+  // Product & Category management states
+  const [apiCategorias, setApiCategorias] = useState<any[]>([]);
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<any>(null);
+  
+  // Form states for Product Modal
+  const [prodFormId, setProdFormId] = useState('');
+  const [prodFormNome, setProdFormNome] = useState('');
+  const [prodFormPreco, setProdFormPreco] = useState('');
+  const [prodFormCategoriaId, setProdFormCategoriaId] = useState('');
+  const [prodFormDescricao, setProdFormDescricao] = useState('');
+  const [prodFormImagem, setProdFormImagem] = useState('');
+  const [prodFormAtivo, setProdFormAtivo] = useState(true);
+
   // Form states
   const [saldoInicial, setSaldoInicial] = useState('100.00');
   const [movTipo, setMovTipo] = useState<'suprimento' | 'sangria'>('suprimento');
@@ -897,6 +911,18 @@ export function CaixaPanel({
     }
   };
 
+  const fetchCategorias = async () => {
+    try {
+      const res = await fetch(`${apiBaseUrl}/produtos/categorias`, { headers: authHeaders });
+      if (res.ok) {
+        const data = await res.json();
+        setApiCategorias(data);
+      }
+    } catch (e) {
+      console.error('Error fetching categorias', e);
+    }
+  };
+
   useEffect(() => {
     fetchTurno();
     fetchSystemUsers();
@@ -970,6 +996,7 @@ export function CaixaPanel({
     }
     if (activeTab === 'cardapio') {
       fetchProdutos();
+      fetchCategorias();
     }
   }, [activeTab, activeSubTab]);
 
@@ -4479,6 +4506,23 @@ export function CaixaPanel({
                 <div className={clsx('flex', 'gap-2')}>
                   <button
                     onClick={() => {
+                      setEditingProduct(null);
+                      setProdFormId('');
+                      setProdFormNome('');
+                      setProdFormPreco('');
+                      setProdFormCategoriaId(apiCategorias[0]?.id || '');
+                      setProdFormDescricao('');
+                      setProdFormImagem('');
+                      setProdFormAtivo(true);
+                      setShowProductModal(true);
+                    }}
+                    className={clsx('flex', 'items-center', 'gap-1.5', 'px-3', 'py-1.5', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'rounded-xl', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}
+                  >
+                    <Plus size={11} />
+                    Novo Item
+                  </button>
+                  <button
+                    onClick={() => {
                       const json = JSON.stringify(apiProdutos, null, 2);
                       const blob = new Blob([json], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
@@ -4505,18 +4549,14 @@ export function CaixaPanel({
                 </div>
               </div>
 
-              {/* Grouped by categoria */}
-              {(() => {
-                const byCat: Record<string, typeof apiProdutos> = {};
-                apiProdutos.forEach(p => {
-                  const cat = (p as any).categoria?.nome || 'Outros';
-                  if (!byCat[cat]) byCat[cat] = [];
-                  byCat[cat].push(p);
-                });
-                return Object.entries(byCat).map(([cat, prods]) => (
-                  <div key={cat} className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-2xl', 'overflow-hidden')}>
+              {/* Grouped by dynamically loaded apiCategorias */}
+              {apiCategorias.map((cat) => {
+                const prods = apiProdutos.filter(p => (p as any).categoria_id === cat.id);
+                if (prods.length === 0) return null;
+                return (
+                  <div key={cat.id} className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-2xl', 'overflow-hidden')}>
                     <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]')}>
-                      <span className={clsx('font-bold', 'text-[#10b981]', 'text-[10px]', 'uppercase', 'tracking-wider')}>{cat}</span>
+                      <span className={clsx('font-bold', 'text-[#10b981]', 'text-[10px]', 'uppercase', 'tracking-wider')}>{cat.nome}</span>
                     </div>
                     <div className={clsx('divide-y', 'divide-[#27272A]/40')}>
                       {prods.map(prod => (
@@ -4533,15 +4573,58 @@ export function CaixaPanel({
                             <span className={`text-[8px] font-bold px-2 py-0.5 rounded-full ${(prod as any).ativo !== false ? 'bg-emerald-600/15 text-emerald-400' : 'bg-red-900/20 text-red-400'}`}>
                               {(prod as any).ativo !== false ? 'Ativo' : 'Esgotado'}
                             </span>
+                            <div className="flex gap-1 pl-2">
+                              <button
+                                onClick={() => {
+                                  setEditingProduct(prod);
+                                  setProdFormId(prod.id);
+                                  setProdFormNome(prod.nome);
+                                  setProdFormPreco(prod.preco.toString());
+                                  setProdFormCategoriaId((prod as any).categoria_id || '');
+                                  setProdFormDescricao((prod as any).descricao || '');
+                                  setProdFormImagem((prod as any).imagem || '');
+                                  setProdFormAtivo((prod as any).ativo !== false);
+                                  setShowProductModal(true);
+                                }}
+                                className="p-1 hover:bg-[#27272A] rounded text-gray-400 hover:text-white transition-all cursor-pointer border border-transparent"
+                                title="Editar Produto"
+                              >
+                                <Edit3 size={11} />
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  if (confirm(`Deseja realmente remover "${prod.nome}" do cardápio? Esta ação não pode ser desfeita.`)) {
+                                    try {
+                                      const res = await fetch(`${apiBaseUrl}/produtos/${prod.id}`, {
+                                        method: 'DELETE',
+                                        headers: authHeaders
+                                      });
+                                      if (res.ok) {
+                                        fetchProdutos();
+                                      } else {
+                                        alert('Erro ao excluir produto.');
+                                      }
+                                    } catch (e) {
+                                      console.error(e);
+                                      alert('Erro de conexão ao excluir produto.');
+                                    }
+                                  }
+                                }}
+                                className="p-1 hover:bg-red-950/20 rounded text-red-400 hover:text-red-300 transition-all cursor-pointer border border-transparent"
+                                title="Excluir Produto"
+                              >
+                                <Trash2 size={11} />
+                              </button>
+                            </div>
                           </div>
                         </div>
                       ))}
                     </div>
                   </div>
-                ));
-              })()}
+                );
+              })}
               {apiProdutos.length === 0 && (
-                <div className={clsx('py-20', 'text-center', 'text-gray-500', 'italic', 'text-xs')}>Nenhum produto encontrado. Cadastre em "Listagem de Produtos".</div>
+                <div className={clsx('py-20', 'text-center', 'text-gray-500', 'italic', 'text-xs')}>Nenhum produto encontrado. Cadastre em "Novo Item".</div>
               )}
             </div>
           )}
@@ -4655,101 +4738,105 @@ export function CaixaPanel({
                   </div>
                 </div>
 
-                {/* Categories */}
-                {Object.entries(byCat).map(([cat, prods]) => (
-                  <div key={cat} className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-2xl', 'overflow-hidden')}>
-                    <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'gap-3')}>
-                      <div className="flex items-baseline gap-2">
-                        <span className={clsx('font-bold', 'text-[#10b981]', 'text-[10px]', 'uppercase', 'tracking-wider')}>{cat}</span>
-                        <span className={clsx('text-[8px]', 'text-gray-500')}>{prods.length} item{prods.length !== 1 ? 's' : ''}</span>
-                      </div>
-                      
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            if (confirm(`Deseja realmente esgotar todos os itens da categoria "${cat}"?`)) {
-                              try {
-                                await Promise.all(prods.map(prod => 
-                                  fetch(`${apiBaseUrl}/produtos/${prod.id}`, {
-                                    method: 'PUT',
-                                    headers: { ...authHeaders, 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ ativo: false })
-                                  })
-                                ));
-                                await fetchProdutos();
-                              } catch (e) {
-                                console.error(e);
-                                alert('Erro ao atualizar categoria.');
-                              }
-                            }
-                          }}
-                          className="px-2 py-0.5 border border-red-900/40 hover:border-red-600/30 bg-red-950/20 hover:bg-red-900/25 text-red-400 hover:text-white text-[8px] font-bold rounded transition-all cursor-pointer uppercase tracking-wide"
-                        >
-                          Esgotar Todos
-                        </button>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            if (confirm(`Deseja realmente disponibilizar todos os itens da categoria "${cat}"?`)) {
-                              try {
-                                await Promise.all(prods.map(prod => 
-                                  fetch(`${apiBaseUrl}/produtos/${prod.id}`, {
-                                    method: 'PUT',
-                                    headers: { ...authHeaders, 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ ativo: true })
-                                  })
-                                ));
-                                await fetchProdutos();
-                              } catch (e) {
-                                console.error(e);
-                                alert('Erro ao atualizar categoria.');
-                              }
-                            }
-                          }}
-                          className="px-2 py-0.5 border border-emerald-900/40 hover:border-emerald-600/30 bg-emerald-950/20 hover:bg-emerald-900/25 text-emerald-400 hover:text-white text-[8px] font-bold rounded transition-all cursor-pointer uppercase tracking-wide"
-                        >
-                          Disponibilizar Todos
-                        </button>
-                      </div>
-                    </div>
-                    <div className={clsx('divide-y', 'divide-[#27272A]/40')}>
-                      {prods.map(prod => {
-                        const isAtivo = (prod as any).ativo !== false;
-                        return (
-                          <div key={prod.id} className={`flex items-center justify-between px-4 py-3 transition-colors ${isAtivo ? 'hover:bg-[#1C1C1F]/30' : 'bg-red-950/10'}`}>
-                            <div className={clsx('flex', 'items-center', 'gap-3')}>
-                              {(prod as any).imagem && <img src={(prod as any).imagem} alt={prod.nome} className={`w-8 h-8 rounded-lg object-cover ${!isAtivo ? 'opacity-40 grayscale' : ''}`} />}
-                              <div>
-                                <span className={`text-xs font-semibold block ${isAtivo ? 'text-white' : 'text-gray-500 line-through'}`}>{prod.nome}</span>
-                                <span className={clsx('text-[9px]', 'text-gray-500', 'font-mono')}>R$ {prod.preco.toFixed(2)}</span>
-                              </div>
-                            </div>
-                            <button
-                              onClick={async () => {
+                {/* Dynamic Category Grouping */}
+                {apiCategorias.map((catObj) => {
+                  const prods = filtered.filter(p => (p as any).categoria_id === catObj.id);
+                  if (prods.length === 0) return null;
+                  return (
+                    <div key={catObj.id} className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-2xl', 'overflow-hidden')}>
+                      <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'gap-3')}>
+                        <div className="flex items-baseline gap-2">
+                          <span className={clsx('font-bold', 'text-[#10b981]', 'text-[10px]', 'uppercase', 'tracking-wider')}>{catObj.nome}</span>
+                          <span className={clsx('text-[8px]', 'text-gray-500')}>{prods.length} item{prods.length !== 1 ? 's' : ''}</span>
+                        </div>
+                        
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (confirm(`Deseja realmente esgotar todos os itens da categoria "${catObj.nome}"?`)) {
                                 try {
-                                  const res = await fetch(`${apiBaseUrl}/produtos/${prod.id}`, {
-                                    method: 'PUT',
-                                    headers: { ...authHeaders, 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ ativo: !isAtivo })
-                                  });
-                                  if (res.ok) { await fetchProdutos(); }
-                                  else { alert('Erro ao atualizar disponibilidade.'); }
-                                } catch { alert('Erro de conexão.'); }
-                              }}
-                              className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase transition-all cursor-pointer border ${isAtivo
-                                ? 'bg-emerald-600/10 text-emerald-500 hover:bg-red-800/20 hover:text-red-400 border-emerald-600/20 hover:border-red-600/20'
-                                : 'bg-red-800/15 text-red-400 hover:bg-emerald-600/20 hover:text-emerald-400 border-red-600/20 hover:border-emerald-600/20'
-                                }`}
-                            >
-                              {isAtivo ? '✓ Disponível' : '✗ Esgotado'}
-                            </button>
-                          </div>
-                        );
-                      })}
+                                  await Promise.all(prods.map(prod => 
+                                    fetch(`${apiBaseUrl}/produtos/${prod.id}`, {
+                                      method: 'PUT',
+                                      headers: { ...authHeaders, 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ ativo: false })
+                                    })
+                                  ));
+                                  await fetchProdutos();
+                                } catch (e) {
+                                  console.error(e);
+                                  alert('Erro ao atualizar categoria.');
+                                }
+                              }
+                            }}
+                            className="px-2 py-0.5 border border-red-900/40 hover:border-red-600/30 bg-red-950/20 hover:bg-red-900/25 text-red-400 hover:text-white text-[8px] font-bold rounded transition-all cursor-pointer uppercase tracking-wide border"
+                          >
+                            Esgotar Todos
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (confirm(`Deseja realmente disponibilizar todos os itens da categoria "${catObj.nome}"?`)) {
+                                try {
+                                  await Promise.all(prods.map(prod => 
+                                    fetch(`${apiBaseUrl}/produtos/${prod.id}`, {
+                                      method: 'PUT',
+                                      headers: { ...authHeaders, 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ ativo: true })
+                                    })
+                                  ));
+                                  await fetchProdutos();
+                                } catch (e) {
+                                  console.error(e);
+                                  alert('Erro ao atualizar categoria.');
+                                }
+                              }
+                            }}
+                            className="px-2 py-0.5 border border-emerald-900/40 hover:border-emerald-600/30 bg-emerald-950/20 hover:bg-emerald-900/25 text-emerald-400 hover:text-white text-[8px] font-bold rounded transition-all cursor-pointer uppercase tracking-wide border"
+                          >
+                            Disponibilizar Todos
+                          </button>
+                        </div>
+                      </div>
+                      <div className={clsx('divide-y', 'divide-[#27272A]/40')}>
+                        {prods.map(prod => {
+                          const isAtivo = (prod as any).ativo !== false;
+                          return (
+                            <div key={prod.id} className={`flex items-center justify-between px-4 py-3 transition-colors ${isAtivo ? 'hover:bg-[#1C1C1F]/30' : 'bg-red-950/10'}`}>
+                              <div className={clsx('flex', 'items-center', 'gap-3')}>
+                                {(prod as any).imagem && <img src={(prod as any).imagem} alt={prod.nome} className={`w-8 h-8 rounded-lg object-cover ${!isAtivo ? 'opacity-40 grayscale' : ''}`} />}
+                                <div>
+                                  <span className={`text-xs font-semibold block ${isAtivo ? 'text-white' : 'text-gray-500 line-through'}`}>{prod.nome}</span>
+                                  <span className={clsx('text-[9px]', 'text-gray-500', 'font-mono')}>R$ {prod.preco.toFixed(2)}</span>
+                                </div>
+                              </div>
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const res = await fetch(`${apiBaseUrl}/produtos/${prod.id}`, {
+                                      method: 'PUT',
+                                      headers: { ...authHeaders, 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ ativo: !isAtivo })
+                                    });
+                                    if (res.ok) { await fetchProdutos(); }
+                                    else { alert('Erro ao atualizar disponibilidade.'); }
+                                  } catch { alert('Erro de conexão.'); }
+                                }}
+                                className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase transition-all cursor-pointer border ${isAtivo
+                                  ? 'bg-emerald-600/10 text-emerald-500 hover:bg-red-800/20 hover:text-red-400 border-emerald-600/20 hover:border-red-600/20'
+                                  : 'bg-red-800/15 text-red-400 hover:bg-emerald-600/20 hover:text-emerald-400 border-red-600/20 hover:border-emerald-600/20'
+                                  }`}
+                              >
+                                {isAtivo ? '✓ Disponível' : '✗ Esgotado'}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 {filtered.length === 0 && (
                   <div className={clsx('py-16', 'text-center', 'text-gray-500', 'italic', 'text-xs')}>Nenhum produto encontrado para "{disponibilidadeSearch}".</div>
                 )}
@@ -6129,6 +6216,181 @@ export function CaixaPanel({
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 7. MODAL: ADICIONAR / EDITAR PRODUTO */}
+      {showProductModal && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="w-full max-w-md bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
+            <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
+              <h3 className="font-serif text-sm font-bold text-white font-serif">
+                {editingProduct ? 'Editar Produto' : 'Novo Produto'}
+              </h3>
+              <button 
+                type="button" 
+                onClick={() => setShowProductModal(false)} 
+                className="p-1 text-gray-400 hover:text-white transition-colors cursor-pointer border border-transparent"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (isLoading) return;
+                setIsLoading(true);
+                try {
+                  const payload = {
+                    nome: prodFormNome,
+                    categoria_id: prodFormCategoriaId,
+                    preco: parseFloat(prodFormPreco),
+                    descricao: prodFormDescricao,
+                    imagem: prodFormImagem,
+                    ativo: prodFormAtivo
+                  };
+
+                  let res;
+                  if (editingProduct) {
+                    res = await fetch(`${apiBaseUrl}/produtos/${editingProduct.id}`, {
+                      method: 'PUT',
+                      headers: { ...authHeaders, 'Content-Type': 'application/json' },
+                      body: JSON.stringify(payload)
+                    });
+                  } else {
+                    res = await fetch(`${apiBaseUrl}/produtos/`, {
+                      method: 'POST',
+                      headers: { ...authHeaders, 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        id: prodFormId,
+                        ...payload
+                      })
+                    });
+                  }
+
+                  if (res.ok) {
+                    await fetchProdutos();
+                    setShowProductModal(false);
+                  } else {
+                    const errData = await res.json();
+                    alert(errData.detail || 'Erro ao salvar produto.');
+                  }
+                } catch (err) {
+                  console.error(err);
+                  alert('Erro de conexão ao salvar produto.');
+                } finally {
+                  setIsLoading(false);
+                }
+              }}
+              className="space-y-4 text-xs"
+            >
+              {!editingProduct && (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Código/Ref do Produto (ID único):</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: 001, 104, burger-duplo"
+                    value={prodFormId}
+                    onChange={(e) => setProdFormId(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                  />
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Nome do Produto:</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: Cheeseburger Duplo"
+                  value={prodFormNome}
+                  onChange={(e) => setProdFormNome(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Preço (R$):</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    placeholder="25.90"
+                    value={prodFormPreco}
+                    onChange={(e) => setProdFormPreco(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981] font-mono text-[11px]"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Categoria:</label>
+                  <select
+                    required
+                    value={prodFormCategoriaId}
+                    onChange={(e) => setProdFormCategoriaId(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                  >
+                    <option value="" disabled>Selecione...</option>
+                    {apiCategorias.map((cat) => (
+                      <option key={cat.id} value={cat.id}>{cat.nome}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Descrição / Ingredientes:</label>
+                <textarea
+                  placeholder="Hambúrguer bovino 150g, queijo cheddar derretido..."
+                  value={prodFormDescricao}
+                  onChange={(e) => setProdFormDescricao(e.target.value)}
+                  rows={2}
+                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">URL da Imagem:</label>
+                <input
+                  type="text"
+                  placeholder="https://exemplo.com/imagem.jpg"
+                  value={prodFormImagem}
+                  onChange={(e) => setProdFormImagem(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 py-1">
+                <input
+                  type="checkbox"
+                  id="prod-form-ativo"
+                  checked={prodFormAtivo}
+                  onChange={(e) => setProdFormAtivo(e.target.checked)}
+                  className="rounded border-[#27272A] text-emerald-500 focus:ring-emerald-500 h-4 w-4 bg-[#121214]"
+                />
+                <label htmlFor="prod-form-ativo" className="text-[10px] font-bold text-gray-300 uppercase tracking-wider cursor-pointer">Disponível em estoque (Ativo)</label>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowProductModal(false)}
+                  className="flex-1 py-2 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] text-white rounded-xl font-bold cursor-pointer transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="flex-1 py-2 bg-[#10b981] hover:bg-[#059669] text-[#121214] rounded-xl font-bold cursor-pointer transition-colors disabled:opacity-50"
+                >
+                  {isLoading ? 'Salvando...' : 'Salvar'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
