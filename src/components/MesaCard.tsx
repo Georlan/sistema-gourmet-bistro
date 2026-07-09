@@ -43,7 +43,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
     const timestamps = orders.map(o => o.timestamp);
     firstOrderTimestamp = Math.min(...timestamps);
 
-    const allActiveItems = orders.flatMap(o => o.itens.filter(i => i.status !== 'cancelado'));
+    const allActiveItems = orders.flatMap(o => o.itens.filter(i => (i.status as string) !== 'cancelado'));
     const hasPronto = allActiveItems.some(item => item.status === 'pronto');
     const hasPreparando = allActiveItems.some(item => item.status === 'preparando');
     const allEntregue = allActiveItems.length > 0 && !hasPronto && !hasPreparando;

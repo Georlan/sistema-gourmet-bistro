@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { Order, OrderItem, CaixaTurno, CaixaMovimentacao, Pagamento, Table, Product } from '../types';
 import { PRODUCTS, CATEGORIES } from '../data';
+import { getProductPresets } from '../domain';
 import clsx from 'clsx';
 
 interface CaixaPanelProps {
@@ -2339,6 +2340,47 @@ export function CaixaPanel({
                             className={clsx('w-24', 'px-1.5', 'py-1', 'text-[9px]', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded', 'focus:outline-none', 'focus:border-[#10b981]', 'text-white')}
                           />
                         </div>
+
+                        {/* Presets de Observação Dinâmicos do Terminal Balcão */}
+                        {(() => {
+                          const presets = getProductPresets(item.product);
+                          if (presets.length === 0) return null;
+                          const parts = item.obs ? item.obs.split(',').map(p => p.trim()) : [];
+                          return (
+                            <div className="flex flex-wrap gap-1 mt-2 justify-end">
+                              {presets.map(preset => {
+                                const isActive = parts.some(p => p.toLowerCase() === preset.toLowerCase());
+                                return (
+                                  <button
+                                    key={preset}
+                                    type="button"
+                                    onClick={() => {
+                                      const currentParts = item.obs ? item.obs.split(',').map(p => p.trim()) : [];
+                                      const exists = currentParts.some(p => p.toLowerCase() === preset.toLowerCase());
+                                      const updatedParts = exists
+                                        ? currentParts.filter(p => p.toLowerCase() !== preset.toLowerCase() && p !== '')
+                                        : [...currentParts.filter(p => p !== ''), preset];
+                                      
+                                      const updatedObs = updatedParts.join(', ');
+                                      setPdvCart(prev => {
+                                        const c = [...prev];
+                                        c[idx].obs = updatedObs;
+                                        return c;
+                                      });
+                                    }}
+                                    className={`px-1.5 py-0.5 text-[8px] rounded border transition-colors cursor-pointer font-medium ${
+                                      isActive
+                                        ? 'bg-emerald-600/20 border-emerald-500/40 text-emerald-400'
+                                        : 'bg-[#27272A] hover:bg-emerald-600/25 text-gray-400 hover:text-white border-[#27272A]'
+                                    }`}
+                                  >
+                                    {isActive ? preset : `+${preset}`}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
                       </div>
                     ))
                   )}
@@ -4169,9 +4211,30 @@ export function CaixaPanel({
             const handleBatchAvailability = async (keyword: string, active: boolean) => {
               const targetProducts = source.filter(p => {
                 const name = p.nome.toLowerCase();
+                const catId = (p as any).categoria_id || '';
+                
+                if (keyword === 'hambúrguer') {
+                  return name.includes('hambúrguer') || 
+                         name.includes('hamburguer') || 
+                         name.includes('burguer') || 
+                         name.includes('burger') ||
+                         catId.includes('hamburguer') ||
+                         catId.includes('frango') ||
+                         catId.includes('suinos');
+                }
+                
+                if (keyword === 'pastel') {
+                  return name.includes('pastel') || catId.includes('pastel');
+                }
+                
+                if (keyword === 'baguete') {
+                  return name.includes('baguete') || catId.includes('baguete');
+                }
+
+                // Fallback
                 const catObj = (p as any).categoria;
                 const cat = typeof catObj === 'object' && catObj ? catObj.nome.toLowerCase() : (typeof catObj === 'string' ? catObj.toLowerCase() : '');
-                return name.includes(keyword) || cat.includes(keyword);
+                return name.includes(keyword) || cat.includes(keyword) || catId.includes(keyword);
               });
 
               if (targetProducts.length === 0) return;

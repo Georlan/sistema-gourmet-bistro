@@ -22,7 +22,7 @@ def seed_database():
         
         # 0. Cadastrar Restaurante Padrão (ID=1)
         restaurante = Restaurante(id=1, nome="Kôma Bistrô", plano="pocket")
-        db.add(restaurante)
+        db.merge(restaurante)
         db.commit()
 
         # 1. Cadastrar Usuários (Garçons, Caixas e Administradores)

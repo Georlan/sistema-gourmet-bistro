@@ -38,7 +38,26 @@ class ObservacaoResponse(BaseModel):
 @router.get("/categorias", response_model=List[CategoriaResponse])
 def get_categorias(db: Session = Depends(get_db)):
     """Retorna todas as categorias de produtos cadastradas no cardápio."""
-    return db.query(Categoria).all()
+    categorias = db.query(Categoria).all()
+    order_list = [
+        "Hambúrgueres Bovinos",
+        "Hambúrgueres de Frango",
+        "Hambúrgueres Suínos",
+        "Baguetes",
+        "Pastéis Tradicionais",
+        "Pastelões Especiais",
+        "Pastéis Doces",
+        "Petiscos",
+        "Combos Promocionais",
+        "Sucos",
+        "Refrigerantes e Águas",
+        "Cervejas",
+        "Bebidas Quentes"
+    ]
+    return sorted(
+        categorias,
+        key=lambda c: order_list.index(c.nome) if c.nome in order_list else len(order_list)
+    )
 
 @router.post("/categorias", response_model=CategoriaResponse, status_code=status.HTTP_201_CREATED)
 def create_categoria(data: CategoriaCreate, db: Session = Depends(get_db)):
