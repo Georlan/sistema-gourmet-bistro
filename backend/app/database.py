@@ -105,6 +105,13 @@ def get_db(request: Request = None):
 
     token_var = current_restaurante_id.set(restaurante_id)
 
+    try:
+        import sentry_sdk
+        sentry_sdk.set_tag("tenant_id", tenant_id)
+        sentry_sdk.set_tag("restaurante_id", str(restaurante_id))
+    except Exception:
+        pass
+
     if tenant_id not in engines:
         db_url = settings.DATABASE_URL
         if tenant_id != "default":

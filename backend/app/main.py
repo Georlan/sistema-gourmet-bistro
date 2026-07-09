@@ -1,5 +1,5 @@
 import sentry_sdk
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .database import engine, Base
@@ -97,6 +97,26 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def add_sentry_context(request: Request, call_next):
+    tenant_id = request.headers.get("X-Tenant-ID", "default")
+    restaurante_id = 1
+    
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.split(" ")[1]
+        try:
+            import jwt
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+            restaurante_id = int(payload.get("restaurante_id", 1))
+        except Exception:
+            pass
+
+    sentry_sdk.set_tag("tenant_id", tenant_id)
+    sentry_sdk.set_tag("restaurante_id", str(restaurante_id))
+        
+    return await call_next(request)
 
 # Register routers
 app.include_router(auth.router)
