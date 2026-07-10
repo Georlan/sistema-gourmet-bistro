@@ -107,6 +107,7 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         setRestauranteConfig(data);
+        setIsConfigLoaded(true);
       }
     } catch (err) {
       console.error("Error fetching configs in App:", err);
@@ -247,6 +248,7 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         setSalonTables(data);
+        setIsTablesLoaded(true);
       }
     } catch (err) {
       console.error("Error fetching tables", err);
@@ -317,6 +319,12 @@ export default function App() {
   // Table filter state
   const [tableFilter, setTableFilter] = useState<'todos' | 'livres' | 'ocupadas' | 'prontas'>('todos');
 
+  // Pre-loading states for smooth intro transition
+  const [isConfigLoaded, setIsConfigLoaded] = useState(false);
+  const [isProductsLoaded, setIsProductsLoaded] = useState(false);
+  const [isOrdersLoaded, setIsOrdersLoaded] = useState(false);
+  const [isTablesLoaded, setIsTablesLoaded] = useState(false);
+
   // 2. Live products loaded from backend (includes ativo field for availability blocking)
   const [liveProdutos, setLiveProdutos] = useState<Product[]>([]);
 
@@ -333,6 +341,7 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         setLiveProdutos(Array.isArray(data) ? data : []);
+        setIsProductsLoaded(true);
       }
     } catch (err) {
       console.error("Error fetching live products", err);
@@ -723,6 +732,7 @@ export default function App() {
         };
       });
       setOrders(mappedOrders);
+      setIsOrdersLoaded(true);
     } catch (err) {
       console.error("Connection error to backend:", err);
     }
@@ -1219,6 +1229,9 @@ export default function App() {
             }}
             className={clsx('w-full', 'h-full', 'object-cover')}
           />
+          {/* Cover/mask overlay to hide the star sparkle watermark in the video */}
+          <div className="absolute bottom-[52px] right-[45px] w-[50px] h-[50px] bg-[#0d1322] blur-md pointer-events-none rounded-full" />
+          
           <button
             onClick={() => setIsMuted(!isMuted)}
             className={clsx('absolute', 'top-4', 'right-4', 'p-2', 'bg-black/60', 'hover:bg-black/80', 'text-white', 'border', 'border-white/10', 'rounded-xl', 'transition-all', 'backdrop-blur-md', 'cursor-pointer', 'flex', 'items-center', 'justify-center')}
@@ -1236,9 +1249,30 @@ export default function App() {
             Pular Intro
           </button>
         </div>
-        <p className={clsx('mt-6', 'text-xs', 'text-emerald-400', 'font-mono', 'tracking-widest', 'uppercase', 'animate-pulse')}>
-          Carregando Kôma...
-        </p>
+        
+        <div className="mt-6 flex flex-col items-center gap-2">
+          <p className={clsx('text-xs', 'text-emerald-400', 'font-mono', 'tracking-widest', 'uppercase', 'animate-pulse')}>
+            {(!isAuthenticated || (isConfigLoaded && isProductsLoaded && isOrdersLoaded && isTablesLoaded)) 
+              ? 'Sistema Pronto!' 
+              : 'Carregando Kôma...'}
+          </p>
+          {isAuthenticated && (
+            <div className="flex gap-4 text-[9px] font-mono text-gray-500 uppercase tracking-wider animate-fade-in">
+              <span className={isConfigLoaded ? 'text-emerald-400 font-bold' : ''}>
+                {isConfigLoaded ? '✓ Config' : '• Config'}
+              </span>
+              <span className={isProductsLoaded ? 'text-emerald-400 font-bold' : ''}>
+                {isProductsLoaded ? '✓ Cardápio' : '• Cardápio'}
+              </span>
+              <span className={isTablesLoaded ? 'text-emerald-400 font-bold' : ''}>
+                {isTablesLoaded ? '✓ Mesas' : '• Mesas'}
+              </span>
+              <span className={isOrdersLoaded ? 'text-emerald-400 font-bold' : ''}>
+                {isOrdersLoaded ? '✓ Pedidos' : '• Pedidos'}
+              </span>
+            </div>
+          )}
+        </div>
       </div>
     );
   }
