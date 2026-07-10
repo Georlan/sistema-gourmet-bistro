@@ -12,6 +12,7 @@ import { MesaCard } from './components/MesaCard';
 import { MesaDetailsModal } from './components/MesaDetailsModal';
 import { KitchenPanel } from './components/KitchenPanel';
 import { CaixaPanel } from './components/CaixaPanel';
+const MemoizedCaixaPanel = React.memo(CaixaPanel);
 import clsx from 'clsx';
 
 
@@ -398,13 +399,13 @@ export default function App() {
     }
   }, [selectedTableId, portal]);
 
-  // 5. Live clock tracker to update permanency timers automatically every 10 seconds
+  // 5. Live clock tracker to update permanency timers automatically every 30 seconds (reduces re-renders)
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
 
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentTime(Date.now());
-    }, 10000);
+    }, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -1183,6 +1184,23 @@ export default function App() {
     return { libre, ocupada, pronto };
   }, [orders, salonTables]);
 
+  const filteredTables = React.useMemo(() => {
+    return salonTables.filter(table => {
+      const tableOrders = orders.filter(o => o.mesaId === table.id);
+      const status = tableOrders.length === 0
+        ? 'livre'
+        : tableOrders.some(o => o.itens.some(i => i.status === 'pronto'))
+          ? 'pronto'
+          : 'ocupada';
+
+      if (tableFilter === 'todos') return true;
+      if (tableFilter === 'livres') return status === 'livre';
+      if (tableFilter === 'ocupadas') return status === 'ocupada';
+      if (tableFilter === 'prontas') return status === 'pronto';
+      return true;
+    });
+  }, [salonTables, orders, tableFilter]);
+
   const selectedTable = salonTables.find(t => t.id === selectedTableId);
   const selectedTableOrders = selectedTable ? orders.filter(o => o.mesaId === selectedTable.id) : [];
 
@@ -1505,7 +1523,7 @@ export default function App() {
             modoExclusivoSalao={restauranteConfig?.modo_exclusivo_salao}
           />
         ) : activeRole === 'caixa' ? (
-          <CaixaPanel
+          <MemoizedCaixaPanel
             orders={orders}
             onRefreshOrders={fetchOrdersFromAPI}
             apiBaseUrl={API_BASE_URL}
@@ -1562,31 +1580,12 @@ export default function App() {
               </div>
 
               <div className={clsx('grid', 'grid-cols-3', 'gap-1', 'sm:gap-6')}>
-                {(() => {
-                  const filteredTables = salonTables.filter(table => {
-                    const tableOrders = orders.filter(o => o.mesaId === table.id);
-                    const status = tableOrders.length === 0
-                      ? 'livre'
-                      : tableOrders.some(o => o.itens.some(i => i.status === 'pronto'))
-                        ? 'pronto'
-                        : 'ocupada';
-
-                    if (tableFilter === 'todos') return true;
-                    if (tableFilter === 'livres') return status === 'livre';
-                    if (tableFilter === 'ocupadas') return status === 'ocupada';
-                    if (tableFilter === 'prontas') return status === 'pronto';
-                    return true;
-                  });
-
-                  if (filteredTables.length === 0) {
-                    return (
-                      <div className={clsx('col-span-full', 'py-10', 'text-center', 'text-gray-500', 'text-sm', 'italic', 'font-sans')}>
-                        Nenhuma mesa encontrada neste status.
-                      </div>
-                    );
-                  }
-
-                  return filteredTables.map((table) => {
+                {filteredTables.length === 0 ? (
+                  <div className={clsx('col-span-full', 'py-10', 'text-center', 'text-gray-500', 'text-sm', 'italic', 'font-sans')}>
+                    Nenhuma mesa encontrada neste status.
+                  </div>
+                ) : (
+                  filteredTables.map((table) => {
                     const tableOrders = orders.filter(o => o.mesaId === table.id);
                     const waiterDrafts = getDraftItems(table.id);
                     const draftQtyCount = waiterDrafts.reduce((sum, item) => sum + (item.quantidade || 1), 0);
@@ -1608,14 +1607,14 @@ export default function App() {
                         orders={tableOrders}
                         draftCount={draftQtyCount}
                         otherWaitersServing={otherWaitersServing}
-                        currentTime={currentTime}
+                        currentTime={tableOrders.length > 0 ? currentTime : 0}
                         activeWaiterId={activeWaiterId}
                         onClick={handleTableClick}
                         hasPendingPayment={hasPendingPayment}
                       />
                     );
-                  });
-                })()}
+                  })
+                )}
               </div>
             </div>
 
