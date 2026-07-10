@@ -23,6 +23,16 @@ def split_justified(left_text: str, right_text: str, width: int) -> str:
 def draw_separator(char: str = "-", width: int = 40) -> str:
     return char * width
 
+# AJUSTADO: Função utilitária segura para buscar chaves/atributos em dicts ou objetos SQLAlchemy
+def safe_get(obj, key, default=""):
+    if obj is None:
+        return default
+    if isinstance(obj, dict):
+        val = obj.get(key, default)
+        return val if val is not None else default
+    val = getattr(obj, key, default)
+    return val if val is not None else default
+
 def format_item_line(name: str, qty: int, price_unit: float, width: int = 40) -> str:
     # Use full name without abbreviations — wrap if needed
     qty_str = f"{qty}x"
@@ -224,77 +234,76 @@ class PrinterService:
         width = self.width
         lines = []
         
-        # Header banner
-        lines.append(draw_separator("=", width))
-        title = "*** REIMPRESSÃO COZINHA ***" if is_reprint else "*** TICKET DE COZINHA ***"
-        lines.append(align_center(title, width))
-        lines.append(draw_separator("=", width))
+        # Comandos de controle de fonte e espaçamento ESC/POS embutidos como string
+        TIGHT_LINE = "\x1b3\x18"  # Espaçamento curto entre linhas (24 dots em vez de 30)
+        FONT_A = "\x1bM\x00"      # Fonte normal (mais legível para cozinha)
+        FONT_B = "\x1bM\x01"      # Fonte condensada pequena (para economizar papel)
+        BOLD_ON = "\x1bE\x01"     # Ativa Negrito
+        BOLD_OFF = "\x1bE\x00"    # Desativa Negrito
         
-        # Compact single-line header
-        mesa_str = f"MESA: {mesa_id}" if mesa_id is not None else "RETIRADA / BALCAO"
-        # Prominent order type banner
-        lines.append(draw_separator(" ", width))
-        lines.append(align_center(f"[ {tipo.upper()} ]", width))
-        lines.append(draw_separator(" ", width))
-        lines.append(align_center(f"{mesa_str}  |  PEDIDO #{num_pedido}", width))
-        lines.append(split_justified(
-            f"GARCOM: {garcom_nome.upper()}",
-            datetime.datetime.now().strftime("%d/%m %H:%M"),
-            width
-        ))
-        lines.append(draw_separator("-", width))
+        # Inicia com espaçamento curto de linha e muda para Fonte B para o cabeçalho
+        lines.append(TIGHT_LINE + FONT_B)
         
-        # Group items by client
+        # Se o garçom não fez o pedido, por padrão vira "CONSUMO LOCAL"
+        order_type = (tipo or "CONSUMO LOCAL").upper()
+        if not garcom_nome or garcom_nome.strip() == "" or garcom_nome.lower() == "caixa":
+            order_type = "CONSUMO LOCAL"
+            
+        mesa_str = f" | MESA: {mesa_id}" if mesa_id is not None else ""
+        reprint_str = "[REIMPRESSÃO] " if is_reprint else ""
+        
+        # Cabeçalho unificado e compacto de 2 linhas
+        lines.append(f"{reprint_str}[{order_type}]{mesa_str} | PEDIDO: #{num_pedido}")
+        
+        garcom_str = garcom_nome.upper() if garcom_nome else "CAIXA"
+        data_hora = datetime.datetime.now().strftime("%d/%m %H:%M")
+        lines.append(f"GARCOM: {garcom_str} | {data_hora}")
+        
+        # Um único traço fino de divisão abaixo do cabeçalho
+        lines.append("-" * 40)
+        
+        # 1. Agrupa os itens idênticos da comanda por (codigo, nome, observacao, cliente_nome) de forma 100% segura
         grouped = {}
         for item in items:
-            client = item.get("cliente_nome") or "Consumo Geral"
-            client = client.strip()
-            if not client:
-                client = "Consumo Geral"
-            grouped.setdefault(client, []).append(item)
+            if safe_get(item, "status") == "cancelado":
+                continue
+                
+            nome = safe_get(item, "nome") or safe_get(safe_get(item, "produto"), "nome") or ""
+            codigo = safe_get(item, "codigo") or safe_get(safe_get(item, "produto"), "id") or ""
+            obs = str(safe_get(item, "observacao") or "").strip()
+            cliente = str(safe_get(item, "cliente_nome") or safe_get(item, "cliente_nome_custom") or "").strip()
+            
+            key = (codigo, nome, obs, cliente)
+            if key not in grouped:
+                grouped[key] = 0
+            grouped[key] += int(safe_get(item, "quantidade") or 1)
 
-        # Print "Consumo Geral" first
-        if "Consumo Geral" in grouped:
-            for item in grouped["Consumo Geral"]:
-                lines.append(format_kitchen_item(
-                    qty=item.get("quantidade", 1),
-                    name=item.get("nome", ""),
-                    observation=item.get("observacao", ""),
-                    client_name="",
-                    width=width,
-                    preco_unit=item.get("preco_unit", 0.0)
-                ))
-                lines.append(draw_separator(".", width))
-            del grouped["Consumo Geral"]
-            
-        # Print named clients
-        for client in sorted(grouped.keys()):
-            if lines and lines[-1] == draw_separator(".", width):
-                lines.pop()
-            
-            lines.append(draw_separator("-", width))
-            lines.append(f"PARA: {client.upper()}")
-            lines.append(draw_separator("-", width))
-            
-            for item in grouped[client]:
-                lines.append(format_kitchen_item(
-                    qty=item.get("quantidade", 1),
-                    name=item.get("nome", ""),
-                    observation=item.get("observacao", ""),
-                    client_name="",
-                    width=width,
-                    preco_unit=item.get("preco_unit", 0.0)
-                ))
-                lines.append(draw_separator(".", width))
-            
-        # Remove last separator dots
-        if lines and lines[-1] == draw_separator(".", width):
-            lines.pop()
-            
-        lines.append(draw_separator("-", width))
-        lines.append(align_center("KÔMA RESTAURANTE - PRODUÇÃO", width))
+        # 2. Altera para Fonte A Negrito para os itens de comida ficarem bem legíveis
+        lines.append(FONT_A + BOLD_ON)
         
-        # Feed/Cut placeholder
+        # 3. Varre os itens agrupados gerando o cupom condensado
+        for (codigo, nome, obs, cliente), quantidade in grouped.items():
+            cod_str = f" {codigo} -" if codigo else ""
+            cliente_str = f" [{cliente.upper()}]" if cliente else ""
+            
+            # Linha principal do item
+            item_line = f"{quantidade}x{cod_str} {nome}{cliente_str}"
+            lines.append(item_line)
+            
+            # Observações em Fonte B (pequena e sem negrito) embaixo do item
+            if obs:
+                lines.append(BOLD_OFF + FONT_B)
+                lines.append(f"   * {obs}")
+                lines.append(FONT_A + BOLD_ON)  # Retorna ao estilo dos itens
+                
+        lines.append(BOLD_OFF)  # Desativa o negrito para o rodapé
+        
+        # Um único traço e rodapé em Fonte B
+        lines.append(FONT_B)
+        lines.append("-" * 40)
+        lines.append(align_center("KÔMA BISTRÔ", width))
+        
+        # Adiciona marcador de corte em simulação
         if self.simulate:
             lines.append("\n" + align_center("[CUT]", width) + "\n")
             
