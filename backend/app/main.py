@@ -3,7 +3,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .database import engine, Base
-from .routes import auth, products, tables, orders, websocket, caixa, optimization
+from .routes import auth, products, tables, orders, websocket, caixa, optimization, estoque
 
 # Inicializa o Sentry antes de qualquer coisa no app
 sentry_sdk.init(
@@ -22,7 +22,7 @@ try:
         conn.execute(text("INSERT INTO restaurantes (id, nome, plano) VALUES (1, 'Kôma Bistrô', 'pocket') ON CONFLICT (id) DO NOTHING"))
         conn.commit()
         
-        tables_to_migrate = ['usuarios', 'mesas', 'categorias', 'produtos', 'comandas', 'pagamentos', 'configuracoes_restaurante']
+        tables_to_migrate = ['usuarios', 'mesas', 'categorias', 'produtos', 'comandas', 'pagamentos', 'configuracoes_restaurante', 'insumos']
         insp = inspect(engine)
         for table in tables_to_migrate:
             try:
@@ -135,6 +135,7 @@ app.include_router(orders.router)
 app.include_router(websocket.router)
 app.include_router(caixa.router)
 app.include_router(optimization.router)
+app.include_router(estoque.router)
 
 
 @app.get("/")

@@ -302,6 +302,10 @@ export function CaixaPanel({
   const [generalStats, setGeneralStats] = useState<any>(null);
   const [estoqueInsumos, setEstoqueInsumos] = useState<{ id: string, nome: string, estoque_atual: number, estoque_minimo: number, estoque_maximo: number, unidade_medida: string, preco_medio_custo: number }[]>([]);
   const [estoqueSugestoes, setEstoqueSugestoes] = useState<{ id: string, nome: string, estoque_atual: number, estoque_minimo: number, estoque_maximo: number, unidade_medida: string, quantidade_sugerida: number }[]>([]);
+  const [notasEntrada, setNotasEntrada] = useState<{ id: string, numero_nota: string, chave_acesso: string, data_emissao: string, valor_total: number, distribuidor: { nome_fantasia: string, cnpj: string } | null }[]>([]);
+  const [distribuidores, setDistribuidores] = useState<{ id: string, nome_fantasia: string, razao_social: string, cnpj: string, lead_time_dias: number }[]>([]);
+  const [xmlUploadState, setXmlUploadState] = useState<{ loading: boolean, result: any | null, error: string | null, isDragging: boolean }>({ loading: false, result: null, error: null, isDragging: false });
+  const xmlFileInputRef = useRef<HTMLInputElement>(null);
   const [horariosPico, setHorariosPico] = useState<{ dia_semana_label: string, dia_semana: number, hora: string, total_pedidos: number }[]>([]);
   const [fidelidadeConfig, setFidelidadeConfig] = useState({
     ativo: true,
@@ -959,17 +963,23 @@ export function CaixaPanel({
     if (activeTab === 'estoque') {
       fetch(`${apiBaseUrl}/estoque/insumos`, { headers: authHeaders })
         .then(res => res.json())
-        .then(data => {
-          if (Array.isArray(data)) setEstoqueInsumos(data);
-        })
+        .then(data => { if (Array.isArray(data)) setEstoqueInsumos(data); })
         .catch(err => console.error('Error fetching insumos:', err));
 
       fetch(`${apiBaseUrl}/estoque/sugestoes`, { headers: authHeaders })
         .then(res => res.json())
-        .then(data => {
-          if (Array.isArray(data)) setEstoqueSugestoes(data);
-        })
+        .then(data => { if (Array.isArray(data)) setEstoqueSugestoes(data); })
         .catch(err => console.error('Error fetching stock suggestions:', err));
+
+      fetch(`${apiBaseUrl}/estoque/notas`, { headers: authHeaders })
+        .then(res => res.json())
+        .then(data => { if (Array.isArray(data)) setNotasEntrada(data); })
+        .catch(err => console.error('Error fetching notas:', err));
+
+      fetch(`${apiBaseUrl}/estoque/distribuidores`, { headers: authHeaders })
+        .then(res => res.json())
+        .then(data => { if (Array.isArray(data)) setDistribuidores(data); })
+        .catch(err => console.error('Error fetching distribuidores:', err));
     }
     if (activeTab === 'dashboard' && activeSubTab === 'metas') {
       fetch(`${apiBaseUrl}/comandas/estatisticas/pico`, { headers: authHeaders })
@@ -4847,42 +4857,44 @@ export function CaixaPanel({
 
 
 
-          {/* MOCK VIEW: ENTRADA DE XML NFE */}
-          {activeTab === 'estoque' && activeSubTab === 'xml' && (
-            <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5', 'text-left', 'animate-fade-in')}>
-              <div className={clsx('lg:col-span-1', 'bg-[#121214]', 'border', 'border-[#27272A]', 'p-5', 'rounded-3xl', 'space-y-4', 'h-fit')}>
-                <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Importar XML de NFe</span>
-                <div className={clsx('border-2', 'border-dashed', 'border-[#27272A]', 'rounded-2xl', 'py-8', 'px-4', 'text-center', 'cursor-pointer', 'hover:border-[#10b981]/30', 'transition-all', 'flex', 'flex-col', 'items-center', 'justify-center', 'space-y-2')}>
-                  <span className={clsx('text-[10px]', 'text-gray-400')}>Arraste seu arquivo .xml aqui</span>
-                  <span className={clsx('text-[8px]', 'text-gray-500')}>ou clique para selecionar do computador</span>
-                </div>
-                <p className={clsx('text-[8px]', 'text-gray-500', 'leading-normal')}>O sistema cadastrará insumos e reajustará o estoque automaticamente ao processar.</p>
-              </div>
-
-              <div className={clsx('lg:col-span-2', 'bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4')}>
-                <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Entradas de NF-e Recentes</span>
+          {/* LIVE VIEW: ESTOQUE DE INSUMOS */}
+          {activeTab === 'estoque' && activeSubTab === 'insumos' && (
+            <div className={clsx('animate-fade-in', 'space-y-4', 'text-left')}>
+              <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-3')}>
+                <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'border-b', 'border-[#27272A]', 'pb-2')}>Estoque de Insumos</span>
                 <div className={clsx('overflow-hidden', 'border', 'border-[#27272A]/40', 'rounded-2xl')}>
                   <table className={clsx('w-full', 'text-left', 'text-[10px]')}>
                     <thead>
                       <tr className={clsx('bg-[#1C1C1F]', 'border-b', 'border-[#27272A]', 'text-gray-400', 'uppercase', 'tracking-wider', 'font-bold')}>
-                        <th className="p-3">Nota</th>
-                        <th className="p-3">Fornecedor</th>
-                        <th className={clsx('p-3', 'font-mono')}>Valor NFe</th>
-                        <th className={clsx('p-3', 'text-right')}>Data Importação</th>
+                        <th className="p-3">Insumo</th>
+                        <th className={clsx('p-3', 'font-mono')}>Estoque Atual</th>
+                        <th className={clsx('p-3', 'font-mono')}>Mínimo</th>
+                        <th className={clsx('p-3', 'font-mono')}>Custo Médio</th>
+                        <th className={clsx('p-3', 'text-right')}>Status</th>
                       </tr>
                     </thead>
                     <tbody className={clsx('divide-y', 'divide-[#27272A]/40')}>
-                      {[
-                        { nota: "NF-001923", for: "Distribuidora Carnes Ltda", valor: 1450.00, data: "28/06/2026" },
-                        { nota: "NF-001855", for: "Hortifruti Central", valor: 380.50, data: "25/06/2026" }
-                      ].map((n, idx) => (
-                        <tr key={idx} className={clsx('hover:bg-[#1C1C1F]/20', 'transition-colors')}>
-                          <td className={clsx('p-3', 'font-mono', 'font-bold', 'text-white')}>{n.nota}</td>
-                          <td className={clsx('p-3', 'text-gray-300')}>{n.for}</td>
-                          <td className={clsx('p-3', 'font-mono', 'text-emerald-400')}>R$ {n.valor.toFixed(2)}</td>
-                          <td className={clsx('p-3', 'text-gray-400', 'text-right')}>{n.data}</td>
-                        </tr>
-                      ))}
+                      {estoqueInsumos.length === 0 ? (
+                        <tr><td colSpan={5} className="p-8 text-center text-gray-500 italic">Nenhum insumo cadastrado. Importe uma NF-e para começar.</td></tr>
+                      ) : estoqueInsumos.map(ins => {
+                        const isLow = ins.estoque_atual <= ins.estoque_minimo;
+                        return (
+                          <tr key={ins.id} className={clsx('transition-colors', isLow ? 'bg-amber-500/5 hover:bg-amber-500/10' : 'hover:bg-[#1C1C1F]/20')}>
+                            <td className={clsx('p-3', 'font-semibold', 'text-white')}>{ins.nome}</td>
+                            <td className={clsx('p-3', 'font-mono', isLow ? 'text-amber-400' : 'text-emerald-400')}>
+                              {ins.estoque_atual.toFixed(2)} <span className="text-gray-500">{ins.unidade_medida}</span>
+                            </td>
+                            <td className={clsx('p-3', 'font-mono', 'text-gray-400')}>{ins.estoque_minimo.toFixed(2)} <span className="text-gray-600">{ins.unidade_medida}</span></td>
+                            <td className={clsx('p-3', 'font-mono', 'text-gray-300')}>R$ {ins.preco_medio_custo.toFixed(2)}</td>
+                            <td className="p-3 text-right">
+                              {isLow
+                                ? <span className="px-2 py-0.5 bg-amber-500/15 text-amber-400 rounded-full text-[8px] font-bold uppercase">⚠ Baixo</span>
+                                : <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 rounded-full text-[8px] font-bold uppercase">✓ Ok</span>
+                              }
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -4890,30 +4902,138 @@ export function CaixaPanel({
             </div>
           )}
 
-          {/* MOCK VIEW: FORNECEDORES */}
+          {/* LIVE VIEW: ENTRADA DE XML NFE */}
+          {activeTab === 'estoque' && activeSubTab === 'xml' && (() => {
+            const handleXmlUpload = async (file: File) => {
+              if (!file || !file.name.endsWith('.xml')) {
+                setXmlUploadState(s => ({ ...s, error: 'Por favor, selecione um arquivo .xml válido.', result: null }));
+                return;
+              }
+              setXmlUploadState(s => ({ ...s, loading: true, error: null, result: null }));
+              const formData = new FormData();
+              formData.append('file', file);
+              try {
+                const res = await fetch(`${apiBaseUrl}/estoque/importar-xml`, {
+                  method: 'POST',
+                  headers: authHeaders,
+                  body: formData
+                });
+                const json = await res.json();
+                if (!res.ok) throw new Error(json.detail || 'Erro ao importar XML.');
+                setXmlUploadState(s => ({ ...s, loading: false, result: json }));
+                // Refresh all estoque data
+                fetch(`${apiBaseUrl}/estoque/insumos`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setEstoqueInsumos(d); });
+                fetch(`${apiBaseUrl}/estoque/notas`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setNotasEntrada(d); });
+                fetch(`${apiBaseUrl}/estoque/distribuidores`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setDistribuidores(d); });
+              } catch (err: any) {
+                setXmlUploadState(s => ({ ...s, loading: false, error: err.message || 'Erro desconhecido.' }));
+              }
+            };
+            return (
+              <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5', 'text-left', 'animate-fade-in')}>
+                <input ref={xmlFileInputRef} type="file" accept=".xml" className="hidden" onChange={e => { if (e.target.files?.[0]) handleXmlUpload(e.target.files[0]); e.target.value = ''; }} />
+                <div className={clsx('lg:col-span-1', 'space-y-4')}>
+                  <div
+                    className={clsx('bg-[#121214]', 'border-2', 'border-dashed', 'rounded-3xl', 'p-6', 'text-center', 'cursor-pointer', 'transition-all', 'space-y-3',
+                      xmlUploadState.isDragging ? 'border-[#10b981] bg-[#10b981]/5' : 'border-[#27272A] hover:border-[#10b981]/30'
+                    )}
+                    onClick={() => xmlFileInputRef.current?.click()}
+                    onDragOver={e => { e.preventDefault(); setXmlUploadState(s => ({ ...s, isDragging: true })); }}
+                    onDragLeave={() => setXmlUploadState(s => ({ ...s, isDragging: false }))}
+                    onDrop={e => { e.preventDefault(); setXmlUploadState(s => ({ ...s, isDragging: false })); const f = e.dataTransfer.files[0]; if (f) handleXmlUpload(f); }}
+                  >
+                    {xmlUploadState.loading ? (
+                      <div className="flex flex-col items-center gap-2 py-4">
+                        <div className="w-8 h-8 border-2 border-[#10b981] border-t-transparent rounded-full animate-spin" />
+                        <span className="text-[10px] text-[#10b981]">Processando NF-e...</span>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="text-3xl">📄</div>
+                        <span className="block text-[11px] font-semibold text-gray-300">Arraste ou clique para importar</span>
+                        <span className="block text-[9px] text-gray-500">Arquivo XML de NF-e (modelo 55)</span>
+                      </>
+                    )}
+                  </div>
+
+                  {xmlUploadState.result && (
+                    <div className={clsx('bg-emerald-500/10', 'border', 'border-emerald-500/20', 'rounded-2xl', 'p-4', 'space-y-2', 'text-left')}>
+                      <span className="block text-[10px] font-bold text-emerald-400 uppercase tracking-wider">✓ NF-e Importada com Sucesso</span>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[9px] text-gray-400 pt-1">
+                        <span>Fornecedor:</span><span className="text-white font-semibold">{xmlUploadState.result.fornecedor}</span>
+                        <span>Insumos criados:</span><span className="text-emerald-400 font-mono">{xmlUploadState.result.insumos_criados}</span>
+                        <span>Insumos atualizados:</span><span className="text-sky-400 font-mono">{xmlUploadState.result.insumos_atualizados}</span>
+                        <span>Valor total:</span><span className="text-white font-mono">R$ {Number(xmlUploadState.result.valor_total).toFixed(2)}</span>
+                      </div>
+                      <button onClick={() => setXmlUploadState(s => ({ ...s, result: null }))} className="text-[8px] text-gray-600 hover:text-gray-400 mt-1 cursor-pointer">Fechar</button>
+                    </div>
+                  )}
+
+                  {xmlUploadState.error && (
+                    <div className={clsx('bg-red-500/10', 'border', 'border-red-500/20', 'rounded-2xl', 'p-4', 'text-left')}>
+                      <span className="block text-[10px] font-bold text-red-400 uppercase tracking-wider">✗ Erro na Importação</span>
+                      <p className="text-[9px] text-red-300 mt-1">{xmlUploadState.error}</p>
+                      <button onClick={() => setXmlUploadState(s => ({ ...s, error: null }))} className="text-[8px] text-gray-600 hover:text-gray-400 mt-1 cursor-pointer">Fechar</button>
+                    </div>
+                  )}
+
+                  <p className={clsx('text-[8px]', 'text-gray-600', 'leading-relaxed', 'px-1')}>O sistema extrai fornecedor, itens e valores automaticamente, cadastrando insumos novos e atualizando estoque via custo médio ponderado.</p>
+                </div>
+
+                <div className={clsx('lg:col-span-2', 'bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4')}>
+                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Entradas de NF-e</span>
+                  <div className={clsx('overflow-hidden', 'border', 'border-[#27272A]/40', 'rounded-2xl')}>
+                    <table className={clsx('w-full', 'text-left', 'text-[10px]')}>
+                      <thead>
+                        <tr className={clsx('bg-[#1C1C1F]', 'border-b', 'border-[#27272A]', 'text-gray-400', 'uppercase', 'tracking-wider', 'font-bold')}>
+                          <th className="p-3">Nota</th>
+                          <th className="p-3">Fornecedor</th>
+                          <th className={clsx('p-3', 'font-mono')}>Valor</th>
+                          <th className={clsx('p-3', 'text-right')}>Emissão</th>
+                        </tr>
+                      </thead>
+                      <tbody className={clsx('divide-y', 'divide-[#27272A]/40')}>
+                        {notasEntrada.length === 0 ? (
+                          <tr><td colSpan={4} className="p-8 text-center text-gray-500 italic">Nenhuma nota importada ainda.</td></tr>
+                        ) : notasEntrada.map(nota => (
+                          <tr key={nota.id} className={clsx('hover:bg-[#1C1C1F]/20', 'transition-colors')}>
+                            <td className={clsx('p-3', 'font-mono', 'font-bold', 'text-white')}>NF-{nota.numero_nota}</td>
+                            <td className={clsx('p-3', 'text-gray-300')}>{nota.distribuidor?.nome_fantasia ?? '—'}</td>
+                            <td className={clsx('p-3', 'font-mono', 'text-emerald-400')}>R$ {Number(nota.valor_total).toFixed(2)}</td>
+                            <td className={clsx('p-3', 'text-gray-400', 'text-right')}>{nota.data_emissao ? new Date(nota.data_emissao).toLocaleDateString('pt-BR') : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* LIVE VIEW: DISTRIBUIDORES */}
           {activeTab === 'estoque' && activeSubTab === 'fornecedores' && (
-            <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'text-left', 'animate-fade-in', 'max-w-2xl')}>
-              <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'border-b', 'border-[#27272A]', 'pb-2')}>Fornecedores Cadastrados</span>
+            <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'text-left', 'animate-fade-in')}>
+              <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'border-b', 'border-[#27272A]', 'pb-2')}>Distribuidores Cadastrados</span>
               <div className={clsx('overflow-hidden', 'border', 'border-[#27272A]/40', 'rounded-2xl')}>
                 <table className={clsx('w-full', 'text-left', 'text-[10px]')}>
                   <thead>
                     <tr className={clsx('bg-[#1C1C1F]', 'border-b', 'border-[#27272A]', 'text-gray-400', 'uppercase', 'tracking-wider', 'font-bold')}>
                       <th className="p-3.5">Nome Fantasia</th>
-                      <th className="p-3.5">Telefone</th>
+                      <th className="p-3.5">Razão Social</th>
                       <th className="p-3.5">CNPJ</th>
-                      <th className={clsx('p-3.5', 'text-right')}>Insumos Principais</th>
+                      <th className={clsx('p-3.5', 'text-right')}>Lead Time</th>
                     </tr>
                   </thead>
                   <tbody className={clsx('divide-y', 'divide-[#27272A]/40')}>
-                    {[
-                      { nome: "Distribuidora Carnes Ltda", tel: "(11) 98765-4321", cnpj: "12.345.678/0001-99", ins: "Carne Bovina, Frango" },
-                      { nome: "Hortifruti Central", tel: "(11) 98888-7777", cnpj: "98.765.432/0001-88", ins: "Hortaliças, Tomate" }
-                    ].map((f, idx) => (
-                      <tr key={idx} className={clsx('hover:bg-[#1C1C1F]/20', 'transition-colors')}>
-                        <td className={clsx('p-3.5', 'font-bold', 'text-white')}>{f.nome}</td>
-                        <td className={clsx('p-3.5', 'font-mono', 'text-gray-300')}>{f.tel}</td>
-                        <td className={clsx('p-3.5', 'font-mono', 'text-gray-400')}>{f.cnpj}</td>
-                        <td className={clsx('p-3.5', 'text-gray-400', 'text-right', 'italic')}>{f.ins}</td>
+                    {distribuidores.length === 0 ? (
+                      <tr><td colSpan={4} className="p-8 text-center text-gray-500 italic">Nenhum distribuidor cadastrado. Os distribuidores são registrados automaticamente ao importar NF-e.</td></tr>
+                    ) : distribuidores.map(dist => (
+                      <tr key={dist.id} className={clsx('hover:bg-[#1C1C1F]/20', 'transition-colors')}>
+                        <td className={clsx('p-3.5', 'font-bold', 'text-white')}>{dist.nome_fantasia || '—'}</td>
+                        <td className={clsx('p-3.5', 'text-gray-400')}>{dist.razao_social || '—'}</td>
+                        <td className={clsx('p-3.5', 'font-mono', 'text-gray-400')}>{dist.cnpj}</td>
+                        <td className={clsx('p-3.5', 'text-gray-400', 'text-right', 'font-mono')}>{dist.lead_time_dias ?? '—'} dias</td>
                       </tr>
                     ))}
                   </tbody>

@@ -405,6 +405,7 @@ class Insumo(Base):
     __tablename__ = "insumos"
     
     id = Column(String, primary_key=True, index=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False)
     nome = Column(String, nullable=False)
     estoque_atual = Column(Float, default=0.0)
     estoque_minimo = Column(Float, default=10.0)
@@ -452,6 +453,49 @@ class Motoboy(Base):
     
     # Relationship to comandas
     comandas = relationship("Comanda", back_populates="motoboy")
+
+
+class Distribuidor(Base):
+    __tablename__ = "distribuidores"
+    
+    id = Column(String, primary_key=True, index=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False)
+    nome_fantasia = Column(String, nullable=False)
+    razao_social = Column(String, nullable=True)
+    cnpj = Column(String, nullable=True)
+    lead_time_dias = Column(Integer, default=3)
+
+
+class NotaEntrada(Base):
+    __tablename__ = "notas_entrada"
+    
+    id = Column(String, primary_key=True, index=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False)
+    chave_acesso = Column(String, nullable=True)
+    numero_nota = Column(String, nullable=False)
+    data_emissao = Column(String, nullable=True)
+    distribuidor_id = Column(String, ForeignKey("distribuidores.id"), nullable=False)
+    valor_total = Column(Float, default=0.0)
+    
+    # Relationships
+    distribuidor = relationship("Distribuidor")
+    itens = relationship("ItemNotaEntrada", back_populates="nota", cascade="all, delete-orphan")
+
+
+class ItemNotaEntrada(Base):
+    __tablename__ = "itens_nota_entrada"
+    
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False)
+    nota_id = Column(String, ForeignKey("notas_entrada.id"), nullable=False)
+    insumo_id = Column(String, ForeignKey("insumos.id"), nullable=False)
+    quantidade = Column(Float, nullable=False)
+    preco_unitario = Column(Float, nullable=False)
+    
+    # Relationships
+    nota = relationship("NotaEntrada", back_populates="itens")
+    insumo = relationship("Insumo")
+
 
 
 

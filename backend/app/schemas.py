@@ -418,4 +418,42 @@ class MotoboyResponse(BaseModel):
         from_attributes = True
 
 
+class DistribuidorResponse(BaseModel):
+    id: str
+    nome_fantasia: str
+    razao_social: Optional[str] = None
+    cnpj: Optional[str] = None
+    lead_time_dias: int
+
+    class Config:
+        from_attributes = True
+
+
+class ItemNotaEntradaResponse(BaseModel):
+    id: int
+    nota_id: str
+    insumo_id: str
+    quantidade: float
+    preco_unitario: float
+    insumo: Optional[InsumoResponse] = None
+
+    class Config:
+        from_attributes = True
+
+
+class NotaEntradaResponse(BaseModel):
+    id: str
+    chave_acesso: Optional[str] = None
+    numero_nota: str
+    data_emissao: Optional[str] = None
+    distribuidor_id: str
+    valor_total: float
+    distribuidor: Optional[DistribuidorResponse] = None
+    itens: Optional[list[ItemNotaEntradaResponse]] = None
+
+    class Config:
+        from_attributes = True
+
+
+
 
