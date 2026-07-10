@@ -1229,8 +1229,6 @@ export default function App() {
             }}
             className={clsx('w-full', 'h-full', 'object-cover')}
           />
-          {/* Cover/mask overlay to hide the star sparkle watermark in the video */}
-          <div className="absolute bottom-[52px] right-[45px] w-[50px] h-[50px] bg-[#0d1322] blur-md pointer-events-none rounded-full" />
           
           <button
             onClick={() => setIsMuted(!isMuted)}
