@@ -159,7 +159,7 @@ class Item(Base):
     
     preco_unit = Column(Float, nullable=False)  # Snapshot of price at order time
     observacao = Column(String, default="")
-    _cliente_nome = Column("cliente_nome", String, default="Consumo Geral")
+    _cliente_nome = Column("cliente_nome", String, default=lambda: encrypt_field("Consumo Geral"))
 
     @hybrid_property
     def cliente_nome(self):

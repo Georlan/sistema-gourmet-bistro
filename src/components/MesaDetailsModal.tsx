@@ -337,7 +337,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
 
                                 {/* Status Badge & Waiter Delivery Control */}
                                 <div className="flex items-center gap-3">
-                                  <span className="font-mono font-bold text-white text-sm">R$ {item.preco.toFixed(2)}</span>
+                                  <span className="font-mono font-bold text-white text-sm">R$ {(item.preco ?? 0).toFixed(2)}</span>
                                   
                                   {item.status === 'preparando' && (
                                     <span className="px-2.5 py-1 text-[10px] font-bold bg-rose-900/40 border border-rose-800/50/20 text-rose-400 rounded-md border border-rose-900/50/30 animate-pulse-subtle uppercase tracking-wider">
@@ -612,7 +612,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                             <span>{item.nome}</span>
                             {item.clienteNome && <span className="text-[9px] text-[#10b981] bg-[#10b981]/10 border border-[#10b981]/20 px-1 rounded">Para: {item.clienteNome}</span>}
                           </div>
-                          <span className="font-mono text-gray-400">R$ {item.preco.toFixed(2)}</span>
+                          <span className="font-mono text-gray-400">R$ {(item.preco ?? 0).toFixed(2)}</span>
                         </label>
                       );
                     })

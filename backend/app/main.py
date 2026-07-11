@@ -2,7 +2,7 @@ import sentry_sdk
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
-from .database import engine, Base
+from .database import engine, Base, current_restaurante_id
 from .routes import auth, products, tables, orders, websocket, caixa, optimization, estoque
 
 # Inicializa o Sentry antes de qualquer coisa no app
@@ -108,7 +108,7 @@ app.add_middleware(
 )
 
 @app.middleware("http")
-async def add_sentry_context(request: Request, call_next):
+async def add_sentry_context_and_tenant(request: Request, call_next):
     tenant_id = request.headers.get("X-Tenant-ID", "default")
     restaurante_id = 1
     
@@ -124,8 +124,16 @@ async def add_sentry_context(request: Request, call_next):
 
     sentry_sdk.set_tag("tenant_id", tenant_id)
     sentry_sdk.set_tag("restaurante_id", str(restaurante_id))
-        
-    return await call_next(request)
+
+    # Define a variável de contexto do tenant de forma segura para esta requisição
+    token_context = current_restaurante_id.set(restaurante_id)
+    try:
+        response = await call_next(request)
+    finally:
+        # Garante a limpeza do contexto após o término da requisição
+        current_restaurante_id.reset(token_context)
+
+    return response
 
 # Register routers
 app.include_router(auth.router)

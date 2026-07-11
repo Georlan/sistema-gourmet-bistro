@@ -22,22 +22,22 @@ class TenantSession(Session):
 
 @event.listens_for(Session, "do_orm_execute")
 def _add_tenant_id_filtering_criteria(execute_state):
+    # Garante que a filtragem se aplica apenas a consultas SELECT comuns de entidades
     if (
         execute_state.is_select
         and not execute_state.is_column_load
         and not execute_state.is_relationship_load
     ):
-        context_override = current_restaurante_id.get()
-        if context_override is not None:
-            session = execute_state.session
-            tenant_id = getattr(session, "restaurante_id", 1)
+        tenant_id = current_restaurante_id.get()  # Fonte única de verdade segura
+        if tenant_id is not None:
+            # Aplica recursivamente o filtro para todas as classes mapeadas que tenham "restaurante_id"
             for mapper in Base.registry.mappers:
                 cls = mapper.class_
                 if hasattr(cls, "restaurante_id"):
                     execute_state.statement = execute_state.statement.options(
                         with_loader_criteria(
                             cls,
-                            lambda target_cls: target_cls.restaurante_id == tenant_id,
+                            lambda target_cls, tid=tenant_id: target_cls.restaurante_id == tid,
                             track_closure_variables=False
                         )
                     )
@@ -83,22 +83,10 @@ def insert_default_restaurant(target, connection, **kw):
 # DB Session dependency generator supporting dynamic tenant databases
 def get_db(request: Request = None):
     tenant_id = "default"
-    restaurante_id = 1
-    
+    restaurante_id = current_restaurante_id.get()  # Lê a variável de contexto centralizada definida pelo middleware
+
     if request:
         tenant_id = request.headers.get("X-Tenant-ID", "default")
-        auth_header = request.headers.get("Authorization")
-        if auth_header and auth_header.startswith("Bearer "):
-            token = auth_header.split(" ")[1]
-            try:
-                import jwt
-                from .config import settings
-                payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-                restaurante_id = int(payload.get("restaurante_id", 1))
-            except Exception:
-                pass
-
-    token_var = current_restaurante_id.set(restaurante_id)
 
     try:
         import sentry_sdk

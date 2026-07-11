@@ -44,6 +44,7 @@ export interface Order {
   tipo?: 'Consumo no Local' | 'Retirada' | 'Entrega'; // Order type
   valorPago?: number;
   identificador?: string;
+  statusComanda?: 'aguardando_pagamento' | null; // Adicionado para compatibilidade com o fluxo do caixa
 }
 
 export interface TableDraft {

@@ -109,7 +109,9 @@ export const KitchenPanel: React.FC<KitchenPanelProps> = ({
                 <div className="space-y-4">
                   {/* Card Header: Table, Timer, and delay badge */}
                   <div className="flex justify-between items-center pb-3 border-b border-[#2E2A25]/80">
-                    <span className="font-serif font-bold text-lg text-white">Mesa {mesaId}</span>
+                    <span className="font-serif font-bold text-lg text-white">
+                      {mesaId && mesaId > 0 ? `Mesa ${mesaId}` : 'Balcão / Viagem'}
+                    </span>
                     
                     <div className="flex items-center gap-1.5 bg-[#1C1917] px-2.5 py-1 rounded-full border border-[#2E2A25]">
                       <Clock size={12} className={isDelayed ? 'text-rose-400' : 'text-[#10b981]'} />

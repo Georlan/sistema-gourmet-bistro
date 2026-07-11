@@ -36,15 +36,21 @@ def gerar_novo_numero_pedido(db: Session) -> int:
     max_pedido = db.query(func.max(Comanda.numero_pedido)).filter(
         Comanda.criado_em >= start_of_month,
         Comanda.criado_em < start_of_next_month
-    ).scalar()
+    ).with_for_update().scalar()
     return (max_pedido or 0) + 1
 
 def print_in_background(printer_name: str, ticket_text: str):
+    import asyncio
     try:
         from ..printer_service import printer_service
-        printer_service.send_to_printer(printer_name, ticket_text)
+        # Executa a chamada de impressão síncrona em uma thread pool do sistema
+        loop = asyncio.new_event_loop() if asyncio.get_event_loop().is_closed() else asyncio.get_event_loop()
+        loop.run_in_executor(
+            None,  # Usa o ThreadPoolExecutor padrão
+            lambda: printer_service.send_to_printer(printer_name, ticket_text)
+        )
     except Exception as e:
-        print(f"Background print error for {printer_name}: {e}")
+        print(f"[PRINT ERROR] Falha no disparo em background para {printer_name}: {e}")
 
 # ----------------- READ ENDPOINTS -----------------
 

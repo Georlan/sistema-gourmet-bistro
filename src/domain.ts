@@ -10,7 +10,9 @@ import { Order, OrderItem } from './types';
  */
 export function getTableTotal(orders: Order[]): number {
   return orders.reduce((sum, order) => {
-    return sum + order.itens.reduce((itemSum, item) => itemSum + item.preco, 0);
+    return sum + order.itens
+      .filter(item => item.status !== 'cancelado')
+      .reduce((itemSum, item) => itemSum + item.preco, 0);
   }, 0);
 }
 
@@ -23,7 +25,11 @@ export function groupItemsByCustomer(orders: Order[]): { [customerName: string]:
 
   orders.forEach((order) => {
     order.itens.forEach((item) => {
-      const normalizedName = item.clienteNome.trim() || 'Consumo Geral';
+      // Ignora itens cancelados na divisão por cliente
+      if (item.status === 'cancelado') return;
+
+      // Proteção de null/undefined para clienteNome
+      const normalizedName = (item.clienteNome ?? '').trim() || 'Consumo Geral';
       if (!grouped[normalizedName]) {
         grouped[normalizedName] = [];
       }

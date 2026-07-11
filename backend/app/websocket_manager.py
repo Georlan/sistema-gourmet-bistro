@@ -39,8 +39,8 @@ class ConnectionManager:
                 try:
                     await connection.send_json(message)
                 except Exception:
-                    # Silently ignore dead sockets; cleanup will occur on disconnect
-                    pass
+                    # Remove o socket morto imediatamente para evitar vazamento de memória
+                    self.disconnect(connection, restaurante_id)
 
 # Singleton instance of the connection manager
 manager = ConnectionManager()

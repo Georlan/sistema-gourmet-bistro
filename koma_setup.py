@@ -31,7 +31,8 @@ for candidate in [_here / "backend", _here]:
 from app.database import engine, Base, SessionLocal
 from app.models import (
     Usuario, Categoria, Produto, Mesa, ObservacaoPredefinida,
-    Motoboy, ConfiguracaoRestaurante, ConfiguracaoIA
+    Motoboy, ConfiguracaoRestaurante, ConfiguracaoIA,
+    Insumo, Distribuidor
 )
 from app.security import get_password_hash
 
@@ -149,6 +150,40 @@ def export_config(output_path="koma_config_export.json"):
                 {"id": mb.id, "nome": mb.nome, "telefone": mb.telefone}
                 for mb in db.query(Motoboy).all()
             ],
+            "produtos": [
+                {
+                    "id": p.id,
+                    "nome": p.nome,
+                    "categoria_id": p.categoria_id,
+                    "preco": p.preco,
+                    "descricao": p.descricao,
+                    "imagem": p.imagem,
+                    "ativo": p.ativo
+                }
+                for p in db.query(Produto).all()
+            ],
+            "insumos": [
+                {
+                    "id": i.id,
+                    "nome": i.nome,
+                    "estoque_atual": i.estoque_atual,
+                    "estoque_minimo": i.estoque_minimo,
+                    "estoque_maximo": i.estoque_maximo,
+                    "unidade_medida": i.unidade_medida,
+                    "preco_medio_custo": i.preco_medio_custo
+                }
+                for i in db.query(Insumo).all()
+            ],
+            "distribuidores": [
+                {
+                    "id": d.id,
+                    "nome_fantasia": d.nome_fantasia,
+                    "razao_social": d.razao_social,
+                    "cnpj": d.cnpj,
+                    "lead_time_dias": d.lead_time_dias
+                }
+                for d in db.query(Distribuidor).all()
+            ],
         }
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
@@ -216,6 +251,49 @@ def import_from_json(json_path, reset_db=False):
                 if not db.query(Motoboy).filter_by(id=mb["id"]).first():
                     db.add(Motoboy(id=mb["id"], nome=mb["nome"], telefone=mb.get("telefone", ""), ativo=True))
             ok(f"{len(data['motoboys'])} motoboys importados.")
+
+        # Produtos
+        if "produtos" in data:
+            for p in data["produtos"]:
+                if not db.query(Produto).filter_by(id=p["id"]).first():
+                    db.add(Produto(
+                        id=p["id"],
+                        nome=p["nome"],
+                        categoria_id=p["categoria_id"],
+                        preco=p["preco"],
+                        descricao=p.get("descricao", ""),
+                        imagem=p.get("imagem", ""),
+                        ativo=p.get("ativo", True)
+                    ))
+            ok(f"{len(data['produtos'])} produtos importados.")
+
+        # Insumos
+        if "insumos" in data:
+            for ins in data["insumos"]:
+                if not db.query(Insumo).filter_by(id=ins["id"]).first():
+                    db.add(Insumo(
+                        id=ins["id"],
+                        nome=ins["nome"],
+                        estoque_atual=ins.get("estoque_atual", 0.0),
+                        estoque_minimo=ins.get("estoque_minimo", 10.0),
+                        estoque_maximo=ins.get("estoque_maximo", 50.0),
+                        unidade_medida=ins.get("unidade_medida", "un"),
+                        preco_medio_custo=ins.get("preco_medio_custo", 0.0)
+                    ))
+            ok(f"{len(data['insumos'])} insumos importados.")
+
+        # Distribuidores
+        if "distribuidores" in data:
+            for d in data["distribuidores"]:
+                if not db.query(Distribuidor).filter_by(id=d["id"]).first():
+                    db.add(Distribuidor(
+                        id=d["id"],
+                        nome_fantasia=d["nome_fantasia"],
+                        razao_social=d.get("razao_social"),
+                        cnpj=d.get("cnpj"),
+                        lead_time_dias=d.get("lead_time_dias", 3)
+                    ))
+            ok(f"{len(data['distribuidores'])} distribuidores importados.")
 
         db.commit()
         ok("Importação concluída com sucesso!")

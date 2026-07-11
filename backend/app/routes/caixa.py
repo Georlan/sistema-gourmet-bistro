@@ -279,7 +279,7 @@ def registrar_pagamento_comanda(
         # 4. Check if comanda is fully settled
         total_de_itens_pendentes = len([i for i in comanda.itens if i.status != 'cancelado' and not i.pago])
         subtotal_total = sum(i.preco_unit for i in comanda.itens if i.status != 'cancelado')
-        total_com_taxa = subtotal_total * 1.10
+        total_com_taxa = round(subtotal_total * 1.10, 2)
         
         if total_de_itens_pendentes == 0 or comanda.valor_pago >= subtotal_total or comanda.valor_pago >= total_com_taxa:
             # Mark all active items as paid just in case
@@ -316,9 +316,9 @@ def registrar_pagamento_comanda(
                 if fidel_config and fidel_config.ativo:
                     total_pago = comanda.valor_pago
                     if fidel_config.tipo_recompensa == "PONTOS":
-                        delta_val = total_pago * fidel_config.taxa_conversao
+                        delta_val = round(total_pago * fidel_config.taxa_conversao, 2)
                     else: # CASHBACK
-                        delta_val = total_pago * (fidel_config.taxa_conversao / 100.0)
+                        delta_val = round(total_pago * (fidel_config.taxa_conversao / 100.0), 2)
                     
                     # Create loyalty log
                     mov_fidel = HistoricoFidelidade(
@@ -380,7 +380,7 @@ def aprovar_pagamento(
     # Check if comanda is fully settled
     total_de_itens_pendentes = len([i for i in comanda.itens if i.status != 'cancelado' and not i.pago])
     subtotal_total = sum(i.preco_unit for i in comanda.itens if i.status != 'cancelado')
-    total_com_taxa = subtotal_total * 1.10
+    total_com_taxa = round(subtotal_total * 1.10, 2)
     
     if total_de_itens_pendentes == 0 or comanda.valor_pago >= subtotal_total or comanda.valor_pago >= total_com_taxa:
         for i in comanda.itens:
