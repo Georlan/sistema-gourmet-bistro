@@ -25,10 +25,7 @@ class InsumoCreate(BaseModel):
     unidade_medida: str
     preco_medio_custo: float
 
-@router.get("/estoque/insumos", response_model=List[InsumoResponse])
-def get_insumos(db: Session = Depends(get_db)):
-    """Retorna todos os insumos cadastrados no estoque."""
-    return db.query(Insumo).all()
+
 
 @router.post("/estoque/insumos", response_model=InsumoResponse)
 def save_insumo(insumo_in: InsumoCreate, db: Session = Depends(get_db)):

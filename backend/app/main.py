@@ -12,83 +12,94 @@ sentry_sdk.init(
     traces_sample_rate=1.0,  # Captura transações para monitorar lentidão
 )
 
-# Automatically create database tables and run migrations on startup
-try:
-    Base.metadata.create_all(bind=engine)
-    from sqlalchemy import text, inspect
-
-    # 1. Seed default Restaurante (ID=1) and dynamically add restaurante_id column to business tables
-    with engine.connect() as conn:
-        conn.execute(text("INSERT INTO restaurantes (id, nome, plano) VALUES (1, 'Kôma Bistrô', 'pocket') ON CONFLICT (id) DO NOTHING"))
-        conn.commit()
-        
-        tables_to_migrate = ['usuarios', 'mesas', 'categorias', 'produtos', 'comandas', 'pagamentos', 'configuracoes_restaurante', 'insumos']
-        insp = inspect(engine)
-        for table in tables_to_migrate:
-            try:
-                cols = {c["name"] for c in insp.get_columns(table)}
-                if "restaurante_id" not in cols:
-                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN restaurante_id INTEGER DEFAULT 1"))
-                    conn.commit()
-                    print(f"[MIGRATION] Added restaurante_id column to table: {table}")
-            except Exception as e:
-                print(f"[MIGRATION ERROR] Failed to add restaurante_id to table {table}: {e}")
-
-    # 2. Existing migrations for both local and production databases
-    with engine.connect() as conn:
-        insp = inspect(engine)
-        
-        # configuracoes_restaurante
-        config_cols = {c["name"] for c in insp.get_columns("configuracoes_restaurante")}
-        sqlite_migrations = [
-            ("modo_exclusivo_salao", "BOOLEAN DEFAULT TRUE"),
-            ("perm_garcom_delivery", "BOOLEAN DEFAULT TRUE"),
-            ("perm_garcom_editar", "BOOLEAN DEFAULT TRUE"),
-            ("perm_garcom_taxas", "BOOLEAN DEFAULT FALSE"),
-            ("perm_garcom_cancelar", "BOOLEAN DEFAULT FALSE"),
-            ("perm_garcom_status", "BOOLEAN DEFAULT TRUE"),
-            ("perm_garcom_abrir_vazia", "BOOLEAN DEFAULT FALSE"),
-            ("perm_garcom_print", "BOOLEAN DEFAULT TRUE"),
-            ("perm_garcom_fechar", "BOOLEAN DEFAULT FALSE"),
-            ("perm_garcom_desconto", "BOOLEAN DEFAULT FALSE"),
-            ("perm_garcom_acrescimo", "BOOLEAN DEFAULT FALSE"),
-            ("perm_garcom_pessoas", "BOOLEAN DEFAULT TRUE"),
-            ("perm_garcom_transferir_mesa", "BOOLEAN DEFAULT TRUE"),
-            ("perm_garcom_transferir_item", "BOOLEAN DEFAULT TRUE"),
-            ("perm_garcom_chamar", "BOOLEAN DEFAULT TRUE"),
-            ("perm_garcom_ociosas", "BOOLEAN DEFAULT TRUE"),
-        ]
-        for col, col_def in sqlite_migrations:
-            if col not in config_cols:
-                conn.execute(text(f"ALTER TABLE configuracoes_restaurante ADD COLUMN {col} {col_def}"))
-        conn.commit()
-
-        # pagamentos
-        pag_cols = {c["name"] for c in insp.get_columns("pagamentos")}
-        pag_migrations = [
-            ("status", "VARCHAR DEFAULT 'aprovado'"),
-            ("idempotency_key", "VARCHAR"),
-            ("cpf_cliente", "VARCHAR"),
-            ("nome_cliente", "VARCHAR"),
-            ("nsu_cartao", "VARCHAR"),
-            ("chave_nfe_emitida", "VARCHAR"),
-        ]
-        for col, col_def in pag_migrations:
-            if col not in pag_cols:
-                conn.execute(text(f"ALTER TABLE pagamentos ADD COLUMN {col} {col_def}"))
-        conn.commit()
-
-        # comandas — new Kanban flow fields
-        cmd_cols = {c["name"] for c in insp.get_columns("comandas")}
-        cmd_migrations = [
-            ("status_comanda", "VARCHAR"),  # null | aguardando_pagamento
-        ]
-        for col, col_def in cmd_migrations:
-            if col not in cmd_cols:
-                conn.execute(text(f"ALTER TABLE comandas ADD COLUMN {col} {col_def}"))
-        conn.commit()
-except Exception as e:
-    print(f"Error running database migrations: {e}")
+# Automatically create database tables and run migrations on startup (DISABLED: Controlled via Alembic)
+# try:
+#     Base.metadata.create_all(bind=engine)
+#     from sqlalchemy import text, inspect
+# 
+#     # 1. Seed default Restaurante (ID=1) and dynamically add restaurante_id column to business tables
+#     with engine.connect() as conn:
+#         conn.execute(text("INSERT INTO restaurantes (id, nome, plano) VALUES (1, 'Kôma Bistrô', 'pocket') ON CONFLICT (id) DO NOTHING"))
+#         conn.commit()
+#         
+#         tables_to_migrate = ['usuarios', 'mesas', 'categorias', 'produtos', 'comandas', 'pagamentos', 'configuracoes_restaurante', 'insumos']
+#         insp = inspect(engine)
+#         for table in tables_to_migrate:
+#             try:
+#                 cols = {c["name"] for c in insp.get_columns(table)}
+#                 if "restaurante_id" not in cols:
+#                     conn.execute(text(f"ALTER TABLE {table} ADD COLUMN restaurante_id INTEGER DEFAULT 1"))
+#                     conn.commit()
+#                     print(f"[MIGRATION] Added restaurante_id column to table: {table}")
+#             except Exception as e:
+#                 print(f"[MIGRATION ERROR] Failed to add restaurante_id to table {table}: {e}")
+# 
+#     # 2. Existing migrations for both local and production databases
+#     with engine.connect() as conn:
+#         insp = inspect(engine)
+#         
+#         # configuracoes_restaurante
+#         config_cols = {c["name"] for c in insp.get_columns("configuracoes_restaurante")}
+#         sqlite_migrations = [
+#             ("modo_exclusivo_salao", "BOOLEAN DEFAULT TRUE"),
+#             ("perm_garcom_delivery", "BOOLEAN DEFAULT TRUE"),
+#             ("perm_garcom_editar", "BOOLEAN DEFAULT TRUE"),
+#             ("perm_garcom_taxas", "BOOLEAN DEFAULT FALSE"),
+#             ("perm_garcom_cancelar", "BOOLEAN DEFAULT FALSE"),
+#             ("perm_garcom_status", "BOOLEAN DEFAULT TRUE"),
+#             ("perm_garcom_abrir_vazia", "BOOLEAN DEFAULT FALSE"),
+#             ("perm_garcom_print", "BOOLEAN DEFAULT TRUE"),
+#             ("perm_garcom_fechar", "BOOLEAN DEFAULT FALSE"),
+#             ("perm_garcom_desconto", "BOOLEAN DEFAULT FALSE"),
+#             ("perm_garcom_acrescimo", "BOOLEAN DEFAULT FALSE"),
+#             ("perm_garcom_pessoas", "BOOLEAN DEFAULT TRUE"),
+#             ("perm_garcom_transferir_mesa", "BOOLEAN DEFAULT TRUE"),
+#             ("perm_garcom_transferir_item", "BOOLEAN DEFAULT TRUE"),
+#             ("perm_garcom_chamar", "BOOLEAN DEFAULT TRUE"),
+#             ("perm_garcom_ociosas", "BOOLEAN DEFAULT TRUE"),
+#         ]
+#         for col, col_def in sqlite_migrations:
+#             if col not in config_cols:
+#                 conn.execute(text(f"ALTER TABLE configuracoes_restaurante ADD COLUMN {col} {col_def}"))
+#         conn.commit()
+# 
+#         # pagamentos
+#         pag_cols = {c["name"] for c in insp.get_columns("pagamentos")}
+#         pag_migrations = [
+#             ("status", "VARCHAR DEFAULT 'aprovado'"),
+#             ("idempotency_key", "VARCHAR"),
+#             ("cpf_cliente", "VARCHAR"),
+#             ("nome_cliente", "VARCHAR"),
+#             ("nsu_cartao", "VARCHAR"),
+#             ("chave_nfe_emitida", "VARCHAR"),
+#         ]
+#         for col, col_def in pag_migrations:
+#             if col not in pag_cols:
+#                 conn.execute(text(f"ALTER TABLE pagamentos ADD COLUMN {col} {col_def}"))
+#         conn.commit()
+# 
+#         # comandas — new Kanban flow fields
+#         cmd_cols = {c["name"] for c in insp.get_columns("comandas")}
+#         cmd_migrations = [
+#             ("status_comanda", "VARCHAR"),  # null | aguardando_pagamento
+#             ("mesa_origem_id", "INTEGER DEFAULT NULL"),
+#         ]
+#         for col, col_def in cmd_migrations:
+#             if col not in cmd_cols:
+#                 conn.execute(text(f"ALTER TABLE comandas ADD COLUMN {col} {col_def}"))
+#         conn.commit()
+# 
+#         # itens — new index/multi-tenancy fields
+#         item_cols = {c["name"] for c in insp.get_columns("itens")}
+#         item_migrations = [
+#             ("restaurante_id", "INTEGER DEFAULT 1"),
+#         ]
+#         for col, col_def in item_migrations:
+#             if col not in item_cols:
+#                 conn.execute(text(f"ALTER TABLE itens ADD COLUMN {col} {col_def}"))
+#         conn.commit()
+# except Exception as e:
+#     print(f"Error running database migrations: {e}")
 
 app = FastAPI(
     title=settings.PROJECT_NAME,

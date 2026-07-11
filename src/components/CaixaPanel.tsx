@@ -94,6 +94,7 @@ export function CaixaPanel({
   const [turno, setTurno] = useState<CaixaTurno | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState('');
 
   // active sidebar tab (the 9 main sections)
@@ -1207,8 +1208,9 @@ export function CaixaPanel({
   // Handle payment processing
   const handleProcessPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedOrder) return;
+    if (!selectedOrder || isProcessingPayment) return;
     setErrorMsg('');
+    setIsProcessingPayment(true);
 
     try {
       const res = await fetch(`${apiBaseUrl}/caixa/comandas/${selectedOrder.id}/pagar`, {
@@ -1260,6 +1262,8 @@ export function CaixaPanel({
       }
     } catch (err) {
       setErrorMsg('Erro de conexão ao servidor.');
+    } finally {
+      setIsProcessingPayment(false);
     }
   };
 

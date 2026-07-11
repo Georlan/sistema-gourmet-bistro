@@ -44,6 +44,8 @@ interface MesaDetailsModalProps {
   restauranteConfig?: any;
   onUpdateItemDetails?: (itemId: string, observacao: string, clienteNome: string, quantidadeAdicional?: number) => Promise<void>;
   isSubmitting?: boolean;
+  onMergeTables?: (sourceTableId: number, targetTableId: number) => void;
+  onUnmergeTable?: (comandaId: string) => void;
 }
 
 export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
@@ -80,6 +82,8 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
   liveProdutos = [],
   restauranteConfig,
   onUpdateItemDetails,
+  onMergeTables,
+  onUnmergeTable,
 }) => {
   // Dynamic default tab based on whether table is active or empty
   const [activeTab, setActiveTab] = useState<'consumo' | 'lancamento' | 'transferir'>(
@@ -89,7 +93,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
   const [selectedOrderToPrint, setSelectedOrderToPrint] = useState<Order | null>(null);
   const [confirmTransferTo, setConfirmTransferTo] = useState<number | null>(null);
   const [selectedItemsForTransfer, setSelectedItemsForTransfer] = useState<string[]>([]);
-  const [transferType, setTransferType] = useState<'total' | 'parcial'>('total');
+  const [transferType, setTransferType] = useState<'total' | 'parcial' | 'mesclar'>('total');
   const [printSuccess, setPrintSuccess] = useState<boolean>(false);
   const [confirmClear, setConfirmClear] = useState<boolean>(false);
   const [editingItem, setEditingItem] = useState<any>(null);
@@ -278,7 +282,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                         >
                           {/* Order Header */}
                           <div className="bg-[#1C1C1F] px-4 py-2.5 flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-[#27272A] gap-2 w-full">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-xs font-bold text-white font-sans">Lote #{order.id.slice(-4)}</span>
                               <span className="text-[10px] bg-[#121214] text-gray-300 px-2 py-0.5 rounded font-bold font-sans">
                                 Garçom: {order.garcomNome}
@@ -292,11 +296,33 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                                   {order.tipo}
                                 </span>
                               )}
+                              {order.mesaOrigemId && (
+                                <span className="text-[8px] sm:text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider bg-purple-500/20 text-purple-400 border border-purple-500/30">
+                                  Origem: Mesa {order.mesaOrigemId}
+                                </span>
+                              )}
                             </div>
                             <div className="flex items-center gap-3">
                               <span className="text-[10px] text-gray-400 font-mono font-bold">
                                 {new Date(order.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                               </span>
+                              
+                              {order.mesaOrigemId && onUnmergeTable && (
+                                <button
+                                  type="button"
+                                  disabled={activeRole === 'garcom' && !restauranteConfig?.perm_garcom_transferir_mesa}
+                                  onClick={() => onUnmergeTable(order.id)}
+                                  className={`px-2.5 py-1 rounded-lg text-[10px] font-sans font-semibold transition-all flex items-center gap-1 shadow-sm ${
+                                    (activeRole === 'garcom' && !restauranteConfig?.perm_garcom_transferir_mesa)
+                                      ? 'bg-[#1C1C1F]/40 border border-[#27272A]/40 text-gray-600 cursor-not-allowed'
+                                      : 'bg-purple-950/40 hover:bg-purple-900/30 text-purple-300 hover:text-white border border-purple-900/40 cursor-pointer'
+                                  }`}
+                                  title="Desmembrar este pedido de volta para sua mesa de origem"
+                                >
+                                  <span>Desmembrar</span>
+                                </button>
+                              )}
+
                               <button
                                 type="button"
                                 onClick={() => setSelectedOrderToPrint(order)}
@@ -493,29 +519,6 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                           <Printer size={13} className="text-[#10b981]" />
                           <span>Prévia e Extrato</span>
                         </button>
-
-                        {onClearTableOrders && (
-                          <button
-                            id="clear-table-orders-test-btn"
-                            onClick={() => {
-                              if (confirmClear) {
-                                onClearTableOrders();
-                                setConfirmClear(false);
-                              } else {
-                                setConfirmClear(true);
-                                // Auto-reset after 4 seconds
-                                setTimeout(() => setConfirmClear(false), 4000);
-                              }
-                            }}
-                            className={`w-full py-2.5 rounded-xl font-bold text-[10px] flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider font-sans ${
-                              confirmClear
-                                ? "bg-rose-600 hover:bg-rose-500 border border-rose-500 text-white animate-pulse"
-                                : "bg-rose-950/40 hover:bg-rose-900/50 border border-rose-900/40 hover:border-rose-700/50 text-rose-300 hover:text-white"
-                            }`}
-                          >
-                            <span>{confirmClear ? "Clique p/ Confirmar Zerar" : "Zerar Mesa (Testes)"}</span>
-                          </button>
-                        )}
                       </div>
                     </div>
 
@@ -578,8 +581,22 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                     transferType === 'parcial' ? 'bg-rose-900/40 border border-rose-800/50 text-white shadow-lg' : 'text-gray-400 hover:text-white'
                   }`}
                 >
-                  Selecionar Itens ("Pedaço")
+                  Selecionar Itens
                 </button>
+                {onMergeTables && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTransferType('mesclar');
+                      setSelectedItemsForTransfer([]);
+                    }}
+                    className={`flex-1 py-2 rounded-lg font-bold transition-all cursor-pointer ${
+                      transferType === 'mesclar' ? 'bg-rose-900/40 border border-rose-800/50 text-white shadow-lg' : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    Mesclar (Unificar)
+                  </button>
+                )}
               </div>
 
               {/* If partial, show items checklist */}
@@ -624,14 +641,14 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
               <div className="space-y-2">
                 <span className="text-[10px] text-gray-400 block font-bold uppercase tracking-wider text-center">Mesa de Destino:</span>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 pt-1">
-                  {TABLES.filter(t => t.id !== table.id).length === 0 ? (
+                  {availableTablesForTransfer.length === 0 ? (
                     <div className="col-span-full py-8 text-center text-gray-400 text-sm italic font-sans">
                       Nenhuma mesa disponível no momento.
                     </div>
                   ) : (
-                    TABLES.filter(t => t.id !== table.id).map((t) => {
+                    availableTablesForTransfer.map((t) => {
                       const isConfirming = confirmTransferTo === t.id;
-                      const hasSelected = transferType === 'total' || selectedItemsForTransfer.length > 0;
+                      const hasSelected = transferType === 'total' || transferType === 'mesclar' || selectedItemsForTransfer.length > 0;
                       return (
                         <button
                           key={t.id}
@@ -643,6 +660,10 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                             if (isConfirming) {
                               if (transferType === 'total') {
                                 onTransferTable(t.id);
+                              } else if (transferType === 'mesclar') {
+                                if (onMergeTables) {
+                                  onMergeTables(table.id, t.id);
+                                }
                               } else {
                                 // Transfer multiple items!
                                 onTransferItems(selectedItemsForTransfer, t.id);
@@ -746,7 +767,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                         {Object.values(globalGrouped).map((item, idx) => (
                           <div key={idx} className="flex justify-between">
                             <span>{item.quantidade}x {item.nome}</span>
-                            <span className="font-bold">R$ {(item.preco * item.quantidade).toFixed(2)}</span>
+                            <span className="font-bold">R$ {((item.preco ?? 0) * (item.quantidade ?? 1)).toFixed(2)}</span>
                           </div>
                         ))}
                       </div>
@@ -783,11 +804,11 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                               {Object.values(clientGrouped).map((item, idx) => (
                                 <div key={idx} className="flex justify-between pl-2">
                                   <span>{item.quantidade}x {item.nome}</span>
-                                  <span className="font-bold">R$ {(item.preco * item.quantidade).toFixed(2)}</span>
+                                  <span className="font-bold">R$ {((item.preco ?? 0) * (item.quantidade ?? 1)).toFixed(2)}</span>
                                 </div>
                               ))}
                               <div className="text-right text-[10px] font-bold text-gray-400 pr-1 pt-0.5">
-                                Subtotal {client}: R$ {clientItems.reduce((s, i) => s + i.preco, 0).toFixed(2)}
+                                Subtotal {client}: R$ {clientItems.reduce((s, i) => s + (i.preco ?? 0), 0).toFixed(2)}
                               </div>
                             </div>
                           );
@@ -947,7 +968,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                       <div key={idx} className="space-y-0.5">
                         <div className="flex justify-between font-bold">
                           <span>{qty}x {item.nome}</span>
-                          <span className="text-gray-400">R$ {(item.preco * qty).toFixed(2)}</span>
+                          <span className="text-gray-400">R$ {((item.preco ?? 0) * qty).toFixed(2)}</span>
                         </div>
                         {item.clienteNome && item.clienteNome !== 'Consumo Geral' && (
                           <p className="text-[9px] text-[#10b981] uppercase font-bold">Para: {item.clienteNome}</p>

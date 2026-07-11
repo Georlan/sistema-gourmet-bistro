@@ -37,8 +37,8 @@ def _add_tenant_id_filtering_criteria(execute_state):
                     execute_state.statement = execute_state.statement.options(
                         with_loader_criteria(
                             cls,
-                            lambda target_cls, tid=tenant_id: target_cls.restaurante_id == tid,
-                            track_closure_variables=False
+                            lambda target_cls: target_cls.restaurante_id == tenant_id,
+                            track_closure_variables=True
                         )
                     )
 

@@ -78,7 +78,7 @@ def test_peak_hours_pure_sql():
 
 def test_stock_purchase_suggestions():
     client = TestClient(app)
-    headers = get_auth_headers(client, "mateus", "123")
+    headers = get_auth_headers(client, "caixa", "123")
     
     # Retrieve insumos list
     resp = client.get("/estoque/insumos", headers=headers)

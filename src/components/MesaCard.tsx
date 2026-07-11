@@ -17,6 +17,8 @@ interface MesaCardProps {
   activeWaiterId: string;
   onClick: (tableId: number) => void;
   hasPendingPayment?: boolean;
+  mergedSources?: number[];
+  mergedIntoMesaId?: number | null;
 }
 
 export const MesaCard = React.memo<MesaCardProps>(({
@@ -27,18 +29,18 @@ export const MesaCard = React.memo<MesaCardProps>(({
   currentTime,
   onClick,
   hasPendingPayment = false,
+  mergedSources = [],
+  mergedIntoMesaId = null,
 }) => {
   const totalValue = getTableTotal(orders);
   
   // Calculate dynamic status:
-  // - Verde (Livre): No active orders
-  // - Amarelo (Pronto): At least one item in 'pronto' status (ready to serve)
-  // - Vermelho (Ocupada): Has orders in 'preparando' (kitchen working)
-  // - Azul (Entregue): All items served/entregue — awaiting cashier payment
-  let status: 'livre' | 'ocupada' | 'pronto' | 'entregue' = 'livre';
+  let status: 'livre' | 'ocupada' | 'pronto' | 'entregue' | 'mesclada' = 'livre';
   let firstOrderTimestamp: number | undefined;
 
-  if (orders.length > 0) {
+  if (mergedIntoMesaId) {
+    status = 'mesclada';
+  } else if (orders.length > 0) {
     // Find the oldest order timestamp
     const timestamps = orders.map(o => o.timestamp);
     firstOrderTimestamp = Math.min(...timestamps);
@@ -101,6 +103,14 @@ export const MesaCard = React.memo<MesaCardProps>(({
       textColor: 'text-blue-300',
       glow: 'hover:translate-y-[-2px] hover:shadow-[0_0_25px_rgba(59,130,246,0.15)] active:translate-y-[0px]',
     },
+    mesclada: {
+      borderColor: 'border-dashed border-zinc-700 hover:border-zinc-500/50 focus:ring-zinc-500',
+      bgColor: 'bg-zinc-950/20 hover:bg-zinc-950/30 backdrop-blur-md',
+      badgeColor: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20',
+      label: `Mesclada na Mesa ${mergedIntoMesaId}`,
+      textColor: 'text-zinc-400',
+      glow: 'hover:translate-y-[0px]',
+    },
   };
 
   const currentConfig = statusConfig[status];
@@ -117,6 +127,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
         <div className="flex items-center justify-between mb-2 sm:mb-4">
           <span className="font-serif text-base sm:text-2xl font-bold text-white tracking-tight">
             {table.nome && table.nome !== `Mesa ${table.id}` ? table.nome : `Mesa ${table.id}`}
+            {mergedSources && mergedSources.length > 0 && ` + ${mergedSources.join(' + ')}`}
           </span>
         </div>
       </div>
@@ -133,6 +144,11 @@ export const MesaCard = React.memo<MesaCardProps>(({
             )}
           </div>
           <span className="text-base font-normal">+</span>
+        </div>
+      ) : status === 'mesclada' ? (
+        <div className="w-full mt-4 flex items-center justify-between border-t border-zinc-800/40 pt-4 text-[10px] text-zinc-500 uppercase font-sans tracking-widest font-bold">
+          <span>Mesclada</span>
+          <span className="text-zinc-500 font-mono">Mesa {mergedIntoMesaId}</span>
         </div>
       ) : (
         <div className="w-full pt-2 sm:pt-4 border-t border-[#27272A]">

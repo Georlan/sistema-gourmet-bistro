@@ -159,7 +159,7 @@ class TestKomaAllPhases(unittest.TestCase):
             is_reprint=False
         )
         
-        self.assertIn("TICKET DE COZINHA", kitchen_ticket)
+        self.assertIn("PEDIDO: #120", kitchen_ticket)
         self.assertIn("MESA: 15", kitchen_ticket)
         self.assertTrue("Hambúrguer de Costela" in kitchen_ticket or "Hamb. de Costela" in kitchen_ticket)
         self.assertIn("Sem cebola", kitchen_ticket)

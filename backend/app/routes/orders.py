@@ -1,7 +1,7 @@
 import uuid
 import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from typing import List, Optional
 
@@ -79,7 +79,10 @@ def get_comandas_detalhes(
     """
     Retorna a lista de comandas completas (com itens e lançamentos), com filtros opcionais.
     """
-    query = db.query(Comanda)
+    query = db.query(Comanda).options(
+        joinedload(Comanda.itens).joinedload(Item.produto),
+        joinedload(Comanda.criada_por)
+    )
     if mesa_id is not None:
         query = query.filter(Comanda.mesa_id == mesa_id)
     if fechada is not None:
@@ -438,20 +441,38 @@ def fechar_comanda(
     if comanda.fechada:
         return comanda
 
+    # Calcula o total devido
+    subtotal = sum(i.preco_unit for i in comanda.itens if i.status != 'cancelado')
+    total_com_taxa = round(subtotal * 1.10, 2)
+    valor_pago = comanda.valor_pago or 0.0
+    
+    # Verifica se há saldo devedor
+    if valor_pago < subtotal and valor_pago < total_com_taxa:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail=f"Não é possível fechar uma comanda com saldo em aberto. Valor devido: R${subtotal:.2f} (ou R${total_com_taxa:.2f} com taxa). Valor pago: R${valor_pago:.2f}"
+        )
+
     comanda.fechada = True
     comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
     db.commit()
     db.refresh(comanda)
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
     if comanda.mesa_id:
-        background_tasks.add_task(manager.broadcast, {
-            "event": "MESA_ATUALIZADA",
-            "data": {
-                "mesa_id": comanda.mesa_id,
-                "status": "livre",
-                "comanda_id": None
-            }
-        })
+        other_open = db.query(Comanda).filter(
+            Comanda.mesa_id == comanda.mesa_id,
+            Comanda.fechada == False,
+            Comanda.id != comanda.id
+        ).first()
+        if not other_open:
+            background_tasks.add_task(manager.broadcast, {
+                "event": "MESA_ATUALIZADA",
+                "data": {
+                    "mesa_id": comanda.mesa_id,
+                    "status": "livre",
+                    "comanda_id": None
+                }
+            })
     return comanda
 
 @router.put("/{comanda_id}/reabrir", response_model=ComandaResponse)
@@ -1029,6 +1050,89 @@ def buscar_impressoras_detectadas(db: Session = Depends(get_db)):
         impressoras.append("Impressora Termica Cozinha (Rede - 192.168.1.150) • Simulador")
         
     return impressoras
+
+
+@router.post("/mesclar", response_model=ComandaResponse)
+def mesclar_comandas(
+    mesa_origem_id: int,
+    mesa_destino_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """
+    Mescla o consumo da mesa de origem na mesa de destino.
+    """
+    # 1. Localizar comanda ativa da mesa de origem
+    comanda_origem = db.query(Comanda).filter(
+        Comanda.mesa_id == mesa_origem_id,
+        Comanda.fechada == False
+    ).first()
+    
+    if not comanda_origem:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Nenhuma comanda ativa encontrada na mesa {mesa_origem_id}"
+        )
+        
+    # 2. Atualizar a comanda para apontar para a mesa de destino e gravar a origem
+    comanda_origem.mesa_id = mesa_destino_id
+    comanda_origem.mesa_origem_id = mesa_origem_id
+    
+    db.commit()
+    db.refresh(comanda_origem)
+    
+    # 3. Notificar via WebSocket
+    background_tasks.add_task(manager.broadcast, {
+        "event": "tables_updated",
+        "detail": {
+            "type": "mesclar_mesas",
+            "mesa_origem": mesa_origem_id,
+            "mesa_destino": mesa_destino_id
+        }
+    })
+    
+    return comanda_origem
+
+
+@router.post("/desmesclar", response_model=ComandaResponse)
+def desmesclar_comanda(
+    comanda_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """
+    Desmembra uma comanda mesclada de volta para a sua mesa de origem.
+    """
+    comanda = db.query(Comanda).filter(Comanda.id == comanda_id).first()
+    if not comanda:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Comanda não encontrada"
+        )
+        
+    if comanda.mesa_origem_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Esta comanda não está mesclada em outra mesa."
+        )
+        
+    mesa_origem = comanda.mesa_origem_id
+    comanda.mesa_id = comanda.mesa_origem_id
+    comanda.mesa_origem_id = None
+    
+    db.commit()
+    db.refresh(comanda)
+    
+    background_tasks.add_task(manager.broadcast, {
+        "event": "tables_updated",
+        "detail": {
+            "type": "desmesclar_mesa",
+            "comanda_id": comanda_id,
+            "mesa_origem": mesa_origem
+        }
+    })
+    
+    return comanda
 
 
 

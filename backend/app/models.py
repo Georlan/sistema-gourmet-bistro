@@ -81,8 +81,9 @@ class Comanda(Base):
     __tablename__ = "comandas"
     
     id = Column(String, primary_key=True, index=True)
-    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False)
-    mesa_id = Column(Integer, ForeignKey("mesas.id"), nullable=True)  # Null for takeout
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
+    mesa_id = Column(Integer, ForeignKey("mesas.id"), nullable=True, index=True)
+    mesa_origem_id = Column(Integer, nullable=True)
     garcom_id = Column(String, ForeignKey("usuarios.id"), nullable=False)
     
     tipo = Column(String, default="Consumo no Local")  # Consumo no Local | Retirada
@@ -97,7 +98,7 @@ class Comanda(Base):
     def identificador(self, value):
         self._identificador = encrypt_field(value)
     
-    fechada = Column(Boolean, default=False)
+    fechada = Column(Boolean, default=False, index=True)
     criado_em = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
     fechado_em = Column(DateTime, nullable=True)
     valor_pago = Column(Float, default=0.0, nullable=False)  # Sum of generic partial payments made
@@ -153,7 +154,8 @@ class Item(Base):
     __tablename__ = "itens"
     
     id = Column(String, primary_key=True, index=True)
-    comanda_id = Column(String, ForeignKey("comandas.id"), nullable=False)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
+    comanda_id = Column(String, ForeignKey("comandas.id"), nullable=False, index=True)
     lancamento_id = Column(String, ForeignKey("lancamentos.id"), nullable=False)
     produto_id = Column(String, ForeignKey("produtos.id"), nullable=False)
     
@@ -169,7 +171,7 @@ class Item(Base):
     def cliente_nome(self, value):
         self._cliente_nome = encrypt_field(value)
     
-    status = Column(String, default="preparando")  # preparando | pronto | entregue | cancelado
+    status = Column(String, default="preparando", index=True)  # preparando | pronto | entregue | cancelado
     cancelado_por = Column(String, ForeignKey("usuarios.id"), nullable=True)
     impresso_em = Column(DateTime, nullable=True)  # Individual unit print log
     pago = Column(Boolean, default=False, nullable=False)  # Settle item payment individually

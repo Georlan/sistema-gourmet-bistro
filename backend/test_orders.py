@@ -125,6 +125,12 @@ def test_flow(setup_db):
     assert resp.status_code == 401
 
     # 10. Testar Fechamento e Reabertura com token - Deve ser permitido (200)
+    db = SessionLocal()
+    db_comanda = db.query(Comanda).filter(Comanda.id == comanda1['id']).first()
+    db_comanda.valor_pago = 10.0
+    db.commit()
+    db.close()
+
     resp = client.put(f"/comandas/{comanda1['id']}/fechar", headers=headers)
     assert resp.status_code == 200
     assert resp.json()["fechada"] is True

@@ -290,14 +290,20 @@ def registrar_pagamento_comanda(
             comanda.fechada = True
             comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
             if comanda.mesa_id:
-                background_tasks.add_task(manager.broadcast, {
-                    "event": "MESA_ATUALIZADA",
-                    "data": {
-                        "mesa_id": comanda.mesa_id,
-                        "status": "livre",
-                        "comanda_id": None
-                    }
-                })
+                other_open = db.query(Comanda).filter(
+                    Comanda.mesa_id == comanda.mesa_id,
+                    Comanda.fechada == False,
+                    Comanda.id != comanda.id
+                ).first()
+                if not other_open:
+                    background_tasks.add_task(manager.broadcast, {
+                        "event": "MESA_ATUALIZADA",
+                        "data": {
+                            "mesa_id": comanda.mesa_id,
+                            "status": "livre",
+                            "comanda_id": None
+                        }
+                    })
             
             # Process loyalty points/cashback if client CPF/phone is present
             from ..models import ConfigFidelizacao, HistoricoFidelidade
@@ -389,14 +395,20 @@ def aprovar_pagamento(
         comanda.fechada = True
         comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
         if comanda.mesa_id:
-            background_tasks.add_task(manager.broadcast, {
-                "event": "MESA_ATUALIZADA",
-                "data": {
-                    "mesa_id": comanda.mesa_id,
-                    "status": "livre",
-                    "comanda_id": None
-                }
-            })
+            other_open = db.query(Comanda).filter(
+                Comanda.mesa_id == comanda.mesa_id,
+                Comanda.fechada == False,
+                Comanda.id != comanda.id
+            ).first()
+            if not other_open:
+                background_tasks.add_task(manager.broadcast, {
+                    "event": "MESA_ATUALIZADA",
+                    "data": {
+                        "mesa_id": comanda.mesa_id,
+                        "status": "livre",
+                        "comanda_id": None
+                    }
+                })
         
     db.commit()
     db.refresh(pagamento)

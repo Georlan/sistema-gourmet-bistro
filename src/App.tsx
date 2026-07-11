@@ -238,9 +238,21 @@ export default function App() {
   // 1.5. Dynamic Salon Tables State and Fetcher
   const [salonTables, setSalonTables] = useState<Table[]>(TABLES);
 
+  const fetchTablesAbortControllerRef = useRef<AbortController | null>(null);
+  const fetchOrdersAbortControllerRef = useRef<AbortController | null>(null);
+
   const fetchTables = async () => {
+    if (fetchTablesAbortControllerRef.current) {
+      fetchTablesAbortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    fetchTablesAbortControllerRef.current = controller;
+
     try {
-      const res = await fetch(`${API_BASE_URL}/mesas`, { headers: getAuthHeaders() });
+      const res = await fetch(`${API_BASE_URL}/mesas`, { 
+        headers: getAuthHeaders(),
+        signal: controller.signal
+      });
       if (res.status === 401) {
         handleLogout();
         return;
@@ -250,8 +262,10 @@ export default function App() {
         setSalonTables(data);
         setIsTablesLoaded(true);
       }
-    } catch (err) {
-      console.error("Error fetching tables", err);
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        console.error("Error fetching tables", err);
+      }
     }
   };
 
@@ -358,6 +372,11 @@ export default function App() {
 
   // 2b. Orders loaded from API
   const [orders, setOrders] = useState<Order[]>([]);
+  const ordersRef = useRef<Order[]>(orders);
+  useEffect(() => {
+    ordersRef.current = orders;
+  }, [orders]);
+
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   const [drafts, setDrafts] = useState<{ [mesaId: number]: DraftItem[] }>(() => {
@@ -396,7 +415,12 @@ export default function App() {
   });
 
   const handleTableClick = useCallback((tableId: number) => {
-    setSelectedTableId(tableId);
+    const targetMesaId = ordersRef.current.find(o => o.mesaOrigemId === tableId)?.mesaId;
+    if (targetMesaId) {
+      setSelectedTableId(targetMesaId);
+    } else {
+      setSelectedTableId(tableId);
+    }
   }, []);
 
   useEffect(() => {
@@ -453,6 +477,7 @@ export default function App() {
 
     let ws: WebSocket;
     let reconnectTimeout: any;
+    let wsUpdateTimeout: any;
 
     const connectWS = () => {
       const wsBase = API_BASE_URL.replace(/^http/, 'ws');
@@ -473,13 +498,18 @@ export default function App() {
         try {
           const data = JSON.parse(event.data);
           if (data.event === "tables_updated") {
-            fetchOrdersFromAPI();
-            fetchTables();
-            fetchLiveProdutos();
-            fetchConfig();
-            if (activeRole === 'caixa' || activeRole === 'admin') {
-              fetchPagamentosPendentes();
+            if (wsUpdateTimeout) {
+              clearTimeout(wsUpdateTimeout);
             }
+            wsUpdateTimeout = setTimeout(() => {
+              fetchOrdersFromAPI();
+              fetchTables();
+              fetchLiveProdutos();
+              fetchConfig();
+              if (activeRole === 'caixa' || activeRole === 'admin') {
+                fetchPagamentosPendentes();
+              }
+            }, 300);
             if (data.detail && data.detail.type === "pagamento_registrado" && data.detail.status === "pendente") {
               showToast(`💵 CONFIRMAR DINHEIRO: R$ ${data.detail.valor.toFixed(2)} - Garçom ${data.detail.garcom_nome}`, 'info', 5000);
             }
@@ -557,6 +587,7 @@ export default function App() {
 
     return () => {
       clearTimeout(reconnectTimeout);
+      clearTimeout(wsUpdateTimeout);
       if (ws) {
         ws.onopen = null;
         ws.onmessage = null;
@@ -691,8 +722,17 @@ export default function App() {
 
   // Load active orders from backend API
   const fetchOrdersFromAPI = async () => {
+    if (fetchOrdersAbortControllerRef.current) {
+      fetchOrdersAbortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    fetchOrdersAbortControllerRef.current = controller;
+
     try {
-      const response = await fetch(`${API_BASE_URL}/comandas/detalhes/todos?fechada=false`, { headers: getAuthHeaders() });
+      const response = await fetch(`${API_BASE_URL}/comandas/detalhes/todos?fechada=false`, { 
+        headers: getAuthHeaders(),
+        signal: controller.signal
+      });
       if (response.status === 401) {
         handleLogout();
         return;
@@ -716,6 +756,7 @@ export default function App() {
           identificador: comanda.identificador || null,
           statusComanda: comanda.status_comanda || null,       // aguardando_pagamento | null
           deliveryStatus: comanda.delivery_status || null,    // pendente | producao | pronto | transito | finalizado
+          mesaOrigemId: comanda.mesa_origem_id || null,
           itens: comanda.itens
             .filter((item: any) => item.status !== 'cancelado')
             .map((item: any) => ({
@@ -733,8 +774,10 @@ export default function App() {
       });
       setOrders(mappedOrders);
       setIsOrdersLoaded(true);
-    } catch (err) {
-      console.error("Connection error to backend:", err);
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        console.error("Connection error to backend:", err);
+      }
     }
   };
 
@@ -916,6 +959,47 @@ export default function App() {
     } catch (err) {
       console.error(err);
       alert("Erro de conexão ao transferir mesas.");
+    }
+  };
+
+  // 8.5. Unify/Split (Merge and Unmerge) Tables
+  const handleMergeTables = async (sourceMesaId: number, targetMesaId: number) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/comandas/mesclar?mesa_origem_id=${sourceMesaId}&mesa_destino_id=${targetMesaId}`, {
+        method: "POST",
+        headers: getAuthHeaders()
+      });
+      if (res.ok) {
+        showToast(`Mesa ${sourceMesaId} mesclada na Mesa ${targetMesaId} com sucesso!`);
+        setSelectedTableId(null);
+        fetchOrdersFromAPI();
+      } else {
+        const errData = await res.json();
+        alert(`Erro ao mesclar mesas: ${errData.detail}`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Erro de conexão ao mesclar mesas.");
+    }
+  };
+
+  const handleUnmergeTable = async (comandaId: string) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/comandas/desmesclar?comanda_id=${comandaId}`, {
+        method: "POST",
+        headers: getAuthHeaders()
+      });
+      if (res.ok) {
+        showToast("Mesa desmembrada com sucesso!");
+        setSelectedTableId(null);
+        fetchOrdersFromAPI();
+      } else {
+        const errData = await res.json();
+        alert(`Erro ao desmembrar mesa: ${errData.detail}`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Erro de conexão ao desmembrar mesa.");
     }
   };
 
@@ -1632,6 +1716,12 @@ export default function App() {
                       tableComandas.some(o => o.id === pag.comanda_id)
                     );
 
+                    const mergedSources = tableComandas
+                      .map(o => o.mesaOrigemId)
+                      .filter((id): id is number => id !== null && id !== undefined && id !== table.id);
+                    
+                    const mergedIntoMesaId = orders.find(o => o.mesaOrigemId === table.id)?.mesaId || null;
+
                     return (
                       <MesaCard
                         key={table.id}
@@ -1643,6 +1733,8 @@ export default function App() {
                         activeWaiterId={activeWaiterId}
                         onClick={handleTableClick}
                         hasPendingPayment={hasPendingPayment}
+                        mergedSources={mergedSources}
+                        mergedIntoMesaId={mergedIntoMesaId}
                       />
                     );
                   })
@@ -1713,6 +1805,8 @@ export default function App() {
             liveProdutos={liveProdutos}
             restauranteConfig={restauranteConfig}
             onUpdateItemDetails={handleUpdateItemDetails}
+            onMergeTables={handleMergeTables}
+            onUnmergeTable={handleUnmergeTable}
           />
         );
       })()}
