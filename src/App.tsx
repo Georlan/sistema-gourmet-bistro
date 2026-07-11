@@ -354,7 +354,12 @@ export default function App() {
       }
       if (res.ok) {
         const data = await res.json();
-        setLiveProdutos(Array.isArray(data) ? data : []);
+        const sorted = Array.isArray(data)
+          ? [...data].sort((a: any, b: any) =>
+              String(a.id).localeCompare(String(b.id), undefined, { numeric: true, sensitivity: 'base' })
+            )
+          : [];
+        setLiveProdutos(sorted);
         setIsProductsLoaded(true);
       }
     } catch (err) {

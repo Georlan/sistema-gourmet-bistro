@@ -448,6 +448,11 @@ export function CaixaPanel({
     }
   }, [selectedOrder]);
 
+  // Clear checkout payment states when selectedOrder, showCheckoutModal or paymentMetodo changes
+  useEffect(() => {
+    setPaymentValor('');
+  }, [selectedOrder, showCheckoutModal, paymentMetodo]);
+
   // Date filters for Meu Desempenho
   const [desempenhoRange, setDesempenhoRange] = useState<'7' | '15' | '30'>('7');
 
@@ -909,7 +914,12 @@ export function CaixaPanel({
       const res = await fetch(`${apiBaseUrl}/produtos/`, { headers: authHeaders });
       if (res.ok) {
         const data = await res.json();
-        setApiProdutos(data);
+        const sorted = Array.isArray(data)
+          ? [...data].sort((a: any, b: any) =>
+              String(a.id).localeCompare(String(b.id), undefined, { numeric: true, sensitivity: 'base' })
+            )
+          : data;
+        setApiProdutos(sorted);
       }
     } catch (e) {
       console.error('Error fetching produtos', e);
@@ -4565,7 +4575,9 @@ export function CaixaPanel({
 
               {/* Grouped by dynamically loaded apiCategorias */}
               {apiCategorias.map((cat) => {
-                const prods = apiProdutos.filter(p => (p as any).categoria_id === cat.id);
+                const prods = apiProdutos
+                  .filter(p => (p as any).categoria_id === cat.id)
+                  .sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true, sensitivity: 'base' }));
                 if (prods.length === 0) return null;
                 return (
                   <div key={cat.id} className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-2xl', 'overflow-hidden')}>
@@ -4754,7 +4766,9 @@ export function CaixaPanel({
 
                 {/* Dynamic Category Grouping */}
                 {apiCategorias.map((catObj) => {
-                  const prods = filtered.filter(p => (p as any).categoria_id === catObj.id);
+                  const prods = filtered
+                    .filter(p => (p as any).categoria_id === catObj.id)
+                    .sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true, sensitivity: 'base' }));
                   if (prods.length === 0) return null;
                   return (
                     <div key={catObj.id} className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-2xl', 'overflow-hidden')}>
@@ -6129,18 +6143,65 @@ export function CaixaPanel({
 
                     <div className="space-y-1.5 font-sans">
                       <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Valor a Lançar (R$):</label>
-                      <div className="relative">
-                        <span className={clsx('absolute', 'left-3.5', 'top-2.5', 'text-gray-400', 'font-mono', 'text-[11px]')}>R$</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          required
-                          value={paymentValor}
-                          onChange={(e) => setPaymentValor(e.target.value)}
-                          className={clsx('w-full', 'pl-9', 'pr-4', 'py-2', 'text-xs', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'focus:outline-none', 'focus:border-[#10b981]', 'text-white', 'font-mono')}
-                        />
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <span className={clsx('absolute', 'left-3.5', 'top-2.5', 'text-gray-400', 'font-mono', 'text-[11px]')}>R$</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            required
+                            value={paymentValor}
+                            onChange={(e) => setPaymentValor(e.target.value)}
+                            className={clsx('w-full', 'pl-9', 'pr-4', 'py-2', 'text-xs', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'focus:outline-none', 'focus:border-[#10b981]', 'text-white', 'font-mono')}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (selectedOrder) {
+                              const { total } = getCheckoutTotals(selectedOrder);
+                              const restante = Math.max(0, total - (selectedOrder.valorPago || 0));
+                              setPaymentValor(restante.toFixed(2));
+                            }
+                          }}
+                          className={clsx(
+                            'px-3.5',
+                            'py-2',
+                            'bg-[#10b981]/15',
+                            'hover:bg-[#10b981]/25',
+                            'border',
+                            'border-[#10b981]/30',
+                            'rounded-xl',
+                            'text-[10px]',
+                            'font-bold',
+                            'text-[#10b981]',
+                            'transition-all',
+                            'cursor-pointer',
+                            'whitespace-nowrap'
+                          )}
+                        >
+                          Pagar Valor Exato
+                        </button>
                       </div>
                     </div>
+
+                    {/* BOTÕES DE ATALHO DE CÉDULAS (CASH SHORTCUTS) */}
+                    <div className="space-y-1">
+                      <label className="text-[8px] font-bold text-gray-500 uppercase tracking-wider block">Atalhos de Cédulas:</label>
+                      <div className="flex flex-wrap gap-1">
+                        {[2, 5, 10, 20, 50, 100, 200].map((val) => (
+                          <button
+                            key={val}
+                            type="button"
+                            onClick={() => setPaymentValor(val.toFixed(2))}
+                            className="px-2.5 py-1 bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] rounded-lg text-[9px] font-bold text-gray-300 font-mono transition-all cursor-pointer hover:border-gray-500 hover:text-white"
+                          >
+                            R$ {val}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
                     <div className="space-y-1.5 font-sans">
                       <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>CPF/Telefone (Opcional - Fidelidade):</label>
                       <input
@@ -6152,47 +6213,32 @@ export function CaixaPanel({
                       />
                     </div>
 
-                    {/* CÉDULAS BRASILEIRAS E TOTAL RESTANTE ATALHOS */}
-                    {paymentMetodo === 'dinheiro' && (
-                      <div className="space-y-1">
-                        <label className="text-[8px] font-bold text-gray-500 uppercase tracking-wider block">Atalhos de Cédulas:</label>
-                        <div className="flex flex-wrap gap-1">
-                          {[2, 5, 10, 20, 50, 100, 200].map((val) => (
-                            <button
-                              key={val}
-                              type="button"
-                              onClick={() => setPaymentValor(val.toFixed(2))}
-                              className="px-2 py-0.5 bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] rounded text-[8px] font-bold text-gray-300 font-mono transition-all cursor-pointer"
-                            >
-                              R$ {val}
-                            </button>
-                          ))}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const { total } = getCheckoutTotals(selectedOrder);
-                              const restante = Math.max(0, total - (selectedOrder.valorPago || 0));
-                              setPaymentValor(restante.toFixed(2));
-                            }}
-                            className="px-2 py-0.5 bg-[#10b981]/15 hover:bg-[#10b981]/25 border border-[#10b981]/30 rounded text-[8px] font-bold text-[#10b981] transition-all cursor-pointer"
-                          >
-                            Total Restante
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
                     {/* TROCO EM TEMPO REAL */}
                     {(() => {
+                      if (!selectedOrder) return null;
                       const { total } = getCheckoutTotals(selectedOrder);
                       const restante = Math.max(0, total - (selectedOrder.valorPago || 0));
                       const inputVal = parseFloat(paymentValor) || 0;
                       if (paymentMetodo === 'dinheiro' && inputVal > restante) {
                         const troco = inputVal - restante;
                         return (
-                          <div className="bg-emerald-950/40 border border-emerald-800/30 text-emerald-300 p-2.5 rounded-xl text-[10px] font-mono flex justify-between items-center animate-pulse-subtle">
-                            <span>Troco a devolver:</span>
-                            <strong className="text-xs">R$ {troco.toFixed(2)}</strong>
+                          <div className={clsx(
+                            'bg-emerald-950/45',
+                            'border',
+                            'border-emerald-800/40',
+                            'text-emerald-300',
+                            'p-3',
+                            'rounded-xl',
+                            'text-xs',
+                            'font-mono',
+                            'flex',
+                            'justify-between',
+                            'items-center',
+                            'shadow-md',
+                            'shadow-emerald-950/20'
+                          )}>
+                            <span className="font-bold uppercase text-[9px] tracking-wider text-emerald-400">Troco devido:</span>
+                            <span className="font-extrabold text-sm text-emerald-200">R$ {troco.toFixed(2)}</span>
                           </div>
                         );
                       }

@@ -162,8 +162,13 @@ def retry_print_queue():
 # ----------------- PRODUCTS ENDPOINTS -----------------
 @router.get("/", response_model=List[ProdutoResponse])
 def get_produtos(db: Session = Depends(get_db)):
-    """Retorna todos os produtos cadastrados no cardápio."""
-    return db.query(Produto).options(joinedload(Produto.categoria)).all()
+    """Retorna todos os produtos cadastrados no cardápio, ordenados por ID dentro de cada categoria."""
+    return (
+        db.query(Produto)
+        .options(joinedload(Produto.categoria))
+        .order_by(Produto.id)
+        .all()
+    )
 
 @router.get("/{produto_id}", response_model=ProdutoResponse)
 def get_produto(produto_id: str, db: Session = Depends(get_db)):
