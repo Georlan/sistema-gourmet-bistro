@@ -18,12 +18,12 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '8f3a2d1c9e7b'
-# None = migration raiz independente. O banco de produção foi criado via main.py
-# antes do Alembic existir, então pulamos a initial migration e aplicamos só os
-# deltas que faltam usando ADD COLUMN IF NOT EXISTS (idempotente e seguro).
-down_revision: Union[str, Sequence[str], None] = None
+# Aponta para a migration inicial como pai — garante cadeia linear e sem
+# MultipleHeads. O banco de produção é tratado via stamp no startup (main.py).
+down_revision: Union[str, Sequence[str], None] = 'dcbca6699d38'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
+
 
 
 

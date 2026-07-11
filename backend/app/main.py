@@ -141,12 +141,15 @@ async def run_migrations_on_startup():
             has_alembic_version = insp.has_table("alembic_version")
 
         if not has_alembic_version:
-            # Banco criado manualmente (pré-Alembic). Stamp direto na migration
-            # de emergência para não tentar re-criar tabelas existentes.
+            # Banco criado manualmente (pré-Alembic). Fazemos stamp na revision
+            # INICIAL (dcbca6699d38) — isso diz ao Alembic "as tabelas base já
+            # existem, não tente recriá-las". O upgrade head a seguir roda apenas
+            # a migration de emergência (8f3a2d1c9e7b) que adiciona colunas faltantes
+            # via ADD COLUMN IF NOT EXISTS, que é 100% segura e idempotente.
             print("[ALEMBIC] Tabela alembic_version não encontrada.")
-            print("[ALEMBIC] Banco criado antes do Alembic — aplicando stamp de emergência...")
-            command.stamp(alembic_cfg, "8f3a2d1c9e7b")
-            print("[ALEMBIC] Stamp aplicado. Rodando upgrade head...")
+            print("[ALEMBIC] Banco pré-Alembic detectado — aplicando stamp na migration inicial...")
+            command.stamp(alembic_cfg, "dcbca6699d38")
+            print("[ALEMBIC] Stamp aplicado em dcbca6699d38. Rodando upgrade head (emergência)...")
 
         command.upgrade(alembic_cfg, "head")
         print("[ALEMBIC] ✅ Migrações concluídas com sucesso.")
