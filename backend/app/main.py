@@ -176,12 +176,17 @@ async def run_migrations_on_startup():
         import traceback
         traceback.print_exc()
 
-# CORS configuration to allow local frontend access (WiFi/Local Network)
+# CORS configuration to allow local/production frontend access with credentials enabled
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "*"
-    ],  # Permits access from any device on the local network (smartphones/tablets)
+        "https://sistema-gourmet-bistro.pages.dev",
+        "https://sistema-gourmet-bistro-production.up.railway.app",
+        "http://localhost:5173",
+        "http://localhost:8000",
+        "http://127.0.0.1:5173",
+    ],
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
