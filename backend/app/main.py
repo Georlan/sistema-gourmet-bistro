@@ -111,50 +111,67 @@ app = FastAPI(
 @app.on_event("startup")
 async def run_migrations_on_startup():
     """
-    Executa 'alembic upgrade head' automaticamente ao subir o servidor.
-    
-    Lógica especial para o banco de produção (Railway):
-    - Se a tabela alembic_version NÃO existir, significa que o banco foi criado
-      manualmente antes do Alembic. Nesse caso, fazemos o 'stamp' direto na
-      revision de emergência (que só adiciona colunas faltantes via IF NOT EXISTS).
-    - Se a tabela alembic_version JÁ existir, rodamos normalmente 'upgrade head'.
+    Executa migrações Alembic automaticamente no startup do servidor.
+
+    Lida com dois cenários:
+    1. Banco pré-Alembic (tabela alembic_version não existe) → stamp inicial + upgrade
+    2. Estado quebrado (stamp aplicado mas migration não rodou) → reset stamp + upgrade
+       Detectado verificando se a coluna 'mesa_origem_id' existe fisicamente na tabela
+       'comandas'. Se não existir, a migration de emergência nunca rodou.
     """
     try:
         import os
-        from sqlalchemy import text, inspect
+        import sqlalchemy as sa
+        from sqlalchemy import inspect as sa_inspect
         from alembic.config import Config
         from alembic import command
 
-        # Resolve o caminho do alembic.ini relativo ao diretório do backend
         backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         alembic_cfg_path = os.path.join(backend_dir, "alembic.ini")
-
         alembic_cfg = Config(alembic_cfg_path)
-        # Override da URL para garantir que usa DATABASE_URL do ambiente
         alembic_cfg.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
         print("[ALEMBIC] Verificando estado do banco de dados...")
 
-        # Verifica se a tabela alembic_version já existe
         with engine.connect() as conn:
-            insp = inspect(conn)
+            insp = sa_inspect(conn)
             has_alembic_version = insp.has_table("alembic_version")
 
-        if not has_alembic_version:
-            # Banco criado manualmente (pré-Alembic). Fazemos stamp na revision
-            # INICIAL (dcbca6699d38) — isso diz ao Alembic "as tabelas base já
-            # existem, não tente recriá-las". O upgrade head a seguir roda apenas
-            # a migration de emergência (8f3a2d1c9e7b) que adiciona colunas faltantes
-            # via ADD COLUMN IF NOT EXISTS, que é 100% segura e idempotente.
-            print("[ALEMBIC] Tabela alembic_version não encontrada.")
-            print("[ALEMBIC] Banco pré-Alembic detectado — aplicando stamp na migration inicial...")
-            command.stamp(alembic_cfg, "dcbca6699d38")
-            print("[ALEMBIC] Stamp aplicado em dcbca6699d38. Rodando upgrade head (emergência)...")
+            # Verifica se a coluna crítica foi realmente criada (prova física da migration)
+            has_mesa_origem_id = False
+            has_itens_restaurante_id = False
+            if insp.has_table("comandas"):
+                cmd_cols = {c["name"] for c in insp.get_columns("comandas")}
+                has_mesa_origem_id = "mesa_origem_id" in cmd_cols
+            if insp.has_table("itens"):
+                item_cols = {c["name"] for c in insp.get_columns("itens")}
+                has_itens_restaurante_id = "restaurante_id" in item_cols
 
+            migration_ran = has_mesa_origem_id and has_itens_restaurante_id
+
+        if not has_alembic_version:
+            # Banco criado manualmente antes do Alembic existir
+            print("[ALEMBIC] Banco pré-Alembic detectado. Aplicando stamp em dcbca6699d38...")
+            command.stamp(alembic_cfg, "dcbca6699d38")
+
+        elif not migration_ran:
+            # Estado quebrado: alembic_version existe mas a migration de emergência
+            # nunca rodou (stamp foi aplicado durante um deploy com erro anterior).
+            # Reseta o stamp para dcbca6699d38 para forçar re-execução da emergência.
+            print("[ALEMBIC] ⚠️  Estado inconsistente detectado!")
+            print("[ALEMBIC]    Colunas críticas ausentes mas alembic_version já existe.")
+            print("[ALEMBIC]    Resetando stamp para dcbca6699d38 e re-aplicando migration...")
+            with engine.connect() as conn:
+                conn.execute(sa.text(
+                    "UPDATE alembic_version SET version_num = 'dcbca6699d38'"
+                ))
+                conn.commit()
+
+        print("[ALEMBIC] Rodando upgrade head...")
         command.upgrade(alembic_cfg, "head")
         print("[ALEMBIC] ✅ Migrações concluídas com sucesso.")
+
     except Exception as e:
-        # Não derruba o servidor se a migration falhar — loga e continua
         print(f"[ALEMBIC] ⚠️ Erro ao rodar migrações automáticas: {e}")
         import traceback
         traceback.print_exc()
