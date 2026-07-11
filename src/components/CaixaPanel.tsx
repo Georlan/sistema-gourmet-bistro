@@ -236,10 +236,10 @@ export function CaixaPanel({
     { id: 2, cliente: "Karla Souza", telefone: "(81) 99122-3344", itens: "1x Burgão Kôma + Batata Frita", total: 39.90, abandonadoEm: "34m atrás", status: "recuperado" },
     { id: 3, cliente: "Bruno Mendes", telefone: "(81) 97344-5566", itens: "2x Pastel Doce + Milkshake", total: 42.00, abandonadoEm: "1h atrás", status: "pendente" }
   ]);
-  const [loyaltyUsers, setLoyaltyUsers] = useState([
-    { id: 1, cliente: "Maria Oliveira", pontos: 340, saldoCashback: 8.50 },
-    { id: 2, cliente: "Felipe Ramos", pontos: 180, saldoCashback: 5.20 },
-    { id: 3, cliente: "Ana Claudia", pontos: 560, saldoCashback: 12.00 }
+  const [loyaltyUsers, setLoyaltyUsers] = useState<{ id: number; cliente: string; telefone: string; pontos: number; saldoCashback: number; }[]>([
+    { id: 1, cliente: "Maria Oliveira", telefone: "", pontos: 340, saldoCashback: 8.50 },
+    { id: 2, cliente: "Felipe Ramos", telefone: "", pontos: 180, saldoCashback: 5.20 },
+    { id: 3, cliente: "Ana Claudia", telefone: "", pontos: 560, saldoCashback: 12.00 }
   ]);
   const [compreGanheRules, setCompreGanheRules] = useState([
     { id: 1, titulo: "Combo Pastel Dobrado", descricao: "Compre 2 Pastéis de Carne e ganhe 1 Coca Lata grátis", ativa: true },
@@ -329,6 +329,9 @@ export function CaixaPanel({
   const [apiCategorias, setApiCategorias] = useState<any[]>([]);
   const [showProductModal, setShowProductModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [editingCrmUser, setEditingCrmUser] = useState<any>(null);
+  const [crmFormNome, setCrmFormNome] = useState('');
+  const [crmFormTelefone, setCrmFormTelefone] = useState('');
   
   // Form states for Product Modal
   const [prodFormId, setProdFormId] = useState('');
@@ -352,6 +355,7 @@ export function CaixaPanel({
 
   // Checkout payment states
   const [checkoutServiceTax, setCheckoutServiceTax] = useState(true);
+  const [taxaServicoAtiva, setTaxaServicoAtiva] = useState(true);
   const [serviceTaxRate, setServiceTaxRate] = useState(10); // Customizable service rate percentage
   const [unificarViasDelivery, setUnificarViasDelivery] = useState(false);
   const [modoExclusivoSalao, setModoExclusivoSalao] = useState(true);
@@ -393,9 +397,10 @@ export function CaixaPanel({
       if (res.ok) {
         const data = await res.json();
         setCheckoutServiceTax(data.taxa_servico_ativa);
+        setTaxaServicoAtiva(data.taxa_servico_ativa);
         setServiceTaxRate(data.taxa_servico_padrao);
         setUnificarViasDelivery(data.unificar_vias_delivery);
-        setModoExclusivoSalao(data.modo_exclusivo_salao);
+        setModoExclusivoSalao(data.modo_exclusivo_salon || data.modo_exclusivo_salao);
         setPermDelivery(data.perm_garcom_delivery);
         setPermEdit(data.perm_garcom_editar);
         setPermAddCharges(data.perm_garcom_taxas);
@@ -888,6 +893,7 @@ export function CaixaPanel({
       if (res.ok) {
         const data = await res.json();
         setCheckoutServiceTax(data.taxa_servico_ativa);
+        setTaxaServicoAtiva(data.taxa_servico_ativa);
         setServiceTaxRate(data.taxa_servico_padrao);
         setUnificarViasDelivery(data.unificar_vias_delivery);
         setModoExclusivoSalao(data.modo_exclusivo_salao);
@@ -909,6 +915,34 @@ export function CaixaPanel({
       }
     } catch (e) {
       console.error('Error fetching configurations', e);
+    }
+  };
+
+  const handleUpdateClient = async (oldPhone: string, newNome: string, newPhone: string) => {
+    try {
+      const res = await fetch(`${apiBaseUrl}/fidelidade/clientes/${oldPhone}`, {
+        method: 'PUT',
+        headers: {
+          ...authHeaders,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ cliente: newNome, telefone: newPhone })
+      });
+      if (res.ok) {
+        alert('Cliente atualizado com sucesso!');
+        // Refresh client lists
+        const freshRes = await fetch(`${apiBaseUrl}/fidelidade/clientes`, { headers: authHeaders });
+        if (freshRes.ok) {
+          const data = await freshRes.json();
+          if (Array.isArray(data)) setLoyaltyUsers(data);
+        }
+      } else {
+        const err = await res.json();
+        alert(`Erro: ${err.detail || 'Falha ao atualizar cliente.'}`);
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Erro de conexão com o servidor.');
     }
   };
 
@@ -1003,7 +1037,7 @@ export function CaixaPanel({
         })
         .catch(err => console.error('Error fetching peak hours:', err));
     }
-    if (activeTab === 'clientes' && activeSubTab === 'fidelidade') {
+    if (activeTab === 'clientes') {
       fetch(`${apiBaseUrl}/fidelidade/config`, { headers: authHeaders })
         .then(res => res.json())
         .then(data => {
@@ -1246,18 +1280,19 @@ export function CaixaPanel({
         // Refresh local details modal state
         const updatedOrdersRes = await fetch(`${apiBaseUrl}/comandas/detalhes/todos?fechada=false`, { headers: authHeaders });
         if (updatedOrdersRes.ok) {
-          const freshOrdersList: Order[] = await updatedOrdersRes.json();
+          const freshOrdersList: any[] = await updatedOrdersRes.json();
           const stillOpen = freshOrdersList.find(o => o.id === selectedOrder.id);
           if (stillOpen) {
             setSelectedOrder({
-              ...selectedOrder,
+              ...stillOpen,
+              valorPago: stillOpen.valor_pago || 0,
               itens: stillOpen.itens.map((item: any) => ({
                 id: item.id,
-                produtoId: item.produto_id,
-                nome: item.nome || `Item ${item.produto_id}`,
-                preco: item.preco_unit,
+                produtoId: item.produto_id || item.produtoId,
+                nome: item.nome || `Item ${item.produto_id || item.produtoId}`,
+                preco: item.preco_unit || item.preco,
                 observacao: item.observacao || '',
-                clienteNome: item.cliente_nome || 'Consumo Geral',
+                clienteNome: item.cliente_nome || item.clienteNome || 'Consumo Geral',
                 status: item.status,
                 pago: item.pago
               }))
@@ -1392,7 +1427,7 @@ export function CaixaPanel({
   const getCheckoutTotals = (order: Order) => {
     const unpaidItems = order.itens.filter(i => !i.pago);
     const subtotal = unpaidItems.reduce((sum, item) => sum + item.preco, 0);
-    const taxa = checkoutServiceTax ? subtotal * (serviceTaxRate / 100) : 0;
+    const taxa = (taxaServicoAtiva && checkoutServiceTax) ? subtotal * (serviceTaxRate / 100) : 0;
     const total = subtotal + taxa;
     return { subtotal, taxa, total, unpaidItems };
   };
@@ -1825,7 +1860,8 @@ export function CaixaPanel({
           {activeTab === 'cardapio' && [
             { id: 'cardapio_lista', label: 'Cardápio' },
             { id: 'ficha_tecnica', label: 'Custos e CMV' },
-            { id: 'disponibilidade', label: 'Disponibilidade' }
+            { id: 'disponibilidade', label: 'Disponibilidade' },
+            { id: 'categorias_lista', label: 'Categorias de Menu' }
           ].map(sub => (
             <button
               key={sub.id}
@@ -2896,7 +2932,10 @@ export function CaixaPanel({
               <div className={clsx('flex-1', 'bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'overflow-y-auto')}>
                 <div className={clsx('grid', 'grid-cols-1', 'sm:grid-cols-2', 'md:grid-cols-3', 'lg:grid-cols-4', 'xl:grid-cols-6', 'gap-4')}>
                   {salonTables.map((table) => {
-                    const tableOrders = orders.filter(o => o.mesaId === table.id);
+                    const mergedIntoMesaId = orders.find(o => o.mesaOrigemId === table.id)?.mesaId || null;
+                    const isMerged = mergedIntoMesaId !== null;
+                    const displayMesaId = isMerged ? mergedIntoMesaId : table.id;
+                    const tableOrders = orders.filter(o => o.mesaId === displayMesaId);
                     const isOcupada = tableOrders.length > 0;
                     const hasPendingPayment = pagamentosPendentes.some(pag => 
                       tableOrders.some(o => o.id === pag.comanda_id)
@@ -2907,9 +2946,11 @@ export function CaixaPanel({
                         key={table.id}
                         className={`bg-[#121214] border rounded-2xl p-3 flex flex-col justify-between gap-3 transition-all relative group ${hasPendingPayment
                           ? 'border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.2)] animate-pulse'
-                          : isOcupada
-                            ? 'border-rose-500/40 hover:border-rose-500'
-                            : 'border-[#27272A] hover:border-[#10b981]/30'
+                          : isMerged
+                            ? 'border-dashed border-zinc-700 opacity-60 bg-zinc-950/20'
+                            : isOcupada
+                              ? 'border-rose-500/40 hover:border-rose-500'
+                              : 'border-[#27272A] hover:border-[#10b981]/30'
                           }`}
                       >
                         <div className={clsx('flex', 'justify-between', 'items-start')}>
@@ -2949,6 +2990,8 @@ export function CaixaPanel({
                         <div>
                           {hasPendingPayment ? (
                             <span className={clsx('px-2', 'py-0.5', 'text-[8px]', 'bg-amber-500/10', 'text-amber-400', 'font-bold', 'rounded-md', 'block', 'w-fit', 'border', 'border-amber-500/20', 'uppercase', 'tracking-wider animate-pulse')}>Confirmar Dinheiro</span>
+                          ) : isMerged ? (
+                            <span className={clsx('px-2', 'py-0.5', 'text-[8px]', 'bg-zinc-800', 'text-zinc-400', 'font-bold', 'rounded-md', 'block', 'w-fit', 'border', 'border-zinc-700/30', 'uppercase', 'tracking-wider')}>Mesclada na Mesa {mergedIntoMesaId}</span>
                           ) : isOcupada ? (
                             <span className={clsx('px-2', 'py-0.5', 'text-[8px]', 'bg-rose-500/10', 'text-rose-400', 'font-bold', 'rounded-md', 'block', 'w-fit', 'border', 'border-rose-500/10', 'uppercase', 'tracking-wider')}>Ocupada</span>
                           ) : (
@@ -4570,8 +4613,28 @@ export function CaixaPanel({
                       const text = await file.text();
                       try {
                         const data = JSON.parse(text);
-                        alert(`Importação simulada: ${Array.isArray(data) ? data.length : 0} itens lidos. Integração com backend em breve.`);
-                      } catch { alert('Arquivo JSON inválido.'); }
+                        const items = Array.isArray(data) ? data : [data];
+                        if (confirm(`Deseja importar/atualizar ${items.length} produtos no cardápio?`)) {
+                          const res = await fetch(`${apiBaseUrl}/produtos/importar`, {
+                            method: 'POST',
+                            headers: {
+                              ...authHeaders,
+                              'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(items)
+                          });
+                          if (res.ok) {
+                            alert('Produtos importados com sucesso!');
+                            await fetchProdutos();
+                          } else {
+                            const err = await res.json();
+                            alert(`Erro na importação: ${err.detail || 'Erro desconhecido'}`);
+                          }
+                        }
+                      } catch (err) {
+                        console.error(err);
+                        alert('Arquivo JSON inválido ou erro de processamento.');
+                      }
                     }} />
                   </label>
                 </div>
@@ -4876,8 +4939,151 @@ export function CaixaPanel({
             );
           })()}
 
+          {/* CATEGORIAS CRUD TELA */}
+          {activeTab === 'cardapio' && activeSubTab === 'categorias_lista' && (
+            <div className={clsx('space-y-4', 'animate-fade-in', 'text-left')}>
+              <div className={clsx('flex', 'justify-between', 'items-center')}>
+                <div>
+                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'text-base', 'block')}>Categorias de Menu</span>
+                  <span className={clsx('text-[9px]', 'text-gray-500')}>{apiCategorias.length} categorias cadastradas</span>
+                </div>
+                <button
+                  onClick={async () => {
+                    const id = prompt('Digite o ID único da nova categoria (ex: sobremesas, petiscos):');
+                    if (!id) return;
+                    const nome = prompt('Digite o nome de exibição da categoria:');
+                    if (!nome) return;
+                    const destino = prompt('Digite o destino de impressão (COZINHA, BAR, ou NENHUM):', 'COZINHA');
+                    if (destino !== 'COZINHA' && destino !== 'BAR' && destino !== 'NENHUM') {
+                      alert('Destino inválido! Deve ser COZINHA, BAR ou NENHUM.');
+                      return;
+                    }
+                    try {
+                      const res = await fetch(`${apiBaseUrl}/produtos/categorias`, {
+                        method: 'POST',
+                        headers: {
+                          ...authHeaders,
+                          'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ id, nome, destino_impressao: destino })
+                      });
+                      if (res.ok) {
+                        alert('Categoria criada com sucesso!');
+                        await fetchCategorias();
+                      } else {
+                        const err = await res.json();
+                        alert(`Erro: ${err.detail || 'Falha ao criar categoria.'}`);
+                      }
+                    } catch (e) {
+                      console.error(e);
+                      alert('Erro ao conectar ao servidor.');
+                    }
+                  }}
+                  className={clsx('flex', 'items-center', 'gap-1.5', 'px-3', 'py-1.5', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'rounded-xl', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}
+                >
+                  <Plus size={11} />
+                  Nova Categoria
+                </button>
+              </div>
 
-
+              <div className={clsx('bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-3xl', 'overflow-hidden')}>
+                <div className={clsx('overflow-x-auto')}>
+                  <table className={clsx('w-full', 'text-left', 'border-collapse', 'font-sans', 'text-[11px]')}>
+                    <thead>
+                      <tr className={clsx('border-b', 'border-[#27272A]', 'bg-[#18181B]/50', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider')}>
+                        <th className={clsx('p-4')}>ID</th>
+                        <th className={clsx('p-4')}>Nome</th>
+                        <th className={clsx('p-4')}>Impressão</th>
+                        <th className={clsx('p-4', 'text-right')}>Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className={clsx('divide-y', 'divide-[#27272A]/40')}>
+                      {apiCategorias.map((cat) => (
+                        <tr key={cat.id} className={clsx('hover:bg-[#1C1C1F]/30', 'transition-colors', 'text-white')}>
+                          <td className={clsx('p-4', 'font-mono', 'text-gray-400')}>{cat.id}</td>
+                          <td className={clsx('p-4', 'font-semibold')}>{cat.nome}</td>
+                          <td className={clsx('p-4')}>
+                            <span className={clsx('px-2', 'py-0.5', 'text-[9px]', 'font-bold', 'rounded-md', 'border', 
+                              cat.destino_impressao === 'COZINHA' 
+                                ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' 
+                                : cat.destino_impressao === 'BAR' 
+                                  ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' 
+                                  : 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20'
+                            )}>
+                              {cat.destino_impressao}
+                            </span>
+                          </td>
+                          <td className={clsx('p-4', 'text-right', 'space-x-2')}>
+                            <button
+                              onClick={async () => {
+                                const newNome = prompt('Digite o novo nome da categoria (deixe vazio para manter o atual):', cat.nome);
+                                const newDestino = prompt('Digite o novo destino de impressão (COZINHA, BAR, ou NENHUM):', cat.destino_impressao);
+                                if (newDestino && newDestino !== 'COZINHA' && newDestino !== 'BAR' && newDestino !== 'NENHUM') {
+                                  alert('Destino inválido! Deve ser COZINHA, BAR ou NENHUM.');
+                                  return;
+                                }
+                                try {
+                                  const res = await fetch(`${apiBaseUrl}/produtos/categorias/${cat.id}`, {
+                                    method: 'PUT',
+                                    headers: {
+                                      ...authHeaders,
+                                      'Content-Type': 'application/json'
+                                    },
+                                    body: JSON.stringify({
+                                      nome: newNome || undefined,
+                                      destino_impressao: newDestino || undefined
+                                    })
+                                  });
+                                  if (res.ok) {
+                                    alert('Categoria atualizada!');
+                                    await fetchCategorias();
+                                  } else {
+                                    const err = await res.json();
+                                    alert(`Erro: ${err.detail || 'Falha ao atualizar.'}`);
+                                  }
+                                } catch (e) {
+                                  console.error(e);
+                                  alert('Erro ao conectar ao servidor.');
+                                }
+                              }}
+                              className="px-2.5 py-1 border border-zinc-800 hover:border-zinc-700 bg-zinc-900/50 hover:bg-zinc-800 text-gray-300 hover:text-white rounded-lg transition-all cursor-pointer font-bold"
+                            >
+                              Editar
+                            </button>
+                            <button
+                              onClick={async () => {
+                                if (confirm(`Deseja realmente excluir a categoria "${cat.nome}"?`)) {
+                                  try {
+                                    const res = await fetch(`${apiBaseUrl}/produtos/categorias/${cat.id}`, {
+                                      method: 'DELETE',
+                                      headers: authHeaders
+                                    });
+                                    if (res.ok) {
+                                      alert('Categoria excluída!');
+                                      await fetchCategorias();
+                                    } else {
+                                      const err = await res.json();
+                                      alert(`Erro: ${err.detail || 'Falha ao excluir.'}`);
+                                    }
+                                  } catch (e) {
+                                    console.error(e);
+                                    alert('Erro ao conectar ao servidor.');
+                                  }
+                                }
+                              }}
+                              className="px-2.5 py-1 border border-red-900/40 hover:border-red-600/30 bg-red-950/20 hover:bg-red-900/25 text-red-400 hover:text-white rounded-lg transition-all cursor-pointer font-bold"
+                            >
+                              Excluir
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* LIVE VIEW: ESTOQUE DE INSUMOS */}
           {activeTab === 'estoque' && activeSubTab === 'insumos' && (
@@ -5182,7 +5388,7 @@ export function CaixaPanel({
             </div>
           )}
 
-          {/* MOCK VIEW: CRM CLIENTES */}
+          {/* CRM CLIENTES — REAL DATA */}
           {activeTab === 'clientes' && activeSubTab === 'crm' && (
             <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'text-left', 'animate-fade-in', 'max-w-3xl')}>
               <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'border-b', 'border-[#27272A]', 'pb-2')}>CRM — Cadastro de Clientes</span>
@@ -5192,22 +5398,30 @@ export function CaixaPanel({
                     <tr className={clsx('bg-[#1C1C1F]', 'border-b', 'border-[#27272A]', 'text-gray-400', 'uppercase', 'tracking-wider', 'font-bold')}>
                       <th className="p-3.5">Nome</th>
                       <th className="p-3.5">WhatsApp</th>
-                      <th className={clsx('p-3.5', 'font-mono')}>Pedidos</th>
-                      <th className={clsx('p-3.5', 'font-mono')}>Ticket Médio</th>
-                      <th className={clsx('p-3.5', 'text-right')}>Frequência</th>
+                      <th className={clsx('p-3.5', 'font-mono')}>Saldo</th>
+                      <th className={clsx('p-3.5', 'text-right')}>Ações</th>
                     </tr>
                   </thead>
                   <tbody className={clsx('divide-y', 'divide-[#27272A]/40')}>
-                    {[
-                      { nome: "João Silva", wpp: "(11) 99999-1111", ped: 12, ticket: 45.50, freq: "Semanal" },
-                      { nome: "Maria Souza", wpp: "(11) 98888-2222", ped: 8, ticket: 32.10, freq: "Quinzenal" }
-                    ].map((c, idx) => (
-                      <tr key={idx} className={clsx('hover:bg-[#1C1C1F]/20', 'transition-colors')}>
-                        <td className={clsx('p-3.5', 'font-bold', 'text-white')}>{c.nome}</td>
-                        <td className={clsx('p-3.5', 'font-mono', 'text-gray-300')}>{c.wpp}</td>
-                        <td className={clsx('p-3.5', 'font-mono', 'text-gray-300')}>{c.ped}</td>
-                        <td className={clsx('p-3.5', 'font-mono', 'text-emerald-400')}>R$ {c.ticket.toFixed(2)}</td>
-                        <td className={clsx('p-3.5', 'text-gray-400', 'text-right', 'font-bold', 'text-[8px]', 'uppercase', 'tracking-wider')}>{c.freq}</td>
+                    {loyaltyUsers.map((user) => (
+                      <tr key={user.id} className={clsx('hover:bg-[#1C1C1F]/20', 'transition-colors')}>
+                        <td className={clsx('p-3.5', 'font-bold', 'text-white')}>{user.cliente}</td>
+                        <td className={clsx('p-3.5', 'font-mono', 'text-gray-300')}>{user.telefone}</td>
+                        <td className={clsx('p-3.5', 'font-mono', 'text-emerald-400')}>
+                          {fidelidadeConfig.tipo_recompensa === 'PONTOS' ? `${user.pontos} pts` : `R$ ${user.saldoCashback.toFixed(2)}`}
+                        </td>
+                        <td className={clsx('p-3.5', 'text-right')}>
+                          <button
+                            onClick={() => {
+                              setEditingCrmUser(user);
+                              setCrmFormNome(user.cliente);
+                              setCrmFormTelefone(user.telefone);
+                            }}
+                            className="px-2.5 py-1 border border-zinc-800 hover:border-zinc-700 bg-zinc-900/50 hover:bg-zinc-800 text-gray-300 hover:text-white rounded-lg transition-all cursor-pointer font-bold"
+                          >
+                            Editar
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -5983,20 +6197,22 @@ export function CaixaPanel({
                 <div className="space-y-4">
                   <div className={clsx('flex', 'items-center', 'justify-between', 'border-b', 'border-[#27272A]', 'pb-1.5')}>
                     <h4 className={clsx('font-serif', 'font-bold', 'text-gray-300')}>Extrato Consumo</h4>
-                    <label className={clsx('flex', 'items-center', 'gap-1.5', 'text-[10px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'cursor-pointer')}>
-                      <input
-                        type="checkbox"
-                        checked={checkoutServiceTax}
-                        onChange={(e) => {
-                          setCheckoutServiceTax(e.target.checked);
-                          const { subtotal } = getCheckoutTotals(selectedOrder);
-                          const newTotal = subtotal + (e.target.checked ? subtotal * (serviceTaxRate / 100) : 0);
-                          setPaymentValor(newTotal.toFixed(2));
-                        }}
-                        className={clsx('rounded', 'border-[#27272A]', 'text-emerald-500', 'focus:ring-emerald-500', 'h-3.5', 'w-3.5', 'bg-[#121214]')}
-                      />
-                      <span>Taxa de {serviceTaxRate}%</span>
-                    </label>
+                    {taxaServicoAtiva && (
+                      <label className={clsx('flex', 'items-center', 'gap-1.5', 'text-[10px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'cursor-pointer')}>
+                        <input
+                          type="checkbox"
+                          checked={checkoutServiceTax}
+                          onChange={(e) => {
+                            setCheckoutServiceTax(e.target.checked);
+                            const { subtotal } = getCheckoutTotals(selectedOrder);
+                            const newTotal = subtotal + (e.target.checked ? subtotal * (serviceTaxRate / 100) : 0);
+                            setPaymentValor(newTotal.toFixed(2));
+                          }}
+                          className={clsx('rounded', 'border-[#27272A]', 'text-emerald-500', 'focus:ring-emerald-500', 'h-3.5', 'w-3.5', 'bg-[#121214]')}
+                        />
+                        <span>Taxa de {serviceTaxRate}%</span>
+                      </label>
+                    )}
                   </div>
 
                   <div className={clsx('space-y-2.5', 'max-h-[40vh]', 'overflow-y-auto', 'pr-1')}>
@@ -6017,7 +6233,7 @@ export function CaixaPanel({
                               }
                               const activeSelectedItems = selectedOrder.itens.filter(i => copy.includes(i.id));
                               const sub = activeSelectedItems.reduce((sum, it) => sum + it.preco, 0);
-                              const t = sub * (1.0 + (checkoutServiceTax ? serviceTaxRate / 100 : 0));
+                              const t = sub * (1.0 + ((taxaServicoAtiva && checkoutServiceTax) ? serviceTaxRate / 100 : 0));
                               setPaymentValor(t.toFixed(2));
                               return copy;
                             });
@@ -6059,10 +6275,23 @@ export function CaixaPanel({
                           <span className={clsx('font-sans', 'text-gray-400')}>Total Itens em Aberto:</span>
                           <span className="text-gray-300">R$ {subtotal.toFixed(2)}</span>
                         </div>
-                        {checkoutServiceTax && (
+                        {taxaServicoAtiva && checkoutServiceTax && (
                           <div className={clsx('flex', 'justify-between')}>
                             <span className={clsx('font-sans', 'text-gray-400')}>Taxa Serviço ({serviceTaxRate}%):</span>
                             <span className="text-gray-300">R$ {taxa.toFixed(2)}</span>
+                          </div>
+                        )}
+                        {selectedItemIds.length > 0 && (
+                          <div className={clsx('flex', 'justify-between', 'text-[#10b981]', 'font-bold', 'border-t', 'border-[#27272A]/40', 'pt-2')}>
+                            <span className="font-sans">Total Selecionado:</span>
+                            <span>
+                              R$ {(() => {
+                                const selectedItems = selectedOrder.itens.filter(i => selectedItemIds.includes(i.id));
+                                const sub = selectedItems.reduce((sum, it) => sum + it.preco, 0);
+                                const taxVal = (taxaServicoAtiva && checkoutServiceTax) ? sub * (serviceTaxRate / 100) : 0;
+                                return (sub + taxVal).toFixed(2);
+                              })()}
+                            </span>
                           </div>
                         )}
                         {selectedOrder.valorPago && selectedOrder.valorPago > 0 ? (
@@ -6562,6 +6791,98 @@ export function CaixaPanel({
                   className="flex-1 py-2 bg-[#10b981] hover:bg-[#059669] text-[#121214] rounded-xl font-bold cursor-pointer transition-colors disabled:opacity-50"
                 >
                   {isLoading ? 'Salvando...' : 'Salvar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {editingCrmUser && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="w-full max-w-md bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
+            <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
+              <h3 className="font-serif text-sm font-bold text-white">
+                Editar Cliente CRM
+              </h3>
+              <button 
+                type="button" 
+                onClick={() => setEditingCrmUser(null)} 
+                className="p-1 text-gray-400 hover:text-white transition-colors cursor-pointer border border-transparent"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!crmFormNome.trim() || !crmFormTelefone.trim()) {
+                  alert('Preencha todos os campos!');
+                  return;
+                }
+                await handleUpdateClient(editingCrmUser.telefone, crmFormNome, crmFormTelefone);
+                setEditingCrmUser(null);
+              }}
+              className="space-y-4"
+            >
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Nome:</label>
+                <input
+                  type="text"
+                  required
+                  value={crmFormNome}
+                  onChange={(e) => setCrmFormNome(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Telefone / WhatsApp:</label>
+                <input
+                  type="text"
+                  required
+                  value={crmFormTelefone}
+                  onChange={(e) => setCrmFormTelefone(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                />
+              </div>
+
+              {/* READ-ONLY SENSITIVE FIELDS */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Saldo de Pontos:</label>
+                  <input
+                    type="text"
+                    disabled
+                    value={`${editingCrmUser.pontos} pts`}
+                    className="w-full px-3 py-2 bg-[#1C1C1F]/40 border border-[#27272A]/50 rounded-xl text-gray-400 focus:outline-none opacity-60 font-mono text-xs"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Saldo Cashback:</label>
+                  <input
+                    type="text"
+                    disabled
+                    value={`R$ ${(editingCrmUser.saldoCashback || 0).toFixed(2)}`}
+                    className="w-full px-3 py-2 bg-[#1C1C1F]/40 border border-[#27272A]/50 rounded-xl text-gray-400 focus:outline-none opacity-60 font-mono text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingCrmUser(null)}
+                  className="flex-1 py-2 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] text-white rounded-xl font-bold cursor-pointer transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2 bg-[#10b981] hover:bg-[#059669] text-[#121214] rounded-xl font-bold cursor-pointer transition-colors"
+                >
+                  Salvar Alterações
                 </button>
               </div>
             </form>

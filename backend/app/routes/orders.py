@@ -402,7 +402,9 @@ def transferir_comanda(comanda_id: str, nova_mesa_id: int, background_tasks: Bac
             detail=f"Mesa de destino {nova_mesa_id} não encontrada"
         )
 
-    # 3. Atualizar mesa_id
+    # 3. Atualizar mesa_id e salvar mesa_origem_id para auditoria se ainda não preenchido
+    if not comanda.mesa_origem_id:
+        comanda.mesa_origem_id = comanda.mesa_id
     comanda.mesa_id = nova_mesa_id
     db.commit()
     db.refresh(comanda)

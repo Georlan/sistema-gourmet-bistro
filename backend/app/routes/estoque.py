@@ -3,10 +3,11 @@ import unicodedata
 import xml.etree.ElementTree as ET
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session, joinedload
-from typing import List
+from typing import List, Optional
+from pydantic import BaseModel
 
 from ..database import get_db, current_restaurante_id
-from ..models import Usuario, Insumo, Distribuidor, NotaEntrada, ItemNotaEntrada
+from ..models import Usuario, Insumo, Distribuidor, NotaEntrada, ItemNotaEntrada, ActivityLog
 from ..schemas import InsumoResponse, DistribuidorResponse, NotaEntradaResponse
 from ..security import get_current_garcom_optional
 
@@ -272,3 +273,204 @@ def get_notas(
         joinedload(NotaEntrada.distribuidor),
         joinedload(NotaEntrada.itens).joinedload(ItemNotaEntrada.insumo)
     ).all()
+
+
+# ─── SCHEMAS INTERNOS PARA INSUMOS E DISTRIBUIDORES ───────────────────────────
+class InsumoCreate(BaseModel):
+    id: str
+    nome: str
+    estoque_minimo: float = 10.0
+    estoque_maximo: float = 50.0
+    unidade_medida: str = "un"
+    preco_medio_custo: float = 0.0
+
+class InsumoUpdate(BaseModel):
+    nome: Optional[str] = None
+    estoque_minimo: Optional[float] = None
+    estoque_maximo: Optional[float] = None
+    unidade_medida: Optional[str] = None
+    preco_medio_custo: Optional[float] = None
+
+class InsumoAjuste(BaseModel):
+    quantidade: float
+    tipo: str  # "ENTRADA" | "SAIDA"
+    justificativa: str = ""
+
+class DistribuidorCreate(BaseModel):
+    id: str
+    nome_fantasia: str
+    razao_social: Optional[str] = None
+    cnpj: Optional[str] = None
+    lead_time_dias: Optional[int] = 3
+
+class DistribuidorUpdate(BaseModel):
+    nome_fantasia: Optional[str] = None
+    razao_social: Optional[str] = None
+    cnpj: Optional[str] = None
+    lead_time_dias: Optional[int] = None
+
+
+# ─── ROTAS CRUD DE INSUMOS ────────────────────────────────────────────────────
+@router.post("/insumos", response_model=InsumoResponse, status_code=status.HTTP_201_CREATED)
+def create_insumo(
+    data: InsumoCreate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_garcom_optional)
+):
+    check_caixa_permission(current_user)
+    rest_id = current_restaurante_id.get() or 1
+    
+    existente = db.query(Insumo).filter_by(id=data.id, restaurante_id=rest_id).first()
+    if existente:
+        raise HTTPException(status_code=400, detail="ID de insumo já existe.")
+        
+    insumo = Insumo(
+        id=data.id,
+        restaurante_id=rest_id,
+        nome=data.nome,
+        estoque_atual=0.0,
+        estoque_minimo=data.estoque_minimo,
+        estoque_maximo=data.estoque_maximo,
+        unidade_medida=data.unidade_medida,
+        preco_medio_custo=data.preco_medio_custo
+    )
+    db.add(insumo)
+    db.commit()
+    db.refresh(insumo)
+    return insumo
+
+@router.put("/insumos/{insumo_id}", response_model=InsumoResponse)
+def update_insumo(
+    insumo_id: str,
+    data: InsumoUpdate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_garcom_optional)
+):
+    check_caixa_permission(current_user)
+    rest_id = current_restaurante_id.get() or 1
+    insumo = db.query(Insumo).filter_by(id=insumo_id, restaurante_id=rest_id).first()
+    if not insumo:
+        raise HTTPException(status_code=404, detail="Insumo não encontrado.")
+        
+    for key, val in data.model_dump(exclude_unset=True).items():
+        setattr(insumo, key, val)
+        
+    db.commit()
+    db.refresh(insumo)
+    return insumo
+
+@router.delete("/insumos/{insumo_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_insumo(
+    insumo_id: str,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_garcom_optional)
+):
+    check_caixa_permission(current_user)
+    rest_id = current_restaurante_id.get() or 1
+    insumo = db.query(Insumo).filter_by(id=insumo_id, restaurante_id=rest_id).first()
+    if not insumo:
+        raise HTTPException(status_code=404, detail="Insumo não encontrado.")
+        
+    db.delete(insumo)
+    db.commit()
+    return
+
+@router.post("/insumos/{insumo_id}/ajustar", response_model=InsumoResponse)
+def ajustar_insumo(
+    insumo_id: str,
+    data: InsumoAjuste,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_garcom_optional)
+):
+    check_caixa_permission(current_user)
+    rest_id = current_restaurante_id.get() or 1
+    insumo = db.query(Insumo).filter_by(id=insumo_id, restaurante_id=rest_id).first()
+    if not insumo:
+        raise HTTPException(status_code=404, detail="Insumo não encontrado.")
+        
+    if data.tipo not in ["ENTRADA", "SAIDA"]:
+        raise HTTPException(status_code=400, detail="Tipo de ajuste deve ser ENTRADA ou SAIDA.")
+        
+    old_qty = insumo.estoque_atual or 0.0
+    if data.tipo == "ENTRADA":
+        insumo.estoque_atual = old_qty + data.quantidade
+    else:
+        insumo.estoque_atual = old_qty - data.quantidade
+        
+    db.commit()
+    db.refresh(insumo)
+    
+    details = f"Insumo {insumo.id} ({insumo.nome}) ajustado de {old_qty} {insumo.unidade_medida} para {insumo.estoque_atual} {insumo.unidade_medida}. Justificativa: {data.justificativa}"
+    log = ActivityLog(
+        garcom_id=current_user.id if current_user else "sistema",
+        action="MANUAL_STOCK_ADJUSTMENT",
+        details=details
+    )
+    db.add(log)
+    db.commit()
+    return insumo
+
+
+# ─── ROTAS CRUD DE DISTRIBUIDORES ─────────────────────────────────────────────
+@router.post("/distribuidores", response_model=DistribuidorResponse, status_code=status.HTTP_201_CREATED)
+def create_distribuidor(
+    data: DistribuidorCreate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_garcom_optional)
+):
+    check_caixa_permission(current_user)
+    rest_id = current_restaurante_id.get() or 1
+    
+    existente = db.query(Distribuidor).filter_by(id=data.id, restaurante_id=rest_id).first()
+    if existente:
+        raise HTTPException(status_code=400, detail="ID de distribuidor já existe.")
+        
+    distribuidor = Distribuidor(
+        id=data.id,
+        restaurante_id=rest_id,
+        nome_fantasia=data.nome_fantasia,
+        razao_social=data.razao_social,
+        cnpj=data.cnpj,
+        lead_time_dias=data.lead_time_dias if data.lead_time_dias is not None else 3
+    )
+    db.add(distribuidor)
+    db.commit()
+    db.refresh(distribuidor)
+    return distribuidor
+
+@router.put("/distribuidores/{dist_id}", response_model=DistribuidorResponse)
+def update_distribuidor(
+    dist_id: str,
+    data: DistribuidorUpdate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_garcom_optional)
+):
+    check_caixa_permission(current_user)
+    rest_id = current_restaurante_id.get() or 1
+    distribuidor = db.query(Distribuidor).filter_by(id=dist_id, restaurante_id=rest_id).first()
+    if not distribuidor:
+        raise HTTPException(status_code=404, detail="Distribuidor não encontrado.")
+        
+    for key, val in data.model_dump(exclude_unset=True).items():
+        setattr(distribuidor, key, val)
+        
+    db.commit()
+    db.refresh(distribuidor)
+    return distribuidor
+
+@router.delete("/distribuidores/{dist_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_distribuidor(
+    dist_id: str,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_garcom_optional)
+):
+    check_caixa_permission(current_user)
+    rest_id = current_restaurante_id.get() or 1
+    distribuidor = db.query(Distribuidor).filter_by(id=dist_id, restaurante_id=rest_id).first()
+    if not distribuidor:
+        raise HTTPException(status_code=404, detail="Distribuidor não encontrado.")
+        
+    db.delete(distribuidor)
+    db.commit()
+    return
+

@@ -5,7 +5,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 from ..database import get_db
-from ..models import Comanda, Insumo, ConfigFidelizacao, HistoricoFidelidade, ActivityLog
+from ..models import Comanda, Insumo, ConfigFidelizacao, HistoricoFidelidade, ActivityLog, Pagamento
 from ..schemas import InsumoResponse, ConfigFidelizacaoResponse, HistoricoFidelidadeResponse
 from ..security import get_current_garcom_optional
 from ..models import Usuario
@@ -369,4 +369,42 @@ def get_garcons_relatorio(db: Session = Depends(get_db)):
         })
         
     return results
+
+
+class ClientUpdate(BaseModel):
+    cliente: str
+    telefone: str
+
+@router.put("/fidelidade/clientes/{old_phone}")
+def update_loyalty_client(
+    old_phone: str,
+    data: ClientUpdate,
+    db: Session = Depends(get_db)
+):
+    """
+    Edita o nome e o telefone (chave primária de fidelidade) de um cliente.
+    Atualiza HistoricoFidelidade e Pagamentos correspondentes.
+    """
+    # 1. Fetch and filter HistoricoFidelidade in Python due to non-deterministic encryption
+    all_movements = db.query(HistoricoFidelidade).all()
+    movements = [m for m in all_movements if m.cliente_telefone.strip() == old_phone]
+    
+    # 2. Fetch Pagamento entries (which are unencrypted)
+    pagamentos = db.query(Pagamento).filter(Pagamento.cpf_cliente == old_phone).all()
+    
+    if not movements and not pagamentos:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado.")
+        
+    # 3. Update HistoricoFidelidade entries
+    for m in movements:
+        m.cliente_telefone = data.telefone.strip()
+        
+    # 4. Update Pagamento entries
+    for p in pagamentos:
+        p.cpf_cliente = data.telefone.strip()
+        p.nome_cliente = data.cliente.strip()
+        
+    db.commit()
+    return {"success": True, "detail": "Cliente atualizado com sucesso."}
+
 

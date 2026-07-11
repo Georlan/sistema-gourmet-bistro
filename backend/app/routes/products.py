@@ -262,3 +262,66 @@ def delete_produto(
     db.commit()
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
     return
+
+class ProdutoImportItem(BaseModel):
+    id: str
+    nome: str
+    preco: float
+    categoria_id: str
+    descricao: Optional[str] = None
+    imagem: Optional[str] = None
+    ativo: Optional[bool] = True
+
+@router.post("/importar", response_model=List[ProdutoResponse])
+def importar_cardapio(
+    produtos_data: List[ProdutoImportItem],
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """
+    Importa uma lista de produtos usando Upsert (insere ou atualiza pelo ID).
+    Cria a categoria automaticamente se ela não existir.
+    """
+    imported_products = []
+    for item in produtos_data:
+        # Garantir categoria
+        cat_id = item.categoria_id
+        cat = db.query(Categoria).filter(Categoria.id == cat_id).first()
+        if not cat:
+            cat = Categoria(id=cat_id, nome=cat_id.replace("_", " ").title(), destino_impressao="COZINHA")
+            db.add(cat)
+            db.commit()
+            db.refresh(cat)
+            
+        existente = db.query(Produto).filter(Produto.id == item.id).first()
+        if existente:
+            existente.nome = item.nome
+            existente.preco = item.preco
+            existente.categoria_id = item.categoria_id
+            if item.descricao is not None:
+                existente.descricao = item.descricao
+            if item.imagem is not None:
+                existente.imagem = item.imagem
+            if item.ativo is not None:
+                existente.ativo = item.ativo
+            db.commit()
+            db.refresh(existente)
+            imported_products.append(existente)
+        else:
+            novo = Produto(
+                id=item.id,
+                nome=item.nome,
+                preco=item.preco,
+                categoria_id=item.categoria_id,
+                descricao=item.descricao or "",
+                imagem=item.imagem or "",
+                ativo=item.ativo if item.ativo is not None else True
+            )
+            db.add(novo)
+            db.commit()
+            db.refresh(novo)
+            imported_products.append(novo)
+            
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
+    return imported_products
+

@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { X, Clock, Receipt, PlusCircle, Move, ShoppingBag, Printer, Trash2, ArrowLeft, Edit2 } from 'lucide-react';
+import { X, Clock, Receipt, PlusCircle, Move, ShoppingBag, Printer, Trash2, ArrowLeft, Edit2, GitMerge } from 'lucide-react';
 import { Table, Order, DraftItem, AppSettings, Product, AppRole, OrderItem } from '../types';
 import { getTableTotal, getCustomerSubtotals, formatElapsedTime } from '../domain';
 import { MenuPanel } from './MenuPanel';
@@ -86,7 +86,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
   onUnmergeTable,
 }) => {
   // Dynamic default tab based on whether table is active or empty
-  const [activeTab, setActiveTab] = useState<'consumo' | 'lancamento' | 'transferir'>(
+  const [activeTab, setActiveTab] = useState<'consumo' | 'lancamento' | 'transferir' | 'mesclar'>(
     orders.length === 0 ? 'lancamento' : 'consumo'
   );
   const [showPrintPreview, setShowPrintPreview] = useState<boolean>(false);
@@ -117,6 +117,13 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
   const tablesList = salonTables || TABLES;
   const availableTablesForTransfer = tablesList.filter(t => t.id !== table.id);
 
+  // Tables with active orders (for merge target — merge only makes sense into an occupied table)
+  const tablesWithOrders = tablesList.filter(t => t.id !== table.id && allOrders.some(o => o.mesaId === t.id));
+  const tablesWithoutOrders = tablesList.filter(t => t.id !== table.id && !allOrders.some(o => o.mesaId === t.id));
+
+  const originIds = Array.from(new Set(orders.map(o => o.mesaOrigemId).filter((id): id is number => id !== null && id !== undefined && id !== table.id)));
+  const originStr = originIds.length > 0 ? ` + ${originIds.join(' + ')}` : '';
+
   // Print invoice helper
   const handlePrintPreview = () => {
     setShowPrintPreview(true);
@@ -146,7 +153,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
               >
                 <ArrowLeft size={16} />
               </button>
-              <h2 className="font-serif text-2xl sm:text-3xl font-bold tracking-tight text-white">Mesa {table.id}</h2>
+              <h2 className="font-serif text-2xl sm:text-3xl font-bold tracking-tight text-white">Mesa {table.id}{originStr}</h2>
               <span className={`px-3 py-1 text-[10px] font-sans font-bold tracking-wider uppercase rounded-full border ${
                 orders.length === 0 
                   ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
@@ -216,7 +223,10 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
           {orders.length > 0 && (
             <button
               id="tab-transferir-btn"
-              onClick={() => setActiveTab('transferir')}
+              onClick={() => {
+                setActiveTab('transferir');
+                setTransferType('total');
+              }}
               className={`px-4.5 py-2 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider font-sans border ${
                 activeTab === 'transferir' 
                   ? 'bg-[#1C1C1F] text-[#10b981] shadow-sm border-[#27272A]' 
@@ -225,6 +235,24 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
             >
               <Move size={14} className="text-[#10b981]" />
               <span>Transferência</span>
+            </button>
+          )}
+
+          {orders.length > 0 && onMergeTables && (
+            <button
+              id="tab-mesclar-btn"
+              onClick={() => {
+                setActiveTab('mesclar');
+                setTransferType('mesclar');
+              }}
+              className={`px-4.5 py-2 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider font-sans border ${
+                activeTab === 'mesclar' 
+                  ? 'bg-[#1C1C1F] text-[#10b981] shadow-sm border-[#27272A]' 
+                  : 'text-gray-400 hover:text-white border-transparent'
+              }`}
+            >
+              <GitMerge size={14} className="text-[#10b981]" />
+              <span>Mesclar</span>
             </button>
           )}
         </div>
@@ -505,12 +533,32 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
 
                     {/* Grand Total & Closing Table Commands */}
                     <div className="mt-4 pt-4 border-t border-[#27272A] space-y-3.5">
-                      <div className="flex justify-between items-baseline font-sans">
-                        <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Total Acumulado:</span>
-                        <span className="text-2xl font-bold font-mono text-[#10b981]">
-                          R$ {totalValue.toFixed(2)}
-                        </span>
-                      </div>
+                      {(() => {
+                        const hasTax = restauranteConfig?.taxa_servico_ativa ?? true;
+                        const taxRate = restauranteConfig?.taxa_servico_padrao ?? 10;
+                        const taxVal = hasTax ? totalValue * (taxRate / 100) : 0;
+                        const grandTotal = totalValue + taxVal;
+                        return (
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between items-baseline font-sans text-xs text-gray-400">
+                              <span className="font-bold uppercase tracking-wider">Subtotal:</span>
+                              <span className="font-mono">R$ {totalValue.toFixed(2)}</span>
+                            </div>
+                            {hasTax && (
+                              <div className="flex justify-between items-baseline font-sans text-xs text-gray-400">
+                                <span className="font-bold uppercase tracking-wider">Taxa Serviço ({taxRate}%):</span>
+                                <span className="font-mono">R$ {taxVal.toFixed(2)}</span>
+                              </div>
+                            )}
+                            <div className="flex justify-between items-baseline font-sans border-t border-[#27272A] pt-2">
+                              <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Total Geral:</span>
+                              <span className="text-2xl font-bold font-mono text-[#10b981]">
+                                R$ {grandTotal.toFixed(2)}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })()}
 
                       <div className="pt-2 flex flex-col gap-2">
                         {/* Print Preview Button for waitstaff */}
@@ -522,6 +570,28 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                           <Printer size={13} className="text-[#10b981]" />
                           <span>Prévia e Extrato</span>
                         </button>
+
+                        {onCloseTable && !(activeRole === 'garcom' && !restauranteConfig?.perm_garcom_fechar_mesa) && (
+                          <button
+                            id="close-table-btn-consumo"
+                            onClick={() => {
+                              if (confirmClear) {
+                                onCloseTable();
+                              } else {
+                                setConfirmClear(true);
+                                setTimeout(() => setConfirmClear(false), 4000);
+                              }
+                            }}
+                            className={`w-full py-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider font-sans transition-all border ${
+                              confirmClear
+                                ? 'bg-rose-800/40 border-rose-700/50 text-rose-300 animate-pulse'
+                                : 'bg-[#1C1C1F] hover:bg-rose-950/30 border-[#27272A] hover:border-rose-800/40 text-gray-300 hover:text-rose-300'
+                            }`}
+                          >
+                            <X size={13} />
+                            <span>{confirmClear ? 'Confirmar Fechamento?' : 'Fechar Mesa'}</span>
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -545,7 +615,6 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
               onUpdateDraftItem={onUpdateDraftItem}
               onSubmitDraft={onSubmitDraft}
               historicClients={historicClients}
-              liveProdutos={liveProdutos}
               isSubmitting={isSubmitting}
             />
           )}
@@ -586,20 +655,6 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                 >
                   Selecionar Itens
                 </button>
-                {onMergeTables && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTransferType('mesclar');
-                      setSelectedItemsForTransfer([]);
-                    }}
-                    className={`flex-1 py-2 rounded-lg font-bold transition-all cursor-pointer ${
-                      transferType === 'mesclar' ? 'bg-rose-900/40 border border-rose-800/50 text-white shadow-lg' : 'text-gray-400 hover:text-white'
-                    }`}
-                  >
-                    Mesclar (Unificar)
-                  </button>
-                )}
               </div>
 
               {/* If partial, show items checklist */}
@@ -651,7 +706,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                   ) : (
                     availableTablesForTransfer.map((t) => {
                       const isConfirming = confirmTransferTo === t.id;
-                      const hasSelected = transferType === 'total' || transferType === 'mesclar' || selectedItemsForTransfer.length > 0;
+                      const hasSelected = transferType === 'total' || selectedItemsForTransfer.length > 0;
                       return (
                         <button
                           key={t.id}
@@ -663,10 +718,6 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                             if (isConfirming) {
                               if (transferType === 'total') {
                                 onTransferTable(t.id);
-                              } else if (transferType === 'mesclar') {
-                                if (onMergeTables) {
-                                  onMergeTables(table.id, t.id);
-                                }
                               } else {
                                 // Transfer multiple items!
                                 onTransferItems(selectedItemsForTransfer, t.id);
@@ -700,6 +751,117 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                   )}
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* TAB 4: MESCLAR MESA */}
+          {activeTab === 'mesclar' && (
+            <div className="space-y-6 max-w-2xl mx-auto py-4">
+              <div className="text-center space-y-2">
+                <div className="p-3 bg-[#10b981]/10 text-[#10b981] rounded-full inline-block border border-[#10b981]/20">
+                  <GitMerge size={24} />
+                </div>
+                <h3 className="font-serif text-xl font-bold text-white">Mesclar Mesa {table.id} com outra</h3>
+                <p className="text-xs text-gray-400 font-sans">
+                  Todo o consumo desta mesa será incorporado à mesa de destino. A mesa origem ficará livre.
+                </p>
+              </div>
+
+              {/* Info banner */}
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-3.5 text-xs text-amber-300 font-sans flex items-start gap-2">
+                <span className="text-sm shrink-0">⚠️</span>
+                <span>A mesclagem une as comandas. Use a aba <strong>Transferência → Selecionar Itens</strong> se quiser mover itens específicos sem mesclar a conta.</span>
+              </div>
+
+              {/* Occupied tables (recommended for merge) */}
+              <div className="space-y-2">
+                <span className="text-[10px] text-gray-400 block font-bold uppercase tracking-wider text-center">Mesa Destino — Mesas Ocupadas:</span>
+                {tablesWithOrders.length === 0 ? (
+                  <div className="py-6 text-center text-gray-500 text-sm italic font-sans bg-[#121214]/40 rounded-2xl border border-[#27272A]/40">
+                    Nenhuma outra mesa está ocupada no momento.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 pt-1">
+                    {tablesWithOrders.map((t) => {
+                      const isConfirming = confirmTransferTo === t.id;
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
+                          id={`merge-target-mesa-${t.id}`}
+                          onClick={() => {
+                            if (isConfirming) {
+                              if (onMergeTables) onMergeTables(table.id, t.id);
+                              setConfirmTransferTo(null);
+                            } else {
+                              setConfirmTransferTo(t.id);
+                            }
+                          }}
+                          onMouseLeave={() => { if (isConfirming) setConfirmTransferTo(null); }}
+                          className={`p-4 border rounded-2xl text-center transition-all flex flex-col items-center justify-center gap-1 group cursor-pointer hover:scale-102 ${
+                            isConfirming
+                              ? 'bg-rose-900/40 border border-rose-800/50 animate-pulse text-white'
+                              : 'bg-[#1C1C1F] hover:bg-[#10b981]/10 border border-rose-500/30 hover:border-[#10b981] text-white'
+                          }`}
+                        >
+                          <span className="text-base font-bold text-white group-hover:text-[#10b981]">
+                            {isConfirming ? 'Confirmar?' : `Mesa ${t.id}`}
+                          </span>
+                          {!isConfirming && (
+                            <span className="text-[8px] text-rose-400 font-bold uppercase tracking-wider">Ocupada</span>
+                          )}
+                          {isConfirming && (
+                            <span className="text-[9px] text-gray-300 font-sans">Toque para confirmar</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Empty tables (less common for merge, but allowed) */}
+              {tablesWithoutOrders.length > 0 && (
+                <div className="space-y-2">
+                  <span className="text-[10px] text-gray-500 block font-bold uppercase tracking-wider text-center">Mesas Livres (mesclar criará consumo nelas):</span>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 pt-1">
+                    {tablesWithoutOrders.map((t) => {
+                      const isConfirming = confirmTransferTo === t.id;
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
+                          id={`merge-target-mesa-free-${t.id}`}
+                          onClick={() => {
+                            if (isConfirming) {
+                              if (onMergeTables) onMergeTables(table.id, t.id);
+                              setConfirmTransferTo(null);
+                            } else {
+                              setConfirmTransferTo(t.id);
+                            }
+                          }}
+                          onMouseLeave={() => { if (isConfirming) setConfirmTransferTo(null); }}
+                          className={`p-4 border rounded-2xl text-center transition-all flex flex-col items-center justify-center gap-1 group cursor-pointer hover:scale-102 opacity-60 ${
+                            isConfirming
+                              ? 'bg-rose-900/40 border border-rose-800/50 animate-pulse text-white opacity-100'
+                              : 'bg-[#1C1C1F] hover:bg-[#10b981]/10 border border-[#27272A] hover:border-[#10b981] text-white hover:opacity-100'
+                          }`}
+                        >
+                          <span className="text-base font-bold text-white group-hover:text-[#10b981]">
+                            {isConfirming ? 'Confirmar?' : `Mesa ${t.id}`}
+                          </span>
+                          {!isConfirming && (
+                            <span className="text-[8px] text-emerald-400 font-bold uppercase tracking-wider">Livre</span>
+                          )}
+                          {isConfirming && (
+                            <span className="text-[9px] text-gray-300 font-sans">Toque para confirmar</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
