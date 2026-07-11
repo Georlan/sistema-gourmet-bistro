@@ -33,10 +33,10 @@ def gerar_novo_numero_pedido(db: Session) -> int:
     else:
         start_of_next_month = datetime.datetime(now.year, now.month + 1, 1)
         
-    max_pedido = db.query(func.max(Comanda.numero_pedido)).filter(
+    max_pedido = db.query(Comanda.numero_pedido).filter(
         Comanda.criado_em >= start_of_month,
         Comanda.criado_em < start_of_next_month
-    ).with_for_update().scalar()
+    ).order_by(Comanda.numero_pedido.desc()).limit(1).with_for_update().scalar()
     return (max_pedido or 0) + 1
 
 def print_in_background(printer_name: str, ticket_text: str):
