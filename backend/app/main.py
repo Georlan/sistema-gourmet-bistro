@@ -107,6 +107,55 @@ app = FastAPI(
     description="Backend API local para o App de Garçons e Caixas do Bistrô",
 )
 
+# ─── STARTUP: Auto-run Alembic migrations ─────────────────────────────────────
+@app.on_event("startup")
+async def run_migrations_on_startup():
+    """
+    Executa 'alembic upgrade head' automaticamente ao subir o servidor.
+    
+    Lógica especial para o banco de produção (Railway):
+    - Se a tabela alembic_version NÃO existir, significa que o banco foi criado
+      manualmente antes do Alembic. Nesse caso, fazemos o 'stamp' direto na
+      revision de emergência (que só adiciona colunas faltantes via IF NOT EXISTS).
+    - Se a tabela alembic_version JÁ existir, rodamos normalmente 'upgrade head'.
+    """
+    try:
+        import os
+        from sqlalchemy import text, inspect
+        from alembic.config import Config
+        from alembic import command
+
+        # Resolve o caminho do alembic.ini relativo ao diretório do backend
+        backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        alembic_cfg_path = os.path.join(backend_dir, "alembic.ini")
+
+        alembic_cfg = Config(alembic_cfg_path)
+        # Override da URL para garantir que usa DATABASE_URL do ambiente
+        alembic_cfg.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+
+        print("[ALEMBIC] Verificando estado do banco de dados...")
+
+        # Verifica se a tabela alembic_version já existe
+        with engine.connect() as conn:
+            insp = inspect(conn)
+            has_alembic_version = insp.has_table("alembic_version")
+
+        if not has_alembic_version:
+            # Banco criado manualmente (pré-Alembic). Stamp direto na migration
+            # de emergência para não tentar re-criar tabelas existentes.
+            print("[ALEMBIC] Tabela alembic_version não encontrada.")
+            print("[ALEMBIC] Banco criado antes do Alembic — aplicando stamp de emergência...")
+            command.stamp(alembic_cfg, "8f3a2d1c9e7b")
+            print("[ALEMBIC] Stamp aplicado. Rodando upgrade head...")
+
+        command.upgrade(alembic_cfg, "head")
+        print("[ALEMBIC] ✅ Migrações concluídas com sucesso.")
+    except Exception as e:
+        # Não derruba o servidor se a migration falhar — loga e continua
+        print(f"[ALEMBIC] ⚠️ Erro ao rodar migrações automáticas: {e}")
+        import traceback
+        traceback.print_exc()
+
 # CORS configuration to allow local frontend access (WiFi/Local Network)
 app.add_middleware(
     CORSMiddleware,
