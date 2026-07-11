@@ -274,7 +274,10 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                     </div>
 
                     <div className="space-y-4 max-h-[45vh] overflow-y-auto pr-1 scrollbar-thin">
-                      {orders.map((order) => (
+                      {orders.map((order) => {
+                        const unpaidItems = order.itens.filter((item: any) => !item.pago);
+                        if (unpaidItems.length === 0) return null;
+                        return (
                         <div
                           key={order.id}
                           id={`placed-order-${order.id}`}
@@ -337,7 +340,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
 
                           {/* Order Items */}
                           <div className="p-4 divide-y divide-[#27272A]">
-                            {order.itens.map((item) => (
+                            {unpaidItems.map((item) => (
                               <div
                                 key={item.id}
                                 id={`placed-item-${item.id}`}
@@ -456,7 +459,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                             ))}
                           </div>
                         </div>
-                      ))}
+                      )})}
                     </div>
                   </div>
 

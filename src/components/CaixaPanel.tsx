@@ -148,20 +148,23 @@ export function CaixaPanel({
       if (comanda.tipo !== 'Consumo no Local' || !comanda.mesaId || comanda.mesaId <= 0) return;
       // Mesas aguardando pagamento → col 3 diretamente
       if ((comanda as any).statusComanda === 'aguardando_pagamento') {
-        list.push({
-          id: comanda.id,
-          comandaId: comanda.id,
-          mesaId: comanda.mesaId,
-          identificador: (comanda as any).identificador ?? null,
-          garcomNome: comanda.garcomNome,
-          tipo: comanda.tipo,
-          valorPago: (comanda as any).valorPago || 0,
-          itens: comanda.itens
-        });
+        const unpaid = comanda.itens.filter(i => (i.status as string) !== 'cancelado' && !i.pago);
+        if (unpaid.length > 0) {
+          list.push({
+            id: comanda.id,
+            comandaId: comanda.id,
+            mesaId: comanda.mesaId,
+            identificador: (comanda as any).identificador ?? null,
+            garcomNome: comanda.garcomNome,
+            tipo: comanda.tipo,
+            valorPago: (comanda as any).valorPago || 0,
+            itens: unpaid
+          });
+        }
         return;
       }
       // Mesas com itens prontos normalmente → col 3 (fechar conta)
-      const readyItems = comanda.itens.filter(i => i.status === 'pronto');
+      const readyItems = comanda.itens.filter(i => i.status === 'pronto' && !i.pago);
       if (readyItems.length > 0) {
         list.push({
           id: comanda.id,
@@ -171,7 +174,7 @@ export function CaixaPanel({
           garcomNome: comanda.garcomNome,
           tipo: comanda.tipo,
           valorPago: (comanda as any).valorPago || 0,
-          itens: comanda.itens
+          itens: readyItems
         });
       }
     });
@@ -2436,8 +2439,9 @@ export function CaixaPanel({
                                   setShowCheckoutModal(true);
                                   setCheckoutServiceTax(true);
                                   setSplitPeople('1');
-                                  setSelectedItemIds([]);
-                                  const sub = fullOrder.itens.filter((item: any) => !item.pago).reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
+                                  const targetItemIds = order.itens.map((i: any) => i.id);
+                                  setSelectedItemIds(targetItemIds);
+                                  const sub = order.itens.reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
                                   setPaymentValor((sub * (1.0 + (checkoutServiceTax ? serviceTaxRate / 100 : 0))).toFixed(2));
                                 }}
                                 className="w-full py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-[9px] transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1"

@@ -11,7 +11,7 @@ import { Order, OrderItem } from './types';
 export function getTableTotal(orders: Order[]): number {
   return orders.reduce((sum, order) => {
     return sum + order.itens
-      .filter(item => (item.status as string) !== 'cancelado')
+      .filter(item => (item.status as string) !== 'cancelado' && !item.pago)
       .reduce((itemSum, item) => itemSum + item.preco, 0);
   }, 0);
 }
@@ -25,8 +25,8 @@ export function groupItemsByCustomer(orders: Order[]): { [customerName: string]:
 
   orders.forEach((order) => {
     order.itens.forEach((item) => {
-      // Ignora itens cancelados na divisão por cliente
-      if ((item.status as string) === 'cancelado') return;
+      // Ignora itens cancelados ou já pagos na divisão por cliente
+      if ((item.status as string) === 'cancelado' || item.pago) return;
 
       // Proteção de null/undefined para clienteNome
       const normalizedName = (item.clienteNome ?? '').trim() || 'Consumo Geral';
