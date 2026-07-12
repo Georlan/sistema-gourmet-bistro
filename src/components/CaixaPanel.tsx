@@ -4837,14 +4837,29 @@ export function CaixaPanel({
               <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-5', 'rounded-3xl', 'space-y-4')}>
                 <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Painel de Metas do Dia</span>
                 <div className="space-y-3">
-                  <div className={clsx('flex', 'justify-between', 'text-[10px]')}>
-                    <span className="text-gray-400">Progresso da Meta (R$ 3.000,00)</span>
-                    <strong className={clsx('text-white', 'font-mono')}>65.2% (R$ 1.956,20)</strong>
-                  </div>
-                  <div className={clsx('h-3', 'w-full', 'bg-[#1C1C1F]', 'rounded-full', 'overflow-hidden', 'border', 'border-[#27272A]/40')}>
-                    <div className={clsx('h-full', 'bg-gradient-to-r', 'from-[#10b981]', 'to-[#10b981]', 'rounded-full')} style={{ width: '65.2%' }} />
-                  </div>
-                  <span className={clsx('text-[8px]', 'text-gray-500', 'block', 'leading-tight')}>Faltam R$ 1.043,80 para atingir a meta diária estipulada pelo gestor.</span>
+                  {(() => {
+                    const meta = 3000.00;
+                    const hoje = generalStats?.faturamento_hoje ?? 0.00;
+                    const pct = Math.min(100, Math.max(0, (hoje / meta) * 100));
+                    const restante = Math.max(0, meta - hoje);
+                    return (
+                      <>
+                        <div className={clsx('flex', 'justify-between', 'text-[10px]')}>
+                          <span className="text-gray-400">Progresso da Meta (R$ {meta.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})</span>
+                          <strong className={clsx('text-white', 'font-mono')}>{pct.toFixed(1)}% (R$ {hoje.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})</strong>
+                        </div>
+                        <div className={clsx('h-3', 'w-full', 'bg-[#1C1C1F]', 'rounded-full', 'overflow-hidden', 'border', 'border-[#27272A]/40')}>
+                          <div className={clsx('h-full', 'bg-gradient-to-r', 'from-[#10b981]', 'to-[#10b981]', 'rounded-full')} style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className={clsx('text-[8px]', 'text-gray-500', 'block', 'leading-tight')}>
+                          {restante > 0 
+                            ? `Faltam R$ ${restante.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} para atingir a meta diária estipulada pelo gestor.`
+                            : "Parabéns! A meta diária estipulada pelo gestor foi atingida!"
+                          }
+                        </span>
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -4882,13 +4897,7 @@ export function CaixaPanel({
             <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'text-left', 'animate-fade-in', 'max-w-xl')}>
               <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'border-b', 'border-[#27272A]', 'pb-2')}>Ranking Geral de Saídas</span>
               <div className={clsx('divide-y', 'divide-[#27272A]/50')}>
-                {[
-                  { rank: "1º", name: "Pastel de Carne", count: 142, price: 12.00 },
-                  { rank: "2º", name: "Hambúrguer Kôma", count: 98, price: 22.00 },
-                  { rank: "3º", name: "Pastel Especial", count: 85, price: 18.00 },
-                  { rank: "4º", name: "Coca-Cola Lata", count: 74, price: 6.00 },
-                  { rank: "5º", name: "Cerveja Heineken", count: 60, price: 8.50 }
-                ].map((item, idx) => (
+                {(generalStats?.top_itens ?? []).map((item: any, idx: number) => (
                   <div key={idx} className={clsx('py-3.5', 'flex', 'justify-between', 'items-center')}>
                     <div className={clsx('flex', 'items-center', 'gap-3.5')}>
                       <span className={`h-6 w-6 rounded-lg flex items-center justify-center text-[10px] font-mono font-bold ${idx === 0 ? 'bg-emerald-600 text-white' : idx === 1 ? 'bg-[#10b981] text-[#121214]' : 'bg-[#1C1C1F] text-gray-400'
@@ -4901,6 +4910,9 @@ export function CaixaPanel({
                     <span className={clsx('text-[10px]', 'font-bold', 'text-emerald-400', 'font-mono')}>{item.count} saídas</span>
                   </div>
                 ))}
+                {(generalStats?.top_itens ?? []).length === 0 && (
+                  <div className="py-8 text-center text-gray-500 italic text-[11px]">Nenhum item vendido no período</div>
+                )}
               </div>
             </div>
           )}
