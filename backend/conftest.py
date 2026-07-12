@@ -1,3 +1,7 @@
+import os
+os.environ.setdefault("SECRET_KEY", "test_secret_key_for_testing_purposes_only_123456789")
+os.environ.setdefault("ENCRYPTION_KEY", "jW-j311rF_qj0Fh_77R-2n1B-Q0v4sK9M1S2T3U4V5o=")
+
 import pytest
 from app.main import app
 

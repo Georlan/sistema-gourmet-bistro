@@ -13,15 +13,16 @@ class Settings:
     SENTRY_DSN: str = os.getenv("SENTRY_DSN", "https://2c4cca573d3eb6bdf81afbcdbae24426@o4511694598176769.ingest.us.sentry.io/4511783030038528")
     
     # Security
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "koma_cuisine_bistro_stable_default_secret_key_18273645")
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "")
+    if not SECRET_KEY:
+        raise RuntimeError("A variável de ambiente 'SECRET_KEY' é obrigatória e não foi configurada.")
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 43200  # 30 days (43200 minutes) to keep waiters logged in
     
     # ENCRYPTION_KEY environment check
     ENCRYPTION_KEY: str = os.getenv("ENCRYPTION_KEY", "")
     if not ENCRYPTION_KEY:
-        ENCRYPTION_KEY = "jW-j311rF_qj0Fh_77R-2n1B-Q0v4sK9M1S2T3U4V5o="
-        print("[WARNING] ENCRYPTION_KEY is not set in environment. Falling back to insecure key for dev/testing.")
+        raise RuntimeError("A variável de ambiente 'ENCRYPTION_KEY' é obrigatória e não foi configurada.")
 
     # Hardware/Printer
     PRINTER_NAME: str = os.getenv("PRINTER_NAME", "Generic / Text Only")

@@ -208,14 +208,35 @@ async def add_sentry_context_and_tenant(request: Request, call_next):
     restaurante_id = 1
     
     auth_header = request.headers.get("Authorization")
-    if auth_header and auth_header.startswith("Bearer "):
-        token = auth_header.split(" ")[1]
-        try:
-            import jwt
-            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-            restaurante_id = int(payload.get("restaurante_id", 1))
-        except Exception:
-            pass
+    if auth_header:
+        if auth_header.startswith("Bearer "):
+            try:
+                parts = auth_header.split(" ")
+                if len(parts) < 2:
+                    import jwt
+                    raise jwt.DecodeError("Token ausente no cabeçalho Bearer")
+                token = parts[1]
+                import jwt
+                payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+                restaurante_id = int(payload.get("restaurante_id", 1))
+            except jwt.PyJWTError as e:
+                from fastapi.responses import JSONResponse
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": f"Token de autenticação inválido ou expirado: {str(e)}"}
+                )
+            except Exception:
+                from fastapi.responses import JSONResponse
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "Falha na validação do token de autenticação."}
+                )
+        else:
+            from fastapi.responses import JSONResponse
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Cabeçalho de autorização mal-formatado. Formato esperado: 'Bearer <token>'."}
+            )
 
     sentry_sdk.set_tag("tenant_id", tenant_id)
     sentry_sdk.set_tag("restaurante_id", str(restaurante_id))

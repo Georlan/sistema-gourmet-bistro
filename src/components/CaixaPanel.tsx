@@ -180,22 +180,15 @@ export function CaixaPanel({
       }
 
       // Caminho B: itens prontos individualmente (sem ter pedido conta ainda) →
-      // agrupa por lançamento, igual à Col 1, para que cada lançamento pronto
-      // tenha seu próprio card separado na Col 3.
-      const itemsByLancamento: Record<string, OrderItem[]> = {};
-      comanda.itens.forEach(item => {
-        if (item.status !== 'pronto' || item.pago) return;
-        const lid = item.lancamentoId || comanda.id;
-        if (!itemsByLancamento[lid]) itemsByLancamento[lid] = [];
-        itemsByLancamento[lid].push(item);
-      });
-      const temItensEmPreparo = orders
-        .filter(o => o.mesaId === comanda.mesaId)
-        .some(o => o.itens.some(i => i.status === 'preparando'));
+      // junta todos os itens prontos e não pagos desta comanda em um só card.
+      const readyItems = comanda.itens.filter(item => item.status === 'pronto' && !item.pago);
+      if (readyItems.length > 0) {
+        const temItensEmPreparo = orders
+          .filter(o => o.mesaId === comanda.mesaId)
+          .some(o => o.itens.some(i => i.status === 'preparando'));
 
-      Object.entries(itemsByLancamento).forEach(([lid, items]) => {
         list.push({
-          id: lid,
+          id: comanda.id,
           comandaId: comanda.id,
           mesaId: comanda.mesaId,
           mesaOrigemId: comanda.mesaOrigemId,
@@ -204,11 +197,11 @@ export function CaixaPanel({
           garcomNome: comanda.garcomNome,
           tipo: comanda.tipo,
           valorPago: (comanda as any).valorPago || 0,
-          itens: items,
+          itens: readyItems,
           contaPedida: false,
           temItensEmPreparo: temItensEmPreparo
         });
-      });
+      }
     });
     return list;
   })();
