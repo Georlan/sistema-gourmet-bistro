@@ -2279,9 +2279,16 @@ export function CaixaPanel({
                             >
                               <div className={clsx('flex', 'justify-between', 'items-start')}>
                                 <div>
-                                  <span className={clsx('px-1.5', 'py-0.5', 'text-[8px]', 'uppercase', 'tracking-wider', 'font-bold', 'bg-[#10b981]/15', 'text-[#10b981]', 'rounded', 'font-mono', 'block', 'w-fit', 'mb-1')}>
-                                    {order.mesaId && order.mesaId > 0 ? `Mesa ${order.mesaId}` : 'Balcão'}
-                                  </span>
+                                  <div className="flex gap-1.5 flex-wrap mb-1">
+                                    <span className={clsx('px-1.5', 'py-0.5', 'text-[8px]', 'uppercase', 'tracking-wider', 'font-bold', 'bg-[#10b981]/15', 'text-[#10b981]', 'rounded', 'font-mono', 'block', 'w-fit')}>
+                                      {order.mesaId && order.mesaId > 0 ? `Mesa ${order.mesaId}` : 'Balcão'}
+                                    </span>
+                                    {order.mesaOrigemId && order.mesaOrigemId !== order.mesaId && (
+                                      <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded font-mono block w-fit" title="Transferido/Mesclado da mesa de origem">
+                                        Origem: Mesa {order.mesaOrigemId}
+                                      </span>
+                                    )}
+                                  </div>
                                   <strong className={clsx('text-white', 'text-xs', 'block')}>
                                     {(order as any).identificador || (order.mesaId && order.mesaId > 0 ? `Consumo Mesa ${order.mesaId}` : 'Consumo Balcão')}
                                   </strong>
@@ -2427,7 +2434,14 @@ export function CaixaPanel({
                             <div key={`close-${order.id}`} onClick={() => setSelectedKanbanOrder(order)} className="bg-[#121214] border border-blue-500/20 hover:border-blue-500/40 p-3 rounded-xl space-y-2.5 transition-all text-left cursor-pointer">
                               <div className="flex justify-between items-start">
                                 <div>
-                                  <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-blue-500/10 text-blue-400 rounded font-mono block w-fit mb-1">{badgeText}</span>
+                                  <div className="flex gap-1.5 flex-wrap mb-1">
+                                    <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-blue-500/10 text-blue-400 rounded font-mono block w-fit">{badgeText}</span>
+                                    {order.mesaOrigemId && order.mesaOrigemId !== order.mesaId && (
+                                      <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded font-mono block w-fit" title="Transferido/Mesclado da mesa de origem">
+                                        Origem: Mesa {order.mesaOrigemId}
+                                      </span>
+                                    )}
+                                  </div>
                                   <strong className="text-white text-xs block">{order.identificador || ((order.mesaId && order.mesaId > 0) ? `Consumo Mesa ${order.mesaId}` : 'Consumo Balcão')}</strong>
                                   <span className="text-[9px] text-gray-500 block">Atendente: {order.garcomNome || 'Garçom'}</span>
                                 </div>
@@ -6550,6 +6564,16 @@ export function CaixaPanel({
             </div>
 
             <div className="space-y-4">
+              {selectedKanbanOrder.mesaOrigemId && selectedKanbanOrder.mesaOrigemId !== selectedKanbanOrder.mesaId && (
+                <div className="bg-purple-950/20 p-3 rounded-2xl border border-purple-900/40 text-xs text-purple-300 flex items-center justify-between shadow-sm font-sans animate-pulse-subtle">
+                  <div>
+                    <strong className="text-purple-400 block text-[9px] uppercase tracking-wider font-bold">Aviso de Transferência/Mesclagem:</strong>
+                    <span className="leading-relaxed">Este lote foi transferido ou mesclado da <strong>Mesa {selectedKanbanOrder.mesaOrigemId}</strong> para a <strong>Mesa {selectedKanbanOrder.mesaId}</strong>.</span>
+                  </div>
+                  <span className="text-lg shrink-0 pl-2">🔄</span>
+                </div>
+              )}
+
               {selectedKanbanOrder.identificador && (
                 <div className="bg-[#1C1C1F] p-2.5 rounded-xl border border-[#27272A] text-xs text-gray-300">
                   <strong className="text-white block text-[10px] uppercase tracking-wider text-gray-400">Cliente:</strong>
