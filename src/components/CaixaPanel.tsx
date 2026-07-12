@@ -25,6 +25,9 @@ interface CaixaPanelProps {
   pagamentosPendentes?: any[];
   onRefreshPagamentosPendentes?: () => Promise<void>;
   isWsConnected?: boolean;
+  liveProdutos?: Product[];
+  liveCategorias?: any[];
+  onRefreshCategorias?: () => Promise<void>;
 }
 
 // Simulated dynamic lists for tabs that don't need real backend persistence yet
@@ -90,7 +93,10 @@ export function CaixaPanel({
   onDeleteMesa,
   pagamentosPendentes = [],
   onRefreshPagamentosPendentes,
-  isWsConnected = false
+  isWsConnected = false,
+  liveProdutos = [],
+  liveCategorias = [],
+  onRefreshCategorias
 }: CaixaPanelProps) {
   // Turno & Sync state
   const [turno, setTurno] = useState<CaixaTurno | null>(null);
@@ -144,12 +150,14 @@ export function CaixaPanel({
     return list;
   })();
 
-  // Col 3 — Fechar conta: apenas mesas/consumo local com status_comanda='aguardando_pagamento' ou itens prontos
+  // Col 3 — Fechar conta: mesas com status 'aguardando_pagamento' (conta pedida) ou itens prontos individualmente
   const tableOrdersReady = (() => {
     const list: any[] = [];
     orders.forEach(comanda => {
       if (comanda.tipo !== 'Consumo no Local' || !comanda.mesaId || comanda.mesaId <= 0) return;
-      // Mesas aguardando pagamento → col 3 diretamente
+
+      // Caminho A: cliente pediu a conta → coloca a comanda inteira (todos os itens não pagos)
+      // num único card de "aguardando pagamento"
       if ((comanda as any).statusComanda === 'aguardando_pagamento') {
         const unpaid = comanda.itens.filter(i => (i.status as string) !== 'cancelado' && !i.pago);
         if (unpaid.length > 0) {
@@ -162,16 +170,26 @@ export function CaixaPanel({
             garcomNome: comanda.garcomNome,
             tipo: comanda.tipo,
             valorPago: (comanda as any).valorPago || 0,
-            itens: unpaid
+            itens: unpaid,
+            contaPedida: true
           });
         }
         return;
       }
-      // Mesas com itens prontos normalmente → col 3 (fechar conta)
-      const readyItems = comanda.itens.filter(i => i.status === 'pronto' && !i.pago);
-      if (readyItems.length > 0) {
+
+      // Caminho B: itens prontos individualmente (sem ter pedido conta ainda) →
+      // agrupa por lançamento, igual à Col 1, para que cada lançamento pronto
+      // tenha seu próprio card separado na Col 3.
+      const itemsByLancamento: Record<string, OrderItem[]> = {};
+      comanda.itens.forEach(item => {
+        if (item.status !== 'pronto' || item.pago) return;
+        const lid = item.lancamentoId || comanda.id;
+        if (!itemsByLancamento[lid]) itemsByLancamento[lid] = [];
+        itemsByLancamento[lid].push(item);
+      });
+      Object.entries(itemsByLancamento).forEach(([lid, items]) => {
         list.push({
-          id: comanda.id,
+          id: lid,
           comandaId: comanda.id,
           mesaId: comanda.mesaId,
           mesaOrigemId: comanda.mesaOrigemId,
@@ -179,9 +197,10 @@ export function CaixaPanel({
           garcomNome: comanda.garcomNome,
           tipo: comanda.tipo,
           valorPago: (comanda as any).valorPago || 0,
-          itens: readyItems
+          itens: items,
+          contaPedida: false
         });
-      }
+      });
     });
     return list;
   })();
@@ -1038,6 +1057,19 @@ export function CaixaPanel({
       fetchCategorias();
     }
   }, [activeTab, activeSubTab]);
+
+  // Sincronização em tempo real do cardápio via WebSocket / Props
+  useEffect(() => {
+    if (liveProdutos && liveProdutos.length > 0) {
+      setApiProdutos(liveProdutos);
+    }
+  }, [liveProdutos]);
+
+  useEffect(() => {
+    if (liveCategorias && liveCategorias.length > 0) {
+      setApiCategorias(liveCategorias);
+    }
+  }, [liveCategorias]);
 
 
   // Global Keyboard Shortcuts for PDV (Cashier)
@@ -2311,18 +2343,17 @@ export function CaixaPanel({
                                   if (isLoading) return;
                                   setIsLoading(true);
                                   try {
-                                    // 1. Mark items as ready
+                                    // Marca apenas os itens deste lançamento como prontos.
+                                    // NÃO chama /pedir-conta na comanda inteira — cada lançamento
+                                    // avança individualmente para a Col 3 via filtro status='pronto'.
+                                    // O /pedir-conta é reservado para quando o cliente solicitar
+                                    // explicitamente o fechamento total da conta da mesa.
                                     await Promise.all(preparingItems.map(item =>
                                       fetch(`${apiBaseUrl}/comandas/itens/${item.id}/status?status=pronto`, {
                                         method: "PUT",
                                         headers: authHeaders
                                       })
                                     ));
-                                    // 2. Move table to Column 3 (esperar pagamento)
-                                    await fetch(`${apiBaseUrl}/comandas/${order.comandaId}/pedir-conta`, {
-                                      method: 'PUT',
-                                      headers: authHeaders
-                                    });
                                     onRefreshOrders();
                                   } catch (err) {
                                     console.error(err);
@@ -2432,13 +2463,21 @@ export function CaixaPanel({
                           const itemsStr = Object.entries(itemCounts)
                             .map(([name, qty]) => `${qty}x ${name}`)
                             .join(' + ') || 'Nenhum item';
-                          const badgeText = (order.mesaId && order.mesaId > 0) ? `Mesa ${order.mesaId} — Aguardando` : 'Balcão — Aguardando';
+                          const contaPedida = !!(order as any).contaPedida;
+                          const badgeText = (order.mesaId && order.mesaId > 0)
+                            ? (contaPedida ? `Mesa ${order.mesaId} — Conta Pedida` : `Mesa ${order.mesaId} — Pronto p/ Receber`)
+                            : (contaPedida ? 'Balcão — Conta Pedida' : 'Balcão — Pronto');
                           return (
-                            <div key={`close-${order.id}`} onClick={() => setSelectedKanbanOrder(order)} className="bg-[#121214] border border-blue-500/20 hover:border-blue-500/40 p-3 rounded-xl space-y-2.5 transition-all text-left cursor-pointer">
+                            <div key={`close-${order.id}`} onClick={() => setSelectedKanbanOrder(order)} className={clsx('bg-[#121214]', 'border', contaPedida ? 'border-blue-500/40 hover:border-blue-500/60' : 'border-emerald-500/30 hover:border-emerald-500/50', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all', 'text-left', 'cursor-pointer')}>
                               <div className="flex justify-between items-start">
                                 <div>
                                   <div className="flex gap-1.5 flex-wrap mb-1">
-                                    <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-blue-500/10 text-blue-400 rounded font-mono block w-fit">{badgeText}</span>
+                                    <span className={clsx('px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold rounded font-mono block w-fit', contaPedida ? 'bg-blue-500/10 text-blue-400' : 'bg-emerald-500/10 text-emerald-400')}>{badgeText}</span>
+                                    {!contaPedida && (
+                                      <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-amber-500/10 text-amber-400 rounded font-mono block w-fit" title="Outros itens desta mesa ainda estão sendo preparados">
+                                        ⏳ Outros itens em preparo
+                                      </span>
+                                    )}
                                     {order.mesaOrigemId && Number(order.mesaOrigemId) !== Number(order.mesaId) && (
                                       <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-purple-500/20 text-purple-300 border border-purple-500/35 rounded font-sans block w-fit shadow-xs" title="Essa mesa foi mesclada/transferida de outra">
                                         🔗 Mesclada (Origem: Mesa {order.mesaOrigemId})
@@ -2450,13 +2489,14 @@ export function CaixaPanel({
                                 </div>
                                 <span className="text-[9px] text-gray-500 font-mono">#{order.id.slice(-4)}</span>
                               </div>
-                              <p className="text-[10px] text-blue-300 bg-[#09090B] p-1.5 rounded border border-[#27272A]/30 leading-relaxed font-mono">{itemsStr}</p>
+                              <p className={clsx('text-[10px] bg-[#09090B] p-1.5 rounded border border-[#27272A]/30 leading-relaxed font-mono', contaPedida ? 'text-blue-300' : 'text-emerald-300')}>{itemsStr}</p>
                               <button
                                 type="button"
                                 onClick={async (e) => {
                                   e.stopPropagation();
                                   if (isLoading) return;
-                                  const fullOrder = orders.find(o => o.id === order.comandaId) || orders.find(o => o.id === order.id);
+                                  // Usa comandaId para buscar a comanda completa (order.id é lancamentoId no caminho B)
+                                  const fullOrder = orders.find(o => o.id === order.comandaId);
                                   if (!fullOrder) return;
                                   setSelectedOrder({
                                     ...fullOrder,
@@ -2470,14 +2510,15 @@ export function CaixaPanel({
                                   setShowCheckoutModal(true);
                                   setCheckoutServiceTax(true);
                                   setSplitPeople('1');
+                                  // Pré-seleciona apenas os itens deste lançamento específico
                                   const targetItemIds = order.itens.map((i: any) => i.id);
                                   setSelectedItemIds(targetItemIds);
                                   const sub = order.itens.reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
                                   setPaymentValor((sub * (1.0 + (checkoutServiceTax ? serviceTaxRate / 100 : 0))).toFixed(2));
                                 }}
-                                className="w-full py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-[9px] transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1"
+                                className={clsx('w-full', 'py-1.5', contaPedida ? 'bg-blue-600 hover:bg-blue-700' : 'bg-emerald-600 hover:bg-emerald-700', 'text-white', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1')}
                               >
-                                <Check size={11} /><span>Fechar Conta</span>
+                                <Check size={11} /><span>{contaPedida ? 'Fechar Conta' : 'Receber Item'}</span>
                               </button>
                             </div>
                           );
@@ -4589,6 +4630,47 @@ export function CaixaPanel({
                     Novo Item
                   </button>
                   <button
+                    onClick={async () => {
+                      const id = prompt('Digite o ID único da nova categoria (ex: sobremesas, petiscos):');
+                      if (!id) return;
+                      const nome = prompt('Digite o nome de exibição da categoria:');
+                      if (!nome) return;
+                      const destino = prompt('Digite o destino de impressão (COZINHA, BAR, ou NENHUM):', 'COZINHA');
+                      if (destino !== 'COZINHA' && destino !== 'BAR' && destino !== 'NENHUM') {
+                        alert('Destino inválido! Deve ser COZINHA, BAR ou NENHUM.');
+                        return;
+                      }
+                      try {
+                        const res = await fetch(`${apiBaseUrl}/produtos/categorias`, {
+                          method: 'POST',
+                          headers: {
+                            ...authHeaders,
+                            'Content-Type': 'application/json'
+                          },
+                          body: JSON.stringify({ id, nome, destino_impressao: destino })
+                        });
+                        if (res.ok) {
+                          alert('Categoria criada com sucesso!');
+                          if (onRefreshCategorias) {
+                            await onRefreshCategorias();
+                          } else {
+                            await fetchCategorias();
+                          }
+                        } else {
+                          const err = await res.json();
+                          alert(`Erro: ${err.detail || 'Falha ao criar categoria.'}`);
+                        }
+                      } catch (e) {
+                        console.error(e);
+                        alert('Erro ao conectar ao servidor.');
+                      }
+                    }}
+                    className={clsx('flex', 'items-center', 'gap-1.5', 'px-3', 'py-1.5', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'hover:border-[#10b981]/40', 'text-gray-300', 'hover:text-[#10b981]', 'rounded-xl', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}
+                  >
+                    <Plus size={11} />
+                    Nova Categoria
+                  </button>
+                  <button
                     onClick={() => {
                       const json = JSON.stringify(apiProdutos, null, 2);
                       const blob = new Blob([json], { type: 'application/json' });
@@ -4598,11 +4680,11 @@ export function CaixaPanel({
                     }}
                     className={clsx('flex', 'items-center', 'gap-1.5', 'px-3', 'py-1.5', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'hover:border-[#10b981]/40', 'text-gray-300', 'hover:text-[#10b981]', 'rounded-xl', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}
                   >
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
                     Exportar JSON
                   </button>
                   <label className={clsx('flex', 'items-center', 'gap-1.5', 'px-3', 'py-1.5', 'bg-[#10b981]/10', 'border', 'border-[#10b981]/20', 'hover:bg-[#10b981]/20', 'text-[#10b981]', 'rounded-xl', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
                     Importar JSON
                     <input type="file" accept=".json" className="hidden" onChange={async (e) => {
                       const file = e.target.files?.[0]; if (!file) return;
@@ -6736,17 +6818,62 @@ export function CaixaPanel({
                 </div>
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Categoria:</label>
-                  <select
-                    required
-                    value={prodFormCategoriaId}
-                    onChange={(e) => setProdFormCategoriaId(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
-                  >
-                    <option value="" disabled>Selecione...</option>
-                    {apiCategorias.map((cat) => (
-                      <option key={cat.id} value={cat.id}>{cat.nome}</option>
-                    ))}
-                  </select>
+                  <div className="flex gap-1.5">
+                    <select
+                      required
+                      value={prodFormCategoriaId}
+                      onChange={(e) => setProdFormCategoriaId(e.target.value)}
+                      className="flex-1 px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                    >
+                      <option value="" disabled>Selecione...</option>
+                      {apiCategorias.map((cat) => (
+                        <option key={cat.id} value={cat.id}>{cat.nome}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const id = prompt('Digite o ID único da nova categoria (ex: sobremesas, petiscos):');
+                        if (!id) return;
+                        const nome = prompt('Digite o nome de exibição da categoria:');
+                        if (!nome) return;
+                        const destino = prompt('Digite o destino de impressão (COZINHA, BAR, ou NENHUM):', 'COZINHA');
+                        if (destino !== 'COZINHA' && destino !== 'BAR' && destino !== 'NENHUM') {
+                          alert('Destino inválido! Deve ser COZINHA, BAR ou NENHUM.');
+                          return;
+                        }
+                        try {
+                          const res = await fetch(`${apiBaseUrl}/produtos/categorias`, {
+                            method: 'POST',
+                            headers: {
+                              ...authHeaders,
+                              'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ id, nome, destino_impressao: destino })
+                          });
+                          if (res.ok) {
+                            alert('Categoria criada com sucesso!');
+                            if (onRefreshCategorias) {
+                              await onRefreshCategorias();
+                            } else {
+                              await fetchCategorias();
+                            }
+                            setProdFormCategoriaId(id);
+                          } else {
+                            const err = await res.json();
+                            alert(`Erro: ${err.detail || 'Falha ao criar categoria.'}`);
+                          }
+                        } catch (e) {
+                          console.error(e);
+                          alert('Erro ao conectar ao servidor.');
+                        }
+                      }}
+                      title="Criar nova categoria"
+                      className="px-3 bg-[#10b981]/10 hover:bg-[#10b981]/20 text-[#10b981] border border-[#10b981]/20 hover:border-[#10b981]/30 rounded-xl font-bold text-sm cursor-pointer transition-colors"
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
               </div>
 

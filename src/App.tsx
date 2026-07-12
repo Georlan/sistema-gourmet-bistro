@@ -343,6 +343,7 @@ export default function App() {
 
   // 2. Live products loaded from backend (includes ativo field for availability blocking)
   const [liveProdutos, setLiveProdutos] = useState<Product[]>([]);
+  const [liveCategorias, setLiveCategorias] = useState<any[]>([]);
 
   const fetchLiveProdutos = useCallback(async () => {
     try {
@@ -369,13 +370,32 @@ export default function App() {
     }
   }, [portal]);
 
+  const fetchLiveCategorias = useCallback(async () => {
+    try {
+      const tokenKey = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
+      const token = localStorage.getItem(tokenKey);
+      const headers: any = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch(`${API_BASE_URL}/produtos/categorias`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setLiveCategorias(data);
+      }
+    } catch (err) {
+      console.error("Error fetching live categories", err);
+    }
+  }, [portal]);
+
   useEffect(() => {
     if (!isAuthenticated) return;
     fetchLiveProdutos();
+    fetchLiveCategorias();
     if (isWsConnected) return;
-    const interval = setInterval(fetchLiveProdutos, 40000); // refresh every 40s if not connected to WS
+    const interval = setInterval(() => {
+      fetchLiveProdutos();
+      fetchLiveCategorias();
+    }, 40000); // refresh every 40s if not connected to WS
     return () => clearInterval(interval);
-  }, [isAuthenticated, isWsConnected, fetchLiveProdutos]);
+  }, [isAuthenticated, isWsConnected, fetchLiveProdutos, fetchLiveCategorias]);
 
   // 2b. Orders loaded from API
   const [orders, setOrders] = useState<Order[]>([]);
@@ -511,6 +531,7 @@ export default function App() {
               fetchOrdersFromAPI();
               fetchTables();
               fetchLiveProdutos();
+              fetchLiveCategorias();
               fetchConfig();
               if (activeRole === 'caixa' || activeRole === 'admin') {
                 fetchPagamentosPendentes();
@@ -1658,6 +1679,9 @@ export default function App() {
             pagamentosPendentes={pagamentosPendentes}
             onRefreshPagamentosPendentes={fetchPagamentosPendentes}
             isWsConnected={isWsConnected}
+            liveProdutos={liveProdutos}
+            liveCategorias={liveCategorias}
+            onRefreshCategorias={fetchLiveCategorias}
           />
         ) : (
           /* VIEW 2: SALÃO (WAITERS OR CASHIER DASHBOARD) */

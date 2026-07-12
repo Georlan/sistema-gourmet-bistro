@@ -1,6 +1,8 @@
+import os
+import json
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session, joinedload
-from typing import List, Optional
+from typing import List, Optional, Union, Dict, Any
 from ..database import get_db
 from ..models import Produto, Categoria, ObservacaoPredefinida
 from ..schemas import ProdutoResponse, ProdutoCreate, ProdutoUpdate, CategoriaResponse
@@ -11,6 +13,70 @@ router = APIRouter(
     prefix="/produtos",
     tags=["Produtos e Categorias"]
 )
+
+def sincronizar_cardapio_json(db: Session):
+    """
+    Sincroniza os produtos e categorias ativos do banco de dados
+    com o arquivo físico 'backend/dump.json'.
+    """
+    try:
+        # Obter todos os produtos ativos
+        produtos_ativos = db.query(Produto).filter(Produto.ativo == True).all()
+        
+        # Obter todas as categorias que possuem pelo menos um produto ativo
+        categoria_ids_ativas = {p.categoria_id for p in produtos_ativos}
+        categorias_ativas = db.query(Categoria).filter(Categoria.id.in_(categoria_ids_ativas)).all()
+        
+        # Mapear os nomes das categorias por ID
+        cat_nome_map = {c.id: c.nome for c in categorias_ativas}
+        
+        # Manter a ordem das categorias consistente
+        order_list = [
+            "Hambúrgueres Bovinos",
+            "Hambúrgueres de Frango",
+            "Hambúrgueres Suínos",
+            "Baguetes",
+            "Pastéis Tradicionais",
+            "Pastelões Especiais",
+            "Pastéis Doces",
+            "Petiscos",
+            "Combos Promocionais",
+            "Sucos",
+            "Refrigerantes e Águas",
+            "Cervejas",
+            "Bebidas Quentes"
+        ]
+        
+        def get_cat_index(c):
+            return order_list.index(c.nome) if c.nome in order_list else len(order_list)
+            
+        categorias_ativas_ordenadas = sorted(categorias_ativas, key=get_cat_index)
+        
+        # Formatar a lista de categorias e produtos no formato original do dump
+        data = {
+            "categories": [c.nome for c in categorias_ativas_ordenadas],
+            "products": [
+                {
+                    "id": p.id,
+                    "nome": p.nome,
+                    "categoria": cat_nome_map.get(p.categoria_id, p.categoria_id),
+                    "preco": float(p.preco),
+                    "descricao": p.descricao or "",
+                    "imagem": p.imagem or ""
+                }
+                for p in produtos_ativos
+            ]
+        }
+        
+        # Gravar no arquivo backend/dump.json
+        filepath = "backend/dump.json"
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            
+    except Exception as e:
+        print(f"Erro ao sincronizar cardápio JSON: {e}")
 
 # ─── SCHEMAS (inline para evitar circular imports) ────────────────────────────
 class CategoriaUpdate(BaseModel):
@@ -60,7 +126,11 @@ def get_categorias(db: Session = Depends(get_db)):
     )
 
 @router.post("/categorias", response_model=CategoriaResponse, status_code=status.HTTP_201_CREATED)
-def create_categoria(data: CategoriaCreate, db: Session = Depends(get_db)):
+def create_categoria(
+    data: CategoriaCreate, 
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
     """Cria uma nova categoria (setup wizard interno)."""
     if db.query(Categoria).filter_by(id=data.id).first():
         raise HTTPException(status_code=400, detail="ID de categoria já existe.")
@@ -68,6 +138,8 @@ def create_categoria(data: CategoriaCreate, db: Session = Depends(get_db)):
     db.add(cat)
     db.commit()
     db.refresh(cat)
+    sincronizar_cardapio_json(db)
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
     return cat
 
 @router.put("/categorias/{categoria_id}", response_model=CategoriaResponse)
@@ -89,11 +161,17 @@ def update_categoria(
         cat.destino_impressao = data.destino_impressao
     db.commit()
     db.refresh(cat)
+    sincronizar_cardapio_json(db)
     background_tasks.add_task(manager.broadcast, {"event": "config_updated"})
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
     return cat
 
 @router.delete("/categorias/{categoria_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_categoria(categoria_id: str, db: Session = Depends(get_db)):
+def delete_categoria(
+    categoria_id: str, 
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
     """Remove uma categoria (só se não tiver produtos vinculados)."""
     cat = db.query(Categoria).filter_by(id=categoria_id).first()
     if not cat:
@@ -102,6 +180,8 @@ def delete_categoria(categoria_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail=f"Categoria tem {len(cat.produtos)} produto(s) vinculado(s). Remova-os primeiro.")
     db.delete(cat)
     db.commit()
+    sincronizar_cardapio_json(db)
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
     return
 
 
@@ -208,6 +288,7 @@ def create_produto(
     db.add(novo_produto)
     db.commit()
     db.refresh(novo_produto)
+    sincronizar_cardapio_json(db)
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
     return novo_produto
 
@@ -242,6 +323,7 @@ def update_produto(
         
     db.commit()
     db.refresh(db_produto)
+    sincronizar_cardapio_json(db)
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
     return db_produto
 
@@ -260,6 +342,7 @@ def delete_produto(
         )
     db.delete(db_produto)
     db.commit()
+    sincronizar_cardapio_json(db)
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
     return
 
@@ -272,23 +355,62 @@ class ProdutoImportItem(BaseModel):
     imagem: Optional[str] = None
     ativo: Optional[bool] = True
 
+class CardapioImportPayload(BaseModel):
+    categories: Optional[List[str]] = None
+    products: Optional[List[ProdutoImportItem]] = None
+
 @router.post("/importar", response_model=List[ProdutoResponse])
 def importar_cardapio(
-    produtos_data: List[ProdutoImportItem],
+    payload: Union[List[ProdutoImportItem], CardapioImportPayload],
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     """
-    Importa uma lista de produtos usando Upsert (insere ou atualiza pelo ID).
-    Cria a categoria automaticamente se ela não existir.
+    Importa uma lista de produtos sobrescrevendo o cardápio atual.
+    Suporta tanto lista direta de produtos quanto formato composto {categories, products}.
+    Produtos antigos que não estão no novo cardápio serão excluídos ou inativados.
+    Reescreve o arquivo backend/dump.json e notifica via WebSocket.
     """
+    if isinstance(payload, CardapioImportPayload):
+        produtos_data = payload.products or []
+        # Opcionalmente podemos criar/garantir categorias da lista de categorias se informadas
+        if payload.categories:
+            for cat_nome in payload.categories:
+                # Gerar ID a partir do nome
+                import unicodedata
+                import re
+                id_cat = unicodedata.normalize('NFKD', cat_nome).encode('ascii', 'ignore').decode('utf-8').lower()
+                id_cat = re.sub(r'[^a-z0-9\-]+', '-', id_cat).strip('-')
+                id_cat = f"cat-{id_cat}"
+                
+                cat = db.query(Categoria).filter(Categoria.id == id_cat).first()
+                if not cat:
+                    destino = "COZINHA"
+                    if "suco" in id_cat or "refri" in id_cat or "cerveja" in id_cat or "bebida" in id_cat:
+                        destino = "NENHUM"
+                    cat = Categoria(id=id_cat, nome=cat_nome, destino_impressao=destino)
+                    db.add(cat)
+            db.commit()
+    else:
+        produtos_data = payload
+        
+    # 1. Inativar temporariamente todos os produtos atuais no banco
+    db.query(Produto).update({Produto.ativo: False})
+    db.commit()
+    
     imported_products = []
+    
+    # 2. Processar a lista importada (Upsert)
     for item in produtos_data:
         # Garantir categoria
         cat_id = item.categoria_id
         cat = db.query(Categoria).filter(Categoria.id == cat_id).first()
         if not cat:
-            cat = Categoria(id=cat_id, nome=cat_id.replace("_", " ").title(), destino_impressao="COZINHA")
+            nome_cat = cat_id.replace("cat-", "").replace("-", " ").replace("_", " ").title()
+            destino = "COZINHA"
+            if cat_id in ["cat-refri", "cat-cervejas"]:
+                destino = "NENHUM"
+            cat = Categoria(id=cat_id, nome=nome_cat, destino_impressao=destino)
             db.add(cat)
             db.commit()
             db.refresh(cat)
@@ -302,8 +424,8 @@ def importar_cardapio(
                 existente.descricao = item.descricao
             if item.imagem is not None:
                 existente.imagem = item.imagem
-            if item.ativo is not None:
-                existente.ativo = item.ativo
+            # Ativar o produto novamente
+            existente.ativo = item.ativo if item.ativo is not None else True
             db.commit()
             db.refresh(existente)
             imported_products.append(existente)
@@ -321,7 +443,35 @@ def importar_cardapio(
             db.commit()
             db.refresh(novo)
             imported_products.append(novo)
+
+    # 3. Limpeza preventiva de produtos inativos sem histórico (exclusão física segura)
+    from ..models import Item
+    inativos = db.query(Produto).filter(Produto.ativo == False).all()
+    for prod in inativos:
+        # Verificar preventivamente se existe algum item na comanda utilizando este produto
+        vencido = db.query(Item).filter(Item.produto_id == prod.id).first()
+        if not vencido:
+            db.delete(prod)
+            db.commit()
             
+    # 4. Limpeza preventiva de categorias órfãs (sem produtos ativos e sem observações)
+    categorias = db.query(Categoria).all()
+    for c in categorias:
+        produtos_ativos_cat = db.query(Produto).filter(Produto.categoria_id == c.id, Produto.ativo == True).first()
+        if not produtos_ativos_cat:
+            obs_vinculo = db.query(ObservacaoPredefinida).filter(ObservacaoPredefinida.categoria_id == c.id).first()
+            if not obs_vinculo:
+                # Garantir que não existam produtos inativos remanescentes vinculados
+                prod_inativo = db.query(Produto).filter(Produto.categoria_id == c.id).first()
+                if not prod_inativo:
+                    db.delete(c)
+                    db.commit()
+
+    # 5. Sincronizar o dump.json contendo apenas o cardápio ativo
+    sincronizar_cardapio_json(db)
+    
+    # 6. Notificar os terminais em tempo real
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
+    
     return imported_products
 
