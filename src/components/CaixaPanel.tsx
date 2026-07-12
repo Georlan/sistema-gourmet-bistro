@@ -325,6 +325,58 @@ export function CaixaPanel({
     valor_ponto_em_dinheiro: 0.05
   });
 
+  const getPeriodString = () => {
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(endDate.getDate() - parseInt(desempenhoRange));
+    const format = (d: Date) => d.toLocaleDateString('pt-BR');
+    return `${format(startDate)} - ${format(endDate)}`;
+  };
+
+  const handleExportReports = () => {
+    if (!generalStats) return;
+    const period = getPeriodString();
+    
+    let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+    csvContent += `Relatório Consolidado de Vendas - Koma\n`;
+    csvContent += `Período:;${period}\n\n`;
+    
+    csvContent += `MÉTRICAS GERAIS\n`;
+    csvContent += `Indicador;Valor\n`;
+    csvContent += `Faturamento Total;R$ ${generalStats.faturamento.toFixed(2)}\n`;
+    csvContent += `Faturamento de Hoje;R$ ${generalStats.faturamento_hoje.toFixed(2)}\n`;
+    csvContent += `Ticket Médio;R$ ${generalStats.ticket_medio.toFixed(2)}\n`;
+    csvContent += `Total de Pedidos;${generalStats.total_pedidos}\n`;
+    csvContent += `Clientes Ativos;${generalStats.clientes_ativos}\n`;
+    csvContent += `Qualidade do Cardápio;${generalStats.qualidade_cardapio}%\n\n`;
+    
+    csvContent += `PEDIDOS POR MODALIDADE\n`;
+    csvContent += `Modalidade;Pedidos\n`;
+    csvContent += `Entrega (Delivery);${generalStats.pedidos_modalidade?.delivery ?? 0}\n`;
+    csvContent += `Consumo no Local (Mesa);${generalStats.pedidos_modalidade?.local ?? 0}\n`;
+    csvContent += `Retirada (Balcão);${generalStats.pedidos_modalidade?.balcao ?? 0}\n\n`;
+    
+    csvContent += `TOP 5 ITENS MAIS PEDIDOS\n`;
+    csvContent += `Rank;Item;Saídas;Preço Unitário\n`;
+    (generalStats.top_itens ?? []).forEach((item: any) => {
+      csvContent += `${item.rank};${item.name};${item.count};R$ ${item.price.toFixed(2)}\n`;
+    });
+    csvContent += "\n";
+    
+    csvContent += `DESEMPENHO DOS GARÇONS\n`;
+    csvContent += `Garçom;Pedidos Atendidos;Comissão Acumulada (10%)\n`;
+    waitersPerformance.forEach((w: any) => {
+      csvContent += `${w.nome_garcon};${w.pedidos_atendidos};R$ ${w.comissao_acumulada.toFixed(2)}\n`;
+    });
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `relatorio_consolidado_${desempenhoRange}_dias.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   // Table management states
   const [showAddMesaModal, setShowAddMesaModal] = useState(false);
@@ -1211,16 +1263,25 @@ export function CaixaPanel({
 
   // Fetch optimized statistics, stock, and reports
   useEffect(() => {
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(endDate.getDate() - parseInt(desempenhoRange));
+    const startStr = startDate.toISOString().split('T')[0];
+    const endStr = endDate.toISOString().split('T')[0];
+
     if (activeTab === 'relatorios' && activeSubTab === 'relatorio_garçons') {
-      fetch(`${apiBaseUrl}/garcons/relatorio`, { headers: authHeaders })
+      fetch(`${apiBaseUrl}/garcons/relatorio?data_inicio=${startStr}&data_fim=${endStr}`, { headers: authHeaders })
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data)) setWaitersPerformance(data);
         })
         .catch(err => console.error('Error fetching waiter report:', err));
     }
-    if (activeTab === 'relatorios' && activeSubTab === 'relatorio_geral') {
-      fetch(`${apiBaseUrl}/comandas/estatisticas/geral`, { headers: authHeaders })
+    if (
+      (activeTab === 'relatorios' && activeSubTab === 'relatorio_geral') ||
+      (activeTab === 'dashboard' && activeSubTab === 'desempenho')
+    ) {
+      fetch(`${apiBaseUrl}/comandas/estatisticas/geral?data_inicio=${startStr}&data_fim=${endStr}`, { headers: authHeaders })
         .then(res => res.json())
         .then(data => {
           if (data && data.faturamento !== undefined) setGeneralStats(data);
@@ -1275,7 +1336,7 @@ export function CaixaPanel({
       fetchProdutos();
       fetchCategorias();
     }
-  }, [activeTab, activeSubTab]);
+  }, [activeTab, activeSubTab, desempenhoRange]);
 
   // Sincronização em tempo real do cardápio via WebSocket / Props
   useEffect(() => {
@@ -3335,7 +3396,9 @@ export function CaixaPanel({
               <div className={clsx('grid', 'grid-cols-2', 'md:grid-cols-4', 'gap-4')}>
                 <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-4', 'rounded-2xl')}>
                   <span className={clsx('text-[9px]', 'uppercase', 'tracking-wider', 'font-bold', 'text-gray-400', 'block')}>Faturamento de Hoje</span>
-                  <strong className={clsx('text-xl', 'text-white', 'font-mono', 'block', 'mt-1')}>R$ 1.956,20</strong>
+                  <strong className={clsx('text-xl', 'text-white', 'font-mono', 'block', 'mt-1')}>
+                    R$ ${(generalStats?.faturamento_hoje ?? 0.00).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </strong>
                 </div>
                 <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-4', 'rounded-2xl')}>
                   <span className={clsx('text-[9px]', 'uppercase', 'tracking-wider', 'font-bold', 'text-gray-400', 'block')}>Em análise agora</span>
@@ -3387,30 +3450,36 @@ export function CaixaPanel({
                   <div className={clsx('bg-[#1C1C1F]', 'p-3.5', 'rounded-xl', 'border', 'border-[#27272A]/50', 'flex', 'justify-between', 'items-center')}>
                     <div>
                       <span className={clsx('text-[8px]', 'font-bold', 'font-sans', 'text-gray-400', 'uppercase', 'tracking-widest', 'block')}>Faturamento</span>
-                      <strong className={clsx('text-base', 'text-white', 'mt-1', 'block')}>R$ {desempenhoRange === '7' ? "19.652,18" : desempenhoRange === '15' ? "38.120,40" : "75.892,10"}</strong>
+                      <strong className={clsx('text-base', 'text-white', 'mt-1', 'block')}>
+                        R$ ${(generalStats?.faturamento ?? 0.00).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </strong>
                     </div>
                     <span className={clsx('text-[10px]', 'text-emerald-400', 'font-bold', 'bg-emerald-500/10', 'px-2', 'py-0.5', 'rounded', 'flex', 'items-center', 'gap-0.5')}>
-                      <ArrowUpRight size={10} /> 28.2%
+                      <ArrowUpRight size={10} /> Real
                     </span>
                   </div>
 
                   <div className={clsx('bg-[#1C1C1F]', 'p-3.5', 'rounded-xl', 'border', 'border-[#27272A]/50', 'flex', 'justify-between', 'items-center')}>
                     <div>
                       <span className={clsx('text-[8px]', 'font-bold', 'font-sans', 'text-gray-400', 'uppercase', 'tracking-widest', 'block')}>Pedidos</span>
-                      <strong className={clsx('text-base', 'text-white', 'mt-1', 'block')}>{desempenhoRange === '7' ? "527" : desempenhoRange === '15' ? "1.042" : "2.115"}</strong>
+                      <strong className={clsx('text-base', 'text-white', 'mt-1', 'block')}>
+                        {generalStats?.total_pedidos ?? 0}
+                      </strong>
                     </div>
                     <span className={clsx('text-[10px]', 'text-emerald-400', 'font-bold', 'bg-emerald-500/10', 'px-2', 'py-0.5', 'rounded', 'flex', 'items-center', 'gap-0.5')}>
-                      <ArrowUpRight size={10} /> 24.8%
+                      <ArrowUpRight size={10} /> Real
                     </span>
                   </div>
 
                   <div className={clsx('bg-[#1C1C1F]', 'p-3.5', 'rounded-xl', 'border', 'border-[#27272A]/50', 'flex', 'justify-between', 'items-center')}>
                     <div>
                       <span className={clsx('text-[8px]', 'font-bold', 'font-sans', 'text-gray-400', 'uppercase', 'tracking-widest', 'block')}>Ticket Médio</span>
-                      <strong className={clsx('text-base', 'text-white', 'mt-1', 'block')}>R$ {desempenhoRange === '7' ? "37,29" : desempenhoRange === '15' ? "36,58" : "35,88"}</strong>
+                      <strong className={clsx('text-base', 'text-white', 'mt-1', 'block')}>
+                        R$ ${(generalStats?.ticket_medio ?? 0.00).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </strong>
                     </div>
                     <span className={clsx('text-[10px]', 'text-emerald-400', 'font-bold', 'bg-emerald-500/10', 'px-2', 'py-0.5', 'rounded', 'flex', 'items-center', 'gap-0.5')}>
-                      <ArrowUpRight size={10} /> 2.7%
+                      <ArrowUpRight size={10} /> Real
                     </span>
                   </div>
                 </div>
@@ -3426,7 +3495,7 @@ export function CaixaPanel({
                   <div className={clsx('relative', 'h-28', 'w-28', 'flex', 'items-center', 'justify-center')}>
                     <svg className={clsx('absolute', 'inset-0', 'transform', '-rotate-90')} viewBox="0 0 100 100">
                       <circle cx="50" cy="50" r="42" stroke="#27272A" strokeWidth="8" fill="transparent" />
-                      <circle cx="50" cy="50" r="42" stroke="url(#gradient)" strokeWidth="8" fill="transparent" strokeDasharray="264" strokeDashoffset={264 - (264 * 85) / 100} strokeLinecap="round" />
+                      <circle cx="50" cy="50" r="42" stroke="url(#gradient)" strokeWidth="8" fill="transparent" strokeDasharray="264" strokeDashoffset={264 - (264 * (generalStats?.qualidade_cardapio ?? 100)) / 100} strokeLinecap="round" />
                       <defs>
                         <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
                           <stop offset="0%" stopColor="#10b981" />
@@ -3434,7 +3503,7 @@ export function CaixaPanel({
                         </linearGradient>
                       </defs>
                     </svg>
-                    <span className={clsx('text-lg', 'font-bold', 'font-mono', 'text-white')}>85%</span>
+                    <span className={clsx('text-lg', 'font-bold', 'font-mono', 'text-white')}>{generalStats?.qualidade_cardapio ?? 100}%</span>
                   </div>
 
                   <div className="space-y-1">
@@ -3449,9 +3518,9 @@ export function CaixaPanel({
 
                   <div className={clsx('space-y-2.5', 'pt-2')}>
                     {[
-                      { name: "Entrega (Delivery)", count: 263, max: 539, barColor: "bg-rose-600" },
-                      { name: "Consumo no Local (Mesa)", count: 214, max: 539, barColor: "bg-[#10b981]" },
-                      { name: "Retirada (Balcão)", count: 62, max: 539, barColor: "bg-emerald-600" }
+                      { name: "Entrega (Delivery)", count: generalStats?.pedidos_modalidade?.delivery ?? 0, max: Math.max(1, generalStats?.total_pedidos ?? 1), barColor: "bg-rose-600" },
+                      { name: "Consumo no Local (Mesa)", count: generalStats?.pedidos_modalidade?.local ?? 0, max: Math.max(1, generalStats?.total_pedidos ?? 1), barColor: "bg-[#10b981]" },
+                      { name: "Retirada (Balcão)", count: generalStats?.pedidos_modalidade?.balcao ?? 0, max: Math.max(1, generalStats?.total_pedidos ?? 1), barColor: "bg-emerald-600" }
                     ].map((mod, idx) => (
                       <div key={idx} className="space-y-1">
                         <div className={clsx('flex', 'justify-between', 'text-[10px]')}>
@@ -3471,13 +3540,7 @@ export function CaixaPanel({
                   <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'border-b', 'border-[#27272A]', 'pb-2')}>Top 5 Itens Mais Pedidos</span>
 
                   <div className={clsx('divide-y', 'divide-[#27272A]/50')}>
-                    {[
-                      { rank: "1º", name: "Pastel de Carne", count: 142, price: 12.00 },
-                      { rank: "2º", name: "Hambúrguer Kôma", count: 98, price: 22.00 },
-                      { rank: "3º", name: "Pastel Especial", count: 85, price: 18.00 },
-                      { rank: "4º", name: "Coca-Cola Lata", count: 74, price: 6.00 },
-                      { rank: "5º", name: "Cerveja Heineken", count: 60, price: 8.50 }
-                    ].map((item, idx) => (
+                    {(generalStats?.top_itens ?? []).map((item: any, idx: number) => (
                       <div key={idx} className={clsx('py-2', 'flex', 'justify-between', 'items-center')}>
                         <div className={clsx('flex', 'items-center', 'gap-2.5')}>
                           <span className={`h-5 w-5 rounded-lg flex items-center justify-center text-[10px] font-mono font-bold ${idx === 0 ? 'bg-emerald-600 text-white' : idx === 1 ? 'bg-[#10b981] text-[#121214]' : 'bg-[#1C1C1F] text-gray-400'
@@ -3487,6 +3550,9 @@ export function CaixaPanel({
                         <span className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'font-mono')}>{item.count} saídas</span>
                       </div>
                     ))}
+                    {(generalStats?.top_itens ?? []).length === 0 && (
+                      <div className="py-8 text-center text-gray-500 italic text-[10px]">Nenhum item vendido no período</div>
+                    )}
                   </div>
                 </div>
 
@@ -4558,13 +4624,37 @@ export function CaixaPanel({
               </div>
 
               {/* Date Filter selector bar */}
-              <div className={clsx('flex', 'justify-between', 'items-center', 'gap-3')}>
-                <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'px-3', 'py-1.5', 'text-[10px]', 'text-gray-300', 'font-bold', 'font-mono')}>
-                  25/06/2026 - 01/07/2026
+              <div className={clsx('flex', 'justify-between', 'items-center', 'gap-3', 'flex-wrap')}>
+                <div className={clsx('flex', 'items-center', 'gap-3')}>
+                  <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'px-3', 'py-1.5', 'text-[10px]', 'text-gray-300', 'font-bold', 'font-mono')}>
+                    {getPeriodString()}
+                  </div>
+                  <div className={clsx('flex', 'gap-1', 'bg-[#09090B]', 'p-1', 'rounded-xl', 'border', 'border-[#27272A]')}>
+                    {[
+                      { id: '7', label: '7D' },
+                      { id: '15', label: '15D' },
+                      { id: '30', label: '30D' }
+                    ].map(r => (
+                      <button
+                        key={r.id}
+                        onClick={() => setDesempenhoRange(r.id as any)}
+                        className={`px-2 py-0.5 text-[9px] font-bold rounded-lg cursor-pointer transition-all ${desempenhoRange === r.id
+                          ? 'bg-emerald-600 text-white shadow'
+                          : 'text-gray-400 hover:text-white'
+                          }`}
+                      >
+                        {r.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <div className={clsx('flex', 'gap-2')}>
-                  <button className={clsx('px-3', 'py-1', 'bg-[#10b981]', 'text-[#121214]', 'hover:bg-[#059669]', 'rounded-xl', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}>Filtrar</button>
-                  <button className={clsx('px-3', 'py-1', 'bg-[#1C1C1F]', 'text-gray-300', 'hover:text-white', 'border', 'border-[#27272A]', 'rounded-xl', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}>Exportar</button>
+                  <button 
+                    onClick={handleExportReports}
+                    className={clsx('px-3', 'py-1', 'bg-[#10b981]', 'text-[#121214]', 'hover:bg-[#059669]', 'rounded-xl', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}
+                  >
+                    Exportar Relatório (CSV)
+                  </button>
                 </div>
               </div>
 
@@ -4657,24 +4747,48 @@ export function CaixaPanel({
               </div>
 
               {/* Date Filter selector bar */}
-              <div className={clsx('flex', 'justify-between', 'items-center', 'gap-3')}>
-                <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'px-3', 'py-1.5', 'text-[10px]', 'text-gray-300', 'font-bold', 'font-mono')}>
-                  01/06/2026 - 01/07/2026
+              <div className={clsx('flex', 'justify-between', 'items-center', 'gap-3', 'flex-wrap')}>
+                <div className={clsx('flex', 'items-center', 'gap-3')}>
+                  <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'px-3', 'py-1.5', 'text-[10px]', 'text-gray-300', 'font-bold', 'font-mono')}>
+                    {getPeriodString()}
+                  </div>
+                  <div className={clsx('flex', 'gap-1', 'bg-[#09090B]', 'p-1', 'rounded-xl', 'border', 'border-[#27272A]')}>
+                    {[
+                      { id: '7', label: '7D' },
+                      { id: '15', label: '15D' },
+                      { id: '30', label: '30D' }
+                    ].map(r => (
+                      <button
+                        key={r.id}
+                        onClick={() => setDesempenhoRange(r.id as any)}
+                        className={`px-2 py-0.5 text-[9px] font-bold rounded-lg cursor-pointer transition-all ${desempenhoRange === r.id
+                          ? 'bg-emerald-600 text-white shadow'
+                          : 'text-gray-400 hover:text-white'
+                          }`}
+                      >
+                        {r.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <div className={clsx('flex', 'gap-2')}>
-                  <button className={clsx('p-1.5', 'bg-[#1C1C1F]', 'text-gray-300', 'hover:text-white', 'border', 'border-[#27272A]', 'rounded-xl', 'cursor-pointer')} title="Imprimir"><Printer size={12} /></button>
-                  <button className={clsx('px-3', 'py-1', 'bg-[#10b981]', 'text-[#121214]', 'hover:bg-[#059669]', 'rounded-xl', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}>Exportar</button>
+                  <button 
+                    onClick={handleExportReports}
+                    className={clsx('px-3', 'py-1', 'bg-[#10b981]', 'text-[#121214]', 'hover:bg-[#059669]', 'rounded-xl', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}
+                  >
+                    Exportar Relatório (CSV)
+                  </button>
                 </div>
               </div>
 
               {/* Grid of KPI cards */}
               <div className={clsx('grid', 'grid-cols-2', 'md:grid-cols-5', 'gap-4')}>
                 {[
-                  { label: "Faturamento", value: "R$ 51.140,06", color: "text-[#10b981]" },
-                  { label: "Ticket médio", value: "R$ 39,25", color: "text-white" },
-                  { label: "Total de pedidos", value: "1303", color: "text-white" },
-                  { label: "Taxa de serviço", value: "R$ 0,00", color: "text-white" },
-                  { label: "Garçons ativos", value: "2", color: "text-white" }
+                  { label: "Faturamento", value: `R$ ${(generalStats?.faturamento ?? 0.00).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, color: "text-[#10b981]" },
+                  { label: "Ticket médio", value: `R$ ${(generalStats?.ticket_medio ?? 0.00).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, color: "text-white" },
+                  { label: "Total de pedidos", value: String(generalStats?.total_pedidos ?? 0), color: "text-white" },
+                  { label: "Comissão Total", value: `R$ ${(waitersPerformance.reduce((acc, w) => acc + w.comissao_acumulada, 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, color: "text-white" },
+                  { label: "Garçons ativos", value: String(waitersPerformance.length), color: "text-white" }
                 ].map((card, idx) => (
                   <div key={idx} className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-2xl', 'p-4', 'md:p-4.5', 'space-y-1', 'flex', 'flex-col', 'justify-center')}>
                     <span className={clsx('text-[9px]', 'text-gray-400', 'uppercase', 'tracking-widest', 'font-bold', 'block')}>{card.label}</span>
@@ -4696,19 +4810,20 @@ export function CaixaPanel({
                       </tr>
                     </thead>
                     <tbody className={clsx('divide-y', 'divide-[#27272A]/40')}>
-                      {(waitersPerformance.length > 0
-                        ? waitersPerformance
-                        : [
-                          { nome_garcon: "Mateus", pedidos_atendidos: 42, comissao_acumulada: 182.30 },
-                          { nome_garcon: "Sarah", pedidos_atendidos: 39, comissao_acumulada: 165.90 }
-                        ]
-                      ).map((waiter, idx) => (
+                      {waitersPerformance.map((waiter, idx) => (
                         <tr key={idx} className={clsx('hover:bg-[#1C1C1F]/20', 'transition-colors')}>
                           <td className={clsx('p-3.5', 'font-bold', 'text-white')}>{waiter.nome_garcon}</td>
                           <td className={clsx('p-3.5', 'font-mono', 'text-gray-300')}>{waiter.pedidos_atendidos}</td>
                           <td className={clsx('p-3.5', 'font-mono', 'text-emerald-400', 'font-bold', 'text-right')}>R$ {waiter.comissao_acumulada.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                         </tr>
                       ))}
+                      {waitersPerformance.length === 0 && (
+                        <tr>
+                          <td colSpan={3} className="p-8 text-center text-gray-500 italic">
+                            Nenhum garçom atendeu pedidos no período
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>

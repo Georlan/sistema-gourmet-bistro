@@ -81,40 +81,97 @@ def get_pico_horarios(db: Session = Depends(get_db)):
     return results
 
 @router.get("/comandas/estatisticas/geral")
-def get_estatisticas_geral(db: Session = Depends(get_db)):
+def get_estatisticas_geral(
+    data_inicio: Optional[str] = None,
+    data_fim: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
     """
     Retorna estatísticas consolidadas de vendas para o painel de BI (dashboard financeiro).
     """
+    import datetime
+    from ..database import current_restaurante_id
+    from ..models import Pagamento, Comanda, Produto
+    
+    rest_id = current_restaurante_id.get() or 1
+    
+    def parse_date(date_str: Optional[str]):
+        if not date_str:
+            return None
+        for fmt in ('%Y-%m-%d', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%dT%H:%M:%S.%fZ', '%Y-%m-%d %H:%M:%S'):
+            try:
+                clean_str = date_str.replace('Z', '')
+                if '.' in clean_str:
+                    clean_str = clean_str.split('.')[0]
+                return datetime.datetime.strptime(clean_str, fmt)
+            except ValueError:
+                continue
+        try:
+            return datetime.datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+        except Exception:
+            return None
+
+    dt_inicio = parse_date(data_inicio)
+    dt_fim = parse_date(data_fim)
+
     # 1. Total faturamento
-    from ..models import Pagamento
-    pags = db.query(Pagamento).filter(Pagamento.status == "aprovado").all()
+    pags_query = db.query(Pagamento).filter(
+        Pagamento.restaurante_id == rest_id,
+        Pagamento.status == "aprovado"
+    )
+    if dt_inicio:
+        pags_query = pags_query.filter(Pagamento.criado_em >= dt_inicio)
+    if dt_fim:
+        pags_query = pags_query.filter(Pagamento.criado_em <= dt_fim)
+        
+    pags = pags_query.all()
     faturamento = sum(p.valor for p in pags)
+
+    # 1b. Faturamento de hoje
+    import sqlalchemy as sa
+    today_start = datetime.datetime.combine(datetime.date.today(), datetime.time.min)
+    today_end = datetime.datetime.combine(datetime.date.today(), datetime.time.max)
+    faturamento_hoje = db.query(sa.func.sum(Pagamento.valor)).filter(
+        Pagamento.restaurante_id == rest_id,
+        Pagamento.status == "aprovado",
+        Pagamento.criado_em >= today_start,
+        Pagamento.criado_em <= today_end
+    ).scalar() or 0.0
     
     # 2. Total de comandas fechadas
-    total_pedidos = db.query(Comanda).filter(Comanda.fechada == True).count()
+    comandas_query = db.query(Comanda).filter(
+        Comanda.restaurante_id == rest_id,
+        Comanda.fechada == True
+    )
+    if dt_inicio:
+        comandas_query = comandas_query.filter(Comanda.fechado_em >= dt_inicio)
+    if dt_fim:
+        comandas_query = comandas_query.filter(Comanda.fechado_em <= dt_fim)
+        
+    comandas = comandas_query.all()
+    total_pedidos = len(comandas)
     
     # 3. Ticket médio
     ticket_medio = faturamento / total_pedidos if total_pedidos > 0 else 0.0
     
     # 4. Clientes únicos
-    cpfs = db.query(Pagamento.cpf_cliente).filter(Pagamento.cpf_cliente.isnot(None), Pagamento.status == "aprovado").distinct().all()
+    cpfs = set(p.cpf_cliente for p in pags if p.cpf_cliente)
     clientes_ativos = len(cpfs) if cpfs else total_pedidos
     
     # 5. Pedidos e entregas semanal
-    import datetime
     dias = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"]
     chart_data = {dia: {"delivery": 0, "local": 0} for dia in dias}
     
-    comandas_fechadas = db.query(Comanda).filter(Comanda.fechada == True, Comanda.fechado_em.isnot(None)).all()
-    for c in comandas_fechadas:
-        wday = c.fechado_em.strftime('%w')
-        dia_label = dias[int(wday)]
-        is_delivery = c.mesa_id is None or c.mesa_id <= 0
-        if is_delivery:
-            chart_data[dia_label]["delivery"] += 1
-        else:
-            chart_data[dia_label]["local"] += 1
-            
+    for c in comandas:
+        if c.fechado_em:
+            wday = c.fechado_em.strftime('%w')
+            dia_label = dias[int(wday)]
+            is_delivery = c.tipo == "Delivery"
+            if is_delivery:
+                chart_data[dia_label]["delivery"] += 1
+            else:
+                chart_data[dia_label]["local"] += 1
+                
     weekly_chart = []
     for dia in dias:
         weekly_chart.append({
@@ -123,12 +180,62 @@ def get_estatisticas_geral(db: Session = Depends(get_db)):
             "local": chart_data[dia]["local"]
         })
         
+    # 6. Qualidade do cardápio
+    total_produtos = db.query(Produto).filter(Produto.restaurante_id == rest_id).count()
+    if total_produtos > 0:
+        produtos_otimizados = db.query(Produto).filter(
+            Produto.restaurante_id == rest_id,
+            Produto.descricao != "",
+            Produto.descricao.isnot(None),
+            Produto.imagem != "",
+            Produto.imagem.isnot(None)
+        ).count()
+        qualidade_cardapio = int((produtos_otimizados / total_produtos) * 100)
+    else:
+        qualidade_cardapio = 100
+        
+    # 7. Pedidos por modalidade
+    pedidos_modalidade = {"local": 0, "delivery": 0, "balcao": 0}
+    for c in comandas:
+        tipo = c.tipo or "Consumo no Local"
+        if tipo == "Delivery":
+            pedidos_modalidade["delivery"] += 1
+        elif tipo == "Balcão":
+            pedidos_modalidade["balcao"] += 1
+        else:
+            pedidos_modalidade["local"] += 1
+            
+    # 8. Top 5 Itens Mais Pedidos
+    item_counts = {}
+    for c in comandas:
+        for item in c.itens:
+            if item.status != "cancelado":
+                prod_name = item.produto.nome if item.produto else f"Item {item.produto_id}"
+                preco = item.preco_unit
+                if prod_name not in item_counts:
+                    item_counts[prod_name] = {"count": 0, "price": preco}
+                item_counts[prod_name]["count"] += 1
+                
+    top_itens = []
+    sorted_items = sorted(item_counts.items(), key=lambda x: x[1]["count"], reverse=True)[:5]
+    for idx, (name, data) in enumerate(sorted_items):
+        top_itens.append({
+            "rank": f"{idx+1}º",
+            "name": name,
+            "count": data["count"],
+            "price": round(data["price"], 2)
+        })
+        
     return {
         "faturamento": round(faturamento, 2),
+        "faturamento_hoje": round(faturamento_hoje, 2),
         "ticket_medio": round(ticket_medio, 2),
         "total_pedidos": total_pedidos,
         "clientes_ativos": clientes_ativos,
-        "weekly_chart": weekly_chart
+        "weekly_chart": weekly_chart,
+        "qualidade_cardapio": qualidade_cardapio,
+        "pedidos_modalidade": pedidos_modalidade,
+        "top_itens": top_itens
     }
 
 
@@ -336,17 +443,59 @@ def checkout_fidelidade(req: CheckoutFidelidadeRequest, db: Session = Depends(ge
 
 
 @router.get("/garcons/relatorio")
-def get_garcons_relatorio(db: Session = Depends(get_db)):
+def get_garcons_relatorio(
+    data_inicio: Optional[str] = None,
+    data_fim: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
     """
     Retorna o relatório simplificado de desempenho dos garçons.
     Calcula o total de pedidos atendidos e a comissão acumulada (10% de serviço).
     """
-    garcons = db.query(Usuario).filter(Usuario.role == "garcom").all()
+    import datetime
+    from ..database import current_restaurante_id
+    from ..models import Comanda
+    
+    rest_id = current_restaurante_id.get() or 1
+    
+    def parse_date(date_str: Optional[str]):
+        if not date_str:
+            return None
+        for fmt in ('%Y-%m-%d', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%dT%H:%M:%S.%fZ', '%Y-%m-%d %H:%M:%S'):
+            try:
+                clean_str = date_str.replace('Z', '')
+                if '.' in clean_str:
+                    clean_str = clean_str.split('.')[0]
+                return datetime.datetime.strptime(clean_str, fmt)
+            except ValueError:
+                continue
+        try:
+            return datetime.datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+        except Exception:
+            return None
+
+    dt_inicio = parse_date(data_inicio)
+    dt_fim = parse_date(data_fim)
+
+    garcons = db.query(Usuario).filter(
+        Usuario.restaurante_id == rest_id,
+        Usuario.role == "garcom"
+    ).all()
     
     results = []
     for g in garcons:
         # Get all closed comandas
-        comandas = db.query(Comanda).filter(Comanda.garcom_id == g.id, Comanda.fechada == True).all()
+        comandas_query = db.query(Comanda).filter(
+            Comanda.restaurante_id == rest_id,
+            Comanda.garcom_id == g.id,
+            Comanda.fechada == True
+        )
+        if dt_inicio:
+            comandas_query = comandas_query.filter(Comanda.fechado_em >= dt_inicio)
+        if dt_fim:
+            comandas_query = comandas_query.filter(Comanda.fechado_em <= dt_fim)
+            
+        comandas = comandas_query.all()
         pedidos_atendidos = len(comandas)
         comissao_acumulada = 0.0
         
