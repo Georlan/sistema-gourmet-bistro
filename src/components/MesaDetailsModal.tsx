@@ -571,6 +571,33 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                           <span>Prévia e Extrato</span>
                         </button>
 
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveTab('transferir');
+                              setTransferType('total');
+                            }}
+                            className="py-2.5 bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] hover:border-[#10b981]/30 text-white rounded-xl font-bold text-[10px] flex items-center justify-center gap-1.5 transition-colors cursor-pointer uppercase tracking-wider font-sans"
+                          >
+                            <Move size={11} className="text-[#10b981]" />
+                            <span>Transferir</span>
+                          </button>
+                          {onMergeTables && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveTab('mesclar');
+                                setTransferType('mesclar');
+                              }}
+                              className="py-2.5 bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] hover:border-[#10b981]/30 text-white rounded-xl font-bold text-[10px] flex items-center justify-center gap-1.5 transition-colors cursor-pointer uppercase tracking-wider font-sans"
+                            >
+                              <GitMerge size={11} className="text-[#10b981]" />
+                              <span>Mesclar</span>
+                            </button>
+                          )}
+                        </div>
+
                         {onCloseTable && !(activeRole === 'garcom' && !restauranteConfig?.perm_garcom_fechar_mesa) && (
                           <button
                             id="close-table-btn-consumo"
