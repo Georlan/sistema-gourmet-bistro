@@ -3,7 +3,7 @@ import json
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional, Union, Dict, Any
-from ..database import get_db
+from ..database import get_db, current_restaurante_id
 from ..models import Produto, Categoria, ObservacaoPredefinida
 from ..schemas import ProdutoResponse, ProdutoCreate, ProdutoUpdate, CategoriaResponse
 from ..websocket_manager import manager
@@ -368,9 +368,11 @@ def importar_cardapio(
     """
     Importa uma lista de produtos sobrescrevendo o cardápio atual.
     Suporta tanto lista direta de produtos quanto formato composto {categories, products}.
-    Produtos antigos que não estão no novo cardápio serão excluídos ou inativados.
+    Produtos antigos que não estão no novo cardápio serão inativados (ativo = False).
     Reescreve o arquivo backend/dump.json e notifica via WebSocket.
     """
+    rest_id = current_restaurante_id.get() or 1
+
     if isinstance(payload, CardapioImportPayload):
         produtos_data = payload.products or []
         # Opcionalmente podemos criar/garantir categorias da lista de categorias se informadas
@@ -390,13 +392,12 @@ def importar_cardapio(
                         destino = "NENHUM"
                     cat = Categoria(id=id_cat, nome=cat_nome, destino_impressao=destino)
                     db.add(cat)
-            db.commit()
+            db.flush()
     else:
         produtos_data = payload
         
-    # 1. Inativar temporariamente todos os produtos atuais no banco
-    db.query(Produto).update({Produto.ativo: False})
-    db.commit()
+    # 1. Inativar temporariamente todos os produtos atuais no banco (com isolamento de tenant)
+    db.query(Produto).filter(Produto.restaurante_id == rest_id).update({Produto.ativo: False})
     
     imported_products = []
     
@@ -412,8 +413,7 @@ def importar_cardapio(
                 destino = "NENHUM"
             cat = Categoria(id=cat_id, nome=nome_cat, destino_impressao=destino)
             db.add(cat)
-            db.commit()
-            db.refresh(cat)
+            db.flush()
             
         existente = db.query(Produto).filter(Produto.id == item.id).first()
         if existente:
@@ -426,8 +426,6 @@ def importar_cardapio(
                 existente.imagem = item.imagem
             # Ativar o produto novamente
             existente.ativo = item.ativo if item.ativo is not None else True
-            db.commit()
-            db.refresh(existente)
             imported_products.append(existente)
         else:
             novo = Produto(
@@ -440,21 +438,12 @@ def importar_cardapio(
                 ativo=item.ativo if item.ativo is not None else True
             )
             db.add(novo)
-            db.commit()
-            db.refresh(novo)
             imported_products.append(novo)
 
-    # 3. Limpeza preventiva de produtos inativos sem histórico (exclusão física segura)
-    from ..models import Item
-    inativos = db.query(Produto).filter(Produto.ativo == False).all()
-    for prod in inativos:
-        # Verificar preventivamente se existe algum item na comanda utilizando este produto
-        vencido = db.query(Item).filter(Item.produto_id == prod.id).first()
-        if not vencido:
-            db.delete(prod)
-            db.commit()
-            
-    # 4. Limpeza preventiva de categorias órfãs (sem produtos ativos e sem observações)
+    db.flush()
+
+    # 3. Limpeza preventiva de categorias órfãs (sem produtos ativos e sem observações)
+    # (Nenhum produto inativo é deletado do banco fisicamente, conforme regras)
     categorias = db.query(Categoria).all()
     for c in categorias:
         produtos_ativos_cat = db.query(Produto).filter(Produto.categoria_id == c.id, Produto.ativo == True).first()
@@ -465,12 +454,18 @@ def importar_cardapio(
                 prod_inativo = db.query(Produto).filter(Produto.categoria_id == c.id).first()
                 if not prod_inativo:
                     db.delete(c)
-                    db.commit()
 
-    # 5. Sincronizar o dump.json contendo apenas o cardápio ativo
+    # 4. Um único db.commit() no final de toda a operação de import
+    db.commit()
+
+    # 5. Refresh nos produtos importados para carregar relações e dados do banco pós-commit
+    for prod in imported_products:
+        db.refresh(prod)
+
+    # 6. Sincronizar o dump.json contendo apenas o cardápio ativo
     sincronizar_cardapio_json(db)
     
-    # 6. Notificar os terminais em tempo real
+    # 7. Notificar os terminais em tempo real
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
     
     return imported_products

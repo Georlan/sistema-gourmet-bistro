@@ -17,36 +17,6 @@ router = APIRouter(
 
 # ----------------- INVENTÓRIO E ESTOQUE -----------------
 
-class InsumoCreate(BaseModel):
-    id: str
-    nome: str
-    estoque_atual: float
-    estoque_minimo: float
-    estoque_maximo: float
-    unidade_medida: str
-    preco_medio_custo: float
-
-
-
-@router.post("/estoque/insumos", response_model=InsumoResponse)
-def save_insumo(insumo_in: InsumoCreate, db: Session = Depends(get_db)):
-    """Cria ou atualiza um insumo no estoque."""
-    insumo = db.query(Insumo).filter(Insumo.id == insumo_in.id).first()
-    if not insumo:
-        insumo = Insumo(id=insumo_in.id)
-        db.add(insumo)
-    
-    insumo.nome = insumo_in.nome
-    insumo.estoque_atual = insumo_in.estoque_atual
-    insumo.estoque_minimo = insumo_in.estoque_minimo
-    insumo.estoque_maximo = insumo_in.estoque_maximo
-    insumo.unidade_medida = insumo_in.unidade_medida
-    insumo.preco_medio_custo = insumo_in.preco_medio_custo
-    
-    db.commit()
-    db.refresh(insumo)
-    return insumo
-
 @router.get("/estoque/sugestoes")
 def get_sugestoes_compra(db: Session = Depends(get_db)):
     """

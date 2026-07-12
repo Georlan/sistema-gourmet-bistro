@@ -181,18 +181,6 @@ async def run_migrations_on_startup():
                     conn.execute(sa.text("ALTER TABLE comandas ADD COLUMN mesa_transferida_de INTEGER;"))
                     conn.commit()
 
-            # Criar tabela clientes caso não exista
-            if not insp.has_table("clientes"):
-                print("[DATABASE] Criando tabela clientes...")
-                conn.execute(sa.text("""
-                    CREATE TABLE clientes (
-                        telefone VARCHAR PRIMARY KEY,
-                        nome VARCHAR NOT NULL,
-                        criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
-                    );
-                """))
-                conn.commit()
-
     except Exception as e:
         print(f"[ALEMBIC] ⚠️ Erro ao rodar migrações automáticas: {e}")
         import traceback

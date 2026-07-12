@@ -177,9 +177,11 @@ def test_importacao_sobrescreve_cardapio():
     coca = db.query(Produto).filter(Produto.id == "prod-coca").first()
     burguer = db.query(Produto).filter(Produto.id == "prod-burguer").first()
     
-    # Como Coca-Cola e Burguer não tinham nenhuma venda/comanda ativa vinculada, eles devem ter sido removidos fisicamente
-    assert coca is None
-    assert burguer is None
+    # Como a deleção física de produtos foi removida, Coca-Cola e Burguer devem continuar existindo, mas inativos
+    assert coca is not None
+    assert coca.ativo is False
+    assert burguer is not None
+    assert burguer.ativo is False
     
     # pizza e guarana devem existir e estar ativos
     pizza = db.query(Produto).filter(Produto.id == "prod-pizza").first()
