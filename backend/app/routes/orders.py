@@ -239,9 +239,17 @@ def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_ta
     db.add(novo_lancamento)
 
     # 5. Criar os itens
+    # Otimizado: Busca unificada de todos os produtos envolvidos no lote para evitar queries N+1
+    prod_ids = list(set(item_in.produto_id for item_in in lancamento_in.itens))
+    produtos = {}
+    if prod_ids:
+        # Usamos joinedload para trazer a categoria associada, resolvendo N+1 na verificação de impressão logo depois
+        from sqlalchemy.orm import joinedload
+        produtos = {p.id: p for p in db.query(Produto).options(joinedload(Produto.categoria)).filter(Produto.id.in_(prod_ids)).all()}
+
     itens_criados = []
     for item_in in lancamento_in.itens:
-        produto = db.query(Produto).filter(Produto.id == item_in.produto_id).first()
+        produto = produtos.get(item_in.produto_id)
         if not produto:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -266,6 +274,10 @@ def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_ta
             impresso_em=None
         )
         db.add(novo_item)
+        
+        # Linkar o produto na memória para o SQLAlchemy evitar lazy load na impressão
+        novo_item.produto = produto
+        
         itens_criados.append(novo_item)
 
     db.commit()

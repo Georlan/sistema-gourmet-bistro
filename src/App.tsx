@@ -78,6 +78,7 @@ export default function App() {
   // Listen to URL changes to switch portal dynamically
   const [restauranteConfig, setRestauranteConfig] = useState<any>(null);
   const [pagamentosPendentes, setPagamentosPendentes] = useState<any[]>([]);
+  const [isWsConnected, setIsWsConnected] = useState<boolean>(false);
 
   const fetchPagamentosPendentes = async () => {
     try {
@@ -116,9 +117,10 @@ export default function App() {
 
   useEffect(() => {
     fetchConfig();
-    const interval = setInterval(fetchConfig, 10000);
+    if (isWsConnected) return;
+    const interval = setInterval(fetchConfig, 40000);
     return () => clearInterval(interval);
-  }, []);
+  }, [isWsConnected]);
 
   useEffect(() => {
     const handleUrlChange = () => {
@@ -368,12 +370,12 @@ export default function App() {
   }, [portal]);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      fetchLiveProdutos();
-      const interval = setInterval(fetchLiveProdutos, 30000); // refresh every 30s
-      return () => clearInterval(interval);
-    }
-  }, [isAuthenticated, fetchLiveProdutos]);
+    if (!isAuthenticated) return;
+    fetchLiveProdutos();
+    if (isWsConnected) return;
+    const interval = setInterval(fetchLiveProdutos, 40000); // refresh every 40s if not connected to WS
+    return () => clearInterval(interval);
+  }, [isAuthenticated, isWsConnected, fetchLiveProdutos]);
 
   // 2b. Orders loaded from API
   const [orders, setOrders] = useState<Order[]>([]);
@@ -454,7 +456,6 @@ export default function App() {
   }
   const [activeDrafts, setActiveDrafts] = useState<{ [mesaId: number]: { [garcomId: string]: ActiveDraftInfo } }>({});
   const wsRef = useRef<WebSocket | null>(null);
-  const [isWsConnected, setIsWsConnected] = useState<boolean>(false);
   const lastDraftStatusesRef = useRef<{ [mesaId: number]: boolean }>({});
 
   const notifyDraftStatus = (mesaId: number, hasDraft: boolean) => {
@@ -1656,6 +1657,7 @@ export default function App() {
             onDeleteMesa={handleDeleteMesa}
             pagamentosPendentes={pagamentosPendentes}
             onRefreshPagamentosPendentes={fetchPagamentosPendentes}
+            isWsConnected={isWsConnected}
           />
         ) : (
           /* VIEW 2: SALÃO (WAITERS OR CASHIER DASHBOARD) */

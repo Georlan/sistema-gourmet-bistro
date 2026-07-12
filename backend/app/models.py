@@ -156,7 +156,7 @@ class Item(Base):
     id = Column(String, primary_key=True, index=True)
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
     comanda_id = Column(String, ForeignKey("comandas.id"), nullable=False, index=True)
-    lancamento_id = Column(String, ForeignKey("lancamentos.id"), nullable=False)
+    lancamento_id = Column(String, ForeignKey("lancamentos.id"), nullable=False, index=True)
     produto_id = Column(String, ForeignKey("produtos.id"), nullable=False)
     
     preco_unit = Column(Float, nullable=False)  # Snapshot of price at order time
@@ -195,14 +195,14 @@ class CaixaTurno(Base):
     declarado_dinheiro = Column(Float, nullable=True)
     declarado_pix = Column(Float, nullable=True)
     declarado_cartao = Column(Float, nullable=True)
-    status = Column(String, default="aberto")  # "aberto" | "fechado"
+    status = Column(String, default="aberto", index=True)  # "aberto" | "fechado"
 
 
 class CaixaMovimentacao(Base):
     __tablename__ = "caixa_movimentacoes"
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    turno_id = Column(Integer, ForeignKey("caixa_turnos.id"), nullable=False)
+    turno_id = Column(Integer, ForeignKey("caixa_turnos.id"), nullable=False, index=True)
     tipo = Column(String, nullable=False)  # "suprimento" | "sangria"
     valor = Column(Float, nullable=False)
     descricao = Column(String, default="")
@@ -214,13 +214,13 @@ class Pagamento(Base):
     
     id = Column(String, primary_key=True, index=True)
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False)
-    comanda_id = Column(String, ForeignKey("comandas.id"), nullable=False)
+    comanda_id = Column(String, ForeignKey("comandas.id"), nullable=False, index=True)
     turno_id = Column(Integer, ForeignKey("caixa_turnos.id"), nullable=False)
     valor = Column(Float, nullable=False)
     metodo = Column(String, nullable=False)  # "dinheiro" | "pix" | "cartao"
     status = Column(String, default="aprovado") # "pendente" | "aprovado" | "cancelado"
     idempotency_key = Column(String, unique=True, nullable=True, index=True)
-    cpf_cliente = Column(String, nullable=True)
+    cpf_cliente = Column(String, nullable=True, index=True)
     nome_cliente = Column(String, nullable=True)
     nsu_cartao = Column(String, nullable=True)
     chave_nfe_emitida = Column(String, nullable=True)

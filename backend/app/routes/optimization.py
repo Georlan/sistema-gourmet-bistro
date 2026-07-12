@@ -9,6 +9,7 @@ from ..models import Comanda, Insumo, ConfigFidelizacao, HistoricoFidelidade, Ac
 from ..schemas import InsumoResponse, ConfigFidelizacaoResponse, HistoricoFidelidadeResponse
 from ..security import get_current_garcom_optional
 from ..models import Usuario
+from ..crypt import decrypt_field
 
 router = APIRouter(
     tags=["Otimizações, Estoque e Fidelidade"]
@@ -191,31 +192,46 @@ def get_loyalty_clients(db: Session = Depends(get_db)):
     """
     Retorna a lista de saldos reais de fidelidade agregados por cliente a partir do histórico.
     """
-    historico = db.query(HistoricoFidelidade).all()
+    # Otimizado: Busca apenas colunas brutas do banco de dados (evita instanciar objetos ORM lentos)
+    historico = db.query(
+        HistoricoFidelidade._cliente_telefone,
+        HistoricoFidelidade.tipo_movimentacao,
+        HistoricoFidelidade.valor_delta
+    ).all()
+
     saldos = {}
-    for h in historico:
-        tel = h.cliente_telefone.strip()
+    for encrypted_tel, tipo_mov, delta in historico:
+        if not encrypted_tel:
+            continue
+        tel = decrypt_field(encrypted_tel).strip()
         if tel not in saldos:
             saldos[tel] = {"pontos": 0.0, "cashback": 0.0}
-        if h.tipo_movimentacao == "ACUMULO":
-            saldos[tel]["pontos"] += h.valor_delta
-            saldos[tel]["cashback"] += h.valor_delta
+        if tipo_mov == "ACUMULO":
+            saldos[tel]["pontos"] += delta
+            saldos[tel]["cashback"] += delta
         else:
-            saldos[tel]["pontos"] -= h.valor_delta
-            saldos[tel]["cashback"] -= h.valor_delta
+            saldos[tel]["pontos"] -= delta
+            saldos[tel]["cashback"] -= delta
             
     result = []
-    # Search for customer name from past Pagamentos
-    from ..models import Pagamento
+    # Otimizado: Resolve o N+1. Busca os nomes de todos os CPFs em uma única query agrupada.
+    unique_tels = list(saldos.keys())
+    pag_names = {}
+    if unique_tels:
+        from ..models import Pagamento
+        pags = db.query(
+            Pagamento.cpf_cliente,
+            Pagamento.nome_cliente
+        ).filter(
+            Pagamento.cpf_cliente.in_(unique_tels)
+        ).all()
+        
+        for cpf, nome in pags:
+            if cpf and nome and cpf not in pag_names:
+                pag_names[cpf] = nome
+
     for idx, (tel, balance) in enumerate(saldos.items()):
-        p_name = None
-        # Try finding a name associated with this CPF/phone in pagamentos
-        pag = db.query(Pagamento).filter(Pagamento.cpf_cliente == tel).first()
-        if pag and pag.nome_cliente:
-            p_name = pag.nome_cliente
-        else:
-            # Fallback to general name format
-            p_name = f"Cliente {tel[-4:] if len(tel) >= 4 else tel}"
+        p_name = pag_names.get(tel) or f"Cliente {tel[-4:] if len(tel) >= 4 else tel}"
             
         result.append({
             "id": idx + 1,
@@ -257,14 +273,22 @@ def checkout_fidelidade(req: CheckoutFidelidadeRequest, db: Session = Depends(ge
     telefone = req.cliente_telefone.strip()
     
     # Calcular saldo atual do cliente
-    historico = db.query(HistoricoFidelidade).all()
+    # Otimizado: Busca apenas colunas brutas do banco de dados (evita instanciar objetos ORM lentos)
+    historico = db.query(
+        HistoricoFidelidade._cliente_telefone,
+        HistoricoFidelidade.tipo_movimentacao,
+        HistoricoFidelidade.valor_delta
+    ).all()
+    
     saldo_atual = 0.0
-    for h in historico:
-        if h.cliente_telefone == telefone:
-            if h.tipo_movimentacao == "ACUMULO":
-                saldo_atual += h.valor_delta
+    for encrypted_tel, tipo_mov, delta in historico:
+        if not encrypted_tel:
+            continue
+        if decrypt_field(encrypted_tel).strip() == telefone:
+            if tipo_mov == "ACUMULO":
+                saldo_atual += delta
             else:
-                saldo_atual -= h.valor_delta
+                saldo_atual -= delta
                 
     desconto_aplicado = 0.0
     valor_final = req.valor_total

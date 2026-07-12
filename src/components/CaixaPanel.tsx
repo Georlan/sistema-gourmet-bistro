@@ -24,6 +24,7 @@ interface CaixaPanelProps {
   onDeleteMesa: (id: number) => Promise<void>;
   pagamentosPendentes?: any[];
   onRefreshPagamentosPendentes?: () => Promise<void>;
+  isWsConnected?: boolean;
 }
 
 // Simulated dynamic lists for tabs that don't need real backend persistence yet
@@ -88,7 +89,8 @@ export function CaixaPanel({
   onUpdateMesa,
   onDeleteMesa,
   pagamentosPendentes = [],
-  onRefreshPagamentosPendentes
+  onRefreshPagamentosPendentes,
+  isWsConnected = false
 }: CaixaPanelProps) {
   // Turno & Sync state
   const [turno, setTurno] = useState<CaixaTurno | null>(null);
@@ -214,11 +216,8 @@ export function CaixaPanel({
     }
   };
 
-  // Marketing, Coupons & Loyalty program mock states
   const [coupons, setCoupons] = useState([
-    { id: "c-1", codigo: "KOMA10", tipo: "percentual", valor: 10, ativo: true },
-    { id: "c-2", codigo: "PASTEL5", tipo: "fixo", valor: 5.00, ativo: true },
-    { id: "c-3", codigo: "BENVINDO", tipo: "fixo", valor: 15.00, ativo: false }
+    { id: "c-1", codigo: "KOMA10", tipo: "percentual", valor: 10, ativo: true }
   ]);
   const [newCouponCode, setNewCouponCode] = useState("");
   const [newCouponVal, setNewCouponVal] = useState(10);
@@ -226,25 +225,10 @@ export function CaixaPanel({
 
   const [cashbackPercent, setCashbackPercent] = useState(5);
   const [cashbackActive, setCashbackActive] = useState(true);
-  const [cashbackHistory, setCashbackHistory] = useState([
-    { id: 1, cliente: "Maria Oliveira", valorCompra: 46.00, cashbackGerado: 2.30, data: "Hoje" },
-    { id: 2, cliente: "Felipe Ramos", valorCompra: 32.50, cashbackGerado: 1.63, data: "Hoje" },
-    { id: 3, cliente: "Ana Claudia", valorCompra: 79.90, cashbackGerado: 4.00, data: "Ontem" }
-  ]);
-  const [abandonedCarts, setAbandonedCarts] = useState([
-    { id: 1, cliente: "Rodrigo Santos", telefone: "(81) 98765-4321", itens: "3x Pastel Especial + Guaraná 2L", total: 68.00, abandonadoEm: "15m atrás", status: "pendente" },
-    { id: 2, cliente: "Karla Souza", telefone: "(81) 99122-3344", itens: "1x Burgão Kôma + Batata Frita", total: 39.90, abandonadoEm: "34m atrás", status: "recuperado" },
-    { id: 3, cliente: "Bruno Mendes", telefone: "(81) 97344-5566", itens: "2x Pastel Doce + Milkshake", total: 42.00, abandonadoEm: "1h atrás", status: "pendente" }
-  ]);
-  const [loyaltyUsers, setLoyaltyUsers] = useState<{ id: number; cliente: string; telefone: string; pontos: number; saldoCashback: number; }[]>([
-    { id: 1, cliente: "Maria Oliveira", telefone: "", pontos: 340, saldoCashback: 8.50 },
-    { id: 2, cliente: "Felipe Ramos", telefone: "", pontos: 180, saldoCashback: 5.20 },
-    { id: 3, cliente: "Ana Claudia", telefone: "", pontos: 560, saldoCashback: 12.00 }
-  ]);
-  const [compreGanheRules, setCompreGanheRules] = useState([
-    { id: 1, titulo: "Combo Pastel Dobrado", descricao: "Compre 2 Pastéis de Carne e ganhe 1 Coca Lata grátis", ativa: true },
-    { id: 2, titulo: "Terça-Feira sem Fome", descricao: "Peça 1 Hambúrguer Kôma e a batata frita é por conta da casa", ativa: false }
-  ]);
+  const [cashbackHistory, setCashbackHistory] = useState<{ id: number; cliente: string; valorCompra: number; cashbackGerado: number; data: string; }[]>([]);
+  const [abandonedCarts, setAbandonedCarts] = useState<{ id: number; cliente: string; telefone: string; itens: string; total: number; abandonadoEm: string; status: string; }[]>([]);
+  const [loyaltyUsers, setLoyaltyUsers] = useState<{ id: number; cliente: string; telefone: string; pontos: number; saldoCashback: number; }[]>([]);
+  const [compreGanheRules, setCompreGanheRules] = useState<{ id: number; titulo: string; descricao: string; ativa: boolean; }[]>([]);
 
   const handleRecuperarCart = (id: number, cliente: string, telefone: string) => {
     alert(`Simulação de WhatsApp: Mensagem enviada para ${cliente} (${telefone}) convidando para finalizar a compra com desconto!`);
@@ -456,10 +440,10 @@ export function CaixaPanel({
     }
   }, [selectedOrder]);
 
-  // Clear checkout payment states when selectedOrder, showCheckoutModal or paymentMetodo changes
+  // Clear checkout payment states when showCheckoutModal changes (opening or closing checkout)
   useEffect(() => {
     setPaymentValor('');
-  }, [selectedOrder, showCheckoutModal, paymentMetodo]);
+  }, [showCheckoutModal]);
 
   // Date filters for Meu Desempenho
   const [desempenhoRange, setDesempenhoRange] = useState<'7' | '15' | '30'>('7');
@@ -805,17 +789,9 @@ export function CaixaPanel({
   const [payCardActive, setPayCardActive] = useState(true);
   const [selectedPlan, setSelectedPlan] = useState<'gold'>('gold');
 
-  // Customer support chats & feedback mock list
-  const [supportChats, setSupportChats] = useState([
-    { id: 1, cliente: "Lucas Pinheiro", ultimaMsg: "Gostaria de saber se o pastel de frango tem catupiry", status: "pendente", canal: "whats" },
-    { id: 2, cliente: "Amanda Lima", ultimaMsg: "Meu pedido está demorando muito para sair", status: "pendente", canal: "ifood" }
-  ]);
+  const [supportChats, setSupportChats] = useState<{ id: number; cliente: string; ultimaMsg: string; status: string; canal: string; }[]>([]);
 
-  const [customerFeedbacks, setCustomerFeedbacks] = useState([
-    { id: 1, cliente: "Renata Abreu", estrelas: 5, comentario: "Melhor pastel da cidade! Super crocante e sequinho.", data: "Hoje" },
-    { id: 2, cliente: "Jefferson Cruz", estrelas: 4, comentario: "Hambúrguer excelente. A entrega demorou uns 10 minutos a mais.", data: "Ontem" },
-    { id: 3, cliente: "Tiago Lemos", estrelas: 5, comentario: "O atendimento pelo WhatsApp foi muito rápido e atencioso.", data: "Ontem" }
-  ]);
+  const [customerFeedbacks, setCustomerFeedbacks] = useState<{ id: number; cliente: string; estrelas: number; comentario: string; data: string; }[]>([]);
   // NEW Phase 13 States (Hybrid AI & White-Label Architecture)
   const [iaPilotMode, setIaPilotMode] = useState<'copilot' | 'autopilot'>('copilot');
   const [iaDiscountEnabled, setIaDiscountEnabled] = useState(false);
@@ -982,13 +958,15 @@ export function CaixaPanel({
     fetchMotoboys();
     fetchConfiguracoes();
 
+    if (isWsConnected) return;
+
     const interval = setInterval(() => {
       fetchTurno();
       fetchDeliveryOrders();
-    }, 8000); // 8s is enough — WS handles real-time, polling is fallback only
+    }, 45000); // Polling lento de fallback se desconectado do WS
 
     return () => clearInterval(interval);
-  }, []);
+  }, [isWsConnected]);
 
   // Fetch optimized statistics, stock, and reports
   useEffect(() => {
@@ -3392,8 +3370,9 @@ export function CaixaPanel({
                     <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer')}>
                       <input
                         type="checkbox"
-                        checked={checkoutServiceTax}
+                        checked={taxaServicoAtiva}
                         onChange={(e) => {
+                          setTaxaServicoAtiva(e.target.checked);
                           setCheckoutServiceTax(e.target.checked);
                           updateConfiguracoes({ taxa_servico_ativa: e.target.checked });
                         }}
@@ -3403,7 +3382,7 @@ export function CaixaPanel({
                     </label>
                   </div>
 
-                  {checkoutServiceTax && (
+                  {taxaServicoAtiva && (
                     <div className={clsx('space-y-1', 'pt-1.5', 'animate-scale-in')}>
                       <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Porcentagem Customizada (%):</label>
                       <input
