@@ -3023,7 +3023,7 @@ export function CaixaPanel({
                           </div>
                         </div>
 
-                        <div>
+                        <div className="space-y-1">
                           {hasPendingPayment ? (
                             <span className={clsx('px-2', 'py-0.5', 'text-[8px]', 'bg-amber-500/10', 'text-amber-400', 'font-bold', 'rounded-md', 'block', 'w-fit', 'border', 'border-amber-500/20', 'uppercase', 'tracking-wider animate-pulse')}>Confirmar Dinheiro</span>
                           ) : isMerged ? (
@@ -3033,6 +3033,16 @@ export function CaixaPanel({
                           ) : (
                             <span className={clsx('px-2', 'py-0.5', 'text-[8px]', 'bg-emerald-500/10', 'text-emerald-400', 'rounded-md', 'block', 'w-fit', 'border', 'border-emerald-500/10', 'uppercase', 'tracking-wider')}>Livre</span>
                           )}
+                          {(() => {
+                            // Badge de origem: aparece quando a comanda ativa desta mesa
+                            // tem itens que vieram transferidos de outra mesa
+                            const origemId = tableOrders.find(o => o.mesaOrigemId && Number(o.mesaOrigemId) !== Number(displayMesaId))?.mesaOrigemId;
+                            return origemId ? (
+                              <span className="px-2 py-0.5 text-[8px] bg-purple-500/10 text-purple-300 font-bold rounded-md block w-fit border border-purple-500/20 uppercase tracking-wider" title={`Consumo transferido da Mesa ${origemId}`}>
+                                🔗 Orig: Mesa {origemId}
+                              </span>
+                            ) : null;
+                          })()}
                         </div>
 
                         {isOcupada && (
@@ -6260,6 +6270,11 @@ export function CaixaPanel({
                   <h3 className={clsx('font-serif', 'text-lg', 'font-bold', 'text-white')}>
                     {selectedOrder.mesaId > 0 ? `Mesa ${selectedOrder.mesaId}` : `Pedido Balcão`}
                   </h3>
+                  {selectedOrder.mesaOrigemId && Number(selectedOrder.mesaOrigemId) !== Number(selectedOrder.mesaId) && (
+                    <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-purple-500/10 text-purple-300 border border-purple-500/25 rounded-full">
+                      🔗 Transferida da Mesa {selectedOrder.mesaOrigemId}
+                    </span>
+                  )}
                 </div>
                 <button
                   type="button"
