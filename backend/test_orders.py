@@ -39,7 +39,10 @@ def setup_db():
         # Create mesas
         m1 = Mesa(id=1, capacidade=4, nome="Mesa 1")
         m2 = Mesa(id=2, capacidade=6, nome="Mesa 2")
-        db.add_all([m1, m2])
+        m3 = Mesa(id=3, capacidade=4, nome="Mesa 3")
+        m4 = Mesa(id=4, capacidade=4, nome="Mesa 4")
+        m5 = Mesa(id=5, capacidade=4, nome="Mesa 5")
+        db.add_all([m1, m2, m3, m4, m5])
         
         db.commit()
     finally:
@@ -168,4 +171,50 @@ def test_flow(setup_db):
     assert resp.status_code == 200
     assert resp.json()["mesa_id"] == 1
     assert resp.json()["fechada"] is False
+
+
+def test_transferir_e_mesclar_limites(setup_db):
+    # 1. Login para obter token
+    login_response = client.post("/auth/login", json={"username": "georlan", "password": "123"})
+    assert login_response.status_code == 200
+    token = login_response.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 2. Criar comanda ativa na Mesa 3, Mesa 4 e Mesa 5
+    resp3 = client.post("/comandas/", json={"mesa_id": 3, "garcom_id": "g-1", "tipo": "Consumo no Local"})
+    assert resp3.status_code == 201
+    comanda3 = resp3.json()
+
+    resp4 = client.post("/comandas/", json={"mesa_id": 4, "garcom_id": "g-1", "tipo": "Consumo no Local"})
+    assert resp4.status_code == 201
+    comanda4 = resp4.json()
+
+    resp5 = client.post("/comandas/", json={"mesa_id": 5, "garcom_id": "g-1", "tipo": "Consumo no Local"})
+    assert resp5.status_code == 201
+    comanda5 = resp5.json()
+
+    # 3. Mesclar Mesa 3 na Mesa 4 -> Permitido
+    resp_merge = client.post("/comandas/mesclar?mesa_origem_id=3&mesa_destino_id=4")
+    assert resp_merge.status_code == 200
+    assert resp_merge.json()["mesa_id"] == 4
+    assert resp_merge.json()["mesa_origem_id"] == 3
+
+    # 4. Tentar mesclar Mesa 5 na Mesa 4 -> Deve ser impedido (limite de 2 mesas excedido na destino)
+    resp_merge_fail = client.post("/comandas/mesclar?mesa_origem_id=5&mesa_destino_id=4")
+    assert resp_merge_fail.status_code == 400
+    assert "Limite de mesclagem atingido" in resp_merge_fail.json()["detail"]
+
+    # 5. Tentar mesclar Mesa 4 (que tem mesclagem de Mesa 3) na Mesa 5 -> Deve ser impedido
+    resp_merge_fail2 = client.post("/comandas/mesclar?mesa_origem_id=4&mesa_destino_id=5")
+    assert resp_merge_fail2.status_code == 400
+    assert "já faz parte de outra mesclagem ativa" in resp_merge_fail2.json()["detail"]
+
+    # 6. Transferir a comanda mesclada (Mesa 4) para a Mesa 5 (que é individual)
+    # Isso deve mudar o mesa_id para 5, limpar mesa_origem_id e definir mesa_transferida_de = 4.
+    resp_trans = client.post(f"/comandas/{comanda3['id']}/transferir/5")
+    assert resp_trans.status_code == 200
+    comanda_trans = resp_trans.json()
+    assert comanda_trans["mesa_id"] == 5
+    assert comanda_trans["mesa_origem_id"] is None
+    assert comanda_trans["mesa_transferida_de"] == 4
 

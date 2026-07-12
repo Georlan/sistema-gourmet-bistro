@@ -1,0 +1,180 @@
+[WARNING] ENCRYPTION_KEY is not set in environment. Falling back to insecure key for dev/testing.
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.6.0 -- /home/testuser/Downloads/sistema-gourmet-bistro/.venv/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/testuser/Downloads/sistema-gourmet-bistro
+plugins: anyio-4.14.1
+collecting ... collected 2 items / 1 deselected / 1 selected
+
+backend/test_orders.py::test_transferir_e_mesclar_limites FAILED
+
+=================================== FAILURES ===================================
+______________________ test_transferir_e_mesclar_limites _______________________
+
+setup_db = None
+
+    def test_transferir_e_mesclar_limites(setup_db):
+        # 1. Login para obter token
+        login_response = client.post("/auth/login", json={"username": "georlan", "password": "123"})
+        assert login_response.status_code == 200
+        token = login_response.json()["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+    
+        # 2. Criar comanda ativa na Mesa 3, Mesa 4 e Mesa 5
+        resp3 = client.post("/comandas/", json={"mesa_id": 3, "garcom_id": "g-1", "tipo": "Consumo no Local"})
+        assert resp3.status_code == 201
+        comanda3 = resp3.json()
+    
+        resp4 = client.post("/comandas/", json={"mesa_id": 4, "garcom_id": "g-1", "tipo": "Consumo no Local"})
+        assert resp4.status_code == 201
+        comanda4 = resp4.json()
+    
+        resp5 = client.post("/comandas/", json={"mesa_id": 5, "garcom_id": "g-1", "tipo": "Consumo no Local"})
+        assert resp5.status_code == 201
+        comanda5 = resp5.json()
+    
+        # 3. Mesclar Mesa 3 na Mesa 4 -> Permitido
+        resp_merge = client.post("/comandas/mesclar?mesa_origem_id=3&mesa_destino_id=4")
+        assert resp_merge.status_code == 200
+        assert resp_merge.json()["mesa_id"] == 4
+        assert resp_merge.json()["mesa_origem_id"] == 3
+    
+        # 4. Tentar mesclar Mesa 5 na Mesa 4 -> Deve ser impedido (limite de 2 mesas excedido na destino)
+        resp_merge_fail = client.post("/comandas/mesclar?mesa_origem_id=5&mesa_destino_id=4")
+        assert resp_merge_fail.status_code == 400
+        assert "Limite de mesclagem atingido" in resp_merge_fail.json()["detail"]
+    
+        # 5. Tentar mesclar Mesa 3 (que já é origem e está mesclada em 4) na Mesa 5 -> Deve ser impedido
+        resp_merge_fail2 = client.post("/comandas/mesclar?mesa_origem_id=3&mesa_destino_id=5")
+>       assert resp_merge_fail2.status_code == 400
+E       assert 404 == 400
+E        +  where 404 = <Response [404 Not Found]>.status_code
+
+backend/test_orders.py:209: AssertionError
+=============================== warnings summary ===============================
+backend/app/schemas.py:10
+  /home/testuser/Downloads/sistema-gourmet-bistro/backend/app/schemas.py:10: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class UsuarioResponse(BaseModel):
+
+backend/app/schemas.py:33
+  /home/testuser/Downloads/sistema-gourmet-bistro/backend/app/schemas.py:33: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class CategoriaResponse(BaseModel):
+
+backend/app/schemas.py:41
+  /home/testuser/Downloads/sistema-gourmet-bistro/backend/app/schemas.py:41: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class ObservacaoPredefinidaResponse(BaseModel):
+
+backend/app/schemas.py:71
+  /home/testuser/Downloads/sistema-gourmet-bistro/backend/app/schemas.py:71: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class ProdutoResponse(ProdutoBase):
+
+backend/app/schemas.py:77
+  /home/testuser/Downloads/sistema-gourmet-bistro/backend/app/schemas.py:77: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class ProdutoSimples(BaseModel):
+
+backend/app/schemas.py:85
+  /home/testuser/Downloads/sistema-gourmet-bistro/backend/app/schemas.py:85: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class UsuarioSimples(BaseModel):
+
+backend/app/schemas.py:108
+  /home/testuser/Downloads/sistema-gourmet-bistro/backend/app/schemas.py:108: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class MesaResponse(MesaBase):
+
+backend/app/schemas.py:119
+  /home/testuser/Downloads/sistema-gourmet-bistro/backend/app/schemas.py:119: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class ItemResponse(BaseModel):
+
+backend/app/schemas.py:139
+  /home/testuser/Downloads/sistema-gourmet-bistro/backend/app/schemas.py:139: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class ComandaResponse(BaseModel):
+
+backend/app/schemas.py:188
+  /home/testuser/Downloads/sistema-gourmet-bistro/backend/app/schemas.py:188: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class LancamentoResponse(BaseModel):
+
+backend/app/schemas.py:215
+  /home/testuser/Downloads/sistema-gourmet-bistro/backend/app/schemas.py:215: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class CaixaTurnoResponse(BaseModel):
+
+backend/app/schemas.py:235
+  /home/testuser/Downloads/sistema-gourmet-bistro/backend/app/schemas.py:235: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class CaixaMovimentacaoResponse(BaseModel):
+
+backend/app/schemas.py:254
+  /home/testuser/Downloads/sistema-gourmet-bistro/backend/app/schemas.py:254: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class PagamentoResponse(BaseModel):
+
+backend/app/schemas.py:280
+  /home/testuser/Downloads/sistema-gourmet-bistro/backend/app/schemas.py:280: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class ConfiguracaoRestauranteResponse(BaseModel):
+
+backend/app/schemas.py:334
+  /home/testuser/Downloads/sistema-gourmet-bistro/backend/app/schemas.py:334: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class ConfiguracaoIAResponse(BaseModel):
+
+backend/app/schemas.py:346
+  /home/testuser/Downloads/sistema-gourmet-bistro/backend/app/schemas.py:346: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class MensagemWhatsAppResponse(BaseModel):
+
+backend/app/schemas.py:359
+  /home/testuser/Downloads/sistema-gourmet-bistro/backend/app/schemas.py:359: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class RascunhoPedidoResponse(BaseModel):
+
+backend/app/schemas.py:371
+  /home/testuser/Downloads/sistema-gourmet-bistro/backend/app/schemas.py:371: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class InsumoResponse(BaseModel):
+
+backend/app/schemas.py:384
+  /home/testuser/Downloads/sistema-gourmet-bistro/backend/app/schemas.py:384: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class ConfigFidelizacaoResponse(BaseModel):
+
+backend/app/schemas.py:395
+  /home/testuser/Downloads/sistema-gourmet-bistro/backend/app/schemas.py:395: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class HistoricoFidelidadeResponse(BaseModel):
+
+backend/app/schemas.py:413
+  /home/testuser/Downloads/sistema-gourmet-bistro/backend/app/schemas.py:413: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class MotoboyResponse(BaseModel):
+
+backend/app/schemas.py:423
+  /home/testuser/Downloads/sistema-gourmet-bistro/backend/app/schemas.py:423: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class DistribuidorResponse(BaseModel):
+
+backend/app/schemas.py:434
+  /home/testuser/Downloads/sistema-gourmet-bistro/backend/app/schemas.py:434: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class ItemNotaEntradaResponse(BaseModel):
+
+backend/app/schemas.py:446
+  /home/testuser/Downloads/sistema-gourmet-bistro/backend/app/schemas.py:446: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class NotaEntradaResponse(BaseModel):
+
+backend/app/routes/products.py:95
+  /home/testuser/Downloads/sistema-gourmet-bistro/backend/app/routes/products.py:95: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class ObservacaoResponse(BaseModel):
+
+backend/app/main.py:111
+  /home/testuser/Downloads/sistema-gourmet-bistro/backend/app/main.py:111: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+.venv/lib/python3.12/site-packages/fastapi/applications.py:4675
+  /home/testuser/Downloads/sistema-gourmet-bistro/.venv/lib/python3.12/site-packages/fastapi/applications.py:4675: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED backend/test_orders.py::test_transferir_e_mesclar_limites - assert 404 == 400
+ +  where 404 = <Response [404 Not Found]>.status_code
+================= 1 failed, 1 deselected, 27 warnings in 1.03s =================
+Sentry is attempting to send 8 pending events
+Waiting up to 2 seconds
+Press Ctrl-C to quit

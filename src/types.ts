@@ -46,6 +46,7 @@ export interface Order {
   identificador?: string;
   statusComanda?: 'aguardando_pagamento' | null; // Adicionado para compatibilidade com o fluxo do caixa
   mesaOrigemId?: number | null;
+  mesaTransferidaDe?: number | null;
 }
 
 export interface TableDraft {

@@ -84,6 +84,7 @@ class Comanda(Base):
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
     mesa_id = Column(Integer, ForeignKey("mesas.id"), nullable=True, index=True)
     mesa_origem_id = Column(Integer, nullable=True)
+    mesa_transferida_de = Column(Integer, nullable=True)
     garcom_id = Column(String, ForeignKey("usuarios.id"), nullable=False)
     
     tipo = Column(String, default="Consumo no Local")  # Consumo no Local | Retirada

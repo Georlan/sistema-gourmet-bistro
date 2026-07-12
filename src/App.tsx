@@ -784,6 +784,7 @@ export default function App() {
           statusComanda: comanda.status_comanda || null,       // aguardando_pagamento | null
           deliveryStatus: comanda.delivery_status || null,    // pendente | producao | pronto | transito | finalizado
           mesaOrigemId: comanda.mesa_origem_id || null,
+          mesaTransferidaDe: comanda.mesa_transferida_de || null,
           itens: comanda.itens
             .filter((item: any) => item.status !== 'cancelado')
             .map((item: any) => ({

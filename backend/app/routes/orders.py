@@ -414,14 +414,16 @@ def transferir_comanda(comanda_id: str, nova_mesa_id: int, background_tasks: Bac
             detail=f"Mesa de destino {nova_mesa_id} não encontrada"
         )
 
-    # 3. Atualizar mesa_id e salvar mesa_origem_id para auditoria se ainda não preenchido
-    if not comanda.mesa_origem_id:
-        comanda.mesa_origem_id = comanda.mesa_id
+    # 3. Atualizar mesa_id, salvar a mesa anterior em mesa_transferida_de e limpar a mesclagem
+    comanda.mesa_transferida_de = comanda.mesa_id
     comanda.mesa_id = nova_mesa_id
+    comanda.mesa_origem_id = None  # Libera a mesclagem!
     db.commit()
     db.refresh(comanda)
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
     return comanda
+
+
 
 @router.put("/{comanda_id}/fechar", response_model=ComandaResponse)
 def fechar_comanda(
@@ -1081,6 +1083,36 @@ def mesclar_comandas(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Nenhuma comanda ativa encontrada na mesa {mesa_origem_id}"
+        )
+
+    # 1.5. Validar limite de 2 mesas mescladas juntas
+    if comanda_origem.mesa_origem_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A mesa de origem já faz parte de outra mesclagem ativa."
+        )
+
+    # Verificar se a mesa de destino já possui alguma comanda mesclada nela
+    mesclas_destino = db.query(Comanda).filter(
+        Comanda.mesa_id == mesa_destino_id,
+        Comanda.mesa_origem_id != None,
+        Comanda.fechada == False
+    ).first()
+    if mesclas_destino:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A mesa de destino já possui outra comanda mesclada. Limite de mesclagem atingido (máximo de 2 mesas)."
+        )
+
+    # Verificar se a mesa destino está mesclada em outra mesa (ou seja, seu consumo foi mesclado em uma terceira mesa)
+    comanda_destino_ativa = db.query(Comanda).filter(
+        Comanda.mesa_id == mesa_destino_id,
+        Comanda.fechada == False
+    ).first()
+    if comanda_destino_ativa and comanda_destino_ativa.mesa_origem_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A mesa de destino está mesclada em outra mesa."
         )
         
     # 2. Atualizar a comanda para apontar para a mesa de destino e gravar a origem

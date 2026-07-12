@@ -140,6 +140,7 @@ class ComandaResponse(BaseModel):
     id: str
     mesa_id: Optional[int] = None
     mesa_origem_id: Optional[int] = None
+    mesa_transferida_de: Optional[int] = None
     garcom_id: str
     tipo: str
     identificador: Optional[str] = None

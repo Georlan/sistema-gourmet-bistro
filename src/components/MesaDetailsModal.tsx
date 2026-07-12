@@ -165,13 +165,24 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
               </span>
             </div>
             
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#A1A1AA] font-sans">
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-[#A1A1AA] font-sans items-center">
               {orders.length > 0 && (
                 <span className="flex items-center gap-1.5">
                   <Clock size={12} className="text-[#10b981]" />
                   Permanência: <strong className="text-white font-medium font-mono">{permanenceTime}</strong>
                 </span>
               )}
+              {(() => {
+                const transferOrigin = orders.find(o => o.mesaTransferidaDe)?.mesaTransferidaDe;
+                if (transferOrigin) {
+                  return (
+                    <span className="px-2 py-0.5 text-[9px] bg-purple-500/20 text-purple-300 border border-purple-500/35 rounded-md font-sans font-bold uppercase tracking-wider block w-fit shadow-xs animate-pulse-subtle">
+                      🔗 Transferida da Mesa {transferOrigin}
+                    </span>
+                  );
+                }
+                return null;
+              })()}
             </div>
           </div>
 
@@ -794,100 +805,126 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                 </p>
               </div>
 
-              {/* Info banner */}
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-3.5 text-xs text-amber-300 font-sans flex items-start gap-2">
-                <span className="text-sm shrink-0">⚠️</span>
-                <span>A mesclagem une as comandas. Use a aba <strong>Transferência → Selecionar Itens</strong> se quiser mover itens específicos sem mesclar a conta.</span>
-              </div>
-
-              {/* Occupied tables (recommended for merge) */}
-              <div className="space-y-2">
-                <span className="text-[10px] text-gray-400 block font-bold uppercase tracking-wider text-center">Mesa Destino — Mesas Ocupadas:</span>
-                {tablesWithOrders.length === 0 ? (
-                  <div className="py-6 text-center text-gray-500 text-sm italic font-sans bg-[#121214]/40 rounded-2xl border border-[#27272A]/40">
-                    Nenhuma outra mesa está ocupada no momento.
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 pt-1">
-                    {tablesWithOrders.map((t) => {
-                      const isConfirming = confirmTransferTo === t.id;
-                      return (
-                        <button
-                          key={t.id}
-                          type="button"
-                          id={`merge-target-mesa-${t.id}`}
-                          onClick={() => {
-                            if (isConfirming) {
-                              if (onMergeTables) onMergeTables(table.id, t.id);
-                              setConfirmTransferTo(null);
-                            } else {
-                              setConfirmTransferTo(t.id);
-                            }
-                          }}
-                          onMouseLeave={() => { if (isConfirming) setConfirmTransferTo(null); }}
-                          className={`p-4 border rounded-2xl text-center transition-all flex flex-col items-center justify-center gap-1 group cursor-pointer hover:scale-102 ${
-                            isConfirming
-                              ? 'bg-rose-900/40 border border-rose-800/50 animate-pulse text-white'
-                              : 'bg-[#1C1C1F] hover:bg-[#10b981]/10 border border-rose-500/30 hover:border-[#10b981] text-white'
-                          }`}
-                        >
-                          <span className="text-base font-bold text-white group-hover:text-[#10b981]">
-                            {isConfirming ? 'Confirmar?' : `Mesa ${t.id}`}
-                          </span>
-                          {!isConfirming && (
-                            <span className="text-[8px] text-rose-400 font-bold uppercase tracking-wider">Ocupada</span>
-                          )}
-                          {isConfirming && (
-                            <span className="text-[9px] text-gray-300 font-sans">Toque para confirmar</span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* Empty tables (less common for merge, but allowed) */}
-              {tablesWithoutOrders.length > 0 && (
-                <div className="space-y-2">
-                  <span className="text-[10px] text-gray-500 block font-bold uppercase tracking-wider text-center">Mesas Livres (mesclar criará consumo nelas):</span>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 pt-1">
-                    {tablesWithoutOrders.map((t) => {
-                      const isConfirming = confirmTransferTo === t.id;
-                      return (
-                        <button
-                          key={t.id}
-                          type="button"
-                          id={`merge-target-mesa-free-${t.id}`}
-                          onClick={() => {
-                            if (isConfirming) {
-                              if (onMergeTables) onMergeTables(table.id, t.id);
-                              setConfirmTransferTo(null);
-                            } else {
-                              setConfirmTransferTo(t.id);
-                            }
-                          }}
-                          onMouseLeave={() => { if (isConfirming) setConfirmTransferTo(null); }}
-                          className={`p-4 border rounded-2xl text-center transition-all flex flex-col items-center justify-center gap-1 group cursor-pointer hover:scale-102 opacity-60 ${
-                            isConfirming
-                              ? 'bg-rose-900/40 border border-rose-800/50 animate-pulse text-white opacity-100'
-                              : 'bg-[#1C1C1F] hover:bg-[#10b981]/10 border border-[#27272A] hover:border-[#10b981] text-white hover:opacity-100'
-                          }`}
-                        >
-                          <span className="text-base font-bold text-white group-hover:text-[#10b981]">
-                            {isConfirming ? 'Confirmar?' : `Mesa ${t.id}`}
-                          </span>
-                          {!isConfirming && (
-                            <span className="text-[8px] text-emerald-400 font-bold uppercase tracking-wider">Livre</span>
-                          )}
-                          {isConfirming && (
-                            <span className="text-[9px] text-gray-300 font-sans">Toque para confirmar</span>
-                          )}
-                        </button>
-                      );
-                    })}
+              {/* Info banner ou bloqueio por limite de mesclagem */}
+              {originIds.length > 0 ? (
+                <div className="bg-rose-500/10 border border-rose-500/20 rounded-2xl p-4 text-xs text-rose-300 font-sans flex items-start gap-2 max-w-md mx-auto">
+                  <span className="text-sm shrink-0">🚫</span>
+                  <div>
+                    <strong className="block text-rose-400 font-bold mb-0.5">Limite de Mesclagem Excedido</strong>
+                    <span>Esta mesa já possui consumo mesclado da <strong>Mesa {originIds.join(', ')}</strong>. O limite máximo é de 2 mesas mescladas juntas.</span>
                   </div>
                 </div>
+              ) : (
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-3.5 text-xs text-amber-300 font-sans flex items-start gap-2">
+                  <span className="text-sm shrink-0">⚠️</span>
+                  <span>A mesclagem une as comandas. Use a aba <strong>Transferência → Selecionar Itens</strong> se quiser mover itens específicos sem mesclar a conta.</span>
+                </div>
+              )}
+
+              {originIds.length === 0 && (
+                <>
+                  {/* Occupied tables (recommended for merge) */}
+                  <div className="space-y-2">
+                    <span className="text-[10px] text-gray-400 block font-bold uppercase tracking-wider text-center">Mesa Destino — Mesas Ocupadas:</span>
+                    {tablesWithOrders.length === 0 ? (
+                      <div className="py-6 text-center text-gray-500 text-sm italic font-sans bg-[#121214]/40 rounded-2xl border border-[#27272A]/40">
+                        Nenhuma outra mesa está ocupada no momento.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 pt-1">
+                        {tablesWithOrders.map((t) => {
+                          const isConfirming = confirmTransferTo === t.id;
+                          const isTargetAlreadyMerged = allOrders?.some(o => o.mesaId === t.id && o.mesaOrigemId !== null && o.mesaOrigemId !== t.id);
+
+                          return (
+                            <button
+                              key={t.id}
+                              type="button"
+                              id={`merge-target-mesa-${t.id}`}
+                              disabled={isTargetAlreadyMerged}
+                              onClick={() => {
+                                if (isConfirming) {
+                                  if (onMergeTables) onMergeTables(table.id, t.id);
+                                  setConfirmTransferTo(null);
+                                } else {
+                                  setConfirmTransferTo(t.id);
+                                }
+                              }}
+                              onMouseLeave={() => { if (isConfirming) setConfirmTransferTo(null); }}
+                              className={`p-4 border rounded-2xl text-center transition-all flex flex-col items-center justify-center gap-1 group ${
+                                isTargetAlreadyMerged
+                                  ? 'bg-[#121214] border-zinc-800 text-zinc-600 cursor-not-allowed opacity-40'
+                                  : isConfirming
+                                    ? 'bg-rose-900/40 border border-rose-800/50 animate-pulse text-white cursor-pointer'
+                                    : 'bg-[#1C1C1F] hover:bg-[#10b981]/10 border border-rose-500/30 hover:border-[#10b981] text-white cursor-pointer hover:scale-102'
+                              }`}
+                            >
+                              <span className={`text-base font-bold text-white ${!isTargetAlreadyMerged && 'group-hover:text-[#10b981]'}`}>
+                                {isConfirming ? 'Confirmar?' : `Mesa ${t.id}`}
+                              </span>
+                              {isTargetAlreadyMerged ? (
+                                <span className="text-[8px] text-zinc-500 font-bold uppercase tracking-wider">Limite Atingido</span>
+                              ) : !isConfirming ? (
+                                <span className="text-[8px] text-rose-400 font-bold uppercase tracking-wider">Ocupada</span>
+                              ) : (
+                                <span className="text-[9px] text-gray-300 font-sans">Toque para confirmar</span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Empty tables (less common for merge, but allowed) */}
+                  {tablesWithoutOrders.length > 0 && (
+                    <div className="space-y-2">
+                      <span className="text-[10px] text-gray-500 block font-bold uppercase tracking-wider text-center">Mesas Livres (mesclar criará consumo nelas):</span>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 pt-1">
+                        {tablesWithoutOrders.map((t) => {
+                          const isConfirming = confirmTransferTo === t.id;
+                          const isTargetAlreadyMerged = allOrders?.some(o => o.mesaId === t.id && o.mesaOrigemId !== null && o.mesaOrigemId !== t.id);
+
+                          return (
+                            <button
+                              key={t.id}
+                              type="button"
+                              id={`merge-target-mesa-free-${t.id}`}
+                              disabled={isTargetAlreadyMerged}
+                              onClick={() => {
+                                if (isConfirming) {
+                                  if (onMergeTables) onMergeTables(table.id, t.id);
+                                  setConfirmTransferTo(null);
+                                } else {
+                                  setConfirmTransferTo(t.id);
+                                }
+                              }}
+                              onMouseLeave={() => { if (isConfirming) setConfirmTransferTo(null); }}
+                              className={`p-4 border rounded-2xl text-center transition-all flex flex-col items-center justify-center gap-1 group opacity-60 ${
+                                isTargetAlreadyMerged
+                                  ? 'bg-[#121214] border-zinc-800 text-zinc-600 cursor-not-allowed opacity-40'
+                                  : isConfirming
+                                    ? 'bg-rose-900/40 border border-rose-800/50 animate-pulse text-white opacity-100 cursor-pointer'
+                                    : 'bg-[#1C1C1F] hover:bg-[#10b981]/10 border border-[#27272A] hover:border-[#10b981] text-white hover:opacity-100 cursor-pointer'
+                              }`}
+                            >
+                              <span className="text-base font-bold text-white group-hover:text-[#10b981]">
+                                {isConfirming ? 'Confirmar?' : `Mesa ${t.id}`}
+                              </span>
+                              {isTargetAlreadyMerged ? (
+                                <span className="text-[8px] text-zinc-500 font-bold uppercase tracking-wider">Limite Atingido</span>
+                              ) : !isConfirming ? (
+                                <span className="text-[8px] text-emerald-400 font-bold uppercase tracking-wider">Livre</span>
+                              ) : (
+                                <span className="text-[9px] text-gray-300 font-sans">Toque para confirmar</span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}

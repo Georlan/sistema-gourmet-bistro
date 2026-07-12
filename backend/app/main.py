@@ -171,6 +171,16 @@ async def run_migrations_on_startup():
         command.upgrade(alembic_cfg, "head")
         print("[ALEMBIC] ✅ Migrações concluídas com sucesso.")
 
+        # Executar DDL de emergência caso a coluna mesa_transferida_de não exista na tabela comandas
+        with engine.connect() as conn:
+            insp = sa_inspect(conn)
+            if insp.has_table("comandas"):
+                columns = {c["name"] for c in insp.get_columns("comandas")}
+                if "mesa_transferida_de" not in columns:
+                    print("[DATABASE] Adicionando coluna 'mesa_transferida_de' na tabela comandas...")
+                    conn.execute(sa.text("ALTER TABLE comandas ADD COLUMN mesa_transferida_de INTEGER;"))
+                    conn.commit()
+
     except Exception as e:
         print(f"[ALEMBIC] ⚠️ Erro ao rodar migrações automáticas: {e}")
         import traceback

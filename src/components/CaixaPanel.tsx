@@ -139,6 +139,7 @@ export function CaixaPanel({
             comandaId: comanda.id,
             mesaId: comanda.mesaId,
             mesaOrigemId: comanda.mesaOrigemId,
+            mesaTransferidaDe: comanda.mesaTransferidaDe,
             identificador: (comanda as any).identificador ?? null,
             garcomNome: comanda.garcomNome,
             tipo: comanda.tipo,
@@ -166,6 +167,7 @@ export function CaixaPanel({
             comandaId: comanda.id,
             mesaId: comanda.mesaId,
             mesaOrigemId: comanda.mesaOrigemId,
+            mesaTransferidaDe: comanda.mesaTransferidaDe,
             identificador: (comanda as any).identificador ?? null,
             garcomNome: comanda.garcomNome,
             tipo: comanda.tipo,
@@ -193,6 +195,7 @@ export function CaixaPanel({
           comandaId: comanda.id,
           mesaId: comanda.mesaId,
           mesaOrigemId: comanda.mesaOrigemId,
+          mesaTransferidaDe: comanda.mesaTransferidaDe,
           identificador: (comanda as any).identificador ?? null,
           garcomNome: comanda.garcomNome,
           tipo: comanda.tipo,
@@ -2319,8 +2322,13 @@ export function CaixaPanel({
                                       {order.mesaId && order.mesaId > 0 ? `Mesa ${order.mesaId}` : 'Balcão'}
                                     </span>
                                     {order.mesaOrigemId && Number(order.mesaOrigemId) !== Number(order.mesaId) && (
-                                      <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-purple-500/20 text-purple-300 border border-purple-500/35 rounded font-sans block w-fit shadow-xs" title="Essa mesa foi mesclada/transferida de outra">
-                                        🔗 Mesclada (Origem: Mesa {order.mesaOrigemId})
+                                      <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/35 rounded font-sans block w-fit shadow-xs" title="Essa mesa possui consumo mesclado de outra">
+                                        🔗 Mesclado de Mesa {order.mesaOrigemId}
+                                      </span>
+                                    )}
+                                    {order.mesaTransferidaDe && Number(order.mesaTransferidaDe) !== Number(order.mesaId) && (
+                                      <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-purple-500/20 text-purple-300 border border-purple-500/35 rounded font-sans block w-fit shadow-xs" title="Essa mesa teve consumo transferido de outra">
+                                        🔗 Transferido da Mesa {order.mesaTransferidaDe}
                                       </span>
                                     )}
                                   </div>
@@ -2479,8 +2487,13 @@ export function CaixaPanel({
                                       </span>
                                     )}
                                     {order.mesaOrigemId && Number(order.mesaOrigemId) !== Number(order.mesaId) && (
-                                      <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-purple-500/20 text-purple-300 border border-purple-500/35 rounded font-sans block w-fit shadow-xs" title="Essa mesa foi mesclada/transferida de outra">
-                                        🔗 Mesclada (Origem: Mesa {order.mesaOrigemId})
+                                      <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/35 rounded font-sans block w-fit shadow-xs" title="Essa mesa possui consumo mesclado de outra">
+                                        🔗 Mesclado de Mesa {order.mesaOrigemId}
+                                      </span>
+                                    )}
+                                    {order.mesaTransferidaDe && Number(order.mesaTransferidaDe) !== Number(order.mesaId) && (
+                                      <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-purple-500/20 text-purple-300 border border-purple-500/35 rounded font-sans block w-fit shadow-xs" title="Essa mesa teve consumo transferido de outra">
+                                        🔗 Transferido da Mesa {order.mesaTransferidaDe}
                                       </span>
                                     )}
                                   </div>
@@ -3034,14 +3047,23 @@ export function CaixaPanel({
                             <span className={clsx('px-2', 'py-0.5', 'text-[8px]', 'bg-emerald-500/10', 'text-emerald-400', 'rounded-md', 'block', 'w-fit', 'border', 'border-emerald-500/10', 'uppercase', 'tracking-wider')}>Livre</span>
                           )}
                           {(() => {
-                            // Badge de origem: aparece quando a comanda ativa desta mesa
-                            // tem itens que vieram transferidos de outra mesa
                             const origemId = tableOrders.find(o => o.mesaOrigemId && Number(o.mesaOrigemId) !== Number(displayMesaId))?.mesaOrigemId;
-                            return origemId ? (
-                              <span className="px-2 py-0.5 text-[8px] bg-purple-500/10 text-purple-300 font-bold rounded-md block w-fit border border-purple-500/20 uppercase tracking-wider" title={`Consumo transferido da Mesa ${origemId}`}>
-                                🔗 Orig: Mesa {origemId}
-                              </span>
-                            ) : null;
+                            const transfId = tableOrders.find(o => o.mesaTransferidaDe && Number(o.mesaTransferidaDe) !== Number(displayMesaId))?.mesaTransferidaDe;
+                            if (origemId) {
+                              return (
+                                <span className="px-2 py-0.5 text-[8px] bg-emerald-500/10 text-emerald-300 font-bold rounded-md block w-fit border border-emerald-500/20 uppercase tracking-wider animate-pulse-subtle" title={`Consumo mesclado da Mesa ${origemId}`}>
+                                  🔗 Mesclado de Mesa {origemId}
+                                </span>
+                              );
+                            }
+                            if (transfId) {
+                              return (
+                                <span className="px-2 py-0.5 text-[8px] bg-purple-500/10 text-purple-300 font-bold rounded-md block w-fit border border-purple-500/20 uppercase tracking-wider" title={`Consumo transferido da Mesa ${transfId}`}>
+                                  🔗 Transferido da Mesa {transfId}
+                                </span>
+                              );
+                            }
+                            return null;
                           })()}
                         </div>
 
@@ -6271,8 +6293,13 @@ export function CaixaPanel({
                     {selectedOrder.mesaId > 0 ? `Mesa ${selectedOrder.mesaId}` : `Pedido Balcão`}
                   </h3>
                   {selectedOrder.mesaOrigemId && Number(selectedOrder.mesaOrigemId) !== Number(selectedOrder.mesaId) && (
+                    <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-300 border border-emerald-500/25 rounded-full">
+                      🔗 Mesclado de Mesa {selectedOrder.mesaOrigemId}
+                    </span>
+                  )}
+                  {selectedOrder.mesaTransferidaDe && Number(selectedOrder.mesaTransferidaDe) !== Number(selectedOrder.mesaId) && (
                     <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-purple-500/10 text-purple-300 border border-purple-500/25 rounded-full">
-                      🔗 Transferida da Mesa {selectedOrder.mesaOrigemId}
+                      🔗 Transferido da Mesa {selectedOrder.mesaTransferidaDe}
                     </span>
                   )}
                 </div>
@@ -6665,10 +6692,20 @@ export function CaixaPanel({
 
             <div className="space-y-4">
               {selectedKanbanOrder.mesaOrigemId && Number(selectedKanbanOrder.mesaOrigemId) !== Number(selectedKanbanOrder.mesaId) && (
+                <div className="bg-emerald-950/20 p-3 rounded-2xl border border-emerald-900/40 text-xs text-emerald-300 flex items-center justify-between shadow-sm font-sans">
+                  <div>
+                    <strong className="text-emerald-400 block text-[9px] uppercase tracking-wider font-bold">Consumo Mesclado:</strong>
+                    <span className="leading-relaxed">Este lote possui consumo mesclado da <strong>Mesa {selectedKanbanOrder.mesaOrigemId}</strong> para a <strong>Mesa {selectedKanbanOrder.mesaId}</strong>.</span>
+                  </div>
+                  <span className="text-lg shrink-0 pl-2">🔗</span>
+                </div>
+              )}
+
+              {selectedKanbanOrder.mesaTransferidaDe && Number(selectedKanbanOrder.mesaTransferidaDe) !== Number(selectedKanbanOrder.mesaId) && (
                 <div className="bg-purple-950/20 p-3 rounded-2xl border border-purple-900/40 text-xs text-purple-300 flex items-center justify-between shadow-sm font-sans animate-pulse-subtle">
                   <div>
-                    <strong className="text-purple-400 block text-[9px] uppercase tracking-wider font-bold">Aviso de Transferência/Mesclagem:</strong>
-                    <span className="leading-relaxed">Este lote foi transferido ou mesclado da <strong>Mesa {selectedKanbanOrder.mesaOrigemId}</strong> para a <strong>Mesa {selectedKanbanOrder.mesaId}</strong>.</span>
+                    <strong className="text-purple-400 block text-[9px] uppercase tracking-wider font-bold">Consumo Transferido:</strong>
+                    <span className="leading-relaxed">Este lote foi transferido da <strong>Mesa {selectedKanbanOrder.mesaTransferidaDe}</strong> para a <strong>Mesa {selectedKanbanOrder.mesaId}</strong>.</span>
                   </div>
                   <span className="text-lg shrink-0 pl-2">🔄</span>
                 </div>
