@@ -132,6 +132,7 @@ export function CaixaPanel({
             id: lid,
             comandaId: comanda.id,
             mesaId: comanda.mesaId,
+            mesaOrigemId: comanda.mesaOrigemId,
             identificador: (comanda as any).identificador ?? null,
             garcomNome: comanda.garcomNome,
             tipo: comanda.tipo,
@@ -156,6 +157,7 @@ export function CaixaPanel({
             id: comanda.id,
             comandaId: comanda.id,
             mesaId: comanda.mesaId,
+            mesaOrigemId: comanda.mesaOrigemId,
             identificador: (comanda as any).identificador ?? null,
             garcomNome: comanda.garcomNome,
             tipo: comanda.tipo,
@@ -172,6 +174,7 @@ export function CaixaPanel({
           id: comanda.id,
           comandaId: comanda.id,
           mesaId: comanda.mesaId,
+          mesaOrigemId: comanda.mesaOrigemId,
           identificador: (comanda as any).identificador ?? null,
           garcomNome: comanda.garcomNome,
           tipo: comanda.tipo,
@@ -2283,9 +2286,9 @@ export function CaixaPanel({
                                     <span className={clsx('px-1.5', 'py-0.5', 'text-[8px]', 'uppercase', 'tracking-wider', 'font-bold', 'bg-[#10b981]/15', 'text-[#10b981]', 'rounded', 'font-mono', 'block', 'w-fit')}>
                                       {order.mesaId && order.mesaId > 0 ? `Mesa ${order.mesaId}` : 'Balcão'}
                                     </span>
-                                    {order.mesaOrigemId && order.mesaOrigemId !== order.mesaId && (
-                                      <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded font-mono block w-fit" title="Transferido/Mesclado da mesa de origem">
-                                        Origem: Mesa {order.mesaOrigemId}
+                                    {order.mesaOrigemId && Number(order.mesaOrigemId) !== Number(order.mesaId) && (
+                                      <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-purple-500/20 text-purple-300 border border-purple-500/35 rounded font-sans block w-fit shadow-xs" title="Essa mesa foi mesclada/transferida de outra">
+                                        🔗 Mesclada (Origem: Mesa {order.mesaOrigemId})
                                       </span>
                                     )}
                                   </div>
@@ -2436,9 +2439,9 @@ export function CaixaPanel({
                                 <div>
                                   <div className="flex gap-1.5 flex-wrap mb-1">
                                     <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-blue-500/10 text-blue-400 rounded font-mono block w-fit">{badgeText}</span>
-                                    {order.mesaOrigemId && order.mesaOrigemId !== order.mesaId && (
-                                      <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded font-mono block w-fit" title="Transferido/Mesclado da mesa de origem">
-                                        Origem: Mesa {order.mesaOrigemId}
+                                    {order.mesaOrigemId && Number(order.mesaOrigemId) !== Number(order.mesaId) && (
+                                      <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-purple-500/20 text-purple-300 border border-purple-500/35 rounded font-sans block w-fit shadow-xs" title="Essa mesa foi mesclada/transferida de outra">
+                                        🔗 Mesclada (Origem: Mesa {order.mesaOrigemId})
                                       </span>
                                     )}
                                   </div>
@@ -6564,7 +6567,7 @@ export function CaixaPanel({
             </div>
 
             <div className="space-y-4">
-              {selectedKanbanOrder.mesaOrigemId && selectedKanbanOrder.mesaOrigemId !== selectedKanbanOrder.mesaId && (
+              {selectedKanbanOrder.mesaOrigemId && Number(selectedKanbanOrder.mesaOrigemId) !== Number(selectedKanbanOrder.mesaId) && (
                 <div className="bg-purple-950/20 p-3 rounded-2xl border border-purple-900/40 text-xs text-purple-300 flex items-center justify-between shadow-sm font-sans animate-pulse-subtle">
                   <div>
                     <strong className="text-purple-400 block text-[9px] uppercase tracking-wider font-bold">Aviso de Transferência/Mesclagem:</strong>
