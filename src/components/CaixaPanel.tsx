@@ -189,6 +189,10 @@ export function CaixaPanel({
         if (!itemsByLancamento[lid]) itemsByLancamento[lid] = [];
         itemsByLancamento[lid].push(item);
       });
+      const temItensEmPreparo = orders
+        .filter(o => o.mesaId === comanda.mesaId)
+        .some(o => o.itens.some(i => i.status === 'preparando'));
+
       Object.entries(itemsByLancamento).forEach(([lid, items]) => {
         list.push({
           id: lid,
@@ -201,7 +205,8 @@ export function CaixaPanel({
           tipo: comanda.tipo,
           valorPago: (comanda as any).valorPago || 0,
           itens: items,
-          contaPedida: false
+          contaPedida: false,
+          temItensEmPreparo: temItensEmPreparo
         });
       });
     });
@@ -341,6 +346,12 @@ export function CaixaPanel({
   const [editingCrmUser, setEditingCrmUser] = useState<any>(null);
   const [crmFormNome, setCrmFormNome] = useState('');
   const [crmFormTelefone, setCrmFormTelefone] = useState('');
+  const [crmFormPontos, setCrmFormPontos] = useState<number>(0);
+  const [crmFormCashback, setCrmFormCashback] = useState<number>(0);
+  const [showNewCrmModal, setShowNewCrmModal] = useState(false);
+  const [newCrmNome, setNewCrmNome] = useState('');
+  const [newCrmTelefone, setNewCrmTelefone] = useState('');
+  const [newCrmSaldo, setNewCrmSaldo] = useState<string>('0');
   
   // Form states for Product Modal
   const [prodFormId, setProdFormId] = useState('');
@@ -350,6 +361,31 @@ export function CaixaPanel({
   const [prodFormDescricao, setProdFormDescricao] = useState('');
   const [prodFormImagem, setProdFormImagem] = useState('');
   const [prodFormAtivo, setProdFormAtivo] = useState(true);
+
+  // Insumos manual management states
+  const [showNewInsumoModal, setShowNewInsumoModal] = useState(false);
+  const [showEditInsumoModal, setShowEditInsumoModal] = useState(false);
+  const [showAjusteInsumoModal, setShowAjusteInsumoModal] = useState(false);
+  const [selectedInsumo, setSelectedInsumo] = useState<any>(null);
+  const [insumoFormId, setInsumoFormId] = useState('');
+  const [insumoFormNome, setInsumoFormNome] = useState('');
+  const [insumoFormMinimo, setInsumoFormMinimo] = useState<number>(10);
+  const [insumoFormMaximo, setInsumoFormMaximo] = useState<number>(50);
+  const [insumoFormUnidade, setInsumoFormUnidade] = useState('un');
+  const [insumoFormCusto, setInsumoFormCusto] = useState<number>(0);
+  const [ajusteQtd, setAjusteQtd] = useState<number>(0);
+  const [ajusteTipo, setAjusteTipo] = useState<'ENTRADA' | 'SAIDA'>('ENTRADA');
+  const [ajusteJustificativa, setAjusteJustificativa] = useState('');
+
+  // Distribuidores manual management states
+  const [showNewDistModal, setShowNewDistModal] = useState(false);
+  const [showEditDistModal, setShowEditDistModal] = useState(false);
+  const [selectedDist, setSelectedDist] = useState<any>(null);
+  const [distFormId, setDistFormId] = useState('');
+  const [distFormNomeFantasia, setDistFormNomeFantasia] = useState('');
+  const [distFormRazaoSocial, setDistFormRazaoSocial] = useState('');
+  const [distFormCnpj, setDistFormCnpj] = useState('');
+  const [distFormLeadTime, setDistFormLeadTime] = useState<number>(3);
 
   // Form states
   const [saldoInicial, setSaldoInicial] = useState('100.00');
@@ -919,15 +955,23 @@ export function CaixaPanel({
     }
   };
 
-  const handleUpdateClient = async (oldPhone: string, newNome: string, newPhone: string) => {
+  const handleUpdateClient = async (oldPhone: string, newNome: string, newPhone: string, newSaldo?: number) => {
     try {
+      const body: any = { cliente: newNome, telefone: newPhone };
+      if (newSaldo !== undefined && !isNaN(newSaldo)) {
+        if (fidelidadeConfig.tipo_recompensa === 'PONTOS') {
+          body.saldo_pontos = Math.round(newSaldo);
+        } else {
+          body.saldo_cashback = newSaldo;
+        }
+      }
       const res = await fetch(`${apiBaseUrl}/fidelidade/clientes/${oldPhone}`, {
         method: 'PUT',
         headers: {
           ...authHeaders,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ cliente: newNome, telefone: newPhone })
+        body: JSON.stringify(body)
       });
       if (res.ok) {
         alert('Cliente atualizado com sucesso!');
@@ -943,7 +987,186 @@ export function CaixaPanel({
       }
     } catch (e) {
       console.error(e);
-      alert('Erro de conexão com o servidor.');
+      alert('Erro de conexão.');
+    }
+  };
+
+  const handleCreateClient = async (nome: string, telefone: string, saldoInicial: number) => {
+    try {
+      const body: any = { cliente: nome, telefone: telefone };
+      if (!isNaN(saldoInicial)) {
+        if (fidelidadeConfig.tipo_recompensa === 'PONTOS') {
+          body.saldo_pontos = Math.round(saldoInicial);
+        } else {
+          body.saldo_cashback = saldoInicial;
+        }
+      }
+      const res = await fetch(`${apiBaseUrl}/fidelidade/clientes`, {
+        method: 'POST',
+        headers: {
+          ...authHeaders,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
+      if (res.ok) {
+        alert('Cliente cadastrado com sucesso!');
+        // Refresh client lists
+        const freshRes = await fetch(`${apiBaseUrl}/fidelidade/clientes`, { headers: authHeaders });
+        if (freshRes.ok) {
+          const data = await freshRes.json();
+          if (Array.isArray(data)) setLoyaltyUsers(data);
+        }
+      } else {
+        const err = await res.json();
+        alert(err.detail || 'Erro ao cadastrar cliente.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Erro de conexão.');
+    }
+  };
+
+  const refreshEstoqueData = () => {
+    fetch(`${apiBaseUrl}/estoque/insumos`, { headers: authHeaders })
+      .then(res => res.json())
+      .then(data => { if (Array.isArray(data)) setEstoqueInsumos(data); })
+      .catch(err => console.error('Error fetching insumos:', err));
+
+    fetch(`${apiBaseUrl}/estoque/distribuidores`, { headers: authHeaders })
+      .then(res => res.json())
+      .then(data => { if (Array.isArray(data)) setDistribuidores(data); })
+      .catch(err => console.error('Error fetching distribuidores:', err));
+  };
+
+  const handleSaveInsumo = async (isNew: boolean) => {
+    try {
+      const url = isNew 
+        ? `${apiBaseUrl}/estoque/insumos` 
+        : `${apiBaseUrl}/estoque/insumos/${selectedInsumo.id}`;
+      const method = isNew ? 'POST' : 'PUT';
+      const body: any = {
+        nome: insumoFormNome,
+        estoque_minimo: Number(insumoFormMinimo),
+        estoque_maximo: Number(insumoFormMaximo),
+        unidade_medida: insumoFormUnidade,
+        preco_medio_custo: Number(insumoFormCusto)
+      };
+      if (isNew) {
+        body.id = insumoFormId;
+        body.estoque_atual = 0.0;
+      }
+
+      const res = await fetch(url, {
+        method,
+        headers: {
+          ...authHeaders,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
+
+      if (res.ok) {
+        alert(isNew ? 'Insumo cadastrado com sucesso!' : 'Insumo atualizado com sucesso!');
+        setShowNewInsumoModal(false);
+        setShowEditInsumoModal(false);
+        refreshEstoqueData();
+      } else {
+        const err = await res.json();
+        alert(err.detail || 'Erro ao salvar insumo.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Erro de conexão ao salvar insumo.');
+    }
+  };
+
+  const handleAjustarEstoque = async () => {
+    try {
+      const res = await fetch(`${apiBaseUrl}/estoque/insumos/${selectedInsumo.id}/ajustar`, {
+        method: 'POST',
+        headers: {
+          ...authHeaders,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          quantidade: Number(ajusteQtd),
+          tipo: ajusteTipo,
+          justificativa: ajusteJustificativa
+        })
+      });
+
+      if (res.ok) {
+        alert('Ajuste de estoque realizado com sucesso!');
+        setShowAjusteInsumoModal(false);
+        refreshEstoqueData();
+      } else {
+        const err = await res.json();
+        alert(err.detail || 'Erro ao ajustar estoque.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Erro de conexão ao ajustar estoque.');
+    }
+  };
+
+  const handleSaveDistribuidor = async (isNew: boolean) => {
+    try {
+      const url = isNew
+        ? `${apiBaseUrl}/estoque/distribuidores`
+        : `${apiBaseUrl}/estoque/distribuidores/${selectedDist.id}`;
+      const method = isNew ? 'POST' : 'PUT';
+      const body: any = {
+        nome_fantasia: distFormNomeFantasia,
+        razao_social: distFormRazaoSocial || null,
+        cnpj: distFormCnpj || null,
+        lead_time_dias: Number(distFormLeadTime)
+      };
+      if (isNew) {
+        body.id = distFormId;
+      }
+
+      const res = await fetch(url, {
+        method,
+        headers: {
+          ...authHeaders,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
+
+      if (res.ok) {
+        alert(isNew ? 'Distribuidor cadastrado com sucesso!' : 'Distribuidor atualizado com sucesso!');
+        setShowNewDistModal(false);
+        setShowEditDistModal(false);
+        refreshEstoqueData();
+      } else {
+        const err = await res.json();
+        alert(err.detail || 'Erro ao salvar distribuidor.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Erro de conexão ao salvar distribuidor.');
+    }
+  };
+
+  const handleDeleteDistribuidor = async (distId: string) => {
+    if (!confirm('Deseja realmente excluir este distribuidor?')) return;
+    try {
+      const res = await fetch(`${apiBaseUrl}/estoque/distribuidores/${distId}`, {
+        method: 'DELETE',
+        headers: authHeaders
+      });
+      if (res.ok) {
+        alert('Distribuidor excluído com sucesso!');
+        refreshEstoqueData();
+      } else {
+        const err = await res.json();
+        alert(err.detail || 'Erro ao excluir distribuidor.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Erro de conexão.');
     }
   };
 
@@ -2481,7 +2704,7 @@ export function CaixaPanel({
                                 <div>
                                   <div className="flex gap-1.5 flex-wrap mb-1">
                                     <span className={clsx('px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold rounded font-mono block w-fit', contaPedida ? 'bg-blue-500/10 text-blue-400' : 'bg-emerald-500/10 text-emerald-400')}>{badgeText}</span>
-                                    {!contaPedida && (
+                                    {!contaPedida && order.temItensEmPreparo && (
                                       <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-amber-500/10 text-amber-400 rounded font-mono block w-fit" title="Outros itens desta mesa ainda estão sendo preparados">
                                         ⏳ Outros itens em preparo
                                       </span>
@@ -5199,7 +5422,24 @@ export function CaixaPanel({
           {activeTab === 'estoque' && activeSubTab === 'insumos' && (
             <div className={clsx('animate-fade-in', 'space-y-4', 'text-left')}>
               <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-3')}>
-                <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'border-b', 'border-[#27272A]', 'pb-2')}>Estoque de Insumos</span>
+                <div className="flex justify-between items-center border-b border-[#27272A] pb-2">
+                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300')}>Estoque de Insumos</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInsumoFormId('');
+                      setInsumoFormNome('');
+                      setInsumoFormMinimo(10);
+                      setInsumoFormMaximo(50);
+                      setInsumoFormUnidade('un');
+                      setInsumoFormCusto(0);
+                      setShowNewInsumoModal(true);
+                    }}
+                    className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm"
+                  >
+                    + Novo Insumo
+                  </button>
+                </div>
                 <div className={clsx('overflow-hidden', 'border', 'border-[#27272A]/40', 'rounded-2xl')}>
                   <table className={clsx('w-full', 'text-left', 'text-[10px]')}>
                     <thead>
@@ -5209,16 +5449,17 @@ export function CaixaPanel({
                         <th className={clsx('p-3', 'font-mono')}>Mínimo</th>
                         <th className={clsx('p-3', 'font-mono')}>Custo Médio</th>
                         <th className={clsx('p-3', 'text-right')}>Status</th>
+                        <th className={clsx('p-3', 'text-right')}>Ações</th>
                       </tr>
                     </thead>
                     <tbody className={clsx('divide-y', 'divide-[#27272A]/40')}>
                       {estoqueInsumos.length === 0 ? (
-                        <tr><td colSpan={5} className="p-8 text-center text-gray-500 italic">Nenhum insumo cadastrado. Importe uma NF-e para começar.</td></tr>
+                        <tr><td colSpan={6} className="p-8 text-center text-gray-500 italic">Nenhum insumo cadastrado. Clique em Novo Insumo ou importe uma NF-e para começar.</td></tr>
                       ) : estoqueInsumos.map(ins => {
                         const isLow = ins.estoque_atual <= ins.estoque_minimo;
                         return (
                           <tr key={ins.id} className={clsx('transition-colors', isLow ? 'bg-amber-500/5 hover:bg-amber-500/10' : 'hover:bg-[#1C1C1F]/20')}>
-                            <td className={clsx('p-3', 'font-semibold', 'text-white')}>{ins.nome}</td>
+                            <td className={clsx('p-3', 'font-semibold', 'text-white')}>{ins.nome} <span className="text-[8px] text-gray-500 block font-mono">ID: {ins.id}</span></td>
                             <td className={clsx('p-3', 'font-mono', isLow ? 'text-amber-400' : 'text-emerald-400')}>
                               {ins.estoque_atual.toFixed(2)} <span className="text-gray-500">{ins.unidade_medida}</span>
                             </td>
@@ -5229,6 +5470,34 @@ export function CaixaPanel({
                                 ? <span className="px-2 py-0.5 bg-amber-500/15 text-amber-400 rounded-full text-[8px] font-bold uppercase">⚠ Baixo</span>
                                 : <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 rounded-full text-[8px] font-bold uppercase">✓ Ok</span>
                               }
+                            </td>
+                            <td className="p-3 text-right space-x-1.5 whitespace-nowrap">
+                              <button
+                                onClick={() => {
+                                  setSelectedInsumo(ins);
+                                  setAjusteQtd(0);
+                                  setAjusteTipo('ENTRADA');
+                                  setAjusteJustificativa('');
+                                  setShowAjusteInsumoModal(true);
+                                }}
+                                className="px-2 py-0.5 border border-zinc-800 hover:border-zinc-700 bg-zinc-900/50 hover:bg-zinc-800 text-gray-300 hover:text-white rounded-md transition-all cursor-pointer font-bold"
+                              >
+                                Ajustar
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setSelectedInsumo(ins);
+                                  setInsumoFormNome(ins.nome);
+                                  setInsumoFormMinimo(ins.estoque_minimo);
+                                  setInsumoFormMaximo(ins.estoque_maximo);
+                                  setInsumoFormUnidade(ins.unidade_medida);
+                                  setInsumoFormCusto(ins.preco_medio_custo);
+                                  setShowEditInsumoModal(true);
+                                }}
+                                className="px-2 py-0.5 border border-zinc-800 hover:border-zinc-700 bg-zinc-900/50 hover:bg-[#1C1C1F] text-emerald-400 hover:text-emerald-300 rounded-md transition-all cursor-pointer font-bold"
+                              >
+                                Editar
+                              </button>
                             </td>
                           </tr>
                         );
@@ -5352,7 +5621,23 @@ export function CaixaPanel({
           {/* LIVE VIEW: DISTRIBUIDORES */}
           {activeTab === 'estoque' && activeSubTab === 'fornecedores' && (
             <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'text-left', 'animate-fade-in')}>
-              <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'border-b', 'border-[#27272A]', 'pb-2')}>Distribuidores Cadastrados</span>
+              <div className="flex justify-between items-center border-b border-[#27272A] pb-2">
+                <span className={clsx('font-serif', 'font-bold', 'text-gray-300')}>Distribuidores Cadastrados</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDistFormId('');
+                    setDistFormNomeFantasia('');
+                    setDistFormRazaoSocial('');
+                    setDistFormCnpj('');
+                    setDistFormLeadTime(3);
+                    setShowNewDistModal(true);
+                  }}
+                  className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm"
+                >
+                  + Novo Distribuidor
+                </button>
+              </div>
               <div className={clsx('overflow-hidden', 'border', 'border-[#27272A]/40', 'rounded-2xl')}>
                 <table className={clsx('w-full', 'text-left', 'text-[10px]')}>
                   <thead>
@@ -5361,17 +5646,39 @@ export function CaixaPanel({
                       <th className="p-3.5">Razão Social</th>
                       <th className="p-3.5">CNPJ</th>
                       <th className={clsx('p-3.5', 'text-right')}>Lead Time</th>
+                      <th className={clsx('p-3.5', 'text-right')}>Ações</th>
                     </tr>
                   </thead>
                   <tbody className={clsx('divide-y', 'divide-[#27272A]/40')}>
                     {distribuidores.length === 0 ? (
-                      <tr><td colSpan={4} className="p-8 text-center text-gray-500 italic">Nenhum distribuidor cadastrado. Os distribuidores são registrados automaticamente ao importar NF-e.</td></tr>
+                      <tr><td colSpan={5} className="p-8 text-center text-gray-500 italic">Nenhum distribuidor cadastrado. Clique em Novo Distribuidor ou importe uma NF-e.</td></tr>
                     ) : distribuidores.map(dist => (
                       <tr key={dist.id} className={clsx('hover:bg-[#1C1C1F]/20', 'transition-colors')}>
-                        <td className={clsx('p-3.5', 'font-bold', 'text-white')}>{dist.nome_fantasia || '—'}</td>
+                        <td className={clsx('p-3.5', 'font-bold', 'text-white')}>{dist.nome_fantasia || '—'} <span className="text-[8px] text-gray-500 block font-mono">ID: {dist.id}</span></td>
                         <td className={clsx('p-3.5', 'text-gray-400')}>{dist.razao_social || '—'}</td>
                         <td className={clsx('p-3.5', 'font-mono', 'text-gray-400')}>{dist.cnpj}</td>
                         <td className={clsx('p-3.5', 'text-gray-400', 'text-right', 'font-mono')}>{dist.lead_time_dias ?? '—'} dias</td>
+                        <td className="p-3.5 text-right space-x-1.5 whitespace-nowrap">
+                          <button
+                            onClick={() => {
+                              setSelectedDist(dist);
+                              setDistFormNomeFantasia(dist.nome_fantasia || '');
+                              setDistFormRazaoSocial(dist.razao_social || '');
+                              setDistFormCnpj(dist.cnpj || '');
+                              setDistFormLeadTime(dist.lead_time_dias ?? 3);
+                              setShowEditDistModal(true);
+                            }}
+                            className="px-2 py-0.5 border border-zinc-800 hover:border-zinc-700 bg-zinc-900/50 hover:bg-[#1C1C1F] text-emerald-400 hover:text-emerald-300 rounded-md transition-all cursor-pointer font-bold"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            onClick={() => handleDeleteDistribuidor(dist.id)}
+                            className="px-2 py-0.5 border border-red-950/40 hover:border-red-600/30 bg-red-950/20 hover:bg-red-900/25 text-red-400 hover:text-white rounded-md transition-all cursor-pointer font-bold"
+                          >
+                            Excluir
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -5501,7 +5808,21 @@ export function CaixaPanel({
           {/* CRM CLIENTES — REAL DATA */}
           {activeTab === 'clientes' && activeSubTab === 'crm' && (
             <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'text-left', 'animate-fade-in', 'max-w-3xl')}>
-              <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'border-b', 'border-[#27272A]', 'pb-2')}>CRM — Cadastro de Clientes</span>
+              <div className="flex justify-between items-center border-b border-[#27272A] pb-2">
+                <span className={clsx('font-serif', 'font-bold', 'text-gray-300')}>CRM — Cadastro de Clientes</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewCrmNome('');
+                    setNewCrmTelefone('');
+                    setNewCrmSaldo('0');
+                    setShowNewCrmModal(true);
+                  }}
+                  className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm"
+                >
+                  + Novo Cliente
+                </button>
+              </div>
               <div className={clsx('overflow-hidden', 'border', 'border-[#27272A]/40', 'rounded-2xl')}>
                 <table className={clsx('w-full', 'text-left', 'text-[10px]')}>
                   <thead>
@@ -5526,6 +5847,8 @@ export function CaixaPanel({
                               setEditingCrmUser(user);
                               setCrmFormNome(user.cliente);
                               setCrmFormTelefone(user.telefone);
+                              setCrmFormPontos(user.pontos || 0);
+                              setCrmFormCashback(user.saldoCashback || 0);
                             }}
                             className="px-2.5 py-1 border border-zinc-800 hover:border-zinc-700 bg-zinc-900/50 hover:bg-zinc-800 text-gray-300 hover:text-white rounded-lg transition-all cursor-pointer font-bold"
                           >
@@ -7006,7 +7329,8 @@ export function CaixaPanel({
                   alert('Preencha todos os campos!');
                   return;
                 }
-                await handleUpdateClient(editingCrmUser.telefone, crmFormNome, crmFormTelefone);
+                const newSaldo = fidelidadeConfig.tipo_recompensa === 'PONTOS' ? crmFormPontos : crmFormCashback;
+                await handleUpdateClient(editingCrmUser.telefone, crmFormNome, crmFormTelefone, newSaldo);
                 setEditingCrmUser(null);
               }}
               className="space-y-4"
@@ -7033,26 +7357,32 @@ export function CaixaPanel({
                 />
               </div>
 
-              {/* READ-ONLY SENSITIVE FIELDS */}
+              {/* EDITABLE FIELDS */}
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Saldo de Pontos:</label>
-                  <input
-                    type="text"
-                    disabled
-                    value={`${editingCrmUser.pontos} pts`}
-                    className="w-full px-3 py-2 bg-[#1C1C1F]/40 border border-[#27272A]/50 rounded-xl text-gray-400 focus:outline-none opacity-60 font-mono text-xs"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Saldo Cashback:</label>
-                  <input
-                    type="text"
-                    disabled
-                    value={`R$ ${(editingCrmUser.saldoCashback || 0).toFixed(2)}`}
-                    className="w-full px-3 py-2 bg-[#1C1C1F]/40 border border-[#27272A]/50 rounded-xl text-gray-400 focus:outline-none opacity-60 font-mono text-xs"
-                  />
-                </div>
+                {fidelidadeConfig.tipo_recompensa === 'PONTOS' ? (
+                  <div className="space-y-1 col-span-2">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Saldo de Pontos (Ajuste):</label>
+                    <input
+                      type="number"
+                      required
+                      value={crmFormPontos}
+                      onChange={(e) => setCrmFormPontos(Number(e.target.value))}
+                      className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981] font-mono text-xs"
+                    />
+                  </div>
+                ) : (
+                  <div className="space-y-1 col-span-2">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Saldo Cashback R$ (Ajuste):</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      required
+                      value={crmFormCashback}
+                      onChange={(e) => setCrmFormCashback(Number(e.target.value))}
+                      className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981] font-mono text-xs"
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-2 pt-2">
@@ -7066,6 +7396,635 @@ export function CaixaPanel({
                 <button
                   type="submit"
                   className="flex-1 py-2 bg-[#10b981] hover:bg-[#059669] text-[#121214] rounded-xl font-bold cursor-pointer transition-colors"
+                >
+                  Salvar Alterações
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showNewCrmModal && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="w-full max-w-md bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
+            <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
+              <h3 className="font-serif text-sm font-bold text-white">
+                Cadastrar Novo Cliente
+              </h3>
+              <button 
+                type="button" 
+                onClick={() => setShowNewCrmModal(false)} 
+                className="p-1 text-gray-400 hover:text-white transition-colors cursor-pointer border border-transparent"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!newCrmNome.trim() || !newCrmTelefone.trim()) {
+                  alert('Preencha todos os campos!');
+                  return;
+                }
+                await handleCreateClient(newCrmNome, newCrmTelefone, Number(newCrmSaldo));
+                setShowNewCrmModal(false);
+              }}
+              className="space-y-4"
+            >
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Nome:</label>
+                <input
+                  type="text"
+                  required
+                  value={newCrmNome}
+                  onChange={(e) => setNewCrmNome(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Telefone / WhatsApp:</label>
+                <input
+                  type="text"
+                  required
+                  value={newCrmTelefone}
+                  onChange={(e) => setNewCrmTelefone(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                  {fidelidadeConfig.tipo_recompensa === 'PONTOS' ? 'Pontos Iniciais:' : 'Cashback Inicial R$:'}
+                </label>
+                <input
+                  type="number"
+                  step={fidelidadeConfig.tipo_recompensa === 'PONTOS' ? '1' : '0.01'}
+                  value={newCrmSaldo}
+                  onChange={(e) => setNewCrmSaldo(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981] font-mono text-xs"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowNewCrmModal(false)}
+                  className="flex-1 py-2 border border-zinc-800 hover:border-zinc-700 bg-zinc-950 text-gray-400 hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2 bg-[#10b981] hover:bg-[#059669] text-[#121214] rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                >
+                  Salvar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showNewInsumoModal && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="w-full max-w-md bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
+            <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
+              <h3 className="font-serif text-sm font-bold text-white">
+                Cadastrar Novo Insumo
+              </h3>
+              <button 
+                type="button" 
+                onClick={() => setShowNewInsumoModal(false)} 
+                className="p-1 text-gray-400 hover:text-white transition-colors cursor-pointer border border-transparent"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!insumoFormId.trim() || !insumoFormNome.trim() || !insumoFormUnidade.trim()) {
+                  alert('Preencha os campos obrigatórios!');
+                  return;
+                }
+                await handleSaveInsumo(true);
+              }}
+              className="space-y-4"
+            >
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">ID do Insumo (slug):</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="ex: carne-bovina"
+                    value={insumoFormId}
+                    onChange={(e) => setInsumoFormId(e.target.value.toLowerCase().replace(/\s+/g, '-'))}
+                    className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981] font-mono text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Nome do Insumo:</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="ex: Contra Filé"
+                    value={insumoFormNome}
+                    onChange={(e) => setInsumoFormNome(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Unidade:</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="ex: kg, un, l"
+                    value={insumoFormUnidade}
+                    onChange={(e) => setInsumoFormUnidade(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Mínimo:</label>
+                  <input
+                    type="number"
+                    required
+                    value={insumoFormMinimo}
+                    onChange={(e) => setInsumoFormMinimo(Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981] font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Máximo:</label>
+                  <input
+                    type="number"
+                    required
+                    value={insumoFormMaximo}
+                    onChange={(e) => setInsumoFormMaximo(Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981] font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Preço de Custo Médio (R$):</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  value={insumoFormCusto}
+                  onChange={(e) => setInsumoFormCusto(Number(e.target.value))}
+                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981] font-mono text-xs"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowNewInsumoModal(false)}
+                  className="flex-1 py-2 border border-zinc-800 hover:border-zinc-700 bg-zinc-950 text-gray-400 hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2 bg-[#10b981] hover:bg-[#059669] text-[#121214] rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                >
+                  Criar Insumo
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showEditInsumoModal && selectedInsumo && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="w-full max-w-md bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
+            <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
+              <h3 className="font-serif text-sm font-bold text-white">
+                Editar Insumo
+              </h3>
+              <button 
+                type="button" 
+                onClick={() => setShowEditInsumoModal(false)} 
+                className="p-1 text-gray-400 hover:text-white transition-colors cursor-pointer border border-transparent"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!insumoFormNome.trim() || !insumoFormUnidade.trim()) {
+                  alert('Preencha os campos obrigatórios!');
+                  return;
+                }
+                await handleSaveInsumo(false);
+              }}
+              className="space-y-4"
+            >
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block font-mono">ID (Não editável):</label>
+                <input
+                  type="text"
+                  disabled
+                  value={selectedInsumo.id}
+                  className="w-full px-3 py-2 bg-[#1C1C1F]/40 border border-[#27272A]/50 rounded-xl text-gray-500 font-mono text-xs opacity-60"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Nome do Insumo:</label>
+                <input
+                  type="text"
+                  required
+                  value={insumoFormNome}
+                  onChange={(e) => setInsumoFormNome(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Unidade:</label>
+                  <input
+                    type="text"
+                    required
+                    value={insumoFormUnidade}
+                    onChange={(e) => setInsumoFormUnidade(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Mínimo:</label>
+                  <input
+                    type="number"
+                    required
+                    value={insumoFormMinimo}
+                    onChange={(e) => setInsumoFormMinimo(Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981] font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Máximo:</label>
+                  <input
+                    type="number"
+                    required
+                    value={insumoFormMaximo}
+                    onChange={(e) => setInsumoFormMaximo(Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981] font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Preço de Custo Médio (R$):</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  value={insumoFormCusto}
+                  onChange={(e) => setInsumoFormCusto(Number(e.target.value))}
+                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981] font-mono text-xs"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowEditInsumoModal(false)}
+                  className="flex-1 py-2 border border-zinc-800 hover:border-zinc-700 bg-zinc-950 text-gray-400 hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2 bg-[#10b981] hover:bg-[#059669] text-[#121214] rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                >
+                  Salvar Alterações
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showAjusteInsumoModal && selectedInsumo && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="w-full max-w-md bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
+            <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
+              <h3 className="font-serif text-sm font-bold text-white">
+                Ajustar Estoque: {selectedInsumo.nome}
+              </h3>
+              <button 
+                type="button" 
+                onClick={() => setShowAjusteInsumoModal(false)} 
+                className="p-1 text-gray-400 hover:text-white transition-colors cursor-pointer border border-transparent"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (ajusteQtd <= 0) {
+                  alert('A quantidade do ajuste deve ser maior que zero!');
+                  return;
+                }
+                await handleAjustarEstoque();
+              }}
+              className="space-y-4"
+            >
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Tipo de Ajuste:</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAjusteTipo('ENTRADA')}
+                    className={clsx(
+                      'py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider border transition-all cursor-pointer',
+                      ajusteTipo === 'ENTRADA'
+                        ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400 font-bold'
+                        : 'bg-zinc-950 border-zinc-800 text-gray-400 hover:text-white font-bold'
+                    )}
+                  >
+                    Entrada (+)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAjusteTipo('SAIDA')}
+                    className={clsx(
+                      'py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider border transition-all cursor-pointer',
+                      ajusteTipo === 'SAIDA'
+                        ? 'bg-red-500/10 border-red-500/60 text-red-400 font-bold'
+                        : 'bg-zinc-950 border-zinc-800 text-gray-400 hover:text-white font-bold'
+                    )}
+                  >
+                    Saída (-)
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Quantidade ({selectedInsumo.unidade_medida}):</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  value={ajusteQtd}
+                  onChange={(e) => setAjusteQtd(Number(e.target.value))}
+                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981] font-mono text-xs"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Justificativa:</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="ex: Ajuste de inventário / Perda por validade"
+                  value={ajusteJustificativa}
+                  onChange={(e) => setAjusteJustificativa(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAjusteInsumoModal(false)}
+                  className="flex-1 py-2 border border-zinc-800 hover:border-zinc-700 bg-zinc-950 text-gray-400 hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2 bg-[#10b981] hover:bg-[#059669] text-[#121214] rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                >
+                  Confirmar Ajuste
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showNewDistModal && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="w-full max-w-md bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
+            <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
+              <h3 className="font-serif text-sm font-bold text-white">
+                Cadastrar Novo Distribuidor
+              </h3>
+              <button 
+                type="button" 
+                onClick={() => setShowNewDistModal(false)} 
+                className="p-1 text-gray-400 hover:text-white transition-colors cursor-pointer border border-transparent"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!distFormId.trim() || !distFormNomeFantasia.trim()) {
+                  alert('Preencha os campos obrigatórios!');
+                  return;
+                }
+                await handleSaveDistribuidor(true);
+              }}
+              className="space-y-4"
+            >
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">ID (slug):</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="ex: ambev"
+                    value={distFormId}
+                    onChange={(e) => setDistFormId(e.target.value.toLowerCase().replace(/\s+/g, '-'))}
+                    className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981] font-mono text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Nome Fantasia:</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="ex: Ambev"
+                    value={distFormNomeFantasia}
+                    onChange={(e) => setDistFormNomeFantasia(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Razão Social:</label>
+                <input
+                  type="text"
+                  placeholder="ex: Companhia de Bebidas das Américas"
+                  value={distFormRazaoSocial}
+                  onChange={(e) => setDistFormRazaoSocial(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">CNPJ:</label>
+                  <input
+                    type="text"
+                    placeholder="00.000.000/0000-00"
+                    value={distFormCnpj}
+                    onChange={(e) => setDistFormCnpj(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981] font-mono text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Lead Time (dias):</label>
+                  <input
+                    type="number"
+                    required
+                    value={distFormLeadTime}
+                    onChange={(e) => setDistFormLeadTime(Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981] font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowNewDistModal(false)}
+                  className="flex-1 py-2 border border-zinc-800 hover:border-zinc-700 bg-zinc-955 text-gray-400 hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2 bg-[#10b981] hover:bg-[#059669] text-[#121214] rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                >
+                  Salvar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showEditDistModal && selectedDist && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="w-full max-w-md bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
+            <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
+              <h3 className="font-serif text-sm font-bold text-white">
+                Editar Distribuidor: {selectedDist.nome_fantasia}
+              </h3>
+              <button 
+                type="button" 
+                onClick={() => setShowEditDistModal(false)} 
+                className="p-1 text-gray-400 hover:text-white transition-colors cursor-pointer border border-transparent"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!distFormNomeFantasia.trim()) {
+                  alert('Preencha o nome fantasia!');
+                  return;
+                }
+                await handleSaveDistribuidor(false);
+              }}
+              className="space-y-4"
+            >
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block font-mono">ID (Não editável):</label>
+                <input
+                  type="text"
+                  disabled
+                  value={selectedDist.id}
+                  className="w-full px-3 py-2 bg-[#1C1C1F]/40 border border-[#27272A]/50 rounded-xl text-gray-500 font-mono text-xs opacity-60"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Nome Fantasia:</label>
+                <input
+                  type="text"
+                  required
+                  value={distFormNomeFantasia}
+                  onChange={(e) => setDistFormNomeFantasia(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Razão Social:</label>
+                <input
+                  type="text"
+                  value={distFormRazaoSocial}
+                  onChange={(e) => setDistFormRazaoSocial(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">CNPJ:</label>
+                  <input
+                    type="text"
+                    value={distFormCnpj}
+                    onChange={(e) => setDistFormCnpj(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981] font-mono text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Lead Time (dias):</label>
+                  <input
+                    type="number"
+                    required
+                    value={distFormLeadTime}
+                    onChange={(e) => setDistFormLeadTime(Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981] font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowEditDistModal(false)}
+                  className="flex-1 py-2 border border-zinc-800 hover:border-zinc-700 bg-zinc-950 text-gray-400 hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2 bg-[#10b981] hover:bg-[#059669] text-[#121214] rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
                 >
                   Salvar Alterações
                 </button>

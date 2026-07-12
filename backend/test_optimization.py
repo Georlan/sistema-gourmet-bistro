@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 import datetime
 
 from app.database import Base, get_db
-from app.models import Usuario, Produto, Categoria, Mesa, Comanda, Item, Insumo, ConfigFidelizacao, HistoricoFidelidade, ActivityLog
+from app.models import Usuario, Produto, Categoria, Mesa, Comanda, Item, Insumo, ConfigFidelizacao, HistoricoFidelidade, ActivityLog, Restaurante, Lancamento
 from app.security import get_password_hash
 from app.main import app
 
@@ -29,6 +29,12 @@ def setup_database():
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     db = TestingSessionLocal()
+    
+    # Create test restaurant if not exists
+    existente = db.query(Restaurante).filter(Restaurante.id == 1).first()
+    if not existente:
+        db.add(Restaurante(id=1, nome="Restaurante Teste"))
+        db.commit()
     
     # Create test users
     db.add(Usuario(id="g-1", nome="Mateus Garcom", usuario="mateus", senha_hash=get_password_hash("123"), role="garcom"))
@@ -162,6 +168,11 @@ def test_waiter_commission_report():
     db.add(c)
     db.commit()
     
+    # Add lancamento with id "none" to satisfy foreign key constraint on Item
+    l = Lancamento(id="none", comanda_id="com-w1", garcom_id="g-1")
+    db.add(l)
+    db.commit()
+    
     item = Item(id="itm-1", comanda_id="com-w1", lancamento_id="none", produto_id="p-1", preco_unit=20.0, status="entregue")
     db.add(item)
     db.commit()
@@ -175,3 +186,121 @@ def test_waiter_commission_report():
     assert report[0]["pedidos_atendidos"] == 1
     # 10% commission on R$ 20.0 is R$ 2.00
     assert report[0]["comissao_acumulada"] == 2.00
+
+
+def test_manual_clients_and_fidelity_adjustments():
+    client = TestClient(app)
+    headers = get_auth_headers(client, "caixa", "123")
+    
+    # 1. Cadastrar cliente manualmente
+    resp = client.post("/fidelidade/clientes", json={
+        "cliente": "José da Silva",
+        "telefone": "81999998888",
+        "saldo_pontos": 100
+    }, headers=headers)
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["success"] is True
+    
+    # 2. Verificar listagem de clientes (GET /fidelidade/clientes)
+    resp = client.get("/fidelidade/clientes", headers=headers)
+    assert resp.status_code == 200
+    clientes = resp.json()
+    jose = next((c for c in clientes if c["telefone"] == "81999998888"), None)
+    assert jose is not None
+    assert jose["cliente"] == "José da Silva"
+    assert jose["pontos"] == 100
+    assert jose["saldoCashback"] == 100.0
+    
+    # 3. Editar cliente e ajustar saldo de pontos/cashback (PUT)
+    # Vamos mudar o nome para "José da Silva Santos" e diminuir os pontos para 80
+    resp = client.put("/fidelidade/clientes/81999998888", json={
+        "cliente": "José da Silva Santos",
+        "telefone": "81999998888",
+        "saldo_pontos": 80
+    }, headers=headers)
+    assert resp.status_code == 200
+    
+    # 4. Verificar novos saldos e histórico gerado
+    resp = client.get("/fidelidade/clientes", headers=headers)
+    assert resp.status_code == 200
+    clientes_updated = resp.json()
+    jose_updated = next((c for c in clientes_updated if c["telefone"] == "81999998888"), None)
+    assert jose_updated["cliente"] == "José da Silva Santos"
+    assert jose_updated["pontos"] == 80
+    assert jose_updated["saldoCashback"] == 80.0
+
+
+def test_manual_insumos_and_distribuidores():
+    client = TestClient(app)
+    headers = get_auth_headers(client, "caixa", "123")
+    
+    # 1. Cadastrar novo distribuidor manualmente
+    resp = client.post("/estoque/distribuidores", json={
+        "id": "ambev-test",
+        "nome_fantasia": "Ambev Teste",
+        "razao_social": "Ambev S/A Teste",
+        "cnpj": "12.345.678/0001-90",
+        "lead_time_dias": 5
+    }, headers=headers)
+    if resp.status_code != 201:
+        print("DISTRIBUIDOR ERROR RESPONSE:", resp.status_code, resp.json())
+        assert False
+    dist = resp.json()
+    assert dist["id"] == "ambev-test"
+    assert dist["nome_fantasia"] == "Ambev Teste"
+    
+    # 2. Listar distribuidores (GET /estoque/distribuidores)
+    resp = client.get("/estoque/distribuidores", headers=headers)
+    assert resp.status_code == 200
+    dists = resp.json()
+    assert len(dists) >= 1
+    
+    # 3. Editar distribuidor (PUT /estoque/distribuidores/ambev-test)
+    resp = client.put("/estoque/distribuidores/ambev-test", json={
+        "nome_fantasia": "Ambev Alterado",
+        "lead_time_dias": 7
+    }, headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()["nome_fantasia"] == "Ambev Alterado"
+    assert resp.json()["lead_time_dias"] == 7
+    
+    # 4. Cadastrar novo insumo
+    resp = client.post("/estoque/insumos", json={
+        "id": "insumo-manual-test",
+        "nome": "Insumo Teste Manual",
+        "estoque_atual": 0.0,
+        "estoque_minimo": 15.0,
+        "estoque_maximo": 60.0,
+        "unidade_medida": "un",
+        "preco_medio_custo": 2.50
+    }, headers=headers)
+    assert resp.status_code == 201 or resp.status_code == 200 # optimization.py save_insumo returns 200
+    ins = resp.json()
+    assert ins["id"] == "insumo-manual-test"
+    assert ins["nome"] == "Insumo Teste Manual"
+    assert ins["estoque_atual"] == 0.0
+    
+    # 5. Ajustar estoque (entrada)
+    resp = client.post("/estoque/insumos/insumo-manual-test/ajustar", json={
+        "quantidade": 10.0,
+        "tipo": "ENTRADA",
+        "justificativa": "Ajuste manual inicial"
+    }, headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()["estoque_atual"] == 10.0
+    
+    # 6. Ajustar estoque (saída)
+    resp = client.post("/estoque/insumos/insumo-manual-test/ajustar", json={
+        "quantidade": 3.0,
+        "tipo": "SAIDA",
+        "justificativa": "Perda de teste"
+    }, headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()["estoque_atual"] == 7.0
+    
+    # 7. Excluir distribuidor (DELETE)
+    resp = client.delete("/estoque/distribuidores/ambev-test", headers=headers)
+    assert resp.status_code == 204
+
+

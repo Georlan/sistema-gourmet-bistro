@@ -446,6 +446,14 @@ class HistoricoFidelidade(Base):
         self._cliente_telefone = encrypt_field(value)
 
 
+class Cliente(Base):
+    __tablename__ = "clientes"
+    
+    telefone = Column(String, primary_key=True, index=True)
+    nome = Column(String, nullable=False)
+    criado_em = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+
 class Motoboy(Base):
     __tablename__ = "motoboys"
     

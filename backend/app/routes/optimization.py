@@ -5,7 +5,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 from ..database import get_db
-from ..models import Comanda, Insumo, ConfigFidelizacao, HistoricoFidelidade, ActivityLog, Pagamento
+from ..models import Comanda, Insumo, ConfigFidelizacao, HistoricoFidelidade, ActivityLog, Pagamento, Cliente
 from ..schemas import InsumoResponse, ConfigFidelizacaoResponse, HistoricoFidelidadeResponse
 from ..security import get_current_garcom_optional
 from ..models import Usuario
@@ -192,7 +192,11 @@ def get_loyalty_clients(db: Session = Depends(get_db)):
     """
     Retorna a lista de saldos reais de fidelidade agregados por cliente a partir do histórico.
     """
-    # Otimizado: Busca apenas colunas brutas do banco de dados (evita instanciar objetos ORM lentos)
+    # 1. Obter todos os clientes cadastrados manualmente
+    clientes_manuais = db.query(Cliente).all()
+    pag_names = {c.telefone.strip(): c.nome.strip() for c in clientes_manuais if c.telefone}
+
+    # 2. Busca histórico
     historico = db.query(
         HistoricoFidelidade._cliente_telefone,
         HistoricoFidelidade.tipo_movimentacao,
@@ -200,6 +204,12 @@ def get_loyalty_clients(db: Session = Depends(get_db)):
     ).all()
 
     saldos = {}
+    
+    # Inicializa saldos dos clientes cadastrados manualmente
+    for c in clientes_manuais:
+        if c.telefone:
+            saldos[c.telefone.strip()] = {"pontos": 0.0, "cashback": 0.0}
+
     for encrypted_tel, tipo_mov, delta in historico:
         if not encrypted_tel:
             continue
@@ -213,10 +223,8 @@ def get_loyalty_clients(db: Session = Depends(get_db)):
             saldos[tel]["pontos"] -= delta
             saldos[tel]["cashback"] -= delta
             
-    result = []
-    # Otimizado: Resolve o N+1. Busca os nomes de todos os CPFs em uma única query agrupada.
-    unique_tels = list(saldos.keys())
-    pag_names = {}
+    # 3. Busca nomes de pagamentos (se não cadastrados na tabela Cliente)
+    unique_tels = [t for t in saldos.keys() if t not in pag_names]
     if unique_tels:
         from ..models import Pagamento
         pags = db.query(
@@ -227,9 +235,10 @@ def get_loyalty_clients(db: Session = Depends(get_db)):
         ).all()
         
         for cpf, nome in pags:
-            if cpf and nome and cpf not in pag_names:
-                pag_names[cpf] = nome
+            if cpf and nome and cpf.strip() not in pag_names:
+                pag_names[cpf.strip()] = nome.strip()
 
+    result = []
     for idx, (tel, balance) in enumerate(saldos.items()):
         p_name = pag_names.get(tel) or f"Cliente {tel[-4:] if len(tel) >= 4 else tel}"
             
@@ -398,6 +407,8 @@ def get_garcons_relatorio(db: Session = Depends(get_db)):
 class ClientUpdate(BaseModel):
     cliente: str
     telefone: str
+    saldo_pontos: Optional[int] = None
+    saldo_cashback: Optional[float] = None
 
 @router.put("/fidelidade/clientes/{old_phone}")
 def update_loyalty_client(
@@ -406,8 +417,8 @@ def update_loyalty_client(
     db: Session = Depends(get_db)
 ):
     """
-    Edita o nome e o telefone (chave primária de fidelidade) de um cliente.
-    Atualiza HistoricoFidelidade e Pagamentos correspondentes.
+    Edita o nome, telefone, pontos e cashback de um cliente.
+    Atualiza tabela Cliente, HistoricoFidelidade e Pagamentos correspondentes.
     """
     # 1. Fetch and filter HistoricoFidelidade in Python due to non-deterministic encryption
     all_movements = db.query(HistoricoFidelidade).all()
@@ -416,19 +427,100 @@ def update_loyalty_client(
     # 2. Fetch Pagamento entries (which are unencrypted)
     pagamentos = db.query(Pagamento).filter(Pagamento.cpf_cliente == old_phone).all()
     
-    if not movements and not pagamentos:
+    # 3. Buscar ou criar o cliente na tabela dedicada 'clientes'
+    cliente_db = db.query(Cliente).filter(Cliente.telefone == old_phone).first()
+    
+    if not movements and not pagamentos and not cliente_db:
         raise HTTPException(status_code=404, detail="Cliente não encontrado.")
         
-    # 3. Update HistoricoFidelidade entries
+    if not cliente_db:
+        # Se não existia, cria um novo
+        cliente_db = Cliente(telefone=old_phone, nome=data.cliente.strip())
+        db.add(cliente_db)
+        db.commit()
+        db.refresh(cliente_db)
+        
+    # Atualizar dados do cliente na tabela 'clientes'
+    cliente_db.nome = data.cliente.strip()
+    cliente_db.telefone = data.telefone.strip()
+    
+    # 4. Update HistoricoFidelidade entries
     for m in movements:
         m.cliente_telefone = data.telefone.strip()
         
-    # 4. Update Pagamento entries
+    # 5. Update Pagamento entries
     for p in pagamentos:
         p.cpf_cliente = data.telefone.strip()
         p.nome_cliente = data.cliente.strip()
         
+    # 6. Tratar ajuste manual de saldo se fornecido
+    pontos_atual = 0.0
+    for m in movements:
+        if m.tipo_movimentacao == "ACUMULO":
+            pontos_atual += m.valor_delta
+        else:
+            pontos_atual -= m.valor_delta
+
+    novo_saldo = None
+    if data.saldo_pontos is not None:
+        novo_saldo = float(data.saldo_pontos)
+    elif data.saldo_cashback is not None:
+        novo_saldo = float(data.saldo_cashback)
+        
+    if novo_saldo is not None:
+        diff = novo_saldo - pontos_atual
+        if abs(diff) > 0.001:
+            tipo = "ACUMULO" if diff > 0 else "RESGATE"
+            ajuste = HistoricoFidelidade(
+                cliente_telefone=data.telefone.strip(),
+                tipo_movimentacao=tipo,
+                valor_delta=abs(diff)
+            )
+            db.add(ajuste)
+            
     db.commit()
     return {"success": True, "detail": "Cliente atualizado com sucesso."}
 
 
+class ClientCreate(BaseModel):
+    cliente: str
+    telefone: str
+    saldo_pontos: Optional[int] = 0
+    saldo_cashback: Optional[float] = 0.0
+
+@router.post("/fidelidade/clientes", status_code=201)
+def create_loyalty_client(
+    data: ClientCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    Cadastra manualmente um novo cliente e lança o saldo inicial se fornecido.
+    """
+    tel_limpo = data.telefone.strip()
+    cliente_existente = db.query(Cliente).filter(Cliente.telefone == tel_limpo).first()
+    if cliente_existente:
+        raise HTTPException(status_code=400, detail="Cliente com este telefone já cadastrado.")
+        
+    # Criar registro na tabela 'clientes'
+    new_c = Cliente(telefone=tel_limpo, nome=data.cliente.strip())
+    db.add(new_c)
+    db.commit()
+    db.refresh(new_c)
+    
+    # Lançar saldo inicial em HistoricoFidelidade se maior que zero
+    saldo_inicial = 0.0
+    if data.saldo_pontos and data.saldo_pontos > 0:
+        saldo_inicial = float(data.saldo_pontos)
+    elif data.saldo_cashback and data.saldo_cashback > 0:
+        saldo_inicial = float(data.saldo_cashback)
+        
+    if saldo_inicial > 0:
+        ajuste = HistoricoFidelidade(
+            cliente_telefone=tel_limpo,
+            tipo_movimentacao="ACUMULO",
+            valor_delta=saldo_inicial
+        )
+        db.add(ajuste)
+        db.commit()
+        
+    return {"success": True, "detail": "Cliente criado com sucesso."}

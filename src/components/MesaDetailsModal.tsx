@@ -339,8 +339,13 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                                 </span>
                               )}
                               {order.mesaOrigemId && (
-                                <span className="text-[8px] sm:text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider bg-purple-500/20 text-purple-400 border border-purple-500/30">
-                                  Origem: Mesa {order.mesaOrigemId}
+                                <span className="text-[8px] sm:text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                  Mesclado da Mesa {order.mesaOrigemId}
+                                </span>
+                              )}
+                              {order.mesaTransferidaDe && (
+                                <span className="text-[8px] sm:text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+                                  Transferido da Mesa {order.mesaTransferidaDe}
                                 </span>
                               )}
                             </div>
