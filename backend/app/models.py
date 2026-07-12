@@ -449,7 +449,7 @@ class HistoricoFidelidade(Base):
 class Cliente(Base):
     __tablename__ = "clientes"
     
-    telefone = Column(String, primary_key=True, index=True)
+    telefone = Column(String, primary_key=True)
     nome = Column(String, nullable=False)
     criado_em = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 

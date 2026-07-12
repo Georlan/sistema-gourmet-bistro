@@ -20,16 +20,22 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
-    op.create_table(
-        'clientes',
-        sa.Column('telefone', sa.String(), primary_key=True),
-        sa.Column('nome', sa.String(), nullable=False),
-        sa.Column('criado_em', sa.DateTime(), server_default=sa.text('CURRENT_TIMESTAMP'))
-    )
-    op.create_index(op.f('ix_clientes_telefone'), 'clientes', ['telefone'], unique=False)
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    tables = inspector.get_table_names()
+    if 'clientes' not in tables:
+        op.create_table(
+            'clientes',
+            sa.Column('telefone', sa.String(), primary_key=True),
+            sa.Column('nome', sa.String(), nullable=False),
+            sa.Column('criado_em', sa.DateTime(), server_default=sa.text('CURRENT_TIMESTAMP'))
+        )
 
 
 def downgrade() -> None:
     """Downgrade schema."""
-    op.drop_index(op.f('ix_clientes_telefone'), table_name='clientes')
-    op.drop_table('clientes')
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    tables = inspector.get_table_names()
+    if 'clientes' in tables:
+        op.drop_table('clientes')
