@@ -450,7 +450,7 @@ export function CaixaPanel({
   const [unificarViasDelivery, setUnificarViasDelivery] = useState(false);
   const [modoExclusivoSalao, setModoExclusivoSalao] = useState(true);
   const [splitPeople, setSplitPeople] = useState('1');
-  const [paymentMetodo, setPaymentMetodo] = useState<'dinheiro' | 'pix' | 'cartao' | 'cartao_debito' | 'cartao_credito'>('dinheiro');
+  const [paymentMetodo, setPaymentMetodo] = useState<'dinheiro' | 'pix' | 'cartao' | 'cartao_debito' | 'cartao_credito'>('pix');
   const [paymentValor, setPaymentValor] = useState('');
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
 
@@ -2800,11 +2800,10 @@ export function CaixaPanel({
                                   setShowCheckoutModal(true);
                                   setCheckoutServiceTax(true);
                                   setSplitPeople('1');
-                                  // Pré-seleciona apenas os itens deste lançamento específico
-                                  const targetItemIds = order.itens.map((i: any) => i.id);
-                                  setSelectedItemIds(targetItemIds);
-                                  const sub = order.itens.reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
-                                  setPaymentValor((sub * (1.0 + (checkoutServiceTax ? serviceTaxRate / 100 : 0))).toFixed(2));
+                                  // Inicia com itens desmarcados por padrão
+                                  setSelectedItemIds([]);
+                                  const sub = fullOrder.itens.filter((item: any) => !item.pago).reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
+                                  setPaymentValor((sub * (1.0 + (taxaServicoAtiva ? serviceTaxRate / 100 : 0))).toFixed(2));
                                 }}
                                 className={clsx('w-full', 'py-1.5', contaPedida ? 'bg-blue-600 hover:bg-blue-700' : 'bg-emerald-600 hover:bg-emerald-700', 'text-white', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1')}
                               >
@@ -6871,9 +6870,9 @@ export function CaixaPanel({
                     );
                   })()}
 
-                  {/* BOTÕES DE REIMPRESSÃO DO EXTRATO E WHATSAPP */}
+                  {/* BOTÕES DE REIMPRESSÃO DO EXTRATO */}
                   <div className={clsx('bg-[#121214]/40', 'border', 'border-[#27272A]/50', 'p-4', 'rounded-2xl', 'space-y-3', 'text-left')}>
-                    <span className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Ações de Envio / Impressão</span>
+                    <span className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Reimpressão de Extrato</span>
                     <div className="flex gap-2">
                       <button
                         type="button"
@@ -6940,37 +6939,6 @@ export function CaixaPanel({
                         🖨️ Só Valores
                       </button>
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const defaultPhone = paymentCPF && /^[0-9]+$/.test(paymentCPF) ? paymentCPF : '';
-                        const phone = prompt("Digite o WhatsApp do cliente (apenas números com DDD):", defaultPhone);
-                        if (!phone) return;
-                        
-                        const { subtotal, taxa, total } = getCheckoutTotals(selectedOrder);
-                        const itensText = selectedOrder.itens
-                          .filter(item => !item.pago)
-                          .map(item => `• ${item.nome}: R$ ${item.preco.toFixed(2)}`)
-                          .join('\n');
-                        
-                        const msg = `🍔 *KÔMA GOURMET BISTRÔ*\n` +
-                          `*Extrato de Consumo - Mesa ${selectedOrder.mesaId}*\n\n` +
-                          `${itensText}\n` +
-                          `---------------------------------\n` +
-                          `*Subtotal:* R$ ${subtotal.toFixed(2)}\n` +
-                          (taxaServicoAtiva && checkoutServiceTax ? `*Taxa de Serviço (${serviceTaxRate}%):* R$ ${taxa.toFixed(2)}\n` : '') +
-                          `*Total Geral:* R$ ${total.toFixed(2)}\n\n` +
-                          `Obrigado pelo seu consumo! Volte sempre!`;
-                        
-                        const encodedMsg = encodeURIComponent(msg);
-                        window.open(`https://api.whatsapp.com/send?phone=55${phone.replace(/\D/g, '')}&text=${encodedMsg}`, '_blank');
-                      }}
-                      className={clsx('w-full', 'py-2', 'bg-emerald-600/10', 'hover:bg-emerald-600/20', 'border', 'border-emerald-600/30', 'rounded-xl', 'text-[10px]', 'font-bold', 'text-[#10b981]', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'justify-center', 'gap-1.5')}
-                      title="Envia a conta detalhada em formato texto no WhatsApp do cliente"
-                    >
-                      💬 Enviar via WhatsApp
-                    </button>
                   </div>
                 </div>
 
@@ -7014,19 +6982,19 @@ export function CaixaPanel({
                       <div className={clsx('flex', 'gap-1.5', 'p-1', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'shrink-0', 'flex-wrap')}>
                         <button
                           type="button"
-                          onClick={() => setPaymentMetodo('dinheiro')}
-                          className={`flex-1 min-w-[60px] py-2 text-[9px] font-bold rounded-lg transition-all cursor-pointer ${paymentMetodo === 'dinheiro' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'
-                            }`}
-                        >
-                          Dinheiro
-                        </button>
-                        <button
-                          type="button"
                           onClick={() => setPaymentMetodo('pix')}
                           className={`flex-1 min-w-[50px] py-2 text-[9px] font-bold rounded-lg transition-all cursor-pointer ${paymentMetodo === 'pix' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'
                             }`}
                         >
                           Pix
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPaymentMetodo('dinheiro')}
+                          className={`flex-1 min-w-[60px] py-2 text-[9px] font-bold rounded-lg transition-all cursor-pointer ${paymentMetodo === 'dinheiro' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'
+                            }`}
+                        >
+                          Dinheiro
                         </button>
                         <button
                           type="button"
