@@ -6979,6 +6979,9 @@ export function CaixaPanel({
                           Pagar Valor Exato
                         </button>
                       </div>
+                      <span className={clsx('text-[8px]', 'text-gray-500', 'block', 'mt-1.5', 'leading-normal')}>
+                        💡 <strong>Dica:</strong> Para pagamentos múltiplos (ex: parte Pix e parte cartão), você pode digitar qualquer valor no campo acima e lançá-los em sequência sem precisar selecionar os itens.
+                      </span>
                     </div>
 
                     {/* BOTÕES DE ATALHO DE CÉDULAS (CASH SHORTCUTS) */}
