@@ -4,7 +4,7 @@ from typing import List, Optional
 from ..database import get_db
 from ..models import Mesa, ObservacaoPredefinida, Comanda, Item, Usuario
 from ..schemas import MesaResponse, MesaUpdate, MesaCreate, ObservacaoPredefinidaResponse
-from ..security import get_current_garcom_optional
+from ..security import get_current_garcom_optional, get_current_user
 from ..websocket_manager import manager
 
 router = APIRouter(
@@ -14,12 +14,12 @@ router = APIRouter(
 
 # ----------------- TABLES ENDPOINTS -----------------
 @router.get("/", response_model=List[MesaResponse])
-def get_mesas(db: Session = Depends(get_db)):
+def get_mesas(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """Retorna todas as mesas do salão com suas respectivas capacidades e nomes."""
     return db.query(Mesa).order_by(Mesa.id).all()
 
 @router.get("/{mesa_id}", response_model=MesaResponse)
-def get_mesa(mesa_id: int, db: Session = Depends(get_db)):
+def get_mesa(mesa_id: int, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """Busca os detalhes de uma mesa específica pelo ID."""
     mesa = db.query(Mesa).filter(Mesa.id == mesa_id).first()
     if not mesa:
@@ -34,7 +34,8 @@ def update_mesa(
     mesa_id: int, 
     update_data: MesaUpdate, 
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
 ):
     """Permite alterar a capacidade ou o nome personalizado da mesa."""
     db_mesa = db.query(Mesa).filter(Mesa.id == mesa_id).first()
@@ -58,7 +59,8 @@ def update_mesa(
 def create_mesa(
     mesa_in: MesaCreate, 
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
 ):
     """Cria uma nova mesa dinamicamente no salão."""
     existing = db.query(Mesa).filter(Mesa.id == mesa_in.id).first()
@@ -82,7 +84,8 @@ def create_mesa(
 def delete_mesa(
     mesa_id: int, 
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
 ):
     """Remove uma mesa do salão se ela não tiver nenhuma comanda ativa aberta."""
     mesa = db.query(Mesa).filter(Mesa.id == mesa_id).first()
@@ -105,12 +108,12 @@ def delete_mesa(
 
 # ----------------- OBSERVATIONS ENDPOINTS -----------------
 @router.get("/observacoes/todas", response_model=List[ObservacaoPredefinidaResponse])
-def get_todas_observacoes(db: Session = Depends(get_db)):
+def get_todas_observacoes(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """Retorna a lista completa de observações predefinidas do salão."""
     return db.query(ObservacaoPredefinida).all()
 
 @router.get("/observacoes/categoria/{categoria_id}", response_model=List[ObservacaoPredefinidaResponse])
-def get_observacoes_por_categoria(categoria_id: str, db: Session = Depends(get_db)):
+def get_observacoes_por_categoria(categoria_id: str, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """
     Retorna as observações predefinidas filtradas por uma categoria de prato.
     Ex: Categoria 'Hambúrgueres Bovinos' retorna ['Sem Cheddar', 'Sem cebola'].
@@ -125,7 +128,7 @@ def imprimir_recibo_mesa(
     print_footer: Optional[str] = None,
     apenas_valores: bool = False,
     db: Session = Depends(get_db),
-    current_garcom: Optional[Usuario] = Depends(get_current_garcom_optional)
+    current_garcom: Usuario = Depends(get_current_user)
 ):
     """
     Imprime o recibo de consumo de todas as comandas abertas da mesa.

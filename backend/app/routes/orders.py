@@ -12,7 +12,7 @@ from ..schemas import (
     LancamentoResponse, LancamentoCreate, ItemResponse, ItemUpdate,
     MotoboyCreate, MotoboyResponse
 )
-from ..security import get_current_garcom_optional
+from ..security import get_current_garcom_optional, get_current_user
 from ..websocket_manager import manager
 
 router = APIRouter(
@@ -53,7 +53,8 @@ def print_in_background(printer_name: str, ticket_text: str):
 def get_comandas(
     mesa_id: Optional[int] = None,
     fechada: Optional[bool] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
 ):
     """
     Retorna a lista de comandas, com filtros opcionais por mesa e status (aberta/fechada).
@@ -69,7 +70,8 @@ def get_comandas(
 def get_comandas_detalhes(
     mesa_id: Optional[int] = None,
     fechada: Optional[bool] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
 ):
     """
     Retorna a lista de comandas completas (com itens e lançamentos), com filtros opcionais.
@@ -85,7 +87,7 @@ def get_comandas_detalhes(
     return query.all()
 
 @router.get("/{comanda_id}", response_model=ComandaDetail)
-def get_comanda(comanda_id: str, db: Session = Depends(get_db)):
+def get_comanda(comanda_id: str, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """
     Retorna os detalhes completos de uma comanda específica (incluindo lançamentos e itens).
     """
@@ -100,7 +102,7 @@ def get_comanda(comanda_id: str, db: Session = Depends(get_db)):
 # ----------------- WRITE/ACTION ENDPOINTS -----------------
 
 @router.post("/", response_model=ComandaResponse, status_code=status.HTTP_201_CREATED)
-def abrir_comanda(comanda_in: ComandaCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def abrir_comanda(comanda_in: ComandaCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """
     Abre uma nova comanda para uma mesa (ou sem mesa para retirada).
     """
@@ -168,14 +170,12 @@ def pedir_conta(
     comanda_id: str,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_garcom=Depends(get_current_garcom_optional)
+    current_garcom: Usuario = Depends(get_current_user)
 ):
     """
     Garçom solicita a conta para a mesa. Altera status_comanda para 'aguardando_pagamento',
     movendo a mesa para a coluna 3 do Kanban (Fechar Conta) sem passar pela coluna 2.
     """
-    if current_garcom is None:
-        raise HTTPException(status_code=401, detail="Token obrigatório")
     comanda = db.query(Comanda).filter(Comanda.id == comanda_id).first()
     if not comanda:
         raise HTTPException(status_code=404, detail="Comanda não encontrada")
@@ -188,7 +188,7 @@ def pedir_conta(
     return comanda
 
 @router.post("/{comanda_id}/lancamentos", response_model=LancamentoResponse, status_code=status.HTTP_201_CREATED)
-def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """
     Lança novos itens na comanda (gerando um novo lote de pedido) e aciona a impressão de cozinha.
     """
@@ -328,7 +328,7 @@ def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_ta
     return novo_lancamento
 
 @router.post("/{comanda_id}/dividir", response_model=List[ComandaResponse])
-def dividir_comanda(comanda_id: str, itens_ids: List[str], novo_identificador: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def dividir_comanda(comanda_id: str, itens_ids: List[str], novo_identificador: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """
     Divide itens de uma comanda aberta criando uma comanda separada (com mesmo número de pedido).
     """
@@ -389,7 +389,7 @@ def dividir_comanda(comanda_id: str, itens_ids: List[str], novo_identificador: s
     return [comanda_origem, nova_comanda]
 
 @router.post("/{comanda_id}/transferir/{nova_mesa_id}", response_model=ComandaResponse)
-def transferir_comanda(comanda_id: str, nova_mesa_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def transferir_comanda(comanda_id: str, nova_mesa_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """
     Transfere uma comanda inteira para outra mesa.
     """
@@ -430,17 +430,11 @@ def fechar_comanda(
     comanda_id: str,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_garcom: Optional[Usuario] = Depends(get_current_garcom_optional)
+    current_garcom: Usuario = Depends(get_current_user)
 ):
     """
     Fecha a comanda. Aceita qualquer operador autenticado (garçom ou caixa).
     """
-
-    if current_garcom is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token obrigatório"
-        )
 
     comanda = db.query(Comanda).filter(Comanda.id == comanda_id).first()
     if not comanda:
@@ -491,16 +485,11 @@ def reabrir_comanda(
     comanda_id: str,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_garcom: Optional[Usuario] = Depends(get_current_garcom_optional)
+    current_garcom: Usuario = Depends(get_current_user)
 ):
     """
     Reabre uma comanda fechada (requer autenticação do garçom).
     """
-    if current_garcom is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token obrigatório"
-        )
 
     comanda = db.query(Comanda).filter(Comanda.id == comanda_id).first()
     if not comanda:
@@ -534,17 +523,12 @@ def cancelar_item(
     item_id: str,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_garcom: Optional[Usuario] = Depends(get_current_garcom_optional)
+    current_garcom: Usuario = Depends(get_current_user)
 ):
     """
     Cancela um item específico de uma comanda (requer autenticação do garçom).
     Se for o único item ativo da comanda, o garçom não pode cancelar.
     """
-    if current_garcom is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token obrigatório"
-        )
 
     item = db.query(Item).filter(Item.id == item_id).first()
     if not item:
@@ -591,7 +575,13 @@ def cancelar_item(
     return item
 
 @router.post("/itens/{item_id}/transferir/{nova_mesa_id}", response_model=ItemResponse)
-def transferir_item(item_id: str, nova_mesa_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def transferir_item(
+    item_id: str,
+    nova_mesa_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
     """
     Transfere um item individual para outra mesa.
     Se a mesa de destino já possuir uma comanda aberta, associa o item a ela.
@@ -656,18 +646,12 @@ def update_item_details(
     update_data: ItemUpdate,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_garcom: Optional[Usuario] = Depends(get_current_garcom_optional)
+    current_garcom: Usuario = Depends(get_current_user)
 ):
     """
     Permite atualizar as observações ou o nome do cliente de um item na comanda ativa.
     Respeita a permissão 'perm_garcom_editar' configurada na retaguarda.
     """
-    if current_garcom is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token obrigatório"
-        )
-        
     item = db.query(Item).filter(Item.id == item_id).first()
     if not item:
         raise HTTPException(
@@ -749,16 +733,11 @@ def update_item_status(
     status: str,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_garcom: Optional[Usuario] = Depends(get_current_garcom_optional)
+    current_garcom: Usuario = Depends(get_current_user)
 ):
     """
     Atualiza o status de um item (requer autenticação do garçom).
     """
-    if current_garcom is None:
-        raise HTTPException(
-            status_code=401,
-            detail="Token obrigatório"
-        )
     item = db.query(Item).filter(Item.id == item_id).first()
     if not item:
         raise HTTPException(
@@ -782,7 +761,7 @@ def reimprimir_lancamento_cozinha(
     lancamento_id: str,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_garcom: Optional[Usuario] = Depends(get_current_garcom_optional)
+    current_garcom: Usuario = Depends(get_current_user)
 ):
     """
     Reimprime a via de cozinha de um lote/lançamento específico ou comanda inteira.
@@ -893,7 +872,7 @@ def reimprimir_lancamento_cozinha(
 # ----------------- DELIVERY & MOTOBOYS ENDPOINTS -----------------
 
 @router.get("/delivery/ativos", response_model=List[ComandaDetail])
-def listar_delivery_ativos(db: Session = Depends(get_db)):
+def listar_delivery_ativos(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """
     Retorna todas as comandas de delivery ou retirada que não estejam finalizadas/fechadas.
     Inclui as pendentes (na gaveta de aceite) e as em produção/trânsito.
@@ -909,7 +888,8 @@ def atualizar_status_delivery(
     comanda_id: str,
     status_novo: str,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
 ):
     """
     Atualiza o status de entrega do delivery.
@@ -930,7 +910,8 @@ def despachar_delivery(
     comanda_id: str,
     payload: dict,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
 ):
     """
     Vincula um motoboy à comanda e altera o status para 'transito'.
@@ -975,7 +956,7 @@ def despachar_delivery(
 
 
 @router.get("/motoboys/lista", response_model=List[MotoboyResponse])
-def listar_motoboys(db: Session = Depends(get_db)):
+def listar_motoboys(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """
     Lista todos os motoboys cadastrados.
     """
@@ -985,7 +966,8 @@ def listar_motoboys(db: Session = Depends(get_db)):
 @router.post("/motoboys/cadastro", response_model=MotoboyResponse, status_code=status.HTTP_201_CREATED)
 def cadastrar_motoboy(
     motoboy_in: MotoboyCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
 ):
     """
     Cadastra um novo motoboy.
@@ -1004,7 +986,7 @@ def cadastrar_motoboy(
 
 
 @router.post("/teste-impressao")
-def testar_impressao(db: Session = Depends(get_db)):
+def testar_impressao(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     from ..printer_service import PrinterService
     try:
         printer = PrinterService()
@@ -1025,7 +1007,7 @@ def testar_impressao(db: Session = Depends(get_db)):
 
 
 @router.get("/impressoras/detectadas")
-def buscar_impressoras_detectadas(db: Session = Depends(get_db)):
+def buscar_impressoras_detectadas(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     import glob
     import subprocess
     import os
@@ -1068,7 +1050,8 @@ def mesclar_comandas(
     mesa_origem_id: int,
     mesa_destino_id: int,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
 ):
     """
     Mescla o consumo da mesa de origem na mesa de destino.
@@ -1139,7 +1122,8 @@ def mesclar_comandas(
 def desmesclar_comanda(
     comanda_id: str,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
 ):
     """
     Desmembra uma comanda mesclada de volta para a sua mesa de origem.

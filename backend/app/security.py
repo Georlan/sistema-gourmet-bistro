@@ -2,7 +2,7 @@ import jwt
 from datetime import datetime, timedelta, timezone
 from typing import Any, Union, Optional
 import bcrypt
-from fastapi import Depends
+from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from .config import settings
@@ -58,4 +58,34 @@ def get_current_garcom_optional(
         return None
     
     return db.query(Usuario).filter(Usuario.id == garcom_id).first()
+
+
+def get_current_user(
+    token: Optional[str] = Depends(oauth2_scheme),
+    db: Session = Depends(get_db)
+) -> Usuario:
+    """
+    Dependency obrigatória. Levanta 401 se não houver token válido ou
+    se o usuário não existir mais no banco.
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Credenciais inválidas ou ausentes.",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    if not token:
+        raise credentials_exception
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        garcom_id: str = payload.get("sub")
+        if garcom_id is None:
+            raise credentials_exception
+    except jwt.PyJWTError:
+        raise credentials_exception
+
+    user = db.query(Usuario).filter(Usuario.id == garcom_id).first()
+    if user is None:
+        raise credentials_exception
+    return user
+
 

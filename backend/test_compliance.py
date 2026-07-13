@@ -7,6 +7,7 @@ from app.database import SessionLocal, Base, engine
 from app.main import app
 from app.models import Comanda, MensagemWhatsApp, RascunhoPedido, ActivityLog, Usuario
 from app.crypt import encrypt_field, decrypt_field
+from app.security import get_password_hash, create_access_token
 
 client = TestClient(app)
 
@@ -22,10 +23,21 @@ def setup_db():
             id="admin",
             nome="Admin",
             usuario="admin",
-            senha_hash="hash",
+            senha_hash=get_password_hash("123"),
             role="admin"
         )
         db.add(admin)
+        
+        # Create standard garcom user
+        garcom = Usuario(
+            id="garcom_test",
+            nome="Garcom",
+            usuario="garcom_test",
+            senha_hash=get_password_hash("123"),
+            role="garcom"
+        )
+        db.add(garcom)
+        
         db.commit()
     finally:
         db.close()
@@ -86,11 +98,29 @@ def test_gdpr_opt_out(setup_db):
         assert msg._cliente_telefone != "81999998888"
         assert msg.cliente_telefone == "81999998888"
         
-        # Fire GDPR request
-        response = client.post("/auth/gdpr/opt-out", json={
+        # 1. Test 401 Unauthorized without token
+        resp_unauthorized = client.post("/auth/gdpr/opt-out", json={
             "telefone": "81999998888",
             "anonimizar": True
         })
+        assert resp_unauthorized.status_code == 401
+        
+        # 2. Test 403 Forbidden for non-admin role (garcom)
+        garcom_token = create_access_token(subject="garcom_test", restaurante_id=1)
+        garcom_headers = {"Authorization": f"Bearer {garcom_token}"}
+        resp_forbidden = client.post("/auth/gdpr/opt-out", json={
+            "telefone": "81999998888",
+            "anonimizar": True
+        }, headers=garcom_headers)
+        assert resp_forbidden.status_code == 403
+        
+        # 3. Fire GDPR request with Admin token (should succeed)
+        admin_token = create_access_token(subject="admin", restaurante_id=1)
+        admin_headers = {"Authorization": f"Bearer {admin_token}"}
+        response = client.post("/auth/gdpr/opt-out", json={
+            "telefone": "81999998888",
+            "anonimizar": True
+        }, headers=admin_headers)
         assert response.status_code == 200
         
         # Verify anonymization succeeded

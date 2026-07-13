@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from ..database import get_db
 from ..models import Comanda, Insumo, ConfigFidelizacao, HistoricoFidelidade, ActivityLog, Pagamento, Cliente
 from ..schemas import InsumoResponse, ConfigFidelizacaoResponse, HistoricoFidelidadeResponse
-from ..security import get_current_garcom_optional
+from ..security import get_current_garcom_optional, get_current_user
 from ..models import Usuario
 from ..crypt import decrypt_field
 
@@ -18,7 +18,7 @@ router = APIRouter(
 # ----------------- INVENTÓRIO E ESTOQUE -----------------
 
 @router.get("/estoque/sugestoes")
-def get_sugestoes_compra(db: Session = Depends(get_db)):
+def get_sugestoes_compra(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """
     Ponto de Ressuprimento (Estoque Mínimo).
     Query que identifica insumos abaixo do mínimo e sugere compras baseadas no estoque máximo desejado.
@@ -41,7 +41,7 @@ def get_sugestoes_compra(db: Session = Depends(get_db)):
 # ----------------- GRÁFICO DE HORÁRIOS DE PICO (SQL) -----------------
 
 @router.get("/comandas/estatisticas/pico")
-def get_pico_horarios(db: Session = Depends(get_db)):
+def get_pico_horarios(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """
     Retorna os horários de pico de comandas do restaurante.
     """
@@ -84,7 +84,8 @@ def get_pico_horarios(db: Session = Depends(get_db)):
 def get_estatisticas_geral(
     data_inicio: Optional[str] = None,
     data_fim: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
 ):
     """
     Retorna estatísticas consolidadas de vendas para o painel de BI (dashboard financeiro).
@@ -254,7 +255,7 @@ class CheckoutFidelidadeRequest(BaseModel):
     pontos_a_resgatar: Optional[float] = 0.0
 
 @router.get("/fidelidade/config", response_model=ConfigFidelizacaoResponse)
-def get_fidelidade_config(db: Session = Depends(get_db)):
+def get_fidelidade_config(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """Retorna as configurações do programa de fidelidade do restaurante."""
     config = db.query(ConfigFidelizacao).first()
     if not config:
@@ -265,7 +266,7 @@ def get_fidelidade_config(db: Session = Depends(get_db)):
     return config
 
 @router.get("/fidelidade/clientes")
-def get_loyalty_clients(db: Session = Depends(get_db)):
+def get_loyalty_clients(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """
     Retorna a lista de saldos reais de fidelidade agregados por cliente a partir do histórico.
     """
@@ -329,7 +330,7 @@ def get_loyalty_clients(db: Session = Depends(get_db)):
     return result
 
 @router.post("/fidelidade/config", response_model=ConfigFidelizacaoResponse)
-def update_fidelidade_config(config_in: ConfigFidelizacaoCreate, db: Session = Depends(get_db)):
+def update_fidelidade_config(config_in: ConfigFidelizacaoCreate, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """Atualiza as configurações do programa de fidelidade."""
     config = db.query(ConfigFidelizacao).first()
     if not config:
@@ -346,7 +347,7 @@ def update_fidelidade_config(config_in: ConfigFidelizacaoCreate, db: Session = D
     return config
 
 @router.post("/fidelidade/checkout")
-def checkout_fidelidade(req: CheckoutFidelidadeRequest, db: Session = Depends(get_db)):
+def checkout_fidelidade(req: CheckoutFidelidadeRequest, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """
     Unifica a aplicação de pontos e cashback no checkout.
     Se tipo_recompensa for PONTOS: calcula a pontuação (R$ 1 = X pontos) ou aplica resgate.
@@ -446,7 +447,8 @@ def checkout_fidelidade(req: CheckoutFidelidadeRequest, db: Session = Depends(ge
 def get_garcons_relatorio(
     data_inicio: Optional[str] = None,
     data_fim: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
 ):
     """
     Retorna o relatório simplificado de desempenho dos garçons.
@@ -533,7 +535,8 @@ class ClientUpdate(BaseModel):
 def update_loyalty_client(
     old_phone: str,
     data: ClientUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
 ):
     """
     Edita o nome, telefone, pontos e cashback de um cliente.
@@ -610,7 +613,8 @@ class ClientCreate(BaseModel):
 @router.post("/fidelidade/clientes", status_code=201)
 def create_loyalty_client(
     data: ClientCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
 ):
     """
     Cadastra manualmente um novo cliente e lança o saldo inicial se fornecido.

@@ -61,21 +61,21 @@ def test_flow(setup_db):
     headers = {"Authorization": f"Bearer {token}"}
 
     # 2. Abrir comanda na Mesa 1
-    resp = client.post("/comandas/", json={"mesa_id": 1, "garcom_id": "g-1", "tipo": "Consumo no Local"})
+    resp = client.post("/comandas/", json={"mesa_id": 1, "garcom_id": "g-1", "tipo": "Consumo no Local"}, headers=headers)
     assert resp.status_code == 201
     comanda1 = resp.json()
     assert comanda1["mesa_id"] == 1
     assert comanda1["numero_pedido"] == 1
 
     # 3. Abrir outra comanda na Mesa 1 (Dividida por nome) - Deve compartilhar o numero_pedido
-    resp = client.post("/comandas/", json={"mesa_id": 1, "garcom_id": "g-1", "tipo": "Consumo no Local", "identificador": "Ana"})
+    resp = client.post("/comandas/", json={"mesa_id": 1, "garcom_id": "g-1", "tipo": "Consumo no Local", "identificador": "Ana"}, headers=headers)
     assert resp.status_code == 201
     comanda2 = resp.json()
     assert comanda2["numero_pedido"] == 1  # Compartilha o número de pedido
     assert comanda2["identificador"] == "Ana"
 
     # 4. Abrir comanda na Mesa 2 - Deve gerar um novo numero_pedido
-    resp = client.post("/comandas/", json={"mesa_id": 2, "garcom_id": "g-1", "tipo": "Consumo no Local"})
+    resp = client.post("/comandas/", json={"mesa_id": 2, "garcom_id": "g-1", "tipo": "Consumo no Local"}, headers=headers)
     assert resp.status_code == 201
     comanda3 = resp.json()
     assert comanda3["numero_pedido"] == 2
@@ -88,7 +88,8 @@ def test_flow(setup_db):
             "itens": [
                 {"produto_id": "p-1", "observacao": "Gelo e limão", "cliente_nome": "João"}
             ]
-        }
+        },
+        headers=headers
     )
     assert resp.status_code == 201
     lancamento = resp.json()
@@ -105,7 +106,8 @@ def test_flow(setup_db):
             "itens": [
                 {"produto_id": "p-2", "observacao": ""}
             ]
-        }
+        },
+        headers=headers
     )
     assert resp.status_code == 400
     assert "desativado" in resp.json()["detail"]
@@ -143,7 +145,7 @@ def test_flow(setup_db):
     assert resp.json()["fechada"] is False
 
     # 11. Testar transferência de comanda
-    resp = client.post(f"/comandas/{comanda1['id']}/transferir/2")
+    resp = client.post(f"/comandas/{comanda1['id']}/transferir/2", headers=headers)
     assert resp.status_code == 200
     assert resp.json()["mesa_id"] == 2
 
@@ -154,20 +156,21 @@ def test_flow(setup_db):
         json={
             "garcom_id": "g-1",
             "itens": [{"produto_id": "p-1", "observacao": "Transferível"}]
-        }
+        },
+        headers=headers
     )
     assert resp.status_code == 201
     item_to_transfer = resp.json()["itens"][0]
 
     # Transferir item para Mesa 1 (que não tem comanda ativa agora, então deve criar uma nova)
-    resp = client.post(f"/comandas/itens/{item_to_transfer['id']}/transferir/1")
+    resp = client.post(f"/comandas/itens/{item_to_transfer['id']}/transferir/1", headers=headers)
     assert resp.status_code == 200
     new_item_data = resp.json()
     assert new_item_data["comanda_id"] != comanda3["id"]
     
     # Verificar se a nova comanda da Mesa 1 foi de fato criada no banco e está aberta
     new_comanda_id = new_item_data["comanda_id"]
-    resp = client.get(f"/comandas/{new_comanda_id}")
+    resp = client.get(f"/comandas/{new_comanda_id}", headers=headers)
     assert resp.status_code == 200
     assert resp.json()["mesa_id"] == 1
     assert resp.json()["fechada"] is False
@@ -181,37 +184,37 @@ def test_transferir_e_mesclar_limites(setup_db):
     headers = {"Authorization": f"Bearer {token}"}
 
     # 2. Criar comanda ativa na Mesa 3, Mesa 4 e Mesa 5
-    resp3 = client.post("/comandas/", json={"mesa_id": 3, "garcom_id": "g-1", "tipo": "Consumo no Local"})
+    resp3 = client.post("/comandas/", json={"mesa_id": 3, "garcom_id": "g-1", "tipo": "Consumo no Local"}, headers=headers)
     assert resp3.status_code == 201
     comanda3 = resp3.json()
 
-    resp4 = client.post("/comandas/", json={"mesa_id": 4, "garcom_id": "g-1", "tipo": "Consumo no Local"})
+    resp4 = client.post("/comandas/", json={"mesa_id": 4, "garcom_id": "g-1", "tipo": "Consumo no Local"}, headers=headers)
     assert resp4.status_code == 201
     comanda4 = resp4.json()
 
-    resp5 = client.post("/comandas/", json={"mesa_id": 5, "garcom_id": "g-1", "tipo": "Consumo no Local"})
+    resp5 = client.post("/comandas/", json={"mesa_id": 5, "garcom_id": "g-1", "tipo": "Consumo no Local"}, headers=headers)
     assert resp5.status_code == 201
     comanda5 = resp5.json()
 
     # 3. Mesclar Mesa 3 na Mesa 4 -> Permitido
-    resp_merge = client.post("/comandas/mesclar?mesa_origem_id=3&mesa_destino_id=4")
+    resp_merge = client.post("/comandas/mesclar?mesa_origem_id=3&mesa_destino_id=4", headers=headers)
     assert resp_merge.status_code == 200
     assert resp_merge.json()["mesa_id"] == 4
     assert resp_merge.json()["mesa_origem_id"] == 3
 
     # 4. Tentar mesclar Mesa 5 na Mesa 4 -> Deve ser impedido (limite de 2 mesas excedido na destino)
-    resp_merge_fail = client.post("/comandas/mesclar?mesa_origem_id=5&mesa_destino_id=4")
+    resp_merge_fail = client.post("/comandas/mesclar?mesa_origem_id=5&mesa_destino_id=4", headers=headers)
     assert resp_merge_fail.status_code == 400
     assert "Limite de mesclagem atingido" in resp_merge_fail.json()["detail"]
 
     # 5. Tentar mesclar Mesa 4 (que tem mesclagem de Mesa 3) na Mesa 5 -> Deve ser impedido
-    resp_merge_fail2 = client.post("/comandas/mesclar?mesa_origem_id=4&mesa_destino_id=5")
+    resp_merge_fail2 = client.post("/comandas/mesclar?mesa_origem_id=4&mesa_destino_id=5", headers=headers)
     assert resp_merge_fail2.status_code == 400
     assert "já faz parte de outra mesclagem ativa" in resp_merge_fail2.json()["detail"]
 
     # 6. Transferir a comanda mesclada (Mesa 4) para a Mesa 5 (que é individual)
     # Isso deve mudar o mesa_id para 5, limpar mesa_origem_id e definir mesa_transferida_de = 4.
-    resp_trans = client.post(f"/comandas/{comanda3['id']}/transferir/5")
+    resp_trans = client.post(f"/comandas/{comanda3['id']}/transferir/5", headers=headers)
     assert resp_trans.status_code == 200
     comanda_trans = resp_trans.json()
     assert comanda_trans["mesa_id"] == 5
