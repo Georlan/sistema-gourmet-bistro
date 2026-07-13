@@ -173,3 +173,44 @@ def test_encryption_errors():
     finally:
         # Restaurar cipher original
         crypt.cipher = original_cipher
+
+def test_post_loyalty_client_encryption_failure(setup_db):
+    import app.crypt as crypt
+    from app.security import create_access_token
+    
+    # 1. Obter o token do Admin
+    admin_token = create_access_token(subject="admin", restaurante_id=1)
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+    
+    # Backup original cipher
+    original_cipher = crypt.cipher
+    
+    try:
+        # 2. Forçar falha no cipher
+        class FailedCipher:
+            def encrypt(self, *args, **kwargs):
+                raise Exception("Encryption failure simulation")
+            def decrypt(self, *args, **kwargs):
+                raise Exception("Decryption failure simulation")
+                
+        crypt.cipher = FailedCipher()
+        
+        # 3. Chamar POST /fidelidade/clientes com saldo_cashback > 0
+        response = client.post(
+            "/fidelidade/clientes",
+            json={
+                "cliente": "Cliente Teste Erro",
+                "telefone": "81888887777",
+                "saldo_pontos": 0,
+                "saldo_cashback": 50.0
+            },
+            headers=admin_headers
+        )
+        
+        # 4. Confirmar que a resposta é 500 com a mensagem tratada
+        assert response.status_code == 500
+        assert response.json()["detail"] == "Erro ao processar dado sensível, contate o suporte."
+        
+    finally:
+        # Restaurar cipher original
+        crypt.cipher = original_cipher

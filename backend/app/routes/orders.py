@@ -14,9 +14,9 @@ from ..schemas import (
     MotoboyCreate, MotoboyResponse
 )
 from ..security import get_current_garcom_optional, get_current_user
+from ..websocket_manager import manager
 
 logger = logging.getLogger("koma.orders")
-from ..websocket_manager import manager
 
 router = APIRouter(
     prefix="/comandas",
