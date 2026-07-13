@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from typing import List, Optional
+import logging
 
 from ..database import get_db
 from ..models import Comanda, Mesa, Usuario, Produto, Lancamento, Item, ActivityLog, Motoboy, ConfiguracaoRestaurante
@@ -13,6 +14,8 @@ from ..schemas import (
     MotoboyCreate, MotoboyResponse
 )
 from ..security import get_current_garcom_optional, get_current_user
+
+logger = logging.getLogger("koma.orders")
 from ..websocket_manager import manager
 
 router = APIRouter(
@@ -143,23 +146,33 @@ def abrir_comanda(comanda_in: ComandaCreate, background_tasks: BackgroundTasks, 
     elif comanda_in.tipo == "Retirada" and auto_delivery_status is None:
         auto_delivery_status = "producao"
 
-    nova_comanda = Comanda(
-        id=f"c-{uuid.uuid4().hex[:8]}",
-        mesa_id=comanda_in.mesa_id,
-        garcom_id=comanda_in.garcom_id,
-        tipo=comanda_in.tipo,
-        identificador=comanda_in.identificador,
-        numero_pedido=numero_pedido,
-        fechada=False,
-        criado_em=datetime.datetime.now(datetime.timezone.utc),
-        delivery_status=auto_delivery_status,
-        delivery_telefone=comanda_in.delivery_telefone,
-        delivery_endereco=comanda_in.delivery_endereco,
-        delivery_taxa=comanda_in.delivery_taxa,
-        motoboy_id=comanda_in.motoboy_id
-    )
-    db.add(nova_comanda)
-    db.commit()
+    try:
+        nova_comanda = Comanda(
+            id=f"c-{uuid.uuid4().hex[:8]}",
+            mesa_id=comanda_in.mesa_id,
+            garcom_id=comanda_in.garcom_id,
+            tipo=comanda_in.tipo,
+            identificador=comanda_in.identificador,
+            numero_pedido=numero_pedido,
+            fechada=False,
+            criado_em=datetime.datetime.now(datetime.timezone.utc),
+            delivery_status=auto_delivery_status,
+            delivery_telefone=comanda_in.delivery_telefone,
+            delivery_endereco=comanda_in.delivery_endereco,
+            delivery_taxa=comanda_in.delivery_taxa,
+            motoboy_id=comanda_in.motoboy_id
+        )
+        db.add(nova_comanda)
+        db.commit()
+    except HTTPException:
+        raise
+    except Exception:
+        db.rollback()
+        logger.exception("Falha ao processar dado sensível criptografado")
+        raise HTTPException(
+            status_code=500,
+            detail="Erro ao processar dado sensível, contate o suporte."
+        )
     db.refresh(nova_comanda)
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
     return nova_comanda
@@ -247,40 +260,50 @@ def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_ta
         from sqlalchemy.orm import joinedload
         produtos = {p.id: p for p in db.query(Produto).options(joinedload(Produto.categoria)).filter(Produto.id.in_(prod_ids)).all()}
 
-    itens_criados = []
-    for item_in in lancamento_in.itens:
-        produto = produtos.get(item_in.produto_id)
-        if not produto:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Produto '{item_in.produto_id}' não encontrado"
-            )
-        if not produto.ativo:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Produto '{produto.nome}' está desativado no cardápio"
-            )
+    try:
+        itens_criados = []
+        for item_in in lancamento_in.itens:
+            produto = produtos.get(item_in.produto_id)
+            if not produto:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Produto '{item_in.produto_id}' não encontrado"
+                )
+            if not produto.ativo:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Produto '{produto.nome}' está desativado no cardápio"
+                )
 
-        novo_item = Item(
-            id=f"i-{uuid.uuid4().hex[:8]}",
-            comanda_id=comanda_id,
-            lancamento_id=novo_lancamento.id,
-            produto_id=item_in.produto_id,
-            preco_unit=produto.preco,
-            observacao=item_in.observacao,
-            cliente_nome=item_in.cliente_nome or "Consumo Geral",
-            status="preparando",
-            cancelado_por=None,
-            impresso_em=None
+            novo_item = Item(
+                id=f"i-{uuid.uuid4().hex[:8]}",
+                comanda_id=comanda_id,
+                lancamento_id=novo_lancamento.id,
+                produto_id=item_in.produto_id,
+                preco_unit=produto.preco,
+                observacao=item_in.observacao,
+                cliente_nome=item_in.cliente_nome or "Consumo Geral",
+                status="preparando",
+                cancelado_por=None,
+                impresso_em=None
+            )
+            db.add(novo_item)
+            
+            # Linkar o produto na memória para o SQLAlchemy evitar lazy load na impressão
+            novo_item.produto = produto
+            
+            itens_criados.append(novo_item)
+
+        db.commit()
+    except HTTPException:
+        raise
+    except Exception:
+        db.rollback()
+        logger.exception("Falha ao processar dado sensível criptografado")
+        raise HTTPException(
+            status_code=500,
+            detail="Erro ao processar dado sensível, contate o suporte."
         )
-        db.add(novo_item)
-        
-        # Linkar o produto na memória para o SQLAlchemy evitar lazy load na impressão
-        novo_item.produto = produto
-        
-        itens_criados.append(novo_item)
-
-    db.commit()
     db.refresh(novo_lancamento)
     novo_lancamento.itens = itens_criados
 
@@ -318,7 +341,17 @@ def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_ta
             print_time = datetime.datetime.now(datetime.timezone.utc)
             for it in itens_criados:
                 it.impresso_em = print_time
-            db.commit()
+            try:
+                db.commit()
+            except HTTPException:
+                raise
+            except Exception:
+                db.rollback()
+                logger.exception("Falha ao processar dado sensível criptografado")
+                raise HTTPException(
+                    status_code=500,
+                    detail="Erro ao processar dado sensível, contate o suporte."
+                )
         else:
             novo_lancamento.dispensado_impressao = True
     except Exception as print_err:
@@ -364,25 +397,35 @@ def dividir_comanda(comanda_id: str, itens_ids: List[str], novo_identificador: s
                 detail=f"Não é possível mover o item '{item.id}' porque ele está cancelado"
             )
 
-    # 3. Criar a nova comanda compartilhando o mesmo numero_pedido e mesa
-    nova_comanda = Comanda(
-        id=f"c-{uuid.uuid4().hex[:8]}",
-        mesa_id=comanda_origem.mesa_id,
-        garcom_id=comanda_origem.garcom_id,
-        tipo=comanda_origem.tipo,
-        identificador=novo_identificador,
-        numero_pedido=comanda_origem.numero_pedido,
-        fechada=False,
-        criado_em=datetime.datetime.now(datetime.timezone.utc)
-    )
-    db.add(nova_comanda)
-    db.flush()
+    try:
+        # 3. Criar a nova comanda compartilhando o mesmo numero_pedido e mesa
+        nova_comanda = Comanda(
+            id=f"c-{uuid.uuid4().hex[:8]}",
+            mesa_id=comanda_origem.mesa_id,
+            garcom_id=comanda_origem.garcom_id,
+            tipo=comanda_origem.tipo,
+            identificador=novo_identificador,
+            numero_pedido=comanda_origem.numero_pedido,
+            fechada=False,
+            criado_em=datetime.datetime.now(datetime.timezone.utc)
+        )
+        db.add(nova_comanda)
+        db.flush()
 
-    # 4. Mover os itens
-    for item in itens:
-        item.comanda_id = nova_comanda.id
+        # 4. Mover os itens
+        for item in itens:
+            item.comanda_id = nova_comanda.id
 
-    db.commit()
+        db.commit()
+    except HTTPException:
+        raise
+    except Exception:
+        db.rollback()
+        logger.exception("Falha ao processar dado sensível criptografado")
+        raise HTTPException(
+            status_code=500,
+            detail="Erro ao processar dado sensível, contate o suporte."
+        )
     db.refresh(comanda_origem)
     db.refresh(nova_comanda)
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
@@ -675,32 +718,42 @@ def update_item_details(
             detail="Permissão negada para editar itens na comanda. Contate o Gerente."
         )
 
-    if update_data.observacao is not None:
-        item.observacao = update_data.observacao
-    if update_data.cliente_nome is not None:
-        item.cliente_nome = update_data.cliente_nome
+    try:
+        if update_data.observacao is not None:
+            item.observacao = update_data.observacao
+        if update_data.cliente_nome is not None:
+            item.cliente_nome = update_data.cliente_nome
 
-    added_count = 0
-    if update_data.quantidade_adicional and update_data.quantidade_adicional > 1:
-        import uuid
-        additional_qty = update_data.quantidade_adicional - 1
-        for _ in range(additional_qty):
-            new_item = Item(
-                id=f"i-{uuid.uuid4().hex[:8]}",
-                comanda_id=item.comanda_id,
-                lancamento_id=item.lancamento_id,
-                produto_id=item.produto_id,
-                preco_unit=item.preco_unit,
-                observacao=item.observacao,
-                cliente_nome=item.cliente_nome,
-                status="preparando",
-                cancelado_por=None,
-                impresso_em=None
-            )
-            db.add(new_item)
-            added_count += 1
-        
-    db.commit()
+        added_count = 0
+        if update_data.quantidade_adicional and update_data.quantidade_adicional > 1:
+            import uuid
+            additional_qty = update_data.quantidade_adicional - 1
+            for _ in range(additional_qty):
+                new_item = Item(
+                    id=f"i-{uuid.uuid4().hex[:8]}",
+                    comanda_id=item.comanda_id,
+                    lancamento_id=item.lancamento_id,
+                    produto_id=item.produto_id,
+                    preco_unit=item.preco_unit,
+                    observacao=item.observacao,
+                    cliente_nome=item.cliente_nome,
+                    status="preparando",
+                    cancelado_por=None,
+                    impresso_em=None
+                )
+                db.add(new_item)
+                added_count += 1
+            
+        db.commit()
+    except HTTPException:
+        raise
+    except Exception:
+        db.rollback()
+        logger.exception("Falha ao processar dado sensível criptografado")
+        raise HTTPException(
+            status_code=500,
+            detail="Erro ao processar dado sensível, contate o suporte."
+        )
     db.refresh(item)
 
     # Imprimir via de comanda indicando edição/alteração

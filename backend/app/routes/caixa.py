@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 import uuid
 import datetime
+import logging
 
 from ..database import get_db
 from ..models import Usuario, Comanda, Item, CaixaTurno, CaixaMovimentacao, Pagamento
@@ -12,6 +13,8 @@ from ..schemas import (
 )
 from ..security import get_current_garcom_optional
 from .websocket import manager
+
+logger = logging.getLogger("koma.caixa")
 
 router = APIRouter(
     prefix="/caixa",
@@ -329,14 +332,34 @@ def registrar_pagamento_comanda(
                         delta_val = round(total_pago * (fidel_config.taxa_conversao / 100.0), 2)
                     
                     # Create loyalty log
-                    mov_fidel = HistoricoFidelidade(
-                        cliente_telefone=client_cpf,
-                        tipo_movimentacao="ACUMULO",
-                        valor_delta=delta_val
-                    )
-                    db.add(mov_fidel)
+                    try:
+                        mov_fidel = HistoricoFidelidade(
+                            cliente_telefone=client_cpf,
+                            tipo_movimentacao="ACUMULO",
+                            valor_delta=delta_val
+                        )
+                        db.add(mov_fidel)
+                    except HTTPException:
+                        raise
+                    except Exception:
+                        db.rollback()
+                        logger.exception("Falha ao processar dado sensível criptografado")
+                        raise HTTPException(
+                            status_code=500,
+                            detail="Erro ao processar dado sensível, contate o suporte."
+                        )
                     
-    db.commit()
+    try:
+        db.commit()
+    except HTTPException:
+        raise
+    except Exception:
+        db.rollback()
+        logger.exception("Falha ao processar dado sensível criptografado")
+        raise HTTPException(
+            status_code=500,
+            detail="Erro ao processar dado sensível, contate o suporte."
+        )
     db.refresh(novo_pagamento)
     db.refresh(comanda)
     

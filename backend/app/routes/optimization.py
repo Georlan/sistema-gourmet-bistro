@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import List, Optional
 from pydantic import BaseModel
+import logging
 
 from ..database import get_db
 from ..models import Comanda, Insumo, ConfigFidelizacao, HistoricoFidelidade, ActivityLog, Pagamento, Cliente
@@ -10,6 +11,8 @@ from ..schemas import InsumoResponse, ConfigFidelizacaoResponse, HistoricoFideli
 from ..security import get_current_garcom_optional, get_current_user
 from ..models import Usuario
 from ..crypt import decrypt_field
+
+logger = logging.getLogger("koma.optimization")
 
 router = APIRouter(
     tags=["Otimizações, Estoque e Fidelidade"]
@@ -380,58 +383,68 @@ def checkout_fidelidade(req: CheckoutFidelidadeRequest, db: Session = Depends(ge
     desconto_aplicado = 0.0
     valor_final = req.valor_total
     
-    if req.resgatar:
-        if config.tipo_recompensa == "PONTOS":
-            pontos_necessarios = req.pontos_a_resgatar or 0.0
-            if pontos_necessarios > saldo_atual:
-                raise HTTPException(status_code=400, detail="Pontos insuficientes.")
-            desconto_aplicado = pontos_necessarios * config.valor_ponto_em_dinheiro
-            valor_final = max(0.0, req.valor_total - desconto_aplicado)
+    try:
+        if req.resgatar:
+            if config.tipo_recompensa == "PONTOS":
+                pontos_necessarios = req.pontos_a_resgatar or 0.0
+                if pontos_necessarios > saldo_atual:
+                    raise HTTPException(status_code=400, detail="Pontos insuficientes.")
+                desconto_aplicado = pontos_necessarios * config.valor_ponto_em_dinheiro
+                valor_final = max(0.0, req.valor_total - desconto_aplicado)
+                
+                # Registrar resgate
+                mov = HistoricoFidelidade(
+                    cliente_telefone=telefone,
+                    tipo_movimentacao="RESGATE",
+                    valor_delta=pontos_necessarios
+                )
+                db.add(mov)
+            else: # CASHBACK
+                cashback_resgate = min(saldo_atual, req.valor_total)
+                desconto_aplicado = cashback_resgate
+                valor_final = max(0.0, req.valor_total - cashback_resgate)
+                
+                # Registrar resgate
+                mov = HistoricoFidelidade(
+                    cliente_telefone=telefone,
+                    tipo_movimentacao="RESGATE",
+                    valor_delta=cashback_resgate
+                )
+                db.add(mov)
+                
+        # Registrar acúmulo da nova compra (calculado sobre o valor final pago)
+        if valor_final > 0:
+            if config.tipo_recompensa == "PONTOS":
+                pontos_gerados = valor_final * config.taxa_conversao
+                mov_acumulo = HistoricoFidelidade(
+                    cliente_telefone=telefone,
+                    tipo_movimentacao="ACUMULO",
+                    valor_delta=pontos_gerados
+                )
+                db.add(mov_acumulo)
+                ret_delta = pontos_gerados
+            else: # CASHBACK
+                cashback_gerado = valor_final * (config.taxa_conversao / 100.0)
+                mov_acumulo = HistoricoFidelidade(
+                    cliente_telefone=telefone,
+                    tipo_movimentacao="ACUMULO",
+                    valor_delta=cashback_gerado
+                )
+                db.add(mov_acumulo)
+                ret_delta = cashback_gerado
+        else:
+            ret_delta = 0.0
             
-            # Registrar resgate
-            mov = HistoricoFidelidade(
-                cliente_telefone=telefone,
-                tipo_movimentacao="RESGATE",
-                valor_delta=pontos_necessarios
-            )
-            db.add(mov)
-        else: # CASHBACK
-            cashback_resgate = min(saldo_atual, req.valor_total)
-            desconto_aplicado = cashback_resgate
-            valor_final = max(0.0, req.valor_total - cashback_resgate)
-            
-            # Registrar resgate
-            mov = HistoricoFidelidade(
-                cliente_telefone=telefone,
-                tipo_movimentacao="RESGATE",
-                valor_delta=cashback_resgate
-            )
-            db.add(mov)
-            
-    # Registrar acúmulo da nova compra (calculado sobre o valor final pago)
-    if valor_final > 0:
-        if config.tipo_recompensa == "PONTOS":
-            pontos_gerados = valor_final * config.taxa_conversao
-            mov_acumulo = HistoricoFidelidade(
-                cliente_telefone=telefone,
-                tipo_movimentacao="ACUMULO",
-                valor_delta=pontos_gerados
-            )
-            db.add(mov_acumulo)
-            ret_delta = pontos_gerados
-        else: # CASHBACK
-            cashback_gerado = valor_final * (config.taxa_conversao / 100.0)
-            mov_acumulo = HistoricoFidelidade(
-                cliente_telefone=telefone,
-                tipo_movimentacao="ACUMULO",
-                valor_delta=cashback_gerado
-            )
-            db.add(mov_acumulo)
-            ret_delta = cashback_gerado
-    else:
-        ret_delta = 0.0
-        
-    db.commit()
+        db.commit()
+    except HTTPException:
+        raise
+    except Exception:
+        db.rollback()
+        logger.exception("Falha ao processar dado sensível criptografado")
+        raise HTTPException(
+            status_code=500,
+            detail="Erro ao processar dado sensível, contate o suporte."
+        )
     
     return {
         "status": "success",
@@ -566,41 +579,51 @@ def update_loyalty_client(
     cliente_db.nome = data.cliente.strip()
     cliente_db.telefone = data.telefone.strip()
     
-    # 4. Update HistoricoFidelidade entries
-    for m in movements:
-        m.cliente_telefone = data.telefone.strip()
-        
-    # 5. Update Pagamento entries
-    for p in pagamentos:
-        p.cpf_cliente = data.telefone.strip()
-        p.nome_cliente = data.cliente.strip()
-        
-    # 6. Tratar ajuste manual de saldo se fornecido
-    pontos_atual = 0.0
-    for m in movements:
-        if m.tipo_movimentacao == "ACUMULO":
-            pontos_atual += m.valor_delta
-        else:
-            pontos_atual -= m.valor_delta
-
-    novo_saldo = None
-    if data.saldo_pontos is not None:
-        novo_saldo = float(data.saldo_pontos)
-    elif data.saldo_cashback is not None:
-        novo_saldo = float(data.saldo_cashback)
-        
-    if novo_saldo is not None:
-        diff = novo_saldo - pontos_atual
-        if abs(diff) > 0.001:
-            tipo = "ACUMULO" if diff > 0 else "RESGATE"
-            ajuste = HistoricoFidelidade(
-                cliente_telefone=data.telefone.strip(),
-                tipo_movimentacao=tipo,
-                valor_delta=abs(diff)
-            )
-            db.add(ajuste)
+    try:
+        # 4. Update HistoricoFidelidade entries
+        for m in movements:
+            m.cliente_telefone = data.telefone.strip()
             
-    db.commit()
+        # 5. Update Pagamento entries
+        for p in pagamentos:
+            p.cpf_cliente = data.telefone.strip()
+            p.nome_cliente = data.cliente.strip()
+            
+        # 6. Tratar ajuste manual de saldo se fornecido
+        pontos_atual = 0.0
+        for m in movements:
+            if m.tipo_movimentacao == "ACUMULO":
+                pontos_atual += m.valor_delta
+            else:
+                pontos_atual -= m.valor_delta
+
+        novo_saldo = None
+        if data.saldo_pontos is not None:
+            novo_saldo = float(data.saldo_pontos)
+        elif data.saldo_cashback is not None:
+            novo_saldo = float(data.saldo_cashback)
+            
+        if novo_saldo is not None:
+            diff = novo_saldo - pontos_atual
+            if abs(diff) > 0.001:
+                tipo = "ACUMULO" if diff > 0 else "RESGATE"
+                ajuste = HistoricoFidelidade(
+                    cliente_telefone=data.telefone.strip(),
+                    tipo_movimentacao=tipo,
+                    valor_delta=abs(diff)
+                )
+                db.add(ajuste)
+                
+        db.commit()
+    except HTTPException:
+        raise
+    except Exception:
+        db.rollback()
+        logger.exception("Falha ao processar dado sensível criptografado")
+        raise HTTPException(
+            status_code=500,
+            detail="Erro ao processar dado sensível, contate o suporte."
+        )
     return {"success": True, "detail": "Cliente atualizado com sucesso."}
 
 
@@ -638,12 +661,22 @@ def create_loyalty_client(
         saldo_inicial = float(data.saldo_cashback)
         
     if saldo_inicial > 0:
-        ajuste = HistoricoFidelidade(
-            cliente_telefone=tel_limpo,
-            tipo_movimentacao="ACUMULO",
-            valor_delta=saldo_inicial
-        )
-        db.add(ajuste)
-        db.commit()
+        try:
+            ajuste = HistoricoFidelidade(
+                cliente_telefone=tel_limpo,
+                tipo_movimentacao="ACUMULO",
+                valor_delta=saldo_inicial
+            )
+            db.add(ajuste)
+            db.commit()
+        except HTTPException:
+            raise
+        except Exception:
+            db.rollback()
+            logger.exception("Falha ao processar dado sensível criptografado")
+            raise HTTPException(
+                status_code=500,
+                detail="Erro ao processar dado sensível, contate o suporte."
+            )
         
     return {"success": True, "detail": "Cliente criado com sucesso."}

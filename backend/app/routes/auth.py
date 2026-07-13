@@ -2,10 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 import uuid
+import logging
+
 from ..database import get_db
 from ..models import Usuario
 from ..schemas import LoginRequest, LoginResponse, UsuarioCreate, UsuarioResponse
 from ..security import verify_password, create_access_token, get_password_hash, get_current_user
+
+logger = logging.getLogger("koma.auth")
 
 def require_admin(user: Usuario):
     if user.role != "admin":
@@ -137,39 +141,49 @@ def gdpr_opt_out(req: GdprOptOutRequest, db: Session = Depends(get_db), current_
         comandas = db.query(Comanda).all()
         matched_comandas = [c for c in comandas if c.identificador and c.identificador.strip().lower() == req.nome.strip().lower()]
 
-    # Apply action
-    if req.anonimizar:
-        for msg in matched_msgs:
-            msg.cliente_telefone = "ANONIMIZADO"
-            msg.conteudo = "Mensagem removida por solicitação LGPD."
-            msg.transcricao = "Removido."
-        for d in matched_drafts:
-            d.cliente_telefone = "ANONIMIZADO"
-            d.conteudo_json = "{}"
-            d.ia_sugestao_resposta = "Removido."
-        for c in matched_comandas:
-            c.identificador = "Cliente Anonimizado (LGPD)"
-        
-        detail_msg = f"Anonimização realizada para telefone {target_phone}."
-    else:
-        # Hard delete
-        for msg in matched_msgs:
-            db.delete(msg)
-        for d in matched_drafts:
-            db.delete(d)
-        for c in matched_comandas:
-            c.identificador = "Cliente Anonimizado (LGPD)"
-        
-        detail_msg = f"Remoção de dados concluída para telefone {target_phone}."
+    try:
+        # Apply action
+        if req.anonimizar:
+            for msg in matched_msgs:
+                msg.cliente_telefone = "ANONIMIZADO"
+                msg.conteudo = "Mensagem removida por solicitação LGPD."
+                msg.transcricao = "Removido."
+            for d in matched_drafts:
+                d.cliente_telefone = "ANONIMIZADO"
+                d.conteudo_json = "{}"
+                d.ia_sugestao_resposta = "Removido."
+            for c in matched_comandas:
+                c.identificador = "Cliente Anonimizado (LGPD)"
+            
+            detail_msg = f"Anonimização realizada para telefone {target_phone}."
+        else:
+            # Hard delete
+            for msg in matched_msgs:
+                db.delete(msg)
+            for d in matched_drafts:
+                db.delete(d)
+            for c in matched_comandas:
+                c.identificador = "Cliente Anonimizado (LGPD)"
+            
+            detail_msg = f"Remoção de dados concluída para telefone {target_phone}."
 
-    # Write immutable log record
-    log = ActivityLog(
-        garcom_id="admin",
-        action="GDPR_DELETE",
-        details=detail_msg
-    )
-    db.add(log)
-    db.commit()
+        # Write immutable log record
+        log = ActivityLog(
+            garcom_id="admin",
+            action="GDPR_DELETE",
+            details=detail_msg
+        )
+        db.add(log)
+        db.commit()
+    except HTTPException:
+        raise
+    except Exception:
+        db.rollback()
+        logger.exception("Falha ao processar dado sensível criptografado")
+        raise HTTPException(
+            status_code=500,
+            detail="Erro ao processar dado sensível, contate o suporte."
+        )
     
     return {"status": "success", "detail": detail_msg}
 

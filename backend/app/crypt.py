@@ -1,7 +1,10 @@
 import base64
 from typing import Optional
 from cryptography.fernet import Fernet
+import logging
 from .config import settings
+
+logger = logging.getLogger("koma.crypt")
 
 # Clean base64 key
 key_str = settings.ENCRYPTION_KEY
@@ -41,7 +44,16 @@ def encrypt_field(plain_text: Optional[str]) -> Optional[str]:
     try:
         return cipher.encrypt(plain_text.encode("utf-8")).decode("utf-8")
     except Exception:
-        return plain_text
+        logger.exception("Falha ao criptografar campo sensível")
+        try:
+            import sentry_sdk
+            sentry_sdk.capture_message(
+                "encrypt_field falhou - dado pode ter sido salvo em texto puro",
+                level="error"
+            )
+        except Exception:
+            pass
+        raise
 
 def decrypt_field(cipher_text: Optional[str]) -> Optional[str]:
     """Decrypts cipher text string using AES-256 (Fernet). Returns plain text on error/fallback."""
@@ -50,4 +62,13 @@ def decrypt_field(cipher_text: Optional[str]) -> Optional[str]:
     try:
         return cipher.decrypt(cipher_text.encode("utf-8")).decode("utf-8")
     except Exception:
+        logger.exception("Falha ao descriptografar campo - retornando valor bruto")
+        try:
+            import sentry_sdk
+            sentry_sdk.capture_message(
+                "decrypt_field falhou - possível divergência de ENCRYPTION_KEY",
+                level="error"
+            )
+        except Exception:
+            pass
         return cipher_text
