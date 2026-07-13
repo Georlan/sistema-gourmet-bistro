@@ -450,7 +450,7 @@ export function CaixaPanel({
   const [unificarViasDelivery, setUnificarViasDelivery] = useState(false);
   const [modoExclusivoSalao, setModoExclusivoSalao] = useState(true);
   const [splitPeople, setSplitPeople] = useState('1');
-  const [paymentMetodo, setPaymentMetodo] = useState<'dinheiro' | 'pix' | 'cartao'>('dinheiro');
+  const [paymentMetodo, setPaymentMetodo] = useState<'dinheiro' | 'pix' | 'cartao' | 'cartao_debito' | 'cartao_credito'>('dinheiro');
   const [paymentValor, setPaymentValor] = useState('');
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
 
@@ -6870,6 +6870,108 @@ export function CaixaPanel({
                       </div>
                     );
                   })()}
+
+                  {/* BOTÕES DE REIMPRESSÃO DO EXTRATO E WHATSAPP */}
+                  <div className={clsx('bg-[#121214]/40', 'border', 'border-[#27272A]/50', 'p-4', 'rounded-2xl', 'space-y-3', 'text-left')}>
+                    <span className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Ações de Envio / Impressão</span>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const printHeader = localStorage.getItem("koma_print_header") || "";
+                            const printFooter = localStorage.getItem("koma_print_footer") || "";
+                            let url = `${apiBaseUrl}/mesas/${selectedOrder.mesaId}/imprimir-recibo?apenas_valores=false`;
+                            const params = new URLSearchParams();
+                            if (printHeader) params.append("print_header", printHeader);
+                            if (printFooter) params.append("print_footer", printFooter);
+                            if (params.toString()) url += `&${params.toString()}`;
+                            
+                            const response = await fetch(url, {
+                              method: 'POST',
+                              headers: authHeaders
+                            });
+                            if (response.ok) {
+                              alert("Extrato completo enviado para a impressora!");
+                            } else {
+                              const err = await response.json();
+                              alert(`Erro ao imprimir: ${err.detail}`);
+                            }
+                          } catch (err) {
+                            console.error(err);
+                            alert("Erro de conexão ao imprimir extrato.");
+                          }
+                        }}
+                        className={clsx('flex-1', 'py-2', 'bg-[#1C1C1F]', 'hover:bg-[#27272A]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-[10px]', 'font-bold', 'text-white', 'transition-all', 'cursor-pointer', 'text-center')}
+                        title="Imprime a via térmica completa com todos os itens consumidos"
+                      >
+                        🖨️ Completo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const printHeader = localStorage.getItem("koma_print_header") || "";
+                            const printFooter = localStorage.getItem("koma_print_footer") || "";
+                            let url = `${apiBaseUrl}/mesas/${selectedOrder.mesaId}/imprimir-recibo?apenas_valores=true`;
+                            const params = new URLSearchParams();
+                            if (printHeader) params.append("print_header", printHeader);
+                            if (printFooter) params.append("print_footer", printFooter);
+                            if (params.toString()) url += `&${params.toString()}`;
+                            
+                            const response = await fetch(url, {
+                              method: 'POST',
+                              headers: authHeaders
+                            });
+                            if (response.ok) {
+                              alert("Extrato resumido (apenas valores) enviado para a impressora!");
+                            } else {
+                              const err = await response.json();
+                              alert(`Erro ao imprimir: ${err.detail}`);
+                            }
+                          } catch (err) {
+                            console.error(err);
+                            alert("Erro de conexão ao imprimir extrato resumido.");
+                          }
+                        }}
+                        className={clsx('flex-1', 'py-2', 'bg-[#1C1C1F]', 'hover:bg-[#27272A]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-[10px]', 'font-bold', 'text-white', 'transition-all', 'cursor-pointer', 'text-center')}
+                        title="Imprime apenas o resumo de subtotais e taxas de serviço para economizar papel"
+                      >
+                        🖨️ Só Valores
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const defaultPhone = paymentCPF && /^[0-9]+$/.test(paymentCPF) ? paymentCPF : '';
+                        const phone = prompt("Digite o WhatsApp do cliente (apenas números com DDD):", defaultPhone);
+                        if (!phone) return;
+                        
+                        const { subtotal, taxa, total } = getCheckoutTotals(selectedOrder);
+                        const itensText = selectedOrder.itens
+                          .filter(item => !item.pago)
+                          .map(item => `• ${item.nome}: R$ ${item.preco.toFixed(2)}`)
+                          .join('\n');
+                        
+                        const msg = `🍔 *KÔMA GOURMET BISTRÔ*\n` +
+                          `*Extrato de Consumo - Mesa ${selectedOrder.mesaId}*\n\n` +
+                          `${itensText}\n` +
+                          `---------------------------------\n` +
+                          `*Subtotal:* R$ ${subtotal.toFixed(2)}\n` +
+                          (taxaServicoAtiva && checkoutServiceTax ? `*Taxa de Serviço (${serviceTaxRate}%):* R$ ${taxa.toFixed(2)}\n` : '') +
+                          `*Total Geral:* R$ ${total.toFixed(2)}\n\n` +
+                          `Obrigado pelo seu consumo! Volte sempre!`;
+                        
+                        const encodedMsg = encodeURIComponent(msg);
+                        window.open(`https://api.whatsapp.com/send?phone=55${phone.replace(/\D/g, '')}&text=${encodedMsg}`, '_blank');
+                      }}
+                      className={clsx('w-full', 'py-2', 'bg-emerald-600/10', 'hover:bg-emerald-600/20', 'border', 'border-emerald-600/30', 'rounded-xl', 'text-[10px]', 'font-bold', 'text-[#10b981]', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'justify-center', 'gap-1.5')}
+                      title="Envia a conta detalhada em formato texto no WhatsApp do cliente"
+                    >
+                      💬 Enviar via WhatsApp
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-4">
@@ -6909,11 +7011,11 @@ export function CaixaPanel({
 
                     <div className="space-y-1.5">
                       <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Método de Baixa:</label>
-                      <div className={clsx('flex', 'gap-2', 'p-1', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'shrink-0')}>
+                      <div className={clsx('flex', 'gap-1.5', 'p-1', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'shrink-0', 'flex-wrap')}>
                         <button
                           type="button"
                           onClick={() => setPaymentMetodo('dinheiro')}
-                          className={`flex-1 py-2 text-[10px] font-bold rounded-lg transition-all cursor-pointer ${paymentMetodo === 'dinheiro' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'
+                          className={`flex-1 min-w-[60px] py-2 text-[9px] font-bold rounded-lg transition-all cursor-pointer ${paymentMetodo === 'dinheiro' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'
                             }`}
                         >
                           Dinheiro
@@ -6921,18 +7023,26 @@ export function CaixaPanel({
                         <button
                           type="button"
                           onClick={() => setPaymentMetodo('pix')}
-                          className={`flex-1 py-2 text-[10px] font-bold rounded-lg transition-all cursor-pointer ${paymentMetodo === 'pix' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'
+                          className={`flex-1 min-w-[50px] py-2 text-[9px] font-bold rounded-lg transition-all cursor-pointer ${paymentMetodo === 'pix' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'
                             }`}
                         >
                           Pix
                         </button>
                         <button
                           type="button"
-                          onClick={() => setPaymentMetodo('cartao')}
-                          className={`flex-1 py-2 text-[10px] font-bold rounded-lg transition-all cursor-pointer ${paymentMetodo === 'cartao' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'
+                          onClick={() => setPaymentMetodo('cartao_debito')}
+                          className={`flex-1 min-w-[70px] py-2 text-[9px] font-bold rounded-lg transition-all cursor-pointer ${paymentMetodo === 'cartao_debito' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'
                             }`}
                         >
-                          Cartão
+                          C. Débito
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPaymentMetodo('cartao_credito')}
+                          className={`flex-1 min-w-[70px] py-2 text-[9px] font-bold rounded-lg transition-all cursor-pointer ${paymentMetodo === 'cartao_credito' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'
+                            }`}
+                        >
+                          C. Crédito
                         </button>
                       </div>
                     </div>

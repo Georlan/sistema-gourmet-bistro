@@ -309,7 +309,7 @@ class PrinterService:
             
         return "\n".join(lines)
 
-    def generate_receipt(self, num_pedido: int, tipo: str, mesa_id: Optional[int], garcom_nome: str, comandas_details: list, print_header: Optional[str] = None, print_footer: Optional[str] = None, taxa_servico_ativa: bool = True, taxa_servico_padrao: float = 10.0) -> str:
+    def generate_receipt(self, num_pedido: int, tipo: str, mesa_id: Optional[int], garcom_nome: str, comandas_details: list, print_header: Optional[str] = None, print_footer: Optional[str] = None, taxa_servico_ativa: bool = True, taxa_servico_padrao: float = 10.0, apenas_valores: bool = False) -> str:
         width = self.width
         lines = []
         
@@ -335,57 +335,68 @@ class PrinterService:
         lines.append(split_justified(f"GARCOM: {garcom_nome}", "", width))
         lines.append(draw_separator("-", width))
         
-        # Table of items header
-        lines.append("ITEM".ljust(21) + "QTD".rjust(4) + "UNIT".rjust(7) + "TOTAL".rjust(8))
-        lines.append(draw_separator("-", width))
-        
         grand_total = 0.0
         
-        # Group all active items from all comandas by client name
-        grouped_by_client = {}
-        for comanda in comandas_details:
-            comanda_items = comanda.get("itens", [])
-            for item in comanda_items:
-                if item.get("status") == "cancelado":
-                    continue
-                # Normalize client name
-                client = item.get("cliente_nome") or item.get("cliente_nome_custom") or comanda.get("identificador") or "Consumo Geral"
-                client = client.strip()
-                if not client or client.lower() == "consumo geral":
-                    # Check if comanda identificador is more specific
-                    comanda_ident = comanda.get("identificador")
-                    if comanda_ident and comanda_ident.strip():
-                        client = comanda_ident.strip()
-                    else:
-                        client = "Consumo Geral"
-                if client not in grouped_by_client:
-                    grouped_by_client[client] = []
-                grouped_by_client[client].append(item)
-                
-        # Loop over clients to output split values and items
-        for client, items_list in grouped_by_client.items():
-            lines.append(align_center(f"--- CLIENTE: {client.upper()} ---", width))
+        if apenas_valores:
+            lines.append(align_center("*** RESUMO FINANCEIRO (APENAS VALORES) ***", width))
+            lines.append(draw_separator("-", width))
             
-            grouped_items = {}
-            for item in items_list:
-                key = (item["produto"]["nome"], item["preco_unit"])
-                grouped_items[key] = grouped_items.get(key, 0) + 1
-                
-            client_subtotal = 0.0
-            for (p_name, p_price), qty in grouped_items.items():
-                item_total = qty * p_price
-                client_subtotal += item_total
-                lines.append(format_item_line(p_name, qty, p_price, width))
-                
-            lines.append(align_right(f"Subtotal {client}: R$ {client_subtotal:.2f}", width))
-            grand_total += client_subtotal
-            lines.append(draw_separator(".", width))
+            # Calculate grand total without printing items
+            for comanda in comandas_details:
+                comanda_items = comanda.get("itens", [])
+                for item in comanda_items:
+                    if item.get("status") != "cancelado":
+                        grand_total += item.get("preco_unit", 0.0)
+        else:
+            # Table of items header
+            lines.append("ITEM".ljust(21) + "QTD".rjust(4) + "UNIT".rjust(7) + "TOTAL".rjust(8))
+            lines.append(draw_separator("-", width))
             
-        # Remove last dot separator
-        if lines and lines[-1] == draw_separator(".", width):
-            lines.pop()
-            
-        lines.append(draw_separator("-", width))
+            # Group all active items from all comandas by client name
+            grouped_by_client = {}
+            for comanda in comandas_details:
+                comanda_items = comanda.get("itens", [])
+                for item in comanda_items:
+                    if item.get("status") == "cancelado":
+                        continue
+                    # Normalize client name
+                    client = item.get("cliente_nome") or item.get("cliente_nome_custom") or comanda.get("identificador") or "Consumo Geral"
+                    client = client.strip()
+                    if not client or client.lower() == "consumo geral":
+                        # Check if comanda identificador is more specific
+                        comanda_ident = comanda.get("identificador")
+                        if comanda_ident and comanda_ident.strip():
+                            client = comanda_ident.strip()
+                        else:
+                            client = "Consumo Geral"
+                    if client not in grouped_by_client:
+                        grouped_by_client[client] = []
+                    grouped_by_client[client].append(item)
+                    
+            # Loop over clients to output split values and items
+            for client, items_list in grouped_by_client.items():
+                lines.append(align_center(f"--- CLIENTE: {client.upper()} ---", width))
+                
+                grouped_items = {}
+                for item in items_list:
+                    key = (item["produto"]["nome"], item["preco_unit"])
+                    grouped_items[key] = grouped_items.get(key, 0) + 1
+                    
+                client_subtotal = 0.0
+                for (p_name, p_price), qty in grouped_items.items():
+                    item_total = qty * p_price
+                    client_subtotal += item_total
+                    lines.append(format_item_line(p_name, qty, p_price, width))
+                    
+                lines.append(align_right(f"Subtotal {client}: R$ {client_subtotal:.2f}", width))
+                grand_total += client_subtotal
+                lines.append(draw_separator(".", width))
+                
+            # Remove last dot separator
+            if lines and lines[-1] == draw_separator(".", width):
+                lines.pop()
+                
+            lines.append(draw_separator("-", width))
         
         # Tax and grand total calculations
         if taxa_servico_ativa:

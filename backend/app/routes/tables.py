@@ -123,6 +123,7 @@ def imprimir_recibo_mesa(
     mesa_id: int,
     print_header: Optional[str] = None,
     print_footer: Optional[str] = None,
+    apenas_valores: bool = False,
     db: Session = Depends(get_db),
     current_garcom: Optional[Usuario] = Depends(get_current_garcom_optional)
 ):
@@ -204,7 +205,8 @@ def imprimir_recibo_mesa(
             print_header=print_header,
             print_footer=print_footer,
             taxa_servico_ativa=taxa_servico_ativa,
-            taxa_servico_padrao=taxa_servico_padrao
+            taxa_servico_padrao=taxa_servico_padrao,
+            apenas_valores=apenas_valores
         )
         
         printer_service.send_to_printer("recibo", receipt_text)

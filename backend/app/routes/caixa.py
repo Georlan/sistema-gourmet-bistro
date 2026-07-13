@@ -226,10 +226,10 @@ def registrar_pagamento_comanda(
         )
         
     # Validate payment method
-    if pag_in.metodo not in ["dinheiro", "pix", "cartao"]:
+    if pag_in.metodo not in ["dinheiro", "pix", "cartao", "cartao_debito", "cartao_credito"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Método de pagamento inválido. Use 'dinheiro', 'pix' ou 'cartao'."
+            detail="Método de pagamento inválido. Use 'dinheiro', 'pix', 'cartao_debito' ou 'cartao_credito'."
         )
 
     # Determine if payment should be pending confirmation (Garçom + Dinheiro)
