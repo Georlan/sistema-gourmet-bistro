@@ -138,12 +138,28 @@ def test_caixa_payments():
     resp = client.post("/caixa/turno/abrir", json={"saldo_inicial": 100.0}, headers=headers_caixa)
     assert resp.status_code == 201
     
-    # 4. Pay partial by item (Client A pays for their burguer: R$ 20.00)
     # Get item IDs
     resp = client.get(f"/comandas/detalhes/todos?fechada=false", headers=headers_garcom)
     assert resp.status_code == 200
     item_id = resp.json()[0]["itens"][0]["id"]
     
+    # 3b. Pay inferior value for selected item (R$ 5.00 on R$ 20.00 item)
+    # Item should NOT be marked as paid and comanda should remain open
+    resp = client.post(f"/caixa/comandas/{comanda_id}/pagar", json={
+        "valor": 5.0,
+        "metodo": "dinheiro",
+        "item_ids": [item_id]
+    }, headers=headers_caixa)
+    assert resp.status_code == 201
+    
+    resp = client.get(f"/comandas/detalhes/todos?fechada=false", headers=headers_garcom)
+    assert resp.status_code == 200
+    comanda = resp.json()[0]
+    assert comanda["fechada"] == False
+    assert comanda["itens"][0]["pago"] == False
+    assert comanda["valor_pago"] == 5.0
+    
+    # 4. Pay remaining item value (Client A pays for their burguer: R$ 20.00)
     resp = client.post(f"/caixa/comandas/{comanda_id}/pagar", json={
         "valor": 20.0,
         "metodo": "pix",
@@ -158,11 +174,11 @@ def test_caixa_payments():
     assert resp.status_code == 200
     comanda = resp.json()[0]
     assert comanda["fechada"] == False
-    assert comanda["valor_pago"] == 20.0
+    assert comanda["valor_pago"] == 25.0
     
-    # 6. Settle remaining comanda value (subtotal 20 + service tax, let's pay R$ 24 in cash)
+    # 6. Settle remaining comanda value (let's pay R$ 19 in cash)
     resp = client.post(f"/caixa/comandas/{comanda_id}/pagar", json={
-        "valor": 24.0,
+        "valor": 19.0,
         "metodo": "dinheiro"
     }, headers=headers_caixa)
     assert resp.status_code == 201

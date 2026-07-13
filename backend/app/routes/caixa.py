@@ -253,9 +253,11 @@ def registrar_pagamento_comanda(
                     detail="Nenhum item válido pendente de pagamento foi selecionado."
                 )
                 
-            # Settle selected items
-            for item in itens_selecionados:
-                item.pago = True
+            # Settle selected items only if the payment valor covers their subtotal
+            subtotal_selecionado = sum(item.preco_unit for item in itens_selecionados)
+            if pag_in.valor >= round(subtotal_selecionado, 2) - 0.01:
+                for item in itens_selecionados:
+                    item.pago = True
 
     # Create the Pagamento transaction
     novo_pagamento = Pagamento(
