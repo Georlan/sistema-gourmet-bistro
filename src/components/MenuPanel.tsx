@@ -549,9 +549,9 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                           <div
                             key={product.id}
                             id={`product-card-${product.id}`}
-                            className={`bg-[#121214]/60 border rounded-2xl p-4 flex flex-col justify-between transition-all ${
+                            className={`bg-[#121214]/60 border rounded-2xl p-4 flex flex-col justify-between ${
                               available
-                                ? 'border-[#27272A] hover:border-[#10b981]/30 hover:shadow-lg group cursor-pointer'
+                                ? 'border-[#27272A] hover:border-[#10b981]/30 group cursor-pointer'
                                 : 'border-red-900/30 opacity-60 cursor-not-allowed'
                             }`}
                             onClick={() => available && handleOpenConfig(product)}
@@ -566,7 +566,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                                     src={product.imagem}
                                     alt={product.nome}
                                     referrerPolicy="no-referrer"
-                                    className={`w-full h-full object-cover transition-transform duration-500 ${available ? 'group-hover:scale-105' : 'grayscale'}`}
+                                    className={`w-full h-full object-cover ${available ? '' : 'grayscale'}`}
                                   />
                                 </div>
                               )}
@@ -645,7 +645,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
 
       {/* 3. PRODUCT CONFIGURATION OVERLAY MODAL */}
       {selectedProductToConfigure && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-[#1C1C1F] border border-[#27272A] rounded-3xl w-full max-w-md p-6 space-y-4 shadow-2xl animate-scale-in">
             
             {/* Modal Header */}

@@ -64,52 +64,50 @@ export const MesaCard = React.memo<MesaCardProps>(({
   // Visual classes based on state
   const statusConfig = {
     livre: {
-      borderColor: 'border-emerald-950 hover:border-emerald-500/50 focus:ring-emerald-500',
-      bgColor: 'bg-emerald-950/10 hover:bg-emerald-950/20 backdrop-blur-md',
+      borderColor: 'border-emerald-950/60 hover:border-emerald-500/30 focus:ring-emerald-500',
+      bgColor: 'bg-emerald-950/80',
       badgeColor: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
       label: 'Livre',
       textColor: 'text-emerald-400',
-      glow: 'hover:translate-y-[-2px] hover:shadow-[0_0_20px_rgba(16,185,129,0.08)] active:translate-y-[0px]',
+      glow: '',
     },
     ocupada: {
       borderColor: hasPendingPayment 
-        ? 'border-amber-500 hover:border-amber-600 focus:ring-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.2)]'
-        : 'border-rose-950 hover:border-rose-500/50 focus:ring-rose-500',
+        ? 'border-amber-500 focus:ring-amber-500'
+        : 'border-rose-950/60 hover:border-rose-500/30 focus:ring-rose-500',
       bgColor: hasPendingPayment
-        ? 'bg-amber-950/20 hover:bg-amber-950/30 backdrop-blur-md'
-        : 'bg-rose-950/10 hover:bg-rose-950/20 backdrop-blur-md',
+        ? 'bg-amber-950/70'
+        : 'bg-rose-950/80',
       badgeColor: hasPendingPayment
         ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
         : 'bg-rose-500/10 text-rose-400 border-rose-500/20',
       label: hasPendingPayment ? 'Aprovar Dinheiro' : 'Ocupada',
       textColor: hasPendingPayment ? 'text-amber-400' : 'text-rose-400',
-      glow: hasPendingPayment 
-        ? 'animate-pulse hover:translate-y-[-2px] active:translate-y-[0px]'
-        : 'hover:translate-y-[-2px] hover:shadow-[0_0_20px_rgba(244,63,94,0.08)] active:translate-y-[0px]',
+      glow: '',
     },
     pronto: {
-      borderColor: 'border-amber-500/30 hover:border-amber-500/60 focus:ring-amber-500',
-      bgColor: 'bg-amber-950/10 hover:bg-amber-950/20 backdrop-blur-md',
+      borderColor: 'border-amber-500/20 hover:border-amber-500/40 focus:ring-amber-500',
+      bgColor: 'bg-amber-950/80',
       badgeColor: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
       label: 'Pronto p/ Servir',
       textColor: 'text-amber-400',
-      glow: 'animate-pulse-subtle hover:translate-y-[-2px] hover:shadow-[0_0_25px_rgba(245,158,11,0.15)] active:translate-y-[0px]',
+      glow: '',
     },
     entregue: {
-      borderColor: 'border-blue-500/40 hover:border-blue-500/70 focus:ring-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.12)]',
-      bgColor: 'bg-blue-950/15 hover:bg-blue-950/25 backdrop-blur-md',
+      borderColor: 'border-blue-500/30 hover:border-blue-500/50 focus:ring-blue-500',
+      bgColor: 'bg-blue-950/85',
       badgeColor: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
       label: 'Aguardando Pgto.',
       textColor: 'text-blue-300',
-      glow: 'hover:translate-y-[-2px] hover:shadow-[0_0_25px_rgba(59,130,246,0.15)] active:translate-y-[0px]',
+      glow: '',
     },
     mesclada: {
-      borderColor: 'border-dashed border-zinc-700 hover:border-zinc-500/50 focus:ring-zinc-500',
-      bgColor: 'bg-zinc-950/20 hover:bg-zinc-950/30 backdrop-blur-md',
+      borderColor: 'border-dashed border-zinc-700 focus:ring-zinc-500',
+      bgColor: 'bg-zinc-950/90',
       badgeColor: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20',
       label: `Mesclada na Mesa ${mergedIntoMesaId}`,
       textColor: 'text-zinc-400',
-      glow: 'hover:translate-y-[0px]',
+      glow: '',
     },
   };
 
@@ -120,7 +118,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
     <button
       id={`mesa-card-${table.id}`}
       onClick={() => onClick(table.id)}
-      className={`relative flex flex-col justify-between p-3 sm:p-5 lg:p-6 rounded-2xl border ${currentConfig.borderColor} ${currentConfig.bgColor} ${currentConfig.glow} transition-all duration-300 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full`}
+      className={`relative flex flex-col justify-between p-3 sm:p-5 lg:p-6 rounded-2xl border ${currentConfig.borderColor} ${currentConfig.bgColor} ${currentConfig.glow} cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full`}
     >
       {/* Top Section */}
       <div className="w-full">

@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Menu, X, User, Wifi, WifiOff, VolumeX, Volume2 } from 'lucide-react';
+import { Menu, X, User, Wifi, WifiOff } from 'lucide-react';
 import { Table, Order, DraftItem, AppSettings, AppRole, Product } from './types';
 import { TABLES, WAITERS, RESTAURANT_CONFIG, PRODUCTS } from './data';
 import { getTableTotal } from './domain';
@@ -38,10 +38,7 @@ const parseBackendDateTime = (dateStr: string): number => {
 };
 
 export default function App() {
-  const [showIntro, setShowIntro] = useState(() => {
-    return !sessionStorage.getItem('koma_intro_played');
-  });
-  const [isMuted, setIsMuted] = useState(true);
+
   // 1. Roles & Active user state (Strictly 'garcom')
   // 1. Detect portal (garcom or caixa/management) from URL query parameters or hashes
   const [portal, setPortal] = useState<'garcom' | 'caixa'>(() => {
@@ -428,7 +425,11 @@ export default function App() {
         console.error('Error loading settings from localStorage', e);
       }
     }
-    return { exibirImagens: true, exibirDescricoes: true };
+    const searchParams = new URLSearchParams(window.location.search);
+    const viewParam = searchParams.get('view');
+    const hash = window.location.hash;
+    const isCaixa = viewParam === 'caixa' || viewParam === 'gerencia' || hash === '#caixa' || hash === '#gerencia';
+    return { exibirImagens: isCaixa, exibirDescricoes: isCaixa };
   });
 
   // 4. Modal focus state
@@ -1326,66 +1327,7 @@ export default function App() {
   const selectedTable = salonTables.find(t => t.id === selectedTableId);
   const selectedTableOrders = selectedTable ? orders.filter(o => o.mesaId === selectedTable.id) : [];
 
-  if (showIntro) {
-    return (
-      <div className={clsx('fixed', 'inset-0', 'bg-[#0B0F19]', 'z-50', 'flex', 'flex-col', 'items-center', 'justify-center', 'p-4')}>
-        <div className={clsx('relative', 'w-full', 'max-w-2xl', 'aspect-video', 'rounded-3xl', 'overflow-hidden', 'shadow-2xl', 'border', 'border-emerald-500/25', 'bg-black')}>
-          <video
-            src="/intro.mp4"
-            autoPlay
-            muted={isMuted}
-            playsInline
-            onEnded={() => {
-              sessionStorage.setItem('koma_intro_played', 'true');
-              setShowIntro(false);
-            }}
-            className={clsx('w-full', 'h-full', 'object-cover')}
-          />
-          
-          <button
-            onClick={() => setIsMuted(!isMuted)}
-            className={clsx('absolute', 'top-4', 'right-4', 'p-2', 'bg-black/60', 'hover:bg-black/80', 'text-white', 'border', 'border-white/10', 'rounded-xl', 'transition-all', 'backdrop-blur-md', 'cursor-pointer', 'flex', 'items-center', 'justify-center')}
-            title={isMuted ? "Ativar Som" : "Desativar Som"}
-          >
-            {isMuted ? <VolumeX size={15} /> : <Volume2 size={15} />}
-          </button>
-          <button
-            onClick={() => {
-              sessionStorage.setItem('koma_intro_played', 'true');
-              setShowIntro(false);
-            }}
-            className={clsx('absolute', 'bottom-4', 'right-4', 'px-4', 'py-2', 'bg-black/65', 'hover:bg-black/85', 'text-white', 'border', 'border-white/10', 'rounded-xl', 'text-xs', 'font-bold', 'transition-all', 'backdrop-blur-md', 'cursor-pointer', 'uppercase', 'tracking-wider')}
-          >
-            Pular Intro
-          </button>
-        </div>
-        
-        <div className="mt-6 flex flex-col items-center gap-2">
-          <p className={clsx('text-xs', 'text-emerald-400', 'font-mono', 'tracking-widest', 'uppercase', 'animate-pulse')}>
-            {(!isAuthenticated || (isConfigLoaded && isProductsLoaded && isOrdersLoaded && isTablesLoaded)) 
-              ? 'Sistema Pronto!' 
-              : 'Carregando Kôma...'}
-          </p>
-          {isAuthenticated && (
-            <div className="flex gap-4 text-[9px] font-mono text-gray-500 uppercase tracking-wider animate-fade-in">
-              <span className={isConfigLoaded ? 'text-emerald-400 font-bold' : ''}>
-                {isConfigLoaded ? '✓ Config' : '• Config'}
-              </span>
-              <span className={isProductsLoaded ? 'text-emerald-400 font-bold' : ''}>
-                {isProductsLoaded ? '✓ Cardápio' : '• Cardápio'}
-              </span>
-              <span className={isTablesLoaded ? 'text-emerald-400 font-bold' : ''}>
-                {isTablesLoaded ? '✓ Mesas' : '• Mesas'}
-              </span>
-              <span className={isOrdersLoaded ? 'text-emerald-400 font-bold' : ''}>
-                {isOrdersLoaded ? '✓ Pedidos' : '• Pedidos'}
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
+
 
   if (!isAuthenticated) {
     return (

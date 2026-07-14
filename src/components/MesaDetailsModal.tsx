@@ -137,9 +137,9 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
           onClose();
         }
       }}
-      className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center p-0 sm:p-4 z-40 animate-fade-in overflow-y-auto"
+      className="fixed inset-0 bg-black/75 flex items-center justify-center p-0 sm:p-4 z-40 animate-fade-in overflow-y-auto"
     >
-      <div className="bg-[#0D0D10]/95 backdrop-blur-xl rounded-none sm:rounded-3xl border-0 sm:border border-[#10b981]/15 shadow-2xl w-full max-w-5xl overflow-hidden h-full sm:h-auto max-h-full sm:max-h-[90vh] flex flex-col">
+      <div className="bg-[#0D0D10] rounded-none sm:rounded-3xl border-0 sm:border border-[#10b981]/15 shadow-2xl w-full max-w-5xl overflow-hidden h-full sm:h-auto max-h-full sm:max-h-[90vh] flex flex-col">
         
         {/* MODAL HEADER */}
         <div className="bg-[#18181B] text-white p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shrink-0 border-b border-[#27272A]">
@@ -940,7 +940,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
 
       {/* EMBEDDED PRINT PREVIEW (RECEIPT) POPUP MODAL */}
       {showPrintPreview && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50 animate-fade-in">
           <div className="bg-[#1C1C1F] border border-[#27272A] rounded-3xl shadow-2xl max-w-sm w-full p-6 space-y-4 max-h-[85vh] flex flex-col justify-between">
             
             {/* Invoice Header */}
@@ -1132,7 +1132,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
 
       {/* REPRINT ORDER MODAL (VIA DE COZINHA) */}
       {selectedOrderToPrint && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50 animate-fade-in">
           <div className="bg-[#1C1C1F] border border-[#27272A] rounded-3xl shadow-2xl max-w-sm w-full p-6 space-y-4 max-h-[85vh] flex flex-col justify-between">
             
             {/* Invoice Header */}
@@ -1264,7 +1264,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
       )}
 
       {editingItem && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4">
           <div className="w-full max-w-sm bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in">
             <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
               <h3 className="font-serif text-sm font-bold text-white">Editar Item: {editingItem.nome}</h3>
