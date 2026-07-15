@@ -317,31 +317,20 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                     </div>
 
                     <div className="space-y-4 max-h-[45vh] overflow-y-auto pr-1 scrollbar-thin">
-                      {orders.map((order, idx) => {
+                      {orders.map((order) => {
                         const unpaidItems = order.itens.filter((item: any) => !item.pago);
                         if (unpaidItems.length === 0) return null;
-                        
-                        const isLatest = idx === orders.length - 1;
-                        const isExpanded = expandedOrders[order.id] !== undefined
-                          ? expandedOrders[order.id]
-                          : isLatest;
 
                         return (
                         <div
                           key={order.id}
                           id={`placed-order-${order.id}`}
-                          className="border border-[#27272A] rounded-2xl overflow-hidden bg-[#121214]/40 animate-fade-in"
+                          className="border border-[#27272A] rounded-2xl overflow-hidden bg-[#121214]/40"
                         >
                           {/* Order Header */}
-                          <div 
-                            onClick={() => setExpandedOrders(prev => ({ ...prev, [order.id]: !isExpanded }))}
-                            className="bg-[#1C1C1F] px-4 py-2.5 flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-[#27272A] gap-2 w-full cursor-pointer select-none hover:bg-[#27272A]/40"
-                          >
+                          <div className="bg-[#1C1C1F] px-4 py-2.5 flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-[#27272A] gap-2 w-full">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-xs font-bold text-white font-sans flex items-center gap-1.5">
-                                <span className="text-[10px] text-gray-500 font-normal font-mono">{isExpanded ? '▲' : '▼'}</span>
-                                Lote #{order.id.slice(-4)}
-                              </span>
+                              <span className="text-xs font-bold text-white font-sans">Lote #{order.id.slice(-4)}</span>
                               <span className="text-[10px] bg-[#121214] text-gray-300 px-2 py-0.5 rounded font-bold font-sans">
                                 Garçom: {order.garcomNome}
                               </span>
@@ -356,16 +345,16 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                               )}
                               {order.mesaOrigemId && (
                                 <span className="text-[8px] sm:text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                                  M{order.mesaOrigemId}
+                                  Mesclado da Mesa {order.mesaOrigemId}
                                 </span>
                               )}
                               {order.mesaTransferidaDe && (
                                 <span className="text-[8px] sm:text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
-                                  T{order.mesaTransferidaDe}
+                                  Transferido da Mesa {order.mesaTransferidaDe}
                                 </span>
                               )}
                             </div>
-                            <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center gap-3">
                               <span className="text-[10px] text-gray-400 font-mono font-bold">
                                 {new Date(order.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                               </span>
@@ -375,7 +364,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                                   type="button"
                                   disabled={activeRole === 'garcom' && !restauranteConfig?.perm_garcom_transferir_mesa}
                                   onClick={() => onUnmergeTable(order.id)}
-                                  className={`px-2.5 py-1 rounded-lg text-[10px] font-sans font-semibold flex items-center gap-1 shadow-sm ${
+                                  className={`px-2.5 py-1 rounded-lg text-[10px] font-sans font-semibold transition-all flex items-center gap-1 shadow-sm ${
                                     (activeRole === 'garcom' && !restauranteConfig?.perm_garcom_transferir_mesa)
                                       ? 'bg-[#1C1C1F]/40 border border-[#27272A]/40 text-gray-600 cursor-not-allowed'
                                       : 'bg-purple-950/40 hover:bg-purple-900/30 text-purple-300 hover:text-white border border-purple-900/40 cursor-pointer'
@@ -389,7 +378,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                               <button
                                 type="button"
                                 onClick={() => setSelectedOrderToPrint(order)}
-                                className="px-2.5 py-1 bg-[#27272A] hover:bg-[#10b981]/20 text-gray-300 hover:text-white border border-[#27272A] hover:border-[#10b981]/30 rounded-lg text-[10px] font-sans font-semibold cursor-pointer flex items-center gap-1 shadow-sm"
+                                className="px-2.5 py-1 bg-[#27272A] hover:bg-[#10b981]/20 text-gray-300 hover:text-white border border-[#27272A] hover:border-[#10b981]/30 rounded-lg text-[10px] font-sans font-semibold transition-all cursor-pointer flex items-center gap-1 shadow-sm"
                                 title="Reimprimir este lote de pedidos"
                               >
                                 <Printer size={11} className="text-[#10b981]" />
@@ -399,8 +388,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                           </div>
 
                           {/* Order Items */}
-                          {isExpanded && (
-                            <div className="p-4 divide-y divide-[#27272A]">
+                          <div className="p-4 divide-y divide-[#27272A]">
                             {unpaidItems.map((item) => (
                               <div
                                 key={item.id}
@@ -519,7 +507,6 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                               </div>
                             ))}
                           </div>
-                        )}
                         </div>
                       )})}
                     </div>
