@@ -177,8 +177,8 @@ export default function CardapioPage() {
     const identifier = getRestaurantIdentifier();
 
     // Fallback instantly if no real Supabase key is configured to avoid pending promise loops
-    const hasRealKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY && 
-                       (import.meta as any).env?.VITE_SUPABASE_ANON_KEY !== "dummy-anon-key-to-prevent-bootstrap-error";
+    const supabaseKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || "sb_publishable_VOLK7mO9OqOhIfm0MeJ0eg_oQ626X4T";
+    const hasRealKey = supabaseKey && supabaseKey !== "dummy-anon-key-to-prevent-bootstrap-error";
 
     if (!hasRealKey) {
       console.warn("Chave Supabase não configurada. Carregando dados Whitelabel de demonstração instantaneamente.");
@@ -441,8 +441,8 @@ export default function CardapioPage() {
 
   // Escuta do Supabase Realtime para recarga em tempo real
   useEffect(() => {
-    const hasRealKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY && 
-                       (import.meta as any).env?.VITE_SUPABASE_ANON_KEY !== "dummy-anon-key-to-prevent-bootstrap-error";
+    const supabaseKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || "sb_publishable_VOLK7mO9OqOhIfm0MeJ0eg_oQ626X4T";
+    const hasRealKey = supabaseKey && supabaseKey !== "dummy-anon-key-to-prevent-bootstrap-error";
     if (!hasRealKey) return;
 
     const channel = supabase
