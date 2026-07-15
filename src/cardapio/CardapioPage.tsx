@@ -13,6 +13,7 @@ import CardapioProductCard from "./components/CardapioProductCard";
 import CardapioProductModal from "./components/CardapioProductModal";
 import CardapioCartDrawer, { CartItem } from "./components/CardapioCartDrawer";
 import CardapioAuthModal from "./components/CardapioAuthModal";
+import { WS_BASE_URL } from "../config/api";
 import CardapioOrderHistoryModal from "./components/CardapioOrderHistoryModal";
 import CardapioUserProfileModal from "./components/CardapioUserProfileModal";
 import CardapioDigital from "./components/CardapioDigital";
@@ -427,13 +428,7 @@ export default function CardapioPage() {
   useEffect(() => {
     if (!activeBrand) return;
 
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const isLocalHost = window.location.hostname === 'localhost' ||
-      window.location.hostname === '127.0.0.1' ||
-      /^(\d{1,3}\.){3}\d{1,3}$/.test(window.location.hostname);
-
-    const wsHost = isLocalHost ? `${window.location.hostname}:8000` : 'sistema-gourmet-bistro-production.up.railway.app';
-    const wsUrl = `${wsProtocol}//${wsHost}/ws/cliente?restaurante_id=${activeBrand.id}`;
+    const wsUrl = `${WS_BASE_URL}/ws/cliente?restaurante_id=${activeBrand.id}`;
 
     console.log(`🔌 Conectando ao WebSocket do Cardápio: ${wsUrl}`);
     let ws: WebSocket;
@@ -458,7 +453,7 @@ export default function CardapioPage() {
                 logo: data.data.logo_url || prev.logo,
                 bannerImage: data.data.banner_url || prev.bannerImage,
                 slogan: data.data.subtitulo || prev.slogan,
-                description: data.data.sobre_nos || prev.description,
+                about: data.data.sobre_nos || prev.about,
                 address: data.data.endereco || prev.address,
                 colors: {
                   ...prev.colors,
@@ -1297,7 +1292,7 @@ export default function CardapioPage() {
         <CardapioAuthModal
           onClose={() => setIsAuthOpen(false)}
           onLoginSuccess={handleLoginSuccess}
-          restauranteId={activeBrand?.id || 1}
+          restauranteId={activeBrand?.id ? Number(activeBrand.id) : 1}
         />
       )}
 

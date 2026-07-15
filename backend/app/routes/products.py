@@ -8,7 +8,7 @@ from ..models import Produto, Categoria, ObservacaoPredefinida, Usuario
 from ..security import get_current_user
 from ..schemas import ProdutoResponse, ProdutoCreate, ProdutoUpdate, CategoriaResponse
 from ..websocket_manager import manager
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 router = APIRouter(
     prefix="/produtos",
@@ -97,8 +97,7 @@ class ObservacaoResponse(BaseModel):
     id: int
     categoria_id: str
     texto: str
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ─── CATEGORIES ENDPOINTS ─────────────────────────────────────────────────────

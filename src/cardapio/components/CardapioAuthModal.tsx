@@ -5,6 +5,7 @@
 
 import React, { useState } from "react";
 import { X, User, Phone, ShieldCheck, Sparkles, MessageSquare, ArrowRight } from "lucide-react";
+import { API_BASE_URL } from "../../config/api";
 
 interface CardapioAuthModalProps {
   onClose: () => void;
@@ -25,14 +26,7 @@ export default function CardapioAuthModal({ onClose, onLoginSuccess, restaurante
     telefone_mascarado: string;
   } | null>(null);
 
-  // Dynamic API base resolution
-  const isLocalHost = window.location.hostname === 'localhost' ||
-    window.location.hostname === '127.0.0.1' ||
-    /^(\d{1,3}\.){3}\d{1,3}$/.test(window.location.hostname);
 
-  const API_BASE_URL = isLocalHost
-    ? `${window.location.protocol}//${window.location.hostname}:8000`
-    : 'https://sistema-gourmet-bistro-production.up.railway.app';
 
   const formatPhoneBrazilian = (value: string) => {
     const numbers = value.replace(/\D/g, "");

@@ -8,6 +8,7 @@ import { X, CheckCircle, ShoppingBag, Send, AlertCircle, Copy, Loader2, Check } 
 import { BrandConfig } from "../CardapioTypes";
 import { CartItem } from "./CardapioCartDrawer";
 import { supabase } from "../SupabaseClient";
+import { API_BASE_URL } from "../../config/api";
 
 interface CardapioDigitalProps {
   activeBrand: BrandConfig;
@@ -153,14 +154,6 @@ export default function CardapioDigital({
   const handlePlaceOrder = async () => {
     setIsSubmitting(true);
     setErrorMessage("");
-
-    const isLocalHost = window.location.hostname === 'localhost' ||
-      window.location.hostname === '127.0.0.1' ||
-      /^(\d{1,3}\.){3}\d{1,3}$/.test(window.location.hostname);
-
-    const API_BASE_URL = isLocalHost
-      ? `${window.location.protocol}//${window.location.hostname}:8000`
-      : 'https://sistema-gourmet-bistro-production.up.railway.app';
 
     const cleanedItems = cart.map((item) => {
       const optionDetails: string[] = [];

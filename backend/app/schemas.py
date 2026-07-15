@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
 from datetime import datetime
 
@@ -13,8 +13,7 @@ class UsuarioResponse(BaseModel):
     usuario: str
     role: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class UsuarioCreate(BaseModel):
     nome: str
@@ -35,16 +34,14 @@ class CategoriaResponse(BaseModel):
     nome: str
     destino_impressao: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ObservacaoPredefinidaResponse(BaseModel):
     id: int
     categoria_id: str
     texto: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ----------------- PRODUCT -----------------
@@ -70,8 +67,7 @@ class ProdutoUpdate(BaseModel):
 
 class ProdutoResponse(ProdutoBase):
     categoria: Optional[CategoriaResponse] = None
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # Lightweight nested schemas (used inside Item/Comanda to avoid circular imports)
 class ProdutoSimples(BaseModel):
@@ -79,15 +75,13 @@ class ProdutoSimples(BaseModel):
     nome: str
     preco: float
     ativo: bool = True
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class UsuarioSimples(BaseModel):
     id: str
     nome: str
     role: str
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ----------------- MESA (TABLE) -----------------
@@ -106,8 +100,7 @@ class MesaUpdate(BaseModel):
     capacidade: Optional[int] = None
 
 class MesaResponse(MesaBase):
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ----------------- ITEM -----------------
@@ -131,8 +124,7 @@ class ItemResponse(BaseModel):
     # Nested: produto name for display (populated via SQLAlchemy relationship)
     produto: Optional[ProdutoSimples] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ----------------- COMANDA -----------------
@@ -160,8 +152,7 @@ class ComandaResponse(BaseModel):
     # Cashier flow
     status_comanda: Optional[str] = None  # null | aguardando_pagamento
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ----------------- ACTIONS & CREATIONS -----------------
@@ -193,8 +184,7 @@ class LancamentoResponse(BaseModel):
     itens: List[ItemResponse] = []
     dispensado_impressao: Optional[bool] = False
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ComandaDetail(ComandaResponse):
     itens: List[ItemResponse] = []
@@ -224,8 +214,7 @@ class CaixaTurnoResponse(BaseModel):
     declarado_cartao: Optional[float] = None
     status: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class CaixaMovimentacaoCreate(BaseModel):
     tipo: str  # "suprimento" | "sangria"
@@ -240,8 +229,7 @@ class CaixaMovimentacaoResponse(BaseModel):
     descricao: str
     criado_em: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class PagamentoRequest(BaseModel):
     valor: float
@@ -265,8 +253,7 @@ class PagamentoResponse(BaseModel):
     chave_nfe_emitida: Optional[str] = None
     criado_em: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class CaixaTurnoDetalhe(CaixaTurnoResponse):
     movimentacoes: List[CaixaMovimentacaoResponse] = []
@@ -302,8 +289,7 @@ class ConfiguracaoRestauranteResponse(BaseModel):
     perm_garcom_chamar: bool
     perm_garcom_ociosas: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ConfiguracaoRestauranteUpdate(BaseModel):
@@ -339,8 +325,7 @@ class ConfiguracaoIAResponse(BaseModel):
     tom_de_voz: str
     teto_interacoes: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MensagemWhatsAppResponse(BaseModel):
@@ -352,8 +337,7 @@ class MensagemWhatsAppResponse(BaseModel):
     audio_url: Optional[str] = None
     criado_em: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class RascunhoPedidoResponse(BaseModel):
@@ -364,8 +348,7 @@ class RascunhoPedidoResponse(BaseModel):
     status: str
     criado_em: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class InsumoResponse(BaseModel):
@@ -377,8 +360,7 @@ class InsumoResponse(BaseModel):
     unidade_medida: str
     preco_medio_custo: float
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ConfigFidelizacaoResponse(BaseModel):
@@ -388,8 +370,7 @@ class ConfigFidelizacaoResponse(BaseModel):
     taxa_conversao: float
     valor_ponto_em_dinheiro: float
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class HistoricoFidelidadeResponse(BaseModel):
@@ -400,8 +381,7 @@ class HistoricoFidelidadeResponse(BaseModel):
     comanda_id: Optional[str] = None
     criado_em: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MotoboyCreate(BaseModel):
@@ -416,8 +396,7 @@ class MotoboyResponse(BaseModel):
     telefone: str
     ativo: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class DistribuidorResponse(BaseModel):
@@ -427,8 +406,7 @@ class DistribuidorResponse(BaseModel):
     cnpj: Optional[str] = None
     lead_time_dias: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ItemNotaEntradaResponse(BaseModel):
@@ -439,8 +417,7 @@ class ItemNotaEntradaResponse(BaseModel):
     preco_unitario: float
     insumo: Optional[InsumoResponse] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class NotaEntradaResponse(BaseModel):
@@ -453,8 +430,7 @@ class NotaEntradaResponse(BaseModel):
     distribuidor: Optional[DistribuidorResponse] = None
     itens: Optional[list[ItemNotaEntradaResponse]] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ----------------- CONFIGURAÇÕES WHITELABEL DO RESTAURANTE -----------------
@@ -477,8 +453,7 @@ class RestauranteConfigResponse(BaseModel):
     cor_primaria: str
     cor_fundo: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class RestauranteConfigUpdate(BaseModel):
     nome: Optional[str] = None

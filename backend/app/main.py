@@ -1,6 +1,7 @@
 import sentry_sdk
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 from .config import settings
 from .database import engine, Base, current_restaurante_id
 from .routes import auth, products, tables, orders, websocket, caixa, optimization, estoque, cardapio
@@ -101,14 +102,19 @@ sentry_sdk.init(
 # except Exception as e:
 #     print(f"Error running database migrations: {e}")
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await run_migrations_on_startup()
+    yield
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.PROJECT_VERSION,
     description="Backend API local para o App de Garçons e Caixas do Bistrô",
+    lifespan=lifespan
 )
 
 # ─── STARTUP: Auto-run Alembic migrations ─────────────────────────────────────
-@app.on_event("startup")
 async def run_migrations_on_startup():
     """
     Executa migrações Alembic automaticamente no startup do servidor.
@@ -279,3 +285,45 @@ def read_root():
 def trigger_backend_error():
     division_by_zero = 1 / 0
     return {"status": division_by_zero}
+
+
+@app.get("/health")
+def health_check():
+    # 1. Testar conexão com o banco de dados
+    db_status = "healthy"
+    try:
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except Exception as e:
+        db_status = f"unhealthy: {e}"
+
+    # 2. Contar arquivos na fila de impressão
+    print_jobs_count = 0
+    try:
+        import os
+        if os.path.exists(settings.PRINT_JOBS_DIR):
+            print_jobs_count = len([f for f in os.listdir(settings.PRINT_JOBS_DIR) if os.path.isfile(os.path.join(settings.PRINT_JOBS_DIR, f))])
+    except Exception:
+        pass
+
+    # 3. Contar conexões ativas no WebSocket
+    ws_connections_count = 0
+    try:
+        from .websocket_manager import manager
+        ws_connections_count = sum(len(conns) for conns in manager.active_connections.values())
+    except Exception:
+        pass
+
+    return {
+        "status": "ok",
+        "version": settings.PROJECT_VERSION,
+        "database": db_status,
+        "print_queue": {
+            "jobs_count": print_jobs_count,
+            "directory": settings.PRINT_JOBS_DIR
+        },
+        "websocket": {
+            "active_connections": ws_connections_count
+        }
+    }

@@ -15,9 +15,16 @@ try:
     if not key_str:
         raise ValueError("Empty key")
     cipher = Fernet(key_str.encode("utf-8"))
-except Exception:
-    # Fallback autocurativo com persistência em arquivo local bistro.key
+except Exception as e:
     import os
+    # Garantir que falhe explicitamente em produção se ENCRYPTION_KEY estiver ausente ou for inválida
+    is_production = os.getenv("ENVIRONMENT") == "production" or os.getenv("DATABASE_URL", "").startswith("postgres")
+    if is_production:
+        raise RuntimeError(
+            f"A variável de ambiente 'ENCRYPTION_KEY' é inválida ou ausente em produção! Erro Fernet: {e}"
+        )
+    
+    # Fallback autocurativo apenas para desenvolvimento local
     key_file = "bistro.key"
     fallback_key = None
     if os.path.exists(key_file):
@@ -33,8 +40,8 @@ except Exception:
         try:
             with open(key_file, "wb") as f:
                 f.write(fallback_key)
-        except Exception as e:
-            print(f"[WARNING] Não foi possível persistir a chave de backup: {e}")
+        except Exception as write_err:
+            print(f"[WARNING] Não foi possível persistir a chave de backup local: {write_err}")
         cipher = Fernet(fallback_key)
 
 def encrypt_field(plain_text: Optional[str]) -> Optional[str]:

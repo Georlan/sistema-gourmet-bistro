@@ -24,3 +24,4 @@ backend/print_jobs/
 # Arquivos de variáveis de ambiente/senhas
 .env
 .env.local
+*.key
