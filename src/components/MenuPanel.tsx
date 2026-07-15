@@ -477,7 +477,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
             </div>
 
             {/* Search & Categories */}
-            <div className="space-y-3">
+            <div className="sticky top-[-12px] sm:relative bg-[#121214] z-20 pt-1.5 pb-2.5 space-y-3">
               <div className="relative">
                 <Search className="absolute left-3.5 top-3.5 h-4 w-4 text-gray-400" />
                 <input
@@ -538,7 +538,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                     <div 
                       key={cat} 
                       id={`category-sec-${cat.toLowerCase().replace(/\s+/g, '-')}`}
-                      className="space-y-3 scroll-mt-2 pt-2"
+                      className="space-y-3 scroll-mt-[105px] sm:scroll-mt-2 pt-2"
                     >
                       <h4 className="font-serif text-xs font-bold text-[#10b981] uppercase tracking-wider border-b border-[#27272A] pb-1.5 pt-1">
                         {cat}
