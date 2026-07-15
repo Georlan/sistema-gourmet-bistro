@@ -19,7 +19,7 @@ import CardapioUserProfileModal from "./components/CardapioUserProfileModal";
 import CardapioDigital from "./components/CardapioDigital";
 import CardapioStoreInfoDrawer from "./components/CardapioStoreInfoDrawer";
 import CardapioAiChefAssistant from "./components/CardapioAiChefAssistant";
-import { ShoppingBag, Eye } from "lucide-react";
+import { ShoppingBag, Eye, X, ArrowRight } from "lucide-react";
 
 const getCategoryId = (name: string) =>
   'sec-' + name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-');
@@ -63,7 +63,12 @@ export default function CardapioPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   // Modals / Overlays Toggles
-  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isCartOpen, setIsCartOpen] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.innerWidth >= 1024; // Inicia aberto em telas grandes (lg)
+    }
+    return false;
+  });
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isOrdersOpen, setIsOrdersOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -929,6 +934,8 @@ export default function CardapioPage() {
         }}
         onViewOrdersClick={() => setIsOrdersOpen(true)}
         onLogoClick={() => setIsStoreInfoOpen(true)} // Open Left Info Drawer
+        onCartToggle={() => setIsCartOpen(!isCartOpen)}
+        cartCount={cartCount}
       />
 
       {/* 2. MAIN WEBSITE BODY CONTAINER */}
@@ -1030,7 +1037,9 @@ export default function CardapioPage() {
                     </div>
 
                     {/* Products Grid for this category */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${
+                      isCartOpen ? "lg:grid-cols-2" : "lg:grid-cols-3"
+                    }`}>
                       {filteredCatProducts.map((item) => (
                         <CardapioProductCard
                           key={item.id}
@@ -1079,270 +1088,295 @@ export default function CardapioPage() {
 
         </main>
 
-        {/* RIGHT COLUMN: Permanent Sidebar Shopping Cart on desktop */}
-        <aside className="hidden lg:flex flex-col w-96 bg-card-app rounded-2xl border border-slate-500/10 p-6 shrink-0 h-[calc(100vh-140px)] sticky top-28 shadow-xs justify-between" id="desktop-shopping-cart-sidebar">
-          <div className="flex-1 flex flex-col min-h-0">
-            <h2 className="font-display text-sm font-extrabold text-text-app mb-4 flex items-center gap-2 pb-3 border-b border-slate-500/10 shrink-0 uppercase tracking-wide">
-              <ShoppingBag className="w-4.5 h-4.5 text-primary" />
-              Sua Sacola
-            </h2>
-
-            {cart.length === 0 ? (
-              <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
-                <div className="w-14 h-14 rounded-full bg-slate-500/10 flex items-center justify-center text-text-app/30 mb-3 border border-slate-500/10">
-                  <ShoppingBag className="w-6 h-6" />
-                </div>
-                <p className="text-xs font-bold text-text-app/60">Sua sacola está vazia</p>
-                <p className="text-[10px] text-text-app/40 max-w-[200px] mt-1.5 leading-normal">
-                  Selecione itens no cardápio para adicionar ao seu pedido e finalizar por aqui!
-                </p>
+        {/* RIGHT COLUMN: Collapsible Sidebar Shopping Cart on desktop (shown when isCartOpen = true) */}
+        {isCartOpen && (
+          <aside
+            className="hidden lg:flex flex-col w-96 bg-card-app rounded-2xl border border-slate-500/10 p-6 shrink-0 h-[calc(100vh-140px)] sticky top-28 shadow-xs justify-between animate-slide-left"
+            id="desktop-shopping-cart-sidebar"
+          >
+            <div className="flex-1 flex flex-col min-h-0">
+              {/* Sidebar Header with Close Button */}
+              <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-500/10 shrink-0">
+                <h2 className="font-display text-sm font-extrabold text-text-app flex items-center gap-2 uppercase tracking-wide">
+                  <ShoppingBag className="w-4.5 h-4.5 text-primary" />
+                  Sua Sacola
+                  {cartCount > 0 && (
+                    <span className="ml-1 inline-flex items-center justify-center h-5 w-5 rounded-full bg-primary text-[9px] font-black text-white">
+                      {cartCount}
+                    </span>
+                  )}
+                </h2>
+                <button
+                  onClick={() => setIsCartOpen(false)}
+                  className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-slate-500/15 text-text-app/40 hover:text-text-app transition cursor-pointer"
+                  title="Fechar sacola"
+                  id="btn-close-desktop-sidebar"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
-            ) : (
-              <div className="flex-1 flex flex-col min-h-0 justify-between">
-                {/* Scrollable list of cart items */}
-                <div className="max-h-44 overflow-y-auto pr-1 no-scrollbar space-y-3 pb-4 border-b border-slate-800 shrink-0">
-                  {cart.map((item) => {
-                    let itemPrice = item.product.price;
-                    const optionNames: string[] = [];
-                    Object.values(item.selectedOptions).forEach((opts) => {
-                      (opts as ProductOption[]).forEach((o) => {
-                        itemPrice += o.extraPrice;
-                        optionNames.push(o.name);
-                      });
-                    });
 
-                    return (
-                      <div key={item.id} className="flex items-start gap-2.5 p-2 rounded-xl border border-slate-500/10 bg-slate-500/5 hover:bg-slate-500/10 transition">
-                        <img src={getProductImageUrl(item.product.image)} alt={item.product.name} className="w-10 h-10 rounded-lg object-cover shrink-0 shadow-xs" />
-                        <div className="flex-1 min-w-0">
-                          <h4 className="text-xs font-bold text-text-app truncate leading-tight">{item.product.name}</h4>
-                          {optionNames.length > 0 && (
-                            <p className="text-[9px] text-text-app/40 truncate leading-none mt-0.5">{optionNames.join(", ")}</p>
-                          )}
-                          <span className="text-[10px] font-bold text-text-app/80 block mt-1">
-                            {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(itemPrice * item.quantity)}
-                          </span>
-                        </div>
-                        
-                        {/* Quantity controls */}
-                        <div className="flex items-center gap-1 rounded-full border border-slate-500/15 bg-card-app p-0.5 shrink-0 shadow-xs">
-                          <button
-                            onClick={() => handleUpdateQty(item.id, item.quantity - 1)}
-                            className="w-4.5 h-4.5 rounded-full bg-slate-500/15 flex items-center justify-center text-text-app/70 text-[10px] font-bold hover:bg-slate-500/25 transition cursor-pointer"
-                          >
-                            -
-                          </button>
-                          <span className="text-[10px] font-bold w-4 text-center text-text-app">{item.quantity}</span>
-                          <button
-                            onClick={() => handleUpdateQty(item.id, item.quantity + 1)}
-                            className="w-4.5 h-4.5 rounded-full bg-slate-500/15 flex items-center justify-center text-text-app/70 text-[10px] font-bold hover:bg-slate-500/25 transition cursor-pointer"
-                          >
-                            +
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
+              {cart.length === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
+                  <div className="w-14 h-14 rounded-full bg-slate-500/10 flex items-center justify-center text-text-app/30 mb-3 border border-slate-500/10">
+                    <ShoppingBag className="w-6 h-6" />
+                  </div>
+                  <p className="text-xs font-bold text-text-app/60">Sua sacola está vazia</p>
+                  <p className="text-[10px] text-text-app/40 max-w-[200px] mt-1.5 leading-normal">
+                    Selecione itens no cardápio para adicionar ao seu pedido e finalizar por aqui!
+                  </p>
                 </div>
+              ) : (
+                <div className="flex-1 flex flex-col min-h-0 justify-between">
+                  {/* Scrollable list of cart items */}
+                  <div className="max-h-44 overflow-y-auto pr-1 no-scrollbar space-y-3 pb-4 border-b border-slate-800 shrink-0">
+                    {cart.map((item) => {
+                      let itemPrice = item.product.price;
+                      const optionNames: string[] = [];
+                      Object.values(item.selectedOptions).forEach((opts) => {
+                        (opts as ProductOption[]).forEach((o) => {
+                          itemPrice += o.extraPrice;
+                          optionNames.push(o.name);
+                        });
+                      });
 
-                {/* Quick checkout fields (Middle) */}
-                <div className="flex-1 overflow-y-auto py-3 space-y-3 min-h-0 no-scrollbar">
-                  {/* Delivery vs Pickup switch */}
-                  <div className="grid grid-cols-2 gap-1 bg-slate-500/5 p-1 rounded-xl border border-slate-500/10">
-                    <button
-                      onClick={() => setDeliveryMethod("delivery")}
-                      className={`py-1.5 text-[10px] font-bold rounded-lg transition cursor-pointer ${
-                        deliveryMethod === "delivery" ? "bg-primary text-white shadow-xs" : "text-text-app/50"
-                      }`}
-                    >
-                      Delivery (Entrega)
-                    </button>
-                    <button
-                      onClick={() => setDeliveryMethod("pickup")}
-                      className={`py-1.5 text-[10px] font-bold rounded-lg transition cursor-pointer ${
-                        deliveryMethod === "pickup" ? "bg-primary text-white shadow-xs" : "text-text-app/50"
-                      }`}
-                    >
-                      Retirada Balcão
-                    </button>
+                      return (
+                        <div key={item.id} className="flex items-start gap-2.5 p-2 rounded-xl border border-slate-500/10 bg-slate-500/5 hover:bg-slate-500/10 transition">
+                          <img src={getProductImageUrl(item.product.image)} alt={item.product.name} className="w-10 h-10 rounded-lg object-cover shrink-0 shadow-xs" />
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-xs font-bold text-text-app truncate leading-tight">{item.product.name}</h4>
+                            {optionNames.length > 0 && (
+                              <p className="text-[9px] text-text-app/40 truncate leading-none mt-0.5">{optionNames.join(", ")}</p>
+                            )}
+                            <span className="text-[10px] font-bold text-text-app/80 block mt-1">
+                              {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(itemPrice * item.quantity)}
+                            </span>
+                          </div>
+                          
+                          {/* Quantity controls */}
+                          <div className="flex items-center gap-1 rounded-full border border-slate-500/15 bg-card-app p-0.5 shrink-0 shadow-xs">
+                            <button
+                              onClick={() => handleUpdateQty(item.id, item.quantity - 1)}
+                              className="w-4.5 h-4.5 rounded-full bg-slate-500/15 flex items-center justify-center text-text-app/70 text-[10px] font-bold hover:bg-slate-500/25 transition cursor-pointer"
+                            >
+                              -
+                            </button>
+                            <span className="text-[10px] font-bold w-4 text-center text-text-app">{item.quantity}</span>
+                            <button
+                              onClick={() => handleUpdateQty(item.id, item.quantity + 1)}
+                              className="w-4.5 h-4.5 rounded-full bg-slate-500/15 flex items-center justify-center text-text-app/70 text-[10px] font-bold hover:bg-slate-500/25 transition cursor-pointer"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
 
-                  {deliveryMethod === "delivery" && (
-                    <div className="space-y-2 border-t border-slate-500/5 pt-2">
-                      <div className="flex gap-2">
-                        <div className="flex-1 space-y-1">
-                          <label className="text-[9px] font-extrabold text-text-app/40 uppercase tracking-wider block">CEP</label>
-                          <div className="relative">
+                  {/* Quick checkout fields (Middle) */}
+                  <div className="flex-1 overflow-y-auto py-3 space-y-3 min-h-0 no-scrollbar">
+                    {/* Delivery vs Pickup switch */}
+                    <div className="grid grid-cols-2 gap-1 bg-slate-500/5 p-1 rounded-xl border border-slate-500/10">
+                      <button
+                        onClick={() => setDeliveryMethod("delivery")}
+                        className={`py-1.5 text-[10px] font-bold rounded-lg transition cursor-pointer ${
+                          deliveryMethod === "delivery" ? "bg-primary text-white shadow-xs" : "text-text-app/50"
+                        }`}
+                      >
+                        Delivery (Entrega)
+                      </button>
+                      <button
+                        onClick={() => setDeliveryMethod("pickup")}
+                        className={`py-1.5 text-[10px] font-bold rounded-lg transition cursor-pointer ${
+                          deliveryMethod === "pickup" ? "bg-primary text-white shadow-xs" : "text-text-app/50"
+                        }`}
+                      >
+                        Retirada Balcão
+                      </button>
+                    </div>
+
+                    {deliveryMethod === "delivery" && (
+                      <div className="space-y-2 border-t border-slate-500/5 pt-2">
+                        <div className="flex gap-2">
+                          <div className="flex-1 space-y-1">
+                            <label className="text-[9px] font-extrabold text-text-app/40 uppercase tracking-wider block">CEP</label>
+                            <div className="relative">
+                              <input
+                                type="text"
+                                placeholder="00000-000"
+                                value={cep}
+                                onChange={handleCEPChange}
+                                className="w-full rounded-xl border border-slate-500/10 bg-slate-500/5 p-2 pr-8 text-xs text-text-app focus:border-primary outline-hidden transition"
+                              />
+                              {cepLoading && (
+                                <span className="absolute right-2.5 top-2.5 flex h-3 w-3">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          {cepError && (
+                            <div className="self-end pb-2 text-[9px] font-bold text-red-500">
+                              {cepError}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="col-span-2 space-y-1">
+                            <label className="text-[9px] font-extrabold text-text-app/40 uppercase tracking-wider block">Rua / Logradouro</label>
                             <input
                               type="text"
-                              placeholder="00000-000"
-                              value={cep}
-                              onChange={handleCEPChange}
-                              className="w-full rounded-xl border border-slate-500/10 bg-slate-500/5 p-2 pr-8 text-xs text-text-app focus:border-primary outline-hidden transition"
+                              placeholder="Ex: Rua Augusta"
+                              value={logradouro}
+                              onChange={(e) => setLogradouro(e.target.value)}
+                              className="w-full rounded-xl border border-slate-500/10 bg-slate-500/5 p-2 text-xs text-text-app focus:border-primary outline-hidden transition"
                             />
-                            {cepLoading && (
-                              <span className="absolute right-2.5 top-2.5 flex h-3 w-3">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
-                              </span>
-                            )}
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-extrabold text-text-app/40 uppercase tracking-wider block">Número</label>
+                            <input
+                              ref={numeroInputRef}
+                              type="text"
+                              placeholder="Nº"
+                              value={numero}
+                              onChange={(e) => setNumero(e.target.value)}
+                              className="w-full rounded-xl border border-slate-500/10 bg-slate-500/5 p-2 text-xs text-text-app focus:border-primary outline-hidden transition"
+                            />
                           </div>
                         </div>
-                        {cepError && (
-                          <div className="self-end pb-2 text-[9px] font-bold text-red-500">
-                            {cepError}
+
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-extrabold text-text-app/40 uppercase tracking-wider block">Bairro</label>
+                          <input
+                            type="text"
+                            placeholder="Ex: Centro"
+                            value={bairro}
+                            onChange={(e) => setBairro(e.target.value)}
+                            className="w-full rounded-xl border border-slate-500/10 bg-slate-500/5 p-2 text-xs text-text-app focus:border-primary outline-hidden transition"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="col-span-2 space-y-1">
+                            <label className="text-[9px] font-extrabold text-text-app/40 uppercase tracking-wider block">Cidade</label>
+                            <input
+                              type="text"
+                              placeholder="Ex: São Paulo"
+                              value={cidade}
+                              onChange={(e) => setCidade(e.target.value)}
+                              className="w-full rounded-xl border border-slate-500/10 bg-slate-500/5 p-2 text-xs text-text-app focus:border-primary outline-hidden transition"
+                            />
                           </div>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-2">
-                        <div className="col-span-2 space-y-1">
-                          <label className="text-[9px] font-extrabold text-text-app/40 uppercase tracking-wider block">Rua / Logradouro</label>
-                          <input
-                            type="text"
-                            placeholder="Ex: Rua Augusta"
-                            value={logradouro}
-                            onChange={(e) => setLogradouro(e.target.value)}
-                            className="w-full rounded-xl border border-slate-500/10 bg-slate-500/5 p-2 text-xs text-text-app focus:border-primary outline-hidden transition"
-                          />
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-extrabold text-text-app/40 uppercase tracking-wider block">UF</label>
+                            <input
+                              type="text"
+                              placeholder="SP"
+                              maxLength={2}
+                              value={estado}
+                              onChange={(e) => setEstado(e.target.value.toUpperCase())}
+                              className="w-full rounded-xl border border-slate-500/10 bg-slate-500/5 p-2 text-xs text-text-app focus:border-primary outline-hidden transition"
+                            />
+                          </div>
                         </div>
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-extrabold text-text-app/40 uppercase tracking-wider block">Número</label>
-                          <input
-                            ref={numeroInputRef}
-                            type="text"
-                            placeholder="Nº"
-                            value={numero}
-                            onChange={(e) => setNumero(e.target.value)}
-                            className="w-full rounded-xl border border-slate-500/10 bg-slate-500/5 p-2 text-xs text-text-app focus:border-primary outline-hidden transition"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-extrabold text-text-app/40 uppercase tracking-wider block">Bairro</label>
-                        <input
-                          type="text"
-                          placeholder="Ex: Centro"
-                          value={bairro}
-                          onChange={(e) => setBairro(e.target.value)}
-                          className="w-full rounded-xl border border-slate-500/10 bg-slate-500/5 p-2 text-xs text-text-app focus:border-primary outline-hidden transition"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-2">
-                        <div className="col-span-2 space-y-1">
-                          <label className="text-[9px] font-extrabold text-text-app/40 uppercase tracking-wider block">Cidade</label>
-                          <input
-                            type="text"
-                            placeholder="Ex: São Paulo"
-                            value={cidade}
-                            onChange={(e) => setCidade(e.target.value)}
-                            className="w-full rounded-xl border border-slate-500/10 bg-slate-500/5 p-2 text-xs text-text-app focus:border-primary outline-hidden transition"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-extrabold text-text-app/40 uppercase tracking-wider block">UF</label>
-                          <input
-                            type="text"
-                            placeholder="SP"
-                            maxLength={2}
-                            value={estado}
-                            onChange={(e) => setEstado(e.target.value.toUpperCase())}
-                            className="w-full rounded-xl border border-slate-500/10 bg-slate-500/5 p-2 text-xs text-text-app focus:border-primary outline-hidden transition"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Payment method selection */}
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-extrabold text-text-app/40 uppercase tracking-wider block">Forma de Pagamento</label>
-                    <select
-                      value={paymentMethod}
-                      onChange={(e) => setPaymentMethod(e.target.value)}
-                      className="w-full rounded-xl border border-slate-500/10 bg-slate-500/5 p-2 text-xs text-text-app focus:border-primary outline-hidden"
-                    >
-                      <option value="Cartão de Crédito" className="bg-card-app text-text-app">Cartão de Crédito (na entrega)</option>
-                      <option value="Cartão de Débito" className="bg-card-app text-text-app">Cartão de Débito (na entrega)</option>
-                      <option value="PIX" className="bg-card-app text-text-app">PIX (Chave na Entrega)</option>
-                      <option value="Dinheiro" className="bg-card-app text-text-app">Dinheiro</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Pricing Breakdown & Action Button (Bottom - Fixed at Footer) */}
-                <div className="pt-3 border-t border-slate-500/15 bg-card-app shrink-0 space-y-3">
-                  {/* Pricing Breakdown */}
-                  <div className="space-y-1 text-xs pt-1">
-                    <div className="flex justify-between text-text-app/50 text-[11px]">
-                      <span>Subtotal</span>
-                      <span>{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cartTotal)}</span>
-                    </div>
-                    {deliveryMethod === "delivery" && (
-                      <div className="flex justify-between text-text-app/50 text-[11px]">
-                        <span>Taxa de Entrega</span>
-                        <span>R$ 7,00</span>
                       </div>
                     )}
-                    <div className="flex justify-between font-extrabold text-text-app pt-1.5 border-t border-slate-500/15 text-xs">
-                      <span>VALOR TOTAL</span>
-                      <span className="text-primary text-sm font-black">
-                        {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
-                          cartTotal + (deliveryMethod === "delivery" ? 7 : 0)
-                        )}
-                      </span>
+
+                    {/* Payment method selection */}
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-extrabold text-text-app/40 uppercase tracking-wider block">Forma de Pagamento</label>
+                      <select
+                        value={paymentMethod}
+                        onChange={(e) => setPaymentMethod(e.target.value)}
+                        className="w-full rounded-xl border border-slate-500/10 bg-slate-500/5 p-2 text-xs text-text-app focus:border-primary outline-hidden"
+                      >
+                        <option value="Cartão de Crédito" className="bg-card-app text-text-app">Cartão de Crédito (na entrega)</option>
+                        <option value="Cartão de Débito" className="bg-card-app text-text-app">Cartão de Débito (na entrega)</option>
+                        <option value="PIX" className="bg-card-app text-text-app">PIX (Chave na Entrega)</option>
+                        <option value="Dinheiro" className="bg-card-app text-text-app">Dinheiro</option>
+                      </select>
                     </div>
                   </div>
 
-                  {/* Validation notice / Error notification */}
-                  {sidebarError && (
-                    <div className="p-2 bg-red-500/10 border border-red-500/25 text-red-400 rounded-xl text-[10px] font-bold text-center animate-pulse">
-                      {sidebarError}
+                  {/* Pricing Breakdown & Action Button (Bottom - Fixed at Footer) */}
+                  <div className="pt-3 border-t border-slate-500/15 bg-card-app shrink-0 space-y-3">
+                    {/* Pricing Breakdown */}
+                    <div className="space-y-1 text-xs pt-1">
+                      <div className="flex justify-between text-text-app/50 text-[11px]">
+                        <span>Subtotal</span>
+                        <span>{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cartTotal)}</span>
+                      </div>
+                      {deliveryMethod === "delivery" && (
+                        <div className="flex justify-between text-text-app/50 text-[11px]">
+                          <span>Taxa de Entrega</span>
+                          <span>R$ 7,00</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between font-extrabold text-text-app pt-1.5 border-t border-slate-500/15 text-xs">
+                        <span>VALOR TOTAL</span>
+                        <span className="text-primary text-sm font-black">
+                          {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
+                            cartTotal + (deliveryMethod === "delivery" ? 7 : 0)
+                          )}
+                        </span>
+                      </div>
                     </div>
-                  )}
 
-                  {/* Checkout button */}
-                  <button
-                    onClick={handleQuickSidebarCheckout}
-                    className="w-full py-2.5 bg-primary text-white text-xs font-black rounded-xl shadow-xs hover:opacity-95 transition uppercase tracking-wider cursor-pointer"
-                  >
-                    Confirmar e Enviar Pedido
-                  </button>
-                  <p className="text-[9px] text-center text-text-app/40 leading-normal">Seu pedido será enviado instantaneamente ao painel da cozinha!</p>
+                    {/* Validation notice / Error notification */}
+                    {sidebarError && (
+                      <div className="p-2 bg-red-500/10 border border-red-500/25 text-red-400 rounded-xl text-[10px] font-bold text-center animate-pulse">
+                        {sidebarError}
+                      </div>
+                    )}
+
+                    {/* Checkout button */}
+                    <button
+                      onClick={handleQuickSidebarCheckout}
+                      className="w-full py-2.5 bg-primary text-white text-xs font-black rounded-xl shadow-xs hover:opacity-95 transition uppercase tracking-wider cursor-pointer"
+                    >
+                      Confirmar e Enviar Pedido
+                    </button>
+                    <p className="text-[9px] text-center text-text-app/40 leading-normal">Seu pedido será enviado instantaneamente ao painel da cozinha!</p>
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-        </aside>
+              )}
+            </div>
+          </aside>
+        )}
 
-      </div>
-
-      {/* 3. MOBILE FLOATING ACTION BUTTON BAR (Only shows on mobile viewports since sidebar is hidden) */}
-      <div className="lg:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center justify-center gap-3 w-full max-w-md px-4">
-        {cartCount > 0 ? (
+      {/* 3. MOBILE STICKY BOTTOM BAR (iFood-style — only shows on mobile when cart has items) */}
+      {cartCount > 0 && (
+        <div className="lg:hidden fixed bottom-0 left-0 w-full z-30 px-4 pb-5 pt-2">
           <button
             onClick={() => setIsCartOpen(true)}
-            className="flex-1 flex items-center justify-between rounded-full bg-primary px-5 h-12 text-white font-bold shadow-lg hover:scale-[1.01] active:scale-[0.99] transition cursor-pointer"
+            className="w-full flex items-center justify-between gap-3 rounded-2xl bg-primary text-white px-5 h-14 shadow-xl hover:opacity-95 active:scale-[0.99] transition cursor-pointer"
             id="floating-cart-trigger"
           >
-            <div className="flex items-center gap-2">
-              <div className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20 text-[10px] font-bold">
+            {/* Left: item count badge + label */}
+            <div className="flex items-center gap-3">
+              <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-white/20 text-xs font-black shrink-0">
                 {cartCount}
               </div>
-              <span className="text-xs">Ver Sacola</span>
+              <div className="flex flex-col items-start leading-tight">
+                <span className="text-[11px] font-black uppercase tracking-wide">Ver Sacola</span>
+                <span className="text-[10px] font-medium text-white/80">{cartCount} {cartCount === 1 ? 'item' : 'itens'}</span>
+              </div>
             </div>
-            <span className="text-xs font-black">
-              {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cartTotal)}
-            </span>
+            {/* Right: total + arrow */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-black">
+                {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cartTotal)}
+              </span>
+              <ArrowRight className="h-4 w-4 text-white/80" />
+            </div>
           </button>
-        ) : (
-          <div className="flex-1 flex items-center justify-center h-11 rounded-full bg-slate-900/95 backdrop-blur-md text-white/95 text-[10px] font-bold px-4 select-none shadow-md">
-            Selecione itens no cardápio
-          </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      </div>{/* end: #main-content-layout */}
 
       {/* MODALS AND DRAWERS (FULLY RESPONSIVE) */}
 
@@ -1355,8 +1389,8 @@ export default function CardapioPage() {
         />
       )}
 
-      {/* Mobile Cart Drawer (Slide up) */}
-      {isCartOpen && (
+      {/* Mobile Cart Drawer (Slide up — only visible on mobile/tablet, desktop uses the sidebar) */}
+      {isCartOpen && window.innerWidth < 1024 && (
         <CardapioCartDrawer
           activeBrand={activeBrand}
           cart={cart}

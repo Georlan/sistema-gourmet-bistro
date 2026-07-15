@@ -18,6 +18,8 @@ interface CardapioHeaderProps {
   onAuthClick: () => void;
   onViewOrdersClick: () => void;
   onLogoClick: () => void; // Click to open the StoreInfoDrawer
+  onCartToggle: () => void;
+  cartCount: number;
 }
 
 const getSocialIcon = (platform: string) => {
@@ -45,7 +47,9 @@ export default function CardapioHeader({
   user,
   onAuthClick,
   onViewOrdersClick,
-  onLogoClick
+  onLogoClick,
+  onCartToggle,
+  cartCount
 }: CardapioHeaderProps) {
   const [showBrandSelector, setShowBrandSelector] = useState(false);
   const [restaurantsList, setRestaurantsList] = useState<any[]>([]);
@@ -196,6 +200,21 @@ export default function CardapioHeader({
               id="btn-share-header"
             >
               <Share2 className="h-4 w-4" />
+            </button>
+
+            {/* Shopping Cart Button */}
+            <button
+              onClick={onCartToggle}
+              className="relative flex items-center justify-center h-9 w-9 rounded-xl border border-slate-500/10 hover:bg-slate-500/10 text-text-app/80 hover:text-primary transition cursor-pointer shrink-0"
+              title="Sua Sacola"
+              id="btn-cart-header"
+            >
+              <ShoppingBag className="h-4.5 w-4.5" />
+              {cartCount > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[8px] font-bold text-white shadow-xs">
+                  {cartCount}
+                </span>
+              )}
             </button>
 
             {/* User past order history status link */}
