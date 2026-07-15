@@ -5,7 +5,7 @@ import {
   Clock, X, RefreshCw, Edit3, Trash2, Plus, ChevronRight,
   MapPin, ClipboardList, BarChart2, Package, Shield, Star,
   MessageSquare, Send, Printer, Cpu, HelpCircle, Smartphone,
-  Gift, Tag, TrendingUp, Heart
+  Gift, Tag, TrendingUp, Heart, Globe
 } from 'lucide-react';
 import { Order, OrderItem, CaixaTurno, CaixaMovimentacao, Pagamento, Table, Product } from '../types';
 import { PRODUCTS, CATEGORIES } from '../data';
@@ -114,6 +114,16 @@ export function CaixaPanel({
   // active sub-tab under each main tab
   const [activeSubTab, setActiveSubTab] = useState<string>('pedidos');
   const [selectedKanbanOrder, setSelectedKanbanOrder] = useState<any>(null);
+
+  // Configurações do Cardápio Digital Whitelabel
+  const [cardapioStatusOverride, setCardapioStatusOverride] = useState<string>('Automático');
+  const [cardapioCorPrimaria, setCardapioCorPrimaria] = useState<string>('#00b894');
+  const [cardapioCorFundo, setCardapioCorFundo] = useState<string>('#090a0f');
+  const [cardapioLogoUrl, setCardapioLogoUrl] = useState<string>('');
+  const [cardapioBannerUrl, setCardapioBannerUrl] = useState<string>('');
+  const [cardapioSobreNos, setCardapioSobreNos] = useState<string>('');
+  const [cardapioEndereco, setCardapioEndereco] = useState<string>('');
+  const [isSavingCardapioConfig, setIsSavingCardapioConfig] = useState<boolean>(false);
 
   // ============================================================================
   // ⚡ FILTRAGEM DINÂMICA DAS COMANDAS DE MESA PARA O KANBAN
@@ -1000,6 +1010,56 @@ export function CaixaPanel({
     }
   };
 
+  const fetchCardapioConfig = async () => {
+    try {
+      const res = await fetch(`${apiBaseUrl}/caixa/restaurante/config`, { headers: authHeaders });
+      if (res.ok) {
+        const data = await res.json();
+        setCardapioStatusOverride(data.status_override || 'Automático');
+        setCardapioCorPrimaria(data.cor_primaria || '#00b894');
+        setCardapioCorFundo(data.cor_fundo || '#090a0f');
+        setCardapioLogoUrl(data.logo_url || '');
+        setCardapioBannerUrl(data.banner_url || '');
+        setCardapioSobreNos(data.sobre_nos || '');
+        setCardapioEndereco(data.endereco || '');
+      }
+    } catch (err) {
+      console.error('Error fetching cardapio whitelabel config', err);
+    }
+  };
+
+  const saveCardapioConfig = async () => {
+    setIsSavingCardapioConfig(true);
+    try {
+      const res = await fetch(`${apiBaseUrl}/caixa/restaurante/config`, {
+        method: 'PUT',
+        headers: {
+          ...authHeaders,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          status_override: cardapioStatusOverride,
+          cor_primaria: cardapioCorPrimaria,
+          cor_fundo: cardapioCorFundo,
+          logo_url: cardapioLogoUrl,
+          banner_url: cardapioBannerUrl,
+          sobre_nos: cardapioSobreNos,
+          endereco: cardapioEndereco
+        })
+      });
+      if (res.ok) {
+        alert('Configurações do cardápio digital atualizadas com sucesso!');
+      } else {
+        alert('Falha ao salvar as configurações.');
+      }
+    } catch (err) {
+      console.error('Error saving cardapio whitelabel config', err);
+      alert('Erro de conexão ao salvar configurações.');
+    } finally {
+      setIsSavingCardapioConfig(false);
+    }
+  };
+
   const handleUpdateClient = async (oldPhone: string, newNome: string, newPhone: string, newSaldo?: number) => {
     try {
       const body: any = { cliente: newNome, telefone: newPhone };
@@ -1335,6 +1395,9 @@ export function CaixaPanel({
     if (activeTab === 'cardapio') {
       fetchProdutos();
       fetchCategorias();
+    }
+    if (activeSubTab === 'config_cardapio') {
+      fetchCardapioConfig();
     }
   }, [activeTab, activeSubTab, desempenhoRange]);
 
@@ -2006,7 +2069,8 @@ export function CaixaPanel({
               {
                 category: 'Parâmetros do Sistema',
                 items: [
-                  { id: 'configuracoes', label: 'Ajustes de Retaguarda', icon: Smartphone }
+                  { id: 'configuracoes', label: 'Ajustes de Retaguarda', icon: Smartphone },
+                  { id: 'config_cardapio', label: 'Configurações do Cardápio', icon: Globe }
                 ]
               }
             ].map((group, gIdx) => (
@@ -2021,20 +2085,23 @@ export function CaixaPanel({
                     <button
                       key={tab.id}
                       onClick={() => {
-                        if (tab.id === 'chat_copiloto') {
+                        if (tab.id === 'config_cardapio') {
+                          setActiveTab('configuracoes');
+                          setActiveSubTab('config_cardapio');
+                        } else if (tab.id === 'chat_copiloto') {
                           setActiveTab('operacao');
                           setActiveSubTab('chat_copiloto');
                         } else {
                           handleTabChange(tab.id as any);
                         }
                       }}
-                      className={`w-full px-3.5 py-1.5 rounded-xl text-left font-semibold transition-all flex items-center justify-between cursor-pointer group ${(tab.id === 'chat_copiloto' ? (activeTab === 'operacao' && activeSubTab === 'chat_copiloto') : activeTab === tab.id)
+                      className={`w-full px-3.5 py-1.5 rounded-xl text-left font-semibold transition-all flex items-center justify-between cursor-pointer group ${(tab.id === 'config_cardapio' ? (activeTab === 'configuracoes' && activeSubTab === 'config_cardapio') : tab.id === 'chat_copiloto' ? (activeTab === 'operacao' && activeSubTab === 'chat_copiloto') : activeTab === tab.id)
                         ? 'bg-[#10b981]/15 text-[#10b981] border border-[#10b981]/10 font-bold shadow-inner'
                         : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]/50 border border-transparent'
                         }`}
                     >
                       <div className={clsx('flex', 'items-center', 'gap-3')}>
-                        <Icon size={13} className={(tab.id === 'chat_copiloto' ? (activeTab === 'operacao' && activeSubTab === 'chat_copiloto') : activeTab === tab.id) ? 'text-[#10b981]' : 'text-gray-500 group-hover:text-white'} />
+                        <Icon size={13} className={(tab.id === 'config_cardapio' ? (activeTab === 'configuracoes' && activeSubTab === 'config_cardapio') : tab.id === 'chat_copiloto' ? (activeTab === 'operacao' && activeSubTab === 'chat_copiloto') : activeTab === tab.id) ? 'text-[#10b981]' : 'text-gray-500 group-hover:text-white'} />
                         <span className="text-[10px]">{tab.label}</span>
                       </div>
                       {tab.id === 'operacao' && (simulatedOrders.filter(o => o.status === 'analise').length + activeKitchenItems.length) > 0 && (
@@ -6510,6 +6577,130 @@ export function CaixaPanel({
                   className={clsx('px-5', 'py-2.5', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'font-bold', 'rounded-xl', 'text-[9px]', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-lg')}
                 >
                   Salvar Configurações de Nicho
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* CONFIGURAÇÃO CARDÁPIO DIGITAL WHITELABEL */}
+          {activeTab === 'configuracoes' && activeSubTab === 'config_cardapio' && (
+            <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-6', 'text-left', 'max-w-2xl', 'mx-auto', 'space-y-6', 'animate-fade-in')}>
+              <div className={clsx('border-b', 'border-[#27272A]', 'pb-3')}>
+                <span className={clsx('font-serif', 'font-bold', 'text-base', 'text-white', 'block')}>Configurações do Cardápio Digital</span>
+                <span className={clsx('text-[10px]', 'text-gray-400', 'block', 'mt-1')}>Personalize a identidade visual e comportamento do cardápio digital do cliente (Whitelabel).</span>
+              </div>
+
+              <div className="space-y-4">
+                {/* Status Override */}
+                <div className="space-y-1.5">
+                  <label className={clsx('text-[10px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Status de Funcionamento:</label>
+                  <select
+                    value={cardapioStatusOverride}
+                    onChange={(e) => setCardapioStatusOverride(e.target.value)}
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-xs', 'focus:outline-none', 'focus:border-[#10b981]')}
+                  >
+                    <option value="Automático">Automático (Segue horários de funcionamento)</option>
+                    <option value="Forçado Aberto">Forçado Aberto (Sempre aberto para pedidos)</option>
+                    <option value="Forçado Fechado">Forçado Fechado (Sempre fechado/indisponível)</option>
+                  </select>
+                </div>
+
+                {/* Cores */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className={clsx('text-[10px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Cor Primária (Tema):</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="color"
+                        value={cardapioCorPrimaria}
+                        onChange={(e) => setCardapioCorPrimaria(e.target.value)}
+                        className="w-10 h-10 p-0 border border-[#27272A] rounded-xl bg-transparent cursor-pointer"
+                      />
+                      <input
+                        type="text"
+                        value={cardapioCorPrimaria}
+                        onChange={(e) => setCardapioCorPrimaria(e.target.value)}
+                        className={clsx('flex-1', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-xs', 'font-mono')}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className={clsx('text-[10px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Cor de Fundo:</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="color"
+                        value={cardapioCorFundo}
+                        onChange={(e) => setCardapioCorFundo(e.target.value)}
+                        className="w-10 h-10 p-0 border border-[#27272A] rounded-xl bg-transparent cursor-pointer"
+                      />
+                      <input
+                        type="text"
+                        value={cardapioCorFundo}
+                        onChange={(e) => setCardapioCorFundo(e.target.value)}
+                        className={clsx('flex-1', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-xs', 'font-mono')}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Logo e Banner URLs */}
+                <div className="space-y-1.5">
+                  <label className={clsx('text-[10px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>URL do Logotipo:</label>
+                  <input
+                    type="text"
+                    value={cardapioLogoUrl}
+                    onChange={(e) => setCardapioLogoUrl(e.target.value)}
+                    placeholder="https://exemplo.com/logo.png"
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-xs', 'focus:outline-none', 'focus:border-[#10b981]')}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className={clsx('text-[10px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>URL do Banner:</label>
+                  <input
+                    type="text"
+                    value={cardapioBannerUrl}
+                    onChange={(e) => setCardapioBannerUrl(e.target.value)}
+                    placeholder="https://exemplo.com/banner.png"
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-xs', 'focus:outline-none', 'focus:border-[#10b981]')}
+                  />
+                </div>
+
+                {/* Sobre Nós */}
+                <div className="space-y-1.5">
+                  <label className={clsx('text-[10px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Sobre Nós:</label>
+                  <textarea
+                    value={cardapioSobreNos}
+                    onChange={(e) => setCardapioSobreNos(e.target.value)}
+                    rows={3}
+                    placeholder="Breve história ou descrição do restaurante..."
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-xs', 'focus:outline-none', 'focus:border-[#10b981]')}
+                  />
+                </div>
+
+                {/* Endereço */}
+                <div className="space-y-1.5">
+                  <label className={clsx('text-[10px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Endereço Físico:</label>
+                  <input
+                    type="text"
+                    value={cardapioEndereco}
+                    onChange={(e) => setCardapioEndereco(e.target.value)}
+                    placeholder="Rua Exemplo, 123 - Centro"
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-xs', 'focus:outline-none', 'focus:border-[#10b981]')}
+                  />
+                </div>
+              </div>
+
+              {/* Botão de salvar */}
+              <div className={clsx('pt-4', 'border-t', 'border-[#27272A]', 'flex', 'justify-end')}>
+                <button
+                  type="button"
+                  disabled={isSavingCardapioConfig}
+                  onClick={saveCardapioConfig}
+                  className={clsx('px-5', 'py-2.5', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'font-bold', 'rounded-xl', 'text-[9px]', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-lg', 'disabled:opacity-50')}
+                >
+                  {isSavingCardapioConfig ? 'Salvando...' : 'Salvar Configurações Whitelabel'}
                 </button>
               </div>
             </div>

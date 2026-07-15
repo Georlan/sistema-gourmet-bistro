@@ -457,5 +457,48 @@ class NotaEntradaResponse(BaseModel):
         from_attributes = True
 
 
+# ----------------- CONFIGURAÇÕES WHITELABEL DO RESTAURANTE -----------------
+class RestauranteConfigResponse(BaseModel):
+    id: int
+    nome: str
+    status_override: str
+    cor_primaria: str
+    cor_fundo: str
+    logo_url: Optional[str] = None
+    banner_url: Optional[str] = None
+    sobre_nos: Optional[str] = None
+    endereco: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class RestauranteConfigUpdate(BaseModel):
+    status_override: Optional[str] = None
+    cor_primaria: Optional[str] = None
+    cor_fundo: Optional[str] = None
+    logo_url: Optional[str] = None
+    banner_url: Optional[str] = None
+    sobre_nos: Optional[str] = None
+    endereco: Optional[str] = None
+
+
+# ----------------- PEDIDOS CARDAPIO DIGITAL -----------------
+class CardapioItemPedido(BaseModel):
+    produto_id: str
+    quantidade: int
+    observacao: Optional[str] = ""
+    cliente_nome: Optional[str] = "Cliente Online"
+
+class CardapioPedidoCreate(BaseModel):
+    restaurante_id: int
+    itens: List[CardapioItemPedido]
+    cliente_nome: str
+    cliente_telefone: str
+    endereco_entrega: str
+    taxa_entrega: float = 0.0
+    forma_pagamento: str  # Pix | Cartão na Entrega | Dinheiro
+    tipo_pedido: str = "delivery"  # delivery | retirada
+
+
 
 

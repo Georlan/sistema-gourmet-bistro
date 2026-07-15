@@ -565,3 +565,80 @@ def atualizar_configuracoes(
     db.refresh(config)
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
     return config
+
+
+# ----------------- CONFIGURAÇÕES WHITELABEL DO RESTAURANTE -----------------
+from ..database import current_restaurante_id
+from ..models import Restaurante
+from ..schemas import RestauranteConfigResponse, RestauranteConfigUpdate
+
+@router.get("/restaurante/config", response_model=RestauranteConfigResponse)
+def obter_configuracao_restaurante(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_garcom_optional)
+):
+    """Obtém as configurações whitelabel de personalização do restaurante ativo."""
+    check_caixa_permission(current_user)
+    rest_id = current_restaurante_id.get() or 1
+    
+    restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
+    if not restaurante:
+        restaurante = Restaurante(
+            id=rest_id,
+            nome="Kôma Bistro",
+            plano="pocket",
+            status_override="Automático",
+            cor_primaria="#00b894",
+            cor_fundo="#090a0f"
+        )
+        db.add(restaurante)
+        db.commit()
+        db.refresh(restaurante)
+        
+    return restaurante
+
+
+@router.put("/restaurante/config", response_model=RestauranteConfigResponse)
+def atualizar_configuracao_restaurante(
+    config_in: RestauranteConfigUpdate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_garcom_optional)
+):
+    """Atualiza as configurações whitelabel de personalização do restaurante ativo."""
+    check_caixa_permission(current_user)
+    rest_id = current_restaurante_id.get() or 1
+    
+    restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
+    if not restaurante:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Restaurante não encontrado"
+        )
+        
+    if config_in.status_override is not None:
+        restaurante.status_override = config_in.status_override
+    if config_in.cor_primaria is not None:
+        restaurante.cor_primaria = config_in.cor_primaria
+    if config_in.cor_fundo is not None:
+        restaurante.cor_fundo = config_in.cor_fundo
+    if config_in.logo_url is not None:
+        restaurante.logo_url = config_in.logo_url
+    if config_in.banner_url is not None:
+        restaurante.banner_url = config_in.banner_url
+    if config_in.sobre_nos is not None:
+        restaurante.sobre_nos = config_in.sobre_nos
+    if config_in.endereco is not None:
+        restaurante.endereco = config_in.endereco
+        
+    db.commit()
+    db.refresh(restaurante)
+    
+    # Dispara atualização de catálogo/configuração para o cardápio
+    background_tasks.add_task(
+        manager.broadcast,
+        {"type": "catalog_updated", "message": "Configurações visuais atualizadas"},
+        rest_id
+    )
+    
+    return restaurante

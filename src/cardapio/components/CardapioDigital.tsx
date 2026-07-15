@@ -154,6 +154,14 @@ export default function CardapioDigital({
     setIsSubmitting(true);
     setErrorMessage("");
 
+    const isLocalHost = window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1' ||
+      /^(\d{1,3}\.){3}\d{1,3}$/.test(window.location.hostname);
+
+    const API_BASE_URL = isLocalHost
+      ? `${window.location.protocol}//${window.location.hostname}:8000`
+      : 'https://sistema-gourmet-bistro-production.up.railway.app';
+
     const cleanedItems = cart.map((item) => {
       const optionDetails: string[] = [];
       Object.entries(item.selectedOptions).forEach(([groupName, opts]) => {
@@ -162,36 +170,32 @@ export default function CardapioDigital({
         }
       });
 
+      const observacoes = [
+        item.notes,
+        optionDetails.length > 0 ? `Opções: ${optionDetails.join(" | ")}` : ""
+      ].filter(Boolean).join(" - ");
+
       return {
-        id: item.product.id,
-        name: item.product.name,
-        quantity: item.quantity,
-        price: item.product.price,
-        notes: item.notes,
-        optionsText: optionDetails.join(" | ")
+        produto_id: item.product.id,
+        quantidade: item.quantity,
+        observacao: observacoes,
+        cliente_nome: customerName
       };
     });
 
     const orderPayload = {
-      brandId: activeBrand.id,
-      brandName: activeBrand.name,
-      customer: {
-        name: customerName,
-        phone: customerPhone
-      },
-      items: cleanedItems,
-      subtotal,
-      deliveryFee,
-      discount: discount + appliedCashback,
-      total: finalTotal,
-      deliveryMethod,
-      address: deliveryMethod === "delivery" ? address : "Retirada no Balcão",
-      paymentMethod,
-      createdAt: new Date().toISOString()
+      restaurante_id: Number(activeBrand.id) || 1,
+      itens: cleanedItems,
+      cliente_nome: customerName,
+      cliente_telefone: customerPhone,
+      endereco_entrega: deliveryMethod === "delivery" ? address : "Retirada no Balcão",
+      taxa_entrega: Number(deliveryFee) || 0,
+      forma_pagamento: paymentMethod === "PIX" ? "Pix" : paymentMethod,
+      tipo_pedido: deliveryMethod === "delivery" ? "delivery" : "retirada"
     };
 
     try {
-      const response = await fetch("/api/pedidos", {
+      const response = await fetch(`${API_BASE_URL}/cardapio/pedidos`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -204,7 +208,7 @@ export default function CardapioDigital({
       }
 
       const data = await response.json();
-      if (data.success) {
+      if (data.success || data.status === "success") {
         const userPhone = profile?.phone || profile?.telefone;
         if (userPhone) {
           try {

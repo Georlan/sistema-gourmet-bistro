@@ -170,180 +170,219 @@ export default function CardapioPage() {
   }, [cep, logradouro, numero, bairro, cidade, estado, deliveryMethod]);
 
   // Dynamic restaurant loading from Supabase
-  useEffect(() => {
-    async function loadRestaurantData() {
-      setIsLoading(true);
-      setErrorMsg("");
-      const identifier = getRestaurantIdentifier();
+  const loadRestaurantData = async () => {
+    setIsLoading(true);
+    setErrorMsg("");
+    const identifier = getRestaurantIdentifier();
 
-      // Fallback instantly if no real Supabase key is configured to avoid pending promise loops
-      const hasRealKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY && 
-                         (import.meta as any).env?.VITE_SUPABASE_ANON_KEY !== "dummy-anon-key-to-prevent-bootstrap-error";
+    // Fallback instantly if no real Supabase key is configured to avoid pending promise loops
+    const hasRealKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY && 
+                       (import.meta as any).env?.VITE_SUPABASE_ANON_KEY !== "dummy-anon-key-to-prevent-bootstrap-error";
 
-      if (!hasRealKey) {
-        console.warn("Chave Supabase não configurada. Carregando dados Whitelabel de demonstração instantaneamente.");
+    if (!hasRealKey) {
+      console.warn("Chave Supabase não configurada. Carregando dados Whitelabel de demonstração instantaneamente.");
+      const fallbackBrand = whitelabelBrands.burger;
+      setActiveBrand(fallbackBrand);
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      let restaurant = null;
+      
+      // Try as numeric ID first if applicable
+      if (/^\d+$/.test(identifier)) {
+        const { data } = await supabase
+          .from("restaurantes")
+          .select("*")
+          .eq("id", Number(identifier))
+          .maybeSingle();
+        if (data) restaurant = data;
+      }
+
+      // Try as slug next
+      if (!restaurant) {
+        const { data } = await supabase
+          .from("restaurantes")
+          .select("*")
+          .eq("slug", identifier)
+          .maybeSingle();
+        if (data) restaurant = data;
+      }
+
+      // If still not found and not burger, try loading burger as default
+      if (!restaurant && identifier !== "burger") {
+        const { data } = await supabase
+          .from("restaurantes")
+          .select("*")
+          .eq("slug", "burger")
+          .maybeSingle();
+        if (data) restaurant = data;
+      }
+
+      // Fallback to static mock whitelabel configuration if DB has no such entry
+      if (!restaurant) {
+        console.warn("Restaurante não encontrado no Supabase. Usando dados mockados como fallback de demonstração.");
         const fallbackBrand = whitelabelBrands.burger;
         setActiveBrand(fallbackBrand);
         setIsLoading(false);
         return;
       }
 
-      try {
-        let restaurant = null;
-        
-        // Try as numeric ID first if applicable
-        if (/^\d+$/.test(identifier)) {
-          const { data } = await supabase
-            .from("restaurantes")
-            .select("*")
-            .eq("id", Number(identifier))
-            .maybeSingle();
-          if (data) restaurant = data;
-        }
+      // Load categories
+      const { data: categoriesData, error: categoriesError } = await supabase
+        .from("categorias")
+        .select("*")
+        .eq("restaurante_id", restaurant.id);
 
-        // Try as slug next
-        if (!restaurant) {
-          const { data } = await supabase
-            .from("restaurantes")
-            .select("*")
-            .eq("slug", identifier)
-            .maybeSingle();
-          if (data) restaurant = data;
-        }
-
-        // If still not found and not burger, try loading burger as default
-        if (!restaurant && identifier !== "burger") {
-          const { data } = await supabase
-            .from("restaurantes")
-            .select("*")
-            .eq("slug", "burger")
-            .maybeSingle();
-          if (data) restaurant = data;
-        }
-
-        // Fallback to static mock whitelabel configuration if DB has no such entry
-        if (!restaurant) {
-          console.warn("Restaurante não encontrado no Supabase. Usando dados mockados como fallback de demonstração.");
-          const fallbackBrand = whitelabelBrands.burger;
-          setActiveBrand(fallbackBrand);
-          setIsLoading(false);
-          return;
-        }
-
-        // Load categories
-        const { data: categoriesData, error: categoriesError } = await supabase
-          .from("categorias")
-          .select("*")
-          .eq("restaurante_id", restaurant.id);
-
-        if (categoriesError) {
-          console.error("Erro ao buscar categorias:", categoriesError);
-        }
-
-        // Sort categories by position/ordem/order
-        const sortedCategories = [...(categoriesData || [])].sort((a, b) => {
-          const orderA = a.ordem !== undefined ? a.ordem : (a.order !== undefined ? a.order : (a.posicao !== undefined ? a.posicao : 0));
-          const orderB = b.ordem !== undefined ? b.ordem : (b.order !== undefined ? b.order : (b.posicao !== undefined ? b.posicao : 0));
-          return orderA - orderB;
-        });
-
-        // Load active products
-        const { data: productsData, error: productsError } = await supabase
-          .from("produtos")
-          .select("*")
-          .eq("restaurante_id", restaurant.id);
-
-        if (productsError) {
-          console.error("Erro ao buscar produtos:", productsError);
-        }
-
-        // Filter active products
-        const activeProducts = (productsData || []).filter((p) => {
-          const isAtivo = p.ativo !== undefined ? p.ativo : (p.is_active !== undefined ? p.is_active : (p.active !== undefined ? p.active : true));
-          return isAtivo;
-        });
-
-        // Category Map
-        const categoryMap: Record<string, string> = {};
-        sortedCategories.forEach((c) => {
-          categoryMap[String(c.id)] = c.nome || c.name || "";
-        });
-
-        // Map products
-        const mappedProducts: Product[] = activeProducts.map((p) => {
-          const catName = categoryMap[String(p.categoria_id)] || "Destaques";
-          
-          let modifiersList = [];
-          if (p.modifiers) {
-            if (typeof p.modifiers === "string") {
-              try { modifiersList = JSON.parse(p.modifiers); } catch(e) {}
-            } else if (Array.isArray(p.modifiers)) {
-              modifiersList = p.modifiers;
-            }
-          }
-
-          return {
-            id: String(p.id),
-            name: p.nome || p.name || "",
-            description: p.descricao || p.description || "",
-            price: Number(p.preco || p.price || 0),
-            image: getProductImageUrl(p.imagem_url || p.image || p.image_url || ""),
-            category: catName,
-            modifiers: modifiersList,
-            isAvailable: p.disponivel !== undefined ? p.disponivel : (p.is_available !== undefined ? p.is_available : true)
-          };
-        });
-
-        // Build theme options
-        const primaryColor = restaurant.cor_primaria || restaurant.primary_color || "#00b894";
-        const backgroundColor = restaurant.cor_fundo || restaurant.background_color || "#090a0f";
-        const isDarkBg = backgroundColor.startsWith("#09") || backgroundColor === "#121420" || backgroundColor === "#000000" || backgroundColor.startsWith("#1");
-        const cardColor = isDarkBg ? "#121420" : "#ffffff";
-        const textColor = isDarkBg ? "#ffffff" : "#1e293b";
-
-        const categoryNames = sortedCategories.map((c) => c.nome || c.name || "").filter(Boolean);
-
-        const newBrand: BrandConfig = {
-          id: String(restaurant.id),
-          name: restaurant.nome || restaurant.name || "Restaurante",
-          slogan: restaurant.slogan || "Sincronizado com o Sistema Kôma PDV",
-          logo: getProductImageUrl(restaurant.logo_url || restaurant.logo || ""),
-          bannerImage: getProductImageUrl(restaurant.banner_url || restaurant.banner_image || ""),
-          phone: restaurant.telefone || restaurant.phone || "",
-          address: restaurant.endereco || restaurant.address || "",
-          colors: {
-            primary: primaryColor,
-            background: backgroundColor,
-            secondary: isDarkBg ? "#121420" : "#f1f5f9",
-            text: textColor,
-            card: cardColor,
-            accent: primaryColor
-          },
-          categories: categoryNames.length > 0 ? categoryNames : ["Geral"],
-          products: mappedProducts,
-          socials: Array.isArray(restaurant.socials) ? restaurant.socials : [],
-          about: restaurant.about || restaurant.descricao || "",
-          paymentMethods: restaurant.payment_methods || [
-            { type: "Cartão de Crédito", accepted: ["Visa", "Mastercard", "Elo"] },
-            { type: "Cartão de Débito", accepted: ["Visa Electron", "Maestro"] },
-            { type: "Pix", accepted: ["Pix com QR Code ou Copia e Cola"] }
-          ],
-          operatingHours: restaurant.operating_hours || [
-            { days: "Segunda a Domingo", hours: "18:00 às 23:00" }
-          ],
-          googleMapsUrl: restaurant.google_maps_url || `https://maps.google.com/?q=${encodeURIComponent(restaurant.endereco || "")}`
-        };
-
-        setActiveBrand(newBrand);
-      } catch (err: any) {
-        console.error("Erro catastrófico ao carregar dados do Supabase:", err);
-        setErrorMsg("Não foi possível carregar as informações do cardápio digital a partir do Supabase.");
-      } finally {
-        setIsLoading(false);
+      if (categoriesError) {
+        console.error("Erro ao buscar categorias:", categoriesError);
       }
-    }
 
+      // Sort categories by position/ordem/order
+      const sortedCategories = [...(categoriesData || [])].sort((a, b) => {
+        const orderA = a.ordem !== undefined ? a.ordem : (a.order !== undefined ? a.order : (a.posicao !== undefined ? a.posicao : 0));
+        const orderB = b.ordem !== undefined ? b.ordem : (b.order !== undefined ? b.order : (b.posicao !== undefined ? b.posicao : 0));
+        return orderA - orderB;
+      });
+
+      // Load active products
+      const { data: productsData, error: productsError } = await supabase
+        .from("produtos")
+        .select("*")
+        .eq("restaurante_id", restaurant.id);
+
+      if (productsError) {
+        console.error("Erro ao buscar produtos:", productsError);
+      }
+
+      // Filter active products
+      const activeProducts = (productsData || []).filter((p) => {
+        const isAtivo = p.ativo !== undefined ? p.ativo : (p.is_active !== undefined ? p.is_active : (p.active !== undefined ? p.active : true));
+        return isAtivo;
+      });
+
+      // Category Map
+      const categoryMap: Record<string, string> = {};
+      sortedCategories.forEach((c) => {
+        categoryMap[String(c.id)] = c.nome || c.name || "";
+      });
+
+      // Map products
+      const mappedProducts: Product[] = activeProducts.map((p) => {
+        const catName = categoryMap[String(p.categoria_id)] || "Destaques";
+        
+        let modifiersList = [];
+        if (p.modifiers) {
+          if (typeof p.modifiers === "string") {
+            try { modifiersList = JSON.parse(p.modifiers); } catch(e) {}
+          } else if (Array.isArray(p.modifiers)) {
+            modifiersList = p.modifiers;
+          }
+        }
+
+        return {
+          id: String(p.id),
+          name: p.nome || p.name || "",
+          description: p.descricao || p.description || "",
+          price: Number(p.preco || p.price || 0),
+          image: getProductImageUrl(p.imagem_url || p.image || p.image_url || ""),
+          category: catName,
+          modifiers: modifiersList,
+          isAvailable: p.disponivel !== undefined ? p.disponivel : (p.is_available !== undefined ? p.is_available : true)
+        };
+      });
+
+      // Build theme options
+      const primaryColor = restaurant.cor_primaria || restaurant.primary_color || "#00b894";
+      const backgroundColor = restaurant.cor_fundo || restaurant.background_color || "#090a0f";
+      const isDarkBg = backgroundColor.startsWith("#09") || backgroundColor === "#121420" || backgroundColor === "#000000" || backgroundColor.startsWith("#1");
+      const cardColor = isDarkBg ? "#121420" : "#ffffff";
+      const textColor = isDarkBg ? "#ffffff" : "#1e293b";
+
+      const categoryNames = sortedCategories.map((c) => c.nome || c.name || "").filter(Boolean);
+
+      const newBrand: BrandConfig = {
+        id: String(restaurant.id),
+        name: restaurant.nome || restaurant.name || "Restaurante",
+        slogan: restaurant.slogan || "Sincronizado com o Sistema Kôma PDV",
+        logo: getProductImageUrl(restaurant.logo_url || restaurant.logo || ""),
+        bannerImage: getProductImageUrl(restaurant.banner_url || restaurant.banner_image || ""),
+        phone: restaurant.telefone || restaurant.phone || "",
+        address: restaurant.endereco || restaurant.address || "",
+        colors: {
+          primary: primaryColor,
+          background: backgroundColor,
+          secondary: isDarkBg ? "#121420" : "#f1f5f9",
+          text: textColor,
+          card: cardColor,
+          accent: primaryColor
+        },
+        categories: categoryNames.length > 0 ? categoryNames : ["Geral"],
+        products: mappedProducts,
+        socials: Array.isArray(restaurant.socials) ? restaurant.socials : [],
+        about: restaurant.about || restaurant.descricao || "",
+        paymentMethods: restaurant.payment_methods || [
+          { type: "Cartão de Crédito", accepted: ["Visa", "Mastercard", "Elo"] },
+          { type: "Cartão de Débito", accepted: ["Visa Electron", "Maestro"] },
+          { type: "Pix", accepted: ["Pix com QR Code ou Copia e Cola"] }
+        ],
+        operatingHours: restaurant.operating_hours || [
+          { days: "Segunda a Domingo", hours: "18:00 às 23:00" }
+        ],
+        googleMapsUrl: restaurant.google_maps_url || `https://maps.google.com/?q=${encodeURIComponent(restaurant.endereco || "")}`
+      };
+
+      setActiveBrand(newBrand);
+    } catch (err: any) {
+      console.error("Erro catastrófico ao carregar dados do Supabase:", err);
+      setErrorMsg("Não foi possível carregar as informações do cardápio digital a partir do Supabase.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
     loadRestaurantData();
+  }, []);
+
+  // Escuta do Supabase Realtime para recarga em tempo real
+  useEffect(() => {
+    const hasRealKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY && 
+                       (import.meta as any).env?.VITE_SUPABASE_ANON_KEY !== "dummy-anon-key-to-prevent-bootstrap-error";
+    if (!hasRealKey) return;
+
+    const channel = supabase
+      .channel('cardapio-realtime-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'produtos' },
+        () => {
+          console.log("Realtime: Catálogo de produtos alterado, recarregando...");
+          loadRestaurantData();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'categorias' },
+        () => {
+          console.log("Realtime: Categorias alteradas, recarregando...");
+          loadRestaurantData();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'restaurantes' },
+        () => {
+          console.log("Realtime: Dados do restaurante alterados, recarregando...");
+          loadRestaurantData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // Load user and orders on mount

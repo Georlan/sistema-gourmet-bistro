@@ -3,7 +3,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .database import engine, Base, current_restaurante_id
-from .routes import auth, products, tables, orders, websocket, caixa, optimization, estoque
+from .routes import auth, products, tables, orders, websocket, caixa, optimization, estoque, cardapio
 
 # Inicializa o Sentry antes de qualquer coisa no app
 sentry_sdk.init(
@@ -260,6 +260,7 @@ app.include_router(websocket.router)
 app.include_router(caixa.router)
 app.include_router(optimization.router)
 app.include_router(estoque.router)
+app.include_router(cardapio.router)
 
 
 @app.get("/")

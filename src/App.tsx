@@ -520,6 +520,28 @@ export default function App() {
     let reconnectTimeout: any;
     let wsUpdateTimeout: any;
 
+    const playNotificationSound = () => {
+      try {
+        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const playTone = (freq: number, start: number, duration: number) => {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(freq, start);
+          gain.gain.setValueAtTime(0.15, start);
+          gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start(start);
+          osc.stop(start + duration);
+        };
+        playTone(587.33, audioCtx.currentTime, 0.15); // D5
+        playTone(880.00, audioCtx.currentTime + 0.15, 0.25); // A5
+      } catch (e) {
+        console.warn("Could not play notification sound:", e);
+      }
+    };
+
     const connectWS = () => {
       const wsBase = API_BASE_URL.replace(/^http/, 'ws');
       const tokenKey = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
@@ -538,6 +560,10 @@ export default function App() {
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          if (data.event === "new_delivery_order") {
+            playNotificationSound();
+            showToast(`🛎️ NOVO PEDIDO ONLINE: ${data.message || 'Recebido no caixa!'}`, 'success', 8000);
+          }
           if (data.event === "tables_updated") {
             if (wsUpdateTimeout) {
               clearTimeout(wsUpdateTimeout);

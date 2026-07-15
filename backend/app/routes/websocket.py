@@ -8,23 +8,28 @@ router = APIRouter(
 )
 
 @router.websocket("/ws/{garcom_id}")
-async def websocket_endpoint(websocket: WebSocket, garcom_id: str, token: str = None):
+async def websocket_endpoint(
+    websocket: WebSocket, 
+    garcom_id: str, 
+    token: str = None, 
+    restaurante_id: int = 1
+):
     # Dynamically extract and decode claims to find the restaurante_id
-    restaurante_id = 1
+    restaurante_id_val = restaurante_id
     if token:
         try:
             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-            restaurante_id = int(payload.get("restaurante_id", 1))
+            restaurante_id_val = int(payload.get("restaurante_id", 1))
         except Exception:
             pass
 
-    await manager.connect(websocket, restaurante_id)
+    await manager.connect(websocket, restaurante_id_val)
     
     # Broadcast connection event to clear any stale states of this waiter on other clients
     await manager.broadcast({
         "event": "waiter_connected",
         "garcom_id": garcom_id
-    }, restaurante_id)
+    }, restaurante_id_val)
     
     try:
         while True:
@@ -39,13 +44,13 @@ async def websocket_endpoint(websocket: WebSocket, garcom_id: str, token: str = 
                     "garcom_id": garcom_id,
                     "garcom_nome": data.get("garcom_nome"),
                     "ativo": data.get("ativo")
-                }, restaurante_id)
+                }, restaurante_id_val)
     except WebSocketDisconnect:
-        manager.disconnect(websocket, restaurante_id)
+        manager.disconnect(websocket, restaurante_id_val)
         # Broadcast disconnect event so other clients can clear draft warnings for this waiter
         await manager.broadcast({
             "event": "waiter_disconnected",
             "garcom_id": garcom_id
-        }, restaurante_id)
+        }, restaurante_id_val)
     except Exception:
-        manager.disconnect(websocket, restaurante_id)
+        manager.disconnect(websocket, restaurante_id_val)

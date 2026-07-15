@@ -11,6 +11,15 @@ class Restaurante(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     nome = Column(String, nullable=False)
     plano = Column(String, default="pocket", nullable=False)
+    
+    # Whitelabel Digital Menu Visuals & Info
+    status_override = Column(String, default="Automático")
+    cor_primaria = Column(String, default="#00b894")
+    cor_fundo = Column(String, default="#090a0f")
+    logo_url = Column(String, nullable=True)
+    banner_url = Column(String, nullable=True)
+    sobre_nos = Column(String, nullable=True)
+    endereco = Column(String, nullable=True)
 
 
 class Usuario(Base):
