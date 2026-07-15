@@ -29,79 +29,64 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Adiciona colunas faltantes detectadas nos erros do Sentry/Railway."""
-
     conn = op.get_bind()
 
-    # ─── TABELA: comandas ─────────────────────────────────────────────────────
-    # Coluna mesa_origem_id (usado para rastrear origem em caso de mescla de mesas)
-    conn.execute(sa.text(
-        "ALTER TABLE comandas ADD COLUMN IF NOT EXISTS mesa_origem_id INTEGER"
-    ))
+    def safe_add_column(table_name, column_name, col_type, **kwargs):
+        try:
+            with op.batch_alter_table(table_name) as batch_op:
+                batch_op.add_column(sa.Column(column_name, col_type, **kwargs))
+            print(f"✅ Coluna '{column_name}' adicionada em '{table_name}'.")
+        except Exception as e:
+            print(f"⚠️ Ignorado erro ao adicionar coluna '{column_name}' em '{table_name}': {e}")
 
-    # Colunas de delivery (podem não existir em bancos criados antes do recurso)
-    conn.execute(sa.text(
-        "ALTER TABLE comandas ADD COLUMN IF NOT EXISTS delivery_status VARCHAR DEFAULT NULL"
-    ))
-    conn.execute(sa.text(
-        "ALTER TABLE comandas ADD COLUMN IF NOT EXISTS delivery_taxa FLOAT DEFAULT NULL"
-    ))
-    conn.execute(sa.text(
-        "ALTER TABLE comandas ADD COLUMN IF NOT EXISTS delivery_telefone VARCHAR DEFAULT NULL"
-    ))
-    conn.execute(sa.text(
-        "ALTER TABLE comandas ADD COLUMN IF NOT EXISTS delivery_endereco VARCHAR DEFAULT NULL"
-    ))
-    conn.execute(sa.text(
-        "ALTER TABLE comandas ADD COLUMN IF NOT EXISTS motoboy_id VARCHAR DEFAULT NULL"
-    ))
-    conn.execute(sa.text(
-        "ALTER TABLE comandas ADD COLUMN IF NOT EXISTS status_comanda VARCHAR DEFAULT NULL"
-    ))
-    conn.execute(sa.text(
-        "ALTER TABLE comandas ADD COLUMN IF NOT EXISTS valor_pago FLOAT DEFAULT 0"
-    ))
-    conn.execute(sa.text(
-        "ALTER TABLE comandas ADD COLUMN IF NOT EXISTS fechado_em TIMESTAMP DEFAULT NULL"
-    ))
-    conn.execute(sa.text(
-        "ALTER TABLE comandas ADD COLUMN IF NOT EXISTS criado_em TIMESTAMP DEFAULT NULL"
-    ))
+    # ─── TABELA: comandas ─────────────────────────────────────────────────────
+    safe_add_column('comandas', 'mesa_origem_id', sa.Integer())
+    safe_add_column('comandas', 'delivery_status', sa.String())
+    safe_add_column('comandas', 'delivery_taxa', sa.Float())
+    safe_add_column('comandas', 'delivery_telefone', sa.String())
+    safe_add_column('comandas', 'delivery_endereco', sa.String())
+    safe_add_column('comandas', 'motoboy_id', sa.String())
+    safe_add_column('comandas', 'status_comanda', sa.String())
+    safe_add_column('comandas', 'valor_pago', sa.Float(), server_default='0')
+    safe_add_column('comandas', 'fechado_em', sa.DateTime())
+    safe_add_column('comandas', 'criado_em', sa.DateTime())
 
     # ─── TABELA: itens ────────────────────────────────────────────────────────
-    # Coluna restaurante_id (adicionada na fase de indexação multi-tenant)
-    conn.execute(sa.text(
-        "ALTER TABLE itens ADD COLUMN IF NOT EXISTS restaurante_id INTEGER DEFAULT NULL"
-    ))
+    safe_add_column('itens', 'restaurante_id', sa.Integer())
 
     # Backfill: preenche restaurante_id nos itens existentes usando a comanda pai
-    conn.execute(sa.text("""
-        UPDATE itens
-        SET restaurante_id = c.restaurante_id
-        FROM comandas c
-        WHERE itens.comanda_id = c.id
-          AND itens.restaurante_id IS NULL
-    """))
+    try:
+        if conn.dialect.name == "postgresql":
+            conn.execute(sa.text("""
+                UPDATE itens
+                SET restaurante_id = c.restaurante_id
+                FROM comandas c
+                WHERE itens.comanda_id = c.id
+                  AND itens.restaurante_id IS NULL
+            """))
+        else:
+            conn.execute(sa.text("""
+                UPDATE itens
+                SET restaurante_id = (
+                    SELECT restaurante_id FROM comandas
+                    WHERE comandas.id = itens.comanda_id
+                )
+                WHERE restaurante_id IS NULL
+            """))
+        print("✅ Backfill de restaurante_id em itens executado.")
+    except Exception as e:
+        print(f"⚠️ Ignorado erro no backfill de restaurante_id em itens: {e}")
 
-    # Agora que está populado, cria o índice se não existir
-    conn.execute(sa.text("""
-        DO $$
-        BEGIN
-            IF NOT EXISTS (
-                SELECT 1 FROM pg_indexes
-                WHERE tablename = 'itens'
-                  AND indexname = 'ix_itens_restaurante_id'
-            ) THEN
-                CREATE INDEX ix_itens_restaurante_id ON itens (restaurante_id);
-            END IF;
-        END
-        $$;
-    """))
+    # Criar índice de restaurante_id em itens
+    try:
+        with op.batch_alter_table('itens') as batch_op:
+            batch_op.create_index('ix_itens_restaurante_id', ['restaurante_id'])
+        print("✅ Índice ix_itens_restaurante_id criado.")
+    except Exception as e:
+        print(f"⚠️ Ignorado erro ao criar índice ix_itens_restaurante_id: {e}")
 
     # ─── TABELA: lancamentos ──────────────────────────────────────────────────
-    # Coluna status_comanda no lancamento (se ainda não existir)
-    conn.execute(sa.text(
-        "ALTER TABLE lancamentos ADD COLUMN IF NOT EXISTS numero_pedido INTEGER DEFAULT NULL"
-    ))
+    safe_add_column('lancamentos', 'numero_pedido', sa.Integer())
 
 
 def downgrade() -> None:

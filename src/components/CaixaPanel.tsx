@@ -1012,7 +1012,7 @@ export function CaixaPanel({
 
   const fetchCardapioConfig = async () => {
     try {
-      const res = await fetch(`${apiBaseUrl}/caixa/restaurante/config`, { headers: authHeaders });
+      const res = await fetch(`${apiBaseUrl}/caixa/config-cardapio`, { headers: authHeaders });
       if (res.ok) {
         const data = await res.json();
         setCardapioStatusOverride(data.status_override || 'Automático');
@@ -1031,7 +1031,7 @@ export function CaixaPanel({
   const saveCardapioConfig = async () => {
     setIsSavingCardapioConfig(true);
     try {
-      const res = await fetch(`${apiBaseUrl}/caixa/restaurante/config`, {
+      const res = await fetch(`${apiBaseUrl}/caixa/config-cardapio`, {
         method: 'PUT',
         headers: {
           ...authHeaders,

@@ -91,23 +91,23 @@ export default function CardapioUserProfileModal({
       setDbError("");
       try {
         const tenantId = activeBrand?.id || "";
+        const cleanPhone = userPhone.replace(/\D/g, "");
         
-        // 1. Fetch Cashback Balance from 'clientes'
-        // We'll support multiple possible column structures: restaurante_id/tenant_id, telefone/phone
+        // 1. Fetch Cashback Balance from 'clientes' (multi-tenant key match)
         let { data: clientData, error: clientErr } = await supabase
           .from("clientes")
           .select("*")
-          .or(`telefone.eq.${userPhone},phone.eq.${userPhone}`)
+          .eq("restaurante_id", Number(tenantId))
+          .or(`telefone.eq.${userPhone},telefone.eq.${cleanPhone}`)
           .maybeSingle();
 
         // If found, update state
         if (clientData) {
-          const cb = Number(clientData.cashback !== undefined ? clientData.cashback : (clientData.saldo_cashback !== undefined ? clientData.saldo_cashback : 0));
+          const cb = Number(clientData.saldo_cashback !== undefined ? clientData.saldo_cashback : (clientData.cashback !== undefined ? clientData.cashback : 0));
           setCashback(cb);
         } else {
-          // If customer record doesn't exist in Supabase, create/seed one or fallback
-          // Fallback to static mock cashback based on customer phone digits to make it feel alive!
-          const lastDigit = parseInt(userPhone.replace(/\D/g, "").slice(-1)) || 3;
+          // Fallback to static mock cashback based on customer phone digits
+          const lastDigit = parseInt(cleanPhone.slice(-1)) || 3;
           setCashback(lastDigit * 2.5);
         }
 
@@ -115,7 +115,8 @@ export default function CardapioUserProfileModal({
         const { data: ordersData, error: ordersErr } = await supabase
           .from("pedidos")
           .select("*")
-          .or(`customerPhone.eq.${userPhone},telefone.eq.${userPhone},customer_phone.eq.${userPhone}`);
+          .eq("restaurante_id", Number(tenantId))
+          .or(`customerPhone.eq.${userPhone},telefone.eq.${userPhone},customerPhone.eq.${cleanPhone},telefone.eq.${cleanPhone}`);
 
         if (ordersData) {
           // Count active or completed orders
@@ -187,35 +188,39 @@ export default function CardapioUserProfileModal({
       // Also sync to parent user state 'whitelabel_menu_current_user' for general app auth state
       localStorage.setItem("whitelabel_menu_current_user", JSON.stringify(newProfile));
 
+      const cleanPhone = phone.replace(/\D/g, "");
       // 2. Try inserting or updating profile in Supabase table 'clientes'
       const clientPayload = {
         nome: name,
-        telefone: phone,
+        telefone: cleanPhone,
         endereco: address,
         restaurante_id: tenantId ? Number(tenantId) : null,
         updated_at: new Date().toISOString()
       };
 
-      // Check if client already exists in Supabase
+      // Check if client already exists in Supabase by composed match (restaurante_id, telefone)
       const { data: existingClient } = await supabase
         .from("clientes")
-        .select("id")
-        .or(`telefone.eq.${phone},phone.eq.${phone}`)
+        .select("id,telefone")
+        .eq("restaurante_id", Number(tenantId))
+        .or(`telefone.eq.${cleanPhone},telefone.eq.${phone}`)
         .maybeSingle();
 
       if (existingClient) {
-        // Update
+        // Update (filtering by composed keys)
         await supabase
           .from("clientes")
           .update(clientPayload)
-          .eq("id", existingClient.id);
+          .eq("restaurante_id", Number(tenantId))
+          .eq("telefone", existingClient.telefone);
       } else {
-        // Insert new client with initial cashback incentive!
+        // Insert new client with unique UUID and initial cashback incentive!
         await supabase
           .from("clientes")
           .insert({
+            id: crypto.randomUUID ? crypto.randomUUID() : `u-${Math.random().toString(36).substr(2, 9)}`,
             ...clientPayload,
-            cashback: 5.00 // R$5,00 incentive cashback for new register!
+            saldo_cashback: 5.00
           });
         setCashback(5.00);
       }

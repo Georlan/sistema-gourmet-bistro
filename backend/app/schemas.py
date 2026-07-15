@@ -461,25 +461,42 @@ class NotaEntradaResponse(BaseModel):
 class RestauranteConfigResponse(BaseModel):
     id: int
     nome: str
-    status_override: str
-    cor_primaria: str
-    cor_fundo: str
+    slug: Optional[str] = None
     logo_url: Optional[str] = None
     banner_url: Optional[str] = None
+    subtitulo: Optional[str] = None
     sobre_nos: Optional[str] = None
     endereco: Optional[str] = None
+    google_maps_url: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    status_override: str
+    socials: Optional[dict] = None
+    horarios_funcionamento: Optional[dict] = None
+    formas_pagamento_aceitas: Optional[dict] = None
+    cor_primaria: str
+    cor_fundo: str
 
     class Config:
         from_attributes = True
 
 class RestauranteConfigUpdate(BaseModel):
-    status_override: Optional[str] = None
-    cor_primaria: Optional[str] = None
-    cor_fundo: Optional[str] = None
+    nome: Optional[str] = None
+    slug: Optional[str] = None
     logo_url: Optional[str] = None
     banner_url: Optional[str] = None
+    subtitulo: Optional[str] = None
     sobre_nos: Optional[str] = None
     endereco: Optional[str] = None
+    google_maps_url: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    status_override: Optional[str] = None
+    socials: Optional[dict] = None
+    horarios_funcionamento: Optional[dict] = None
+    formas_pagamento_aceitas: Optional[dict] = None
+    cor_primaria: Optional[str] = None
+    cor_fundo: Optional[str] = None
 
 
 # ----------------- PEDIDOS CARDAPIO DIGITAL -----------------
@@ -498,6 +515,18 @@ class CardapioPedidoCreate(BaseModel):
     taxa_entrega: float = 0.0
     forma_pagamento: str  # Pix | Cartão na Entrega | Dinheiro
     tipo_pedido: str = "delivery"  # delivery | retirada
+
+
+# ----------------- JORNADA SEM SENHA & OTP CARDAPIO -----------------
+class CardapioIdentificarRequest(BaseModel):
+    restaurante_id: int
+    telefone: str
+
+
+class CardapioVerificarOtpRequest(BaseModel):
+    restaurante_id: int
+    telefone: str
+    otp: str
 
 
 

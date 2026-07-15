@@ -1,7 +1,8 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey, event
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey, event, JSON, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.hybrid import hybrid_property
 import datetime
+import uuid
 from .database import Base, current_restaurante_id
 from .crypt import encrypt_field, decrypt_field
 
@@ -11,15 +12,21 @@ class Restaurante(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     nome = Column(String, nullable=False)
     plano = Column(String, default="pocket", nullable=False)
-    
-    # Whitelabel Digital Menu Visuals & Info
-    status_override = Column(String, default="Automático")
-    cor_primaria = Column(String, default="#00b894")
-    cor_fundo = Column(String, default="#090a0f")
+    slug = Column(String, nullable=True)
     logo_url = Column(String, nullable=True)
     banner_url = Column(String, nullable=True)
+    subtitulo = Column(String, nullable=True)
     sobre_nos = Column(String, nullable=True)
     endereco = Column(String, nullable=True)
+    google_maps_url = Column(String, nullable=True)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    status_override = Column(String, default="Automático")
+    socials = Column(JSON, nullable=True)
+    horarios_funcionamento = Column(JSON, nullable=True)
+    formas_pagamento_aceitas = Column(JSON, nullable=True)
+    cor_primaria = Column(String, default="#00b894")
+    cor_fundo = Column(String, default="#090a0f")
 
 
 class Usuario(Base):
@@ -458,9 +465,18 @@ class HistoricoFidelidade(Base):
 class Cliente(Base):
     __tablename__ = "clientes"
     
-    telefone = Column(String, primary_key=True)
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False)
+    telefone = Column(String, nullable=False)
     nome = Column(String, nullable=False)
+    endereco = Column(String, nullable=True)
+    saldo_pontos = Column(Integer, default=0, nullable=False)
+    saldo_cashback = Column(Float, default=0.0, nullable=False)
     criado_em = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    
+    __table_args__ = (
+        UniqueConstraint('restaurante_id', 'telefone', name='uq_restaurante_cliente_telefone'),
+    )
 
 
 class Motoboy(Base):

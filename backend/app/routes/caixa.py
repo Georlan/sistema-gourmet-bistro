@@ -616,25 +616,67 @@ def atualizar_configuracao_restaurante(
             detail="Restaurante não encontrado"
         )
         
-    if config_in.status_override is not None:
-        restaurante.status_override = config_in.status_override
-    if config_in.cor_primaria is not None:
-        restaurante.cor_primaria = config_in.cor_primaria
-    if config_in.cor_fundo is not None:
-        restaurante.cor_fundo = config_in.cor_fundo
+    if config_in.nome is not None:
+        restaurante.nome = config_in.nome
+    if config_in.slug is not None:
+        restaurante.slug = config_in.slug
     if config_in.logo_url is not None:
         restaurante.logo_url = config_in.logo_url
     if config_in.banner_url is not None:
         restaurante.banner_url = config_in.banner_url
+    if config_in.subtitulo is not None:
+        restaurante.subtitulo = config_in.subtitulo
     if config_in.sobre_nos is not None:
         restaurante.sobre_nos = config_in.sobre_nos
     if config_in.endereco is not None:
         restaurante.endereco = config_in.endereco
+    if config_in.google_maps_url is not None:
+        restaurante.google_maps_url = config_in.google_maps_url
+    if config_in.latitude is not None:
+        restaurante.latitude = config_in.latitude
+    if config_in.longitude is not None:
+        restaurante.longitude = config_in.longitude
+    if config_in.status_override is not None:
+        restaurante.status_override = config_in.status_override
+    if config_in.socials is not None:
+        restaurante.socials = config_in.socials
+    if config_in.horarios_funcionamento is not None:
+        restaurante.horarios_funcionamento = config_in.horarios_funcionamento
+    if config_in.formas_pagamento_aceitas is not None:
+        restaurante.formas_pagamento_aceitas = config_in.formas_pagamento_aceitas
+    if config_in.cor_primaria is not None:
+        restaurante.cor_primaria = config_in.cor_primaria
+    if config_in.cor_fundo is not None:
+        restaurante.cor_fundo = config_in.cor_fundo
         
     db.commit()
     db.refresh(restaurante)
     
-    # Dispara atualização de catálogo/configuração para o cardápio
+    restaurante_data = {
+        "id": restaurante.id,
+        "nome": restaurante.nome,
+        "slug": restaurante.slug,
+        "logo_url": restaurante.logo_url,
+        "banner_url": restaurante.banner_url,
+        "subtitulo": restaurante.subtitulo,
+        "sobre_nos": restaurante.sobre_nos,
+        "endereco": restaurante.endereco,
+        "google_maps_url": restaurante.google_maps_url,
+        "latitude": restaurante.latitude,
+        "longitude": restaurante.longitude,
+        "status_override": restaurante.status_override,
+        "socials": restaurante.socials,
+        "horarios_funcionamento": restaurante.horarios_funcionamento,
+        "formas_pagamento_aceitas": restaurante.formas_pagamento_aceitas,
+        "cor_primaria": restaurante.cor_primaria,
+        "cor_fundo": restaurante.cor_fundo
+    }
+    
+    background_tasks.add_task(
+        manager.broadcast,
+        {"event": "CONFIG_UPDATE", "data": restaurante_data},
+        rest_id
+    )
     background_tasks.add_task(
         manager.broadcast,
         {"type": "catalog_updated", "message": "Configurações visuais atualizadas"},
@@ -642,3 +684,14 @@ def atualizar_configuracao_restaurante(
     )
     
     return restaurante
+
+
+@router.put("/config-cardapio", response_model=RestauranteConfigResponse)
+def atualizar_config_cardapio(
+    config_in: RestauranteConfigUpdate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_garcom_optional)
+):
+    """Atualiza as configurações whitelabel de personalização do restaurante ativo via config-cardapio."""
+    return atualizar_configuracao_restaurante(config_in, background_tasks, db, current_user)

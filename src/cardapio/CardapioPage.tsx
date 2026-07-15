@@ -423,6 +423,74 @@ export default function CardapioPage() {
     document.body.style.color = activeBrand.colors.text || "#1c1917";
   }, [activeBrand]);
 
+  // Connect to WebSocket to listen for reactive whitelabel changes
+  useEffect(() => {
+    if (!activeBrand) return;
+
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const isLocalHost = window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1' ||
+      /^(\d{1,3}\.){3}\d{1,3}$/.test(window.location.hostname);
+
+    const wsHost = isLocalHost ? `${window.location.hostname}:8000` : 'sistema-gourmet-bistro-production.up.railway.app';
+    const wsUrl = `${wsProtocol}//${wsHost}/ws/cliente?restaurante_id=${activeBrand.id}`;
+
+    console.log(`🔌 Conectando ao WebSocket do Cardápio: ${wsUrl}`);
+    let ws: WebSocket;
+    let reconnectTimeout: any;
+
+    const connectWS = () => {
+      ws = new WebSocket(wsUrl);
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log("📥 Messagem WebSocket recebida no Cardápio:", data);
+          
+          if (data.event === "CONFIG_UPDATE" && data.data) {
+            console.log("🎨 Sincronizando visual via WebSocket reativo:", data.data);
+            
+            setActiveBrand(prev => {
+              if (!prev) return null;
+              return {
+                ...prev,
+                name: data.data.nome || prev.name,
+                logo: data.data.logo_url || prev.logo,
+                bannerImage: data.data.banner_url || prev.bannerImage,
+                slogan: data.data.subtitulo || prev.slogan,
+                description: data.data.sobre_nos || prev.description,
+                address: data.data.endereco || prev.address,
+                colors: {
+                  ...prev.colors,
+                  primary: data.data.cor_primaria || prev.colors.primary,
+                  background: data.data.cor_fundo || prev.colors.background
+                }
+              };
+            });
+          }
+        } catch (err) {
+          console.error("Erro ao processar mensagem do WebSocket:", err);
+        }
+      };
+
+      ws.onerror = (err) => {
+        console.warn("Erro na conexão do WebSocket:", err);
+      };
+
+      ws.onclose = () => {
+        console.log("🔌 Conexão do WebSocket fechada. Tentando reconectar em 5s...");
+        reconnectTimeout = setTimeout(connectWS, 5000);
+      };
+    };
+
+    connectWS();
+
+    return () => {
+      if (ws) ws.close();
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+    };
+  }, [activeBrand?.id]);
+
   const refreshOrders = () => {
     const savedOrders = localStorage.getItem("whitelabel_menu_orders");
     if (savedOrders) {
@@ -1229,6 +1297,7 @@ export default function CardapioPage() {
         <CardapioAuthModal
           onClose={() => setIsAuthOpen(false)}
           onLoginSuccess={handleLoginSuccess}
+          restauranteId={activeBrand?.id || 1}
         />
       )}
 
