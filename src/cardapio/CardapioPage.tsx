@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef } from "react";
-import { Product, BrandConfig, ProductOption, getProductImageUrl } from "./CardapioTypes";
+import { Product, BrandConfig, ProductOption, getProductImageUrl, SocialNetwork, OperatingHours, PaymentMethodGroup } from "./CardapioTypes";
 import { whitelabelBrands } from "./CardapioConfig";
 import { supabase } from "./SupabaseClient";
 import CardapioHeader from "./components/CardapioHeader";

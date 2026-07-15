@@ -32,6 +32,7 @@ export interface OrderItem {
   status: 'preparando' | 'pronto' | 'entregue';
   pago?: boolean;
   lancamentoId?: string;
+  comandaId?: string;
 }
 
 export interface Order {

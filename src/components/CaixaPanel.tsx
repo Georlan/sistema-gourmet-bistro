@@ -66,6 +66,8 @@ interface SimulatedDeliveryOrder {
   status: 'pendente' | 'analise' | 'producao' | 'pronto' | 'transito';
   endereco?: string;
   criadoEm: string;
+  pagoOnline?: boolean;
+  mesaId?: number;
 }
 
 interface SystemUser {
@@ -182,7 +184,7 @@ export function CaixaPanel({
             garcomNome: comanda.garcomNome,
             tipo: comanda.tipo,
             valorPago: (comanda as any).valorPago || 0,
-            itens: unpaid,
+            itens: unpaid.map(i => ({ ...i, comandaId: comanda.id })),
             contaPedida: true
           });
         }
@@ -207,13 +209,66 @@ export function CaixaPanel({
           garcomNome: comanda.garcomNome,
           tipo: comanda.tipo,
           valorPago: (comanda as any).valorPago || 0,
-          itens: readyItems,
+          itens: readyItems.map(i => ({ ...i, comandaId: comanda.id })),
           contaPedida: false,
           temItensEmPreparo: temItensEmPreparo
         });
       }
     });
     return list;
+  })();
+
+  // Group tableOrdersReady by mesaId to join multiple orders from the same table
+  const groupedTableOrdersReady = (() => {
+    const rawList = tableOrdersReady;
+    const groups: Record<number, any[]> = {};
+    rawList.forEach(order => {
+      const mid = order.mesaId;
+      if (!groups[mid]) groups[mid] = [];
+      groups[mid].push(order);
+    });
+    
+    const mergedList: any[] = [];
+    Object.entries(groups).forEach(([mesaIdStr, ordersList]) => {
+      const mesaId = parseInt(mesaIdStr);
+      if (ordersList.length === 1) {
+        mergedList.push({
+          ...ordersList[0],
+          isGrouped: false,
+          originalOrders: [ordersList[0]]
+        });
+      } else {
+        const comandaIds = ordersList.map(o => o.comandaId);
+        const combinedItems = ordersList.flatMap(o => o.itens);
+        const total = combinedItems.reduce((sum, item) => sum + item.preco, 0);
+        const valorPago = ordersList.reduce((sum, o) => sum + (o.valorPago || 0), 0);
+        const identifiers = ordersList.map(o => o.identificador).filter(Boolean);
+        const uniqueIdentifiers = Array.from(new Set(identifiers));
+        const identificador = uniqueIdentifiers.join(' / ') || `Consumo Mesa ${mesaId}`;
+        const garçons = ordersList.map(o => o.garcomNome).filter(Boolean);
+        const uniqueGarçons = Array.from(new Set(garçons));
+        const garcomNome = uniqueGarçons.join(', ') || 'Garçom';
+        
+        mergedList.push({
+          id: `mesa-group-${mesaId}`,
+          comandaId: ordersList[0].comandaId,
+          comandaIds: comandaIds,
+          mesaId: mesaId,
+          mesaOrigemId: ordersList[0].mesaOrigemId,
+          mesaTransferidaDe: ordersList[0].mesaTransferidaDe,
+          identificador: identificador,
+          garcomNome: garcomNome,
+          tipo: 'Consumo no Local',
+          valorPago: valorPago,
+          itens: combinedItems,
+          contaPedida: ordersList.some(o => o.contaPedida),
+          temItensEmPreparo: ordersList.some(o => o.temItensEmPreparo),
+          isGrouped: true,
+          originalOrders: ordersList
+        });
+      }
+    });
+    return mergedList;
   })();
 
   const handleTabChange = (tabId: 'dashboard' | 'operacao' | 'cardapio' | 'estoque' | 'financeiro' | 'clientes' | 'relatorios' | 'robo_ia' | 'configuracoes') => {
@@ -711,7 +766,8 @@ export function CaixaPanel({
       canal: canal,
       status: c.delivery_status || 'pendente',
       endereco: c.delivery_endereco || '',
-      criadoEm: criadoEm
+      criadoEm: criadoEm,
+      mesaId: c.mesa_id || undefined
     };
   };
 
@@ -2798,17 +2854,109 @@ export function CaixaPanel({
                   <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
                     <span className={clsx('font-bold', 'text-gray-300', 'font-serif')}>Fechar Conta</span>
                     <span className={clsx('bg-blue-500/10', 'text-blue-400', 'font-bold', 'px-2', 'py-0.5', 'rounded-full', 'font-mono', 'text-[9px]')}>
-                      {tableOrdersReady.length + (modoExclusivoSalao ? 0 : simulatedOrders.filter(o => o.status === 'transito').length)}
+                      {groupedTableOrdersReady.length + (modoExclusivoSalao ? 0 : simulatedOrders.filter(o => o.status === 'transito').length)}
                     </span>
                   </div>
 
                   <div className={clsx('p-3', 'flex-1', 'overflow-y-auto', 'space-y-3')}>
-                    {tableOrdersReady.length === 0 && (modoExclusivoSalao || simulatedOrders.filter(o => o.status === 'transito').length === 0) ? (
+                    {groupedTableOrdersReady.length === 0 && (modoExclusivoSalao || simulatedOrders.filter(o => o.status === 'transito').length === 0) ? (
                       <div className={clsx('py-20', 'text-center', 'text-gray-500', 'italic', 'text-[10px]')}>Nenhuma conta ou entrega pendente</div>
                     ) : (
                       <>
                         {/* 1. Mesas locais prontas / conta pedida */}
-                        {tableOrdersReady.map((order) => {
+                        {groupedTableOrdersReady.map((order) => {
+                          if (order.isGrouped) {
+                            const contaPedida = order.contaPedida;
+                            return (
+                              <div
+                                key={order.id}
+                                className={clsx(
+                                  'bg-[#121214]',
+                                  'border',
+                                  contaPedida ? 'border-blue-500/40 hover:border-blue-500/60' : 'border-emerald-500/30 hover:border-emerald-500/50',
+                                  'p-3',
+                                  'rounded-xl',
+                                  'space-y-3',
+                                  'transition-all',
+                                  'text-left'
+                                )}
+                              >
+                                <div className="flex justify-between items-start">
+                                  <div>
+                                    <div className="flex gap-1.5 flex-wrap mb-1">
+                                      <span className={clsx(
+                                        'px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold rounded font-mono block w-fit',
+                                        contaPedida ? 'bg-blue-500/10 text-blue-400' : 'bg-emerald-500/10 text-emerald-400'
+                                      )}>
+                                        Mesa {order.mesaId} (Agrupado — {order.originalOrders.length} Comandas)
+                                      </span>
+                                      {order.temItensEmPreparo && (
+                                        <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-amber-500/10 text-amber-400 rounded font-mono block w-fit" title="Outros itens desta mesa ainda estão sendo preparados">
+                                          ⏳ Outros itens em preparo
+                                        </span>
+                                      )}
+                                    </div>
+                                    <strong className="text-white text-xs block">{order.identificador}</strong>
+                                    <span className="text-[9px] text-gray-500 block">Atendentes: {order.garcomNome}</span>
+                                  </div>
+                                </div>
+
+                                <div className="space-y-2 pt-2 border-t border-[#27272A]/50">
+                                  {order.originalOrders.map((origOrder: any) => {
+                                    const origItemCounts: Record<string, number> = {};
+                                    origOrder.itens.forEach((item: any) => {
+                                      const name = item.nome || 'Item';
+                                      origItemCounts[name] = (origItemCounts[name] || 0) + 1;
+                                    });
+                                    const origItemsStr = Object.entries(origItemCounts)
+                                      .map(([name, qty]) => `${qty}x ${name}`)
+                                      .join(' + ') || 'Nenhum item';
+                                    const origContaPedida = origOrder.contaPedida;
+
+                                    return (
+                                      <div key={`orig-${origOrder.id}`} className="bg-[#09090B] p-2 rounded-lg border border-[#27272A]/40 space-y-1.5">
+                                        <div className="flex justify-between items-center text-[9px]">
+                                          <span className="font-bold text-gray-300">
+                                            {origOrder.identificador || `Comanda #${origOrder.id.slice(-4)}`}
+                                          </span>
+                                          <span className="text-gray-500 font-mono">#{origOrder.id.slice(-4)}</span>
+                                        </div>
+                                        <p className="text-[9.5px] text-emerald-300 font-mono leading-relaxed">{origItemsStr}</p>
+                                        <button
+                                          type="button"
+                                          onClick={async (e) => {
+                                            e.stopPropagation();
+                                            if (isLoading) return;
+                                            const fullOrder = orders.find(o => o.id === origOrder.comandaId);
+                                            if (!fullOrder) return;
+                                            setSelectedOrder({
+                                              ...fullOrder,
+                                              itens: fullOrder.itens.map((item: any) => ({
+                                                id: item.id, produtoId: item.produto_id || item.produtoId,
+                                                nome: item.nome || `Item ${item.produtoId}`, preco: item.preco_unit || item.preco,
+                                                observacao: item.observacao || '', clienteNome: item.cliente_nome || item.clienteNome || 'Consumo Geral',
+                                                status: item.status, pago: item.pago
+                                              }))
+                                            });
+                                            setShowCheckoutModal(true);
+                                            setCheckoutServiceTax(true);
+                                            setSplitPeople('1');
+                                            setSelectedItemIds([]);
+                                            const sub = fullOrder.itens.filter((item: any) => !item.pago).reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
+                                            setPaymentValor((sub * (1.0 + (taxaServicoAtiva ? serviceTaxRate / 100 : 0))).toFixed(2));
+                                          }}
+                                          className={clsx('w-full', 'py-1', origContaPedida ? 'bg-blue-600 hover:bg-blue-700' : 'bg-emerald-600 hover:bg-emerald-700', 'text-white', 'rounded-md', 'font-bold', 'text-[8.5px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1')}
+                                        >
+                                          <Check size={9} /><span>Fechar Conta</span>
+                                        </button>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          }
+
                           const itemCounts: Record<string, number> = {};
                           order.itens.forEach(item => {
                             const name = item.nome || 'Item';
