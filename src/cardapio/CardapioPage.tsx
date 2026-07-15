@@ -176,6 +176,18 @@ export default function CardapioPage() {
       setErrorMsg("");
       const identifier = getRestaurantIdentifier();
 
+      // Fallback instantly if no real Supabase key is configured to avoid pending promise loops
+      const hasRealKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY && 
+                         (import.meta as any).env?.VITE_SUPABASE_ANON_KEY !== "dummy-anon-key-to-prevent-bootstrap-error";
+
+      if (!hasRealKey) {
+        console.warn("Chave Supabase não configurada. Carregando dados Whitelabel de demonstração instantaneamente.");
+        const fallbackBrand = whitelabelBrands.burger;
+        setActiveBrand(fallbackBrand);
+        setIsLoading(false);
+        return;
+      }
+
       try {
         let restaurant = null;
         
