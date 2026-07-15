@@ -1,0 +1,79 @@
+version: "3.8"
+
+services:
+  # Python FastAPI core gateway
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - NODE_ENV=production
+      - SUPABASE_DB_URL=postgresql://postgres:supabase@db.koma.supabase.co:5432/postgres
+      - SUPABASE_SERVICE_ROLE_KEY=sb_key_placeholder
+      - CLOUDFLARE_API_TOKEN=cf_token_placeholder
+      - CLOUDFLARE_ZONE_ID=zone_koma_1122
+      - TELEGRAM_BOT_TOKEN=123456789:AAF-KomaAdmin_SecretBotToken_9823
+      - TELEGRAM_CHAT_ID=987654321
+      - REDIS_URL=redis://redis:6379/0
+      - SENTRY_DSN=https://sentry_dsn_placeholder.sentry.io/123
+    depends_on:
+      - redis
+      - elasticsearch
+    networks:
+      - saas-network
+
+  # Redis cache database cluster
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - saas-network
+
+  # Central ELK: Elasticsearch
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.9
+    environment:
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    networks:
+      - saas-network
+
+  # Central ELK: Logstash
+  logstash:
+    image: docker.elastic.co/logstash/logstash:7.17.9
+    volumes:
+      - ./logstash/config/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+    ports:
+      - "5044:5044"
+    depends_on:
+      - elasticsearch
+    networks:
+      - saas-network
+
+  # Central ELK: Kibana
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.17.9
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+    networks:
+      - saas-network
+
+networks:
+  saas-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+  es-data:

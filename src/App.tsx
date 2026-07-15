@@ -15,6 +15,7 @@ import { CaixaPanel } from './components/CaixaPanel';
 const MemoizedCaixaPanel = React.memo(CaixaPanel);
 import clsx from 'clsx';
 import CardapioPage from './cardapio/CardapioPage';
+import SuperAdminPanel from './super-admin/SuperAdminPanel';
 
 
 import { API_BASE_URL } from './config/api';
@@ -33,6 +34,12 @@ const parseBackendDateTime = (dateStr: string): number => {
 };
 
 export default function App() {
+  const isSuperAdmin = window.location.pathname.startsWith('/super-admin');
+
+  if (isSuperAdmin) {
+    return <SuperAdminPanel />;
+  }
+
   // Detect if access is client cardapio (online menu)
   const isCardapio = window.location.pathname.startsWith('/cardapio') ||
                      window.location.search.includes('view=cardapio') ||
