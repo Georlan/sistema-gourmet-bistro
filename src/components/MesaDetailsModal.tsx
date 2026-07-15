@@ -97,6 +97,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
   const [printSuccess, setPrintSuccess] = useState<boolean>(false);
   const [confirmClear, setConfirmClear] = useState<boolean>(false);
   const [editingItem, setEditingItem] = useState<any>(null);
+  const [expandedOrders, setExpandedOrders] = useState<Record<string, boolean>>({});
 
   // Lock background scroll when modal is active
   React.useEffect(() => {
@@ -142,9 +143,10 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
       <div className="bg-[#0D0D10] rounded-none sm:rounded-3xl border-0 sm:border border-[#10b981]/15 shadow-2xl w-full max-w-5xl overflow-hidden h-full sm:h-auto max-h-full sm:max-h-[90vh] flex flex-col">
         
         {/* MODAL HEADER */}
-        <div className="bg-[#18181B] text-white p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shrink-0 border-b border-[#27272A]">
-          <div className="space-y-1">
-            <div className="flex items-center gap-3">
+        <div className="bg-[#18181B] text-white p-4 sm:p-6 flex flex-col gap-3 shrink-0 border-b border-[#27272A] relative">
+          {/* Top Line: Title + Status + Close Button */}
+          <div className="flex justify-between items-center w-full">
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={onClose}
@@ -153,8 +155,8 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
               >
                 <ArrowLeft size={16} />
               </button>
-              <h2 className="font-serif text-2xl sm:text-3xl font-bold tracking-tight text-white">Mesa {table.id}{originStr}</h2>
-              <span className={`px-3 py-1 text-[10px] font-sans font-bold tracking-wider uppercase rounded-full border ${
+              <h2 className="font-serif text-xl sm:text-3xl font-bold tracking-tight text-white">Mesa {table.id}{originStr}</h2>
+              <span className={`px-2 py-0.5 text-[9px] sm:text-[10px] font-sans font-bold tracking-wider uppercase rounded-full border ${
                 orders.length === 0 
                   ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
                   : orders.some(o => o.itens.some(i => i.status === 'pronto'))
@@ -165,9 +167,20 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
               </span>
             </div>
             
-            <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-[#A1A1AA] font-sans items-center">
+            <button
+              id="close-mesa-modal-btn"
+              onClick={onClose}
+              className="p-2 rounded-full hover:bg-white/5 text-gray-400 hover:text-white transition-colors cursor-pointer border border-transparent hover:border-[#27272A]"
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          {/* Bottom Line: Permanence & Waiter Name */}
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#A1A1AA] font-sans">
+            <div className="flex flex-wrap gap-x-3 gap-y-1 items-center">
               {orders.length > 0 && (
-                <span className="flex items-center gap-1.5">
+                <span className="flex items-center gap-1">
                   <Clock size={12} className="text-[#10b981]" />
                   Permanência: <strong className="text-white font-medium font-mono">{permanenceTime}</strong>
                 </span>
@@ -177,31 +190,22 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                 if (transferOrigin) {
                   return (
                     <span className="px-2 py-0.5 text-[9px] bg-purple-500/20 text-purple-300 border border-purple-500/35 rounded-md font-sans font-bold uppercase tracking-wider block w-fit shadow-xs animate-pulse-subtle">
-                      🔗 Transferida da Mesa {transferOrigin}
+                      🔗 Transf. de M{transferOrigin}
                     </span>
                   );
                 }
                 return null;
               })()}
             </div>
-          </div>
-
-          <div className="flex items-center gap-2.5 self-end sm:self-center">
-            <span className="text-[10px] uppercase tracking-wider bg-[#27272A] px-3.5 py-2 rounded-xl border border-[#10b981]/10 font-sans text-[#10b981] font-bold">
-              Atendimento: <strong className="text-white">{activeWaiterNome}</strong>
+            
+            <span className="text-[9px] sm:text-[10px] uppercase tracking-wider bg-[#27272A] px-2.5 py-1 rounded-lg border border-[#10b981]/10 font-sans text-[#10b981] font-bold">
+              Garçom: <strong className="text-white">{activeWaiterNome}</strong>
             </span>
-            <button
-              id="close-mesa-modal-btn"
-              onClick={onClose}
-              className="p-2 rounded-full hover:bg-white/5 text-gray-400 hover:text-white transition-colors cursor-pointer border border-transparent hover:border-[#27272A]"
-            >
-              <X size={20} />
-            </button>
           </div>
         </div>
 
         {/* MODAL TABS */}
-        <div className="bg-[#121214] border-b border-[#27272A] px-6 py-2.5 flex gap-2 shrink-0 overflow-x-auto">
+        <div className="bg-[#121214] border-b border-[#27272A] px-4 sm:px-6 py-2.5 flex gap-2 shrink-0 overflow-x-auto scrollbar-none">
           <button
             id="tab-consumo-btn"
             onClick={() => setActiveTab('consumo')}
@@ -269,7 +273,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
         </div>
 
         {/* MODAL BODY */}
-        <div className="p-6 overflow-y-auto flex-1 bg-[#18181B] space-y-4">
+        <div className="p-3 sm:p-6 overflow-y-auto flex-1 bg-[#18181B] space-y-4">
           
           {/* Concurrency Alert Banner */}
           {otherWaitersServing.length > 0 && (
@@ -313,19 +317,31 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                     </div>
 
                     <div className="space-y-4 max-h-[45vh] overflow-y-auto pr-1 scrollbar-thin">
-                      {orders.map((order) => {
+                      {orders.map((order, idx) => {
                         const unpaidItems = order.itens.filter((item: any) => !item.pago);
                         if (unpaidItems.length === 0) return null;
+                        
+                        const isLatest = idx === orders.length - 1;
+                        const isExpanded = expandedOrders[order.id] !== undefined
+                          ? expandedOrders[order.id]
+                          : isLatest;
+
                         return (
                         <div
                           key={order.id}
                           id={`placed-order-${order.id}`}
-                          className="border border-[#27272A] rounded-2xl overflow-hidden bg-[#121214]/40"
+                          className="border border-[#27272A] rounded-2xl overflow-hidden bg-[#121214]/40 animate-fade-in"
                         >
                           {/* Order Header */}
-                          <div className="bg-[#1C1C1F] px-4 py-2.5 flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-[#27272A] gap-2 w-full">
+                          <div 
+                            onClick={() => setExpandedOrders(prev => ({ ...prev, [order.id]: !isExpanded }))}
+                            className="bg-[#1C1C1F] px-4 py-2.5 flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-[#27272A] gap-2 w-full cursor-pointer select-none hover:bg-[#27272A]/40"
+                          >
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-xs font-bold text-white font-sans">Lote #{order.id.slice(-4)}</span>
+                              <span className="text-xs font-bold text-white font-sans flex items-center gap-1.5">
+                                <span className="text-[10px] text-gray-500 font-normal font-mono">{isExpanded ? '▲' : '▼'}</span>
+                                Lote #{order.id.slice(-4)}
+                              </span>
                               <span className="text-[10px] bg-[#121214] text-gray-300 px-2 py-0.5 rounded font-bold font-sans">
                                 Garçom: {order.garcomNome}
                               </span>
@@ -340,16 +356,16 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                               )}
                               {order.mesaOrigemId && (
                                 <span className="text-[8px] sm:text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                                  Mesclado da Mesa {order.mesaOrigemId}
+                                  M{order.mesaOrigemId}
                                 </span>
                               )}
                               {order.mesaTransferidaDe && (
                                 <span className="text-[8px] sm:text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
-                                  Transferido da Mesa {order.mesaTransferidaDe}
+                                  T{order.mesaTransferidaDe}
                                 </span>
                               )}
                             </div>
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
                               <span className="text-[10px] text-gray-400 font-mono font-bold">
                                 {new Date(order.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                               </span>
@@ -359,7 +375,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                                   type="button"
                                   disabled={activeRole === 'garcom' && !restauranteConfig?.perm_garcom_transferir_mesa}
                                   onClick={() => onUnmergeTable(order.id)}
-                                  className={`px-2.5 py-1 rounded-lg text-[10px] font-sans font-semibold transition-all flex items-center gap-1 shadow-sm ${
+                                  className={`px-2.5 py-1 rounded-lg text-[10px] font-sans font-semibold flex items-center gap-1 shadow-sm ${
                                     (activeRole === 'garcom' && !restauranteConfig?.perm_garcom_transferir_mesa)
                                       ? 'bg-[#1C1C1F]/40 border border-[#27272A]/40 text-gray-600 cursor-not-allowed'
                                       : 'bg-purple-950/40 hover:bg-purple-900/30 text-purple-300 hover:text-white border border-purple-900/40 cursor-pointer'
@@ -373,7 +389,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                               <button
                                 type="button"
                                 onClick={() => setSelectedOrderToPrint(order)}
-                                className="px-2.5 py-1 bg-[#27272A] hover:bg-[#10b981]/20 text-gray-300 hover:text-white border border-[#27272A] hover:border-[#10b981]/30 rounded-lg text-[10px] font-sans font-semibold transition-all cursor-pointer flex items-center gap-1 shadow-sm"
+                                className="px-2.5 py-1 bg-[#27272A] hover:bg-[#10b981]/20 text-gray-300 hover:text-white border border-[#27272A] hover:border-[#10b981]/30 rounded-lg text-[10px] font-sans font-semibold cursor-pointer flex items-center gap-1 shadow-sm"
                                 title="Reimprimir este lote de pedidos"
                               >
                                 <Printer size={11} className="text-[#10b981]" />
@@ -383,7 +399,8 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                           </div>
 
                           {/* Order Items */}
-                          <div className="p-4 divide-y divide-[#27272A]">
+                          {isExpanded && (
+                            <div className="p-4 divide-y divide-[#27272A]">
                             {unpaidItems.map((item) => (
                               <div
                                 key={item.id}
@@ -502,6 +519,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                               </div>
                             ))}
                           </div>
+                        )}
                         </div>
                       )})}
                     </div>

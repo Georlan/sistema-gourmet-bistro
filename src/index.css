@@ -1,10 +1,27 @@
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-serif: "Montserrat", sans-serif;
   --font-mono: "JetBrains Mono", monospace;
+  --font-display: "Space Grotesk", sans-serif;
+  
+  --color-primary: var(--color-brand-primary, #00b894);
+  --color-secondary: var(--color-brand-secondary, #121420);
+  --color-bg-app: var(--color-brand-bg, #090a0f);
+  --color-text-app: var(--color-brand-text, #ffffff);
+  --color-card-app: var(--color-brand-card, #121420);
+  --color-accent-app: var(--color-brand-accent, #00b894);
+}
+
+:root {
+  --color-brand-primary: #00b894;
+  --color-brand-bg: #090a0f;
+  --color-brand-text: #ffffff;
+  --color-brand-secondary: #121420;
+  --color-brand-card: #121420;
+  --color-brand-accent: #00b894;
 }
 
 /* Luxury Fine Dining Color Palettes - Setup as Rich Dark theme */
@@ -159,6 +176,15 @@ body {
   background: #059669;
 }
 
+/* Hide scrollbar (for filter rows on mobile) */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 /* Premium Card Borders & Backgrounds */
 .glass-panel {
   background: rgba(15, 23, 42, 0.75);
@@ -211,3 +237,19 @@ body {
 .font-huge .text-base { font-size: 20px !important; }
 .font-huge .text-lg { font-size: 22px !important; }
 .font-huge .text-xl { font-size: 28px !important; }
+
+/* Cardápio Digital Whitelabel Utilities */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.drawer-enter {
+  transform: translateY(100%);
+}
+.drawer-enter-active {
+  transform: translateY(0);
+  transition: transform 300s cubic-bezier(0.16, 1, 0.3, 1);
+}

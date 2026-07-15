@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { Clock } from 'lucide-react';
+import { Clock, FileText, GitMerge } from 'lucide-react';
 import { Table, Order } from '../types';
 import { getTableTotal, formatElapsedTime } from '../domain';
 
@@ -118,81 +118,66 @@ export const MesaCard = React.memo<MesaCardProps>(({
     <button
       id={`mesa-card-${table.id}`}
       onClick={() => onClick(table.id)}
-      className={`relative flex flex-col justify-between p-3 sm:p-5 lg:p-6 rounded-2xl border ${currentConfig.borderColor} ${currentConfig.bgColor} ${currentConfig.glow} cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full`}
+      className={`relative flex flex-col justify-between p-2.5 sm:p-4 rounded-xl border min-h-[100px] sm:min-h-[130px] ${currentConfig.borderColor} ${currentConfig.bgColor} cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full`}
     >
       {/* Top Section */}
       <div className="w-full">
-        <div className="flex items-center justify-between mb-2 sm:mb-4">
-          <span className="font-serif text-base sm:text-2xl font-bold text-white tracking-tight">
+        <div className="flex items-start justify-between mb-1.5 sm:mb-3">
+          <span className="font-serif text-sm sm:text-lg font-bold text-white tracking-tight leading-tight">
             {table.nome && table.nome !== `Mesa ${table.id}` ? table.nome : `Mesa ${table.id}`}
-            {mergedSources && mergedSources.length > 0 && ` + ${mergedSources.join(' + ')}`}
+            {mergedSources && mergedSources.length > 0 && (
+              <span className="text-[10px] font-normal text-zinc-400 ml-1">+{mergedSources.join('+')}</span>
+            )}
           </span>
         </div>
       </div>
 
       {/* Bottom Section */}
       {status === 'livre' ? (
-        <div className="w-full mt-4 flex items-center justify-between border-t border-emerald-950/20 pt-4 text-[10px] text-emerald-500/40 uppercase font-sans tracking-widest font-bold">
-          <div className="flex items-center gap-1.5">
+        <div className="w-full mt-3 flex items-center justify-between border-t border-emerald-950/20 pt-2 text-[9px] text-emerald-500/40 uppercase font-sans tracking-widest font-bold">
+          <div className="flex items-center gap-1">
             <span>Livre</span>
             {draftCount > 0 && (
-              <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded px-1.5 py-0.5 text-[8px] font-bold tracking-normal uppercase normal-case shrink-0">
-                Rascunho ({draftCount})
+              <span className="flex items-center gap-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded px-1 py-0.5 text-[8px] font-bold">
+                <FileText size={9} className="shrink-0" />
+                <span>{draftCount}</span>
               </span>
             )}
           </div>
-          <span className="text-base font-normal">+</span>
+          <span className="text-sm font-normal">+</span>
         </div>
       ) : status === 'mesclada' ? (
-        <div className="w-full mt-4 flex items-center justify-between border-t border-zinc-800/40 pt-4 text-[10px] text-zinc-500 uppercase font-sans tracking-widest font-bold">
-          <span>Mesclada</span>
-          <span className="text-zinc-500 font-mono">Mesa {mergedIntoMesaId}</span>
+        <div className="w-full mt-3 flex items-center justify-between border-t border-[#27272A] pt-2 text-[9px] text-zinc-500 font-sans font-bold uppercase tracking-wider">
+          <div className="flex items-center gap-1">
+            <GitMerge size={10} className="text-zinc-500 shrink-0" />
+            <span>Mesclada</span>
+          </div>
+          <span className="text-zinc-400 font-mono text-[9px]">M{mergedIntoMesaId}</span>
         </div>
       ) : (
-        <div className="w-full pt-2 sm:pt-4 border-t border-[#27272A]">
-          <div className="flex items-center justify-between text-[10px] sm:text-xs text-[#A1A1AA] mb-2 sm:mb-3 font-sans">
-            {/* Timer since first order */}
-            <div className="flex items-center gap-1 sm:gap-1.5">
-              <Clock size={11} className="text-emerald-400 shrink-0 sm:w-3 sm:h-3" />
-              <span className="truncate">
-                <strong className={status === 'entregue' ? 'text-blue-300 font-medium font-mono' : 'text-rose-400 font-medium font-mono'}>{elapsed}</strong>
+        <div className="w-full pt-2 border-t border-[#27272A]">
+          <div className="flex items-center justify-between">
+            {/* Timer */}
+            <div className="flex items-center gap-1">
+              <Clock size={10} className="text-emerald-400 shrink-0" />
+              <strong className={`text-[10px] font-mono ${status === 'entregue' ? 'text-blue-300' : 'text-rose-400'}`}>{elapsed}</strong>
+            </div>
+
+            {/* Right side: draft icon + total */}
+            <div className="flex items-center gap-1.5">
+              {draftCount > 0 && (
+                <div className="flex items-center gap-0.5 px-1 py-0.5 bg-emerald-500/10 text-emerald-400 rounded border border-emerald-500/20 text-[9px]" title={`Rascunho: ${draftCount}`}>
+                  <FileText size={10} className="shrink-0" />
+                  <span className="font-bold">{draftCount}</span>
+                </div>
+              )}
+              {otherWaitersServing.length > 0 && (
+                <span title={`Editando: ${otherWaitersServing.join(', ')}`} className="text-amber-400 text-[11px]">⚠️</span>
+              )}
+              <span className={`text-xs sm:text-sm font-bold font-mono ${totalValue > 0 ? 'text-emerald-400' : 'text-[#71717A]'}`}>
+                {totalValue > 0 ? `R$${totalValue.toFixed(0)}` : (status === 'entregue' ? '💳' : '+')}
               </span>
             </div>
-
-            {/* Draft count */}
-            {draftCount > 0 && (
-              <div className="flex items-center gap-0.5 px-1 bg-emerald-500/10 text-emerald-400 rounded border border-emerald-500/20 font-bold text-[8px] sm:text-[10px]" title={`Rascunho: ${draftCount}`}>
-                <span className="sm:inline hidden">Rascunho</span>
-                <span>({draftCount})</span>
-              </div>
-            )}
-          </div>
-
-          {/* Concurrency alert */}
-          {otherWaitersServing.length > 0 && (
-            <div 
-              className="flex items-center gap-1 px-1.5 py-0.5 bg-amber-500/15 text-amber-400 rounded border border-amber-500/30 font-bold text-[8px] sm:text-[9px] mb-2 animate-pulse"
-              title={`Outros garçons com rascunho nesta mesa: ${otherWaitersServing.join(', ')}`}
-            >
-              <span>⚠️</span>
-              <span className="truncate">Editando: {otherWaitersServing.join(', ')}</span>
-            </div>
-          )}
-
-          {/* Entregue — aguardando pagamento badge */}
-          {status === 'entregue' && (
-            <div className="flex items-center gap-1 px-1.5 py-1 bg-blue-500/10 text-blue-300 rounded-lg border border-blue-500/20 font-bold text-[8px] sm:text-[9px] mb-2 mt-1 w-full justify-center tracking-wider uppercase">
-              <span>💳</span>
-              <span>Aguardando Pagamento</span>
-            </div>
-          )}
-
-          {/* Total Active Consumption */}
-          <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mt-1 sm:mt-2 font-sans">
-            <span className="text-[8px] sm:text-[10px] text-[#A1A1AA] uppercase tracking-wider font-semibold">Total:</span>
-            <span className={`text-xs sm:text-lg lg:text-xl font-bold font-mono ${totalValue > 0 ? 'text-emerald-400' : 'text-[#71717A]'}`}>
-              R$ {totalValue.toFixed(2)}
-            </span>
           </div>
         </div>
       )}

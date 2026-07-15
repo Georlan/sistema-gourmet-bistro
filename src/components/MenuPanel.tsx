@@ -63,6 +63,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('Hambúrgueres Bovinos');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [showSettings, setShowSettings] = useState<boolean>(false);
+  const [expandedDraftObs, setExpandedDraftObs] = useState<string | null>(null);
 
   // Selected product to configure
   const [selectedProductToConfigure, setSelectedProductToConfigure] = useState<Product | null>(null);
@@ -276,64 +277,80 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                         </div>
                       </div>
 
-                      {/* Observations */}
-                      <div className="space-y-1.5 pt-1.5 border-t border-[#27272A]">
-                        <div className="flex items-center justify-between text-[10px] text-gray-300 font-sans font-medium">
-                          <div className="flex items-center gap-1">
-                            <FileText size={10} className="text-[#10b981]" />
-                            <span>Observação de Preparo:</span>
-                          </div>
-                          {item.observacao && (
+                      {/* Observations Toggle/Display */}
+                      {!(item.observacao || expandedDraftObs === item.id) ? (
+                        <div className="flex justify-end pt-1 border-t border-[#27272A]/40">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedDraftObs(item.id)}
+                            className="text-[10px] text-gray-400 hover:text-white flex items-center gap-1 cursor-pointer"
+                          >
+                            <FileText size={10} className="text-[#10b981]/80" />
+                            <span>Adicionar Observação...</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-1.5 pt-1.5 border-t border-[#27272A] animate-fade-in">
+                          <div className="flex items-center justify-between text-[10px] text-gray-300 font-sans font-medium">
+                            <div className="flex items-center gap-1">
+                              <FileText size={10} className="text-[#10b981]" />
+                              <span>Observação de Preparo:</span>
+                            </div>
                             <button
-                              onClick={() => onUpdateDraftItem(item.id, { observacao: '' })}
-                              className="text-[9px] text-[#10b981] hover:underline"
+                              type="button"
+                              onClick={() => {
+                                onUpdateDraftItem(item.id, { observacao: '' });
+                                setExpandedDraftObs(null);
+                              }}
+                              className="text-[9px] text-[#10b981] hover:underline animate-fade-in"
                             >
-                              Limpar
+                              Limpar / Recolher
                             </button>
-                          )}
-                        </div>
-                        
-                        <input
-                          id={`draft-item-obs-${item.id}`}
-                          type="text"
-                          value={item.observacao}
-                          onChange={(e) => onUpdateDraftItem(item.id, { observacao: e.target.value })}
-                          placeholder="Ex: sem cebola, molho à parte..."
-                          className="w-full px-2.5 py-1.5 text-xs bg-[#121214] border border-[#27272A] rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 text-white"
-                        />
+                          </div>
+                          
+                          <input
+                            id={`draft-item-obs-${item.id}`}
+                            type="text"
+                            value={item.observacao}
+                            onChange={(e) => onUpdateDraftItem(item.id, { observacao: e.target.value })}
+                            placeholder="Ex: sem cebola, molho à parte..."
+                            className="w-full px-2.5 py-1.5 text-xs bg-[#121214] border border-[#27272A] rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 text-white"
+                          />
 
-                        {/* Presets */}
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {(() => {
-                            const product = PRODUCTS.find(p => p.id === item.produtoId);
-                            const presets = product ? getProductPresets(product) : ['VIAGEM', 'PRA MESA'];
-                            return presets.map((preset) => {
-                              const parts = item.observacao ? item.observacao.split(',').map(p => p.trim()) : [];
-                              const isActive = parts.some(p => p.toLowerCase() === preset.toLowerCase());
-                              return (
-                                <button
-                                  key={preset}
-                                  onClick={() => {
-                                    const currentParts = item.observacao ? item.observacao.split(',').map(p => p.trim()) : [];
-                                    const exists = currentParts.some(p => p.toLowerCase() === preset.toLowerCase());
-                                    const updatedParts = exists 
-                                      ? currentParts.filter(p => p.toLowerCase() !== preset.toLowerCase() && p !== '')
-                                      : [...currentParts.filter(p => p !== ''), preset];
-                                    onUpdateDraftItem(item.id, { observacao: updatedParts.join(', ') });
-                                  }}
-                                  className={`px-2 py-0.5 text-[9px] rounded border transition-colors font-medium cursor-pointer ${
-                                    isActive 
-                                      ? 'bg-[#10b981]/20 border-[#10b981]/40 text-[#10b981]'
-                                      : 'bg-[#27272A] hover:bg-[#10b981]/15 text-gray-300 hover:text-white border-[#27272A]'
-                                  }`}
-                                >
-                                  {isActive ? preset : `+${preset}`}
-                                </button>
-                              );
-                            });
-                          })()}
+                          {/* Presets */}
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {(() => {
+                              const product = PRODUCTS.find(p => p.id === item.produtoId);
+                              const presets = product ? getProductPresets(product) : ['VIAGEM', 'PRA MESA'];
+                              return presets.map((preset) => {
+                                const parts = item.observacao ? item.observacao.split(',').map(p => p.trim()) : [];
+                                const isActive = parts.some(p => p.toLowerCase() === preset.toLowerCase());
+                                return (
+                                  <button
+                                    key={preset}
+                                    type="button"
+                                    onClick={() => {
+                                      const currentParts = item.observacao ? item.observacao.split(',').map(p => p.trim()) : [];
+                                      const exists = currentParts.some(p => p.toLowerCase() === preset.toLowerCase());
+                                      const updatedParts = exists 
+                                        ? currentParts.filter(p => p.toLowerCase() !== preset.toLowerCase() && p !== '')
+                                        : [...currentParts.filter(p => p !== ''), preset];
+                                      onUpdateDraftItem(item.id, { observacao: updatedParts.join(', ') });
+                                    }}
+                                    className={`px-2 py-0.5 text-[9px] rounded border font-medium cursor-pointer transition-colors ${
+                                      isActive 
+                                        ? 'bg-[#10b981]/20 border-[#10b981]/40 text-[#10b981]'
+                                        : 'bg-[#27272A] hover:bg-[#10b981]/15 text-gray-300 hover:text-white border-[#27272A]'
+                                    }`}
+                                  >
+                                    {isActive ? preset : `+${preset}`}
+                                  </button>
+                                );
+                              });
+                            })()}
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -600,26 +617,45 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                               </div>
                             </div>
 
-                            <button
-                              id={`add-product-btn-${product.id}`}
-                              type="button"
-                              disabled={!available}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (available) handleOpenConfig(product);
-                              }}
-                              className={`mt-4 w-full flex items-center justify-center gap-1 py-2 text-xs font-bold rounded-xl transition-all border ${
-                                available
-                                  ? 'bg-[#1C1C1F] hover:bg-[#10b981]/20 text-[#10b981] cursor-pointer border-[#27272A]'
-                                  : 'bg-red-900/10 text-red-500/50 cursor-not-allowed border-red-900/20'
-                              }`}
-                            >
-                              {available ? (
-                                <><Plus size={13} /><span>Configurar e Adicionar</span></>
-                              ) : (
-                                <span>Indisponível</span>
+                            <div className="mt-4 flex gap-2">
+                              <button
+                                id={`quick-add-btn-${product.id}`}
+                                type="button"
+                                disabled={!available}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (available) {
+                                    onAddToDraft(product, 1, '', 'Consumo Geral');
+                                  }
+                                }}
+                                className={`flex-1 flex items-center justify-center gap-1 py-2.5 text-xs font-bold rounded-xl border ${
+                                  available
+                                    ? 'bg-[#10b981] hover:bg-[#10b981]/90 text-[#121214] font-extrabold cursor-pointer border-[#10b981]/20 shadow-md'
+                                    : 'bg-[#121214] text-gray-500 cursor-not-allowed border-[#27272A]'
+                                }`}
+                              >
+                                {available ? (
+                                  <><Plus size={14} /><span>Lançar</span></>
+                                ) : (
+                                  <span>Indisponível</span>
+                                )}
+                              </button>
+
+                              {available && (
+                                <button
+                                  id={`config-add-btn-${product.id}`}
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenConfig(product);
+                                  }}
+                                  className="px-3 bg-[#1C1C1F] hover:bg-[#27272A] text-gray-300 hover:text-white rounded-xl border border-[#27272A] cursor-pointer flex items-center justify-center transition-colors"
+                                  title="Ajustar observações ou nome do cliente"
+                                >
+                                  <SlidersHorizontal size={14} />
+                                </button>
                               )}
-                            </button>
+                            </div>
                           </div>
                         );})}
                       </div>
