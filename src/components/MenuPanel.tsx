@@ -122,7 +122,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
     <div className="relative h-full">
       {/* 1. VIEW: CART (CARRINHO DE COMPRAS) */}
       {view === 'cart' && (
-        <div className="bg-[#121214] border border-[#27272A] rounded-3xl p-5 flex flex-col justify-between h-full min-h-[450px] max-w-2xl mx-auto">
+        <div className="bg-[#121214] sm:border sm:border-[#27272A] sm:rounded-3xl p-3 sm:p-5 flex flex-col justify-between h-full sm:min-h-[450px] max-w-2xl mx-auto border-0 rounded-none">
           <div className="flex flex-col h-full justify-between space-y-4">
             
             {/* Cart Header */}
@@ -211,7 +211,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                 </div>
 
                 {/* Draft items list */}
-                <div className="space-y-3 max-h-[40vh] overflow-y-auto pr-1 scrollbar-thin flex-1">
+                <div className="space-y-3 sm:max-h-[40vh] sm:overflow-y-auto max-h-none overflow-y-visible pr-1 scrollbar-thin flex-1">
                   {draftItems.map((item, index) => (
                     <div
                       key={item.id}
@@ -403,7 +403,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
 
       {/* 2. VIEW: MENU (CARDÁPIO DE PRODUTOS) */}
       {view === 'menu' && (
-        <div className="lg:col-span-12 flex flex-col justify-between max-w-4xl mx-auto bg-[#121214] border border-[#27272A] rounded-3xl p-5 min-h-[450px]">
+        <div className="lg:col-span-12 flex flex-col justify-between max-w-4xl mx-auto bg-[#121214] sm:border sm:border-[#27272A] sm:rounded-3xl p-3 sm:p-5 sm:min-h-[450px] border-0 rounded-none">
           <div className="space-y-4">
             
             {/* Header: Title and Back button */}
@@ -519,7 +519,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
             </div>
 
             {/* Scrollable Products List grouped by Categories */}
-            <div className="flex flex-col gap-6 max-h-[50vh] overflow-y-auto pr-1 scroll-smooth">
+            <div className="flex flex-col gap-6 sm:max-h-[50vh] sm:overflow-y-auto max-h-none overflow-y-visible pr-1 scroll-smooth">
               {(() => {
                 let totalRendered = 0;
                 const renderedSections = CATEGORIES.map((cat) => {

@@ -316,7 +316,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                       <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider font-sans">Lotes Consolidados: {orders.length}</span>
                     </div>
 
-                    <div className="space-y-4 max-h-[45vh] overflow-y-auto pr-1 scrollbar-thin">
+                    <div className="space-y-4 sm:max-h-[45vh] sm:overflow-y-auto max-h-none overflow-y-visible pr-1 scrollbar-thin">
                       {orders.map((order) => {
                         const unpaidItems = order.itens.filter((item: any) => !item.pago);
                         if (unpaidItems.length === 0) return null;
@@ -525,7 +525,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                       </div>
 
                       {/* Customer list with subtotal calculations */}
-                      <div className="space-y-2.5 max-h-[30vh] overflow-y-auto pr-1 scrollbar-thin">
+                      <div className="space-y-2.5 sm:max-h-[30vh] sm:overflow-y-auto max-h-none overflow-y-visible pr-1 scrollbar-thin">
                         {customerSubtotals.map((cust) => (
                           <div
                             key={cust.name}
