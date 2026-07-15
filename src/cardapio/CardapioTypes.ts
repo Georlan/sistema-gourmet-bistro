@@ -84,7 +84,7 @@ export function getProductImageUrl(imagePath: string): string {
     return imagePath;
   }
   // Base Supabase URL from environment or fallback
-  const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL || "https://tcmquksunj4cwwmjzxpisy.supabase.co";
+  const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL || "https://iiowhekvahxiepwcdidm.supabase.co";
   return `${supabaseUrl}/storage/v1/object/public/produtos/${imagePath}`;
 }
 

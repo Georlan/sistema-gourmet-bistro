@@ -210,6 +210,16 @@ export default function CardapioPage() {
         if (data) restaurant = data;
       }
 
+      // If still not found, try loading restaurant ID = 1 (main store) as default real database fallback
+      if (!restaurant) {
+        const { data } = await supabase
+          .from("restaurantes")
+          .select("*")
+          .eq("id", 1)
+          .maybeSingle();
+        if (data) restaurant = data;
+      }
+
       // If still not found and not burger, try loading burger as default
       if (!restaurant && identifier !== "burger") {
         const { data } = await supabase
