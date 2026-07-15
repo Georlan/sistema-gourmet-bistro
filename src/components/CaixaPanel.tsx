@@ -2568,79 +2568,17 @@ export function CaixaPanel({
                 {/* COLUMN 1: Em produção */}
                 <div className={clsx('bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden')}>
                   <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
-                    <span className={clsx('font-bold', 'text-gray-300', 'font-serif')}>Em preparo</span>
+                    <span className={clsx('font-bold', 'text-gray-300', 'font-serif')}>Cozinha (Mesa)</span>
                     <span className={clsx('bg-[#10b981]/10', 'text-[#10b981]', 'font-bold', 'px-2', 'py-0.5', 'rounded-full', 'font-mono', 'text-[9px]')}>
-                      {(modoExclusivoSalao ? 0 : simulatedOrders.filter(o => o.status === 'producao').length) + tableOrdersInProduction.length}
+                      {tableOrdersInProduction.length}
                     </span>
                   </div>
 
                   <div className={clsx('p-3', 'flex-1', 'overflow-y-auto', 'space-y-3')}>
-                    {(modoExclusivoSalao ? 0 : simulatedOrders.filter(o => o.status === 'producao').length) === 0 && tableOrdersInProduction.length === 0 ? (
-                      <div className={clsx('py-20', 'text-center', 'text-gray-500', 'italic', 'text-[10px]')}>Nenhum pedido em produção</div>
+                    {tableOrdersInProduction.length === 0 ? (
+                      <div className={clsx('py-20', 'text-center', 'text-gray-500', 'italic', 'text-[10px]')}>Nenhum pedido local em produção</div>
                     ) : (
                       <>
-                        {!modoExclusivoSalao && simulatedOrders.filter(o => o.status === 'producao').map((order) => {
-                          const isIFood = order.canal === 'ifood';
-                          const isWhats = order.canal === 'whats';
-                          const hasAddress = !!order.endereco;
-                          let badgeText = 'BALCÃO';
-                          let badgeColor = 'bg-zinc-500/15 text-zinc-400';
-
-                          if (isIFood) {
-                            badgeText = 'IFOOD';
-                            badgeColor = 'bg-red-500/15 text-red-400';
-                          } else if (isWhats) {
-                            badgeText = 'WHATSAPP';
-                            badgeColor = 'bg-emerald-500/15 text-emerald-400';
-                          } else if (hasAddress) {
-                            badgeText = 'DELIVERY';
-                            badgeColor = 'bg-orange-500/15 text-orange-400';
-                          } else {
-                            badgeText = 'BALCÃO / RETIRADA';
-                            badgeColor = 'bg-amber-500/15 text-amber-400';
-                          }
-
-                          return (
-                            <div 
-                              key={order.id} 
-                              onClick={() => openSimulatedOrderDetails(order)}
-                              className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'hover:border-[#10b981]/30', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all', 'cursor-pointer')}
-                            >
-                              <div className={clsx('flex', 'justify-between', 'items-start')}>
-                                <div>
-                                  <span className={clsx('px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold rounded font-mono block w-fit mb-1', badgeColor)}>
-                                    {badgeText}
-                                  </span>
-                                  <strong className={clsx('text-white', 'text-xs', 'block')}>{order.cliente}</strong>
-                                  <span className={clsx('text-[9px]', 'text-gray-400', 'block')}>{order.telefone}</span>
-                                </div>
-                                <span className={clsx('font-bold', 'text-white', 'font-mono', 'text-[11px]', 'shrink-0')}>R$ {order.total.toFixed(2)}</span>
-                              </div>
-
-                            <p className={clsx('text-[10px]', 'text-gray-300', 'bg-[#09090B]', 'p-1.5', 'rounded', 'border', 'border-[#27272A]/30', 'leading-relaxed', 'font-mono')}>
-                              {order.itens}
-                            </p>
-
-                            {order.endereco && (
-                              <span className={clsx('text-[9px]', 'text-gray-400', 'flex', 'items-start', 'gap-1', 'block')}>
-                                <MapPin size={10} className={clsx('shrink-0', 'text-rose-500', 'mt-0.5')} />
-                                <span className="truncate">{order.endereco}</span>
-                              </span>
-                            )}
-
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleUpdateDeliveryStatus(order.id, 'pronto');
-                              }}
-                              className={clsx('w-full', 'py-1.5', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider')}
-                            >
-                              Marcar como Pronto
-                            </button>
-                            </div>
-                          );
-                        })}
-
                         {/* Pedidos do Salão (Mesa) em Produção */}
                         {tableOrdersInProduction.map((order) => {
                           const itemCounts: Record<string, number> = {};
@@ -2695,11 +2633,6 @@ export function CaixaPanel({
                                   if (isLoading) return;
                                   setIsLoading(true);
                                   try {
-                                    // Marca apenas os itens deste lançamento como prontos.
-                                    // NÃO chama /pedir-conta na comanda inteira — cada lançamento
-                                    // avança individualmente para a Col 3 via filtro status='pronto'.
-                                    // O /pedir-conta é reservado para quando o cliente solicitar
-                                    // explicitamente o fechamento total da conta da mesa.
                                     await Promise.all(preparingItems.map(item =>
                                       fetch(`${apiBaseUrl}/comandas/itens/${item.id}/status?status=pronto`, {
                                         method: "PUT",
@@ -2726,32 +2659,41 @@ export function CaixaPanel({
                   </div>
                 </div>
 
-                {/* COLUMN 2: Pronto p/ Despacho (Delivery e Retirada) */}
+                {/* COLUMN 2: Delivery & Retirada (Preparo) */}
                 <div className={clsx('bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden')}>
                   <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
-                    <span className={clsx('font-bold', 'text-gray-300', 'font-serif')}>Pronto p/ Despacho</span>
+                    <span className={clsx('font-bold', 'text-gray-300', 'font-serif')}>Delivery & Retirada (Preparo)</span>
                     <span className={clsx('bg-orange-500/10', 'text-orange-400', 'font-bold', 'px-2', 'py-0.5', 'rounded-full', 'font-mono', 'text-[9px]')}>
-                      {modoExclusivoSalao ? 0 : simulatedOrders.filter(o => o.status === 'pronto').length}
+                      {modoExclusivoSalao ? 0 : simulatedOrders.filter(o => o.status === 'producao').length}
                     </span>
                   </div>
 
                   <div className={clsx('p-3', 'flex-1', 'overflow-y-auto', 'space-y-3')}>
-                    {(modoExclusivoSalao ? 0 : simulatedOrders.filter(o => o.status === 'pronto').length) === 0 ? (
-                      <div className={clsx('py-20', 'text-center', 'text-gray-500', 'italic', 'text-[10px]')}>Nenhum pedido pronto para despacho</div>
+                    {(modoExclusivoSalao ? 0 : simulatedOrders.filter(o => o.status === 'producao').length) === 0 ? (
+                      <div className={clsx('py-20', 'text-center', 'text-gray-500', 'italic', 'text-[10px]')}>Nenhum pedido online em preparo</div>
                     ) : (
                       <>
-                        {!modoExclusivoSalao && simulatedOrders.filter(o => o.status === 'pronto').map((order) => {
+                        {!modoExclusivoSalao && simulatedOrders.filter(o => o.status === 'producao').map((order) => {
                           const hasAddress = !!order.endereco;
-                          const badgeText = hasAddress ? 'DELIVERY - PRONTO' : 'RETIRADA - PRONTO';
-                          const badgeColor = hasAddress ? 'bg-orange-500/10 text-orange-400' : 'bg-amber-500/10 text-amber-400';
-                          const buttonText = hasAddress ? 'SAIU PARA ENTREGA' : '✓ RETIROU';
-                          const buttonColor = hasAddress ? 'bg-orange-600 hover:bg-orange-700 text-white' : 'bg-amber-600 hover:bg-amber-700 text-white';
+                          let badgeText = 'RETIRADA - PREPARANDO';
+                          let badgeColor = 'bg-amber-500/10 text-amber-400';
+                          
+                          if (hasAddress) {
+                            badgeText = 'DELIVERY - PREPARANDO';
+                            badgeColor = 'bg-orange-500/10 text-orange-400';
+                          } else if (order.mesaId && order.mesaId > 0) {
+                            badgeText = `MESA ${order.mesaId} - PREPARANDO`;
+                            badgeColor = 'bg-emerald-500/10 text-emerald-400';
+                          }
+
+                          const buttonText = hasAddress ? 'SAIU PARA ENTREGA' : 'PEDIDO PRONTO';
+                          const buttonColor = hasAddress ? 'bg-orange-600 hover:bg-orange-700 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white';
 
                           return (
                             <div 
                               key={order.id} 
                               onClick={() => openSimulatedOrderDetails(order)}
-                              className={clsx('bg-[#1C1C1F]', 'border', 'border-emerald-500/30', 'hover:border-emerald-500/50', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all', 'cursor-pointer')}
+                              className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'hover:border-[#10b981]/30', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all', 'cursor-pointer')}
                             >
                               <div className={clsx('flex', 'justify-between', 'items-start')}>
                                 <div>
@@ -2759,7 +2701,7 @@ export function CaixaPanel({
                                   <strong className={clsx('text-white', 'text-xs', 'block')}>{order.cliente}</strong>
                                   <span className={clsx('text-[9px]', 'text-gray-400', 'block')}>{order.telefone}</span>
                                 </div>
-                                <span className={clsx('font-bold', 'text-emerald-400', 'font-mono', 'text-[11px]', 'shrink-0')}>R$ {order.total.toFixed(2)}</span>
+                                <span className={clsx('font-bold', 'text-white', 'font-mono', 'text-[11px]', 'shrink-0')}>R$ {order.total.toFixed(2)}</span>
                               </div>
 
                               <p className={clsx('text-[10px]', 'text-gray-300', 'bg-[#09090B]', 'p-1.5', 'rounded', 'border', 'border-[#27272A]/30', 'leading-relaxed', 'font-mono')}>
