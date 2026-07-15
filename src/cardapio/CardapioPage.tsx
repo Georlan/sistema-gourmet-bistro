@@ -41,8 +41,8 @@ function getRestaurantIdentifier(): string {
     return parts[0];
   }
 
-  // Fallback to default
-  return "burger"; // default fallback
+  // Fallback to default (restaurante_id = 1)
+  return "1";
 }
 
 export default function CardapioPage() {
@@ -313,13 +313,101 @@ export default function CardapioPage() {
 
       const categoryNames = sortedCategories.map((c) => c.nome || c.name || "").filter(Boolean);
 
+      // Map social networks dynamically from JSON object or Array
+      let mappedSocials: SocialNetwork[] = [];
+      let whatsappNumber = "";
+      if (restaurant.socials) {
+        const s = typeof restaurant.socials === "string" ? JSON.parse(restaurant.socials) : restaurant.socials;
+        if (typeof s === "object" && !Array.isArray(s)) {
+          if (s.whatsapp) {
+            whatsappNumber = String(s.whatsapp).replace(/\D/g, "");
+          }
+          Object.entries(s).forEach(([platform, value]) => {
+            if (value) {
+              let url = String(value);
+              if (platform === "instagram" && !url.startsWith("http")) {
+                url = `https://instagram.com/${url.replace("@", "")}`;
+              } else if (platform === "whatsapp") {
+                url = `https://wa.me/${url.replace(/\D/g, "")}`;
+              }
+              mappedSocials.push({
+                platform: platform === "instagram" ? "Instagram" : platform === "whatsapp" ? "WhatsApp" : platform,
+                url,
+                active: true
+              });
+            }
+          });
+        } else if (Array.isArray(s)) {
+          mappedSocials = s;
+          const wa = s.find((item: any) => item.platform?.toLowerCase() === "whatsapp");
+          if (wa) {
+            whatsappNumber = wa.url.replace(/\D/g, "");
+          }
+        }
+      }
+
+      // Map operating hours dynamically from JSON object or Array
+      let mappedHours: OperatingHours[] = [];
+      if (restaurant.horarios_funcionamento) {
+        const h = typeof restaurant.horarios_funcionamento === "string" 
+          ? JSON.parse(restaurant.horarios_funcionamento) 
+          : restaurant.horarios_funcionamento;
+        if (typeof h === "object" && !Array.isArray(h)) {
+          mappedHours = Object.entries(h).map(([key, value]) => {
+            let days = key;
+            if (key === "segunda_a_sexta") days = "Segunda a Sexta";
+            else if (key === "segunda_a_quinta") days = "Segunda a Quinta";
+            else if (key === "sexta_e_sabado") days = "Sexta e Sábado";
+            else if (key === "sabado") days = "Sábado";
+            else if (key === "domingo") days = "Domingo";
+            else if (key === "domingo_e_feriados") days = "Domingos e Feriados";
+            
+            return { days, hours: String(value) };
+          });
+        } else if (Array.isArray(h)) {
+          mappedHours = h;
+        }
+      }
+      if (mappedHours.length === 0) {
+        mappedHours = [{ days: "Segunda a Domingo", hours: "18:00 às 23:00" }];
+      }
+
+      // Map accepted payment methods dynamically from JSON array
+      let mappedPayments: PaymentMethodGroup[] = [];
+      if (restaurant.formas_pagamento_aceitas) {
+        const p = typeof restaurant.formas_pagamento_aceitas === "string"
+          ? JSON.parse(restaurant.formas_pagamento_aceitas)
+          : restaurant.formas_pagamento_aceitas;
+        if (Array.isArray(p)) {
+          if (p.includes("credito") || p.includes("Cartão de Crédito")) {
+            mappedPayments.push({ type: "Cartão de Crédito", accepted: ["Visa", "Mastercard", "Elo"] });
+          }
+          if (p.includes("debito") || p.includes("Cartão de Débito")) {
+            mappedPayments.push({ type: "Cartão de Débito", accepted: ["Visa Electron", "Maestro"] });
+          }
+          if (p.includes("pix") || p.includes("Pix")) {
+            mappedPayments.push({ type: "Pix", accepted: ["Pix Instantâneo (QR Code ou Chave Copia e Cola)"] });
+          }
+          if (p.includes("dinheiro") || p.includes("Dinheiro")) {
+            mappedPayments.push({ type: "Dinheiro", accepted: ["Cédulas e Moedas na entrega"] });
+          }
+        }
+      }
+      if (mappedPayments.length === 0) {
+        mappedPayments = [
+          { type: "Cartão de Crédito", accepted: ["Visa", "Mastercard", "Elo"] },
+          { type: "Cartão de Débito", accepted: ["Visa Electron", "Maestro"] },
+          { type: "Pix", accepted: ["Pix com QR Code ou Copia e Cola"] }
+        ];
+      }
+
       const newBrand: BrandConfig = {
         id: String(restaurant.id),
         name: restaurant.nome || restaurant.name || "Restaurante",
-        slogan: restaurant.slogan || "Sincronizado com o Sistema Kôma PDV",
+        slogan: restaurant.subtitulo || restaurant.slogan || "Sincronizado com o Sistema Kôma PDV",
         logo: getProductImageUrl(restaurant.logo_url || restaurant.logo || ""),
         bannerImage: getProductImageUrl(restaurant.banner_url || restaurant.banner_image || ""),
-        phone: restaurant.telefone || restaurant.phone || "",
+        phone: whatsappNumber || restaurant.telefone || restaurant.phone || "",
         address: restaurant.endereco || restaurant.address || "",
         colors: {
           primary: primaryColor,
@@ -331,16 +419,10 @@ export default function CardapioPage() {
         },
         categories: categoryNames.length > 0 ? categoryNames : ["Geral"],
         products: mappedProducts,
-        socials: Array.isArray(restaurant.socials) ? restaurant.socials : [],
-        about: restaurant.about || restaurant.descricao || "",
-        paymentMethods: restaurant.payment_methods || [
-          { type: "Cartão de Crédito", accepted: ["Visa", "Mastercard", "Elo"] },
-          { type: "Cartão de Débito", accepted: ["Visa Electron", "Maestro"] },
-          { type: "Pix", accepted: ["Pix com QR Code ou Copia e Cola"] }
-        ],
-        operatingHours: restaurant.operating_hours || [
-          { days: "Segunda a Domingo", hours: "18:00 às 23:00" }
-        ],
+        socials: mappedSocials,
+        about: restaurant.sobre_nos || restaurant.about || restaurant.descricao || "",
+        paymentMethods: mappedPayments,
+        operatingHours: mappedHours,
         googleMapsUrl: restaurant.google_maps_url || `https://maps.google.com/?q=${encodeURIComponent(restaurant.endereco || "")}`
       };
 
