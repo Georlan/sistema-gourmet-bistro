@@ -914,7 +914,7 @@ export default function CardapioPage() {
 
   return (
     <div
-      style={styleVariables}
+      style={{ ...styleVariables, overflowX: 'clip' } as React.CSSProperties}
       className="min-h-screen bg-bg-app text-text-app flex flex-col font-sans selection:bg-primary/20 selection:text-primary transition-all duration-300"
       id="app-root-container"
     >
@@ -939,10 +939,10 @@ export default function CardapioPage() {
       />
 
       {/* 2. MAIN WEBSITE BODY CONTAINER */}
-      <div className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col lg:flex-row gap-8" id="main-content-layout">
+      <div className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col lg:flex-row gap-6 lg:gap-8 min-w-0" id="main-content-layout">
         
         {/* LEFT COLUMN: Main Restaurant Catalog */}
-        <main className="flex-1 flex flex-col gap-6" id="catalog-section">
+        <main className="flex-1 min-w-0 flex flex-col gap-6" id="catalog-section">
           
           {/* Active Brand Hero Banner (Elegant full-width banner) */}
           <div className="h-44 sm:h-56 w-full overflow-hidden relative rounded-2xl shadow-xs group" id="brand-banner-hero">

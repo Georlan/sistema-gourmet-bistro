@@ -44,7 +44,7 @@ export default function CardapioCategoryNav({
 
   return (
     <div
-      className="sticky top-0 z-35 w-full border-b border-slate-200/10 bg-card-app/95 backdrop-blur-md py-3 px-4 shadow-xs"
+      className="sticky top-0 z-[35] w-full overflow-hidden border-b border-slate-200/10 bg-card-app/95 backdrop-blur-md py-3 px-4 shadow-xs"
       id="category-nav-container"
     >
       <div 
