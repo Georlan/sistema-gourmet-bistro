@@ -26,7 +26,7 @@ interface SuperAdminCredentialsProps {
 export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }: SuperAdminCredentialsProps) {
   const [keys, setKeys] = useState<Record<string, string>>({
     CLOUDFLARE_TOKEN: "",
-    CLOUDFLARE_ZONE_ID: "",
+    CLOUDFLARE_ZONE_ID: "zone_koma_1122",
     GITHUB_TOKEN: "",
     GITHUB_OWNER: "",
     GITHUB_REPO: "",
@@ -278,20 +278,20 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
     <div className="space-y-6" id="superadmin-credentials-manager">
       
       {/* Intro Header Card */}
-      <div className="bg-[#121420] border border-[#1e293b]/40 p-5 rounded flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className={clsx('bg-[#121420]', 'border', 'border-[#1e293b]/40', 'p-5', 'rounded', 'flex', 'flex-col', 'md:flex-row', 'md:items-center', 'justify-between', 'gap-4')}>
         <div>
-          <h2 className="text-base font-bold text-white flex items-center gap-2">
-            <Key className="w-5 h-5 text-[#00b894]" />
+          <h2 className={clsx('text-base', 'font-bold', 'text-white', 'flex', 'items-center', 'gap-2')}>
+            <Key className={clsx('w-5', 'h-5', 'text-[#00b894]')} />
             GERENCIADOR DE CHAVES & CREDENCIAIS DO SISTEMA
           </h2>
-          <p className="text-xs text-slate-400 mt-1 max-w-2xl font-sans leading-relaxed">
-            Configure e edite as chaves de API reais do seu sistema diretamente por aqui. As atualizações modificam o arquivo <code className="text-amber-400 font-mono">.env</code> de forma persistente e recarregam as configurações em memória em tempo de execução, sem necessidade de reinicializar o container do servidor de forma forçada.
+          <p className={clsx('text-xs', 'text-slate-400', 'mt-1', 'max-w-2xl', 'font-sans', 'leading-relaxed')}>
+            Configure e edite as chaves de API reais do seu sistema diretamente por aqui. As atualizações modificam o arquivo <code className={clsx('text-amber-400', 'font-mono')}>.env</code> de forma persistente e recarregam as configurações em memória em tempo de execução, sem necessidade de reinicializar o container do servidor de forma forçada.
           </p>
         </div>
         <button
           onClick={fetchCredentials}
           disabled={isLoading || isSaving}
-          className="text-xs bg-black/40 hover:bg-black border border-[#1e293b]/40 text-slate-300 font-mono py-1.5 px-3 rounded flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+          className={clsx('text-xs', 'bg-black/40', 'hover:bg-black', 'border', 'border-[#1e293b]/40', 'text-slate-300', 'font-mono', 'py-1.5', 'px-3', 'rounded', 'flex', 'items-center', 'gap-2', 'transition-all', 'cursor-pointer', 'disabled:opacity-50')}
         >
           <RefreshCw className={`w-3.5 h-3.5 text-[#00b894] ${isLoading ? "animate-spin" : ""}`} />
           {isLoading ? "CARREGANDO..." : "RECARREGAR DO DISCO"}
@@ -305,13 +305,13 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
             : "bg-red-950/20 border-red-500/50 text-red-400"
         }`}>
           {saveStatus.type === "success" ? (
-            <CheckCircle className="w-5 h-5 shrink-0" />
+            <CheckCircle className={clsx('w-5', 'h-5', 'shrink-0')} />
           ) : (
-            <AlertCircle className="w-5 h-5 shrink-0" />
+            <AlertCircle className={clsx('w-5', 'h-5', 'shrink-0')} />
           )}
           <div>
-            <span className="font-bold uppercase block">{saveStatus.type === "success" ? "SUCESSO DE CONFIGURAÇÃO" : "ERRO DE PROCESSO"}</span>
-            <span className="font-sans text-[11px] opacity-90 mt-0.5 block">{saveStatus.message}</span>
+            <span className={clsx('font-bold', 'uppercase', 'block')}>{saveStatus.type === "success" ? "SUCESSO DE CONFIGURAÇÃO" : "ERRO DE PROCESSO"}</span>
+            <span className={clsx('font-sans', 'text-[11px]', 'opacity-90', 'mt-0.5', 'block')}>{saveStatus.message}</span>
           </div>
         </div>
       )}
@@ -319,15 +319,15 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
       <form onSubmit={handleSave} className="space-y-6">
         
         {/* Grid of Credentials Sections */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-2', 'gap-6')}>
 
           {/* Module 1: Cloudflare */}
-          <div className="bg-[#121420] border border-[#1e293b]/40 p-5 rounded flex flex-col justify-between" id="cred-module-cloudflare">
+          <div className={clsx('bg-[#121420]', 'border', 'border-[#1e293b]/40', 'p-5', 'rounded', 'flex', 'flex-col', 'justify-between')} id="cred-module-cloudflare">
             <div>
-              <div className="flex items-center justify-between border-b border-[#1e293b]/40 pb-3 mb-4">
-                <div className="flex items-center gap-2">
-                  <Globe className="w-4 h-4 text-orange-500" />
-                  <h3 className="text-sm font-bold text-white font-mono uppercase tracking-wide">
+              <div className={clsx('flex', 'items-center', 'justify-between', 'border-b', 'border-[#1e293b]/40', 'pb-3', 'mb-4')}>
+                <div className={clsx('flex', 'items-center', 'gap-2')}>
+                  <Globe className={clsx('w-4', 'h-4', 'text-orange-500')} />
+                  <h3 className={clsx('text-sm', 'font-bold', 'text-white', 'font-mono', 'uppercase', 'tracking-wide')}>
                     [01] Cloudflare DNS API
                   </h3>
                 </div>
@@ -335,22 +335,22 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                   type="button"
                   onClick={() => testConnection("cloudflare")}
                   disabled={testStatus.cloudflare?.status === "loading" || !keys.CLOUDFLARE_TOKEN || !keys.CLOUDFLARE_ZONE_ID}
-                  className="text-[10px] font-mono bg-black/40 hover:bg-[#00b894]/20 border border-[#1e293b]/60 hover:border-[#00b894]/50 disabled:border-zinc-850 disabled:opacity-40 disabled:hover:bg-transparent text-slate-300 hover:text-[#00b894] py-1 px-2.5 rounded transition-all cursor-pointer flex items-center gap-1.5"
+                  className={clsx('text-[10px]', 'font-mono', 'bg-black/40', 'hover:bg-[#00b894]/20', 'border', 'border-[#1e293b]/60', 'hover:border-[#00b894]/50', 'disabled:border-zinc-850', 'disabled:opacity-40', 'disabled:hover:bg-transparent', 'text-slate-300', 'hover:text-[#00b894]', 'py-1', 'px-2.5', 'rounded', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'gap-1.5')}
                 >
                   {testStatus.cloudflare?.status === "loading" ? (
                     <>
-                      <RefreshCw className="w-3 h-3 animate-spin text-[#00b894]" />
+                      <RefreshCw className={clsx('w-3', 'h-3', 'animate-spin', 'text-[#00b894]')} />
                       TESTANDO...
                     </>
                   ) : (
                     <>
-                      <Sparkles className="w-3 h-3 text-[#00b894]" />
+                      <Sparkles className={clsx('w-3', 'h-3', 'text-[#00b894]')} />
                       TESTAR CONEXÃO
                     </>
                   )}
                 </button>
               </div>
-              <p className="text-[11px] text-slate-400 mb-4 font-sans leading-relaxed">
+              <p className={clsx('text-[11px]', 'text-slate-400', 'mb-4', 'font-sans', 'leading-relaxed')}>
                 Usado para gerenciar, criar e auditar registros CNAME de subdomínios para novos estabelecimentos (tenants).
               </p>
 
@@ -360,22 +360,22 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                     ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-400" 
                     : "bg-red-950/20 border-red-500/30 text-red-400"
                 }`}>
-                  <span className="font-bold flex items-center gap-1">
+                  <span className={clsx('font-bold', 'flex', 'items-center', 'gap-1')}>
                     {testStatus.cloudflare?.status === "success" ? "🟢 CONEXÃO REAL SUCESSO" : "🔴 CONEXÃO REAL FALHOU"}
                   </span>
-                  <p className="mt-1 text-[10px] opacity-90 leading-relaxed">{testStatus.cloudflare?.message}</p>
+                  <p className={clsx('mt-1', 'text-[10px]', 'opacity-90', 'leading-relaxed')}>{testStatus.cloudflare?.message}</p>
                 </div>
               )}
 
-              <div className="space-y-4 font-mono text-xs">
+              <div className={clsx('space-y-4', 'font-mono', 'text-xs')}>
                 {/* CLOUDFLARE_ZONE_ID */}
                 <div className="space-y-1.5">
-                  <label className="text-slate-400 flex items-center justify-between">
+                  <label className={clsx('text-slate-400', 'flex', 'items-center', 'justify-between')}>
                     <span>CLOUDFLARE_ZONE_ID</span>
                     {keys.CLOUDFLARE_ZONE_ID ? (
-                      <span className="text-[9px] text-[#00b894] bg-[#00b894]/10 px-1.5 py-0.2 rounded border border-[#00b894]/20">DEFINIDO</span>
+                      <span className={clsx('text-[9px]', 'text-[#00b894]', 'bg-[#00b894]/10', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-[#00b894]/20')}>DEFINIDO</span>
                     ) : (
-                      <span className="text-[9px] text-amber-500 bg-amber-950/30 px-1.5 py-0.2 rounded border border-amber-900/50">VAZIO</span>
+                      <span className={clsx('text-[9px]', 'text-amber-500', 'bg-amber-950/30', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-amber-900/50')}>VAZIO</span>
                     )}
                   </label>
                   <input
@@ -390,8 +390,8 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                     }`}
                   />
                   {validateField("CLOUDFLARE_ZONE_ID", keys.CLOUDFLARE_ZONE_ID) && (
-                    <span className="text-[10px] text-amber-500 mt-1 block flex items-center gap-1 font-sans">
-                      <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                    <span className={clsx('text-[10px]', 'text-amber-500', 'mt-1', 'block', 'flex', 'items-center', 'gap-1', 'font-sans')}>
+                      <AlertCircle className={clsx('w-3.5', 'h-3.5', 'text-amber-500', 'shrink-0')} />
                       {validateField("CLOUDFLARE_ZONE_ID", keys.CLOUDFLARE_ZONE_ID)}
                     </span>
                   )}
@@ -399,12 +399,12 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
 
                 {/* CLOUDFLARE_TOKEN */}
                 <div className="space-y-1.5">
-                  <label className="text-slate-400 flex items-center justify-between">
+                  <label className={clsx('text-slate-400', 'flex', 'items-center', 'justify-between')}>
                     <span>CLOUDFLARE_TOKEN</span>
                     {keys.CLOUDFLARE_TOKEN ? (
-                      <span className="text-[9px] text-[#00b894] bg-[#00b894]/10 px-1.5 py-0.2 rounded border border-[#00b894]/20">DEFINIDO</span>
+                      <span className={clsx('text-[9px]', 'text-[#00b894]', 'bg-[#00b894]/10', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-[#00b894]/20')}>DEFINIDO</span>
                     ) : (
-                      <span className="text-[9px] text-amber-500 bg-amber-950/30 px-1.5 py-0.2 rounded border border-amber-900/50">VAZIO</span>
+                      <span className={clsx('text-[9px]', 'text-amber-500', 'bg-amber-950/30', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-amber-900/50')}>VAZIO</span>
                     )}
                   </label>
                   <div className="relative">
@@ -422,14 +422,14 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                     <button
                       type="button"
                       onClick={() => handleToggleVisibility("CLOUDFLARE_TOKEN")}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 cursor-pointer"
+                      className={clsx('absolute', 'right-3', 'top-1/2', '-translate-y-1/2', 'text-slate-500', 'hover:text-slate-300', 'cursor-pointer')}
                     >
-                      {visibleKeys.CLOUDFLARE_TOKEN ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      {visibleKeys.CLOUDFLARE_TOKEN ? <EyeOff className={clsx('w-4', 'h-4')} /> : <Eye className={clsx('w-4', 'h-4')} />}
                     </button>
                   </div>
                   {validateField("CLOUDFLARE_TOKEN", keys.CLOUDFLARE_TOKEN) && (
-                    <span className="text-[10px] text-amber-500 mt-1 block flex items-center gap-1 font-sans">
-                      <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                    <span className={clsx('text-[10px]', 'text-amber-500', 'mt-1', 'block', 'flex', 'items-center', 'gap-1', 'font-sans')}>
+                      <AlertCircle className={clsx('w-3.5', 'h-3.5', 'text-amber-500', 'shrink-0')} />
                       {validateField("CLOUDFLARE_TOKEN", keys.CLOUDFLARE_TOKEN)}
                     </span>
                   )}
@@ -437,19 +437,19 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
               </div>
             </div>
             
-            <div className="mt-4 pt-3 border-t border-zinc-900 flex items-center gap-2 text-[10px] text-slate-500 font-sans">
-              <HelpCircle className="w-3.5 h-3.5 text-amber-500" />
+            <div className={clsx('mt-4', 'pt-3', 'border-t', 'border-zinc-900', 'flex', 'items-center', 'gap-2', 'text-[10px]', 'text-slate-500', 'font-sans')}>
+              <HelpCircle className={clsx('w-3.5', 'h-3.5', 'text-amber-500')} />
               <span>O Zone ID pode ser encontrado no menu lateral direito da sua Dashboard Cloudflare.</span>
             </div>
           </div>
 
           {/* Module 2: GitHub Actions */}
-          <div className="bg-[#121420] border border-[#1e293b]/40 p-5 rounded flex flex-col justify-between" id="cred-module-github">
+          <div className={clsx('bg-[#121420]', 'border', 'border-[#1e293b]/40', 'p-5', 'rounded', 'flex', 'flex-col', 'justify-between')} id="cred-module-github">
             <div>
-              <div className="flex items-center justify-between border-b border-[#1e293b]/40 pb-3 mb-4">
-                <div className="flex items-center gap-2">
-                  <GitBranch className="w-4 h-4 text-purple-400" />
-                  <h3 className="text-sm font-bold text-white font-mono uppercase tracking-wide">
+              <div className={clsx('flex', 'items-center', 'justify-between', 'border-b', 'border-[#1e293b]/40', 'pb-3', 'mb-4')}>
+                <div className={clsx('flex', 'items-center', 'gap-2')}>
+                  <GitBranch className={clsx('w-4', 'h-4', 'text-purple-400')} />
+                  <h3 className={clsx('text-sm', 'font-bold', 'text-white', 'font-mono', 'uppercase', 'tracking-wide')}>
                     [02] GitHub Actions CI/CD
                   </h3>
                 </div>
@@ -457,22 +457,22 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                   type="button"
                   onClick={() => testConnection("github")}
                   disabled={testStatus.github?.status === "loading" || !keys.GITHUB_TOKEN}
-                  className="text-[10px] font-mono bg-black/40 hover:bg-[#00b894]/20 border border-[#1e293b]/60 hover:border-[#00b894]/50 disabled:border-zinc-850 disabled:opacity-40 disabled:hover:bg-transparent text-slate-300 hover:text-[#00b894] py-1 px-2.5 rounded transition-all cursor-pointer flex items-center gap-1.5"
+                  className={clsx('text-[10px]', 'font-mono', 'bg-black/40', 'hover:bg-[#00b894]/20', 'border', 'border-[#1e293b]/60', 'hover:border-[#00b894]/50', 'disabled:border-zinc-850', 'disabled:opacity-40', 'disabled:hover:bg-transparent', 'text-slate-300', 'hover:text-[#00b894]', 'py-1', 'px-2.5', 'rounded', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'gap-1.5')}
                 >
                   {testStatus.github?.status === "loading" ? (
                     <>
-                      <RefreshCw className="w-3 h-3 animate-spin text-[#00b894]" />
+                      <RefreshCw className={clsx('w-3', 'h-3', 'animate-spin', 'text-[#00b894]')} />
                       TESTANDO...
                     </>
                   ) : (
                     <>
-                      <Sparkles className="w-3 h-3 text-[#00b894]" />
+                      <Sparkles className={clsx('w-3', 'h-3', 'text-[#00b894]')} />
                       TESTAR CONEXÃO
                     </>
                   )}
                 </button>
               </div>
-              <p className="text-[11px] text-slate-400 mb-4 font-sans leading-relaxed">
+              <p className={clsx('text-[11px]', 'text-slate-400', 'mb-4', 'font-sans', 'leading-relaxed')}>
                 Usado para consultar status de builds anteriores e disparar workflows automáticos de testes ou deployments.
               </p>
 
@@ -482,22 +482,22 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                     ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-400" 
                     : "bg-red-950/20 border-red-500/30 text-red-400"
                 }`}>
-                  <span className="font-bold flex items-center gap-1">
+                  <span className={clsx('font-bold', 'flex', 'items-center', 'gap-1')}>
                     {testStatus.github?.status === "success" ? "🟢 CONEXÃO REAL SUCESSO" : "🔴 CONEXÃO REAL FALHOU"}
                   </span>
-                  <p className="mt-1 text-[10px] opacity-90 leading-relaxed">{testStatus.github?.message}</p>
+                  <p className={clsx('mt-1', 'text-[10px]', 'opacity-90', 'leading-relaxed')}>{testStatus.github?.message}</p>
                 </div>
               )}
 
-              <div className="space-y-3 font-mono text-xs">
+              <div className={clsx('space-y-3', 'font-mono', 'text-xs')}>
                 {/* GITHUB_OWNER */}
                 <div className="space-y-1.5">
-                  <label className="text-slate-400 flex items-center justify-between">
+                  <label className={clsx('text-slate-400', 'flex', 'items-center', 'justify-between')}>
                     <span>GITHUB_OWNER (Nome do Usuário/Organização)</span>
                     {keys.GITHUB_OWNER ? (
-                      <span className="text-[9px] text-[#00b894] bg-[#00b894]/10 px-1.5 py-0.2 rounded border border-[#00b894]/20">DEFINIDO</span>
+                      <span className={clsx('text-[9px]', 'text-[#00b894]', 'bg-[#00b894]/10', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-[#00b894]/20')}>DEFINIDO</span>
                     ) : (
-                      <span className="text-[9px] text-amber-500 bg-amber-950/30 px-1.5 py-0.2 rounded border border-amber-900/50">VAZIO</span>
+                      <span className={clsx('text-[9px]', 'text-amber-500', 'bg-amber-950/30', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-amber-900/50')}>VAZIO</span>
                     )}
                   </label>
                   <input
@@ -505,18 +505,18 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                     value={keys.GITHUB_OWNER}
                     onChange={(e) => handleChange("GITHUB_OWNER", e.target.value)}
                     placeholder="Padrão: Georlan"
-                    className="w-full bg-[#090a0f]/60 border border-[#1e293b]/40 rounded py-2 px-3 text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-[#00b894] transition-all"
+                    className={clsx('w-full', 'bg-[#090a0f]/60', 'border', 'border-[#1e293b]/40', 'rounded', 'py-2', 'px-3', 'text-slate-200', 'placeholder:text-slate-600', 'focus:outline-none', 'focus:border-[#00b894]', 'transition-all')}
                   />
                 </div>
 
                 {/* GITHUB_REPO */}
                 <div className="space-y-1.5">
-                  <label className="text-slate-400 flex items-center justify-between">
+                  <label className={clsx('text-slate-400', 'flex', 'items-center', 'justify-between')}>
                     <span>GITHUB_REPO (Nome do Repositório)</span>
                     {keys.GITHUB_REPO ? (
-                      <span className="text-[9px] text-[#00b894] bg-[#00b894]/10 px-1.5 py-0.2 rounded border border-[#00b894]/20">DEFINIDO</span>
+                      <span className={clsx('text-[9px]', 'text-[#00b894]', 'bg-[#00b894]/10', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-[#00b894]/20')}>DEFINIDO</span>
                     ) : (
-                      <span className="text-[9px] text-amber-500 bg-amber-950/30 px-1.5 py-0.2 rounded border border-amber-900/50">VAZIO</span>
+                      <span className={clsx('text-[9px]', 'text-amber-500', 'bg-amber-950/30', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-amber-900/50')}>VAZIO</span>
                     )}
                   </label>
                   <input
@@ -524,18 +524,18 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                     value={keys.GITHUB_REPO}
                     onChange={(e) => handleChange("GITHUB_REPO", e.target.value)}
                     placeholder="Padrão: sistema-gourmet-bistro"
-                    className="w-full bg-[#090a0f]/60 border border-[#1e293b]/40 rounded py-2 px-3 text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-[#00b894] transition-all"
+                    className={clsx('w-full', 'bg-[#090a0f]/60', 'border', 'border-[#1e293b]/40', 'rounded', 'py-2', 'px-3', 'text-slate-200', 'placeholder:text-slate-600', 'focus:outline-none', 'focus:border-[#00b894]', 'transition-all')}
                   />
                 </div>
 
                 {/* GITHUB_TOKEN */}
                 <div className="space-y-1.5">
-                  <label className="text-slate-400 flex items-center justify-between">
+                  <label className={clsx('text-slate-400', 'flex', 'items-center', 'justify-between')}>
                     <span>GITHUB_TOKEN (Personal Access Token)</span>
                     {keys.GITHUB_TOKEN ? (
-                      <span className="text-[9px] text-[#00b894] bg-[#00b894]/10 px-1.5 py-0.2 rounded border border-[#00b894]/20">DEFINIDO</span>
+                      <span className={clsx('text-[9px]', 'text-[#00b894]', 'bg-[#00b894]/10', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-[#00b894]/20')}>DEFINIDO</span>
                     ) : (
-                      <span className="text-[9px] text-amber-500 bg-amber-950/30 px-1.5 py-0.2 rounded border border-amber-900/50">VAZIO</span>
+                      <span className={clsx('text-[9px]', 'text-amber-500', 'bg-amber-950/30', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-amber-900/50')}>VAZIO</span>
                     )}
                   </label>
                   <div className="relative">
@@ -553,14 +553,14 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                     <button
                       type="button"
                       onClick={() => handleToggleVisibility("GITHUB_TOKEN")}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 cursor-pointer"
+                      className={clsx('absolute', 'right-3', 'top-1/2', '-translate-y-1/2', 'text-slate-500', 'hover:text-slate-300', 'cursor-pointer')}
                     >
-                      {visibleKeys.GITHUB_TOKEN ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      {visibleKeys.GITHUB_TOKEN ? <EyeOff className={clsx('w-4', 'h-4')} /> : <Eye className={clsx('w-4', 'h-4')} />}
                     </button>
                   </div>
                   {validateField("GITHUB_TOKEN", keys.GITHUB_TOKEN) && (
-                    <span className="text-[10px] text-amber-500 mt-1 block flex items-center gap-1 font-sans">
-                      <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                    <span className={clsx('text-[10px]', 'text-amber-500', 'mt-1', 'block', 'flex', 'items-center', 'gap-1', 'font-sans')}>
+                      <AlertCircle className={clsx('w-3.5', 'h-3.5', 'text-amber-500', 'shrink-0')} />
                       {validateField("GITHUB_TOKEN", keys.GITHUB_TOKEN)}
                     </span>
                   )}
@@ -568,19 +568,19 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
               </div>
             </div>
             
-            <div className="mt-4 pt-3 border-t border-zinc-900 flex items-center gap-2 text-[10px] text-slate-500 font-sans">
-              <HelpCircle className="w-3.5 h-3.5 text-amber-500" />
+            <div className={clsx('mt-4', 'pt-3', 'border-t', 'border-zinc-900', 'flex', 'items-center', 'gap-2', 'text-[10px]', 'text-slate-500', 'font-sans')}>
+              <HelpCircle className={clsx('w-3.5', 'h-3.5', 'text-amber-500')} />
               <span>O token deve possuir permissões ativas para ler e disparar 'workflows' e 'actions'.</span>
             </div>
           </div>
 
           {/* Module 3: Railway */}
-          <div className="bg-[#121420] border border-[#1e293b]/40 p-5 rounded flex flex-col justify-between" id="cred-module-railway">
+          <div className={clsx('bg-[#121420]', 'border', 'border-[#1e293b]/40', 'p-5', 'rounded', 'flex', 'flex-col', 'justify-between')} id="cred-module-railway">
             <div>
-              <div className="flex items-center justify-between border-b border-[#1e293b]/40 pb-3 mb-4">
-                <div className="flex items-center gap-2">
-                  <Server className="w-4 h-4 text-rose-400" />
-                  <h3 className="text-sm font-bold text-white font-mono uppercase tracking-wide">
+              <div className={clsx('flex', 'items-center', 'justify-between', 'border-b', 'border-[#1e293b]/40', 'pb-3', 'mb-4')}>
+                <div className={clsx('flex', 'items-center', 'gap-2')}>
+                  <Server className={clsx('w-4', 'h-4', 'text-rose-400')} />
+                  <h3 className={clsx('text-sm', 'font-bold', 'text-white', 'font-mono', 'uppercase', 'tracking-wide')}>
                     [03] Railway Cloud Engine
                   </h3>
                 </div>
@@ -588,22 +588,22 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                   type="button"
                   onClick={() => testConnection("railway")}
                   disabled={testStatus.railway?.status === "loading" || !keys.RAILWAY_TOKEN || !keys.RAILWAY_PROJECT_ID || !keys.RAILWAY_SERVICE_ID}
-                  className="text-[10px] font-mono bg-black/40 hover:bg-[#00b894]/20 border border-[#1e293b]/60 hover:border-[#00b894]/50 disabled:border-zinc-850 disabled:opacity-40 disabled:hover:bg-transparent text-slate-300 hover:text-[#00b894] py-1 px-2.5 rounded transition-all cursor-pointer flex items-center gap-1.5"
+                  className={clsx('text-[10px]', 'font-mono', 'bg-black/40', 'hover:bg-[#00b894]/20', 'border', 'border-[#1e293b]/60', 'hover:border-[#00b894]/50', 'disabled:border-zinc-850', 'disabled:opacity-40', 'disabled:hover:bg-transparent', 'text-slate-300', 'hover:text-[#00b894]', 'py-1', 'px-2.5', 'rounded', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'gap-1.5')}
                 >
                   {testStatus.railway?.status === "loading" ? (
                     <>
-                      <RefreshCw className="w-3 h-3 animate-spin text-[#00b894]" />
+                      <RefreshCw className={clsx('w-3', 'h-3', 'animate-spin', 'text-[#00b894]')} />
                       TESTANDO...
                     </>
                   ) : (
                     <>
-                      <Sparkles className="w-3 h-3 text-[#00b894]" />
+                      <Sparkles className={clsx('w-3', 'h-3', 'text-[#00b894]')} />
                       TESTAR CONEXÃO
                     </>
                   )}
                 </button>
               </div>
-              <p className="text-[11px] text-slate-400 mb-4 font-sans leading-relaxed">
+              <p className={clsx('text-[11px]', 'text-slate-400', 'mb-4', 'font-sans', 'leading-relaxed')}>
                 Usado para carregar estatísticas reais de uso de recursos (CPU, RAM, conexões de banco) e registros operacionais de deploy.
               </p>
 
@@ -613,22 +613,22 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                     ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-400" 
                     : "bg-red-950/20 border-red-500/30 text-red-400"
                 }`}>
-                  <span className="font-bold flex items-center gap-1">
+                  <span className={clsx('font-bold', 'flex', 'items-center', 'gap-1')}>
                     {testStatus.railway?.status === "success" ? "🟢 CONEXÃO REAL SUCESSO" : "🔴 CONEXÃO REAL FALHOU"}
                   </span>
-                  <p className="mt-1 text-[10px] opacity-90 leading-relaxed">{testStatus.railway?.message}</p>
+                  <p className={clsx('mt-1', 'text-[10px]', 'opacity-90', 'leading-relaxed')}>{testStatus.railway?.message}</p>
                 </div>
               )}
 
-              <div className="space-y-3 font-mono text-xs">
+              <div className={clsx('space-y-3', 'font-mono', 'text-xs')}>
                 {/* RAILWAY_PROJECT_ID */}
                 <div className="space-y-1.5">
-                  <label className="text-slate-400 flex items-center justify-between">
+                  <label className={clsx('text-slate-400', 'flex', 'items-center', 'justify-between')}>
                     <span>RAILWAY_PROJECT_ID</span>
                     {keys.RAILWAY_PROJECT_ID ? (
-                      <span className="text-[9px] text-[#00b894] bg-[#00b894]/10 px-1.5 py-0.2 rounded border border-[#00b894]/20">DEFINIDO</span>
+                      <span className={clsx('text-[9px]', 'text-[#00b894]', 'bg-[#00b894]/10', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-[#00b894]/20')}>DEFINIDO</span>
                     ) : (
-                      <span className="text-[9px] text-amber-500 bg-amber-950/30 px-1.5 py-0.2 rounded border border-amber-900/50">VAZIO</span>
+                      <span className={clsx('text-[9px]', 'text-amber-500', 'bg-amber-950/30', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-amber-900/50')}>VAZIO</span>
                     )}
                   </label>
                   <input
@@ -643,8 +643,8 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                     }`}
                   />
                   {validateField("RAILWAY_PROJECT_ID", keys.RAILWAY_PROJECT_ID) && (
-                    <span className="text-[10px] text-amber-500 mt-1 block flex items-center gap-1 font-sans">
-                      <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                    <span className={clsx('text-[10px]', 'text-amber-500', 'mt-1', 'block', 'flex', 'items-center', 'gap-1', 'font-sans')}>
+                      <AlertCircle className={clsx('w-3.5', 'h-3.5', 'text-amber-500', 'shrink-0')} />
                       {validateField("RAILWAY_PROJECT_ID", keys.RAILWAY_PROJECT_ID)}
                     </span>
                   )}
@@ -652,12 +652,12 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
 
                 {/* RAILWAY_SERVICE_ID */}
                 <div className="space-y-1.5">
-                  <label className="text-slate-400 flex items-center justify-between">
+                  <label className={clsx('text-slate-400', 'flex', 'items-center', 'justify-between')}>
                     <span>RAILWAY_SERVICE_ID (ID do Serviço de Container)</span>
                     {keys.RAILWAY_SERVICE_ID ? (
-                      <span className="text-[9px] text-[#00b894] bg-[#00b894]/10 px-1.5 py-0.2 rounded border border-[#00b894]/20">DEFINIDO</span>
+                      <span className={clsx('text-[9px]', 'text-[#00b894]', 'bg-[#00b894]/10', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-[#00b894]/20')}>DEFINIDO</span>
                     ) : (
-                      <span className="text-[9px] text-amber-500 bg-amber-950/30 px-1.5 py-0.2 rounded border border-amber-900/50">VAZIO</span>
+                      <span className={clsx('text-[9px]', 'text-amber-500', 'bg-amber-950/30', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-amber-900/50')}>VAZIO</span>
                     )}
                   </label>
                   <input
@@ -672,8 +672,8 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                     }`}
                   />
                   {validateField("RAILWAY_SERVICE_ID", keys.RAILWAY_SERVICE_ID) && (
-                    <span className="text-[10px] text-amber-500 mt-1 block flex items-center gap-1 font-sans">
-                      <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                    <span className={clsx('text-[10px]', 'text-amber-500', 'mt-1', 'block', 'flex', 'items-center', 'gap-1', 'font-sans')}>
+                      <AlertCircle className={clsx('w-3.5', 'h-3.5', 'text-amber-500', 'shrink-0')} />
                       {validateField("RAILWAY_SERVICE_ID", keys.RAILWAY_SERVICE_ID)}
                     </span>
                   )}
@@ -681,12 +681,12 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
 
                 {/* RAILWAY_TOKEN */}
                 <div className="space-y-1.5">
-                  <label className="text-slate-400 flex items-center justify-between">
+                  <label className={clsx('text-slate-400', 'flex', 'items-center', 'justify-between')}>
                     <span>RAILWAY_TOKEN (Developer API Token)</span>
                     {keys.RAILWAY_TOKEN ? (
-                      <span className="text-[9px] text-[#00b894] bg-[#00b894]/10 px-1.5 py-0.2 rounded border border-[#00b894]/20">DEFINIDO</span>
+                      <span className={clsx('text-[9px]', 'text-[#00b894]', 'bg-[#00b894]/10', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-[#00b894]/20')}>DEFINIDO</span>
                     ) : (
-                      <span className="text-[9px] text-amber-500 bg-amber-950/30 px-1.5 py-0.2 rounded border border-amber-900/50">VAZIO</span>
+                      <span className={clsx('text-[9px]', 'text-amber-500', 'bg-amber-950/30', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-amber-900/50')}>VAZIO</span>
                     )}
                   </label>
                   <div className="relative">
@@ -704,14 +704,14 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                     <button
                       type="button"
                       onClick={() => handleToggleVisibility("RAILWAY_TOKEN")}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 cursor-pointer"
+                      className={clsx('absolute', 'right-3', 'top-1/2', '-translate-y-1/2', 'text-slate-500', 'hover:text-slate-300', 'cursor-pointer')}
                     >
-                      {visibleKeys.RAILWAY_TOKEN ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      {visibleKeys.RAILWAY_TOKEN ? <EyeOff className={clsx('w-4', 'h-4')} /> : <Eye className={clsx('w-4', 'h-4')} />}
                     </button>
                   </div>
                   {validateField("RAILWAY_TOKEN", keys.RAILWAY_TOKEN) && (
-                    <span className="text-[10px] text-amber-500 mt-1 block flex items-center gap-1 font-sans">
-                      <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                    <span className={clsx('text-[10px]', 'text-amber-500', 'mt-1', 'block', 'flex', 'items-center', 'gap-1', 'font-sans')}>
+                      <AlertCircle className={clsx('w-3.5', 'h-3.5', 'text-amber-500', 'shrink-0')} />
                       {validateField("RAILWAY_TOKEN", keys.RAILWAY_TOKEN)}
                     </span>
                   )}
@@ -719,19 +719,19 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
               </div>
             </div>
             
-            <div className="mt-4 pt-3 border-t border-zinc-900 flex items-center gap-2 text-[10px] text-slate-500 font-sans">
-              <HelpCircle className="w-3.5 h-3.5 text-amber-500" />
+            <div className={clsx('mt-4', 'pt-3', 'border-t', 'border-zinc-900', 'flex', 'items-center', 'gap-2', 'text-[10px]', 'text-slate-500', 'font-sans')}>
+              <HelpCircle className={clsx('w-3.5', 'h-3.5', 'text-amber-500')} />
               <span>O token deve ser gerado no painel de configurações de conta na Railway Cloud.</span>
             </div>
           </div>
 
           {/* Module 4: Sentry */}
-          <div className="bg-[#121420] border border-[#1e293b]/40 p-5 rounded flex flex-col justify-between" id="cred-module-sentry">
+          <div className={clsx('bg-[#121420]', 'border', 'border-[#1e293b]/40', 'p-5', 'rounded', 'flex', 'flex-col', 'justify-between')} id="cred-module-sentry">
             <div>
-              <div className="flex items-center justify-between border-b border-[#1e293b]/40 pb-3 mb-4">
-                <div className="flex items-center gap-2">
-                  <CloudLightning className="w-4 h-4 text-cyan-400" />
-                  <h3 className="text-sm font-bold text-white font-mono uppercase tracking-wide">
+              <div className={clsx('flex', 'items-center', 'justify-between', 'border-b', 'border-[#1e293b]/40', 'pb-3', 'mb-4')}>
+                <div className={clsx('flex', 'items-center', 'gap-2')}>
+                  <CloudLightning className={clsx('w-4', 'h-4', 'text-cyan-400')} />
+                  <h3 className={clsx('text-sm', 'font-bold', 'text-white', 'font-mono', 'uppercase', 'tracking-wide')}>
                     [04] Sentry Telemetry System
                   </h3>
                 </div>
@@ -739,22 +739,22 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                   type="button"
                   onClick={() => testConnection("sentry")}
                   disabled={testStatus.sentry?.status === "loading" || !keys.SENTRY_AUTH_TOKEN || !keys.SENTRY_ORG || !keys.SENTRY_PROJECT}
-                  className="text-[10px] font-mono bg-black/40 hover:bg-[#00b894]/20 border border-[#1e293b]/60 hover:border-[#00b894]/50 disabled:border-zinc-850 disabled:opacity-40 disabled:hover:bg-transparent text-slate-300 hover:text-[#00b894] py-1 px-2.5 rounded transition-all cursor-pointer flex items-center gap-1.5"
+                  className={clsx('text-[10px]', 'font-mono', 'bg-black/40', 'hover:bg-[#00b894]/20', 'border', 'border-[#1e293b]/60', 'hover:border-[#00b894]/50', 'disabled:border-zinc-850', 'disabled:opacity-40', 'disabled:hover:bg-transparent', 'text-slate-300', 'hover:text-[#00b894]', 'py-1', 'px-2.5', 'rounded', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'gap-1.5')}
                 >
                   {testStatus.sentry?.status === "loading" ? (
                     <>
-                      <RefreshCw className="w-3 h-3 animate-spin text-[#00b894]" />
+                      <RefreshCw className={clsx('w-3', 'h-3', 'animate-spin', 'text-[#00b894]')} />
                       TESTANDO...
                     </>
                   ) : (
                     <>
-                      <Sparkles className="w-3 h-3 text-[#00b894]" />
+                      <Sparkles className={clsx('w-3', 'h-3', 'text-[#00b894]')} />
                       TESTAR CONEXÃO
                     </>
                   )}
                 </button>
               </div>
-              <p className="text-[11px] text-slate-400 mb-4 font-sans leading-relaxed">
+              <p className={clsx('text-[11px]', 'text-slate-400', 'mb-4', 'font-sans', 'leading-relaxed')}>
                 Usado para carregar issues reais, erros ativos de produção, frequências de exceção e telemetria de logs.
               </p>
 
@@ -764,22 +764,22 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                     ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-400" 
                     : "bg-red-950/20 border-red-500/30 text-red-400"
                 }`}>
-                  <span className="font-bold flex items-center gap-1">
+                  <span className={clsx('font-bold', 'flex', 'items-center', 'gap-1')}>
                     {testStatus.sentry?.status === "success" ? "🟢 CONEXÃO REAL SUCESSO" : "🔴 CONEXÃO REAL FALHOU"}
                   </span>
-                  <p className="mt-1 text-[10px] opacity-90 leading-relaxed">{testStatus.sentry?.message}</p>
+                  <p className={clsx('mt-1', 'text-[10px]', 'opacity-90', 'leading-relaxed')}>{testStatus.sentry?.message}</p>
                 </div>
               )}
 
-              <div className="space-y-3 font-mono text-xs">
+              <div className={clsx('space-y-3', 'font-mono', 'text-xs')}>
                 {/* SENTRY_ORG */}
                 <div className="space-y-1.5">
-                  <label className="text-slate-400 flex items-center justify-between">
+                  <label className={clsx('text-slate-400', 'flex', 'items-center', 'justify-between')}>
                     <span>SENTRY_ORG (Apelido/Slug da Organização)</span>
                     {keys.SENTRY_ORG ? (
-                      <span className="text-[9px] text-[#00b894] bg-[#00b894]/10 px-1.5 py-0.2 rounded border border-[#00b894]/20">DEFINIDO</span>
+                      <span className={clsx('text-[9px]', 'text-[#00b894]', 'bg-[#00b894]/10', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-[#00b894]/20')}>DEFINIDO</span>
                     ) : (
-                      <span className="text-[9px] text-amber-500 bg-amber-950/30 px-1.5 py-0.2 rounded border border-amber-900/50">VAZIO</span>
+                      <span className={clsx('text-[9px]', 'text-amber-500', 'bg-amber-950/30', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-amber-900/50')}>VAZIO</span>
                     )}
                   </label>
                   <input
@@ -787,18 +787,18 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                     value={keys.SENTRY_ORG}
                     onChange={(e) => handleChange("SENTRY_ORG", e.target.value)}
                     placeholder="Ex: koma-saas"
-                    className="w-full bg-[#090a0f]/60 border border-[#1e293b]/40 rounded py-2 px-3 text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-[#00b894] transition-all"
+                    className={clsx('w-full', 'bg-[#090a0f]/60', 'border', 'border-[#1e293b]/40', 'rounded', 'py-2', 'px-3', 'text-slate-200', 'placeholder:text-slate-600', 'focus:outline-none', 'focus:border-[#00b894]', 'transition-all')}
                   />
                 </div>
 
                 {/* SENTRY_PROJECT */}
                 <div className="space-y-1.5">
-                  <label className="text-slate-400 flex items-center justify-between">
+                  <label className={clsx('text-slate-400', 'flex', 'items-center', 'justify-between')}>
                     <span>SENTRY_PROJECT (Slug do Projeto)</span>
                     {keys.SENTRY_PROJECT ? (
-                      <span className="text-[9px] text-[#00b894] bg-[#00b894]/10 px-1.5 py-0.2 rounded border border-[#00b894]/20">DEFINIDO</span>
+                      <span className={clsx('text-[9px]', 'text-[#00b894]', 'bg-[#00b894]/10', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-[#00b894]/20')}>DEFINIDO</span>
                     ) : (
-                      <span className="text-[9px] text-amber-500 bg-amber-950/30 px-1.5 py-0.2 rounded border border-amber-900/50">VAZIO</span>
+                      <span className={clsx('text-[9px]', 'text-amber-500', 'bg-amber-950/30', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-amber-900/50')}>VAZIO</span>
                     )}
                   </label>
                   <input
@@ -806,18 +806,18 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                     value={keys.SENTRY_PROJECT}
                     onChange={(e) => handleChange("SENTRY_PROJECT", e.target.value)}
                     placeholder="Ex: api-node-express"
-                    className="w-full bg-[#090a0f]/60 border border-[#1e293b]/40 rounded py-2 px-3 text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-[#00b894] transition-all"
+                    className={clsx('w-full', 'bg-[#090a0f]/60', 'border', 'border-[#1e293b]/40', 'rounded', 'py-2', 'px-3', 'text-slate-200', 'placeholder:text-slate-600', 'focus:outline-none', 'focus:border-[#00b894]', 'transition-all')}
                   />
                 </div>
 
                 {/* SENTRY_AUTH_TOKEN */}
                 <div className="space-y-1.5">
-                  <label className="text-slate-400 flex items-center justify-between">
+                  <label className={clsx('text-slate-400', 'flex', 'items-center', 'justify-between')}>
                     <span>SENTRY_AUTH_TOKEN</span>
                     {keys.SENTRY_AUTH_TOKEN ? (
-                      <span className="text-[9px] text-[#00b894] bg-[#00b894]/10 px-1.5 py-0.2 rounded border border-[#00b894]/20">DEFINIDO</span>
+                      <span className={clsx('text-[9px]', 'text-[#00b894]', 'bg-[#00b894]/10', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-[#00b894]/20')}>DEFINIDO</span>
                     ) : (
-                      <span className="text-[9px] text-amber-500 bg-amber-950/30 px-1.5 py-0.2 rounded border border-amber-900/50">VAZIO</span>
+                      <span className={clsx('text-[9px]', 'text-amber-500', 'bg-amber-950/30', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-amber-900/50')}>VAZIO</span>
                     )}
                   </label>
                   <div className="relative">
@@ -835,14 +835,14 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                     <button
                       type="button"
                       onClick={() => handleToggleVisibility("SENTRY_AUTH_TOKEN")}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 cursor-pointer"
+                      className={clsx('absolute', 'right-3', 'top-1/2', '-translate-y-1/2', 'text-slate-500', 'hover:text-slate-300', 'cursor-pointer')}
                     >
-                      {visibleKeys.SENTRY_AUTH_TOKEN ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      {visibleKeys.SENTRY_AUTH_TOKEN ? <EyeOff className={clsx('w-4', 'h-4')} /> : <Eye className={clsx('w-4', 'h-4')} />}
                     </button>
                   </div>
                   {validateField("SENTRY_AUTH_TOKEN", keys.SENTRY_AUTH_TOKEN) && (
-                    <span className="text-[10px] text-amber-500 mt-1 block flex items-center gap-1 font-sans">
-                      <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                    <span className={clsx('text-[10px]', 'text-amber-500', 'mt-1', 'block', 'flex', 'items-center', 'gap-1', 'font-sans')}>
+                      <AlertCircle className={clsx('w-3.5', 'h-3.5', 'text-amber-500', 'shrink-0')} />
                       {validateField("SENTRY_AUTH_TOKEN", keys.SENTRY_AUTH_TOKEN)}
                     </span>
                   )}
@@ -850,34 +850,34 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
               </div>
             </div>
             
-            <div className="mt-4 pt-3 border-t border-zinc-900 flex items-center gap-2 text-[10px] text-slate-500 font-sans">
-              <HelpCircle className="w-3.5 h-3.5 text-amber-500" />
+            <div className={clsx('mt-4', 'pt-3', 'border-t', 'border-zinc-900', 'flex', 'items-center', 'gap-2', 'text-[10px]', 'text-slate-500', 'font-sans')}>
+              <HelpCircle className={clsx('w-3.5', 'h-3.5', 'text-amber-500')} />
               <span>O token Sentry deve ser do tipo "Internal Integration" ou "User Auth Token".</span>
             </div>
           </div>
 
           {/* Module 5: Supabase */}
-          <div className="bg-[#121420] border border-[#1e293b]/40 p-5 rounded lg:col-span-2 flex flex-col justify-between" id="cred-module-supabase">
+          <div className={clsx('bg-[#121420]', 'border', 'border-[#1e293b]/40', 'p-5', 'rounded', 'lg:col-span-2', 'flex', 'flex-col', 'justify-between')} id="cred-module-supabase">
             <div>
-              <div className="flex items-center gap-2 border-b border-[#1e293b]/40 pb-3 mb-4">
-                <Database className="w-4 h-4 text-emerald-400" />
-                <h3 className="text-sm font-bold text-white font-mono uppercase tracking-wide">
+              <div className={clsx('flex', 'items-center', 'gap-2', 'border-b', 'border-[#1e293b]/40', 'pb-3', 'mb-4')}>
+                <Database className={clsx('w-4', 'h-4', 'text-emerald-400')} />
+                <h3 className={clsx('text-sm', 'font-bold', 'text-white', 'font-mono', 'uppercase', 'tracking-wide')}>
                   [05] Supabase / PostgreSQL Client API
                 </h3>
               </div>
-              <p className="text-[11px] text-slate-400 mb-4 font-sans leading-relaxed">
+              <p className={clsx('text-[11px]', 'text-slate-400', 'mb-4', 'font-sans', 'leading-relaxed')}>
                 Configure a URL e a chave de API (anon/service) do Supabase para conectar à base PostgreSQL real. Caso as credenciais não estejam corretas, o gateway de dados reverte automaticamente para o modo resiliente de alta-fidelidade local, impedindo falhas em tela.
               </p>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-mono text-xs">
+              <div className={clsx('grid', 'grid-cols-1', 'md:grid-cols-2', 'gap-4', 'font-mono', 'text-xs')}>
                 {/* SUPABASE_URL */}
                 <div className="space-y-1.5">
-                  <label className="text-slate-400 flex items-center justify-between">
+                  <label className={clsx('text-slate-400', 'flex', 'items-center', 'justify-between')}>
                     <span>SUPABASE_URL</span>
                     {keys.SUPABASE_URL ? (
-                      <span className="text-[9px] text-[#00b894] bg-[#00b894]/10 px-1.5 py-0.2 rounded border border-[#00b894]/20">DEFINIDO</span>
+                      <span className={clsx('text-[9px]', 'text-[#00b894]', 'bg-[#00b894]/10', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-[#00b894]/20')}>DEFINIDO</span>
                     ) : (
-                      <span className="text-[9px] text-amber-500 bg-amber-950/30 px-1.5 py-0.2 rounded border border-amber-900/50">VAZIO</span>
+                      <span className={clsx('text-[9px]', 'text-amber-500', 'bg-amber-950/30', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-amber-900/50')}>VAZIO</span>
                     )}
                   </label>
                   <input
@@ -892,8 +892,8 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                     }`}
                   />
                   {validateField("SUPABASE_URL", keys.SUPABASE_URL) && (
-                    <span className="text-[10px] text-amber-500 mt-1 block flex items-center gap-1 font-sans">
-                      <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                    <span className={clsx('text-[10px]', 'text-amber-500', 'mt-1', 'block', 'flex', 'items-center', 'gap-1', 'font-sans')}>
+                      <AlertCircle className={clsx('w-3.5', 'h-3.5', 'text-amber-500', 'shrink-0')} />
                       {validateField("SUPABASE_URL", keys.SUPABASE_URL)}
                     </span>
                   )}
@@ -901,12 +901,12 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
 
                 {/* SUPABASE_KEY */}
                 <div className="space-y-1.5">
-                  <label className="text-slate-400 flex items-center justify-between">
+                  <label className={clsx('text-slate-400', 'flex', 'items-center', 'justify-between')}>
                     <span>SUPABASE_KEY (anon key ou service_role key)</span>
                     {keys.SUPABASE_KEY ? (
-                      <span className="text-[9px] text-[#00b894] bg-[#00b894]/10 px-1.5 py-0.2 rounded border border-[#00b894]/20">DEFINIDO</span>
+                      <span className={clsx('text-[9px]', 'text-[#00b894]', 'bg-[#00b894]/10', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-[#00b894]/20')}>DEFINIDO</span>
                     ) : (
-                      <span className="text-[9px] text-amber-500 bg-amber-950/30 px-1.5 py-0.2 rounded border border-amber-900/50">VAZIO</span>
+                      <span className={clsx('text-[9px]', 'text-amber-500', 'bg-amber-950/30', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-amber-900/50')}>VAZIO</span>
                     )}
                   </label>
                   <div className="relative">
@@ -915,14 +915,14 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                       value={keys.SUPABASE_KEY}
                       onChange={(e) => handleChange("SUPABASE_KEY", e.target.value)}
                       placeholder="Chave de API pública ou privada"
-                      className="w-full bg-[#090a0f]/60 border border-[#1e293b]/40 rounded py-2 pl-3 pr-10 text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-[#00b894] transition-all"
+                      className={clsx('w-full', 'bg-[#090a0f]/60', 'border', 'border-[#1e293b]/40', 'rounded', 'py-2', 'pl-3', 'pr-10', 'text-slate-200', 'placeholder:text-slate-600', 'focus:outline-none', 'focus:border-[#00b894]', 'transition-all')}
                     />
                     <button
                       type="button"
                       onClick={() => handleToggleVisibility("SUPABASE_KEY")}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 cursor-pointer"
+                      className={clsx('absolute', 'right-3', 'top-1/2', '-translate-y-1/2', 'text-slate-500', 'hover:text-slate-300', 'cursor-pointer')}
                     >
-                      {visibleKeys.SUPABASE_KEY ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      {visibleKeys.SUPABASE_KEY ? <EyeOff className={clsx('w-4', 'h-4')} /> : <Eye className={clsx('w-4', 'h-4')} />}
                     </button>
                   </div>
                 </div>
@@ -933,18 +933,18 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
         </div>
 
         {/* Save Controls Panel */}
-        <div className="bg-[#121420] border border-[#1e293b]/40 p-4 rounded flex items-center justify-between gap-4 flex-wrap" id="credentials-actions-panel">
-          <div className="text-[10px] font-mono text-slate-500 flex items-center gap-1.5 bg-black/30 py-2 px-3 rounded border border-zinc-900/55 max-w-lg">
-            <Sparkles className="w-3.5 h-3.5 text-[#00b894] animate-pulse" />
+        <div className={clsx('bg-[#121420]', 'border', 'border-[#1e293b]/40', 'p-4', 'rounded', 'flex', 'items-center', 'justify-between', 'gap-4', 'flex-wrap')} id="credentials-actions-panel">
+          <div className={clsx('text-[10px]', 'font-mono', 'text-slate-500', 'flex', 'items-center', 'gap-1.5', 'bg-black/30', 'py-2', 'px-3', 'rounded', 'border', 'border-zinc-900/55', 'max-w-lg')}>
+            <Sparkles className={clsx('w-3.5', 'h-3.5', 'text-[#00b894]', 'animate-pulse')} />
             <span>As credenciais salvas entram em operação imediatamente após a confirmação do processo de persistência do servidor.</span>
           </div>
           
           <button
             type="submit"
             disabled={isSaving}
-            className="bg-[#00b894] hover:bg-[#00b894]/80 text-black font-bold font-mono text-xs px-6 py-2.5 rounded cursor-pointer transition-all flex items-center gap-2 shadow-[0_0_12px_rgba(16,185,129,0.3)] hover:shadow-[0_0_20px_rgba(16,185,129,0.4)] disabled:opacity-50"
+            className={clsx('bg-[#00b894]', 'hover:bg-[#00b894]/80', 'text-black', 'font-bold', 'font-mono', 'text-xs', 'px-6', 'py-2.5', 'rounded', 'cursor-pointer', 'transition-all', 'flex', 'items-center', 'gap-2', 'shadow-[0_0_12px_rgba(16,185,129,0.3)]', 'hover:shadow-[0_0_20px_rgba(16,185,129,0.4)]', 'disabled:opacity-50')}
           >
-            <Save className="w-4 h-4" />
+            <Save className={clsx('w-4', 'h-4')} />
             {isSaving ? "SALVANDO CHAVES..." : "SALVAR TODAS AS CHAVES"}
           </button>
         </div>
@@ -953,49 +953,49 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
 
       {/* Safety Confirmation / Warning Overlay modal */}
       {showWarningModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="bg-[#0b0c13] border-2 border-red-500/60 w-full max-w-xl p-6 rounded-lg shadow-[0_0_50px_rgba(239,68,68,0.25)] flex flex-col gap-4">
+        <div className={clsx('fixed', 'inset-0', 'z-50', 'flex', 'items-center', 'justify-center', 'bg-black/80', 'backdrop-blur-sm', 'p-4', 'animate-fadeIn')}>
+          <div className={clsx('bg-[#0b0c13]', 'border-2', 'border-red-500/60', 'w-full', 'max-w-xl', 'p-6', 'rounded-lg', 'shadow-[0_0_50px_rgba(239,68,68,0.25)]', 'flex', 'flex-col', 'gap-4')}>
             
-            <div className="flex items-start gap-3.5 border-b border-[#1e293b]/40 pb-4">
-              <div className="p-2.5 bg-red-950/40 rounded border border-red-500/30">
-                <AlertTriangle className="w-6 h-6 text-red-500 animate-pulse" />
+            <div className={clsx('flex', 'items-start', 'gap-3.5', 'border-b', 'border-[#1e293b]/40', 'pb-4')}>
+              <div className={clsx('p-2.5', 'bg-red-950/40', 'rounded', 'border', 'border-red-500/30')}>
+                <AlertTriangle className={clsx('w-6', 'h-6', 'text-red-500', 'animate-pulse')} />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-white font-mono uppercase tracking-wide">
+                <h3 className={clsx('text-sm', 'font-bold', 'text-white', 'font-mono', 'uppercase', 'tracking-wide')}>
                   ⚠️ CONFIRMAÇÃO DE GRAVAÇÃO COM INCONSISTÊNCIAS
                 </h3>
-                <p className="text-[11px] text-slate-400 font-sans mt-1">
+                <p className={clsx('text-[11px]', 'text-slate-400', 'font-sans', 'mt-1')}>
                   O sistema identificou um ou mais campos com formatação suspeita que sabidamente impedirão a conexão real com as APIs externas.
                 </p>
               </div>
             </div>
 
-            <div className="bg-[#121420] border border-[#1e293b]/40 p-3.5 rounded text-xs font-mono max-h-52 overflow-y-auto space-y-2.5">
+            <div className={clsx('bg-[#121420]', 'border', 'border-[#1e293b]/40', 'p-3.5', 'rounded', 'text-xs', 'font-mono', 'max-h-52', 'overflow-y-auto', 'space-y-2.5')}>
               {pendingWarnings.map((warning, idx) => (
-                <div key={idx} className="flex gap-2 text-amber-400 bg-amber-950/20 p-2 rounded border border-amber-500/20">
-                  <AlertCircle className="w-4 h-4 shrink-0 text-amber-500" />
+                <div key={idx} className={clsx('flex', 'gap-2', 'text-amber-400', 'bg-amber-950/20', 'p-2', 'rounded', 'border', 'border-amber-500/20')}>
+                  <AlertCircle className={clsx('w-4', 'h-4', 'shrink-0', 'text-amber-500')} />
                   <div>
-                    <span className="font-bold text-[10px] uppercase block text-slate-400">{warning.key}</span>
-                    <span className="text-[11px] leading-relaxed block mt-0.5">{warning.message}</span>
+                    <span className={clsx('font-bold', 'text-[10px]', 'uppercase', 'block', 'text-slate-400')}>{warning.key}</span>
+                    <span className={clsx('text-[11px]', 'leading-relaxed', 'block', 'mt-0.5')}>{warning.message}</span>
                   </div>
                 </div>
               ))}
             </div>
 
-            <div className="p-3 bg-black/40 border border-zinc-900 rounded text-[10px] text-slate-400 leading-relaxed font-sans">
+            <div className={clsx('p-3', 'bg-black/40', 'border', 'border-zinc-900', 'rounded', 'text-[10px]', 'text-slate-400', 'leading-relaxed', 'font-sans')}>
               <strong>Impacto do Salvamento:</strong> Ao persistir valores inválidos, placeholders como "test", ou hashes truncados, o Painel do Orquestrador de Infra [04] entrará em modo de ERRO EXPLÍCITO DE CONEXÃO e desativará os gráficos e fluxos em tempo real.
             </div>
 
-            <div className="flex items-center justify-end gap-3 font-mono text-xs mt-2">
+            <div className={clsx('flex', 'items-center', 'justify-end', 'gap-3', 'font-mono', 'text-xs', 'mt-2')}>
               <button
                 onClick={() => setShowWarningModal(false)}
-                className="bg-black hover:bg-zinc-900 text-slate-300 hover:text-white border border-[#1e293b] py-2 px-4 rounded cursor-pointer transition-all"
+                className={clsx('bg-black', 'hover:bg-zinc-900', 'text-slate-300', 'hover:text-white', 'border', 'border-[#1e293b]', 'py-2', 'px-4', 'rounded', 'cursor-pointer', 'transition-all')}
               >
                 CANCELAR E CORRIGIR
               </button>
               <button
                 onClick={confirmAndSave}
-                className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded cursor-pointer transition-all shadow-[0_0_15px_rgba(239,68,68,0.4)]"
+                className={clsx('bg-red-600', 'hover:bg-red-700', 'text-white', 'font-bold', 'py-2', 'px-4', 'rounded', 'cursor-pointer', 'transition-all', 'shadow-[0_0_15px_rgba(239,68,68,0.4)]')}
               >
                 FORÇAR SALVAMENTO (SALVAR ASSIM MESMO)
               </button>
