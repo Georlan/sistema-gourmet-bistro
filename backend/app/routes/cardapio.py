@@ -201,26 +201,30 @@ def criar_pedido_online(
 def identificar_cliente(payload: CardapioIdentificarRequest, db: Session = Depends(get_db)):
     telefone_clean = limpar_telefone(payload.telefone)
     
-    cliente = db.query(Cliente).filter(
-        Cliente.restaurante_id == payload.restaurante_id,
-        Cliente.telefone == telefone_clean
-    ).first()
-    
-    if cliente:
-        # LGPD: Retorna dados mascarados e omite saldos reais antes da validação OTP
-        nome_mascarado = mascarar_nome(cliente.nome)
-        endereco_mascarado = mascarar_endereco(cliente.endereco)
-        telefone_mascarado = formatar_e_mascarar_telefone(cliente.telefone)
-        return {
-            "exists": True,
-            "nome_mascarado": nome_mascarado,
-            "endereco_mascarado": endereco_mascarado,
-            "telefone_mascarado": telefone_mascarado
-        }
-    else:
-        return {
-            "exists": False
-        }
+    token_context = current_restaurante_id.set(payload.restaurante_id)
+    try:
+        cliente = db.query(Cliente).filter(
+            Cliente.restaurante_id == payload.restaurante_id,
+            Cliente.telefone == telefone_clean
+        ).first()
+        
+        if cliente:
+            # LGPD: Retorna dados mascarados e omite saldos reais antes da validação OTP
+            nome_mascarado = mascarar_nome(cliente.nome)
+            endereco_mascarado = mascarar_endereco(cliente.endereco)
+            telefone_mascarado = formatar_e_mascarar_telefone(cliente.telefone)
+            return {
+                "exists": True,
+                "nome_mascarado": nome_mascarado,
+                "endereco_mascarado": endereco_mascarado,
+                "telefone_mascarado": telefone_mascarado
+            }
+        else:
+            return {
+                "exists": False
+            }
+    finally:
+        current_restaurante_id.reset(token_context)
 
 
 @router.post("/enviar-otp")
@@ -278,23 +282,27 @@ def verificar_otp(payload: CardapioVerificarOtpRequest, db: Session = Depends(ge
     # OTP validado com sucesso! Remove do cache para segurança (uso único)
     otp_store.pop((payload.restaurante_id, telefone_clean), None)
     
-    # Buscar cliente no banco e retornar os dados reais sem máscara (LGPD)
-    cliente = db.query(Cliente).filter(
-        Cliente.restaurante_id == payload.restaurante_id,
-        Cliente.telefone == telefone_clean
-    ).first()
-    
-    if cliente:
-        return {
-            "success": True,
-            "nome": cliente.nome,
-            "endereco": cliente.endereco,
-            "telefone": cliente.telefone,
-            "saldo_pontos": cliente.saldo_pontos,
-            "saldo_cashback": cliente.saldo_cashback
-        }
-    else:
-        return {
-            "success": True,
-            "is_new": True
-        }
+    token_context = current_restaurante_id.set(payload.restaurante_id)
+    try:
+        # Buscar cliente no banco e retornar os dados reais sem máscara (LGPD)
+        cliente = db.query(Cliente).filter(
+            Cliente.restaurante_id == payload.restaurante_id,
+            Cliente.telefone == telefone_clean
+        ).first()
+        
+        if cliente:
+            return {
+                "success": True,
+                "nome": cliente.nome,
+                "endereco": cliente.endereco,
+                "telefone": cliente.telefone,
+                "saldo_pontos": cliente.saldo_pontos,
+                "saldo_cashback": cliente.saldo_cashback
+            }
+        else:
+            return {
+                "success": True,
+                "is_new": True
+            }
+    finally:
+        current_restaurante_id.reset(token_context)

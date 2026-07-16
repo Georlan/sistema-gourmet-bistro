@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from .config import settings
 from .database import engine, Base, current_restaurante_id
-from .routes import auth, products, tables, orders, websocket, caixa, optimization, estoque, cardapio, super_admin
+from .routes import auth, products, tables, orders, websocket, caixa, optimization, estoque, cardapio, super_admin, ai
 
 # Inicializa o Sentry antes de qualquer coisa no app
 sentry_sdk.init(
@@ -269,6 +269,7 @@ app.include_router(optimization.router)
 app.include_router(estoque.router)
 app.include_router(cardapio.router)
 app.include_router(super_admin.router, prefix="/api")
+app.include_router(ai.router, prefix="/api")
 
 
 @app.get("/")

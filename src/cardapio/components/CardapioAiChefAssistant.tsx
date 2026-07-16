@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Sparkles, Send, X, Bot, Loader2, ArrowRight } from "lucide-react";
 import { BrandConfig } from "../CardapioTypes";
+import { API_BASE_URL } from "../../config/api";
 
 interface CardapioAiChefAssistantProps {
   activeBrand: BrandConfig;
@@ -52,7 +53,7 @@ export default function CardapioAiChefAssistant({ activeBrand }: CardapioAiChefA
 
     try {
       // Send chat request to our server-side API route (keeping keys hidden!)
-      const response = await fetch("/api/chat-waiter", {
+      const response = await fetch(`${API_BASE_URL}/api/chat-waiter`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
