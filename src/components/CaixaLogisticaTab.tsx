@@ -1,13 +1,6 @@
 import React from 'react';
 import clsx from 'clsx';
-import { SimulatedDeliveryOrder } from './CaixaPanel';
-
-export interface Motoboy {
-  id: number;
-  nome: string;
-  telefone: string;
-  ativo: boolean;
-}
+import { SimulatedDeliveryOrder, Motoboy } from '../types';
 
 export interface CaixaLogisticaTabProps {
   simulatedOrders: SimulatedDeliveryOrder[];

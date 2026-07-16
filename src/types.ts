@@ -117,3 +117,70 @@ export interface Pagamento {
   metodo: 'dinheiro' | 'pix' | 'cartao';
   criado_em: string;
 }
+
+export interface Courier {
+  id: number;
+  nome: string;
+  telefone: string;
+  placa: string;
+  status: 'disponivel' | 'em_entrega' | 'indisponivel';
+  corridas: number;
+}
+
+export interface DeliveryZone {
+  id: number;
+  bairro: string;
+  taxa: number;
+  tempo: string;
+}
+
+export interface AccountItem {
+  id: number;
+  descricao: string;
+  valor: number;
+  vencimento: string;
+  status: 'pago' | 'pendente' | 'atrasado';
+  tipo: 'pagar' | 'receber';
+}
+
+export interface SimulatedDeliveryOrder {
+  id: string;
+  cliente: string;
+  telefone: string;
+  itens: string;
+  total: number;
+  canal: 'ifood' | 'site' | 'whats';
+  status: 'pendente' | 'analise' | 'producao' | 'pronto' | 'transito';
+  endereco?: string;
+  criadoEm: string;
+  pagoOnline?: boolean;
+  mesaId?: number;
+}
+
+export interface SystemUser {
+  id: string;
+  nome: string;
+  usuario: string;
+  role: string;
+}
+
+export interface BotChatMessage {
+  sender: 'user' | 'bot';
+  text: string;
+  timestamp: string;
+}
+
+export interface Motoboy {
+  id: number;
+  nome: string;
+  telefone: string;
+  ativo: boolean;
+}
+
+export interface PdvCartItem {
+  product: Product;
+  quantity: number;
+  obs: string;
+  client: string;
+}
+

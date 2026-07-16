@@ -21,6 +21,9 @@ backend/print_jobs/
 *.db-shm
 *.db-wal
 
+# Pastas de rascunho / indexação temporária
+scratch/
+
 # Arquivos de variáveis de ambiente/senhas
 .env
 .env.local

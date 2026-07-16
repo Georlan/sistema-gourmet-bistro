@@ -7,11 +7,15 @@ import {
   MessageSquare, Send, Printer, Cpu, HelpCircle, Smartphone,
   Gift, Tag, TrendingUp, Heart, Globe
 } from 'lucide-react';
-import { Order, OrderItem, CaixaTurno, CaixaMovimentacao, Pagamento, Table, Product } from '../types';
+import { Order, OrderItem, CaixaTurno, CaixaMovimentacao, Pagamento, Table, Product, SimulatedDeliveryOrder, DeliveryZone, SystemUser, BotChatMessage } from '../types';
 import { PRODUCTS, CATEGORIES } from '../data';
 import { getProductPresets } from '../domain';
 import clsx from 'clsx';
 import { CaixaLogisticaTab } from './CaixaLogisticaTab';
+import { CaixaSalaoTab } from './CaixaSalaoTab';
+import { CaixaBalcaoTab } from './CaixaBalcaoTab';
+import { CaixaKanbanBoard } from './CaixaKanbanBoard';
+import * as API from '../config/caixaService';
 
 interface CaixaPanelProps {
   orders: Order[];
@@ -29,59 +33,6 @@ interface CaixaPanelProps {
   liveProdutos?: Product[];
   liveCategorias?: any[];
   onRefreshCategorias?: () => Promise<void>;
-}
-
-// Simulated dynamic lists for tabs that don't need real backend persistence yet
-interface Courier {
-  id: number;
-  nome: string;
-  telefone: string;
-  placa: string;
-  status: 'disponivel' | 'em_entrega' | 'indisponivel';
-  corridas: number;
-}
-
-interface DeliveryZone {
-  id: number;
-  bairro: string;
-  taxa: number;
-  tempo: string;
-}
-
-interface AccountItem {
-  id: number;
-  descricao: string;
-  valor: number;
-  vencimento: string;
-  status: 'pago' | 'pendente' | 'atrasado';
-  tipo: 'pagar' | 'receber';
-}
-
-export interface SimulatedDeliveryOrder {
-  id: string;
-  cliente: string;
-  telefone: string;
-  itens: string;
-  total: number;
-  canal: 'ifood' | 'site' | 'whats';
-  status: 'pendente' | 'analise' | 'producao' | 'pronto' | 'transito';
-  endereco?: string;
-  criadoEm: string;
-  pagoOnline?: boolean;
-  mesaId?: number;
-}
-
-interface SystemUser {
-  id: string;
-  nome: string;
-  usuario: string;
-  role: string;
-}
-
-interface BotChatMessage {
-  sender: 'user' | 'bot';
-  text: string;
-  timestamp: string;
 }
 
 export function CaixaPanel({
@@ -222,13 +173,59 @@ export function CaixaPanel({
     return list;
   })();
 
-  // Group tableOrdersReady by mesaId to join multiple orders from the same table (disabled/desmembrado according to business rules)
   const groupedTableOrdersReady = (() => {
-    return tableOrdersReady.map(order => ({
-      ...order,
-      isGrouped: false,
-      originalOrders: [order]
-    }));
+    const groups: Record<number, any[]> = {};
+    tableOrdersReady.forEach(order => {
+      if (!order.mesaId) return;
+      if (!groups[order.mesaId]) {
+        groups[order.mesaId] = [];
+      }
+      groups[order.mesaId].push(order);
+    });
+
+    const list: any[] = [];
+    Object.entries(groups).forEach(([mesaIdStr, ordersList]) => {
+      const mId = parseInt(mesaIdStr);
+      if (ordersList.length > 1) {
+        const allItems: any[] = [];
+        ordersList.forEach(o => {
+          allItems.push(...o.itens);
+        });
+
+        const contaPedida = ordersList.some(o => o.contaPedida);
+        const temItensEmPreparo = ordersList.some(o => o.temItensEmPreparo);
+        const valorPago = ordersList.reduce((acc, o) => acc + (o.valorPago || 0), 0);
+        const garcomSet = new Set<string>();
+        ordersList.forEach(o => {
+          if (o.garcomNome) garcomSet.add(o.garcomNome);
+        });
+        const garcomNome = garcomSet.size > 0 ? Array.from(garcomSet).join(', ') : 'Garçom';
+
+        list.push({
+          id: `grouped-mesa-${mId}`,
+          mesaId: mId,
+          mesaOrigemId: ordersList[0].mesaOrigemId,
+          mesaTransferidaDe: ordersList[0].mesaTransferidaDe,
+          identificador: `Consumo Mesa ${mId}`,
+          garcomNome: garcomNome,
+          tipo: 'Consumo no Local',
+          valorPago: valorPago,
+          itens: allItems,
+          contaPedida: contaPedida,
+          temItensEmPreparo: temItensEmPreparo,
+          isGrouped: true,
+          originalOrders: ordersList
+        });
+      } else {
+        list.push({
+          ...ordersList[0],
+          isGrouped: false,
+          originalOrders: ordersList
+        });
+      }
+    });
+
+    return list;
   })();
 
   const handleTabChange = (tabId: 'dashboard' | 'operacao' | 'cardapio' | 'estoque' | 'financeiro' | 'clientes' | 'relatorios' | 'robo_ia' | 'configuracoes') => {
@@ -296,14 +293,7 @@ export function CaixaPanel({
   const handleSaveFidelityConfig = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${apiBaseUrl}/fidelidade/config`, {
-        method: 'POST',
-        headers: {
-          ...authHeaders,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(fidelidadeConfig)
-      });
+      const res = await API.saveFidelityConfig(apiBaseUrl, authHeaders, fidelidadeConfig);
       if (res.ok) {
         alert('Configurações do Programa de Fidelidade salvas com sucesso!');
       } else {
@@ -501,14 +491,7 @@ export function CaixaPanel({
     perm_garcom_ociosas?: boolean;
   }) => {
     try {
-      const res = await fetch(`${apiBaseUrl}/caixa/configuracoes`, {
-        method: 'PUT',
-        headers: {
-          ...authHeaders,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(updates)
-      });
+      const res = await API.updateCaixaConfiguracoes(apiBaseUrl, authHeaders, updates);
       if (res.ok) {
         const data = await res.json();
         setCheckoutServiceTax(data.taxa_servico_ativa);
@@ -630,6 +613,13 @@ export function CaixaPanel({
   const [simulatedOrders, setSimulatedOrders] = useState<SimulatedDeliveryOrder[]>([]);
   const [motoboys, setMotoboys] = useState<any[]>([]);
   const [selectedMotoboys, setSelectedMotoboys] = useState<{ [orderId: string]: string }>({});
+  const activeMotoboysList = motoboys && motoboys.length > 0
+    ? motoboys.filter((m: any) => m.ativo)
+    : [
+        { id: 1, nome: 'Pedro Silva', ativo: true },
+        { id: 2, nome: 'Carlos Roberto', ativo: true },
+        { id: 3, nome: 'Marcos Junior', ativo: true }
+      ];
   const [novoMotoboyNome, setNovoMotoboyNome] = useState('');
   const [novoMotoboyTelefone, setNovoMotoboyTelefone] = useState('');
 
@@ -733,7 +723,7 @@ export function CaixaPanel({
 
   const fetchDeliveryOrders = async () => {
     try {
-      const res = await fetch(`${apiBaseUrl}/comandas/delivery/ativos`, { headers: authHeaders });
+      const res = await API.getActiveDeliveryOrders(apiBaseUrl, authHeaders);
       if (res.ok) {
         const data = await res.json();
         const mapped = data.map(mapComandaToSimulatedDelivery);
@@ -755,7 +745,7 @@ export function CaixaPanel({
 
   const fetchMotoboys = async () => {
     try {
-      const res = await fetch(`${apiBaseUrl}/comandas/motoboys/lista`, { headers: authHeaders });
+      const res = await API.getMotoboysLista(apiBaseUrl, authHeaders);
       if (res.ok) {
         const data = await res.json();
         setMotoboys(data);
@@ -797,10 +787,7 @@ export function CaixaPanel({
     if (isLoading) return;
     setIsLoading(true);
     try {
-      const res = await fetch(`${apiBaseUrl}/comandas/${orderId}/delivery/status?status_novo=${statusNovo}`, {
-        method: 'PUT',
-        headers: authHeaders
-      });
+      const res = await API.updateDeliveryStatus(apiBaseUrl, authHeaders, orderId, statusNovo);
       if (res.ok) {
         fetchDeliveryOrders();
       } else {
@@ -819,14 +806,8 @@ export function CaixaPanel({
     if (!confirm('Deseja realmente recusar e cancelar este pedido?')) return;
     setIsLoading(true);
     try {
-      await fetch(`${apiBaseUrl}/comandas/${orderId}/delivery/status?status_novo=finalizado`, {
-        method: 'PUT',
-        headers: authHeaders
-      });
-      await fetch(`${apiBaseUrl}/comandas/${orderId}/fechar`, {
-        method: 'PUT',
-        headers: authHeaders
-      });
+      await API.finalizarPedido(apiBaseUrl, authHeaders, orderId);
+      await API.fecharComanda(apiBaseUrl, authHeaders, orderId);
       fetchDeliveryOrders();
       onRefreshOrders();
     } catch (e) {
@@ -836,15 +817,40 @@ export function CaixaPanel({
     }
   };
 
+  const handleProntoItemAction = async (itemId: number) => {
+    setIsLoading(true);
+    try {
+      const res = await API.updateItemStatus(apiBaseUrl, authHeaders, itemId, 'pronto');
+      if (res.ok) onRefreshOrders();
+      else alert('Erro ao marcar item como pronto.');
+    } catch (err) {
+      console.error(err);
+      alert('Erro de conexão.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleProntoRoundAction = async (roundItens: any[]) => {
+    setIsLoading(true);
+    try {
+      await Promise.all(roundItens.map((item: any) =>
+        API.updateItemStatus(apiBaseUrl, authHeaders, item.itemId, 'pronto')
+      ));
+      onRefreshOrders();
+    } catch (err) {
+      console.error(err);
+      alert('Erro de conexão.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleDespacharPedido = async (orderId: string, motoboyId: number) => {
     if (isLoading) return;
     setIsLoading(true);
     try {
-      const res = await fetch(`${apiBaseUrl}/comandas/${orderId}/delivery/despachar`, {
-        method: 'POST',
-        headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ motoboy_id: motoboyId })
-      });
+      const res = await API.despacharPedido(apiBaseUrl, authHeaders, orderId, motoboyId);
       if (res.ok) {
         alert('Pedido despachado com sucesso!');
         fetchDeliveryOrders();
@@ -864,14 +870,8 @@ export function CaixaPanel({
     if (isLoading) return;
     setIsLoading(true);
     try {
-      await fetch(`${apiBaseUrl}/comandas/${orderId}/delivery/status?status_novo=finalizado`, {
-        method: 'PUT',
-        headers: authHeaders
-      });
-      const res = await fetch(`${apiBaseUrl}/comandas/${orderId}/fechar`, {
-        method: 'PUT',
-        headers: authHeaders
-      });
+      await API.finalizarPedido(apiBaseUrl, authHeaders, orderId);
+      const res = await API.fecharComanda(apiBaseUrl, authHeaders, orderId);
       if (res.ok) {
         alert('Pedido finalizado e comanda fechada com sucesso!');
         fetchDeliveryOrders();
@@ -891,11 +891,7 @@ export function CaixaPanel({
     e.preventDefault();
     if (!novoMotoboyNome || !novoMotoboyTelefone) return;
     try {
-      const res = await fetch(`${apiBaseUrl}/comandas/motoboys/cadastro`, {
-        method: 'POST',
-        headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome: novoMotoboyNome, telefone: novoMotoboyTelefone })
-      });
+      const res = await API.cadastrarMotoboy(apiBaseUrl, authHeaders, { nome: novoMotoboyNome, telefone: novoMotoboyTelefone });
       if (res.ok) {
         alert('Fretista cadastrado com sucesso!');
         setNovoMotoboyNome('');
@@ -970,7 +966,7 @@ export function CaixaPanel({
   const fetchTurno = async () => {
     try {
       setIsLoading(true);
-      const res = await fetch(`${apiBaseUrl}/caixa/turno/atual`, { headers: authHeaders });
+      const res = await API.getTurnoAtual(apiBaseUrl, authHeaders);
       if (res.ok) {
         const data = await res.json();
         setTurno(data);
@@ -985,7 +981,7 @@ export function CaixaPanel({
   // Fetch registered users (waiters CRUD)
   const fetchSystemUsers = async () => {
     try {
-      const res = await fetch(`${apiBaseUrl}/auth/usuarios`, { headers: authHeaders });
+      const res = await API.getUsuarios(apiBaseUrl, authHeaders);
       if (res.ok) {
         const data = await res.json();
         setSystemUsers(data);
@@ -997,7 +993,7 @@ export function CaixaPanel({
 
   const fetchConfiguracoes = async () => {
     try {
-      const res = await fetch(`${apiBaseUrl}/caixa/configuracoes`, { headers: authHeaders });
+      const res = await API.getCaixaConfiguracoes(apiBaseUrl, authHeaders);
       if (res.ok) {
         const data = await res.json();
         setCheckoutServiceTax(data.taxa_servico_ativa);
@@ -1028,7 +1024,7 @@ export function CaixaPanel({
 
   const fetchCardapioConfig = async () => {
     try {
-      const res = await fetch(`${apiBaseUrl}/caixa/config-cardapio`, { headers: authHeaders });
+      const res = await API.getCaixaConfigCardapio(apiBaseUrl, authHeaders);
       if (res.ok) {
         const data = await res.json();
         setCardapioStatusOverride(data.status_override || 'Automático');
@@ -1047,21 +1043,14 @@ export function CaixaPanel({
   const saveCardapioConfig = async () => {
     setIsSavingCardapioConfig(true);
     try {
-      const res = await fetch(`${apiBaseUrl}/caixa/config-cardapio`, {
-        method: 'PUT',
-        headers: {
-          ...authHeaders,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          status_override: cardapioStatusOverride,
-          cor_primaria: cardapioCorPrimaria,
-          cor_fundo: cardapioCorFundo,
-          logo_url: cardapioLogoUrl,
-          banner_url: cardapioBannerUrl,
-          sobre_nos: cardapioSobreNos,
-          endereco: cardapioEndereco
-        })
+      const res = await API.updateCaixaConfigCardapio(apiBaseUrl, authHeaders, {
+        status_override: cardapioStatusOverride,
+        cor_primaria: cardapioCorPrimaria,
+        cor_fundo: cardapioCorFundo,
+        logo_url: cardapioLogoUrl,
+        banner_url: cardapioBannerUrl,
+        sobre_nos: cardapioSobreNos,
+        endereco: cardapioEndereco
       });
       if (res.ok) {
         alert('Configurações do cardápio digital atualizadas com sucesso!');
@@ -1086,18 +1075,10 @@ export function CaixaPanel({
           body.saldo_cashback = newSaldo;
         }
       }
-      const res = await fetch(`${apiBaseUrl}/fidelidade/clientes/${oldPhone}`, {
-        method: 'PUT',
-        headers: {
-          ...authHeaders,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(body)
-      });
+      const res = await API.updateFidelidadeCliente(apiBaseUrl, authHeaders, oldPhone, body);
       if (res.ok) {
         alert('Cliente atualizado com sucesso!');
-        // Refresh client lists
-        const freshRes = await fetch(`${apiBaseUrl}/fidelidade/clientes`, { headers: authHeaders });
+        const freshRes = await API.getFidelidadeClientes(apiBaseUrl, authHeaders);
         if (freshRes.ok) {
           const data = await freshRes.json();
           if (Array.isArray(data)) setLoyaltyUsers(data);
@@ -1122,18 +1103,11 @@ export function CaixaPanel({
           body.saldo_cashback = saldoInicial;
         }
       }
-      const res = await fetch(`${apiBaseUrl}/fidelidade/clientes`, {
-        method: 'POST',
-        headers: {
-          ...authHeaders,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(body)
-      });
+      const res = await API.cadastrarFidelidadeCliente(apiBaseUrl, authHeaders, body);
       if (res.ok) {
         alert('Cliente cadastrado com sucesso!');
         // Refresh client lists
-        const freshRes = await fetch(`${apiBaseUrl}/fidelidade/clientes`, { headers: authHeaders });
+        const freshRes = await API.getFidelidadeClientes(apiBaseUrl, authHeaders);
         if (freshRes.ok) {
           const data = await freshRes.json();
           if (Array.isArray(data)) setLoyaltyUsers(data);
@@ -1149,12 +1123,12 @@ export function CaixaPanel({
   };
 
   const refreshEstoqueData = () => {
-    fetch(`${apiBaseUrl}/estoque/insumos`, { headers: authHeaders })
+    API.getInsumos(apiBaseUrl, authHeaders)
       .then(res => res.json())
       .then(data => { if (Array.isArray(data)) setEstoqueInsumos(data); })
       .catch(err => console.error('Error fetching insumos:', err));
 
-    fetch(`${apiBaseUrl}/estoque/distribuidores`, { headers: authHeaders })
+    API.getDistribuidores(apiBaseUrl, authHeaders)
       .then(res => res.json())
       .then(data => { if (Array.isArray(data)) setDistribuidores(data); })
       .catch(err => console.error('Error fetching distribuidores:', err));
@@ -1162,9 +1136,9 @@ export function CaixaPanel({
 
   const handleSaveInsumo = async (isNew: boolean) => {
     try {
-      const url = isNew 
-        ? `${apiBaseUrl}/estoque/insumos` 
-        : `${apiBaseUrl}/estoque/insumos/${selectedInsumo.id}`;
+      const endpoint = isNew 
+        ? '/estoque/insumos' 
+        : `/estoque/insumos/${selectedInsumo.id}`;
       const method = isNew ? 'POST' : 'PUT';
       const body: any = {
         nome: insumoFormNome,
@@ -1178,14 +1152,7 @@ export function CaixaPanel({
         body.estoque_atual = 0.0;
       }
 
-      const res = await fetch(url, {
-        method,
-        headers: {
-          ...authHeaders,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(body)
-      });
+      const res = await API.saveInsumo(apiBaseUrl, authHeaders, endpoint, method, body);
 
       if (res.ok) {
         alert(isNew ? 'Insumo cadastrado com sucesso!' : 'Insumo atualizado com sucesso!');
@@ -1204,17 +1171,10 @@ export function CaixaPanel({
 
   const handleAjustarEstoque = async () => {
     try {
-      const res = await fetch(`${apiBaseUrl}/estoque/insumos/${selectedInsumo.id}/ajustar`, {
-        method: 'POST',
-        headers: {
-          ...authHeaders,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          quantidade: Number(ajusteQtd),
-          tipo: ajusteTipo,
-          justificativa: ajusteJustificativa
-        })
+      const res = await API.ajustarInsumo(apiBaseUrl, authHeaders, selectedInsumo.id, {
+        quantidade: Number(ajusteQtd),
+        tipo: ajusteTipo,
+        justificativa: ajusteJustificativa
       });
 
       if (res.ok) {
@@ -1233,9 +1193,9 @@ export function CaixaPanel({
 
   const handleSaveDistribuidor = async (isNew: boolean) => {
     try {
-      const url = isNew
-        ? `${apiBaseUrl}/estoque/distribuidores`
-        : `${apiBaseUrl}/estoque/distribuidores/${selectedDist.id}`;
+      const endpoint = isNew
+        ? '/estoque/distribuidores'
+        : `/estoque/distribuidores/${selectedDist.id}`;
       const method = isNew ? 'POST' : 'PUT';
       const body: any = {
         nome_fantasia: distFormNomeFantasia,
@@ -1247,14 +1207,7 @@ export function CaixaPanel({
         body.id = distFormId;
       }
 
-      const res = await fetch(url, {
-        method,
-        headers: {
-          ...authHeaders,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(body)
-      });
+      const res = await API.saveDistribuidor(apiBaseUrl, authHeaders, endpoint, method, body);
 
       if (res.ok) {
         alert(isNew ? 'Distribuidor cadastrado com sucesso!' : 'Distribuidor atualizado com sucesso!');
@@ -1274,10 +1227,7 @@ export function CaixaPanel({
   const handleDeleteDistribuidor = async (distId: string) => {
     if (!confirm('Deseja realmente excluir este distribuidor?')) return;
     try {
-      const res = await fetch(`${apiBaseUrl}/estoque/distribuidores/${distId}`, {
-        method: 'DELETE',
-        headers: authHeaders
-      });
+      const res = await API.deletarDistribuidor(apiBaseUrl, authHeaders, Number(distId));
       if (res.ok) {
         alert('Distribuidor excluído com sucesso!');
         refreshEstoqueData();
@@ -1293,7 +1243,7 @@ export function CaixaPanel({
 
   const fetchProdutos = async () => {
     try {
-      const res = await fetch(`${apiBaseUrl}/produtos/`, { headers: authHeaders });
+      const res = await API.getProdutos(apiBaseUrl, authHeaders);
       if (res.ok) {
         const data = await res.json();
         const sorted = Array.isArray(data)
@@ -1310,7 +1260,7 @@ export function CaixaPanel({
 
   const fetchCategorias = async () => {
     try {
-      const res = await fetch(`${apiBaseUrl}/produtos/categorias`, { headers: authHeaders });
+      const res = await API.getCategorias(apiBaseUrl, authHeaders);
       if (res.ok) {
         const data = await res.json();
         setApiCategorias(data);
@@ -1346,7 +1296,7 @@ export function CaixaPanel({
     const endStr = endDate.toISOString().split('T')[0];
 
     if (activeTab === 'relatorios' && activeSubTab === 'relatorio_garçons') {
-      fetch(`${apiBaseUrl}/garcons/relatorio?data_inicio=${startStr}&data_fim=${endStr}`, { headers: authHeaders })
+      API.getGarconsRelatorio(apiBaseUrl, authHeaders, startStr, endStr)
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data)) setWaitersPerformance(data);
@@ -1357,7 +1307,7 @@ export function CaixaPanel({
       (activeTab === 'relatorios' && activeSubTab === 'relatorio_geral') ||
       (activeTab === 'dashboard' && activeSubTab === 'desempenho')
     ) {
-      fetch(`${apiBaseUrl}/comandas/estatisticas/geral?data_inicio=${startStr}&data_fim=${endStr}`, { headers: authHeaders })
+      API.getEstatisticasGeral(apiBaseUrl, authHeaders, startStr, endStr)
         .then(res => res.json())
         .then(data => {
           if (data && data.faturamento !== undefined) setGeneralStats(data);
@@ -1365,28 +1315,28 @@ export function CaixaPanel({
         .catch(err => console.error('Error fetching general stats report:', err));
     }
     if (activeTab === 'estoque') {
-      fetch(`${apiBaseUrl}/estoque/insumos`, { headers: authHeaders })
+      API.getInsumos(apiBaseUrl, authHeaders)
         .then(res => res.json())
         .then(data => { if (Array.isArray(data)) setEstoqueInsumos(data); })
         .catch(err => console.error('Error fetching insumos:', err));
 
-      fetch(`${apiBaseUrl}/estoque/sugestoes`, { headers: authHeaders })
+      API.getSugestoesEstoque(apiBaseUrl, authHeaders)
         .then(res => res.json())
         .then(data => { if (Array.isArray(data)) setEstoqueSugestoes(data); })
         .catch(err => console.error('Error fetching stock suggestions:', err));
 
-      fetch(`${apiBaseUrl}/estoque/notas`, { headers: authHeaders })
+      API.getNotasEstoque(apiBaseUrl, authHeaders)
         .then(res => res.json())
         .then(data => { if (Array.isArray(data)) setNotasEntrada(data); })
         .catch(err => console.error('Error fetching notas:', err));
 
-      fetch(`${apiBaseUrl}/estoque/distribuidores`, { headers: authHeaders })
+      API.getDistribuidores(apiBaseUrl, authHeaders)
         .then(res => res.json())
         .then(data => { if (Array.isArray(data)) setDistribuidores(data); })
         .catch(err => console.error('Error fetching distribuidores:', err));
     }
     if (activeTab === 'dashboard' && activeSubTab === 'metas') {
-      fetch(`${apiBaseUrl}/comandas/estatisticas/pico`, { headers: authHeaders })
+      API.getEstatisticasPico(apiBaseUrl, authHeaders)
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data)) setHorariosPico(data);
@@ -1394,14 +1344,14 @@ export function CaixaPanel({
         .catch(err => console.error('Error fetching peak hours:', err));
     }
     if (activeTab === 'clientes') {
-      fetch(`${apiBaseUrl}/fidelidade/config`, { headers: authHeaders })
+      API.getFidelidadeConfig(apiBaseUrl, authHeaders)
         .then(res => res.json())
         .then(data => {
           if (data && data.tipo_recompensa) setFidelidadeConfig(data);
         })
         .catch(err => console.error('Error fetching fidelity config:', err));
 
-      fetch(`${apiBaseUrl}/fidelidade/clientes`, { headers: authHeaders })
+      API.getFidelidadeClientes(apiBaseUrl, authHeaders)
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data)) setLoyaltyUsers(data);
@@ -1490,11 +1440,7 @@ export function CaixaPanel({
     e.preventDefault();
     setErrorMsg('');
     try {
-      const res = await fetch(`${apiBaseUrl}/caixa/turno/abrir`, {
-        method: 'POST',
-        headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ saldo_inicial: parseFloat(saldoInicial) })
-      });
+      const res = await API.abrirCaixa(apiBaseUrl, authHeaders, parseFloat(saldoInicial));
       if (res.ok) {
         setShowAbrirModal(false);
         fetchTurno();
@@ -1540,14 +1486,10 @@ export function CaixaPanel({
   const submitFecharCaixaDirectly = async () => {
     setErrorMsg('');
     try {
-      const res = await fetch(`${apiBaseUrl}/caixa/turno/fechar`, {
-        method: 'POST',
-        headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          declarado_dinheiro: parseFloat(decDinheiro || '0'),
-          declarado_pix: turno?.total_esperado_pix || 0,
-          declarado_cartao: turno?.total_esperado_cartao || 0
-        })
+      const res = await API.fecharCaixa(apiBaseUrl, authHeaders, {
+        declarado_dinheiro: parseFloat(decDinheiro || '0'),
+        declarado_pix: turno?.total_esperado_pix || 0,
+        declarado_cartao: turno?.total_esperado_cartao || 0
       });
       if (res.ok) {
         setShowFecharModal(false);
@@ -1572,14 +1514,10 @@ export function CaixaPanel({
     e.preventDefault();
     setErrorMsg('');
     try {
-      const res = await fetch(`${apiBaseUrl}/caixa/turno/fechar`, {
-        method: 'POST',
-        headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          declarado_dinheiro: parseFloat(decDinheiro || '0'),
-          declarado_pix: turno?.total_esperado_pix || 0,
-          declarado_cartao: turno?.total_esperado_cartao || 0
-        })
+      const res = await API.fecharCaixa(apiBaseUrl, authHeaders, {
+        declarado_dinheiro: parseFloat(decDinheiro || '0'),
+        declarado_pix: turno?.total_esperado_pix || 0,
+        declarado_cartao: turno?.total_esperado_cartao || 0
       });
       if (res.ok) {
         setShowFecharModal(false);
@@ -1601,14 +1539,10 @@ export function CaixaPanel({
     e.preventDefault();
     setErrorMsg('');
     try {
-      const res = await fetch(`${apiBaseUrl}/caixa/turno/movimentar`, {
-        method: 'POST',
-        headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tipo: movTipo,
-          valor: parseFloat(movValor),
-          descricao: movDesc
-        })
+      const res = await API.movimentarCaixa(apiBaseUrl, authHeaders, {
+        tipo: movTipo,
+        valor: parseFloat(movValor),
+        descricao: movDesc
       });
       if (res.ok) {
         setShowMovModal(false);
@@ -1641,16 +1575,12 @@ export function CaixaPanel({
           const subtotal = unpaidItens.reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
           const totalWithTax = subtotal * (1.0 + (checkoutServiceTax ? serviceTaxRate / 100 : 0));
 
-          const res = await fetch(`${apiBaseUrl}/caixa/comandas/${origOrder.id}/pagar`, {
-            method: 'POST',
-            headers: { ...authHeaders, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              valor: parseFloat(totalWithTax.toFixed(2)),
-              metodo: paymentMetodo,
-              item_ids: null, // pay all items in this comanda
-              idempotency_key: `${idempotencyKey}-${origOrder.id}`,
-              cpf_cliente: paymentCPF || null
-            })
+          const res = await API.pagarComanda(apiBaseUrl, authHeaders, origOrder.id, {
+            valor: parseFloat(totalWithTax.toFixed(2)),
+            metodo: paymentMetodo,
+            item_ids: null, // pay all items in this comanda
+            idempotency_key: `${idempotencyKey}-${origOrder.id}`,
+            cpf_cliente: paymentCPF || null
           });
 
           if (!res.ok) {
@@ -1670,16 +1600,12 @@ export function CaixaPanel({
         fetchTurno();
       } else {
         // Normal single order payment
-        const res = await fetch(`${apiBaseUrl}/caixa/comandas/${selectedOrder.id}/pagar`, {
-          method: 'POST',
-          headers: { ...authHeaders, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            valor: parseFloat(paymentValor),
-            metodo: paymentMetodo,
-            item_ids: selectedItemIds.length > 0 ? selectedItemIds : null,
-            idempotency_key: idempotencyKey,
-            cpf_cliente: paymentCPF || null
-          })
+        const res = await API.pagarComanda(apiBaseUrl, authHeaders, selectedOrder.id, {
+          valor: parseFloat(paymentValor),
+          metodo: paymentMetodo,
+          item_ids: selectedItemIds.length > 0 ? selectedItemIds : null,
+          idempotency_key: idempotencyKey,
+          cpf_cliente: paymentCPF || null
         });
         if (res.ok) {
           setPaymentValor('');
@@ -1688,7 +1614,7 @@ export function CaixaPanel({
           setIdempotencyKey(`idem-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
 
           // Refresh local details modal state
-          const updatedOrdersRes = await fetch(`${apiBaseUrl}/comandas/detalhes/todos?fechada=false`, { headers: authHeaders });
+          const updatedOrdersRes = await API.getTodasDetalhesComandas(apiBaseUrl, authHeaders);
           if (updatedOrdersRes.ok) {
             const freshOrdersList: any[] = await updatedOrdersRes.json();
             const stillOpen = freshOrdersList.find(o => o.id === selectedOrder.id);
@@ -1732,10 +1658,7 @@ export function CaixaPanel({
     const tableOrders = orders.filter(o => o.mesaId === mesaId);
     try {
       for (const comanda of tableOrders) {
-        await fetch(`${apiBaseUrl}/comandas/${comanda.id}/fechar`, {
-          method: "PUT",
-          headers: authHeaders
-        });
+        await API.fecharComanda(apiBaseUrl, authHeaders, comanda.id);
       }
       onRefreshOrders();
       setSelectedOrder(null);
@@ -1774,15 +1697,11 @@ export function CaixaPanel({
     e.preventDefault();
     if (!newUserNome || !newUserUsuario || !newUserSenha) return;
     try {
-      const res = await fetch(`${apiBaseUrl}/auth/usuarios`, {
-        method: "POST",
-        headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nome: newUserNome,
-          usuario: newUserUsuario,
-          senha: newUserSenha,
-          role: newUserRole
-        })
+      const res = await API.cadastrarUsuario(apiBaseUrl, authHeaders, {
+        nome: newUserNome,
+        usuario: newUserUsuario,
+        senha: newUserSenha,
+        role: newUserRole
       });
       if (res.ok) {
         setNewUserNome('');
@@ -1803,10 +1722,7 @@ export function CaixaPanel({
   const handleDeleteUser = async (userId: string) => {
     if (!confirm("Deseja realmente excluir este funcionário?")) return;
     try {
-      const res = await fetch(`${apiBaseUrl}/auth/usuarios/${userId}`, {
-        method: "DELETE",
-        headers: authHeaders
-      });
+      const res = await API.deletarUsuario(apiBaseUrl, authHeaders, userId);
       if (res.ok) {
         fetchSystemUsers();
       } else {
@@ -1820,10 +1736,7 @@ export function CaixaPanel({
   // KDS Kitchen actions (status updates)
   const handleUpdateItemStatus = async (itemId: string, newStatus: 'preparando' | 'pronto' | 'entregue') => {
     try {
-      const res = await fetch(`${apiBaseUrl}/comandas/itens/${itemId}/status?status=${newStatus}`, {
-        method: "PUT",
-        headers: authHeaders
-      });
+      const res = await API.updateItemStatus(apiBaseUrl, authHeaders, Number(itemId), newStatus);
       if (res.ok) {
         onRefreshOrders();
       } else {
@@ -1843,30 +1756,6 @@ export function CaixaPanel({
     return { subtotal, taxa, total, unpaidItems };
   };
 
-  // Handle local PDV cart item additions
-  const handlePdvAddToCart = (product: Product) => {
-    setPdvCart(prev => {
-      const idx = prev.findIndex(item => item.product.id === product.id && item.client === 'Balcão');
-      if (idx >= 0) {
-        const copy = [...prev];
-        copy[idx] = { ...copy[idx], quantity: copy[idx].quantity + 1 };
-        return copy;
-      }
-      return [...prev, { product, quantity: 1, obs: '', client: 'Balcão' }];
-    });
-  };
-
-  const handlePdvUpdateCartQty = (idx: number, delta: number) => {
-    setPdvCart(prev => {
-      const copy = [...prev];
-      copy[idx] = { ...copy[idx], quantity: Math.max(1, copy[idx].quantity + delta) };
-      return copy;
-    });
-  };
-
-  const handlePdvRemoveCartItem = (idx: number) => {
-    setPdvCart(prev => prev.filter((_, i) => i !== idx));
-  };
 
   // Submit Order from PDV Counter
   const handlePdvSubmitOrder = async (e: React.FormEvent) => {
@@ -1884,19 +1773,15 @@ export function CaixaPanel({
     }
     setIsLoading(true);
     try {
-      const openRes = await fetch(`${apiBaseUrl}/comandas/`, {
-        method: "POST",
-        headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mesa_id: pdvOrderType === 'mesa' ? pdvTargetMesaId : null,
-          garcom_id: 'c-01', // Cashier operator ID
-          tipo: pdvOrderType === 'mesa' ? 'Consumo no Local' : (pdvOrderType === 'entrega' ? 'Entrega' : 'Retirada'),
-          identificador: pdvCustomerName || undefined,
-          delivery_status: pdvOrderType === 'entrega' ? 'producao' : undefined,
-          delivery_telefone: pdvOrderType === 'entrega' ? pdvCustomerPhone : undefined,
-          delivery_endereco: pdvOrderType === 'entrega' ? pdvDeliveryAddress : undefined,
-          delivery_taxa: pdvOrderType === 'entrega' ? parseFloat(pdvDeliveryTaxa) || 0.0 : 0.0
-        })
+      const openRes = await API.abrirComandaPdv(apiBaseUrl, authHeaders, {
+        mesa_id: pdvOrderType === 'mesa' ? pdvTargetMesaId : null,
+        garcom_id: 'c-01', // Cashier operator ID
+        tipo: pdvOrderType === 'mesa' ? 'Consumo no Local' : (pdvOrderType === 'entrega' ? 'Entrega' : 'Retirada'),
+        identificador: pdvCustomerName || undefined,
+        delivery_status: pdvOrderType === 'entrega' ? 'producao' : undefined,
+        delivery_telefone: pdvOrderType === 'entrega' ? pdvCustomerPhone : undefined,
+        delivery_endereco: pdvOrderType === 'entrega' ? pdvDeliveryAddress : undefined,
+        delivery_taxa: pdvOrderType === 'entrega' ? parseFloat(pdvDeliveryTaxa) || 0.0 : 0.0
       });
       if (!openRes.ok) {
         const err = await openRes.json();
@@ -1914,13 +1799,9 @@ export function CaixaPanel({
         }))
       );
 
-      const launchRes = await fetch(`${apiBaseUrl}/comandas/${newComanda.id}/lancamentos`, {
-        method: "POST",
-        headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          garcom_id: 'c-01',
-          itens: itemsList
-        })
+      const launchRes = await API.lancarItensComanda(apiBaseUrl, authHeaders, newComanda.id, {
+        garcom_id: 'c-01',
+        itens: itemsList
       });
       if (launchRes.ok) {
         setPdvCart([]);
@@ -1956,9 +1837,7 @@ export function CaixaPanel({
     setIsSearchingPrinters(true);
     setDetectedPrinters([]);
     try {
-      const res = await fetch(`${apiBaseUrl}/comandas/impressoras/detectadas`, {
-        headers: authHeaders
-      });
+      const res = await API.getImpressorasDetectadas(apiBaseUrl, authHeaders);
       if (res.ok) {
         const data = await res.json();
         setDetectedPrinters(data);
@@ -1992,22 +1871,15 @@ export function CaixaPanel({
     // Call real backend endpoint /api/chat-waiter
     (async () => {
       try {
-        const response = await fetch(`${apiBaseUrl}/api/chat-waiter`, {
-          method: 'POST',
-          headers: {
-            ...authHeaders,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            brandName: 'Kôma Bistrô',
-            slogan: 'Gastronomia Urbana',
-            menuItems: PRODUCTS.map(p => ({ name: p.nome, price: p.preco })),
-            history: chatbotMessages.map(m => ({
-              role: m.sender === 'user' ? 'user' : 'model',
-              text: m.text
-            })),
-            message: promptText
-          })
+        const response = await API.chatWaiter(apiBaseUrl, authHeaders, {
+          brandName: 'Kôma Bistrô',
+          slogan: 'Gastronomia Urbana',
+          menuItems: PRODUCTS.map(p => ({ name: p.nome, price: p.preco })),
+          history: chatbotMessages.map(m => ({
+            role: m.sender === 'user' ? 'user' : 'model',
+            text: m.text
+          })),
+          message: promptText
         });
         if (response.ok) {
           const data = await response.json();
@@ -2465,10 +2337,7 @@ export function CaixaPanel({
                               type="button"
                               onClick={async () => {
                                 try {
-                                  const res = await fetch(`${apiBaseUrl}/caixa/pagamentos/${pag.id}/aprovar`, {
-                                    method: 'POST',
-                                    headers: authHeaders
-                                  });
+                                  const res = await API.aprovarPagamentoPendente(apiBaseUrl, authHeaders, pag.id);
                                   if (res.ok) {
                                     alert("Pagamento em dinheiro confirmado com sucesso!");
                                     onRefreshOrders();
@@ -2486,10 +2355,7 @@ export function CaixaPanel({
                               type="button"
                               onClick={async () => {
                                 try {
-                                  const res = await fetch(`${apiBaseUrl}/caixa/pagamentos/${pag.id}/recusar`, {
-                                    method: 'POST',
-                                    headers: authHeaders
-                                  });
+                                  const res = await API.recusarPagamentoPendente(apiBaseUrl, authHeaders, pag.id);
                                   if (res.ok) {
                                     alert("Pagamento recusado.");
                                     onRefreshOrders();
@@ -2645,542 +2511,31 @@ export function CaixaPanel({
                    Col 2: Delivery & Retirada
                    Col 3: Fechamento & Contas
               ══════════════════════════════════════════════════════════ */}
-              <div className={clsx('flex-1', 'grid', 'grid-cols-1', 'md:grid-cols-3', 'gap-4', 'min-h-0')}>
-
-                {/* ═══════════════════════════════════════
-                    COLUMN 1: Produção Local (Mesa / Balcão)
-                    Um card por ITEM individual em preparo
-                ═══════════════════════════════════════ */}
-                <div className="flex flex-col overflow-hidden rounded-2xl border border-orange-500/20 bg-gradient-to-b from-orange-950/20 to-[#0c0c0e]/80">
-                  {/* Column header */}
-                  <div className="px-4 py-3 border-b border-orange-500/15 flex justify-between items-center shrink-0 bg-orange-950/30">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-2 h-2 rounded-full bg-orange-400 shadow-[0_0_6px_2px_rgba(251,146,60,0.4)]"></div>
-                      <div>
-                        <span className="font-bold text-orange-100 text-sm tracking-wide block">Produção Local</span>
-                        <span className="text-[9px] text-orange-400/60 font-mono">Mesa / Garçom — por rodada</span>
-                      </div>
-                    </div>
-                    <span className={clsx(
-                      'font-bold px-2.5 py-0.5 rounded-full font-mono text-[10px]',
-                      localProductionRounds.length > 0
-                        ? 'bg-orange-500/20 text-orange-300 animate-pulse'
-                        : 'bg-orange-500/10 text-orange-500/50'
-                    )}>
-                      {localProductionRounds.length}
-                    </span>
-                  </div>
-
-                  <div className="p-3 flex-1 overflow-y-auto space-y-2 scrollbar-thin scrollbar-thumb-orange-900/30 scrollbar-track-transparent">
-                    {localProductionRounds.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center h-full min-h-[200px] text-orange-700/50 space-y-3">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" className="opacity-40">
-                          <path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>
-                        </svg>
-                        <p className="text-[11px] italic">Nenhuma rodada em preparo</p>
-                      </div>
-                    ) : (
-                      localProductionRounds.map((round) => (
-                        <div
-                          key={`prod-round-${round.rodadaId}`}
-                          className="group bg-[#15100a] border border-orange-500/20 hover:border-orange-400/50 p-3 rounded-xl space-y-2.5 transition-all duration-200 hover:shadow-[0_0_14px_rgba(251,146,60,0.1)]"
-                        >
-                          {/* Round header */}
-                          <div className="flex justify-between items-start gap-2">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex flex-wrap gap-1 mb-1">
-                                <span className="px-2 py-0.5 text-[9px] uppercase tracking-widest font-black bg-orange-500/15 text-orange-400 rounded-md font-mono border border-orange-500/20">
-                                  🍽️ {round.mesaId && round.mesaId > 0 ? `Mesa ${round.mesaId}` : 'Balcão'}
-                                </span>
-                                {round.mesaOrigemId && Number(round.mesaOrigemId) !== Number(round.mesaId) && (
-                                  <span className="px-2 py-0.5 text-[9px] uppercase tracking-widest font-black bg-teal-500/10 text-teal-300 rounded-md font-mono border border-teal-500/20">
-                                    🔗 +M{round.mesaOrigemId}
-                                  </span>
-                                )}
-                                <span className="px-2 py-0.5 text-[9px] uppercase tracking-widest font-black bg-yellow-500/10 text-yellow-400 rounded-md font-mono border border-yellow-500/20 flex items-center gap-1">
-                                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse"></span>
-                                  {round.itens.length} {round.itens.length === 1 ? 'item' : 'itens'}
-                                </span>
-                              </div>
-                              <strong className="text-white text-sm block">{round.identificador || (round.mesaId && round.mesaId > 0 ? `Consumo Mesa ${round.mesaId}` : 'Consumo Balcão')}</strong>
-                              <span className="text-[10px] text-gray-500 block mt-0.5">👨‍🍳 {round.garcomNome || 'Garçom'}</span>
-                            </div>
-                            <span className="text-[9px] text-gray-600 font-mono shrink-0">#{round.rodadaId.slice(-4)}</span>
-                          </div>
-
-                          {/* Items list */}
-                          <div className="space-y-1.5 pt-1.5 border-t border-orange-500/10">
-                            {round.itens.map((item: any, idx: number) => (
-                              <div key={`item-${item.itemId || idx}`} className="flex items-start justify-between gap-2">
-                                <div className="flex-1 min-w-0">
-                                  <span className="text-[11px] text-orange-100 font-semibold block truncate">{item.nome}</span>
-                                  {item.observacao && (
-                                    <span className="text-[9px] text-orange-300/60 italic block">📝 {item.observacao}</span>
-                                  )}
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={async (e) => {
-                                    e.stopPropagation();
-                                    if (isLoading) return;
-                                    setIsLoading(true);
-                                    try {
-                                      const res = await fetch(`${apiBaseUrl}/comandas/itens/${item.itemId}/status?status=pronto`, {
-                                        method: 'PUT',
-                                        headers: authHeaders
-                                      });
-                                      if (res.ok) onRefreshOrders();
-                                      else alert('Erro ao marcar item como pronto.');
-                                    } catch (err) {
-                                      console.error(err);
-                                      alert('Erro de conexão.');
-                                    } finally {
-                                      setIsLoading(false);
-                                    }
-                                  }}
-                                  className="shrink-0 px-2 py-1 bg-orange-600/30 hover:bg-orange-500/50 border border-orange-500/30 text-orange-300 hover:text-white rounded-md font-black text-[8px] transition-all duration-150 cursor-pointer uppercase tracking-wider flex items-center gap-1"
-                                >
-                                  <Check size={9} /> OK
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-
-                          {/* Mark ALL as ready button */}
-                          <button
-                            type="button"
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              if (isLoading) return;
-                              setIsLoading(true);
-                              try {
-                                await Promise.all(round.itens.map((item: any) =>
-                                  fetch(`${apiBaseUrl}/comandas/itens/${item.itemId}/status?status=pronto`, {
-                                    method: 'PUT',
-                                    headers: authHeaders
-                                  })
-                                ));
-                                onRefreshOrders();
-                              } catch (err) {
-                                console.error(err);
-                                alert('Erro de conexão.');
-                              } finally {
-                                setIsLoading(false);
-                              }
-                            }}
-                            className="w-full py-2 bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-500 hover:to-orange-400 active:scale-95 text-white rounded-lg font-black text-[10px] transition-all duration-150 cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-[0_2px_8px_rgba(251,146,60,0.3)]"
-                          >
-                            <Check size={12} /> Rodada Pronta
-                          </button>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                {/* ═══════════════════════════════════════
-                    COLUMN 2: Delivery & Retirada (online em preparo + em rota)
-                ═══════════════════════════════════════ */}
-                <div className="flex flex-col overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-b from-emerald-950/20 to-[#0c0c0e]/80">
-                  {/* Column header */}
-                  <div className="px-4 py-3 border-b border-emerald-500/15 flex justify-between items-center shrink-0 bg-emerald-950/30">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_2px_rgba(52,211,153,0.4)]"></div>
-                      <div>
-                        <span className="font-bold text-emerald-100 text-sm tracking-wide block">Delivery & Retirada</span>
-                        <span className="text-[9px] text-emerald-400/60 font-mono">Em Preparo</span>
-                      </div>
-                    </div>
-                    <span className={clsx(
-                      'font-bold px-2.5 py-0.5 rounded-full font-mono text-[10px]',
-                      (modoExclusivoSalao ? 0 : simulatedOrders.filter(o => o.status === 'producao').length) > 0
-                        ? 'bg-emerald-500/20 text-emerald-300'
-                        : 'bg-emerald-500/10 text-emerald-500/50'
-                    )}>
-                      {modoExclusivoSalao ? 0 : simulatedOrders.filter(o => o.status === 'producao').length}
-                    </span>
-                  </div>
-
-                  <div className="p-3 flex-1 overflow-y-auto space-y-3 scrollbar-thin scrollbar-thumb-emerald-900/30 scrollbar-track-transparent">
-                    {(modoExclusivoSalao || simulatedOrders.filter(o => o.status === 'producao').length === 0) ? (
-                      <div className="flex flex-col items-center justify-center h-full min-h-[200px] text-emerald-700/50 space-y-3">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" className="opacity-40">
-                          <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
-                        </svg>
-                        <p className="text-[11px] italic">Nenhum pedido externo em preparo</p>
-                        {modoExclusivoSalao && <p className="text-[9px] text-emerald-700/40">Modo Salão exclusivo ativo</p>}
-                      </div>
-                    ) : (
-                      <>
-                        {/* Pedidos em PREPARO */}
-                        {!modoExclusivoSalao && simulatedOrders.filter(o => o.status === 'producao').map((order) => {
-                          const hasAddress = !!order.endereco;
-                          const isMesa = order.mesaId && order.mesaId > 0;
-
-                          let badgeEmoji = '🏪';
-                          let badgeLabel = 'Retirada';
-                          let badgeClass = 'bg-violet-500/10 text-violet-400 border-violet-500/20';
-                          let btnLabel = '🏪 Retirada Pronta';
-                          let btnClass = 'bg-emerald-600 hover:bg-emerald-500 shadow-[0_2px_8px_rgba(16,185,129,0.25)]';
-
-                          if (hasAddress) {
-                            badgeEmoji = '🛵'; badgeLabel = 'Delivery';
-                            badgeClass = 'bg-orange-500/10 text-orange-400 border-orange-500/20';
-                            btnLabel = '🛵 Saiu para Entrega';
-                            btnClass = 'bg-orange-600 hover:bg-orange-500 shadow-[0_2px_8px_rgba(234,88,12,0.25)]';
-                          } else if (isMesa) {
-                            badgeEmoji = '🍽️'; badgeLabel = `Mesa ${order.mesaId}`;
-                            badgeClass = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
-                            btnLabel = '✓ Pedido Pronto';
-                          }
-
-                          return (
-                            <div
-                              key={`prod-online-${order.id}`}
-                              onClick={() => openSimulatedOrderDetails(order)}
-                              className="group bg-[#0d1812] border border-emerald-500/15 hover:border-emerald-400/40 p-3.5 rounded-xl space-y-3 transition-all duration-200 cursor-pointer hover:shadow-[0_0_16px_rgba(52,211,153,0.06)]"
-                            >
-                              <div className="flex justify-between items-start gap-2">
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex flex-wrap gap-1 mb-1.5">
-                                    <span className={clsx('px-2 py-0.5 text-[9px] uppercase tracking-widest font-black rounded-md font-mono border', badgeClass)}>
-                                      {badgeEmoji} {badgeLabel}
-                                    </span>
-                                    <span className="px-2 py-0.5 text-[9px] uppercase tracking-widest font-black bg-yellow-500/10 text-yellow-400 rounded-md font-mono border border-yellow-500/20">⏳ Preparando</span>
-                                  </div>
-                                  <strong className="text-white text-sm block truncate">{order.cliente}</strong>
-                                  <span className="text-[10px] text-gray-400 block">{order.telefone}</span>
-                                </div>
-                                <span className="font-black text-white font-mono text-[13px] shrink-0">R$ {order.total.toFixed(2)}</span>
-                              </div>
-
-                              <p className="text-[10px] text-emerald-300/70 bg-black/40 px-2.5 py-2 rounded-lg border border-emerald-500/10 leading-relaxed font-mono">
-                                {order.itens}
-                              </p>
-
-                              {order.endereco && (
-                                <div className="flex items-start gap-1.5 bg-rose-950/20 px-2 py-1.5 rounded-lg border border-rose-500/10">
-                                  <MapPin size={10} className="shrink-0 text-rose-400 mt-0.5" />
-                                  <span className="text-[9.5px] text-rose-300/70 leading-relaxed">{order.endereco}</span>
-                                </div>
-                              )}
-
-                              <button
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  if (isLoading) return;
-                                  await handleUpdateDeliveryStatus(order.id, hasAddress ? 'transito' : 'pronto');
-                                  if (hasAddress) {
-                                    alert(`Simulação de WhatsApp: Mensagem enviada para ${order.cliente} (${order.telefone}) avisando que o pedido saiu para entrega!`);
-                                  } else if (isMesa) {
-                                    alert(`Simulação de WhatsApp: Mensagem enviada para ${order.cliente} (${order.telefone}) avisando que o pedido da Mesa ${order.mesaId} está pronto!`);
-                                  } else {
-                                    alert(`Simulação de WhatsApp: Mensagem enviada para ${order.cliente} (${order.telefone}) avisando que o pedido está pronto para retirada!`);
-                                  }
-                                }}
-                                className={clsx('w-full py-2 active:scale-95 text-white rounded-lg font-black text-[10px] transition-all duration-150 cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5', btnClass)}
-                              >
-                                {btnLabel}
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {/* ═══════════════════════════════════════
-                    COLUMN 3: Fechamento & Contas
-                    (mesas prontas/conta pedida + delivery em trânsito/pronto)
-                ═══════════════════════════════════════ */}
-                <div className="flex flex-col overflow-hidden rounded-2xl border border-blue-500/20 bg-gradient-to-b from-blue-950/20 to-[#0c0c0e]/80">
-                  {/* Column header */}
-                  <div className="px-4 py-3 border-b border-blue-500/15 flex justify-between items-center shrink-0 bg-blue-950/30">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-2 h-2 rounded-full bg-blue-400 shadow-[0_0_6px_2px_rgba(96,165,250,0.4)]"></div>
-                      <div>
-                        <span className="font-bold text-blue-100 text-sm tracking-wide block">Fechamento & Contas</span>
-                        <span className="text-[9px] text-blue-400/60 font-mono">Prontos / Em rota / Conta pedida</span>
-                      </div>
-                    </div>
-                    <span className={clsx(
-                      'font-bold px-2.5 py-0.5 rounded-full font-mono text-[10px]',
-                      (groupedTableOrdersReady.length + (modoExclusivoSalao ? 0 : simulatedOrders.filter(o => o.status === 'transito' || o.status === 'pronto').length)) > 0
-                        ? 'bg-blue-500/20 text-blue-300'
-                        : 'bg-blue-500/10 text-blue-500/50'
-                    )}>
-                      {groupedTableOrdersReady.length + (modoExclusivoSalao ? 0 : simulatedOrders.filter(o => o.status === 'transito' || o.status === 'pronto').length)}
-                    </span>
-                  </div>
-
-                  <div className="p-3 flex-1 overflow-y-auto space-y-3 scrollbar-thin scrollbar-thumb-blue-900/30 scrollbar-track-transparent">
-                    {groupedTableOrdersReady.length === 0 && (modoExclusivoSalao || simulatedOrders.filter(o => o.status === 'transito' || o.status === 'pronto').length === 0) ? (
-                      <div className="flex flex-col items-center justify-center h-full min-h-[200px] text-blue-700/50 space-y-3">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" className="opacity-40">
-                          <rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/>
-                        </svg>
-                        <p className="text-[11px] italic">Nenhuma conta pendente</p>
-                      </div>
-                    ) : (
-                      <>
-                        {/* Delivery / Retirada orders in transit or ready */}
-                        {!modoExclusivoSalao && simulatedOrders.filter(o => o.status === 'transito' || o.status === 'pronto').map((order) => {
-                          const isDelivery = !!order.endereco;
-                          const badgeEmoji = isDelivery ? '🛵' : '🏪';
-                          const badgeLabel = isDelivery ? 'Delivery — Em Rota' : 'Retirada — Pronta';
-                          const badgeClass = isDelivery ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' : 'bg-violet-500/10 text-violet-400 border-violet-500/20';
-
-                          return (
-                            <div
-                              key={`ready-online-${order.id}`}
-                              onClick={() => openSimulatedOrderDetails(order)}
-                              className="group bg-[#0b0d14] border border-blue-500/20 hover:border-blue-400/40 p-3.5 rounded-xl space-y-3 transition-all duration-200 cursor-pointer"
-                            >
-                              <div className="flex justify-between items-start gap-2">
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex flex-wrap gap-1 mb-1.5">
-                                    <span className={clsx('px-2 py-0.5 text-[9px] uppercase tracking-widest font-black rounded-md font-mono border', badgeClass)}>
-                                      {badgeEmoji} {badgeLabel}
-                                    </span>
-                                  </div>
-                                  <strong className="text-white text-sm block truncate">{order.cliente}</strong>
-                                  <span className="text-[10px] text-gray-400 block">{order.telefone}</span>
-                                </div>
-                                <span className="font-black text-white font-mono text-[13px] shrink-0">R$ {order.total.toFixed(2)}</span>
-                              </div>
-
-                              <p className="text-[10px] text-blue-300/70 bg-black/40 px-2.5 py-2 rounded-lg border border-blue-500/10 leading-relaxed font-mono">
-                                {order.itens}
-                              </p>
-
-                              {order.endereco && (
-                                <div className="flex items-start gap-1.5 bg-rose-950/20 px-2 py-1.5 rounded-lg border border-rose-500/10">
-                                  <MapPin size={10} className="shrink-0 text-rose-400 mt-0.5" />
-                                  <span className="text-[9.5px] text-rose-300/70 leading-relaxed">{order.endereco}</span>
-                                </div>
-                              )}
-
-                              <button
-                                type="button"
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  if (isLoading) return;
-                                  const fullOrder = orders.find(o => o.id === order.id);
-                                  if (fullOrder) {
-                                    setSelectedOrder({
-                                      ...fullOrder,
-                                      itens: fullOrder.itens.map((it: any) => ({
-                                        id: it.id,
-                                        produtoId: it.produto_id || it.produtoId,
-                                        name: it.nome || `Item ${it.produtoId}`,
-                                        preco: it.preco_unit || it.preco,
-                                        observacao: it.observacao || '',
-                                        clienteNome: it.cliente_nome || it.clienteNome || 'Consumo Geral',
-                                        status: it.status,
-                                        pago: it.pago
-                                      }))
-                                    });
-                                    setShowCheckoutModal(true);
-                                    setCheckoutServiceTax(false);
-                                    setSplitPeople('1');
-                                    setSelectedItemIds([]);
-                                    const sub = fullOrder.itens.filter((it: any) => !it.pago).reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
-                                    setPaymentValor(sub.toFixed(2));
-                                  } else {
-                                    await handleFinalizarPedido(order.id);
-                                  }
-                                }}
-                                className="w-full py-2 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white rounded-lg font-black text-[10px] transition-all duration-150 cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-[0_2px_8px_rgba(59,130,246,0.25)]"
-                              >
-                                <CreditCard size={11} /> Fechar Conta
-                              </button>
-                            </div>
-                          );
-                        })}
-
-                        {groupedTableOrdersReady.map((order) => {
-                          if (order.isGrouped) {
-                            const contaPedida = order.contaPedida;
-                            return (
-                              <div
-                                key={order.id}
-                                className={clsx(
-                                  'bg-[#0b0d14] border p-3.5 rounded-xl space-y-3 transition-all duration-200',
-                                  contaPedida ? 'border-blue-500/40 hover:border-blue-400/60 hover:shadow-[0_0_16px_rgba(96,165,250,0.08)]' : 'border-emerald-500/25 hover:border-emerald-400/45'
-                                )}
-                              >
-                                <div className="flex justify-between items-start gap-2">
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex flex-wrap gap-1 mb-1.5">
-                                      <span className={clsx(
-                                        'px-2 py-0.5 text-[9px] uppercase tracking-widest font-black rounded-md font-mono border',
-                                        contaPedida ? 'bg-blue-500/15 text-blue-400 border-blue-500/25' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                      )}>
-                                        🍽️ Mesa {order.mesaId} — {order.originalOrders.length} Comandas
-                                      </span>
-                                      {order.temItensEmPreparo && (
-                                        <span className="px-2 py-0.5 text-[9px] uppercase tracking-widest font-black bg-amber-500/10 text-amber-400 rounded-md font-mono border border-amber-500/20" title="Itens ainda sendo preparados">
-                                          ⏳ Em preparo
-                                        </span>
-                                      )}
-                                    </div>
-                                    <strong className="text-white text-sm block truncate">{order.identificador}</strong>
-                                    <span className="text-[10px] text-gray-500 block">👨‍🍳 {order.garcomNome}</span>
-                                  </div>
-                                </div>
-
-                                <div className="space-y-2 pt-2 border-t border-white/5">
-                                  {order.originalOrders.map((origOrder: any) => {
-                                    const origItemCounts: Record<string, number> = {};
-                                    origOrder.itens.forEach((it: any) => {
-                                      const name = it.nome || 'Item';
-                                      origItemCounts[name] = (origItemCounts[name] || 0) + 1;
-                                    });
-                                    const origItemsStr = Object.entries(origItemCounts)
-                                      .map(([name, qty]) => `${qty}x ${name}`)
-                                      .join(' • ') || 'Nenhum item';
-
-                                    return (
-                                      <div key={`orig-${origOrder.id}`} className="bg-black/30 p-2.5 rounded-lg border border-white/5 space-y-1.5">
-                                        <div className="flex justify-between items-center text-[9px]">
-                                          <span className="font-bold text-gray-300">{origOrder.identificador || `Comanda #${origOrder.id.slice(-4)}`}</span>
-                                          <span className="text-gray-600 font-mono">#{origOrder.id.slice(-4)}</span>
-                                        </div>
-                                        <p className="text-[9.5px] text-emerald-300/80 font-mono leading-relaxed">{origItemsStr}</p>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={async (e) => {
-                                    e.stopPropagation();
-                                    if (isLoading) return;
-                                    setSelectedOrder({
-                                      id: order.id,
-                                      mesaId: order.mesaId,
-                                      mesaOrigemId: order.mesaOrigemId,
-                                      mesaTransferidaDe: order.mesaTransferidaDe,
-                                      identificador: order.identificador,
-                                      garcomNome: order.garcomNome,
-                                      tipo: order.tipo,
-                                      valorPago: order.valorPago,
-                                      itens: order.itens.map((it: any) => ({
-                                        id: it.id, produtoId: it.produto_id || it.produtoId,
-                                        nome: it.nome || `Item ${it.produtoId}`, preco: it.preco_unit || it.preco,
-                                        observacao: it.observacao || '', clienteNome: it.cliente_nome || it.clienteNome || 'Consumo Geral',
-                                        status: it.status, pago: it.pago
-                                      })),
-                                      isGrouped: true,
-                                      originalOrders: order.originalOrders
-                                    });
-                                    setShowCheckoutModal(true);
-                                    setCheckoutServiceTax(true);
-                                    setSplitPeople('1');
-                                    setSelectedItemIds([]);
-                                    const sub = order.itens.filter((it: any) => !it.pago).reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
-                                    setPaymentValor((sub * (1.0 + (taxaServicoAtiva ? serviceTaxRate / 100 : 0))).toFixed(2));
-                                  }}
-                                  className={clsx('w-full py-2 active:scale-95 text-white rounded-lg font-black text-[10px] transition-all duration-150 cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5', contaPedida ? 'bg-blue-600 hover:bg-blue-500 shadow-[0_2px_8px_rgba(96,165,250,0.25)]' : 'bg-emerald-600 hover:bg-emerald-500 shadow-[0_2px_8px_rgba(16,185,129,0.25)]')}
-                                >
-                                  <Check size={11} /> Fechar Conta
-                                </button>
-                              </div>
-                            );
-                          }
-
-                          // Single (non-grouped) order
-                          const itemCounts: Record<string, number> = {};
-                          order.itens.forEach((it: { nome?: string }) => {
-                            const name = it.nome || 'Item';
-                            itemCounts[name] = (itemCounts[name] || 0) + 1;
-                          });
-                          const itemsStr = Object.entries(itemCounts)
-                            .map(([name, qty]) => `${qty}x ${name}`)
-                            .join(' • ') || 'Nenhum item';
-                          const contaPedida = !!(order as any).contaPedida;
-                          const badgeText = (order.mesaId && order.mesaId > 0)
-                            ? (contaPedida ? `Mesa ${order.mesaId} — Conta Pedida` : `Mesa ${order.mesaId} — Pronto`)
-                            : (contaPedida ? 'Balcão — Conta Pedida' : 'Balcão — Pronto');
-
-                          return (
-                            <div
-                              key={`close-${order.id}`}
-                              onClick={() => setSelectedKanbanOrder(order)}
-                              className={clsx(
-                                'bg-[#0b0d14] border p-3.5 rounded-xl space-y-3 transition-all duration-200 cursor-pointer',
-                                contaPedida ? 'border-blue-500/40 hover:border-blue-400/60 hover:shadow-[0_0_16px_rgba(96,165,250,0.08)]' : 'border-emerald-500/25 hover:border-emerald-400/45'
-                              )}
-                            >
-                              <div className="flex justify-between items-start gap-2">
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex flex-wrap gap-1 mb-1.5">
-                                    <span className={clsx(
-                                      'px-2 py-0.5 text-[9px] uppercase tracking-widest font-black rounded-md font-mono border',
-                                      contaPedida ? 'bg-blue-500/15 text-blue-400 border-blue-500/25' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                    )}>
-                                      🍽️ {badgeText}
-                                    </span>
-                                    {!contaPedida && order.temItensEmPreparo && (
-                                      <span className="px-2 py-0.5 text-[9px] uppercase tracking-widest font-black bg-amber-500/10 text-amber-400 rounded-md font-mono border border-amber-500/20">
-                                        ⏳ Em preparo
-                                      </span>
-                                    )}
-                                    {order.mesaOrigemId && Number(order.mesaOrigemId) !== Number(order.mesaId) && (
-                                      <span className="px-2 py-0.5 text-[9px] uppercase tracking-widest font-black bg-teal-500/10 text-teal-300 rounded-md font-mono border border-teal-500/20">
-                                        🔗 +Mesa {order.mesaOrigemId}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <strong className="text-white text-sm block truncate">
-                                    {order.identificador || ((order.mesaId && order.mesaId > 0) ? `Consumo Mesa ${order.mesaId}` : 'Consumo Balcão')}
-                                  </strong>
-                                  <span className="text-[10px] text-gray-500 block">👨‍🍳 {order.garcomNome || 'Garçom'}</span>
-                                </div>
-                                <span className="text-[9px] text-gray-600 font-mono shrink-0">#{order.id.slice(-4)}</span>
-                              </div>
-
-                              <p className={clsx('text-[10px] bg-black/40 px-2.5 py-2 rounded-lg border leading-relaxed font-mono', contaPedida ? 'text-blue-300/80 border-blue-500/10' : 'text-emerald-300/80 border-emerald-500/10')}>
-                                {itemsStr}
-                              </p>
-
-                              <button
-                                type="button"
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  if (isLoading) return;
-                                  const fullOrder = orders.find(o => o.id === order.comandaId);
-                                  if (!fullOrder) return;
-                                  setSelectedOrder({
-                                    ...fullOrder,
-                                    itens: fullOrder.itens.map((it: any) => ({
-                                      id: it.id, produtoId: it.produto_id || it.produtoId,
-                                      nome: it.nome || `Item ${it.produtoId}`, preco: it.preco_unit || it.preco,
-                                      observacao: it.observacao || '', clienteNome: it.cliente_nome || it.clienteNome || 'Consumo Geral',
-                                      status: it.status, pago: it.pago
-                                    }))
-                                  });
-                                  setShowCheckoutModal(true);
-                                  setCheckoutServiceTax(true);
-                                  setSplitPeople('1');
-                                  setSelectedItemIds([]);
-                                  const sub = fullOrder.itens.filter((it: any) => !it.pago).reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
-                                  setPaymentValor((sub * (1.0 + (taxaServicoAtiva ? serviceTaxRate / 100 : 0))).toFixed(2));
-                                }}
-                                className={clsx('w-full py-2 active:scale-95 text-white rounded-lg font-black text-[10px] transition-all duration-150 cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5', contaPedida ? 'bg-blue-600 hover:bg-blue-500 shadow-[0_2px_8px_rgba(96,165,250,0.25)]' : 'bg-emerald-600 hover:bg-emerald-500 shadow-[0_2px_8px_rgba(16,185,129,0.25)]')}
-                              >
-                                <Check size={11} /> Fechar Conta
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </>
-                    )}
-                  </div>
-                </div>
-
-              </div>
+              <CaixaKanbanBoard
+                localProductionRounds={localProductionRounds}
+                simulatedOrders={simulatedOrders}
+                groupedTableOrdersReady={groupedTableOrdersReady}
+                orders={orders}
+                modoExclusivoSalao={modoExclusivoSalao}
+                activeMotoboysList={activeMotoboysList}
+                isLoading={isLoading}
+                taxaServicoAtiva={taxaServicoAtiva}
+                serviceTaxRate={serviceTaxRate}
+                handleProntoItemAction={handleProntoItemAction}
+                handleProntoRoundAction={handleProntoRoundAction}
+                handleDespacharPedido={handleDespacharPedido}
+                handleUpdateDeliveryStatus={handleUpdateDeliveryStatus}
+                handleFinalizarPedido={handleFinalizarPedido}
+                setSelectedMotoboys={setSelectedMotoboys}
+                setSelectedOrder={setSelectedOrder}
+                setShowCheckoutModal={setShowCheckoutModal}
+                setCheckoutServiceTax={setCheckoutServiceTax}
+                setSplitPeople={setSplitPeople}
+                setSelectedItemIds={setSelectedItemIds}
+                setPaymentValor={setPaymentValor}
+                openSimulatedOrderDetails={openSimulatedOrderDetails}
+                setSelectedKanbanOrder={setSelectedKanbanOrder}
+              />
             </div>
           )}
 
@@ -3188,522 +2543,52 @@ export function CaixaPanel({
 
           {/* VIEW 2: PDV (Pedidos Balcão) */}
           {activeSubTab === 'pdv' && (
-            <div className={clsx('h-full', 'flex', 'gap-5', 'overflow-hidden')}>
-
-              {/* Product grid column */}
-              <div className={clsx('flex-1', 'flex', 'flex-col', 'space-y-4', 'overflow-hidden')}>
-                <div className={clsx('space-y-3', 'shrink-0')}>
-                  <div className={clsx('flex', 'gap-2')}>
-                    <div className="flex-1">
-                      <input
-                        id="pdv-search-input"
-                        type="text"
-                        placeholder="Pesquisar prato no menu..."
-                        value={pdvSearch}
-                        onChange={(e) => setPdvSearch(e.target.value)}
-                        className={clsx('w-full', 'px-4', 'py-2', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'focus:outline-none', 'focus:border-[#10b981]', 'text-white')}
-                      />
-                      <span className={clsx('text-[8px]', 'text-gray-500', 'font-mono', 'block', 'mt-1', 'text-left')}>Atalho: Pressione [F1] para pesquisar</span>
-                    </div>
-                    {pdvSearch && (
-                      <button
-                        onClick={() => setPdvSearch('')}
-                        className={clsx('px-3', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-gray-400', 'hover:text-white')}
-                      >
-                        Limpar
-                      </button>
-                    )}
-                  </div>
-
-                  <div className={clsx('flex', 'gap-1.5', 'overflow-x-auto', 'pb-1.5', 'scrollbar-thin')}>
-                    <button
-                      type="button"
-                      onClick={() => setPdvSelectedCategory('todos')}
-                      className={`px-3 py-1.5 text-[10px] font-bold rounded-lg cursor-pointer whitespace-nowrap transition-all border ${pdvSelectedCategory === 'todos'
-                        ? 'bg-emerald-600 text-white border-transparent'
-                        : 'bg-[#121214] border-[#27272A] text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
-                        }`}
-                    >
-                      Todos
-                    </button>
-                    {CATEGORIES.map(cat => (
-                      <button
-                        key={cat}
-                        type="button"
-                        onClick={() => setPdvSelectedCategory(cat)}
-                        className={`px-3 py-1.5 text-[10px] font-bold rounded-lg cursor-pointer whitespace-nowrap transition-all border ${pdvSelectedCategory === cat
-                          ? 'bg-emerald-600 text-white border-transparent'
-                          : 'bg-[#121214] border-[#27272A] text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
-                          }`}
-                      >
-                        {cat}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className={clsx('flex-1', 'overflow-y-auto', 'pr-1')}>
-                  <div className={clsx('grid', 'grid-cols-2', 'sm:grid-cols-3', 'xl:grid-cols-4', 'gap-3')}>
-                    {filteredProducts.map(p => (
-                      <div
-                        key={p.id}
-                        onClick={() => handlePdvAddToCart(p)}
-                        className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'hover:border-[#10b981]/30', 'p-3', 'rounded-xl', 'flex', 'flex-col', 'justify-between', 'gap-3', 'cursor-pointer', 'group', 'hover:shadow-md', 'transition-all', 'text-left')}
-                      >
-                        <div>
-                          <h4 className={clsx('font-serif', 'font-bold', 'text-white', 'group-hover:text-[#10b981]', 'transition-colors')}>{p.nome}</h4>
-                          <p className={clsx('text-[9px]', 'text-gray-500', 'mt-1', 'line-clamp-2')}>{p.descricao}</p>
-                        </div>
-                        <div className={clsx('flex', 'justify-between', 'items-center')}>
-                          <span className={clsx('font-bold', 'text-white', 'font-mono')}>R$ {p.preco.toFixed(2)}</span>
-                          <span className={clsx('p-1', 'bg-[#1C1C1F]', 'group-hover:bg-[#10b981]', 'text-gray-400', 'group-hover:text-[#121214]', 'rounded-lg', 'transition-colors', 'border', 'border-[#27272A]/50')}>
-                            <Plus size={12} />
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Shopping cart sidebar */}
-              <div className={clsx('w-80', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden', 'shrink-0')}>
-                <div className={clsx('bg-[#18181B]', 'px-4', 'py-3', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
-                  <span className={clsx('font-bold', 'text-white', 'font-serif', 'flex', 'items-center', 'gap-1.5')}>
-                    <ShoppingCart size={14} className="text-[#10b981]" />
-                    <span>Carrinho de Vendas</span>
-                  </span>
-                  <span className={clsx('bg-[#10b981]/10', 'text-[#10b981]', 'font-bold', 'px-2', 'py-0.5', 'rounded-full', 'font-mono', 'text-[9px]')}>
-                    {pdvCart.reduce((sum, item) => sum + item.quantity, 0)} itens
-                  </span>
-                </div>
-
-                <div className={clsx('flex-1', 'overflow-y-auto', 'p-3', 'space-y-2')}>
-                  {pdvCart.length === 0 ? (
-                    <div className={clsx('py-24', 'text-center', 'space-y-2', 'text-gray-500', 'italic')}>
-                      <p>Carrinho Vazio</p>
-                      <p className={clsx('text-[9px]', 'text-gray-600')}>Clique nos produtos ao lado para lançar</p>
-                    </div>
-                  ) : (
-                    pdvCart.map((item, idx) => (
-                      <div key={`${item.product.id}-${idx}`} className={clsx('bg-[#1C1C1F]', 'p-2.5', 'rounded-xl', 'border', 'border-[#27272A]', 'space-y-2')}>
-                        <div className={clsx('flex', 'justify-between', 'items-start')}>
-                          <div className="space-y-0.5">
-                            <strong className={clsx('text-white', 'block', 'truncate', 'w-40')}>{item.product.nome}</strong>
-                            <span className={clsx('text-[9px]', 'text-[#10b981]', 'font-mono')}>R$ {item.product.preco.toFixed(2)} / un</span>
-                          </div>
-                          <button
-                            onClick={() => handlePdvRemoveCartItem(idx)}
-                            className={clsx('text-gray-500', 'hover:text-rose-500', 'p-0.5', 'cursor-pointer')}
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
-
-                        <div className={clsx('flex', 'justify-between', 'items-center')}>
-                          <div className={clsx('flex', 'items-center', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'overflow-hidden')}>
-                            <button
-                              type="button"
-                              onClick={() => handlePdvUpdateCartQty(idx, -1)}
-                              className={clsx('px-2', 'py-1', 'text-gray-400', 'hover:text-white', 'cursor-pointer', 'hover:bg-[#1C1C1F]')}
-                            >
-                              -
-                            </button>
-                            <span className={clsx('px-2', 'text-[10px]', 'font-bold', 'font-mono', 'text-white')}>{item.quantity}</span>
-                            <button
-                              type="button"
-                              onClick={() => handlePdvUpdateCartQty(idx, 1)}
-                              className={clsx('px-2', 'py-1', 'text-gray-400', 'hover:text-white', 'cursor-pointer', 'hover:bg-[#1C1C1F]')}
-                            >
-                              +
-                            </button>
-                          </div>
-                          <input
-                            type="text"
-                            placeholder="Obs..."
-                            value={item.obs}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setPdvCart(prev => {
-                                const c = [...prev];
-                                c[idx].obs = val;
-                                return c;
-                              });
-                            }}
-                            className={clsx('w-24', 'px-1.5', 'py-1', 'text-[9px]', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded', 'focus:outline-none', 'focus:border-[#10b981]', 'text-white')}
-                          />
-                        </div>
-
-                        {/* Presets de Observação Dinâmicos do Terminal Balcão */}
-                        {(() => {
-                          const presets = getProductPresets(item.product);
-                          if (presets.length === 0) return null;
-                          const parts = item.obs ? item.obs.split(',').map(p => p.trim()) : [];
-                          return (
-                            <div className="flex flex-wrap gap-1 mt-2 justify-end">
-                              {presets.map(preset => {
-                                const isActive = parts.some(p => p.toLowerCase() === preset.toLowerCase());
-                                return (
-                                  <button
-                                    key={preset}
-                                    type="button"
-                                    onClick={() => {
-                                      const currentParts = item.obs ? item.obs.split(',').map(p => p.trim()) : [];
-                                      const exists = currentParts.some(p => p.toLowerCase() === preset.toLowerCase());
-                                      const updatedParts = exists
-                                        ? currentParts.filter(p => p.toLowerCase() !== preset.toLowerCase() && p !== '')
-                                        : [...currentParts.filter(p => p !== ''), preset];
-                                      
-                                      const updatedObs = updatedParts.join(', ');
-                                      setPdvCart(prev => {
-                                        const c = [...prev];
-                                        c[idx].obs = updatedObs;
-                                        return c;
-                                      });
-                                    }}
-                                    className={`px-1.5 py-0.5 text-[8px] rounded border transition-colors cursor-pointer font-medium ${
-                                      isActive
-                                        ? 'bg-emerald-600/20 border-emerald-500/40 text-emerald-400'
-                                        : 'bg-[#27272A] hover:bg-emerald-600/25 text-gray-400 hover:text-white border-[#27272A]'
-                                    }`}
-                                  >
-                                    {isActive ? preset : `+${preset}`}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                <form onSubmit={handlePdvSubmitOrder} className={clsx('bg-[#18181B]', 'p-3', 'border-t', 'border-[#27272A]', 'space-y-3', 'shrink-0')}>
-                  {!modoExclusivoSalao && (
-                    <div className="space-y-1">
-                      <div className={clsx('flex', 'gap-1', 'p-0.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'shrink-0')}>
-                        <button
-                          type="button"
-                          onClick={() => setPdvOrderType('balcao')}
-                          className={`flex-1 py-1 text-[8.5px] font-bold rounded transition-all cursor-pointer ${pdvOrderType === 'balcao' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'
-                            }`}
-                        >
-                          Balcão
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPdvOrderType('entrega')}
-                          className={`flex-1 py-1 text-[8.5px] font-bold rounded transition-all cursor-pointer ${pdvOrderType === 'entrega' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'
-                            }`}
-                        >
-                          Delivery
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPdvOrderType('mesa')}
-                          className={`flex-1 py-1 text-[8.5px] font-bold rounded transition-all cursor-pointer ${pdvOrderType === 'mesa' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'
-                            }`}
-                        >
-                          Mesa
-                        </button>
-                      </div>
-                      <span className={clsx('text-[7.5px]', 'text-gray-500', 'font-mono', 'block', 'text-left')}>Atalhos de Tipo: [F2] Balcão • [F3] Mesa • [F8] Delivery</span>
-                    </div>
-                  )}
-
-                  {pdvOrderType === 'mesa' && (
-                    <div className="space-y-1">
-                      <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Mesa Destino:</label>
-                      <select
-                        id="pdv-mesa-select"
-                        value={pdvTargetMesaId}
-                        onChange={(e) => setPdvTargetMesaId(parseInt(e.target.value))}
-                        className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'focus:border-[#10b981]', 'text-white', 'text-[10px]')}
-                      >
-                        <option value={0}>Selecione uma mesa...</option>
-                        {salonTables.map(t => {
-                          const mergedIntoMesaId = orders.find(o => o.mesaOrigemId === t.id)?.mesaId || null;
-                          const isMerged = mergedIntoMesaId !== null;
-                          const displayMesaId = isMerged ? mergedIntoMesaId : t.id;
-                          const tableOrders = orders.filter(o => o.mesaId === displayMesaId);
-                          const isOcupada = tableOrders.length > 0;
-                          
-                          let label = `🟢 Mesa ${t.id} (Livre)`;
-                          if (isMerged) {
-                            label = `🟡 Mesa ${t.id} (Unificada na Mesa ${mergedIntoMesaId})`;
-                          } else if (isOcupada) {
-                            label = `🔴 Mesa ${t.id} (Ocupada)`;
-                          }
-                          
-                          return (
-                            <option key={t.id} value={t.id}>
-                              {label}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    </div>
-                  )}
-
-                  {pdvOrderType === 'balcao' && (
-                    <div className={clsx('grid', 'grid-cols-2', 'gap-1.5')}>
-                      <div className="space-y-1">
-                        <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Nome Cliente:</label>
-                        <input
-                          id="pdv-customer-name-input"
-                          type="text"
-                          placeholder="Ex: Maria"
-                          required={pdvCart.length > 0}
-                          value={pdvCustomerName}
-                          onChange={(e) => setPdvCustomerName(e.target.value)}
-                          className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'text-white', 'text-[10px]')}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Telefone:</label>
-                        <input
-                          type="text"
-                          placeholder="(81) 9..."
-                          value={pdvCustomerPhone}
-                          onChange={(e) => setPdvCustomerPhone(e.target.value)}
-                          className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'text-white', 'text-[10px]')}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {pdvOrderType === 'entrega' && (
-                    <div className="space-y-2.5">
-                      <div className={clsx('grid', 'grid-cols-2', 'gap-1.5')}>
-                        <div className="space-y-1">
-                          <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Nome Cliente:</label>
-                          <input
-                            id="pdv-customer-name-input"
-                            type="text"
-                            placeholder="Ex: Maria"
-                            required={pdvCart.length > 0}
-                            value={pdvCustomerName}
-                            onChange={(e) => setPdvCustomerName(e.target.value)}
-                            className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'text-white', 'text-[10px]')}
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Telefone:</label>
-                          <input
-                            type="text"
-                            placeholder="(81) 9..."
-                            value={pdvCustomerPhone}
-                            onChange={(e) => setPdvCustomerPhone(e.target.value)}
-                            className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'text-white', 'text-[10px]')}
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-1">
-                        <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Endereço de Entrega:</label>
-                        <input
-                          type="text"
-                          placeholder="Rua, Número, Bairro, Complemento"
-                          required={pdvCart.length > 0}
-                          value={pdvDeliveryAddress}
-                          onChange={(e) => setPdvDeliveryAddress(e.target.value)}
-                          className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'text-white', 'text-[10px]')}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Taxa de Entrega (R$):</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          placeholder="5.00"
-                          value={pdvDeliveryTaxa}
-                          onChange={(e) => setPdvDeliveryTaxa(e.target.value)}
-                          className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'text-white', 'text-[10px]')}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  <div className={clsx('flex', 'justify-between', 'items-center', 'font-mono', 'border-t', 'border-[#27272A]', 'pt-2', 'text-[11px]', 'font-bold', 'text-white')}>
-                    <span>Total Pedido:</span>
-                    <span className={clsx('text-[#10b981]', 'text-sm')}>
-                      R$ {(
-                        pdvCart.reduce((sum, item) => sum + (item.product.preco * item.quantity), 0) +
-                        (pdvOrderType === 'entrega' ? parseFloat(pdvDeliveryTaxa) || 0 : 0)
-                      ).toFixed(2)}
-                    </span>
-                  </div>
-
-                  {modoExclusivoSalao && (pdvOrderType !== 'mesa' || !pdvTargetMesaId || pdvTargetMesaId === 0) && (
-                    <div className={clsx('text-[9.5px]', 'text-amber-500', 'border', 'border-amber-500/20', 'bg-amber-500/5', 'px-2.5', 'py-1.5', 'rounded-lg', 'text-left', 'leading-relaxed')}>
-                      Durante o modo de testes de salão, todos os pedidos de venda devem ser vinculados a uma Mesa física ativa.
-                    </div>
-                  )}
-
-                  <button
-                    id="pdv-submit-btn"
-                    type="submit"
-                    disabled={modoExclusivoSalao && (pdvOrderType !== 'mesa' || !pdvTargetMesaId || pdvTargetMesaId === 0)}
-                    className={clsx('w-full', 'py-2', 'bg-emerald-600', 'hover:bg-emerald-700', 'disabled:bg-zinc-800', 'disabled:text-zinc-500', 'disabled:border-zinc-800', 'disabled:cursor-not-allowed', 'text-white', 'rounded-lg', 'font-bold', 'text-[9px]', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'flex', 'flex-col', 'items-center', 'justify-center', 'gap-0.5', 'shadow')}
-                  >
-                    <div className={clsx('flex', 'items-center', 'gap-1')}>
-                      <Check size={12} />
-                      <span>Lançar Pedido</span>
-                    </div>
-                    <span className={clsx('text-[7.5px]', 'text-emerald-200/80', 'font-mono', 'font-normal')}>Pressione [F4] para finalizar</span>
-                  </button>
-                </form>
-              </div>
-
-            </div>
+            <CaixaBalcaoTab
+              products={dynamicMenu}
+              pdvCart={pdvCart}
+              setPdvCart={setPdvCart}
+              pdvSearch={pdvSearch}
+              setPdvSearch={setPdvSearch}
+              pdvOrderType={pdvOrderType}
+              setPdvOrderType={setPdvOrderType}
+              pdvCustomerName={pdvCustomerName}
+              setPdvCustomerName={setPdvCustomerName}
+              pdvCustomerPhone={pdvCustomerPhone}
+              setPdvCustomerPhone={setPdvCustomerPhone}
+              pdvDeliveryAddress={pdvDeliveryAddress}
+              setPdvDeliveryAddress={setPdvDeliveryAddress}
+              pdvDeliveryTaxa={pdvDeliveryTaxa}
+              setPdvDeliveryTaxa={setPdvDeliveryTaxa}
+              pdvTargetMesaId={pdvTargetMesaId}
+              setPdvTargetMesaId={setPdvTargetMesaId}
+              salonTables={salonTables}
+              orders={orders}
+              modoExclusivoSalao={modoExclusivoSalao}
+              handlePdvSubmitOrder={handlePdvSubmitOrder}
+              isLoading={isLoading}
+            />
           )}
 
           {/* VIEW 3: MAPA DE MESAS (Salão) */}
           {activeSubTab === 'salon' && (
-            <div className={clsx('h-full', 'flex', 'flex-col', 'space-y-4')}>
-              <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-3', 'rounded-2xl', 'flex', 'justify-between', 'items-center', 'gap-3')}>
-                <span className={clsx('font-serif', 'font-bold', 'text-gray-300')}>Estrutura Física do Salão</span>
-                <button
-                  onClick={() => setShowAddMesaModal(true)}
-                  className={clsx('px-4', 'py-2', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'font-bold', 'rounded-xl', 'flex', 'items-center', 'gap-1.5', 'cursor-pointer', 'text-[10px]', 'uppercase', 'tracking-wider', 'shadow')}
-                >
-                  <Plus size={12} />
-                  <span>Adicionar Mesa</span>
-                </button>
-              </div>
-
-              <div className={clsx('flex-1', 'bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'overflow-y-auto')}>
-                <div className={clsx('grid', 'grid-cols-1', 'sm:grid-cols-2', 'md:grid-cols-3', 'lg:grid-cols-4', 'xl:grid-cols-6', 'gap-4')}>
-                  {salonTables.map((table) => {
-                    const mergedIntoMesaId = orders.find(o => o.mesaOrigemId === table.id)?.mesaId || null;
-                    const isMerged = mergedIntoMesaId !== null;
-                    const displayMesaId = isMerged ? mergedIntoMesaId : table.id;
-                    const tableOrders = orders.filter(o => o.mesaId === displayMesaId);
-                    const isOcupada = tableOrders.length > 0;
-                    const hasPendingPayment = pagamentosPendentes.some(pag => 
-                      tableOrders.some(o => o.id === pag.comanda_id)
-                    );
-
-                    return (
-                      <div
-                        key={table.id}
-                        className={`bg-[#121214] border rounded-2xl p-3 flex flex-col justify-between gap-3 transition-all relative group ${hasPendingPayment
-                          ? 'border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.2)] animate-pulse'
-                          : isMerged
-                            ? 'border-dashed border-zinc-700 opacity-60 bg-zinc-950/20'
-                            : isOcupada
-                              ? 'border-rose-500/40 hover:border-rose-500'
-                              : 'border-[#27272A] hover:border-[#10b981]/30'
-                          }`}
-                      >
-                        <div className={clsx('flex', 'justify-between', 'items-start')}>
-                          <div>
-                            <span className={clsx('text-[9px]', 'font-bold', 'text-gray-500', 'uppercase', 'tracking-widest', 'block')}>Mesa</span>
-                            <strong className={clsx('text-xl', 'font-serif', 'text-white', 'leading-none')}>{table.id}</strong>
-                            {table.nome && table.nome !== `Mesa ${table.id}` && (
-                              <span className={clsx('text-[9px]', 'text-[#10b981]', 'block', 'mt-0.5')}>{table.nome}</span>
-                            )}
-                          </div>
-                          <div className={clsx('flex', 'gap-1', 'opacity-0', 'group-hover:opacity-100', 'transition-opacity')}>
-                            <button
-                              onClick={() => {
-                                const newName = prompt(`Novo nome/identificação para Mesa ${table.id} (Deixe em branco para padrão):`, table.nome || '');
-                                const newCap = prompt(`Nova capacidade (lugares) para Mesa ${table.id}?`, table.capacidade.toString());
-                                if (newCap && !isNaN(parseInt(newCap))) {
-                                  onUpdateMesa(table.id, parseInt(newCap), newName !== null ? (newName.trim() || `Mesa ${table.id}`) : undefined);
-                                } else if (newName !== null) {
-                                  onUpdateMesa(table.id, table.capacidade, newName.trim() || `Mesa ${table.id}`);
-                                }
-                              }}
-                              className={clsx('p-1', 'text-gray-400', 'hover:text-[#10b981]')}
-                              title="Editar capacidade"
-                            >
-                              <Edit3 size={10} />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteMesaAction(table.id)}
-                              className={clsx('p-1', 'text-gray-400', 'hover:text-emerald-500')}
-                              title="Excluir mesa"
-                            >
-                              <Trash2 size={10} />
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="space-y-1">
-                          {hasPendingPayment ? (
-                            <span className={clsx('px-2', 'py-0.5', 'text-[8px]', 'bg-amber-500/10', 'text-amber-400', 'font-bold', 'rounded-md', 'block', 'w-fit', 'border', 'border-amber-500/20', 'uppercase', 'tracking-wider animate-pulse')}>Confirmar Dinheiro</span>
-                          ) : isMerged ? (
-                            <span className={clsx('px-2', 'py-0.5', 'text-[8px]', 'bg-zinc-800', 'text-zinc-400', 'font-bold', 'rounded-md', 'block', 'w-fit', 'border', 'border-zinc-700/30', 'uppercase', 'tracking-wider')}>Mesclada na Mesa {mergedIntoMesaId}</span>
-                          ) : isOcupada ? (
-                            <span className={clsx('px-2', 'py-0.5', 'text-[8px]', 'bg-rose-500/10', 'text-rose-400', 'font-bold', 'rounded-md', 'block', 'w-fit', 'border', 'border-rose-500/10', 'uppercase', 'tracking-wider')}>Ocupada</span>
-                          ) : (
-                            <span className={clsx('px-2', 'py-0.5', 'text-[8px]', 'bg-emerald-500/10', 'text-emerald-400', 'rounded-md', 'block', 'w-fit', 'border', 'border-emerald-500/10', 'uppercase', 'tracking-wider')}>Livre</span>
-                          )}
-                          {(() => {
-                            const origemId = tableOrders.find(o => o.mesaOrigemId && Number(o.mesaOrigemId) !== Number(displayMesaId))?.mesaOrigemId;
-                            const transfId = tableOrders.find(o => o.mesaTransferidaDe && Number(o.mesaTransferidaDe) !== Number(displayMesaId))?.mesaTransferidaDe;
-                            if (origemId) {
-                              return (
-                                <span className="px-2 py-0.5 text-[8px] bg-emerald-500/10 text-emerald-300 font-bold rounded-md block w-fit border border-emerald-500/20 uppercase tracking-wider animate-pulse-subtle" title={`Consumo mesclado da Mesa ${origemId}`}>
-                                  🔗 Mesclado de Mesa {origemId}
-                                </span>
-                              );
-                            }
-                            if (transfId) {
-                              return (
-                                <span className="px-2 py-0.5 text-[8px] bg-purple-500/10 text-purple-300 font-bold rounded-md block w-fit border border-purple-500/20 uppercase tracking-wider" title={`Consumo transferido da Mesa ${transfId}`}>
-                                  🔗 Transferido da Mesa {transfId}
-                                </span>
-                              );
-                            }
-                            return null;
-                          })()}
-                        </div>
-
-                        {isOcupada && (
-                          <div className={clsx('flex', 'gap-1', 'pt-1.5', 'border-t', 'border-[#27272A]')}>
-                            <button
-                              onClick={() => {
-                                const order = tableOrders[0];
-                                setSelectedOrder({
-                                  ...order,
-                                  itens: order.itens.map((item: any) => ({
-                                    id: item.id,
-                                    produtoId: item.produto_id || item.produtoId,
-                                    nome: item.nome || `Item ${item.produtoId}`,
-                                    preco: item.preco_unit || item.preco,
-                                    observacao: item.observacao || '',
-                                    clienteNome: item.cliente_nome || 'Consumo Geral',
-                                    status: item.status,
-                                    pago: item.pago
-                                  }))
-                                });
-                                setShowCheckoutModal(true);
-                                setCheckoutServiceTax(true);
-                                setSplitPeople('1');
-                                setSelectedItemIds([]);
-                                const sub = order.itens.filter((item: any) => !item.pago).reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
-                                setPaymentValor((sub * (1.0 + (checkoutServiceTax ? serviceTaxRate / 100 : 0))).toFixed(2));
-                              }}
-                              className={clsx('flex-1', 'py-1', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'rounded', 'font-bold', 'text-[8px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider')}
-                            >
-                              Checkout
-                            </button>
-                            <button
-                              onClick={() => handleForceFreeTable(table.id)}
-                              className={clsx('p-1', 'bg-emerald-600/20', 'hover:bg-emerald-600', 'text-[#C46A74]', 'hover:text-white', 'rounded', 'transition-colors', 'cursor-pointer')}
-                            >
-                              <X size={10} />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
+            <CaixaSalaoTab
+              salonTables={salonTables}
+              orders={orders}
+              pagamentosPendentes={pagamentosPendentes}
+              setShowAddMesaModal={setShowAddMesaModal}
+              onUpdateMesa={onUpdateMesa}
+              handleDeleteMesaAction={handleDeleteMesaAction}
+              handleForceFreeTable={handleForceFreeTable}
+              setSelectedOrder={setSelectedOrder}
+              setShowCheckoutModal={setShowCheckoutModal}
+              setCheckoutServiceTax={setCheckoutServiceTax}
+              setSplitPeople={setSplitPeople}
+              setSelectedItemIds={setSelectedItemIds}
+              setPaymentValor={setPaymentValor}
+              serviceTaxRate={serviceTaxRate}
+              checkoutServiceTax={checkoutServiceTax}
+              isLoading={isLoading}
+            />
           )}
 
           {/* VIEW 4: MEU DESEMPENHO (Analytics) */}
@@ -4295,10 +3180,7 @@ export function CaixaPanel({
                               type="button"
                               onClick={async () => {
                                 try {
-                                  const res = await fetch(`${apiBaseUrl}/comandas/teste-impressao`, {
-                                    method: 'POST',
-                                    headers: authHeaders
-                                  });
+                                  const res = await API.testeImpressao(apiBaseUrl, authHeaders, {});
                                   if (res.ok) {
                                     alert('Cupom de teste enviado para a impressora Gertec G250!');
                                   } else {
@@ -5333,7 +4215,7 @@ export function CaixaPanel({
                         return;
                       }
                       try {
-                        const res = await fetch(`${apiBaseUrl}/produtos/categorias`, {
+                        const res = await API.callCaixaApi(apiBaseUrl, authHeaders, `/produtos/categorias`, {
                           method: 'POST',
                           headers: {
                             ...authHeaders,
@@ -5385,7 +4267,7 @@ export function CaixaPanel({
                         const data = JSON.parse(text);
                         const items = Array.isArray(data) ? data : [data];
                         if (confirm(`Deseja importar/atualizar ${items.length} produtos no cardápio?`)) {
-                          const res = await fetch(`${apiBaseUrl}/produtos/importar`, {
+                          const res = await API.callCaixaApi(apiBaseUrl, authHeaders, `/produtos/importar`, {
                             method: 'POST',
                             headers: {
                               ...authHeaders,
@@ -5458,7 +4340,7 @@ export function CaixaPanel({
                                 onClick={async () => {
                                   if (confirm(`Deseja realmente remover "${prod.nome}" do cardápio? Esta ação não pode ser desfeita.`)) {
                                     try {
-                                      const res = await fetch(`${apiBaseUrl}/produtos/${prod.id}`, {
+                                      const res = await API.callCaixaApi(apiBaseUrl, authHeaders, `/produtos/${prod.id}`, {
                                         method: 'DELETE',
                                         headers: authHeaders
                                       });
@@ -5529,7 +4411,7 @@ export function CaixaPanel({
               if (confirm(`Deseja realmente ${active ? 'disponibilizar' : 'esgotar'} todos os itens relacionados a "${keyword}" (${targetProducts.length} itens)?`)) {
                 try {
                   await Promise.all(targetProducts.map(prod =>
-                    fetch(`${apiBaseUrl}/produtos/${prod.id}`, {
+                    API.callCaixaApi(apiBaseUrl, authHeaders, `/produtos/${prod.id}`, {
                       method: 'PUT',
                       headers: { ...authHeaders, 'Content-Type': 'application/json' },
                       body: JSON.stringify({ ativo: active })
@@ -5622,7 +4504,7 @@ export function CaixaPanel({
                               if (confirm(`Deseja realmente esgotar todos os itens da categoria "${catObj.nome}"?`)) {
                                 try {
                                   await Promise.all(prods.map(prod => 
-                                    fetch(`${apiBaseUrl}/produtos/${prod.id}`, {
+                                    API.callCaixaApi(apiBaseUrl, authHeaders, `/produtos/${prod.id}`, {
                                       method: 'PUT',
                                       headers: { ...authHeaders, 'Content-Type': 'application/json' },
                                       body: JSON.stringify({ ativo: false })
@@ -5645,7 +4527,7 @@ export function CaixaPanel({
                               if (confirm(`Deseja realmente disponibilizar todos os itens da categoria "${catObj.nome}"?`)) {
                                 try {
                                   await Promise.all(prods.map(prod => 
-                                    fetch(`${apiBaseUrl}/produtos/${prod.id}`, {
+                                    API.callCaixaApi(apiBaseUrl, authHeaders, `/produtos/${prod.id}`, {
                                       method: 'PUT',
                                       headers: { ...authHeaders, 'Content-Type': 'application/json' },
                                       body: JSON.stringify({ ativo: true })
@@ -5679,7 +4561,7 @@ export function CaixaPanel({
                               <button
                                 onClick={async () => {
                                   try {
-                                    const res = await fetch(`${apiBaseUrl}/produtos/${prod.id}`, {
+                                    const res = await API.callCaixaApi(apiBaseUrl, authHeaders, `/produtos/${prod.id}`, {
                                       method: 'PUT',
                                       headers: { ...authHeaders, 'Content-Type': 'application/json' },
                                       body: JSON.stringify({ ativo: !isAtivo })
@@ -5729,7 +4611,7 @@ export function CaixaPanel({
                       return;
                     }
                     try {
-                      const res = await fetch(`${apiBaseUrl}/produtos/categorias`, {
+                      const res = await API.callCaixaApi(apiBaseUrl, authHeaders, `/produtos/categorias`, {
                         method: 'POST',
                         headers: {
                           ...authHeaders,
@@ -5793,7 +4675,7 @@ export function CaixaPanel({
                                   return;
                                 }
                                 try {
-                                  const res = await fetch(`${apiBaseUrl}/produtos/categorias/${cat.id}`, {
+                                  const res = await API.callCaixaApi(apiBaseUrl, authHeaders, `/produtos/categorias/${cat.id}`, {
                                     method: 'PUT',
                                     headers: {
                                       ...authHeaders,
@@ -5824,7 +4706,7 @@ export function CaixaPanel({
                               onClick={async () => {
                                 if (confirm(`Deseja realmente excluir a categoria "${cat.nome}"?`)) {
                                   try {
-                                    const res = await fetch(`${apiBaseUrl}/produtos/categorias/${cat.id}`, {
+                                    const res = await API.callCaixaApi(apiBaseUrl, authHeaders, `/produtos/categorias/${cat.id}`, {
                                       method: 'DELETE',
                                       headers: authHeaders
                                     });
@@ -5957,7 +4839,7 @@ export function CaixaPanel({
               const formData = new FormData();
               formData.append('file', file);
               try {
-                const res = await fetch(`${apiBaseUrl}/estoque/importar-xml`, {
+                const res = await API.callCaixaApi(apiBaseUrl, authHeaders, `/estoque/importar-xml`, {
                   method: 'POST',
                   headers: authHeaders,
                   body: formData
@@ -5966,9 +4848,9 @@ export function CaixaPanel({
                 if (!res.ok) throw new Error(json.detail || 'Erro ao importar XML.');
                 setXmlUploadState(s => ({ ...s, loading: false, result: json }));
                 // Refresh all estoque data
-                fetch(`${apiBaseUrl}/estoque/insumos`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setEstoqueInsumos(d); });
-                fetch(`${apiBaseUrl}/estoque/notas`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setNotasEntrada(d); });
-                fetch(`${apiBaseUrl}/estoque/distribuidores`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setDistribuidores(d); });
+                API.callCaixaApi(apiBaseUrl, authHeaders, `/estoque/insumos`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setEstoqueInsumos(d); });
+                API.callCaixaApi(apiBaseUrl, authHeaders, `/estoque/notas`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setNotasEntrada(d); });
+                API.callCaixaApi(apiBaseUrl, authHeaders, `/estoque/distribuidores`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setDistribuidores(d); });
               } catch (err: any) {
                 setXmlUploadState(s => ({ ...s, loading: false, error: err.message || 'Erro desconhecido.' }));
               }
@@ -7170,16 +6052,14 @@ export function CaixaPanel({
                           try {
                             const printHeader = localStorage.getItem("koma_print_header") || "";
                             const printFooter = localStorage.getItem("koma_print_footer") || "";
-                            let url = `${apiBaseUrl}/mesas/${selectedOrder.mesaId}/imprimir-recibo?apenas_valores=false`;
-                            const params = new URLSearchParams();
-                            if (printHeader) params.append("print_header", printHeader);
-                            if (printFooter) params.append("print_footer", printFooter);
-                            if (params.toString()) url += `&${params.toString()}`;
-                            
-                            const response = await fetch(url, {
-                              method: 'POST',
-                              headers: authHeaders
-                            });
+                            const response = await API.imprimirReciboMesa(
+                              apiBaseUrl,
+                              authHeaders,
+                              selectedOrder.mesaId,
+                              false,
+                              printHeader,
+                              printFooter
+                            );
                             if (response.ok) {
                               alert("Extrato completo enviado para a impressora!");
                             } else {
@@ -7193,25 +6073,23 @@ export function CaixaPanel({
                         }}
                         className={clsx('flex-1', 'py-2', 'bg-[#1C1C1F]', 'hover:bg-[#27272A]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-[10px]', 'font-bold', 'text-white', 'transition-all', 'cursor-pointer', 'text-center')}
                         title="Imprime a via térmica completa com todos os itens consumidos"
-                      >
+                       >
                         🖨️ Completo
-                      </button>
-                      <button
+                       </button>
+                       <button
                         type="button"
                         onClick={async () => {
                           try {
                             const printHeader = localStorage.getItem("koma_print_header") || "";
                             const printFooter = localStorage.getItem("koma_print_footer") || "";
-                            let url = `${apiBaseUrl}/mesas/${selectedOrder.mesaId}/imprimir-recibo?apenas_valores=true`;
-                            const params = new URLSearchParams();
-                            if (printHeader) params.append("print_header", printHeader);
-                            if (printFooter) params.append("print_footer", printFooter);
-                            if (params.toString()) url += `&${params.toString()}`;
-                            
-                            const response = await fetch(url, {
-                              method: 'POST',
-                              headers: authHeaders
-                            });
+                            const response = await API.imprimirReciboMesa(
+                              apiBaseUrl,
+                              authHeaders,
+                              selectedOrder.mesaId,
+                              true,
+                              printHeader,
+                              printFooter
+                            );
                             if (response.ok) {
                               alert("Extrato resumido (apenas valores) enviado para a impressora!");
                             } else {
@@ -7551,7 +6429,7 @@ export function CaixaPanel({
                   type="button"
                   onClick={async () => {
                     try {
-                      const res = await fetch(`${apiBaseUrl}/comandas/lancamentos/${selectedKanbanOrder.id}/reimprimir`, {
+                      const res = await API.callCaixaApi(apiBaseUrl, authHeaders, `/comandas/lancamentos/${selectedKanbanOrder.id}/reimprimir`, {
                         method: "POST",
                         headers: authHeaders
                       });
@@ -7611,13 +6489,13 @@ export function CaixaPanel({
 
                   let res;
                   if (editingProduct) {
-                    res = await fetch(`${apiBaseUrl}/produtos/${editingProduct.id}`, {
+                    res = await API.callCaixaApi(apiBaseUrl, authHeaders, `/produtos/${editingProduct.id}`, {
                       method: 'PUT',
                       headers: { ...authHeaders, 'Content-Type': 'application/json' },
                       body: JSON.stringify(payload)
                     });
                   } else {
-                    res = await fetch(`${apiBaseUrl}/produtos/`, {
+                    res = await API.callCaixaApi(apiBaseUrl, authHeaders, `/produtos/`, {
                       method: 'POST',
                       headers: { ...authHeaders, 'Content-Type': 'application/json' },
                       body: JSON.stringify({
@@ -7709,7 +6587,7 @@ export function CaixaPanel({
                           return;
                         }
                         try {
-                          const res = await fetch(`${apiBaseUrl}/produtos/categorias`, {
+                          const res = await API.callCaixaApi(apiBaseUrl, authHeaders, `/produtos/categorias`, {
                             method: 'POST',
                             headers: {
                               ...authHeaders,
