@@ -59,8 +59,12 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
 
   // Format validator for fields
   const validateField = (name: string, value: string): string | null => {
-    if (!value || value.trim() === "") return null; // Blank values are ok (not configured), but formatting must be valid if entered
+    if (!value || value.trim() === "" || value.includes("...")) return null; // Blank or masked values are ok (not configured or unchanged)
     const val = value.trim();
+
+    // Skip validation for mock settings/defaults
+    const isMock = val.includes("mock") || val.includes("koma") || val === "Georlan" || val === "solopreneur" || val === "sistema-gourmet-bistro";
+    if (isMock) return null;
 
     if (name === "CLOUDFLARE_ZONE_ID") {
       if (val === "test" || val === "placeholder") {

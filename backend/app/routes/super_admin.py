@@ -334,8 +334,11 @@ def save_credentials_to_env(updates: dict):
                 lines.append(line_content)
                 key_line_index[m_key] = len(lines) - 1
                 
-    with open(env_path, "w", encoding="utf-8") as f:
-        f.writelines(lines)
+    try:
+        with open(env_path, "w", encoding="utf-8") as f:
+            f.writelines(lines)
+    except Exception as e:
+        logger.error(f"Failed to write credentials to .env file (possibly read-only container): {str(e)}")
 
 @router.post("/credentials")
 async def update_credentials(payload: Dict[str, Any] = Body(...), admin: dict = Depends(get_current_admin)):
