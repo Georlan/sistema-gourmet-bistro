@@ -33,6 +33,7 @@ interface CaixaPanelProps {
   liveProdutos?: Product[];
   liveCategorias?: any[];
   onRefreshCategorias?: () => Promise<void>;
+  restauranteConfig?: any;
 }
 
 export function CaixaPanel({
@@ -50,7 +51,8 @@ export function CaixaPanel({
   isWsConnected = false,
   liveProdutos = [],
   liveCategorias = [],
-  onRefreshCategorias
+  onRefreshCategorias,
+  restauranteConfig
 }: CaixaPanelProps) {
   // Turno & Sync state
   const [turno, setTurno] = useState<CaixaTurno | null>(null);
@@ -560,6 +562,13 @@ export function CaixaPanel({
   useEffect(() => {
     setPaymentValor('');
   }, [showCheckoutModal]);
+
+  // Synchronize plano state when restauranteConfig prop updates
+  useEffect(() => {
+    if (restauranteConfig?.plano) {
+      setPlano(restauranteConfig.plano.toLowerCase() as any);
+    }
+  }, [restauranteConfig]);
 
   // Date filters for Meu Desempenho
   const [desempenhoRange, setDesempenhoRange] = useState<'7' | '15' | '30'>('7');
@@ -2154,8 +2163,8 @@ export function CaixaPanel({
           {activeTab === 'operacao' && [
             { id: 'pedidos', label: 'Fila de Pedidos' },
             { id: 'pdv', label: 'Terminal Balcão' },
-            { id: 'salon', label: 'Layout do Salão', show: modulesActive.salon },
-            { id: 'entregadores', label: 'Fretistas & Logística', show: !modoExclusivoSalao && modulesActive.delivery }
+            { id: 'salon', label: 'Layout do Salão', show: plano !== 'delivery' && modulesActive.salon },
+            { id: 'entregadores', label: 'Fretistas & Logística', show: plano !== 'bistro' && !modoExclusivoSalao && modulesActive.delivery }
           ].filter(sub => sub.show !== false).map(sub => (
             <button
               key={sub.id}
@@ -2274,10 +2283,10 @@ export function CaixaPanel({
 
           {activeTab === 'configuracoes' && [
             { id: 'equipe', label: 'Cargos & Permissões' },
-            { id: 'impressoras', label: 'Roteamento de Impressoras' },
+            { id: 'impressoras', label: 'Roteamento de Impressoras', show: plano !== 'pocket' },
             { id: 'nicho_wizard', label: 'Setup Wizard (Nicho)' },
             { id: 'planos', label: 'Planos & Integrações' }
-          ].map(sub => (
+          ].filter(sub => sub.show !== false).map(sub => (
             <button
               key={sub.id}
               onClick={() => setActiveSubTab(sub.id)}
@@ -2520,6 +2529,7 @@ export function CaixaPanel({
                 groupedTableOrdersReady={groupedTableOrdersReady}
                 orders={orders}
                 modoExclusivoSalao={modoExclusivoSalao}
+                plano={plano}
                 activeMotoboysList={activeMotoboysList}
                 isLoading={isLoading}
                 taxaServicoAtiva={taxaServicoAtiva}
@@ -3177,14 +3187,44 @@ export function CaixaPanel({
                                     console.error(e);
                                     alert('Erro de conexão ao testar impressora.');
                                   }
-                    <span>R$ 18,00</span>
+                                }}
+                                className={clsx('text-[8px]', 'uppercase', 'tracking-wider', 'text-[#10b981]', 'font-bold', 'hover:text-white', 'cursor-pointer')}
+                              >
+                                Teste
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className={clsx('text-center', 'text-[8px]', 'text-gray-600', 'border-t', 'border-dashed', 'border-gray-400', 'pt-1.5', 'uppercase', 'leading-normal')}>
-                    <span>{printFooter}</span>
-                  </div>
-                </div>
 
-              </div>
+                  {/* Mockup live preview coupon */}
+                  <div className={clsx('bg-[#FFFFFC]', 'text-black', 'p-4', 'rounded-xl', 'border', 'border-gray-300', 'font-mono', 'text-[9px]', 'space-y-3', 'shadow-inner', 'my-2')}>
+                    <div className={clsx('text-center', 'font-bold', 'border-b', 'border-dashed', 'border-gray-400', 'pb-1.5', 'uppercase', 'leading-normal')}>
+                      <span>{printHeader}</span>
+                    </div>
+                    <div className="space-y-1">
+                      <div className={clsx('flex', 'justify-between')}>
+                        <span>1x Pastel Carne</span>
+                        <span>R$ 12,00</span>
+                      </div>
+                      <div className={clsx('flex', 'justify-between')}>
+                        <span>1x Coca-Cola</span>
+                        <span>R$ 6,00</span>
+                      </div>
+                    </div>
+                    <div className={clsx('flex', 'justify-between', 'font-bold', 'border-t', 'border-dashed', 'border-gray-400', 'pt-1', 'text-[10px]')}>
+                      <span>Total:</span>
+                      <span>R$ 18,00</span>
+                    </div>
+                    <div className={clsx('text-center', 'text-[8px]', 'text-gray-600', 'border-t', 'border-dashed', 'border-gray-400', 'pt-1.5', 'uppercase', 'leading-normal')}>
+                      <span>{printFooter}</span>
+                    </div>
+                  </div>
+
+                </div>
+              )}
 
             </div>
           )}
@@ -6001,71 +6041,73 @@ export function CaixaPanel({
                   })()}
 
                   {/* BOTÕES DE REIMPRESSÃO DO EXTRATO */}
-                  <div className={clsx('bg-[#121214]/40', 'border', 'border-[#27272A]/50', 'p-4', 'rounded-2xl', 'space-y-3', 'text-left')}>
-                    <span className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Reimpressão de Extrato</span>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          try {
-                            const printHeader = localStorage.getItem("koma_print_header") || "";
-                            const printFooter = localStorage.getItem("koma_print_footer") || "";
-                            const response = await API.imprimirReciboMesa(
-                              apiBaseUrl,
-                              authHeaders,
-                              selectedOrder.mesaId,
-                              false,
-                              printHeader,
-                              printFooter
-                            );
-                            if (response.ok) {
-                              alert("Extrato completo enviado para a impressora!");
-                            } else {
-                              const err = await response.json();
-                              alert(`Erro ao imprimir: ${err.detail}`);
+                  {plano !== 'pocket' && (
+                    <div className={clsx('bg-[#121214]/40', 'border', 'border-[#27272A]/50', 'p-4', 'rounded-2xl', 'space-y-3', 'text-left')}>
+                      <span className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Reimpressão de Extrato</span>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              const printHeader = localStorage.getItem("koma_print_header") || "";
+                              const printFooter = localStorage.getItem("koma_print_footer") || "";
+                              const response = await API.imprimirReciboMesa(
+                                apiBaseUrl,
+                                authHeaders,
+                                selectedOrder.mesaId,
+                                false,
+                                printHeader,
+                                printFooter
+                              );
+                              if (response.ok) {
+                                alert("Extrato completo enviado para a impressora!");
+                              } else {
+                                const err = await response.json();
+                                alert(`Erro ao imprimir: ${err.detail}`);
+                              }
+                            } catch (err) {
+                              console.error(err);
+                              alert("Erro de conexão ao imprimir extrato.");
                             }
-                          } catch (err) {
-                            console.error(err);
-                            alert("Erro de conexão ao imprimir extrato.");
-                          }
-                        }}
-                        className={clsx('flex-1', 'py-2', 'bg-[#1C1C1F]', 'hover:bg-[#27272A]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-[10px]', 'font-bold', 'text-white', 'transition-all', 'cursor-pointer', 'text-center')}
-                        title="Imprime a via térmica completa com todos os itens consumidos"
-                       >
-                        🖨️ Completo
-                       </button>
-                       <button
-                        type="button"
-                        onClick={async () => {
-                          try {
-                            const printHeader = localStorage.getItem("koma_print_header") || "";
-                            const printFooter = localStorage.getItem("koma_print_footer") || "";
-                            const response = await API.imprimirReciboMesa(
-                              apiBaseUrl,
-                              authHeaders,
-                              selectedOrder.mesaId,
-                              true,
-                              printHeader,
-                              printFooter
-                            );
-                            if (response.ok) {
-                              alert("Extrato resumido (apenas valores) enviado para a impressora!");
-                            } else {
-                              const err = await response.json();
-                              alert(`Erro ao imprimir: ${err.detail}`);
+                          }}
+                          className={clsx('flex-1', 'py-2', 'bg-[#1C1C1F]', 'hover:bg-[#27272A]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-[10px]', 'font-bold', 'text-white', 'transition-all', 'cursor-pointer', 'text-center')}
+                          title="Imprime a via térmica completa com todos os itens consumidos"
+                         >
+                          🖨️ Completo
+                         </button>
+                         <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              const printHeader = localStorage.getItem("koma_print_header") || "";
+                              const printFooter = localStorage.getItem("koma_print_footer") || "";
+                              const response = await API.imprimirReciboMesa(
+                                apiBaseUrl,
+                                authHeaders,
+                                selectedOrder.mesaId,
+                                true,
+                                printHeader,
+                                printFooter
+                              );
+                              if (response.ok) {
+                                alert("Extrato resumido (apenas valores) enviado para a impressora!");
+                              } else {
+                                const err = await response.json();
+                                alert(`Erro ao imprimir: ${err.detail}`);
+                              }
+                            } catch (err) {
+                              console.error(err);
+                              alert("Erro de conexão ao imprimir extrato resumido.");
                             }
-                          } catch (err) {
-                            console.error(err);
-                            alert("Erro de conexão ao imprimir extrato resumido.");
-                          }
-                        }}
-                        className={clsx('flex-1', 'py-2', 'bg-[#1C1C1F]', 'hover:bg-[#27272A]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-[10px]', 'font-bold', 'text-white', 'transition-all', 'cursor-pointer', 'text-center')}
-                        title="Imprime apenas o resumo de subtotais e taxas de serviço para economizar papel"
-                      >
-                        🖨️ Só Valores
-                      </button>
+                          }}
+                          className={clsx('flex-1', 'py-2', 'bg-[#1C1C1F]', 'hover:bg-[#27272A]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-[10px]', 'font-bold', 'text-white', 'transition-all', 'cursor-pointer', 'text-center')}
+                          title="Imprime apenas o resumo de subtotais e taxas de serviço para economizar papel"
+                        >
+                          🖨️ Só Valores
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 <div className="space-y-4">

@@ -9,6 +9,7 @@ export interface CaixaKanbanBoardProps {
   groupedTableOrdersReady: any[];
   orders: Order[];
   modoExclusivoSalao: boolean;
+  plano?: string;
   activeMotoboysList: Motoboy[];
   isLoading: boolean;
   taxaServicoAtiva: boolean;
@@ -35,6 +36,7 @@ export const CaixaKanbanBoard: React.FC<CaixaKanbanBoardProps> = ({
   groupedTableOrdersReady,
   orders,
   modoExclusivoSalao,
+  plano = 'premium',
   activeMotoboysList,
   isLoading,
   taxaServicoAtiva,
@@ -54,38 +56,53 @@ export const CaixaKanbanBoard: React.FC<CaixaKanbanBoardProps> = ({
   openSimulatedOrderDetails,
   setSelectedKanbanOrder,
 }) => {
+  const isTwoColumns = modoExclusivoSalao || plano === 'bistro' || plano === 'delivery';
+  const includesRetiradaInLocal = modoExclusivoSalao || plano === 'bistro';
+  const localSimulatedOrdersInPreparo = includesRetiradaInLocal
+    ? simulatedOrders.filter(o => o.status === 'producao' && !o.endereco && !(o.mesaId && o.mesaId > 0))
+    : [];
+  const totalLocalCount = localProductionRounds.length + localSimulatedOrdersInPreparo.length;
+
+  const checkoutTableOrders = plano === 'delivery' ? [] : groupedTableOrdersReady;
+  const checkoutSimulatedOrders = simulatedOrders.filter(o => {
+    const isReady = o.status === 'transito' || o.status === 'pronto';
+    if (!isReady) return false;
+    if (modoExclusivoSalao || plano === 'bistro') {
+      return !o.endereco;
+    }
+    return true;
+  });
+  const totalCheckoutCount = checkoutTableOrders.length + checkoutSimulatedOrders.length;
+
   return (
     <div className={clsx(
       'flex-1', 'grid', 'gap-4', 'min-h-0',
-      modoExclusivoSalao ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1 md:grid-cols-3'
+      isTwoColumns ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1 md:grid-cols-3'
     )}>
 
-      {/* ═══════════════════════════════════════
-          COLUMN 1: Produção Local (Mesa / Balcão)
-          Um card por ITEM individual em preparo
-      ═══════════════════════════════════════ */}
-      <div className="flex flex-col overflow-hidden rounded-2xl border border-orange-500/20 bg-gradient-to-b from-orange-950/20 to-[#0c0c0e]/80 text-left">
-        {/* Column header */}
-        <div className="px-4 py-3 border-b border-orange-500/15 flex justify-between items-center shrink-0 bg-orange-950/30">
-          <div className="flex items-center gap-2.5">
-            <div className="w-2 h-2 rounded-full bg-orange-400 shadow-[0_0_6px_2px_rgba(251,146,60,0.4)]"></div>
-            <div>
-              <span className="font-bold text-orange-100 text-sm tracking-wide block">Produção Local</span>
-              <span className="text-[9px] text-orange-400/60 font-mono">Mesa / Garçom — por rodada</span>
+      {plano !== 'delivery' && (
+        <div className="flex flex-col overflow-hidden rounded-2xl border border-orange-500/20 bg-gradient-to-b from-orange-950/20 to-[#0c0c0e]/80 text-left">
+          {/* Column header */}
+          <div className="px-4 py-3 border-b border-orange-500/15 flex justify-between items-center shrink-0 bg-orange-950/30">
+            <div className="flex items-center gap-2.5">
+              <div className="w-2 h-2 rounded-full bg-orange-400 shadow-[0_0_6px_2px_rgba(251,146,60,0.4)]"></div>
+              <div>
+                <span className="font-bold text-orange-100 text-sm tracking-wide block">Produção Local</span>
+                <span className="text-[9px] text-orange-400/60 font-mono">Mesa / Garçom — por rodada</span>
+              </div>
             </div>
+            <span className={clsx(
+              'font-bold px-2.5 py-0.5 rounded-full font-mono text-[10px]',
+              totalLocalCount > 0
+                ? 'bg-orange-500/20 text-orange-300 animate-pulse'
+                : 'bg-orange-500/10 text-orange-500/50'
+            )}>
+              {totalLocalCount}
+            </span>
           </div>
-          <span className={clsx(
-            'font-bold px-2.5 py-0.5 rounded-full font-mono text-[10px]',
-            (localProductionRounds.length + (modoExclusivoSalao ? simulatedOrders.filter(o => o.status === 'producao' && !o.endereco && !(o.mesaId && o.mesaId > 0)).length : 0)) > 0
-              ? 'bg-orange-500/20 text-orange-300 animate-pulse'
-              : 'bg-orange-500/10 text-orange-500/50'
-          )}>
-            {localProductionRounds.length + (modoExclusivoSalao ? simulatedOrders.filter(o => o.status === 'producao' && !o.endereco && !(o.mesaId && o.mesaId > 0)).length : 0)}
-          </span>
-        </div>
 
-        <div className="p-3 flex-1 overflow-y-auto space-y-2 scrollbar-thin scrollbar-thumb-orange-900/30 scrollbar-track-transparent">
-          {localProductionRounds.length === 0 && (!modoExclusivoSalao || simulatedOrders.filter(o => o.status === 'producao' && !o.endereco && !(o.mesaId && o.mesaId > 0)).length === 0) ? (
+          <div className="p-3 flex-1 overflow-y-auto space-y-2 scrollbar-thin scrollbar-thumb-orange-900/30 scrollbar-track-transparent">
+            {totalLocalCount === 0 ? (
             <div className="flex flex-col items-center justify-center h-full min-h-[200px] text-orange-700/50 space-y-3">
               <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" className="opacity-40">
                 <path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>
@@ -162,8 +179,8 @@ export const CaixaKanbanBoard: React.FC<CaixaKanbanBoardProps> = ({
                 </div>
               ))}
 
-              {/* If modoExclusivoSalao is TRUE, show Retirada orders in preparation here */}
-              {modoExclusivoSalao && simulatedOrders
+              {/* If includesRetiradaInLocal is TRUE, show Retirada orders in preparation here */}
+              {includesRetiradaInLocal && simulatedOrders
                 .filter(o => o.status === 'producao' && !o.endereco && !(o.mesaId && o.mesaId > 0))
                 .map((order) => {
                   const btnLabel = '🏪 Retirada Pronta';
@@ -212,11 +229,12 @@ export const CaixaKanbanBoard: React.FC<CaixaKanbanBoardProps> = ({
           )}
         </div>
       </div>
+      )}
 
       {/* ═══════════════════════════════════════
           COLUMN 2: Delivery & Retirada (online em preparo + em rota)
       ═══════════════════════════════════════ */}
-      {!modoExclusivoSalao && (
+      {!(modoExclusivoSalao || plano === 'bistro') && (
         <div className="flex flex-col overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-b from-emerald-950/20 to-[#0c0c0e]/80 text-left">
           {/* Column header */}
           <div className="px-4 py-3 border-b border-emerald-500/15 flex justify-between items-center shrink-0 bg-emerald-950/30">
@@ -366,16 +384,16 @@ export const CaixaKanbanBoard: React.FC<CaixaKanbanBoardProps> = ({
           </div>
           <span className={clsx(
             'font-bold px-2.5 py-0.5 rounded-full font-mono text-[10px]',
-            (groupedTableOrdersReady.length + (modoExclusivoSalao ? 0 : simulatedOrders.filter(o => o.status === 'transito' || o.status === 'pronto').length)) > 0
+            totalCheckoutCount > 0
               ? 'bg-blue-500/20 text-blue-300'
               : 'bg-blue-500/10 text-blue-500/50'
           )}>
-            {groupedTableOrdersReady.length + (modoExclusivoSalao ? 0 : simulatedOrders.filter(o => o.status === 'transito' || o.status === 'pronto').length)}
+            {totalCheckoutCount}
           </span>
         </div>
 
         <div className="p-3 flex-1 overflow-y-auto space-y-3 scrollbar-thin scrollbar-thumb-blue-900/30 scrollbar-track-transparent">
-          {groupedTableOrdersReady.length === 0 && (modoExclusivoSalao || simulatedOrders.filter(o => o.status === 'transito' || o.status === 'pronto').length === 0) ? (
+          {totalCheckoutCount === 0 ? (
             <div className="flex flex-col items-center justify-center h-full min-h-[200px] text-blue-700/50 space-y-3">
               <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" className="opacity-40">
                 <rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/>
@@ -385,7 +403,7 @@ export const CaixaKanbanBoard: React.FC<CaixaKanbanBoardProps> = ({
           ) : (
             <>
               {/* Delivery / Retirada orders in transit or ready */}
-              {!modoExclusivoSalao && simulatedOrders.filter(o => o.status === 'transito' || o.status === 'pronto').map((order) => {
+              {checkoutSimulatedOrders.map((order) => {
                 const isDelivery = !!order.endereco;
                 const badgeEmoji = isDelivery ? '🛵' : '🏪';
                 const badgeLabel = isDelivery ? 'Delivery — Em Rota' : 'Retirada — Pronta';
@@ -459,7 +477,7 @@ export const CaixaKanbanBoard: React.FC<CaixaKanbanBoardProps> = ({
                 );
               })}
 
-              {groupedTableOrdersReady.map((order) => {
+              {checkoutTableOrders.map((order) => {
                 if (order.isGrouped) {
                   const contaPedida = order.contaPedida;
                   return (
