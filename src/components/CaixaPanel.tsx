@@ -2172,9 +2172,9 @@ export function CaixaPanel({
                         <Icon size={13} className={(tab.id === 'config_cardapio' ? (activeTab === 'configuracoes' && activeSubTab === 'config_cardapio') : tab.id === 'chat_copiloto' ? (activeTab === 'operacao' && activeSubTab === 'chat_copiloto') : activeTab === tab.id) ? 'text-[#10b981]' : 'text-gray-500 group-hover:text-white'} />
                         <span className="text-[10px]">{tab.label}</span>
                       </div>
-                      {tab.id === 'operacao' && (simulatedOrders.filter(o => o.status === 'analise').length + activeKitchenItems.length) > 0 && (
+                      {tab.id === 'operacao' && (tableOrdersInProduction.length + simulatedOrders.filter(o => ['pendente', 'analise', 'producao', 'pronto', 'transito'].includes(o.status)).length + tableOrdersReady.length) > 0 && (
                         <span className={clsx('bg-[#10b981]', 'text-[#121214]', 'text-[7px]', 'font-bold', 'px-1.5', 'py-0.5', 'rounded-full', 'font-mono')}>
-                          {simulatedOrders.filter(o => o.status === 'analise').length + activeKitchenItems.length}
+                          {tableOrdersInProduction.length + simulatedOrders.filter(o => ['pendente', 'analise', 'producao', 'pronto', 'transito'].includes(o.status)).length + tableOrdersReady.length}
                         </span>
                       )}
                     </button>
