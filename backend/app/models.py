@@ -278,6 +278,12 @@ class ConfiguracaoRestaurante(Base):
     perm_garcom_chamar = Column(Boolean, default=True)
     perm_garcom_ociosas = Column(Boolean, default=True)
 
+    restaurante = relationship("Restaurante")
+
+    @property
+    def plano(self):
+        return self.restaurante.plano if self.restaurante else "pocket"
+
 
 class ConfiguracaoIA(Base):
     __tablename__ = "configuracoes_ia"

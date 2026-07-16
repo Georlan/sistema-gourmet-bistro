@@ -288,6 +288,7 @@ class ConfiguracaoRestauranteResponse(BaseModel):
     perm_garcom_transferir_item: bool
     perm_garcom_chamar: bool
     perm_garcom_ociosas: bool
+    plano: Optional[str] = "pocket"
 
     model_config = ConfigDict(from_attributes=True)
 

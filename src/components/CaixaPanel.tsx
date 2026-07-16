@@ -464,6 +464,7 @@ export function CaixaPanel({
   const [serviceTaxRate, setServiceTaxRate] = useState(10); // Customizable service rate percentage
   const [unificarViasDelivery, setUnificarViasDelivery] = useState(false);
   const [modoExclusivoSalao, setModoExclusivoSalao] = useState(true);
+  const [plano, setPlano] = useState<'pocket' | 'bistro' | 'delivery' | 'premium'>('premium');
   const [splitPeople, setSplitPeople] = useState('1');
   const [paymentMetodo, setPaymentMetodo] = useState<'dinheiro' | 'pix' | 'cartao' | 'cartao_debito' | 'cartao_credito'>('pix');
   const [paymentValor, setPaymentValor] = useState('');
@@ -499,6 +500,7 @@ export function CaixaPanel({
         setServiceTaxRate(data.taxa_servico_padrao);
         setUnificarViasDelivery(data.unificar_vias_delivery);
         setModoExclusivoSalao(data.modo_exclusivo_salon || data.modo_exclusivo_salao);
+        if (data.plano) setPlano(data.plano.toLowerCase() as any);
         setPermDelivery(data.perm_garcom_delivery);
         setPermEdit(data.perm_garcom_editar);
         setPermAddCharges(data.perm_garcom_taxas);
@@ -1001,6 +1003,7 @@ export function CaixaPanel({
         setServiceTaxRate(data.taxa_servico_padrao);
         setUnificarViasDelivery(data.unificar_vias_delivery);
         setModoExclusivoSalao(data.modo_exclusivo_salao);
+        if (data.plano) setPlano(data.plano.toLowerCase() as any);
         setPermDelivery(data.perm_garcom_delivery);
         setPermEdit(data.perm_garcom_editar);
         setPermAddCharges(data.perm_garcom_taxas);
@@ -2985,7 +2988,7 @@ export function CaixaPanel({
             <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5')}>
 
               {/* Waiters permissions switches (Left Column) */}
-              <div className={clsx('lg:col-span-2', 'bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'flex', 'flex-col', 'overflow-hidden')}>
+              <div className={clsx(plano === 'pocket' ? 'lg:col-span-3' : 'lg:col-span-2', 'bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'flex', 'flex-col', 'overflow-hidden')}>
                 <div className={clsx('border-b', 'border-[#27272A]', 'pb-3', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
                   <span className={clsx('font-serif', 'font-bold', 'text-gray-300')}>Configurações de Permissões do App do Garçom</span>
                 </div>
@@ -3022,15 +3025,15 @@ export function CaixaPanel({
                         { title: "Permitir que garçons cancelem pedidos", desc: "Permite a exclusão direta de itens ou comandas pelo aplicativo sem aprovação do gerente.", checked: permCancel, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_cancelar: val }) },
                         { title: "Permitir exibição de status de pedidos no mapa de mesas", desc: "Gera ícones de produção ('Em preparo', 'Pronto') sobre as mesas no mapa.", checked: permShowStatus, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_status: val }) },
                         { title: "Permitir que garçons abram comandas sem pedido", desc: "Permite reservar uma mesa com status 'ocupada' sem lançar nenhum item.", checked: permOpenEmpty, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_abrir_vazia: val }) },
-                        { title: "Permitir impressão automática dos pedidos feitos pelo Garçom", desc: "Dispara a via térmica de produção no balcão imediatamente após o garçom confirmar.", checked: permAutoPrint, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_print: val }) }
+                        { title: "Permitir impressão automática dos pedidos feitos pelo Garçom", desc: "Dispara a via térmica de produção no balcão imediatamente após o garçom confirmar.", checked: plano === 'pocket' ? false : permAutoPrint, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_print: val }), disabled: plano === 'pocket' }
                       ].map((item, idx) => (
                         <div key={idx} className={clsx('flex', 'justify-between', 'items-start', 'gap-4')}>
                           <div className="space-y-0.5">
-                            <strong className={clsx('text-white', 'block', 'font-semibold')}>{item.title}</strong>
-                            <span className={clsx('text-[9px]', 'text-gray-500', 'block', 'leading-relaxed')}>{item.desc}</span>
+                            <strong className={clsx('text-white', 'block', 'font-semibold', item.disabled && 'opacity-50')}>{item.title}</strong>
+                            <span className={clsx('text-[9px]', 'text-gray-500', 'block', 'leading-relaxed', item.disabled && 'opacity-50')}>{item.desc}</span>
                           </div>
-                          <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer', 'shrink-0', 'mt-0.5')}>
-                            <input type="checkbox" checked={item.checked} onChange={(e) => item.onChange(e.target.checked)} className={clsx('sr-only', 'peer')} />
+                          <label className={clsx('relative', 'inline-flex', 'items-center', 'shrink-0', 'mt-0.5', item.disabled ? 'cursor-not-allowed opacity-40' : 'cursor-pointer')}>
+                            <input type="checkbox" checked={item.checked} disabled={item.disabled} onChange={(e) => item.onChange(e.target.checked)} className={clsx('sr-only', 'peer')} />
                             <div className={clsx('w-8', 'h-4.5', 'bg-[#27272A]', 'peer-focus:outline-none', 'rounded-full', 'peer', 'peer-checked:after:translate-x-full', 'peer-checked:after:border-white', "after:content-['']", 'after:absolute', 'after:top-[2px]', 'after:left-[2px]', 'after:bg-white', 'after:border-gray-300', 'after:border', 'after:rounded-full', 'after:h-3.5', 'after:w-3.5', 'after:transition-all', 'peer-checked:bg-emerald-600')}></div>
                           </label>
                         </div>
@@ -3097,128 +3100,83 @@ export function CaixaPanel({
               </div>
 
               {/* Printer messages & test (Right Column) */}
-              <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'flex', 'flex-col', 'justify-between')}>
-                <div className="space-y-4">
-                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Impressoras térmicas</span>
+              {plano !== 'pocket' && (
+                <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'flex', 'flex-col', 'justify-between')}>
+                  <div className="space-y-4">
+                    <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Impressoras térmicas</span>
 
-                  <div className={clsx('space-y-3', 'text-left')}>
-                    <div className="space-y-1">
-                      <label className={clsx('text-[9px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Mensagem de Cabeçalho:</label>
-                      <input
-                        type="text"
-                        value={printHeader}
-                        onChange={(e) => {
-                          setPrintHeader(e.target.value);
-                          localStorage.setItem("koma_print_header", e.target.value);
-                        }}
-                        className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-[10px]')}
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className={clsx('text-[9px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Mensagem de Rodapé:</label>
-                      <input
-                        type="text"
-                        value={printFooter}
-                        onChange={(e) => {
-                          setPrintFooter(e.target.value);
-                          localStorage.setItem("koma_print_footer", e.target.value);
-                        }}
-                        className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-[10px]')}
-                      />
-                    </div>
-
-                    <div className={clsx('flex', 'justify-between', 'items-center', 'pt-2')}>
-                      <span className={clsx('text-[10px]', 'text-gray-300', 'font-semibold')}>Unificar Vias de Delivery (Via Única)</span>
-                      <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer')}>
+                    <div className={clsx('space-y-3', 'text-left')}>
+                      <div className="space-y-1">
+                        <label className={clsx('text-[9px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Mensagem de Cabeçalho:</label>
                         <input
-                          type="checkbox"
-                          checked={unificarViasDelivery}
+                          type="text"
+                          value={printHeader}
                           onChange={(e) => {
-                            setUnificarViasDelivery(e.target.checked);
-                            updateConfiguracoes({ unificar_vias_delivery: e.target.checked });
+                            setPrintHeader(e.target.value);
+                            localStorage.setItem("koma_print_header", e.target.value);
                           }}
-                          className={clsx('sr-only', 'peer')}
+                          className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-[10px]')}
                         />
-                        <div className={clsx('w-9', 'h-5', 'bg-[#27272A]', 'peer-focus:outline-none', 'rounded-full', 'peer', 'peer-checked:after:translate-x-full', 'peer-checked:after:border-white', "after:content-['']", 'after:absolute', 'after:top-[2px]', 'after:left-[2px]', 'after:bg-white', 'after:border-gray-300', 'after:border', 'after:rounded-full', 'after:h-4', 'after:w-4', 'after:transition-all', 'peer-checked:bg-emerald-600')}></div>
-                      </label>
-                    </div>
-
-                    <div className={clsx('flex', 'justify-between', 'items-center', 'pt-2', 'border-t', 'border-[#27272A]/40')}>
-                      <span className={clsx('text-[10px]', 'text-gray-300', 'font-semibold')}>Modo Exclusivo de Salão (Kôma Lite)</span>
-                      <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer')}>
-                        <input
-                          type="checkbox"
-                          checked={modoExclusivoSalao}
-                          onChange={(e) => {
-                            setModoExclusivoSalao(e.target.checked);
-                            updateConfiguracoes({ modo_exclusivo_salao: e.target.checked });
-                          }}
-                          className={clsx('sr-only', 'peer')}
-                        />
-                        <div className={clsx('w-9', 'h-5', 'bg-[#27272A]', 'peer-focus:outline-none', 'rounded-full', 'peer', 'peer-checked:after:translate-x-full', 'peer-checked:after:border-white', "after:content-['']", 'after:absolute', 'after:top-[2px]', 'after:left-[2px]', 'after:bg-white', 'after:border-gray-300', 'after:border', 'after:rounded-full', 'after:h-4', 'after:w-4', 'after:transition-all', 'peer-checked:bg-emerald-600')}></div>
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Detected printers list / test search */}
-                  <div className="space-y-2">
-                    <button
-                      onClick={handleSearchPrinters}
-                      className={clsx('w-full', 'py-1.5', 'bg-[#1C1C1F]', 'hover:bg-[#27272A]', 'border', 'border-[#27272A]', 'text-gray-300', 'font-bold', 'rounded-lg', 'text-[9px]', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1.5', 'cursor-pointer')}
-                    >
-                      <Printer size={12} />
-                      <span>{isSearchingPrinters ? 'Procurando...' : 'Achar Impressoras'}</span>
-                    </button>
-
-                    {detectedPrinters.length > 0 && (
-                      <div className={clsx('space-y-1', 'animate-scale-in')}>
-                        {detectedPrinters.map((p, idx) => (
-                          <div key={idx} className={clsx('p-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'text-[9px]', 'text-gray-400', 'font-mono', 'flex', 'justify-between', 'items-center')}>
-                            <span>{p}</span>
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                try {
-                                  const res = await API.testeImpressao(apiBaseUrl, authHeaders, {});
-                                  if (res.ok) {
-                                    alert('Cupom de teste enviado para a impressora Gertec G250!');
-                                  } else {
-                                    alert('Erro ao disparar teste de impressão.');
-                                  }
-                                } catch (e) {
-                                  console.error(e);
-                                  alert('Erro de conexão ao testar impressora.');
-                                }
-                              }}
-                              className={clsx('text-[8px]', 'uppercase', 'tracking-wider', 'text-[#10b981]', 'font-bold', 'hover:text-white', 'cursor-pointer')}
-                            >
-                              Teste
-                            </button>
-                          </div>
-                        ))}
                       </div>
-                    )}
-                  </div>
-                </div>
 
-                {/* Mockup live preview coupon */}
-                <div className={clsx('bg-[#FFFFFC]', 'text-black', 'p-4', 'rounded-xl', 'border', 'border-gray-300', 'font-mono', 'text-[9px]', 'space-y-3', 'shadow-inner', 'my-2')}>
-                  <div className={clsx('text-center', 'font-bold', 'border-b', 'border-dashed', 'border-gray-400', 'pb-1.5', 'uppercase', 'leading-normal')}>
-                    <span>{printHeader}</span>
-                  </div>
-                  <div className="space-y-1">
-                    <div className={clsx('flex', 'justify-between')}>
-                      <span>1x Pastel Carne</span>
-                      <span>R$ 12,00</span>
+                      <div className="space-y-1">
+                        <label className={clsx('text-[9px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Mensagem de Rodapé:</label>
+                        <input
+                          type="text"
+                          value={printFooter}
+                          onChange={(e) => {
+                            setPrintFooter(e.target.value);
+                            localStorage.setItem("koma_print_footer", e.target.value);
+                          }}
+                          className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-[10px]')}
+                        />
+                      </div>
+
+                      <div className={clsx('flex', 'justify-between', 'items-center', 'pt-2')}>
+                        <span className={clsx('text-[10px]', 'text-gray-300', 'font-semibold')}>Unificar Vias de Delivery (Via Única)</span>
+                        <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer')}>
+                          <input
+                            type="checkbox"
+                            checked={unificarViasDelivery}
+                            onChange={(e) => {
+                              setUnificarViasDelivery(e.target.checked);
+                              updateConfiguracoes({ unificar_vias_delivery: e.target.checked });
+                            }}
+                            className={clsx('sr-only', 'peer')}
+                          />
+                          <div className={clsx('w-9', 'h-5', 'bg-[#27272A]', 'peer-focus:outline-none', 'rounded-full', 'peer', 'peer-checked:after:translate-x-full', 'peer-checked:after:border-white', "after:content-['']", 'after:absolute', 'after:top-[2px]', 'after:left-[2px]', 'after:bg-white', 'after:border-gray-300', 'after:border', 'after:rounded-full', 'after:h-4', 'after:w-4', 'after:transition-all', 'peer-checked:bg-emerald-600')}></div>
+                        </label>
+                      </div>
                     </div>
-                    <div className={clsx('flex', 'justify-between')}>
-                      <span>1x Coca-Cola</span>
-                      <span>R$ 6,00</span>
-                    </div>
-                  </div>
-                  <div className={clsx('flex', 'justify-between', 'font-bold', 'border-t', 'border-dashed', 'border-gray-400', 'pt-1', 'text-[10px]')}>
-                    <span>Total:</span>
+
+                    <div className="space-y-2">
+                      <button
+                        onClick={handleSearchPrinters}
+                        className={clsx('w-full', 'py-1.5', 'bg-[#1C1C1F]', 'hover:bg-[#27272A]', 'border', 'border-[#27272A]', 'text-gray-300', 'font-bold', 'rounded-lg', 'text-[9px]', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1.5', 'cursor-pointer')}
+                      >
+                        <Printer size={12} />
+                        <span>{isSearchingPrinters ? 'Procurando...' : 'Achar Impressoras'}</span>
+                      </button>
+
+                      {detectedPrinters.length > 0 && (
+                        <div className={clsx('space-y-1', 'animate-scale-in')}>
+                          {detectedPrinters.map((p, idx) => (
+                            <div key={idx} className={clsx('p-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'text-[9px]', 'text-gray-400', 'font-mono', 'flex', 'justify-between', 'items-center')}>
+                              <span>{p}</span>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  try {
+                                    const res = await API.testeImpressao(apiBaseUrl, authHeaders, {});
+                                    if (res.ok) {
+                                      alert('Cupom de teste enviado para a impressora Gertec G250!');
+                                    } else {
+                                      alert('Erro ao disparar teste de impressão.');
+                                    }
+                                  } catch (e) {
+                                    console.error(e);
+                                    alert('Erro de conexão ao testar impressora.');
+                                  }
                     <span>R$ 18,00</span>
                   </div>
                   <div className={clsx('text-center', 'text-[8px]', 'text-gray-600', 'border-t', 'border-dashed', 'border-gray-400', 'pt-1.5', 'uppercase', 'leading-normal')}>
