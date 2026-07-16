@@ -467,6 +467,7 @@ export function CaixaPanel({
   const [unificarViasDelivery, setUnificarViasDelivery] = useState(false);
   const [modoExclusivoSalao, setModoExclusivoSalao] = useState(true);
   const [plano, setPlano] = useState<'pocket' | 'bistro' | 'delivery' | 'premium'>('premium');
+  const restaurante = { plano };
   const isPocket = plano === 'pocket';
   const isBistro = plano === 'bistro';
   const isDelivery = plano === 'delivery';
@@ -2542,7 +2543,7 @@ export function CaixaPanel({
                 groupedTableOrdersReady={groupedTableOrdersReady}
                 orders={orders}
                 modoExclusivoSalao={modoExclusivoSalao}
-                plano={plano}
+                plano={restaurante?.plano}
                 activeMotoboysList={activeMotoboysList}
                 isLoading={isLoading}
                 taxaServicoAtiva={taxaServicoAtiva}

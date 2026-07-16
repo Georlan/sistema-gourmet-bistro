@@ -9,7 +9,7 @@ export interface CaixaKanbanBoardProps {
   groupedTableOrdersReady: any[];
   orders: Order[];
   modoExclusivoSalao: boolean;
-  plano?: string;
+  plano: string;
   activeMotoboysList: Motoboy[];
   isLoading: boolean;
   taxaServicoAtiva: boolean;
@@ -59,9 +59,9 @@ export const CaixaKanbanBoard: React.FC<CaixaKanbanBoardProps> = ({
   const isPocket = plano === 'pocket';
   const isBistro = plano === 'bistro';
   const isDelivery = plano === 'delivery';
-  const isPremium = plano === 'premium' || (!isPocket && !isBistro && !isDelivery);
+  const isPremium = plano === 'premium' || !plano;
 
-  const isTwoColumns = isBistro || isDelivery;
+  const isTwoColumns = isBistro || isDelivery || isPocket;
   const localSimulatedOrdersInPreparo = isBistro
     ? simulatedOrders.filter(o => o.status === 'producao' && !o.endereco)
     : [];
@@ -72,8 +72,8 @@ export const CaixaKanbanBoard: React.FC<CaixaKanbanBoardProps> = ({
   const checkoutSimulatedOrders = simulatedOrders.filter(o => {
     const isReady = o.status === 'transito' || o.status === 'pronto';
     if (!isReady) return false;
-    if (isBistro) {
-      return !o.endereco;
+    if (isBistro || isPocket) {
+      return !o.endereco && o.status === 'pronto';
     }
     return true;
   });
@@ -82,7 +82,7 @@ export const CaixaKanbanBoard: React.FC<CaixaKanbanBoardProps> = ({
   return (
     <div className={clsx(
       'flex-1', 'grid', 'gap-4', 'min-h-0',
-      isTwoColumns ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1 md:grid-cols-3'
+      isPremium ? 'grid-cols-1 lg:grid-cols-3' : 'grid-cols-1 lg:grid-cols-2'
     )}>
 
       {!isDelivery && (
@@ -241,7 +241,7 @@ export const CaixaKanbanBoard: React.FC<CaixaKanbanBoardProps> = ({
       {/* ═══════════════════════════════════════
           COLUMN 2: Delivery & Retirada (online em preparo + em rota)
       ═══════════════════════════════════════ */}
-      {!isBistro && (
+      {!isBistro && !isPocket && (
         <div className="flex flex-col overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-b from-emerald-950/20 to-[#0c0c0e]/80 text-left">
           {/* Column header */}
           <div className="px-4 py-3 border-b border-emerald-500/15 flex justify-between items-center shrink-0 bg-emerald-950/30">
