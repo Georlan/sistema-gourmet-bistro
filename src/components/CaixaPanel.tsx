@@ -3413,18 +3413,6 @@ export function CaixaPanel({
                             >
                               <Edit3 size={10} />
                             </button>
-                            <button
-                              onClick={() => {
-                                setEditingTable(table);
-                                setEditTableCap(table.capacidade.toString());
-                                setEditTableNome(table.nome || '');
-                                setIsConfirmingDelete(true);
-                              }}
-                              className={clsx('p-1', 'text-gray-400', 'hover:text-rose-500')}
-                              title="Excluir mesa"
-                            >
-                              <Trash2 size={10} />
-                            </button>
                           </div>
                         </div>
 

@@ -100,6 +100,8 @@ def delete_mesa(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Não é possível excluir uma mesa com comandas abertas."
         )
+    # Dissocia comandas fechadas/antigas para evitar violações de chave estrangeira (FK constraints)
+    db.query(Comanda).filter(Comanda.mesa_id == mesa_id).update({Comanda.mesa_id: None}, synchronize_session=False)
     db.delete(mesa)
     db.commit()
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})

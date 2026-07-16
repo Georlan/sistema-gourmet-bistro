@@ -344,11 +344,18 @@ export default function App() {
       if (res.ok) {
         await fetchTables();
       } else {
-        const err = await res.json();
-        alert(`Erro ao excluir mesa: ${err.detail}`);
+        let errMsg = 'Erro desconhecido';
+        try {
+          const err = await res.json();
+          errMsg = err.detail || errMsg;
+        } catch (_) {
+          errMsg = res.statusText || errMsg;
+        }
+        alert(`Erro ao excluir mesa: ${errMsg}`);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      alert(`Erro de conexão ao excluir mesa: ${err.message}`);
     }
   };
 
