@@ -496,6 +496,7 @@ export function CaixaPanel({
     perm_garcom_transferir_item?: boolean;
     perm_garcom_chamar?: boolean;
     perm_garcom_ociosas?: boolean;
+    plano?: string;
   }) => {
     try {
       const res = await API.updateCaixaConfiguracoes(apiBaseUrl, authHeaders, updates);
@@ -526,6 +527,10 @@ export function CaixaPanel({
     } catch (e) {
       console.error('Error saving configurations:', e);
     }
+  };
+
+  const handleSavePlan = async (novoPlano: string) => {
+    await updateConfiguracoes({ plano: novoPlano });
   };
 
   // Toggle automatics
@@ -3515,7 +3520,10 @@ export function CaixaPanel({
                   ].map((plan) => (
                     <div
                       key={plan.id}
-                      onClick={() => setSelectedPlan(plan.id as any)}
+                      onClick={() => {
+                        setSelectedPlan(plan.id as any);
+                        handleSavePlan(plan.id);
+                      }}
                       className={`p-3.5 rounded-2xl border transition-all cursor-pointer text-left ${selectedPlan === plan.id
                         ? 'bg-emerald-600/15 border-[#10b981] shadow'
                         : 'bg-[#1C1C1F] border-[#27272A] hover:border-[#10b981]/30'

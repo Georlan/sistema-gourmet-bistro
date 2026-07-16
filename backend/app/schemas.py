@@ -295,6 +295,7 @@ class ConfiguracaoRestauranteResponse(BaseModel):
 
 class ConfiguracaoRestauranteUpdate(BaseModel):
     nicho: Optional[str] = None
+    plano: Optional[str] = None
     mapa_mesas_ativo: Optional[bool] = None
     delivery_ativo: Optional[bool] = None
     taxa_servico_ativa: Optional[bool] = None

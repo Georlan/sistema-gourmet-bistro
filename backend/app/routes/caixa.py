@@ -560,6 +560,9 @@ def atualizar_configuracoes(
         config.perm_garcom_chamar = config_in.perm_garcom_chamar
     if config_in.perm_garcom_ociosas is not None:
         config.perm_garcom_ociosas = config_in.perm_garcom_ociosas
+    if config_in.plano is not None:
+        if config.restaurante:
+            config.restaurante.plano = config_in.plano.lower()
         
     db.commit()
     db.refresh(config)
