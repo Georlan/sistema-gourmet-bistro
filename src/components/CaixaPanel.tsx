@@ -3221,9 +3221,18 @@ export function CaixaPanel({
                         className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'focus:border-[#10b981]', 'text-white', 'text-[10px]')}
                       >
                         <option value={0}>Selecione uma mesa...</option>
-                        {salonTables.map(t => (
-                          <option key={t.id} value={t.id}>Mesa {t.id} (Cap: {t.capacidade})</option>
-                        ))}
+                        {salonTables.map(t => {
+                          const isOccupied = orders.some(o => o.mesaId === t.id);
+                          return (
+                            <option
+                              key={t.id}
+                              value={t.id}
+                              style={{ color: isOccupied ? '#f87171' : '#4ade80' }}
+                            >
+                              {isOccupied ? '🔴' : '🟢'} Mesa {t.id} ({isOccupied ? 'Ocupada' : 'Livre'})
+                            </option>
+                          );
+                        })}
                       </select>
                     </div>
                   )}
