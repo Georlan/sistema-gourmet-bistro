@@ -926,7 +926,13 @@ export function CaixaPanel({
   // Online payments & billing plans mock states
   const [payPixActive, setPayPixActive] = useState(true);
   const [payCardActive, setPayCardActive] = useState(true);
-  const [selectedPlan, setSelectedPlan] = useState<'gold'>('gold');
+  const [selectedPlan, setSelectedPlan] = useState<'pocket' | 'bistro' | 'delivery' | 'premium'>('premium');
+
+  useEffect(() => {
+    if (plano) {
+      setSelectedPlan(plano);
+    }
+  }, [plano]);
 
   const [supportChats, setSupportChats] = useState<{ id: number; cliente: string; ultimaMsg: string; status: string; canal: string; }[]>([]);
 
@@ -3497,9 +3503,10 @@ export function CaixaPanel({
 
                 <div className="space-y-3">
                   {[
-                    { id: 'bronze', name: 'Plano Bronze', price: 'R$ 99/mês', features: ['Menu Digital QR Code', 'Gestão de Mesas', 'Suporte por e-mail'] },
-                    { id: 'gold', name: 'Plano Ouro (Recomendado)', price: 'R$ 199/mês', features: ['Menu Digital + iFood', 'Robô de Atendimento IA', 'Suporte 24h WhatsApp'] },
-                    { id: 'platinum', name: 'Plano Platinum', price: 'R$ 349/mês', features: ['Multi-lojas Integrado', 'Gestão de Estoque Avançado', 'Gerente de Contas Dedicado'] }
+                    { id: 'pocket', name: 'Kôma Pocket', price: 'R$ 99/mês', features: ['Menu Digital QR Code', 'Gestão Local', 'Sem impressoras térmicas'] },
+                    { id: 'bistro', name: 'Kôma Bistrô', price: 'R$ 199/mês', features: ['Gestão de Mesas', 'Atendimento Local', 'Sem Delivery'] },
+                    { id: 'delivery', name: 'Kôma Delivery', price: 'R$ 199/mês', features: ['Gestão de Entregas', 'Taxas e Logística', 'Sem Mesas'] },
+                    { id: 'premium', name: 'Kôma Premium', price: 'R$ 349/mês', features: ['Acesso Completo', 'Mesas e Delivery', 'Impressão e KDS'] }
                   ].map((plan) => (
                     <div
                       key={plan.id}
