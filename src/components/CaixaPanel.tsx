@@ -415,6 +415,7 @@ export function CaixaPanel({
   const [editTableCap, setEditTableCap] = useState('');
   const [editTableNome, setEditTableNome] = useState('');
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [confirmingFreeTableId, setConfirmingFreeTableId] = useState<number | null>(null);
 
   // Product & Category management states
   const [apiCategorias, setApiCategorias] = useState<any[]>([]);
@@ -3488,8 +3489,9 @@ export function CaixaPanel({
                               Checkout
                             </button>
                             <button
-                              onClick={() => handleForceFreeTable(table.id)}
+                              onClick={() => setConfirmingFreeTableId(table.id)}
                               className={clsx('p-1', 'bg-emerald-600/20', 'hover:bg-emerald-600', 'text-[#C46A74]', 'hover:text-white', 'rounded', 'transition-colors', 'cursor-pointer')}
+                              title="Liberar mesa de forma forçada"
                             >
                               <X size={10} />
                             </button>
@@ -7571,6 +7573,64 @@ export function CaixaPanel({
                   </div>
                 </>
               )}
+            </div>
+          </div>
+        )
+      }
+
+      {/* 5.2 MODAL: CONFIRMAR LIBERAÇÃO DE MESA */}
+      {
+        confirmingFreeTableId !== null && (
+          <div className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4')}>
+            <div className={clsx('bg-[#1C1C1F]', 'border', 'border-rose-900/40', 'rounded-3xl', 'w-full', 'max-w-sm', 'p-6', 'space-y-4', 'shadow-2xl', 'animate-scale-in')}>
+              <div className="text-center space-y-3">
+                <span className="text-2xl block">⚠️</span>
+                <h3 className="font-serif font-bold text-base text-white">Liberar Mesa {confirmingFreeTableId}</h3>
+                <p className="text-xs text-rose-300 leading-relaxed">
+                  Deseja realmente fechar e liberar a <strong>Mesa {confirmingFreeTableId}</strong> de forma forçada? Esta ação fechará o saldo e liberará a mesa no sistema.
+                </p>
+                <div className="flex gap-2 pt-2">
+                  <button 
+                    type="button" 
+                    onClick={() => setConfirmingFreeTableId(null)} 
+                    className="flex-1 py-2.5 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] text-white text-xs font-bold rounded-xl cursor-pointer transition-all"
+                  >
+                    Cancelar
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={async () => {
+                      if (isLoading) return;
+                      try {
+                        setIsLoading(true);
+                        const tableOrders = orders.filter(o => o.mesaId === confirmingFreeTableId);
+                        for (const comanda of tableOrders) {
+                          const res = await fetch(`${apiBaseUrl}/comandas/${comanda.id}/fechar?force=true`, {
+                            method: "PUT",
+                            headers: authHeaders
+                          });
+                          if (!res.ok) {
+                            const errData = await res.json();
+                            throw new Error(errData.detail || "Erro ao liberar");
+                          }
+                        }
+                        setConfirmingFreeTableId(null);
+                        onRefreshOrders();
+                        setSelectedOrder(null);
+                        setShowCheckoutModal(false);
+                      } catch (err: any) {
+                        console.error(err);
+                        alert(err.message || "Erro ao liberar mesa.");
+                      } finally {
+                        setIsLoading(false);
+                      }
+                    }}
+                    className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl cursor-pointer transition-all"
+                  >
+                    Sim, Liberar
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )

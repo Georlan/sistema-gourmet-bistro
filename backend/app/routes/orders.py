@@ -472,6 +472,7 @@ def transferir_comanda(comanda_id: str, nova_mesa_id: int, background_tasks: Bac
 def fechar_comanda(
     comanda_id: str,
     background_tasks: BackgroundTasks,
+    force: bool = False,
     db: Session = Depends(get_db),
     current_garcom: Usuario = Depends(get_current_user)
 ):
@@ -495,11 +496,12 @@ def fechar_comanda(
     valor_pago = comanda.valor_pago or 0.0
     
     # Verifica se há saldo devedor
-    if valor_pago < subtotal and valor_pago < total_com_taxa:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, 
-            detail=f"Não é possível fechar uma comanda com saldo em aberto. Valor devido: R${subtotal:.2f} (ou R${total_com_taxa:.2f} com taxa). Valor pago: R${valor_pago:.2f}"
-        )
+    if not force:
+        if valor_pago < subtotal and valor_pago < total_com_taxa:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail=f"Não é possível fechar uma comanda com saldo em aberto. Valor devido: R${subtotal:.2f} (ou R${total_com_taxa:.2f} com taxa). Valor pago: R${valor_pago:.2f}"
+            )
 
     comanda.fechada = True
     comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
