@@ -411,6 +411,10 @@ export function CaixaPanel({
   const [newMesaId, setNewMesaId] = useState('');
   const [newMesaCap, setNewMesaCap] = useState('4');
   const [newMesaNome, setNewMesaNome] = useState('');
+  const [editingTable, setEditingTable] = useState<any | null>(null);
+  const [editTableCap, setEditTableCap] = useState('');
+  const [editTableNome, setEditTableNome] = useState('');
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
 
   // Product & Category management states
   const [apiCategorias, setApiCategorias] = useState<any[]>([]);
@@ -3398,22 +3402,24 @@ export function CaixaPanel({
                           <div className={clsx('flex', 'gap-1', 'opacity-0', 'group-hover:opacity-100', 'transition-opacity')}>
                             <button
                               onClick={() => {
-                                const newName = prompt(`Novo nome/identificação para Mesa ${table.id} (Deixe em branco para padrão):`, table.nome || '');
-                                const newCap = prompt(`Nova capacidade (lugares) para Mesa ${table.id}?`, table.capacidade.toString());
-                                if (newCap && !isNaN(parseInt(newCap))) {
-                                  onUpdateMesa(table.id, parseInt(newCap), newName !== null ? (newName.trim() || `Mesa ${table.id}`) : undefined);
-                                } else if (newName !== null) {
-                                  onUpdateMesa(table.id, table.capacidade, newName.trim() || `Mesa ${table.id}`);
-                                }
+                                setEditingTable(table);
+                                setEditTableCap(table.capacidade.toString());
+                                setEditTableNome(table.nome || '');
+                                setIsConfirmingDelete(false);
                               }}
                               className={clsx('p-1', 'text-gray-400', 'hover:text-[#10b981]')}
-                              title="Editar capacidade"
+                              title="Editar mesa"
                             >
                               <Edit3 size={10} />
                             </button>
                             <button
-                              onClick={() => handleDeleteMesaAction(table.id)}
-                              className={clsx('p-1', 'text-gray-400', 'hover:text-emerald-500')}
+                              onClick={() => {
+                                setEditingTable(table);
+                                setEditTableCap(table.capacidade.toString());
+                                setEditTableNome(table.nome || '');
+                                setIsConfirmingDelete(true);
+                              }}
+                              className={clsx('p-1', 'text-gray-400', 'hover:text-rose-500')}
                               title="Excluir mesa"
                             >
                               <Trash2 size={10} />
@@ -7407,6 +7413,18 @@ export function CaixaPanel({
                 </div>
 
                 <div className="space-y-1">
+                  <label className={clsx('text-[9px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Capacidade (Lugares):</label>
+                  <input
+                    type="number"
+                    required
+                    placeholder="Ex: 4"
+                    value={newMesaCap}
+                    onChange={(e) => setNewMesaCap(e.target.value)}
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'font-mono')}
+                  />
+                </div>
+
+                <div className="space-y-1">
                   <label className={clsx('text-[9px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Nome Personalizado (Opcional):</label>
                   <input
                     type="text"
@@ -7423,6 +7441,137 @@ export function CaixaPanel({
                 <button type="submit" className={clsx('flex-1', 'py-2', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'rounded-xl', 'font-bold', 'cursor-pointer')}>Salvar Mesa</button>
               </div>
             </form>
+          </div>
+        )
+      }
+
+      {/* 5.1 MODAL: EDITAR / EXCLUIR MESA */}
+      {
+        editingTable && (
+          <div className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4')}>
+            <div className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-3xl', 'w-full', 'max-w-sm', 'p-6', 'space-y-4', 'shadow-2xl', 'animate-scale-in')}>
+              <div className={clsx('flex', 'justify-between', 'items-center', 'border-b', 'border-[#27272A]', 'pb-3')}>
+                <h3 className={clsx('font-serif', 'font-bold', 'text-lg', 'text-white')}>Editar Mesa {editingTable.id}</h3>
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    setEditingTable(null);
+                    setIsConfirmingDelete(false);
+                  }} 
+                  className={clsx('p-1', 'hover:bg-[#27272A]', 'rounded-full', 'text-gray-400', 'hover:text-white', 'cursor-pointer')}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {isConfirmingDelete ? (
+                <div className="bg-rose-950/20 border border-rose-900/40 p-4 rounded-2xl text-center space-y-3">
+                  <span className="text-lg block">⚠️</span>
+                  <p className="text-xs text-rose-300">
+                    Tem certeza que deseja remover a <strong>Mesa {editingTable.id}</strong> permanentemente? Essa ação não pode ser desfeita.
+                  </p>
+                  <div className="flex gap-2">
+                    <button 
+                      type="button" 
+                      onClick={() => setIsConfirmingDelete(false)} 
+                      className="flex-1 py-1.5 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] text-white text-xs font-bold rounded-lg cursor-pointer transition-all"
+                    >
+                      Voltar
+                    </button>
+                    <button 
+                      type="button" 
+                      onClick={async () => {
+                        if (isLoading) return;
+                        try {
+                          setIsLoading(true);
+                          await onDeleteMesa(editingTable.id);
+                          setEditingTable(null);
+                          setIsConfirmingDelete(false);
+                        } catch (err) {
+                          console.error(err);
+                        } finally {
+                          setIsLoading(false);
+                        }
+                      }}
+                      className="flex-1 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg cursor-pointer transition-all"
+                    >
+                      Sim, Excluir
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className={clsx('space-y-3', 'text-left')}>
+                    <div className="space-y-1">
+                      <label className={clsx('text-[9px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Nome da Mesa:</label>
+                      <input
+                        type="text"
+                        placeholder={`Mesa ${editingTable.id}`}
+                        value={editTableNome}
+                        onChange={(e) => setEditTableNome(e.target.value)}
+                        className={clsx('w-full', 'px-3', 'py-2', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white')}
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className={clsx('text-[9px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Capacidade (Lugares):</label>
+                      <input
+                        type="number"
+                        placeholder="Ex: 4"
+                        value={editTableCap}
+                        onChange={(e) => setEditTableCap(e.target.value)}
+                        className={clsx('w-full', 'px-3', 'py-2', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'font-mono')}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 pt-2">
+                    <div className="flex gap-2">
+                      <button 
+                        type="button" 
+                        onClick={() => setEditingTable(null)} 
+                        className={clsx('flex-1', 'py-2', 'bg-[#121214]', 'hover:bg-[#27272A]', 'border', 'border-[#27272A]', 'text-gray-400', 'hover:text-white', 'rounded-xl', 'font-bold', 'text-xs', 'cursor-pointer', 'transition-all')}
+                      >
+                        Cancelar
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={async () => {
+                          if (isLoading) return;
+                          const capVal = parseInt(editTableCap);
+                          const nameVal = editTableNome.trim() || `Mesa ${editingTable.id}`;
+                          if (isNaN(capVal) || capVal <= 0) {
+                            alert("Insira uma capacidade válida.");
+                            return;
+                          }
+                          try {
+                            setIsLoading(true);
+                            await onUpdateMesa(editingTable.id, capVal, nameVal);
+                            setEditingTable(null);
+                          } catch (err) {
+                            console.error(err);
+                          } finally {
+                            setIsLoading(false);
+                          }
+                        }}
+                        className={clsx('flex-1', 'py-2', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'rounded-xl', 'font-bold', 'text-xs', 'cursor-pointer', 'transition-all')}
+                      >
+                        Salvar
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsConfirmingDelete(true)}
+                      className={clsx('w-full', 'py-2', 'bg-rose-950/25', 'hover:bg-rose-950/45', 'border', 'border-rose-900/35', 'text-rose-400', 'hover:text-rose-300', 'rounded-xl', 'font-bold', 'text-[11px]', 'uppercase', 'tracking-wider', 'cursor-pointer', 'transition-all', 'flex', 'items-center', 'justify-center', 'gap-1')}
+                    >
+                      <Trash2 size={12} />
+                      Excluir Mesa permanentemente
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         )
       }
