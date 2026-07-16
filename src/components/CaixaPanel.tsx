@@ -170,57 +170,67 @@ export function CaixaPanel({
   })();
 
   // Col 3 — Fechar conta: mesas com status 'aguardando_pagamento' (conta pedida) ou itens prontos individualmente
+  // Unifica comandas da mesma mesa em um único card de pagamento.
   const tableOrdersReady = (() => {
     const list: any[] = [];
+    const groupedByMesa: Record<number, Array<{ comanda: any; itens: any[]; contaPedida: boolean }>> = {};
+
     orders.forEach(comanda => {
       if (comanda.tipo !== 'Consumo no Local' || !comanda.mesaId || comanda.mesaId <= 0) return;
 
-      // Caminho A: cliente pediu a conta → coloca a comanda inteira (todos os itens não pagos)
-      // num único card de "aguardando pagamento"
-      if ((comanda as any).statusComanda === 'aguardando_pagamento') {
-        const unpaid = comanda.itens.filter(i => (i.status as string) !== 'cancelado' && !i.pago);
-        if (unpaid.length > 0) {
-          list.push({
-            id: comanda.id,
-            comandaId: comanda.id,
-            mesaId: comanda.mesaId,
-            mesaOrigemId: comanda.mesaOrigemId,
-            mesaTransferidaDe: comanda.mesaTransferidaDe,
-            identificador: (comanda as any).identificador ?? null,
-            garcomNome: comanda.garcomNome,
-            tipo: comanda.tipo,
-            valorPago: (comanda as any).valorPago || 0,
-            itens: unpaid,
-            contaPedida: true
-          });
-        }
-        return;
-      }
-
-      // Caminho B: itens prontos individualmente (sem ter pedido conta ainda) →
-      // junta todos os itens prontos e não pagos desta comanda em um só card.
+      const unpaid = comanda.itens.filter(i => (i.status as string) !== 'cancelado' && !i.pago);
       const readyItems = comanda.itens.filter(item => item.status === 'pronto' && !item.pago);
-      if (readyItems.length > 0) {
-        const temItensEmPreparo = orders
-          .filter(o => o.mesaId === comanda.mesaId)
-          .some(o => o.itens.some(i => i.status === 'preparando'));
+      const contaPedida = (comanda as any).statusComanda === 'aguardando_pagamento';
 
-        list.push({
-          id: comanda.id,
-          comandaId: comanda.id,
-          mesaId: comanda.mesaId,
-          mesaOrigemId: comanda.mesaOrigemId,
-          mesaTransferidaDe: comanda.mesaTransferidaDe,
-          identificador: (comanda as any).identificador ?? null,
-          garcomNome: comanda.garcomNome,
-          tipo: comanda.tipo,
-          valorPago: (comanda as any).valorPago || 0,
-          itens: readyItems,
-          contaPedida: false,
-          temItensEmPreparo: temItensEmPreparo
-        });
+      if (contaPedida && unpaid.length > 0) {
+        if (!groupedByMesa[comanda.mesaId]) {
+          groupedByMesa[comanda.mesaId] = [];
+        }
+        groupedByMesa[comanda.mesaId].push({ comanda, itens: unpaid, contaPedida: true });
+      } else if (readyItems.length > 0) {
+        if (!groupedByMesa[comanda.mesaId]) {
+          groupedByMesa[comanda.mesaId] = [];
+        }
+        groupedByMesa[comanda.mesaId].push({ comanda, itens: readyItems, contaPedida: false });
       }
     });
+
+    Object.entries(groupedByMesa).forEach(([mesaIdStr, entries]) => {
+      const mesaId = Number(mesaIdStr);
+      const allItems: any[] = [];
+      entries.forEach(e => {
+        e.itens.forEach((it: any) => {
+          allItems.push({
+            ...it,
+            comandaId: e.comanda.id
+          });
+        });
+      });
+
+      const hasContaPedida = entries.some(e => e.contaPedida);
+      const temItensEmPreparo = orders
+        .filter(o => o.mesaId === mesaId)
+        .some(o => o.itens.some(i => i.status === 'preparando'));
+
+      const firstComanda = entries[0].comanda;
+
+      list.push({
+        id: firstComanda.id, // ID real da comanda principal para rotear requisições
+        comandaId: firstComanda.id,
+        mesaId: mesaId,
+        mesaOrigemId: firstComanda.mesaOrigemId,
+        mesaTransferidaDe: firstComanda.mesaTransferidaDe,
+        identificador: firstComanda.identificador ?? null,
+        garcomNome: firstComanda.garcomNome,
+        tipo: firstComanda.tipo,
+        valorPago: entries.reduce((sum, e) => sum + (e.comanda.valorPago || 0), 0),
+        itens: allItems,
+        contaPedida: hasContaPedida,
+        temItensEmPreparo: temItensEmPreparo,
+        comandaIds: entries.map(e => e.comanda.id)
+      });
+    });
+
     return list;
   })();
 
@@ -1624,56 +1634,102 @@ export function CaixaPanel({
     setIsProcessingPayment(true);
 
     try {
-      const res = await fetch(`${apiBaseUrl}/caixa/comandas/${selectedOrder.id}/pagar`, {
-        method: 'POST',
-        headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          valor: parseFloat(paymentValor),
-          metodo: paymentMetodo,
-          item_ids: selectedItemIds.length > 0 ? selectedItemIds : null,
-          idempotency_key: idempotencyKey,
-          cpf_cliente: paymentCPF || null
-        })
-      });
-      if (res.ok) {
-        setPaymentValor('');
-        setPaymentCPF('');
-        setSelectedItemIds([]);
-        setIdempotencyKey(`idem-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
+      const comandaIds: string[] = (selectedOrder as any).comandaIds || [selectedOrder.id];
 
-        // Refresh local details modal state
-        const updatedOrdersRes = await fetch(`${apiBaseUrl}/comandas/detalhes/todos?fechada=false`, { headers: authHeaders });
-        if (updatedOrdersRes.ok) {
-          const freshOrdersList: any[] = await updatedOrdersRes.json();
-          const stillOpen = freshOrdersList.find(o => o.id === selectedOrder.id);
-          if (stillOpen) {
-            setSelectedOrder({
-              ...stillOpen,
-              valorPago: stillOpen.valor_pago || 0,
-              itens: stillOpen.itens.map((item: any) => ({
-                id: item.id,
-                produtoId: item.produto_id || item.produtoId,
-                nome: item.nome || `Item ${item.produto_id || item.produtoId}`,
-                preco: item.preco_unit || item.preco,
-                observacao: item.observacao || '',
-                clienteNome: item.cliente_nome || item.clienteNome || 'Consumo Geral',
-                status: item.status,
-                pago: item.pago
-              }))
-            });
-          } else {
-            setSelectedOrder(null);
-            setShowCheckoutModal(false);
+      if (selectedItemIds.length > 0) {
+        // Opção 1: Itens selecionados. Agrupa os IDs de itens pela comanda de origem
+        const itemsByComanda: Record<string, { itemIds: string[]; subtotal: number }> = {};
+        selectedItemIds.forEach(itemId => {
+          const itemObj = selectedOrder.itens.find(i => i.id === itemId);
+          if (itemObj) {
+            const cid = itemObj.comandaId || selectedOrder.id;
+            if (!itemsByComanda[cid]) {
+              itemsByComanda[cid] = { itemIds: [], subtotal: 0 };
+            }
+            itemsByComanda[cid].itemIds.push(itemId);
+            itemsByComanda[cid].subtotal += itemObj.preco;
           }
+        });
+
+        // Efetua o pagamento em cada comanda correspondente
+        const comandaEntries = Object.entries(itemsByComanda);
+        let idx = 0;
+        const totalSubtotal = Object.values(itemsByComanda).reduce((sum, d) => sum + d.subtotal, 0);
+        const originalVal = parseFloat(paymentValor);
+
+        for (const [cid, data] of comandaEntries) {
+          const isLast = idx === comandaEntries.length - 1;
+          // Distribui o valor proporcionalmente baseado no subtotal
+          const ratio = data.subtotal / totalSubtotal;
+          const valToPay = isLast 
+            ? originalVal - comandaEntries.slice(0, idx).reduce((sum, entry) => sum + (entry[1].subtotal / totalSubtotal) * originalVal, 0)
+            : originalVal * ratio;
+
+          const res = await fetch(`${apiBaseUrl}/caixa/comandas/${cid}/pagar`, {
+            method: 'POST',
+            headers: { ...authHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              valor: parseFloat(valToPay.toFixed(2)),
+              metodo: paymentMetodo,
+              item_ids: data.itemIds,
+              idempotency_key: `${idempotencyKey}-${cid}`,
+              cpf_cliente: paymentCPF || null
+            })
+          });
+          if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.detail || `Erro ao pagar itens da comanda ${cid}`);
+          }
+          idx++;
         }
-        onRefreshOrders();
-        fetchTurno();
       } else {
-        const data = await res.json();
-        setErrorMsg(data.detail || 'Erro ao processar pagamento');
+        // Opção 2: Valor geral. Liquida as comandas sequencialmente
+        let remainingVal = parseFloat(paymentValor);
+
+        for (const cid of comandaIds) {
+          if (remainingVal <= 0.01) break;
+
+          // Busca itens pendentes desta comanda no card unificado
+          const comUnpaidItems = selectedOrder.itens.filter(i => i.comandaId === cid && !i.pago && i.status !== 'cancelado');
+          if (comUnpaidItems.length === 0) continue;
+
+          const comSubtotal = comUnpaidItems.reduce((sum, item) => sum + item.preco, 0);
+          const comTaxa = (taxaServicoAtiva && checkoutServiceTax) ? comSubtotal * (serviceTaxRate / 100) : 0;
+          const comTotal = comSubtotal + comTaxa;
+
+          // Valor a pagar para esta comanda
+          const valToPay = Math.min(remainingVal, comTotal);
+
+          const res = await fetch(`${apiBaseUrl}/caixa/comandas/${cid}/pagar`, {
+            method: 'POST',
+            headers: { ...authHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              valor: parseFloat(valToPay.toFixed(2)),
+              metodo: paymentMetodo,
+              item_ids: null,
+              idempotency_key: `${idempotencyKey}-${cid}`,
+              cpf_cliente: paymentCPF || null
+            })
+          });
+          if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.detail || `Erro ao registrar pagamento na comanda ${cid}`);
+          }
+          remainingVal -= valToPay;
+        }
       }
-    } catch (err) {
-      setErrorMsg('Erro de conexão ao servidor.');
+
+      setPaymentValor('');
+      setPaymentCPF('');
+      setSelectedItemIds([]);
+      setIdempotencyKey(`idem-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
+
+      setSelectedOrder(null);
+      setShowCheckoutModal(false);
+      onRefreshOrders();
+      fetchTurno();
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Erro de conexão ao servidor.');
     } finally {
       setIsProcessingPayment(false);
     }
@@ -2812,24 +2868,41 @@ export function CaixaPanel({
                                 onClick={async (e) => {
                                   e.stopPropagation();
                                   if (isLoading) return;
-                                  // Usa comandaId para buscar a comanda completa (order.id é lancamentoId no caminho B)
-                                  const fullOrder = orders.find(o => o.id === order.comandaId);
-                                  if (!fullOrder) return;
-                                  setSelectedOrder({
-                                    ...fullOrder,
-                                    itens: fullOrder.itens.map((item: any) => ({
-                                      id: item.id, produtoId: item.produto_id || item.produtoId,
-                                      nome: item.nome || `Item ${item.produtoId}`, preco: item.preco_unit || item.preco,
-                                      observacao: item.observacao || '', clienteNome: item.cliente_nome || item.clienteNome || 'Consumo Geral',
-                                      status: item.status, pago: item.pago
+                                  
+                                  // Busca todas as comandas associadas a este card agrupado de mesa
+                                  const tableComandas = orders.filter(o => order.comandaIds.includes(o.id));
+                                  if (tableComandas.length === 0) return;
+                                  
+                                  // Combina todos os itens das comandas agrupadas
+                                  const combinedItems = tableComandas.flatMap(com => 
+                                    com.itens.map((item: any) => ({
+                                      id: item.id,
+                                      produtoId: item.produto_id || item.produtoId,
+                                      nome: item.nome || `Item ${item.produto_id || item.produtoId}`,
+                                      preco: item.preco_unit || item.preco,
+                                      observacao: item.observacao || '',
+                                      clienteNome: item.cliente_nome || item.clienteNome || 'Consumo Geral',
+                                      status: item.status,
+                                      pago: item.pago,
+                                      comandaId: com.id
                                     }))
+                                  );
+
+                                  const primaryComanda = tableComandas[0];
+
+                                  setSelectedOrder({
+                                    ...primaryComanda,
+                                    itens: combinedItems,
+                                    comandaIds: order.comandaIds
                                   });
+
                                   setShowCheckoutModal(true);
                                   setCheckoutServiceTax(true);
                                   setSplitPeople('1');
-                                  // Inicia com itens desmarcados por padrão
                                   setSelectedItemIds([]);
-                                  const sub = fullOrder.itens.filter((item: any) => !item.pago).reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
+                                  
+                                  const unpaidCombined = combinedItems.filter(item => !item.pago && item.status !== 'cancelado');
+                                  const sub = unpaidCombined.reduce((s, it) => s + it.preco, 0);
                                   setPaymentValor((sub * (1.0 + (taxaServicoAtiva ? serviceTaxRate / 100 : 0))).toFixed(2));
                                 }}
                                 className={clsx('w-full', 'py-1.5', contaPedida ? 'bg-blue-600 hover:bg-blue-700' : 'bg-emerald-600 hover:bg-emerald-700', 'text-white', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1')}
