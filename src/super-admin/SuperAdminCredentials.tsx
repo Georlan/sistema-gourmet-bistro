@@ -26,7 +26,7 @@ interface SuperAdminCredentialsProps {
 export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }: SuperAdminCredentialsProps) {
   const [keys, setKeys] = useState<Record<string, string>>({
     CLOUDFLARE_TOKEN: "",
-    CLOUDFLARE_ZONE_ID: "zone_koma_1122",
+    CLOUDFLARE_ZONE_ID: "",
     GITHUB_TOKEN: "",
     GITHUB_OWNER: "",
     GITHUB_REPO: "",
