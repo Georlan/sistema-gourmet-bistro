@@ -54,6 +54,8 @@ sentryIssues = [
 
 credentialsStore = {
     "SENTRY_AUTH_TOKEN": sentry_auth_token or "sntryu_mock_token_1234567890",
+    "SENTRY_ORG": os.getenv("SENTRY_ORG", "koma-saas"),
+    "SENTRY_PROJECT": os.getenv("SENTRY_PROJECT", "api1-node-express"),
     "CLOUDFLARE_TOKEN": os.getenv("CLOUDFLARE_API_TOKEN", "cf_token_mock_abcdef"),
     "CLOUDFLARE_ZONE_ID": os.getenv("CLOUDFLARE_ZONE_ID", "zone_koma_1122"),
     "CLOUDFLARE_DOMAIN": "koma.com",
@@ -61,10 +63,12 @@ credentialsStore = {
     "RAILWAY_PROJECT_ID": os.getenv("RAILWAY_PROJECT_ID", "project_koma_456"),
     "RAILWAY_SERVICE_ID": railway_service_id or "00000000-0000-0000-0000-000000000000",
     "GITHUB_TOKEN": os.getenv("GITHUB_TOKEN", "ghp_mock_token_value_98765"),
-    "GITHUB_OWNER": "solopreneur",
-    "GITHUB_REPO": "koma-saas",
+    "GITHUB_OWNER": os.getenv("GITHUB_OWNER", "Georlan"),
+    "GITHUB_REPO": os.getenv("GITHUB_REPO", "sistema-gourmet-bistro"),
     "TELEGRAM_BOT_TOKEN": os.getenv("TELEGRAM_BOT_TOKEN", "123456789:AAF-KomaAdmin_SecretBotToken_9823"),
-    "TELEGRAM_CHAT_ID": os.getenv("TELEGRAM_CHAT_ID", "987654321")
+    "TELEGRAM_CHAT_ID": os.getenv("TELEGRAM_CHAT_ID", "987654321"),
+    "SUPABASE_URL": os.getenv("SUPABASE_URL", os.getenv("VITE_SUPABASE_URL", "https://iiowhekvahxiepwcdidm.supabase.co")),
+    "SUPABASE_KEY": os.getenv("SUPABASE_KEY", os.getenv("VITE_SUPABASE_ANON_KEY", "sb_publishable_VOLK7mO9OqOhIfm0MeJ0eg_oQ626X4T"))
 }
 
 # --- SECURITY / MOCK JWT VALIDATION ---
@@ -291,12 +295,60 @@ async def get_credentials(admin: dict = Depends(get_current_admin)):
             masked[k] = "..."
     return masked
 
+def save_credentials_to_env(updates: dict):
+    env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../.env"))
+    lines = []
+    if os.path.exists(env_path):
+        with open(env_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+            
+    key_line_index = {}
+    for idx, line in enumerate(lines):
+        clean_line = line.strip()
+        if clean_line and not clean_line.startswith("#") and "=" in clean_line:
+            parts = clean_line.split("=", 1)
+            key = parts[0].strip()
+            key_line_index[key] = idx
+            
+    for key, val in updates.items():
+        if not val or val.startswith("..."):
+            continue
+            
+        mapped_keys = [key]
+        if key == "CLOUDFLARE_TOKEN":
+            mapped_keys.append("CLOUDFLARE_API_TOKEN")
+        elif key == "RAILWAY_TOKEN":
+            mapped_keys.append("RAILWAY_API_TOKEN")
+        elif key == "SUPABASE_KEY":
+            mapped_keys.append("SUPABASE_SERVICE_ROLE_KEY")
+            mapped_keys.append("VITE_SUPABASE_ANON_KEY")
+        elif key == "SUPABASE_URL":
+            mapped_keys.append("VITE_SUPABASE_URL")
+            
+        for m_key in mapped_keys:
+            os.environ[m_key] = val
+            line_content = f'{m_key}="{val}"\n'
+            if m_key in key_line_index:
+                lines[key_line_index[m_key]] = line_content
+            else:
+                lines.append(line_content)
+                key_line_index[m_key] = len(lines) - 1
+                
+    with open(env_path, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+
 @router.post("/credentials")
-async def update_credentials(payload: Dict[str, str] = Body(...), admin: dict = Depends(get_current_admin)):
-    for k, v in payload.items():
+async def update_credentials(payload: Dict[str, Any] = Body(...), admin: dict = Depends(get_current_admin)):
+    credentials = payload.get("credentials", payload)
+    if not isinstance(credentials, dict):
+        credentials = payload
+        
+    for k, v in credentials.items():
         if k in credentialsStore and v and not v.startswith("..."):
             credentialsStore[k] = v
-    return {"success": True, "message": "Credentials updated successfully."}
+            
+    save_credentials_to_env(credentials)
+    return {"success": True, "message": "Credentials updated and synchronized persistently in .env file."}
 
 @router.post("/test-connection")
 async def test_connection(payload: Dict[str, str] = Body(...), admin: dict = Depends(get_current_admin)):
