@@ -28,6 +28,7 @@ interface CaixaPanelProps {
   liveProdutos?: Product[];
   liveCategorias?: any[];
   onRefreshCategorias?: () => Promise<void>;
+  restauranteConfig?: any;
 }
 
 // Simulated dynamic lists for tabs that don't need real backend persistence yet
@@ -96,8 +97,15 @@ export function CaixaPanel({
   isWsConnected = false,
   liveProdutos = [],
   liveCategorias = [],
-  onRefreshCategorias
+  onRefreshCategorias,
+  restauranteConfig
 }: CaixaPanelProps) {
+  const plano = restauranteConfig?.plano?.toLowerCase() || 'premium';
+  const isPocket = plano === 'pocket';
+  const isBistro = plano === 'bistro';
+  const isDelivery = plano === 'delivery';
+  const isPremium = plano === 'premium';
+
   // Turno & Sync state
   const [turno, setTurno] = useState<CaixaTurno | null>(null);
   const [isLoading, setIsLoading] = useState(false);
