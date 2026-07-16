@@ -130,6 +130,60 @@ class RailwayService:
         # In real-world, calls POST https://backboard.railway.app/graphql to redeploy the service
         return True
 
+    async def update_environment_variables(self, variables: Dict[str, str]) -> bool:
+        """
+        Updates environment variables on Railway for the current service using Railway's GraphQL API.
+        """
+        environment_id = os.getenv("RAILWAY_ENVIRONMENT_ID")
+        if not self.api_token or not self.project_id or not environment_id:
+            logger.warning("Railway API connection parameters missing (token, project_id, environment_id). Skipping cloud upsert.")
+            return False
+
+        service_id = os.getenv("RAILWAY_SERVICE_ID")
+
+        query = """
+        mutation variableCollectionUpsert($input: VariableCollectionUpsertInput!) {
+          variableCollectionUpsert(input: $input)
+        }
+        """
+        
+        variables_payload = {
+            "input": {
+                "projectId": self.project_id,
+                "environmentId": environment_id,
+                "variables": variables
+            }
+        }
+        if service_id:
+            variables_payload["input"]["serviceId"] = service_id
+
+        headers = {
+            "Authorization": f"Bearer {self.api_token}",
+            "Content-Type": "application/json"
+        }
+
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.post(
+                    "https://backboard.railway.app/graphql/v2",
+                    json={"query": query, "variables": variables_payload},
+                    headers=headers,
+                    timeout=15.0
+                )
+                if response.status_code == 200:
+                    res_json = response.json()
+                    if "errors" in res_json:
+                        logger.error(f"Railway GraphQL API errors: {res_json['errors']}")
+                        return False
+                    logger.info("Railway environment variables updated successfully.")
+                    return True
+                else:
+                    logger.error(f"Railway API returned status: {response.status_code} - {response.text}")
+                    return False
+            except Exception as e:
+                logger.error(f"Failed to connect to Railway GraphQL API: {str(e)}")
+                return False
+
 
 class TelegramService:
     """

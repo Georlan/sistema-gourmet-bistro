@@ -4,7 +4,7 @@ import logging
 import uuid
 from datetime import datetime
 from typing import Dict, Any, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Header, Body
+from fastapi import APIRouter, Depends, HTTPException, status, Header, Body, BackgroundTasks
 from pydantic import BaseModel
 
 # Import our modular isolated services
@@ -341,7 +341,11 @@ def save_credentials_to_env(updates: dict):
         logger.error(f"Failed to write credentials to .env file (possibly read-only container): {str(e)}")
 
 @router.post("/credentials")
-async def update_credentials(payload: Dict[str, Any] = Body(...), admin: dict = Depends(get_current_admin)):
+async def update_credentials(
+    payload: Dict[str, Any] = Body(...),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    admin: dict = Depends(get_current_admin)
+):
     credentials = payload.get("credentials", payload)
     if not isinstance(credentials, dict):
         credentials = payload
@@ -351,7 +355,36 @@ async def update_credentials(payload: Dict[str, Any] = Body(...), admin: dict = 
             credentialsStore[k] = v
             
     save_credentials_to_env(credentials)
-    return {"success": True, "message": "Credentials updated and synchronized persistently in .env file."}
+    
+    # Construct a flat map of environment variables to synchronize to Railway in the background
+    railway_updates = {}
+    for key, val in credentials.items():
+        if not val or val.startswith("..."):
+            continue
+            
+        mapped_keys = [key]
+        if key == "CLOUDFLARE_TOKEN":
+            mapped_keys.append("CLOUDFLARE_API_TOKEN")
+        elif key == "RAILWAY_TOKEN":
+            mapped_keys.append("RAILWAY_API_TOKEN")
+        elif key == "SUPABASE_KEY":
+            mapped_keys.append("SUPABASE_SERVICE_ROLE_KEY")
+            mapped_keys.append("VITE_SUPABASE_ANON_KEY")
+        elif key == "SUPABASE_URL":
+            mapped_keys.append("VITE_SUPABASE_URL")
+            
+        for m_key in mapped_keys:
+            railway_updates[m_key] = val
+            
+    if railway_updates:
+        # Get the latest Railway API Token and Project ID from the updated store
+        railway_token = credentialsStore.get("RAILWAY_TOKEN")
+        railway_project = credentialsStore.get("RAILWAY_PROJECT_ID")
+        if railway_token and not railway_token.startswith("..."):
+            railway_svc = RailwayService(api_token=railway_token, project_id=railway_project)
+            background_tasks.add_task(railway_svc.update_environment_variables, railway_updates)
+            
+    return {"success": True, "message": "Credentials updated, written to .env, and scheduled for cloud synchronization."}
 
 @router.post("/test-connection")
 async def test_connection(payload: Dict[str, str] = Body(...), admin: dict = Depends(get_current_admin)):
