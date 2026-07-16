@@ -56,18 +56,23 @@ export const CaixaKanbanBoard: React.FC<CaixaKanbanBoardProps> = ({
   openSimulatedOrderDetails,
   setSelectedKanbanOrder,
 }) => {
-  const isTwoColumns = modoExclusivoSalao || plano === 'bistro' || plano === 'delivery';
-  const includesRetiradaInLocal = modoExclusivoSalao || plano === 'bistro';
-  const localSimulatedOrdersInPreparo = includesRetiradaInLocal
-    ? simulatedOrders.filter(o => o.status === 'producao' && !o.endereco && !(o.mesaId && o.mesaId > 0))
+  const isPocket = plano === 'pocket';
+  const isBistro = plano === 'bistro';
+  const isDelivery = plano === 'delivery';
+  const isPremium = plano === 'premium' || (!isPocket && !isBistro && !isDelivery);
+
+  const isTwoColumns = isBistro || isDelivery;
+  const localSimulatedOrdersInPreparo = isBistro
+    ? simulatedOrders.filter(o => o.status === 'producao' && !o.endereco)
     : [];
+  const deliverySimulatedOrdersInPreparo = simulatedOrders.filter(o => o.status === 'producao');
   const totalLocalCount = localProductionRounds.length + localSimulatedOrdersInPreparo.length;
 
-  const checkoutTableOrders = plano === 'delivery' ? [] : groupedTableOrdersReady;
+  const checkoutTableOrders = isDelivery ? [] : groupedTableOrdersReady;
   const checkoutSimulatedOrders = simulatedOrders.filter(o => {
     const isReady = o.status === 'transito' || o.status === 'pronto';
     if (!isReady) return false;
-    if (modoExclusivoSalao || plano === 'bistro') {
+    if (isBistro) {
       return !o.endereco;
     }
     return true;
@@ -80,15 +85,19 @@ export const CaixaKanbanBoard: React.FC<CaixaKanbanBoardProps> = ({
       isTwoColumns ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1 md:grid-cols-3'
     )}>
 
-      {plano !== 'delivery' && (
+      {!isDelivery && (
         <div className="flex flex-col overflow-hidden rounded-2xl border border-orange-500/20 bg-gradient-to-b from-orange-950/20 to-[#0c0c0e]/80 text-left">
           {/* Column header */}
           <div className="px-4 py-3 border-b border-orange-500/15 flex justify-between items-center shrink-0 bg-orange-950/30">
             <div className="flex items-center gap-2.5">
               <div className="w-2 h-2 rounded-full bg-orange-400 shadow-[0_0_6px_2px_rgba(251,146,60,0.4)]"></div>
               <div>
-                <span className="font-bold text-orange-100 text-sm tracking-wide block">Produção Local</span>
-                <span className="text-[9px] text-orange-400/60 font-mono">Mesa / Garçom — por rodada</span>
+                <span className="font-bold text-orange-100 text-sm tracking-wide block">
+                  {isBistro ? "Produção Local & Retirada" : "Produção Local"}
+                </span>
+                <span className="text-[9px] text-orange-400/60 font-mono">
+                  {isBistro ? "Mesa e Retirada — em preparo" : "Mesa / Garçom — por rodada"}
+                </span>
               </div>
             </div>
             <span className={clsx(
@@ -179,10 +188,8 @@ export const CaixaKanbanBoard: React.FC<CaixaKanbanBoardProps> = ({
                 </div>
               ))}
 
-              {/* If includesRetiradaInLocal is TRUE, show Retirada orders in preparation here */}
-              {includesRetiradaInLocal && simulatedOrders
-                .filter(o => o.status === 'producao' && !o.endereco && !(o.mesaId && o.mesaId > 0))
-                .map((order) => {
+              {/* If isBistro is TRUE, show Retirada orders in preparation here */}
+              {localSimulatedOrdersInPreparo.map((order) => {
                   const btnLabel = '🏪 Retirada Pronta';
                   const btnClass = 'bg-emerald-600 hover:bg-emerald-500 shadow-[0_2px_8px_rgba(16,185,129,0.25)]';
 
@@ -234,38 +241,41 @@ export const CaixaKanbanBoard: React.FC<CaixaKanbanBoardProps> = ({
       {/* ═══════════════════════════════════════
           COLUMN 2: Delivery & Retirada (online em preparo + em rota)
       ═══════════════════════════════════════ */}
-      {!(modoExclusivoSalao || plano === 'bistro') && (
+      {!isBistro && (
         <div className="flex flex-col overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-b from-emerald-950/20 to-[#0c0c0e]/80 text-left">
           {/* Column header */}
           <div className="px-4 py-3 border-b border-emerald-500/15 flex justify-between items-center shrink-0 bg-emerald-950/30">
             <div className="flex items-center gap-2.5">
               <div className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_2px_rgba(52,211,153,0.4)]"></div>
               <div>
-                <span className="font-bold text-emerald-100 text-sm tracking-wide block">Delivery & Retirada</span>
-                <span className="text-[9px] text-emerald-400/60 font-mono">Em Preparo</span>
+                <span className="font-bold text-emerald-100 text-sm tracking-wide block">
+                  {isDelivery ? "Delivery & Retirada (Em Preparo)" : "Delivery & Retirada"}
+                </span>
+                <span className="text-[9px] text-emerald-400/60 font-mono">
+                  {isDelivery ? "Delivery e Retirada — em preparo" : "Em Preparo"}
+                </span>
               </div>
             </div>
             <span className={clsx(
               'font-bold px-2.5 py-0.5 rounded-full font-mono text-[10px]',
-              (modoExclusivoSalao ? 0 : simulatedOrders.filter(o => o.status === 'producao').length) > 0
+              deliverySimulatedOrdersInPreparo.length > 0
                 ? 'bg-emerald-500/20 text-emerald-300'
                 : 'bg-emerald-500/10 text-emerald-500/50'
             )}>
-              {modoExclusivoSalao ? 0 : simulatedOrders.filter(o => o.status === 'producao').length}
+              {deliverySimulatedOrdersInPreparo.length}
             </span>
           </div>
 
           <div className="p-3 flex-1 overflow-y-auto space-y-3 scrollbar-thin scrollbar-thumb-emerald-900/30 scrollbar-track-transparent">
-            {(modoExclusivoSalao || simulatedOrders.filter(o => o.status === 'producao').length === 0) ? (
+            {deliverySimulatedOrdersInPreparo.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full min-h-[200px] text-emerald-700/50 space-y-3">
                 <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" className="opacity-40">
                   <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
                 </svg>
                 <p className="text-[11px] italic">Nenhum pedido externo em preparo</p>
-                {modoExclusivoSalao && <p className="text-[9px] text-emerald-700/40">Modo Salão exclusivo ativo</p>}
               </div>
             ) : (
-              simulatedOrders.filter(o => o.status === 'producao').map((order) => {
+              deliverySimulatedOrdersInPreparo.map((order) => {
                 const hasAddress = !!order.endereco;
                 const isMesa = order.mesaId && order.mesaId > 0;
 

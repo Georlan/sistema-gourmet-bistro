@@ -467,6 +467,10 @@ export function CaixaPanel({
   const [unificarViasDelivery, setUnificarViasDelivery] = useState(false);
   const [modoExclusivoSalao, setModoExclusivoSalao] = useState(true);
   const [plano, setPlano] = useState<'pocket' | 'bistro' | 'delivery' | 'premium'>('premium');
+  const isPocket = plano === 'pocket';
+  const isBistro = plano === 'bistro';
+  const isDelivery = plano === 'delivery';
+  const isPremium = plano === 'premium';
   const [splitPeople, setSplitPeople] = useState('1');
   const [paymentMetodo, setPaymentMetodo] = useState<'dinheiro' | 'pix' | 'cartao' | 'cartao_debito' | 'cartao_credito'>('pix');
   const [paymentValor, setPaymentValor] = useState('');
@@ -2169,8 +2173,8 @@ export function CaixaPanel({
           {activeTab === 'operacao' && [
             { id: 'pedidos', label: 'Fila de Pedidos' },
             { id: 'pdv', label: 'Terminal Balcão' },
-            { id: 'salon', label: 'Layout do Salão', show: plano !== 'delivery' && modulesActive.salon },
-            { id: 'entregadores', label: 'Fretistas & Logística', show: plano !== 'bistro' && !modoExclusivoSalao && modulesActive.delivery }
+            { id: 'salon', label: 'Layout do Salão', show: !isDelivery && modulesActive.salon },
+            { id: 'entregadores', label: 'Fretistas & Logística', show: !isBistro && !modoExclusivoSalao && modulesActive.delivery }
           ].filter(sub => sub.show !== false).map(sub => (
             <button
               key={sub.id}
@@ -2289,7 +2293,7 @@ export function CaixaPanel({
 
           {activeTab === 'configuracoes' && [
             { id: 'equipe', label: 'Cargos & Permissões' },
-            { id: 'impressoras', label: 'Roteamento de Impressoras', show: plano !== 'pocket' },
+            { id: 'impressoras', label: 'Roteamento de Impressoras', show: !isPocket },
             { id: 'nicho_wizard', label: 'Setup Wizard (Nicho)' },
             { id: 'planos', label: 'Planos & Integrações' }
           ].filter(sub => sub.show !== false).map(sub => (
@@ -3004,7 +3008,8 @@ export function CaixaPanel({
             <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5')}>
 
               {/* Waiters permissions switches (Left Column) */}
-              <div className={clsx(plano === 'pocket' ? 'lg:col-span-3' : 'lg:col-span-2', 'bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'flex', 'flex-col', 'overflow-hidden')}>
+              {!isDelivery && (
+                <div className={clsx(isPocket ? 'lg:col-span-3' : 'lg:col-span-2', 'bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'flex', 'flex-col', 'overflow-hidden')}>
                 <div className={clsx('border-b', 'border-[#27272A]', 'pb-3', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
                   <span className={clsx('font-serif', 'font-bold', 'text-gray-300')}>Configurações de Permissões do App do Garçom</span>
                 </div>
@@ -3111,13 +3116,13 @@ export function CaixaPanel({
                       )}
                     </div>
                   )}
-
                 </div>
               </div>
+            )}
 
               {/* Printer messages & test (Right Column) */}
-              {plano !== 'pocket' && (
-                <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'flex', 'flex-col', 'justify-between')}>
+              {!isPocket && (
+                <div className={clsx(isDelivery ? 'lg:col-span-3' : 'lg:col-span-1', 'bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'flex', 'flex-col', 'justify-between')}>
                   <div className="space-y-4">
                     <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Impressoras térmicas</span>
 
@@ -3503,10 +3508,10 @@ export function CaixaPanel({
 
                 <div className="space-y-3">
                   {[
-                    { id: 'pocket', name: 'Kôma Pocket', price: 'R$ 99/mês', features: ['Menu Digital QR Code', 'Gestão Local', 'Sem impressoras térmicas'] },
-                    { id: 'bistro', name: 'Kôma Bistrô', price: 'R$ 199/mês', features: ['Gestão de Mesas', 'Atendimento Local', 'Sem Delivery'] },
-                    { id: 'delivery', name: 'Kôma Delivery', price: 'R$ 199/mês', features: ['Gestão de Entregas', 'Taxas e Logística', 'Sem Mesas'] },
-                    { id: 'premium', name: 'Kôma Premium', price: 'R$ 349/mês', features: ['Acesso Completo', 'Mesas e Delivery', 'Impressão e KDS'] }
+                    { id: 'pocket', name: 'Kôma Pocket', price: 'R$ 149/mês', features: ['Menu Digital QR Code', 'Atendimento Local Simples', '(Sem suporte a impressoras térmicas)'] },
+                    { id: 'bistro', name: 'Kôma Bistrô', price: 'R$ 219/mês', features: ['Gestão de Mesas', 'Atendimento Local de Salão', '(Sem suporte a Delivery)'] },
+                    { id: 'delivery', name: 'Kôma Delivery', price: 'R$ 219/mês', features: ['Gestão de Entregas', 'Taxas e Logística de Delivery', '(Sem suporte a Mesas)'] },
+                    { id: 'premium', name: 'Kôma Premium', price: 'R$ 349/mês', features: ['Versão Completa', 'Mesas, Delivery, Impressora e KDS'] }
                   ].map((plan) => (
                     <div
                       key={plan.id}
