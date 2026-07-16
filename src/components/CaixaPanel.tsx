@@ -11,6 +11,7 @@ import { Order, OrderItem, CaixaTurno, CaixaMovimentacao, Pagamento, Table, Prod
 import { PRODUCTS, CATEGORIES } from '../data';
 import { getProductPresets } from '../domain';
 import clsx from 'clsx';
+import { CaixaLogisticaTab } from './CaixaLogisticaTab';
 
 interface CaixaPanelProps {
   orders: Order[];
@@ -56,7 +57,7 @@ interface AccountItem {
   tipo: 'pagar' | 'receber';
 }
 
-interface SimulatedDeliveryOrder {
+export interface SimulatedDeliveryOrder {
   id: string;
   cliente: string;
   telefone: string;
@@ -221,57 +222,13 @@ export function CaixaPanel({
     return list;
   })();
 
-  // Group tableOrdersReady by mesaId to join multiple orders from the same table
+  // Group tableOrdersReady by mesaId to join multiple orders from the same table (disabled/desmembrado according to business rules)
   const groupedTableOrdersReady = (() => {
-    const rawList = tableOrdersReady;
-    const groups: Record<number, any[]> = {};
-    rawList.forEach(order => {
-      const mid = order.mesaId;
-      if (!groups[mid]) groups[mid] = [];
-      groups[mid].push(order);
-    });
-    
-    const mergedList: any[] = [];
-    Object.entries(groups).forEach(([mesaIdStr, ordersList]) => {
-      const mesaId = parseInt(mesaIdStr);
-      if (ordersList.length === 1) {
-        mergedList.push({
-          ...ordersList[0],
-          isGrouped: false,
-          originalOrders: [ordersList[0]]
-        });
-      } else {
-        const comandaIds = ordersList.map(o => o.comandaId);
-        const combinedItems = ordersList.flatMap(o => o.itens);
-        const total = combinedItems.reduce((sum, item) => sum + item.preco, 0);
-        const valorPago = ordersList.reduce((sum, o) => sum + (o.valorPago || 0), 0);
-        const identifiers = ordersList.map(o => o.identificador).filter(Boolean);
-        const uniqueIdentifiers = Array.from(new Set(identifiers));
-        const identificador = uniqueIdentifiers.join(' / ') || `Consumo Mesa ${mesaId}`;
-        const garçons = ordersList.map(o => o.garcomNome).filter(Boolean);
-        const uniqueGarçons = Array.from(new Set(garçons));
-        const garcomNome = uniqueGarçons.join(', ') || 'Garçom';
-        
-        mergedList.push({
-          id: `mesa-group-${mesaId}`,
-          comandaId: ordersList[0].comandaId,
-          comandaIds: comandaIds,
-          mesaId: mesaId,
-          mesaOrigemId: ordersList[0].mesaOrigemId,
-          mesaTransferidaDe: ordersList[0].mesaTransferidaDe,
-          identificador: identificador,
-          garcomNome: garcomNome,
-          tipo: 'Consumo no Local',
-          valorPago: valorPago,
-          itens: combinedItems,
-          contaPedida: ordersList.some(o => o.contaPedida),
-          temItensEmPreparo: ordersList.some(o => o.temItensEmPreparo),
-          isGrouped: true,
-          originalOrders: ordersList
-        });
-      }
-    });
-    return mergedList;
+    return tableOrdersReady.map(order => ({
+      ...order,
+      isGrouped: false,
+      originalOrders: [order]
+    }));
   })();
 
   const handleTabChange = (tabId: 'dashboard' | 'operacao' | 'cardapio' | 'estoque' | 'financeiro' | 'clientes' | 'relatorios' | 'robo_ia' | 'configuracoes') => {
@@ -1675,56 +1632,95 @@ export function CaixaPanel({
     setIsProcessingPayment(true);
 
     try {
-      const res = await fetch(`${apiBaseUrl}/caixa/comandas/${selectedOrder.id}/pagar`, {
-        method: 'POST',
-        headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          valor: parseFloat(paymentValor),
-          metodo: paymentMetodo,
-          item_ids: selectedItemIds.length > 0 ? selectedItemIds : null,
-          idempotency_key: idempotencyKey,
-          cpf_cliente: paymentCPF || null
-        })
-      });
-      if (res.ok) {
+      if (selectedOrder.isGrouped) {
+        // Pay all comandas in the group sequentially
+        for (const origOrder of selectedOrder.originalOrders) {
+          const unpaidItens = origOrder.itens.filter((it: any) => !it.pago);
+          if (unpaidItens.length === 0) continue;
+
+          const subtotal = unpaidItens.reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
+          const totalWithTax = subtotal * (1.0 + (checkoutServiceTax ? serviceTaxRate / 100 : 0));
+
+          const res = await fetch(`${apiBaseUrl}/caixa/comandas/${origOrder.id}/pagar`, {
+            method: 'POST',
+            headers: { ...authHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              valor: parseFloat(totalWithTax.toFixed(2)),
+              metodo: paymentMetodo,
+              item_ids: null, // pay all items in this comanda
+              idempotency_key: `${idempotencyKey}-${origOrder.id}`,
+              cpf_cliente: paymentCPF || null
+            })
+          });
+
+          if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.detail || `Erro ao pagar comanda #${origOrder.id.slice(-4)}`);
+          }
+        }
+
+        // Successfully paid all comandas in the group!
         setPaymentValor('');
         setPaymentCPF('');
         setSelectedItemIds([]);
         setIdempotencyKey(`idem-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
-
-        // Refresh local details modal state
-        const updatedOrdersRes = await fetch(`${apiBaseUrl}/comandas/detalhes/todos?fechada=false`, { headers: authHeaders });
-        if (updatedOrdersRes.ok) {
-          const freshOrdersList: any[] = await updatedOrdersRes.json();
-          const stillOpen = freshOrdersList.find(o => o.id === selectedOrder.id);
-          if (stillOpen) {
-            setSelectedOrder({
-              ...stillOpen,
-              valorPago: stillOpen.valor_pago || 0,
-              itens: stillOpen.itens.map((item: any) => ({
-                id: item.id,
-                produtoId: item.produto_id || item.produtoId,
-                nome: item.nome || `Item ${item.produto_id || item.produtoId}`,
-                preco: item.preco_unit || item.preco,
-                observacao: item.observacao || '',
-                clienteNome: item.cliente_nome || item.clienteNome || 'Consumo Geral',
-                status: item.status,
-                pago: item.pago
-              }))
-            });
-          } else {
-            setSelectedOrder(null);
-            setShowCheckoutModal(false);
-          }
-        }
+        setSelectedOrder(null);
+        setShowCheckoutModal(false);
         onRefreshOrders();
         fetchTurno();
       } else {
-        const data = await res.json();
-        setErrorMsg(data.detail || 'Erro ao processar pagamento');
+        // Normal single order payment
+        const res = await fetch(`${apiBaseUrl}/caixa/comandas/${selectedOrder.id}/pagar`, {
+          method: 'POST',
+          headers: { ...authHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            valor: parseFloat(paymentValor),
+            metodo: paymentMetodo,
+            item_ids: selectedItemIds.length > 0 ? selectedItemIds : null,
+            idempotency_key: idempotencyKey,
+            cpf_cliente: paymentCPF || null
+          })
+        });
+        if (res.ok) {
+          setPaymentValor('');
+          setPaymentCPF('');
+          setSelectedItemIds([]);
+          setIdempotencyKey(`idem-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
+
+          // Refresh local details modal state
+          const updatedOrdersRes = await fetch(`${apiBaseUrl}/comandas/detalhes/todos?fechada=false`, { headers: authHeaders });
+          if (updatedOrdersRes.ok) {
+            const freshOrdersList: any[] = await updatedOrdersRes.json();
+            const stillOpen = freshOrdersList.find(o => o.id === selectedOrder.id);
+            if (stillOpen) {
+              setSelectedOrder({
+                ...stillOpen,
+                valorPago: stillOpen.valor_pago || 0,
+                itens: stillOpen.itens.map((item: any) => ({
+                  id: item.id,
+                  produtoId: item.produto_id || item.produtoId,
+                  nome: item.nome || `Item ${item.produto_id || item.produtoId}`,
+                  preco: item.preco_unit || item.preco,
+                  observacao: item.observacao || '',
+                  clienteNome: item.cliente_nome || item.clienteNome || 'Consumo Geral',
+                  status: item.status,
+                  pago: item.pago
+                }))
+              });
+            } else {
+              setSelectedOrder(null);
+              setShowCheckoutModal(false);
+            }
+          }
+          onRefreshOrders();
+          fetchTurno();
+        } else {
+          const data = await res.json();
+          setErrorMsg(data.detail || 'Erro ao processar pagamento');
+        }
       }
-    } catch (err) {
-      setErrorMsg('Erro de conexão ao servidor.');
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Erro de conexão ao servidor.');
     } finally {
       setIsProcessingPayment(false);
     }
@@ -1993,31 +1989,53 @@ export function CaixaPanel({
     setChatInputText('');
     setIsBotTyping(true);
 
-    // Simulate smart bot typing answers based on AI context
-    setTimeout(() => {
-      let replyText = "Desculpe, não entendi muito bem. Você gostaria de ver nossas opções de pastéis ou hambúrgueres?";
-      const lower = promptText.toLowerCase();
-
-      if (lower.includes('pastel') || lower.includes('pasteis')) {
-        replyText = "Temos pastéis tradicionais incríveis (carne, queijo, frango) a partir de R$ 12.00 e pastel doce de Nutella com Morango! Qual sabor gostaria?";
-      } else if (lower.includes('burger') || lower.includes('hambur') || lower.includes('carne')) {
-        replyText = "Nosso carro-chefe é o Hambúrguer Kôma, com blend artesanal de 150g, muito queijo derretido e molho especial no pão brioche! Deseja um?";
-      } else if (lower.includes('bebida') || lower.includes('refrigerante') || lower.includes('coca')) {
-        replyText = "Temos Coca-Cola, Guaraná, Sucos Naturais geladinhos e Cerveja Heineken em lata! Qual vai querer para acompanhar?";
-      } else if (lower.includes('oi') || lower.includes('olá') || lower.includes('bom dia')) {
-        replyText = "Olá! Como posso ajudar você a escolher as delícias do Kôma hoje?";
-      }
-
-      setChatbotMessages(prev => [
-        ...prev,
-        {
-          sender: 'bot',
-          text: replyText,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    // Call real backend endpoint /api/chat-waiter
+    (async () => {
+      try {
+        const response = await fetch(`${apiBaseUrl}/api/chat-waiter`, {
+          method: 'POST',
+          headers: {
+            ...authHeaders,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            brandName: 'Kôma Bistrô',
+            slogan: 'Gastronomia Urbana',
+            menuItems: PRODUCTS.map(p => ({ name: p.nome, price: p.preco })),
+            history: chatbotMessages.map(m => ({
+              role: m.sender === 'user' ? 'user' : 'model',
+              text: m.text
+            })),
+            message: promptText
+          })
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setChatbotMessages(prev => [
+            ...prev,
+            {
+              sender: 'bot',
+              text: data.reply || 'Desculpe, tive um problema para processar sua mensagem.',
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            }
+          ]);
+        } else {
+          throw new Error('Failed to fetch from chat waiter');
         }
-      ]);
-      setIsBotTyping(false);
-    }, 1200);
+      } catch (err) {
+        console.error(err);
+        setChatbotMessages(prev => [
+          ...prev,
+          {
+            sender: 'bot',
+            text: 'Desculpe, estou com dificuldades para me conectar ao servidor agora.',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }
+        ]);
+      } finally {
+        setIsBotTyping(false);
+      }
+    })();
   };
 
   // FILTERED menu list for PDV
@@ -2851,7 +2869,7 @@ export function CaixaPanel({
                                 onClick={async (e) => {
                                   e.stopPropagation();
                                   if (isLoading) return;
-                                  await handleUpdateDeliveryStatus(order.id, 'transito');
+                                  await handleUpdateDeliveryStatus(order.id, hasAddress ? 'transito' : 'pronto');
                                   if (hasAddress) {
                                     alert(`Simulação de WhatsApp: Mensagem enviada para ${order.cliente} (${order.telefone}) avisando que o pedido saiu para entrega!`);
                                   } else if (isMesa) {
@@ -2906,6 +2924,81 @@ export function CaixaPanel({
                       </div>
                     ) : (
                       <>
+                        {/* Delivery / Retirada orders in transit or ready */}
+                        {!modoExclusivoSalao && simulatedOrders.filter(o => o.status === 'transito' || o.status === 'pronto').map((order) => {
+                          const isDelivery = !!order.endereco;
+                          const badgeEmoji = isDelivery ? '🛵' : '🏪';
+                          const badgeLabel = isDelivery ? 'Delivery — Em Rota' : 'Retirada — Pronta';
+                          const badgeClass = isDelivery ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' : 'bg-violet-500/10 text-violet-400 border-violet-500/20';
+
+                          return (
+                            <div
+                              key={`ready-online-${order.id}`}
+                              onClick={() => openSimulatedOrderDetails(order)}
+                              className="group bg-[#0b0d14] border border-blue-500/20 hover:border-blue-400/40 p-3.5 rounded-xl space-y-3 transition-all duration-200 cursor-pointer"
+                            >
+                              <div className="flex justify-between items-start gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex flex-wrap gap-1 mb-1.5">
+                                    <span className={clsx('px-2 py-0.5 text-[9px] uppercase tracking-widest font-black rounded-md font-mono border', badgeClass)}>
+                                      {badgeEmoji} {badgeLabel}
+                                    </span>
+                                  </div>
+                                  <strong className="text-white text-sm block truncate">{order.cliente}</strong>
+                                  <span className="text-[10px] text-gray-400 block">{order.telefone}</span>
+                                </div>
+                                <span className="font-black text-white font-mono text-[13px] shrink-0">R$ {order.total.toFixed(2)}</span>
+                              </div>
+
+                              <p className="text-[10px] text-blue-300/70 bg-black/40 px-2.5 py-2 rounded-lg border border-blue-500/10 leading-relaxed font-mono">
+                                {order.itens}
+                              </p>
+
+                              {order.endereco && (
+                                <div className="flex items-start gap-1.5 bg-rose-950/20 px-2 py-1.5 rounded-lg border border-rose-500/10">
+                                  <MapPin size={10} className="shrink-0 text-rose-400 mt-0.5" />
+                                  <span className="text-[9.5px] text-rose-300/70 leading-relaxed">{order.endereco}</span>
+                                </div>
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  if (isLoading) return;
+                                  const fullOrder = orders.find(o => o.id === order.id);
+                                  if (fullOrder) {
+                                    setSelectedOrder({
+                                      ...fullOrder,
+                                      itens: fullOrder.itens.map((it: any) => ({
+                                        id: it.id,
+                                        produtoId: it.produto_id || it.produtoId,
+                                        name: it.nome || `Item ${it.produtoId}`,
+                                        preco: it.preco_unit || it.preco,
+                                        observacao: it.observacao || '',
+                                        clienteNome: it.cliente_nome || it.clienteNome || 'Consumo Geral',
+                                        status: it.status,
+                                        pago: it.pago
+                                      }))
+                                    });
+                                    setShowCheckoutModal(true);
+                                    setCheckoutServiceTax(false);
+                                    setSplitPeople('1');
+                                    setSelectedItemIds([]);
+                                    const sub = fullOrder.itens.filter((it: any) => !it.pago).reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
+                                    setPaymentValor(sub.toFixed(2));
+                                  } else {
+                                    await handleFinalizarPedido(order.id);
+                                  }
+                                }}
+                                className="w-full py-2 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white rounded-lg font-black text-[10px] transition-all duration-150 cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-[0_2px_8px_rgba(59,130,246,0.25)]"
+                              >
+                                <CreditCard size={11} /> Fechar Conta
+                              </button>
+                            </div>
+                          );
+                        })}
+
                         {groupedTableOrdersReady.map((order) => {
                           if (order.isGrouped) {
                             const contaPedida = order.contaPedida;
@@ -2947,46 +3040,52 @@ export function CaixaPanel({
                                     const origItemsStr = Object.entries(origItemCounts)
                                       .map(([name, qty]) => `${qty}x ${name}`)
                                       .join(' • ') || 'Nenhum item';
-                                    const origContaPedida = origOrder.contaPedida;
 
                                     return (
-                                      <div key={`orig-${origOrder.id}`} className="bg-black/30 p-2.5 rounded-lg border border-white/5 space-y-2">
+                                      <div key={`orig-${origOrder.id}`} className="bg-black/30 p-2.5 rounded-lg border border-white/5 space-y-1.5">
                                         <div className="flex justify-between items-center text-[9px]">
                                           <span className="font-bold text-gray-300">{origOrder.identificador || `Comanda #${origOrder.id.slice(-4)}`}</span>
                                           <span className="text-gray-600 font-mono">#{origOrder.id.slice(-4)}</span>
                                         </div>
                                         <p className="text-[9.5px] text-emerald-300/80 font-mono leading-relaxed">{origItemsStr}</p>
-                                        <button
-                                          type="button"
-                                          onClick={async (e) => {
-                                            e.stopPropagation();
-                                            if (isLoading) return;
-                                            const fullOrder = orders.find(o => o.id === origOrder.comandaId);
-                                            if (!fullOrder) return;
-                                            setSelectedOrder({
-                                              ...fullOrder,
-                                              itens: fullOrder.itens.map((it: any) => ({
-                                                id: it.id, produtoId: it.produto_id || it.produtoId,
-                                                nome: it.nome || `Item ${it.produtoId}`, preco: it.preco_unit || it.preco,
-                                                observacao: it.observacao || '', clienteNome: it.cliente_nome || it.clienteNome || 'Consumo Geral',
-                                                status: it.status, pago: it.pago
-                                              }))
-                                            });
-                                            setShowCheckoutModal(true);
-                                            setCheckoutServiceTax(true);
-                                            setSplitPeople('1');
-                                            setSelectedItemIds([]);
-                                            const sub = fullOrder.itens.filter((it: any) => !it.pago).reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
-                                            setPaymentValor((sub * (1.0 + (taxaServicoAtiva ? serviceTaxRate / 100 : 0))).toFixed(2));
-                                          }}
-                                          className={clsx('w-full py-1.5 active:scale-95 text-white rounded-md font-black text-[9px] transition-all duration-150 cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1', origContaPedida ? 'bg-blue-600 hover:bg-blue-500' : 'bg-emerald-600 hover:bg-emerald-500')}
-                                        >
-                                          <Check size={9} /> Fechar Conta
-                                        </button>
                                       </div>
                                     );
                                   })}
                                 </div>
+                                <button
+                                  type="button"
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    if (isLoading) return;
+                                    setSelectedOrder({
+                                      id: order.id,
+                                      mesaId: order.mesaId,
+                                      mesaOrigemId: order.mesaOrigemId,
+                                      mesaTransferidaDe: order.mesaTransferidaDe,
+                                      identificador: order.identificador,
+                                      garcomNome: order.garcomNome,
+                                      tipo: order.tipo,
+                                      valorPago: order.valorPago,
+                                      itens: order.itens.map((it: any) => ({
+                                        id: it.id, produtoId: it.produto_id || it.produtoId,
+                                        nome: it.nome || `Item ${it.produtoId}`, preco: it.preco_unit || it.preco,
+                                        observacao: it.observacao || '', clienteNome: it.cliente_nome || it.clienteNome || 'Consumo Geral',
+                                        status: it.status, pago: it.pago
+                                      })),
+                                      isGrouped: true,
+                                      originalOrders: order.originalOrders
+                                    });
+                                    setShowCheckoutModal(true);
+                                    setCheckoutServiceTax(true);
+                                    setSplitPeople('1');
+                                    setSelectedItemIds([]);
+                                    const sub = order.itens.filter((it: any) => !it.pago).reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
+                                    setPaymentValor((sub * (1.0 + (taxaServicoAtiva ? serviceTaxRate / 100 : 0))).toFixed(2));
+                                  }}
+                                  className={clsx('w-full py-2 active:scale-95 text-white rounded-lg font-black text-[10px] transition-all duration-150 cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5', contaPedida ? 'bg-blue-600 hover:bg-blue-500 shadow-[0_2px_8px_rgba(96,165,250,0.25)]' : 'bg-emerald-600 hover:bg-emerald-500 shadow-[0_2px_8px_rgba(16,185,129,0.25)]')}
+                                >
+                                  <Check size={11} /> Fechar Conta
+                                </button>
                               </div>
                             );
                           }
@@ -6438,171 +6537,19 @@ export function CaixaPanel({
 
           {/* VIEW: FRETISTAS & LOGÍSTICA */}
           {activeSubTab === 'entregadores' && (
-            <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5', 'animate-fade-in', 'text-left')}>
-
-              {/* Painel de Entregas (Colunas da Esquerda) */}
-              <div className={clsx('lg:col-span-2', 'bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-5', 'flex', 'flex-col', 'overflow-hidden')}>
-                <div className={clsx('border-b', 'border-[#27272A]', 'pb-3', 'shrink-0')}>
-                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'text-sm')}>Controle de Despacho e Entregas</span>
-                  <span className={clsx('text-[9px]', 'text-gray-500', 'block')}>Gerencie o fluxo de saída e entrega de pedidos de Delivery.</span>
-                </div>
-
-                {/* Pedidos Pendentes de Envio */}
-                <div className={clsx('space-y-3', 'flex-1', 'overflow-y-auto')}>
-                  <span className={clsx('text-[10px]', 'font-bold', 'text-[#10b981]', 'uppercase', 'tracking-wider', 'block')}>Pedidos para Despachar</span>
-
-                  {simulatedOrders.filter(o => o.status === 'producao' || o.status === 'pendente' || o.status === 'analise').length === 0 ? (
-                    <div className={clsx('py-8', 'text-center', 'text-gray-500', 'text-xs', 'italic', 'bg-[#1C1C1F]/20', 'border', 'border-[#27272A]/40', 'rounded-2xl')}>
-                      Não há pedidos prontos ou em produção aguardando despacho no momento.
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {simulatedOrders.filter(o => o.status === 'producao' || o.status === 'pendente' || o.status === 'analise').map((order) => {
-                        const motoboyId = selectedMotoboys[order.id] || '';
-                        return (
-                          <div key={order.id} className={clsx('p-4', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'sm:flex-row', 'justify-between', 'gap-3', 'text-xs')}>
-                            <div className={clsx('space-y-1.5', 'flex-1')}>
-                              <div className={clsx('flex', 'items-center', 'gap-2')}>
-                                <span className={clsx('font-bold', 'text-white', 'text-[11px]')}>Pedido {order.id}</span>
-                                <span className={clsx('bg-[#10b981]/15', 'text-[#10b981]', 'text-[8px]', 'font-bold', 'px-1.5', 'py-0.5', 'rounded', 'border', 'border-[#10b981]/20', 'uppercase')}>
-                                  {order.canal}
-                                </span>
-                              </div>
-                              <span className={clsx('text-gray-300', 'font-bold', 'block')}>{order.cliente} • {order.telefone}</span>
-                              <span className={clsx('text-gray-400', 'text-[10px]', 'block', 'leading-relaxed')}>{order.endereco}</span>
-                              <span className={clsx('text-[9px]', 'text-gray-500', 'block', 'font-mono')}>Itens: {order.itens}</span>
-                            </div>
-
-                            <div className={clsx('flex', 'flex-col', 'sm:items-end', 'justify-between', 'gap-2', 'shrink-0')}>
-                              <span className={clsx('font-mono', 'font-bold', 'text-emerald-400', 'text-[11px]')}>R$ {order.total.toFixed(2)}</span>
-
-                              <div className={clsx('flex', 'items-center', 'gap-2')}>
-                                <select
-                                  value={motoboyId}
-                                  onChange={(e) => setSelectedMotoboys(prev => ({ ...prev, [order.id]: e.target.value }))}
-                                  className={clsx('py-1.5', 'px-2', 'bg-[#121214]', 'border', 'border-[#27272A]', 'text-white', 'rounded-xl', 'text-[10px]', 'focus:outline-none', 'focus:border-[#10b981]')}
-                                >
-                                  <option value="">Selecione o Entregador...</option>
-                                  {motoboys.filter(m => m.ativo).map(m => (
-                                    <option key={m.id} value={m.id}>{m.nome}</option>
-                                  ))}
-                                </select>
-                                <button
-                                  type="button"
-                                  disabled={!motoboyId}
-                                  onClick={() => handleDespacharPedido(order.id, parseInt(motoboyId))}
-                                  className={clsx('py-1.5', 'px-3', 'bg-emerald-600', 'hover:bg-[#9d2b3c]', 'disabled:opacity-50', 'text-white', 'font-bold', 'rounded-xl', 'text-[10px]', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
-                                >
-                                  Despachar
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* Pedidos Em Trânsito */}
-                  <span className={clsx('text-[10px]', 'font-bold', 'text-[#10b981]', 'uppercase', 'tracking-wider', 'block', 'pt-4')}>Em Trânsito (Entregas Ativas)</span>
-
-                  {simulatedOrders.filter(o => o.status === 'transito' || o.status === 'pronto').length === 0 ? (
-                    <div className={clsx('py-8', 'text-center', 'text-gray-500', 'text-xs', 'italic', 'bg-[#1C1C1F]/20', 'border', 'border-[#27272A]/40', 'rounded-2xl')}>
-                      Nenhum pedido em trânsito no momento.
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {simulatedOrders.filter(o => o.status === 'transito' || o.status === 'pronto').map((order) => {
-                        return (
-                          <div key={order.id} className={clsx('p-4', 'bg-[#1C1C1F]/40', 'border', 'border-[#27272A]/40', 'rounded-2xl', 'flex', 'flex-col', 'sm:flex-row', 'justify-between', 'gap-3', 'text-xs')}>
-                            <div className={clsx('space-y-1', 'flex-1')}>
-                              <div className={clsx('flex', 'items-center', 'gap-2')}>
-                                <span className={clsx('font-bold', 'text-white', 'text-[11px]')}>Pedido {order.id}</span>
-                                <span className={clsx('bg-emerald-500/10', 'text-emerald-400', 'text-[8px]', 'font-bold', 'px-1.5', 'py-0.5', 'rounded', 'border', 'border-emerald-500/20', 'uppercase', 'tracking-wider')}>
-                                  Em Trânsito
-                                </span>
-                              </div>
-                              <span className={clsx('text-gray-300', 'font-bold', 'block')}>{order.cliente} • {order.telefone}</span>
-                              <span className={clsx('text-gray-400', 'text-[10px]', 'block', 'leading-relaxed')}>{order.endereco}</span>
-                            </div>
-
-                            <div className={clsx('flex', 'flex-col', 'sm:items-end', 'justify-between', 'gap-2', 'shrink-0')}>
-                              <span className={clsx('font-mono', 'font-bold', 'text-emerald-400', 'text-[11px]')}>R$ {order.total.toFixed(2)}</span>
-
-                              <button
-                                type="button"
-                                onClick={() => handleFinalizarPedido(order.id)}
-                                className={clsx('py-1.5', 'px-3', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'font-bold', 'rounded-xl', 'text-[10px]', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
-                              >
-                                Concluir Entrega
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Gerenciamento de Fretistas (Coluna da Direita) */}
-              <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'flex', 'flex-col', 'justify-between', 'overflow-hidden')}>
-                <div className={clsx('space-y-4', 'flex-1', 'flex', 'flex-col', 'overflow-hidden')}>
-                  <div className={clsx('border-b', 'border-[#27272A]', 'pb-3', 'shrink-0')}>
-                    <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'text-sm')}>Fretistas Cadastrados</span>
-                    <span className={clsx('text-[9px]', 'text-gray-500', 'block')}>Lista de motoboys e entregadores de plantão.</span>
-                  </div>
-
-                  <div className={clsx('flex-1', 'overflow-y-auto', 'space-y-2.5')}>
-                    {motoboys.length === 0 ? (
-                      <span className={clsx('text-xs', 'text-gray-500', 'italic')}>Nenhum fretista cadastrado.</span>
-                    ) : (
-                      motoboys.map((m) => (
-                        <div key={m.id} className={clsx('p-3', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'flex', 'items-center', 'justify-between', 'gap-2')}>
-                          <div className="text-xs">
-                            <span className={clsx('font-bold', 'text-white', 'block')}>{m.nome}</span>
-                            <span className={clsx('text-[10px]', 'text-gray-400', 'block', 'font-mono')}>{m.telefone}</span>
-                          </div>
-                          <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ${m.ativo ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                            }`}>
-                            {m.ativo ? 'Ativo' : 'Inativo'}
-                          </span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                {/* Cadastro de novo Motoboy */}
-                <form onSubmit={handleCadastrarMotoboy} className={clsx('pt-4', 'border-t', 'border-[#27272A]', 'space-y-3', 'shrink-0')}>
-                  <span className={clsx('text-[10px]', 'font-bold', 'text-[#10b981]', 'uppercase', 'tracking-wider', 'block')}>Novo Fretista</span>
-
-                  <input
-                    type="text"
-                    required
-                    placeholder="Nome do Entregador"
-                    value={novoMotoboyNome}
-                    onChange={(e) => setNovoMotoboyNome(e.target.value)}
-                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-xs', 'focus:outline-none', 'focus:border-[#10b981]')}
-                  />
-                  <input
-                    type="text"
-                    required
-                    placeholder="Telefone (ex: 81 99999-8888)"
-                    value={novoMotoboyTelefone}
-                    onChange={(e) => setNovoMotoboyTelefone(e.target.value)}
-                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-xs', 'font-mono', 'focus:outline-none', 'focus:border-[#10b981]')}
-                  />
-                  <button
-                    type="submit"
-                    className={clsx('w-full', 'py-2', 'bg-emerald-600', 'hover:bg-[#9d2b3c]', 'text-white', 'font-bold', 'rounded-xl', 'text-[10px]', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
-                  >
-                    Adicionar Fretista
-                  </button>
-                </form>
-              </div>
-
-            </div>
+            <CaixaLogisticaTab
+              simulatedOrders={simulatedOrders}
+              motoboys={motoboys}
+              selectedMotoboys={selectedMotoboys}
+              setSelectedMotoboys={setSelectedMotoboys}
+              handleDespacharPedido={handleDespacharPedido}
+              handleFinalizarPedido={handleFinalizarPedido}
+              handleCadastrarMotoboy={handleCadastrarMotoboy}
+              novoMotoboyNome={novoMotoboyNome}
+              setNovoMotoboyNome={setNovoMotoboyNome}
+              novoMotoboyTelefone={novoMotoboyTelefone}
+              setNovoMotoboyTelefone={setNovoMotoboyTelefone}
+            />
           )}
 
           {/* MOCK VIEW: SETUP WIZARD (NICHO) */}
