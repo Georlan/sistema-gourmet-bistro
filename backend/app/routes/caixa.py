@@ -468,10 +468,11 @@ def recusar_pagamento(
 
 from ..models import ConfiguracaoRestaurante
 from ..schemas import ConfiguracaoRestauranteResponse, ConfiguracaoRestauranteUpdate
+from sqlalchemy.orm import joinedload
 
 @router.get("/configuracoes", response_model=ConfiguracaoRestauranteResponse)
 def obter_configuracoes(db: Session = Depends(get_db)):
-    config = db.query(ConfiguracaoRestaurante).first()
+    config = db.query(ConfiguracaoRestaurante).options(joinedload(ConfiguracaoRestaurante.restaurante)).first()
     if not config:
         config = ConfiguracaoRestaurante(
             nicho="hamburgueria",
@@ -508,7 +509,7 @@ def atualizar_configuracoes(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
-    config = db.query(ConfiguracaoRestaurante).first()
+    config = db.query(ConfiguracaoRestaurante).options(joinedload(ConfiguracaoRestaurante.restaurante)).first()
     if not config:
         config = ConfiguracaoRestaurante()
         db.add(config)

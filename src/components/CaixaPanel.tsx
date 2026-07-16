@@ -466,7 +466,7 @@ export function CaixaPanel({
   const [serviceTaxRate, setServiceTaxRate] = useState(10); // Customizable service rate percentage
   const [unificarViasDelivery, setUnificarViasDelivery] = useState(false);
   const [modoExclusivoSalao, setModoExclusivoSalao] = useState(true);
-  const [plano, setPlano] = useState<'pocket' | 'bistro' | 'delivery' | 'premium'>('premium');
+  const [plano, setPlano] = useState<'pocket' | 'bistro' | 'delivery' | 'premium'>('pocket');
   const restaurante = { plano };
   const isPocket = plano === 'pocket';
   const isBistro = plano === 'bistro';
