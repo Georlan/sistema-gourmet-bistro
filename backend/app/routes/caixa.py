@@ -698,3 +698,41 @@ def atualizar_config_cardapio(
 ):
     """Atualiza as configurações whitelabel de personalização do restaurante ativo via config-cardapio."""
     return atualizar_configuracao_restaurante(config_in, background_tasks, db, current_user)
+
+
+from pydantic import BaseModel
+
+class UpdatePlanoRequest(BaseModel):
+    plano: str
+
+@router.put("/plano")
+def atualizar_plano_restaurante(
+    payload: UpdatePlanoRequest,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_garcom_optional)
+):
+    """Atualiza o plano do restaurante ativo."""
+    check_caixa_permission(current_user)
+    plano_val = payload.plano.lower()
+    if plano_val not in ['pocket', 'bistro', 'delivery', 'premium']:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Plano inválido. Deve ser um de: pocket, bistro, delivery, premium"
+        )
+    rest_id = current_restaurante_id.get() or 1
+    restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
+    if not restaurante:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Restaurante não encontrado"
+        )
+    restaurante.plano = plano_val
+    db.commit()
+    db.refresh(restaurante)
+    
+    return {
+        "success": True,
+        "plano": restaurante.plano,
+        "id": restaurante.id,
+        "nome": restaurante.nome
+    }

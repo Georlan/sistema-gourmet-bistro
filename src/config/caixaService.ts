@@ -303,3 +303,14 @@ export const imprimirReciboMesa = async (
     method: 'POST'
   });
 };
+
+export const updateRestaurantePlano = async (
+  apiBaseUrl: string,
+  authHeaders: any,
+  plano: string
+) => {
+  return callCaixaApi(apiBaseUrl, authHeaders, '/caixa/plano', {
+    method: 'PUT',
+    body: JSON.stringify({ plano })
+  });
+};

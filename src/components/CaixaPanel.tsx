@@ -531,7 +531,19 @@ export function CaixaPanel({
   };
 
   const handleSavePlan = async (novoPlano: string) => {
-    await updateConfiguracoes({ plano: novoPlano });
+    try {
+      const res = await API.updateRestaurantePlano(apiBaseUrl, authHeaders, novoPlano);
+      if (res.ok) {
+        setPlano(novoPlano as any);
+        if (novoPlano === 'delivery') {
+          setActiveSubTab('pedidos');
+        } else if (novoPlano === 'bistro' || novoPlano === 'pocket') {
+          setActiveSubTab('pedidos');
+        }
+      }
+    } catch (e) {
+      console.error('Error saving restaurant plan:', e);
+    }
   };
 
   // Toggle automatics
@@ -2179,8 +2191,8 @@ export function CaixaPanel({
           {activeTab === 'operacao' && [
             { id: 'pedidos', label: 'Fila de Pedidos' },
             { id: 'pdv', label: 'Terminal Balcão' },
-            { id: 'salon', label: 'Layout do Salão', show: !isDelivery && modulesActive.salon },
-            { id: 'entregadores', label: 'Fretistas & Logística', show: !isBistro && !modoExclusivoSalao && modulesActive.delivery }
+            { id: 'salon', label: 'Layout do Salão', show: !isDelivery },
+            { id: 'entregadores', label: 'Fretistas & Logística', show: isDelivery || isPremium }
           ].filter(sub => sub.show !== false).map(sub => (
             <button
               key={sub.id}
@@ -2298,7 +2310,7 @@ export function CaixaPanel({
           ))}
 
           {activeTab === 'configuracoes' && [
-            { id: 'equipe', label: 'Cargos & Permissões' },
+            { id: 'equipe', label: 'Cargos & Permissões', show: !isDelivery },
             { id: 'impressoras', label: 'Roteamento de Impressoras', show: !isPocket },
             { id: 'nicho_wizard', label: 'Setup Wizard (Nicho)' },
             { id: 'planos', label: 'Planos & Integrações' }
@@ -6443,32 +6455,34 @@ export function CaixaPanel({
                 ))}
               </div>
 
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      const res = await API.callCaixaApi(apiBaseUrl, authHeaders, `/comandas/lancamentos/${selectedKanbanOrder.id}/reimprimir`, {
-                        method: "POST",
-                        headers: authHeaders
-                      });
-                      if (res.ok) {
-                        alert("Pedido reenviado para a impressora com sucesso!");
-                        setSelectedKanbanOrder(null);
-                      } else {
+              {!isPocket && (
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const res = await API.callCaixaApi(apiBaseUrl, authHeaders, `/comandas/lancamentos/${selectedKanbanOrder.id}/reimprimir`, {
+                          method: "POST",
+                          headers: authHeaders
+                        });
+                        if (res.ok) {
+                          alert("Pedido reenviado para a impressora com sucesso!");
+                          setSelectedKanbanOrder(null);
+                        } else {
+                          alert("Erro ao solicitar reimpressão.");
+                        }
+                      } catch (err) {
+                        console.error(err);
                         alert("Erro ao solicitar reimpressão.");
                       }
-                    } catch (err) {
-                      console.error(err);
-                      alert("Erro ao solicitar reimpressão.");
-                    }
-                  }}
-                  className="flex-1 py-2.5 bg-rose-950/40 border border-rose-900/50 text-rose-400 hover:bg-rose-900/20 text-white font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-[#10b981]/20 shadow-lg"
-                >
-                  <Printer size={13} />
-                  <span>Reimprimir na Cozinha</span>
-                </button>
-              </div>
+                    }}
+                    className="flex-1 py-2.5 bg-rose-950/40 border border-rose-900/50 text-rose-400 hover:bg-rose-900/20 text-white font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-[#10b981]/20 shadow-lg"
+                  >
+                    <Printer size={13} />
+                    <span>Reimprimir na Cozinha</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
