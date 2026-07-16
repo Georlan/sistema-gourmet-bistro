@@ -7,15 +7,10 @@ import {
   MessageSquare, Send, Printer, Cpu, HelpCircle, Smartphone,
   Gift, Tag, TrendingUp, Heart, Globe
 } from 'lucide-react';
-import { Order, OrderItem, CaixaTurno, CaixaMovimentacao, Pagamento, Table, Product, SimulatedDeliveryOrder, DeliveryZone, SystemUser, BotChatMessage } from '../types';
+import { Order, OrderItem, CaixaTurno, CaixaMovimentacao, Pagamento, Table, Product } from '../types';
 import { PRODUCTS, CATEGORIES } from '../data';
 import { getProductPresets } from '../domain';
 import clsx from 'clsx';
-import { CaixaLogisticaTab } from './CaixaLogisticaTab';
-import { CaixaSalaoTab } from './CaixaSalaoTab';
-import { CaixaBalcaoTab } from './CaixaBalcaoTab';
-import { CaixaKanbanBoard } from './CaixaKanbanBoard';
-import * as API from '../config/caixaService';
 
 interface CaixaPanelProps {
   orders: Order[];
@@ -33,7 +28,57 @@ interface CaixaPanelProps {
   liveProdutos?: Product[];
   liveCategorias?: any[];
   onRefreshCategorias?: () => Promise<void>;
-  restauranteConfig?: any;
+}
+
+// Simulated dynamic lists for tabs that don't need real backend persistence yet
+interface Courier {
+  id: number;
+  nome: string;
+  telefone: string;
+  placa: string;
+  status: 'disponivel' | 'em_entrega' | 'indisponivel';
+  corridas: number;
+}
+
+interface DeliveryZone {
+  id: number;
+  bairro: string;
+  taxa: number;
+  tempo: string;
+}
+
+interface AccountItem {
+  id: number;
+  descricao: string;
+  valor: number;
+  vencimento: string;
+  status: 'pago' | 'pendente' | 'atrasado';
+  tipo: 'pagar' | 'receber';
+}
+
+interface SimulatedDeliveryOrder {
+  id: string;
+  cliente: string;
+  telefone: string;
+  itens: string;
+  total: number;
+  canal: 'ifood' | 'site' | 'whats';
+  status: 'pendente' | 'analise' | 'producao' | 'pronto' | 'transito';
+  endereco?: string;
+  criadoEm: string;
+}
+
+interface SystemUser {
+  id: string;
+  nome: string;
+  usuario: string;
+  role: string;
+}
+
+interface BotChatMessage {
+  sender: 'user' | 'bot';
+  text: string;
+  timestamp: string;
 }
 
 export function CaixaPanel({
@@ -51,8 +96,7 @@ export function CaixaPanel({
   isWsConnected = false,
   liveProdutos = [],
   liveCategorias = [],
-  onRefreshCategorias,
-  restauranteConfig
+  onRefreshCategorias
 }: CaixaPanelProps) {
   // Turno & Sync state
   const [turno, setTurno] = useState<CaixaTurno | null>(null);
@@ -85,40 +129,37 @@ export function CaixaPanel({
   // ⚡ FILTRAGEM DINÂMICA DAS COMANDAS DE MESA PARA O KANBAN
   // ============================================================================
 
-  // Col 1 — Produção Local: AGRUPADO POR RODADA (Order) — 1 card por comanda/rodada de pedido
-  // Cada rodada pode conter múltiplos itens; o botão "Pronto" é individual por item.
-  const localProductionRounds = (() => {
-    const rounds: any[] = [];
+  // Col 1 — Preparo: itens 'preparando' apenas de mesas/consumo local (delivery/retirada/balcão ignorados aqui)
+  const tableOrdersInProduction = (() => {
+    const list: any[] = [];
     orders.forEach(comanda => {
-      if (comanda.tipo !== 'Consumo no Local') return;
+      if (comanda.tipo !== 'Consumo no Local' || !comanda.mesaId || comanda.mesaId <= 0) return;
       if ((comanda as any).statusComanda === 'aguardando_pagamento') return;
-      // Coletar apenas os itens desta rodada ainda em preparo
-      const preparingItems = comanda.itens.filter(item => item.status === 'preparando');
-      if (preparingItems.length === 0) return;
-      rounds.push({
-        rodadaId: comanda.id,
-        comandaId: comanda.id,
-        mesaId: comanda.mesaId,
-        mesaOrigemId: (comanda as any).mesaOrigemId,
-        garcomNome: comanda.garcomNome,
-        identificador: (comanda as any).identificador ?? null,
-        timestamp: comanda.timestamp,
-        itens: preparingItems.map(item => ({
-          itemId: item.id,
-          nome: (item as any).nome || 'Item',
-          observacao: (item as any).observacao || '',
-          preco: (item as any).preco_unit ?? (item as any).preco ?? 0,
-          lancamentoId: (item as any).lancamentoId,
-          status: item.status,
-        })),
+      const itemsByLancamento: Record<string, OrderItem[]> = {};
+      comanda.itens.forEach(item => {
+        const lid = item.lancamentoId || comanda.id;
+        if (!itemsByLancamento[lid]) itemsByLancamento[lid] = [];
+        itemsByLancamento[lid].push(item);
+      });
+      Object.entries(itemsByLancamento).forEach(([lid, items]) => {
+        const preparingItems = items.filter(i => i.status === 'preparando');
+        if (preparingItems.length > 0) {
+          list.push({
+            id: lid,
+            comandaId: comanda.id,
+            mesaId: comanda.mesaId,
+            mesaOrigemId: comanda.mesaOrigemId,
+            mesaTransferidaDe: comanda.mesaTransferidaDe,
+            identificador: (comanda as any).identificador ?? null,
+            garcomNome: comanda.garcomNome,
+            tipo: comanda.tipo,
+            itens: preparingItems
+          });
+        }
       });
     });
-    return rounds;
+    return list;
   })();
-
-  // Alias para compatibilidade com o segundo bloco Kanban (que usa tableOrdersInProduction)
-  const localProductionItems = localProductionRounds;
-  const tableOrdersInProduction = localProductionRounds;
 
   // Col 3 — Fechar conta: mesas com status 'aguardando_pagamento' (conta pedida) ou itens prontos individualmente
   const tableOrdersReady = (() => {
@@ -141,7 +182,7 @@ export function CaixaPanel({
             garcomNome: comanda.garcomNome,
             tipo: comanda.tipo,
             valorPago: (comanda as any).valorPago || 0,
-            itens: unpaid.map(i => ({ ...i, comandaId: comanda.id })),
+            itens: unpaid,
             contaPedida: true
           });
         }
@@ -166,67 +207,12 @@ export function CaixaPanel({
           garcomNome: comanda.garcomNome,
           tipo: comanda.tipo,
           valorPago: (comanda as any).valorPago || 0,
-          itens: readyItems.map(i => ({ ...i, comandaId: comanda.id })),
+          itens: readyItems,
           contaPedida: false,
           temItensEmPreparo: temItensEmPreparo
         });
       }
     });
-    return list;
-  })();
-
-  const groupedTableOrdersReady = (() => {
-    const groups: Record<number, any[]> = {};
-    tableOrdersReady.forEach(order => {
-      if (!order.mesaId) return;
-      if (!groups[order.mesaId]) {
-        groups[order.mesaId] = [];
-      }
-      groups[order.mesaId].push(order);
-    });
-
-    const list: any[] = [];
-    Object.entries(groups).forEach(([mesaIdStr, ordersList]) => {
-      const mId = parseInt(mesaIdStr);
-      if (ordersList.length > 1) {
-        const allItems: any[] = [];
-        ordersList.forEach(o => {
-          allItems.push(...o.itens);
-        });
-
-        const contaPedida = ordersList.some(o => o.contaPedida);
-        const temItensEmPreparo = ordersList.some(o => o.temItensEmPreparo);
-        const valorPago = ordersList.reduce((acc, o) => acc + (o.valorPago || 0), 0);
-        const garcomSet = new Set<string>();
-        ordersList.forEach(o => {
-          if (o.garcomNome) garcomSet.add(o.garcomNome);
-        });
-        const garcomNome = garcomSet.size > 0 ? Array.from(garcomSet).join(', ') : 'Garçom';
-
-        list.push({
-          id: `grouped-mesa-${mId}`,
-          mesaId: mId,
-          mesaOrigemId: ordersList[0].mesaOrigemId,
-          mesaTransferidaDe: ordersList[0].mesaTransferidaDe,
-          identificador: `Consumo Mesa ${mId}`,
-          garcomNome: garcomNome,
-          tipo: 'Consumo no Local',
-          valorPago: valorPago,
-          itens: allItems,
-          contaPedida: contaPedida,
-          temItensEmPreparo: temItensEmPreparo,
-          isGrouped: true,
-          originalOrders: ordersList
-        });
-      } else {
-        list.push({
-          ...ordersList[0],
-          isGrouped: false,
-          originalOrders: ordersList
-        });
-      }
-    });
-
     return list;
   })();
 
@@ -295,7 +281,14 @@ export function CaixaPanel({
   const handleSaveFidelityConfig = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await API.saveFidelityConfig(apiBaseUrl, authHeaders, fidelidadeConfig);
+      const res = await fetch(`${apiBaseUrl}/fidelidade/config`, {
+        method: 'POST',
+        headers: {
+          ...authHeaders,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(fidelidadeConfig)
+      });
       if (res.ok) {
         alert('Configurações do Programa de Fidelidade salvas com sucesso!');
       } else {
@@ -466,12 +459,6 @@ export function CaixaPanel({
   const [serviceTaxRate, setServiceTaxRate] = useState(10); // Customizable service rate percentage
   const [unificarViasDelivery, setUnificarViasDelivery] = useState(false);
   const [modoExclusivoSalao, setModoExclusivoSalao] = useState(true);
-  const [plano, setPlano] = useState<'pocket' | 'bistro' | 'delivery' | 'premium'>('pocket');
-  const restaurante = { plano };
-  const isPocket = plano === 'pocket';
-  const isBistro = plano === 'bistro';
-  const isDelivery = plano === 'delivery';
-  const isPremium = plano === 'premium';
   const [splitPeople, setSplitPeople] = useState('1');
   const [paymentMetodo, setPaymentMetodo] = useState<'dinheiro' | 'pix' | 'cartao' | 'cartao_debito' | 'cartao_credito'>('pix');
   const [paymentValor, setPaymentValor] = useState('');
@@ -497,10 +484,16 @@ export function CaixaPanel({
     perm_garcom_transferir_item?: boolean;
     perm_garcom_chamar?: boolean;
     perm_garcom_ociosas?: boolean;
-    plano?: string;
   }) => {
     try {
-      const res = await API.updateCaixaConfiguracoes(apiBaseUrl, authHeaders, updates);
+      const res = await fetch(`${apiBaseUrl}/caixa/configuracoes`, {
+        method: 'PUT',
+        headers: {
+          ...authHeaders,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updates)
+      });
       if (res.ok) {
         const data = await res.json();
         setCheckoutServiceTax(data.taxa_servico_ativa);
@@ -508,7 +501,6 @@ export function CaixaPanel({
         setServiceTaxRate(data.taxa_servico_padrao);
         setUnificarViasDelivery(data.unificar_vias_delivery);
         setModoExclusivoSalao(data.modo_exclusivo_salon || data.modo_exclusivo_salao);
-        if (data.plano) setPlano(data.plano.toLowerCase() as any);
         setPermDelivery(data.perm_garcom_delivery);
         setPermEdit(data.perm_garcom_editar);
         setPermAddCharges(data.perm_garcom_taxas);
@@ -527,22 +519,6 @@ export function CaixaPanel({
       }
     } catch (e) {
       console.error('Error saving configurations:', e);
-    }
-  };
-
-  const handleSavePlan = async (novoPlano: string) => {
-    try {
-      const res = await API.updateRestaurantePlano(apiBaseUrl, authHeaders, novoPlano);
-      if (res.ok) {
-        setPlano(novoPlano as any);
-        if (novoPlano === 'delivery') {
-          setActiveSubTab('pedidos');
-        } else if (novoPlano === 'bistro' || novoPlano === 'pocket') {
-          setActiveSubTab('pedidos');
-        }
-      }
-    } catch (e) {
-      console.error('Error saving restaurant plan:', e);
     }
   };
 
@@ -584,13 +560,6 @@ export function CaixaPanel({
   useEffect(() => {
     setPaymentValor('');
   }, [showCheckoutModal]);
-
-  // Synchronize plano state when restauranteConfig prop updates
-  useEffect(() => {
-    if (restauranteConfig?.plano) {
-      setPlano(restauranteConfig.plano.toLowerCase() as any);
-    }
-  }, [restauranteConfig]);
 
   // Date filters for Meu Desempenho
   const [desempenhoRange, setDesempenhoRange] = useState<'7' | '15' | '30'>('7');
@@ -646,13 +615,6 @@ export function CaixaPanel({
   const [simulatedOrders, setSimulatedOrders] = useState<SimulatedDeliveryOrder[]>([]);
   const [motoboys, setMotoboys] = useState<any[]>([]);
   const [selectedMotoboys, setSelectedMotoboys] = useState<{ [orderId: string]: string }>({});
-  const activeMotoboysList = motoboys && motoboys.length > 0
-    ? motoboys.filter((m: any) => m.ativo)
-    : [
-        { id: 1, nome: 'Pedro Silva', ativo: true },
-        { id: 2, nome: 'Carlos Roberto', ativo: true },
-        { id: 3, nome: 'Marcos Junior', ativo: true }
-      ];
   const [novoMotoboyNome, setNovoMotoboyNome] = useState('');
   const [novoMotoboyTelefone, setNovoMotoboyTelefone] = useState('');
 
@@ -749,14 +711,13 @@ export function CaixaPanel({
       canal: canal,
       status: c.delivery_status || 'pendente',
       endereco: c.delivery_endereco || '',
-      criadoEm: criadoEm,
-      mesaId: c.mesa_id || undefined
+      criadoEm: criadoEm
     };
   };
 
   const fetchDeliveryOrders = async () => {
     try {
-      const res = await API.getActiveDeliveryOrders(apiBaseUrl, authHeaders);
+      const res = await fetch(`${apiBaseUrl}/comandas/delivery/ativos`, { headers: authHeaders });
       if (res.ok) {
         const data = await res.json();
         const mapped = data.map(mapComandaToSimulatedDelivery);
@@ -778,7 +739,7 @@ export function CaixaPanel({
 
   const fetchMotoboys = async () => {
     try {
-      const res = await API.getMotoboysLista(apiBaseUrl, authHeaders);
+      const res = await fetch(`${apiBaseUrl}/comandas/motoboys/lista`, { headers: authHeaders });
       if (res.ok) {
         const data = await res.json();
         setMotoboys(data);
@@ -820,7 +781,10 @@ export function CaixaPanel({
     if (isLoading) return;
     setIsLoading(true);
     try {
-      const res = await API.updateDeliveryStatus(apiBaseUrl, authHeaders, orderId, statusNovo);
+      const res = await fetch(`${apiBaseUrl}/comandas/${orderId}/delivery/status?status_novo=${statusNovo}`, {
+        method: 'PUT',
+        headers: authHeaders
+      });
       if (res.ok) {
         fetchDeliveryOrders();
       } else {
@@ -839,8 +803,14 @@ export function CaixaPanel({
     if (!confirm('Deseja realmente recusar e cancelar este pedido?')) return;
     setIsLoading(true);
     try {
-      await API.finalizarPedido(apiBaseUrl, authHeaders, orderId);
-      await API.fecharComanda(apiBaseUrl, authHeaders, orderId);
+      await fetch(`${apiBaseUrl}/comandas/${orderId}/delivery/status?status_novo=finalizado`, {
+        method: 'PUT',
+        headers: authHeaders
+      });
+      await fetch(`${apiBaseUrl}/comandas/${orderId}/fechar`, {
+        method: 'PUT',
+        headers: authHeaders
+      });
       fetchDeliveryOrders();
       onRefreshOrders();
     } catch (e) {
@@ -850,40 +820,15 @@ export function CaixaPanel({
     }
   };
 
-  const handleProntoItemAction = async (itemId: number) => {
-    setIsLoading(true);
-    try {
-      const res = await API.updateItemStatus(apiBaseUrl, authHeaders, itemId, 'pronto');
-      if (res.ok) onRefreshOrders();
-      else alert('Erro ao marcar item como pronto.');
-    } catch (err) {
-      console.error(err);
-      alert('Erro de conexão.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleProntoRoundAction = async (roundItens: any[]) => {
-    setIsLoading(true);
-    try {
-      await Promise.all(roundItens.map((item: any) =>
-        API.updateItemStatus(apiBaseUrl, authHeaders, item.itemId, 'pronto')
-      ));
-      onRefreshOrders();
-    } catch (err) {
-      console.error(err);
-      alert('Erro de conexão.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleDespacharPedido = async (orderId: string, motoboyId: number) => {
     if (isLoading) return;
     setIsLoading(true);
     try {
-      const res = await API.despacharPedido(apiBaseUrl, authHeaders, orderId, motoboyId);
+      const res = await fetch(`${apiBaseUrl}/comandas/${orderId}/delivery/despachar`, {
+        method: 'POST',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ motoboy_id: motoboyId })
+      });
       if (res.ok) {
         alert('Pedido despachado com sucesso!');
         fetchDeliveryOrders();
@@ -903,8 +848,14 @@ export function CaixaPanel({
     if (isLoading) return;
     setIsLoading(true);
     try {
-      await API.finalizarPedido(apiBaseUrl, authHeaders, orderId);
-      const res = await API.fecharComanda(apiBaseUrl, authHeaders, orderId);
+      await fetch(`${apiBaseUrl}/comandas/${orderId}/delivery/status?status_novo=finalizado`, {
+        method: 'PUT',
+        headers: authHeaders
+      });
+      const res = await fetch(`${apiBaseUrl}/comandas/${orderId}/fechar`, {
+        method: 'PUT',
+        headers: authHeaders
+      });
       if (res.ok) {
         alert('Pedido finalizado e comanda fechada com sucesso!');
         fetchDeliveryOrders();
@@ -924,7 +875,11 @@ export function CaixaPanel({
     e.preventDefault();
     if (!novoMotoboyNome || !novoMotoboyTelefone) return;
     try {
-      const res = await API.cadastrarMotoboy(apiBaseUrl, authHeaders, { nome: novoMotoboyNome, telefone: novoMotoboyTelefone });
+      const res = await fetch(`${apiBaseUrl}/comandas/motoboys/cadastro`, {
+        method: 'POST',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome: novoMotoboyNome, telefone: novoMotoboyTelefone })
+      });
       if (res.ok) {
         alert('Fretista cadastrado com sucesso!');
         setNovoMotoboyNome('');
@@ -948,13 +903,7 @@ export function CaixaPanel({
   // Online payments & billing plans mock states
   const [payPixActive, setPayPixActive] = useState(true);
   const [payCardActive, setPayCardActive] = useState(true);
-  const [selectedPlan, setSelectedPlan] = useState<'pocket' | 'bistro' | 'delivery' | 'premium'>('premium');
-
-  useEffect(() => {
-    if (plano) {
-      setSelectedPlan(plano);
-    }
-  }, [plano]);
+  const [selectedPlan, setSelectedPlan] = useState<'gold'>('gold');
 
   const [supportChats, setSupportChats] = useState<{ id: number; cliente: string; ultimaMsg: string; status: string; canal: string; }[]>([]);
 
@@ -1005,7 +954,7 @@ export function CaixaPanel({
   const fetchTurno = async () => {
     try {
       setIsLoading(true);
-      const res = await API.getTurnoAtual(apiBaseUrl, authHeaders);
+      const res = await fetch(`${apiBaseUrl}/caixa/turno/atual`, { headers: authHeaders });
       if (res.ok) {
         const data = await res.json();
         setTurno(data);
@@ -1020,7 +969,7 @@ export function CaixaPanel({
   // Fetch registered users (waiters CRUD)
   const fetchSystemUsers = async () => {
     try {
-      const res = await API.getUsuarios(apiBaseUrl, authHeaders);
+      const res = await fetch(`${apiBaseUrl}/auth/usuarios`, { headers: authHeaders });
       if (res.ok) {
         const data = await res.json();
         setSystemUsers(data);
@@ -1032,7 +981,7 @@ export function CaixaPanel({
 
   const fetchConfiguracoes = async () => {
     try {
-      const res = await API.getCaixaConfiguracoes(apiBaseUrl, authHeaders);
+      const res = await fetch(`${apiBaseUrl}/caixa/configuracoes`, { headers: authHeaders });
       if (res.ok) {
         const data = await res.json();
         setCheckoutServiceTax(data.taxa_servico_ativa);
@@ -1040,7 +989,6 @@ export function CaixaPanel({
         setServiceTaxRate(data.taxa_servico_padrao);
         setUnificarViasDelivery(data.unificar_vias_delivery);
         setModoExclusivoSalao(data.modo_exclusivo_salao);
-        if (data.plano) setPlano(data.plano.toLowerCase() as any);
         setPermDelivery(data.perm_garcom_delivery);
         setPermEdit(data.perm_garcom_editar);
         setPermAddCharges(data.perm_garcom_taxas);
@@ -1064,7 +1012,7 @@ export function CaixaPanel({
 
   const fetchCardapioConfig = async () => {
     try {
-      const res = await API.getCaixaConfigCardapio(apiBaseUrl, authHeaders);
+      const res = await fetch(`${apiBaseUrl}/caixa/config-cardapio`, { headers: authHeaders });
       if (res.ok) {
         const data = await res.json();
         setCardapioStatusOverride(data.status_override || 'Automático');
@@ -1083,14 +1031,21 @@ export function CaixaPanel({
   const saveCardapioConfig = async () => {
     setIsSavingCardapioConfig(true);
     try {
-      const res = await API.updateCaixaConfigCardapio(apiBaseUrl, authHeaders, {
-        status_override: cardapioStatusOverride,
-        cor_primaria: cardapioCorPrimaria,
-        cor_fundo: cardapioCorFundo,
-        logo_url: cardapioLogoUrl,
-        banner_url: cardapioBannerUrl,
-        sobre_nos: cardapioSobreNos,
-        endereco: cardapioEndereco
+      const res = await fetch(`${apiBaseUrl}/caixa/config-cardapio`, {
+        method: 'PUT',
+        headers: {
+          ...authHeaders,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          status_override: cardapioStatusOverride,
+          cor_primaria: cardapioCorPrimaria,
+          cor_fundo: cardapioCorFundo,
+          logo_url: cardapioLogoUrl,
+          banner_url: cardapioBannerUrl,
+          sobre_nos: cardapioSobreNos,
+          endereco: cardapioEndereco
+        })
       });
       if (res.ok) {
         alert('Configurações do cardápio digital atualizadas com sucesso!');
@@ -1115,10 +1070,18 @@ export function CaixaPanel({
           body.saldo_cashback = newSaldo;
         }
       }
-      const res = await API.updateFidelidadeCliente(apiBaseUrl, authHeaders, oldPhone, body);
+      const res = await fetch(`${apiBaseUrl}/fidelidade/clientes/${oldPhone}`, {
+        method: 'PUT',
+        headers: {
+          ...authHeaders,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
       if (res.ok) {
         alert('Cliente atualizado com sucesso!');
-        const freshRes = await API.getFidelidadeClientes(apiBaseUrl, authHeaders);
+        // Refresh client lists
+        const freshRes = await fetch(`${apiBaseUrl}/fidelidade/clientes`, { headers: authHeaders });
         if (freshRes.ok) {
           const data = await freshRes.json();
           if (Array.isArray(data)) setLoyaltyUsers(data);
@@ -1143,11 +1106,18 @@ export function CaixaPanel({
           body.saldo_cashback = saldoInicial;
         }
       }
-      const res = await API.cadastrarFidelidadeCliente(apiBaseUrl, authHeaders, body);
+      const res = await fetch(`${apiBaseUrl}/fidelidade/clientes`, {
+        method: 'POST',
+        headers: {
+          ...authHeaders,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
       if (res.ok) {
         alert('Cliente cadastrado com sucesso!');
         // Refresh client lists
-        const freshRes = await API.getFidelidadeClientes(apiBaseUrl, authHeaders);
+        const freshRes = await fetch(`${apiBaseUrl}/fidelidade/clientes`, { headers: authHeaders });
         if (freshRes.ok) {
           const data = await freshRes.json();
           if (Array.isArray(data)) setLoyaltyUsers(data);
@@ -1163,12 +1133,12 @@ export function CaixaPanel({
   };
 
   const refreshEstoqueData = () => {
-    API.getInsumos(apiBaseUrl, authHeaders)
+    fetch(`${apiBaseUrl}/estoque/insumos`, { headers: authHeaders })
       .then(res => res.json())
       .then(data => { if (Array.isArray(data)) setEstoqueInsumos(data); })
       .catch(err => console.error('Error fetching insumos:', err));
 
-    API.getDistribuidores(apiBaseUrl, authHeaders)
+    fetch(`${apiBaseUrl}/estoque/distribuidores`, { headers: authHeaders })
       .then(res => res.json())
       .then(data => { if (Array.isArray(data)) setDistribuidores(data); })
       .catch(err => console.error('Error fetching distribuidores:', err));
@@ -1176,9 +1146,9 @@ export function CaixaPanel({
 
   const handleSaveInsumo = async (isNew: boolean) => {
     try {
-      const endpoint = isNew 
-        ? '/estoque/insumos' 
-        : `/estoque/insumos/${selectedInsumo.id}`;
+      const url = isNew 
+        ? `${apiBaseUrl}/estoque/insumos` 
+        : `${apiBaseUrl}/estoque/insumos/${selectedInsumo.id}`;
       const method = isNew ? 'POST' : 'PUT';
       const body: any = {
         nome: insumoFormNome,
@@ -1192,7 +1162,14 @@ export function CaixaPanel({
         body.estoque_atual = 0.0;
       }
 
-      const res = await API.saveInsumo(apiBaseUrl, authHeaders, endpoint, method, body);
+      const res = await fetch(url, {
+        method,
+        headers: {
+          ...authHeaders,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
 
       if (res.ok) {
         alert(isNew ? 'Insumo cadastrado com sucesso!' : 'Insumo atualizado com sucesso!');
@@ -1211,10 +1188,17 @@ export function CaixaPanel({
 
   const handleAjustarEstoque = async () => {
     try {
-      const res = await API.ajustarInsumo(apiBaseUrl, authHeaders, selectedInsumo.id, {
-        quantidade: Number(ajusteQtd),
-        tipo: ajusteTipo,
-        justificativa: ajusteJustificativa
+      const res = await fetch(`${apiBaseUrl}/estoque/insumos/${selectedInsumo.id}/ajustar`, {
+        method: 'POST',
+        headers: {
+          ...authHeaders,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          quantidade: Number(ajusteQtd),
+          tipo: ajusteTipo,
+          justificativa: ajusteJustificativa
+        })
       });
 
       if (res.ok) {
@@ -1233,9 +1217,9 @@ export function CaixaPanel({
 
   const handleSaveDistribuidor = async (isNew: boolean) => {
     try {
-      const endpoint = isNew
-        ? '/estoque/distribuidores'
-        : `/estoque/distribuidores/${selectedDist.id}`;
+      const url = isNew
+        ? `${apiBaseUrl}/estoque/distribuidores`
+        : `${apiBaseUrl}/estoque/distribuidores/${selectedDist.id}`;
       const method = isNew ? 'POST' : 'PUT';
       const body: any = {
         nome_fantasia: distFormNomeFantasia,
@@ -1247,7 +1231,14 @@ export function CaixaPanel({
         body.id = distFormId;
       }
 
-      const res = await API.saveDistribuidor(apiBaseUrl, authHeaders, endpoint, method, body);
+      const res = await fetch(url, {
+        method,
+        headers: {
+          ...authHeaders,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
 
       if (res.ok) {
         alert(isNew ? 'Distribuidor cadastrado com sucesso!' : 'Distribuidor atualizado com sucesso!');
@@ -1267,7 +1258,10 @@ export function CaixaPanel({
   const handleDeleteDistribuidor = async (distId: string) => {
     if (!confirm('Deseja realmente excluir este distribuidor?')) return;
     try {
-      const res = await API.deletarDistribuidor(apiBaseUrl, authHeaders, Number(distId));
+      const res = await fetch(`${apiBaseUrl}/estoque/distribuidores/${distId}`, {
+        method: 'DELETE',
+        headers: authHeaders
+      });
       if (res.ok) {
         alert('Distribuidor excluído com sucesso!');
         refreshEstoqueData();
@@ -1283,7 +1277,7 @@ export function CaixaPanel({
 
   const fetchProdutos = async () => {
     try {
-      const res = await API.getProdutos(apiBaseUrl, authHeaders);
+      const res = await fetch(`${apiBaseUrl}/produtos/`, { headers: authHeaders });
       if (res.ok) {
         const data = await res.json();
         const sorted = Array.isArray(data)
@@ -1300,7 +1294,7 @@ export function CaixaPanel({
 
   const fetchCategorias = async () => {
     try {
-      const res = await API.getCategorias(apiBaseUrl, authHeaders);
+      const res = await fetch(`${apiBaseUrl}/produtos/categorias`, { headers: authHeaders });
       if (res.ok) {
         const data = await res.json();
         setApiCategorias(data);
@@ -1336,7 +1330,7 @@ export function CaixaPanel({
     const endStr = endDate.toISOString().split('T')[0];
 
     if (activeTab === 'relatorios' && activeSubTab === 'relatorio_garçons') {
-      API.getGarconsRelatorio(apiBaseUrl, authHeaders, startStr, endStr)
+      fetch(`${apiBaseUrl}/garcons/relatorio?data_inicio=${startStr}&data_fim=${endStr}`, { headers: authHeaders })
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data)) setWaitersPerformance(data);
@@ -1347,7 +1341,7 @@ export function CaixaPanel({
       (activeTab === 'relatorios' && activeSubTab === 'relatorio_geral') ||
       (activeTab === 'dashboard' && activeSubTab === 'desempenho')
     ) {
-      API.getEstatisticasGeral(apiBaseUrl, authHeaders, startStr, endStr)
+      fetch(`${apiBaseUrl}/comandas/estatisticas/geral?data_inicio=${startStr}&data_fim=${endStr}`, { headers: authHeaders })
         .then(res => res.json())
         .then(data => {
           if (data && data.faturamento !== undefined) setGeneralStats(data);
@@ -1355,28 +1349,28 @@ export function CaixaPanel({
         .catch(err => console.error('Error fetching general stats report:', err));
     }
     if (activeTab === 'estoque') {
-      API.getInsumos(apiBaseUrl, authHeaders)
+      fetch(`${apiBaseUrl}/estoque/insumos`, { headers: authHeaders })
         .then(res => res.json())
         .then(data => { if (Array.isArray(data)) setEstoqueInsumos(data); })
         .catch(err => console.error('Error fetching insumos:', err));
 
-      API.getSugestoesEstoque(apiBaseUrl, authHeaders)
+      fetch(`${apiBaseUrl}/estoque/sugestoes`, { headers: authHeaders })
         .then(res => res.json())
         .then(data => { if (Array.isArray(data)) setEstoqueSugestoes(data); })
         .catch(err => console.error('Error fetching stock suggestions:', err));
 
-      API.getNotasEstoque(apiBaseUrl, authHeaders)
+      fetch(`${apiBaseUrl}/estoque/notas`, { headers: authHeaders })
         .then(res => res.json())
         .then(data => { if (Array.isArray(data)) setNotasEntrada(data); })
         .catch(err => console.error('Error fetching notas:', err));
 
-      API.getDistribuidores(apiBaseUrl, authHeaders)
+      fetch(`${apiBaseUrl}/estoque/distribuidores`, { headers: authHeaders })
         .then(res => res.json())
         .then(data => { if (Array.isArray(data)) setDistribuidores(data); })
         .catch(err => console.error('Error fetching distribuidores:', err));
     }
     if (activeTab === 'dashboard' && activeSubTab === 'metas') {
-      API.getEstatisticasPico(apiBaseUrl, authHeaders)
+      fetch(`${apiBaseUrl}/comandas/estatisticas/pico`, { headers: authHeaders })
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data)) setHorariosPico(data);
@@ -1384,14 +1378,14 @@ export function CaixaPanel({
         .catch(err => console.error('Error fetching peak hours:', err));
     }
     if (activeTab === 'clientes') {
-      API.getFidelidadeConfig(apiBaseUrl, authHeaders)
+      fetch(`${apiBaseUrl}/fidelidade/config`, { headers: authHeaders })
         .then(res => res.json())
         .then(data => {
           if (data && data.tipo_recompensa) setFidelidadeConfig(data);
         })
         .catch(err => console.error('Error fetching fidelity config:', err));
 
-      API.getFidelidadeClientes(apiBaseUrl, authHeaders)
+      fetch(`${apiBaseUrl}/fidelidade/clientes`, { headers: authHeaders })
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data)) setLoyaltyUsers(data);
@@ -1480,7 +1474,11 @@ export function CaixaPanel({
     e.preventDefault();
     setErrorMsg('');
     try {
-      const res = await API.abrirCaixa(apiBaseUrl, authHeaders, parseFloat(saldoInicial));
+      const res = await fetch(`${apiBaseUrl}/caixa/turno/abrir`, {
+        method: 'POST',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ saldo_inicial: parseFloat(saldoInicial) })
+      });
       if (res.ok) {
         setShowAbrirModal(false);
         fetchTurno();
@@ -1526,10 +1524,14 @@ export function CaixaPanel({
   const submitFecharCaixaDirectly = async () => {
     setErrorMsg('');
     try {
-      const res = await API.fecharCaixa(apiBaseUrl, authHeaders, {
-        declarado_dinheiro: parseFloat(decDinheiro || '0'),
-        declarado_pix: turno?.total_esperado_pix || 0,
-        declarado_cartao: turno?.total_esperado_cartao || 0
+      const res = await fetch(`${apiBaseUrl}/caixa/turno/fechar`, {
+        method: 'POST',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          declarado_dinheiro: parseFloat(decDinheiro || '0'),
+          declarado_pix: turno?.total_esperado_pix || 0,
+          declarado_cartao: turno?.total_esperado_cartao || 0
+        })
       });
       if (res.ok) {
         setShowFecharModal(false);
@@ -1554,10 +1556,14 @@ export function CaixaPanel({
     e.preventDefault();
     setErrorMsg('');
     try {
-      const res = await API.fecharCaixa(apiBaseUrl, authHeaders, {
-        declarado_dinheiro: parseFloat(decDinheiro || '0'),
-        declarado_pix: turno?.total_esperado_pix || 0,
-        declarado_cartao: turno?.total_esperado_cartao || 0
+      const res = await fetch(`${apiBaseUrl}/caixa/turno/fechar`, {
+        method: 'POST',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          declarado_dinheiro: parseFloat(decDinheiro || '0'),
+          declarado_pix: turno?.total_esperado_pix || 0,
+          declarado_cartao: turno?.total_esperado_cartao || 0
+        })
       });
       if (res.ok) {
         setShowFecharModal(false);
@@ -1579,10 +1585,14 @@ export function CaixaPanel({
     e.preventDefault();
     setErrorMsg('');
     try {
-      const res = await API.movimentarCaixa(apiBaseUrl, authHeaders, {
-        tipo: movTipo,
-        valor: parseFloat(movValor),
-        descricao: movDesc
+      const res = await fetch(`${apiBaseUrl}/caixa/turno/movimentar`, {
+        method: 'POST',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tipo: movTipo,
+          valor: parseFloat(movValor),
+          descricao: movDesc
+        })
       });
       if (res.ok) {
         setShowMovModal(false);
@@ -1606,87 +1616,56 @@ export function CaixaPanel({
     setIsProcessingPayment(true);
 
     try {
-      if (selectedOrder.isGrouped) {
-        // Pay all comandas in the group sequentially
-        for (const origOrder of selectedOrder.originalOrders) {
-          const unpaidItens = origOrder.itens.filter((it: any) => !it.pago);
-          if (unpaidItens.length === 0) continue;
-
-          const subtotal = unpaidItens.reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
-          const totalWithTax = subtotal * (1.0 + (checkoutServiceTax ? serviceTaxRate / 100 : 0));
-
-          const res = await API.pagarComanda(apiBaseUrl, authHeaders, origOrder.id, {
-            valor: parseFloat(totalWithTax.toFixed(2)),
-            metodo: paymentMetodo,
-            item_ids: null, // pay all items in this comanda
-            idempotency_key: `${idempotencyKey}-${origOrder.id}`,
-            cpf_cliente: paymentCPF || null
-          });
-
-          if (!res.ok) {
-            const data = await res.json();
-            throw new Error(data.detail || `Erro ao pagar comanda #${origOrder.id.slice(-4)}`);
-          }
-        }
-
-        // Successfully paid all comandas in the group!
-        setPaymentValor('');
-        setPaymentCPF('');
-        setSelectedItemIds([]);
-        setIdempotencyKey(`idem-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
-        setSelectedOrder(null);
-        setShowCheckoutModal(false);
-        onRefreshOrders();
-        fetchTurno();
-      } else {
-        // Normal single order payment
-        const res = await API.pagarComanda(apiBaseUrl, authHeaders, selectedOrder.id, {
+      const res = await fetch(`${apiBaseUrl}/caixa/comandas/${selectedOrder.id}/pagar`, {
+        method: 'POST',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           valor: parseFloat(paymentValor),
           metodo: paymentMetodo,
           item_ids: selectedItemIds.length > 0 ? selectedItemIds : null,
           idempotency_key: idempotencyKey,
           cpf_cliente: paymentCPF || null
-        });
-        if (res.ok) {
-          setPaymentValor('');
-          setPaymentCPF('');
-          setSelectedItemIds([]);
-          setIdempotencyKey(`idem-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
+        })
+      });
+      if (res.ok) {
+        setPaymentValor('');
+        setPaymentCPF('');
+        setSelectedItemIds([]);
+        setIdempotencyKey(`idem-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
 
-          // Refresh local details modal state
-          const updatedOrdersRes = await API.getTodasDetalhesComandas(apiBaseUrl, authHeaders);
-          if (updatedOrdersRes.ok) {
-            const freshOrdersList: any[] = await updatedOrdersRes.json();
-            const stillOpen = freshOrdersList.find(o => o.id === selectedOrder.id);
-            if (stillOpen) {
-              setSelectedOrder({
-                ...stillOpen,
-                valorPago: stillOpen.valor_pago || 0,
-                itens: stillOpen.itens.map((item: any) => ({
-                  id: item.id,
-                  produtoId: item.produto_id || item.produtoId,
-                  nome: item.nome || `Item ${item.produto_id || item.produtoId}`,
-                  preco: item.preco_unit || item.preco,
-                  observacao: item.observacao || '',
-                  clienteNome: item.cliente_nome || item.clienteNome || 'Consumo Geral',
-                  status: item.status,
-                  pago: item.pago
-                }))
-              });
-            } else {
-              setSelectedOrder(null);
-              setShowCheckoutModal(false);
-            }
+        // Refresh local details modal state
+        const updatedOrdersRes = await fetch(`${apiBaseUrl}/comandas/detalhes/todos?fechada=false`, { headers: authHeaders });
+        if (updatedOrdersRes.ok) {
+          const freshOrdersList: any[] = await updatedOrdersRes.json();
+          const stillOpen = freshOrdersList.find(o => o.id === selectedOrder.id);
+          if (stillOpen) {
+            setSelectedOrder({
+              ...stillOpen,
+              valorPago: stillOpen.valor_pago || 0,
+              itens: stillOpen.itens.map((item: any) => ({
+                id: item.id,
+                produtoId: item.produto_id || item.produtoId,
+                nome: item.nome || `Item ${item.produto_id || item.produtoId}`,
+                preco: item.preco_unit || item.preco,
+                observacao: item.observacao || '',
+                clienteNome: item.cliente_nome || item.clienteNome || 'Consumo Geral',
+                status: item.status,
+                pago: item.pago
+              }))
+            });
+          } else {
+            setSelectedOrder(null);
+            setShowCheckoutModal(false);
           }
-          onRefreshOrders();
-          fetchTurno();
-        } else {
-          const data = await res.json();
-          setErrorMsg(data.detail || 'Erro ao processar pagamento');
         }
+        onRefreshOrders();
+        fetchTurno();
+      } else {
+        const data = await res.json();
+        setErrorMsg(data.detail || 'Erro ao processar pagamento');
       }
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Erro de conexão ao servidor.');
+    } catch (err) {
+      setErrorMsg('Erro de conexão ao servidor.');
     } finally {
       setIsProcessingPayment(false);
     }
@@ -1698,7 +1677,10 @@ export function CaixaPanel({
     const tableOrders = orders.filter(o => o.mesaId === mesaId);
     try {
       for (const comanda of tableOrders) {
-        await API.fecharComanda(apiBaseUrl, authHeaders, comanda.id);
+        await fetch(`${apiBaseUrl}/comandas/${comanda.id}/fechar`, {
+          method: "PUT",
+          headers: authHeaders
+        });
       }
       onRefreshOrders();
       setSelectedOrder(null);
@@ -1737,11 +1719,15 @@ export function CaixaPanel({
     e.preventDefault();
     if (!newUserNome || !newUserUsuario || !newUserSenha) return;
     try {
-      const res = await API.cadastrarUsuario(apiBaseUrl, authHeaders, {
-        nome: newUserNome,
-        usuario: newUserUsuario,
-        senha: newUserSenha,
-        role: newUserRole
+      const res = await fetch(`${apiBaseUrl}/auth/usuarios`, {
+        method: "POST",
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nome: newUserNome,
+          usuario: newUserUsuario,
+          senha: newUserSenha,
+          role: newUserRole
+        })
       });
       if (res.ok) {
         setNewUserNome('');
@@ -1762,7 +1748,10 @@ export function CaixaPanel({
   const handleDeleteUser = async (userId: string) => {
     if (!confirm("Deseja realmente excluir este funcionário?")) return;
     try {
-      const res = await API.deletarUsuario(apiBaseUrl, authHeaders, userId);
+      const res = await fetch(`${apiBaseUrl}/auth/usuarios/${userId}`, {
+        method: "DELETE",
+        headers: authHeaders
+      });
       if (res.ok) {
         fetchSystemUsers();
       } else {
@@ -1776,7 +1765,10 @@ export function CaixaPanel({
   // KDS Kitchen actions (status updates)
   const handleUpdateItemStatus = async (itemId: string, newStatus: 'preparando' | 'pronto' | 'entregue') => {
     try {
-      const res = await API.updateItemStatus(apiBaseUrl, authHeaders, Number(itemId), newStatus);
+      const res = await fetch(`${apiBaseUrl}/comandas/itens/${itemId}/status?status=${newStatus}`, {
+        method: "PUT",
+        headers: authHeaders
+      });
       if (res.ok) {
         onRefreshOrders();
       } else {
@@ -1796,6 +1788,30 @@ export function CaixaPanel({
     return { subtotal, taxa, total, unpaidItems };
   };
 
+  // Handle local PDV cart item additions
+  const handlePdvAddToCart = (product: Product) => {
+    setPdvCart(prev => {
+      const idx = prev.findIndex(item => item.product.id === product.id && item.client === 'Balcão');
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = { ...copy[idx], quantity: copy[idx].quantity + 1 };
+        return copy;
+      }
+      return [...prev, { product, quantity: 1, obs: '', client: 'Balcão' }];
+    });
+  };
+
+  const handlePdvUpdateCartQty = (idx: number, delta: number) => {
+    setPdvCart(prev => {
+      const copy = [...prev];
+      copy[idx] = { ...copy[idx], quantity: Math.max(1, copy[idx].quantity + delta) };
+      return copy;
+    });
+  };
+
+  const handlePdvRemoveCartItem = (idx: number) => {
+    setPdvCart(prev => prev.filter((_, i) => i !== idx));
+  };
 
   // Submit Order from PDV Counter
   const handlePdvSubmitOrder = async (e: React.FormEvent) => {
@@ -1813,15 +1829,19 @@ export function CaixaPanel({
     }
     setIsLoading(true);
     try {
-      const openRes = await API.abrirComandaPdv(apiBaseUrl, authHeaders, {
-        mesa_id: pdvOrderType === 'mesa' ? pdvTargetMesaId : null,
-        garcom_id: 'c-01', // Cashier operator ID
-        tipo: pdvOrderType === 'mesa' ? 'Consumo no Local' : (pdvOrderType === 'entrega' ? 'Entrega' : 'Retirada'),
-        identificador: pdvCustomerName || undefined,
-        delivery_status: pdvOrderType === 'entrega' ? 'producao' : undefined,
-        delivery_telefone: pdvOrderType === 'entrega' ? pdvCustomerPhone : undefined,
-        delivery_endereco: pdvOrderType === 'entrega' ? pdvDeliveryAddress : undefined,
-        delivery_taxa: pdvOrderType === 'entrega' ? parseFloat(pdvDeliveryTaxa) || 0.0 : 0.0
+      const openRes = await fetch(`${apiBaseUrl}/comandas/`, {
+        method: "POST",
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mesa_id: pdvOrderType === 'mesa' ? pdvTargetMesaId : null,
+          garcom_id: 'c-01', // Cashier operator ID
+          tipo: pdvOrderType === 'mesa' ? 'Consumo no Local' : (pdvOrderType === 'entrega' ? 'Entrega' : 'Retirada'),
+          identificador: pdvCustomerName || undefined,
+          delivery_status: pdvOrderType === 'entrega' ? 'producao' : undefined,
+          delivery_telefone: pdvOrderType === 'entrega' ? pdvCustomerPhone : undefined,
+          delivery_endereco: pdvOrderType === 'entrega' ? pdvDeliveryAddress : undefined,
+          delivery_taxa: pdvOrderType === 'entrega' ? parseFloat(pdvDeliveryTaxa) || 0.0 : 0.0
+        })
       });
       if (!openRes.ok) {
         const err = await openRes.json();
@@ -1839,9 +1859,13 @@ export function CaixaPanel({
         }))
       );
 
-      const launchRes = await API.lancarItensComanda(apiBaseUrl, authHeaders, newComanda.id, {
-        garcom_id: 'c-01',
-        itens: itemsList
+      const launchRes = await fetch(`${apiBaseUrl}/comandas/${newComanda.id}/lancamentos`, {
+        method: "POST",
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          garcom_id: 'c-01',
+          itens: itemsList
+        })
       });
       if (launchRes.ok) {
         setPdvCart([]);
@@ -1877,7 +1901,9 @@ export function CaixaPanel({
     setIsSearchingPrinters(true);
     setDetectedPrinters([]);
     try {
-      const res = await API.getImpressorasDetectadas(apiBaseUrl, authHeaders);
+      const res = await fetch(`${apiBaseUrl}/comandas/impressoras/detectadas`, {
+        headers: authHeaders
+      });
       if (res.ok) {
         const data = await res.json();
         setDetectedPrinters(data);
@@ -1908,46 +1934,31 @@ export function CaixaPanel({
     setChatInputText('');
     setIsBotTyping(true);
 
-    // Call real backend endpoint /api/chat-waiter
-    (async () => {
-      try {
-        const response = await API.chatWaiter(apiBaseUrl, authHeaders, {
-          brandName: 'Kôma Bistrô',
-          slogan: 'Gastronomia Urbana',
-          menuItems: PRODUCTS.map(p => ({ name: p.nome, price: p.preco })),
-          history: chatbotMessages.map(m => ({
-            role: m.sender === 'user' ? 'user' : 'model',
-            text: m.text
-          })),
-          message: promptText
-        });
-        if (response.ok) {
-          const data = await response.json();
-          setChatbotMessages(prev => [
-            ...prev,
-            {
-              sender: 'bot',
-              text: data.reply || 'Desculpe, tive um problema para processar sua mensagem.',
-              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            }
-          ]);
-        } else {
-          throw new Error('Failed to fetch from chat waiter');
-        }
-      } catch (err) {
-        console.error(err);
-        setChatbotMessages(prev => [
-          ...prev,
-          {
-            sender: 'bot',
-            text: 'Desculpe, estou com dificuldades para me conectar ao servidor agora.',
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          }
-        ]);
-      } finally {
-        setIsBotTyping(false);
+    // Simulate smart bot typing answers based on AI context
+    setTimeout(() => {
+      let replyText = "Desculpe, não entendi muito bem. Você gostaria de ver nossas opções de pastéis ou hambúrgueres?";
+      const lower = promptText.toLowerCase();
+
+      if (lower.includes('pastel') || lower.includes('pasteis')) {
+        replyText = "Temos pastéis tradicionais incríveis (carne, queijo, frango) a partir de R$ 12.00 e pastel doce de Nutella com Morango! Qual sabor gostaria?";
+      } else if (lower.includes('burger') || lower.includes('hambur') || lower.includes('carne')) {
+        replyText = "Nosso carro-chefe é o Hambúrguer Kôma, com blend artesanal de 150g, muito queijo derretido e molho especial no pão brioche! Deseja um?";
+      } else if (lower.includes('bebida') || lower.includes('refrigerante') || lower.includes('coca')) {
+        replyText = "Temos Coca-Cola, Guaraná, Sucos Naturais geladinhos e Cerveja Heineken em lata! Qual vai querer para acompanhar?";
+      } else if (lower.includes('oi') || lower.includes('olá') || lower.includes('bom dia')) {
+        replyText = "Olá! Como posso ajudar você a escolher as delícias do Kôma hoje?";
       }
-    })();
+
+      setChatbotMessages(prev => [
+        ...prev,
+        {
+          sender: 'bot',
+          text: replyText,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }
+      ]);
+      setIsBotTyping(false);
+    }, 1200);
   };
 
   // FILTERED menu list for PDV
@@ -2093,9 +2104,9 @@ export function CaixaPanel({
                         <Icon size={13} className={(tab.id === 'config_cardapio' ? (activeTab === 'configuracoes' && activeSubTab === 'config_cardapio') : tab.id === 'chat_copiloto' ? (activeTab === 'operacao' && activeSubTab === 'chat_copiloto') : activeTab === tab.id) ? 'text-[#10b981]' : 'text-gray-500 group-hover:text-white'} />
                         <span className="text-[10px]">{tab.label}</span>
                       </div>
-                      {tab.id === 'operacao' && (simulatedOrders.filter(o => o.status === 'pendente' || o.status === 'analise').length + activeKitchenItems.length) > 0 && (
+                      {tab.id === 'operacao' && (simulatedOrders.filter(o => o.status === 'analise').length + activeKitchenItems.length) > 0 && (
                         <span className={clsx('bg-[#10b981]', 'text-[#121214]', 'text-[7px]', 'font-bold', 'px-1.5', 'py-0.5', 'rounded-full', 'font-mono')}>
-                          {simulatedOrders.filter(o => o.status === 'pendente' || o.status === 'analise').length + activeKitchenItems.length}
+                          {simulatedOrders.filter(o => o.status === 'analise').length + activeKitchenItems.length}
                         </span>
                       )}
                     </button>
@@ -2191,8 +2202,8 @@ export function CaixaPanel({
           {activeTab === 'operacao' && [
             { id: 'pedidos', label: 'Fila de Pedidos' },
             { id: 'pdv', label: 'Terminal Balcão' },
-            { id: 'salon', label: 'Layout do Salão', show: !isDelivery },
-            { id: 'entregadores', label: 'Fretistas & Logística', show: isDelivery || isPremium }
+            { id: 'salon', label: 'Layout do Salão', show: modulesActive.salon },
+            { id: 'entregadores', label: 'Fretistas & Logística', show: !modoExclusivoSalao && modulesActive.delivery }
           ].filter(sub => sub.show !== false).map(sub => (
             <button
               key={sub.id}
@@ -2310,11 +2321,11 @@ export function CaixaPanel({
           ))}
 
           {activeTab === 'configuracoes' && [
-            { id: 'equipe', label: 'Cargos & Permissões', show: !isDelivery },
-            { id: 'impressoras', label: 'Roteamento de Impressoras', show: !isPocket },
+            { id: 'equipe', label: 'Cargos & Permissões' },
+            { id: 'impressoras', label: 'Roteamento de Impressoras' },
             { id: 'nicho_wizard', label: 'Setup Wizard (Nicho)' },
             { id: 'planos', label: 'Planos & Integrações' }
-          ].filter(sub => sub.show !== false).map(sub => (
+          ].map(sub => (
             <button
               key={sub.id}
               onClick={() => setActiveSubTab(sub.id)}
@@ -2377,7 +2388,10 @@ export function CaixaPanel({
                               type="button"
                               onClick={async () => {
                                 try {
-                                  const res = await API.aprovarPagamentoPendente(apiBaseUrl, authHeaders, pag.id);
+                                  const res = await fetch(`${apiBaseUrl}/caixa/pagamentos/${pag.id}/aprovar`, {
+                                    method: 'POST',
+                                    headers: authHeaders
+                                  });
                                   if (res.ok) {
                                     alert("Pagamento em dinheiro confirmado com sucesso!");
                                     onRefreshOrders();
@@ -2395,7 +2409,10 @@ export function CaixaPanel({
                               type="button"
                               onClick={async () => {
                                 try {
-                                  const res = await API.recusarPagamentoPendente(apiBaseUrl, authHeaders, pag.id);
+                                  const res = await fetch(`${apiBaseUrl}/caixa/pagamentos/${pag.id}/recusar`, {
+                                    method: 'POST',
+                                    headers: authHeaders
+                                  });
                                   if (res.ok) {
                                     alert("Pagamento recusado.");
                                     onRefreshOrders();
@@ -2418,38 +2435,40 @@ export function CaixaPanel({
               )}
 
               {/* Controls bar */}
-              <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-3', 'rounded-2xl', 'flex', 'flex-col', 'sm:flex-row', 'justify-between', 'items-start', 'sm:items-center', 'gap-3')}>
-                <div className={clsx('flex', 'items-center', 'gap-4')}>
-                  <label className={clsx('flex', 'items-center', 'gap-2', 'cursor-pointer', 'font-semibold', 'text-gray-300')}>
-                    <input
-                      type="checkbox"
-                      checked={autoAccept}
-                      onChange={(e) => setAutoAccept(e.target.checked)}
-                      className={clsx('rounded', 'border-[#27272A]', 'text-emerald-500', 'focus:ring-emerald-500', 'h-3.5', 'w-3.5', 'bg-[#121214]')}
-                    />
-                    <span>Aceitar os pedidos automaticamente (iFood/Apps)</span>
-                  </label>
-                </div>
-                <div className={clsx('flex', 'items-center', 'gap-4')}>
-                  <div className={clsx('text-[10px]', 'text-gray-400')}>
-                    Total Delivery hoje: <strong className="text-white">R$ {simulatedOrders.reduce((s, o) => s + o.total, 0).toFixed(2)}</strong>
+              {!modoExclusivoSalao && (
+                <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-3', 'rounded-2xl', 'flex', 'flex-col', 'sm:flex-row', 'justify-between', 'items-start', 'sm:items-center', 'gap-3')}>
+                  <div className={clsx('flex', 'items-center', 'gap-4')}>
+                    <label className={clsx('flex', 'items-center', 'gap-2', 'cursor-pointer', 'font-semibold', 'text-gray-300')}>
+                      <input
+                        type="checkbox"
+                        checked={autoAccept}
+                        onChange={(e) => setAutoAccept(e.target.checked)}
+                        className={clsx('rounded', 'border-[#27272A]', 'text-emerald-500', 'focus:ring-emerald-500', 'h-3.5', 'w-3.5', 'bg-[#121214]')}
+                      />
+                      <span>Aceitar os pedidos automaticamente (iFood/Apps)</span>
+                    </label>
                   </div>
-                  {/* Bell button — opens floating drawer */}
-                  <button
-                    type="button"
-                    onClick={() => { setIsDrawerOpen(true); }}
-                    className="relative flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 text-amber-400 hover:text-amber-300 rounded-xl transition-all cursor-pointer"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-                    <span className="text-[10px] font-bold">Novos Pedidos</span>
-                    {simulatedOrders.filter(o => o.status === 'pendente').length > 0 && (
-                      <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[8px] font-bold text-black animate-bounce">
-                        {simulatedOrders.filter(o => o.status === 'pendente').length}
-                      </span>
-                    )}
-                  </button>
+                  <div className={clsx('flex', 'items-center', 'gap-4')}>
+                    <div className={clsx('text-[10px]', 'text-gray-400')}>
+                      Total Delivery hoje: <strong className="text-white">R$ {simulatedOrders.reduce((s, o) => s + o.total, 0).toFixed(2)}</strong>
+                    </div>
+                    {/* Bell button — opens floating drawer */}
+                    <button
+                      type="button"
+                      onClick={() => { setIsDrawerOpen(true); }}
+                      className="relative flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 text-amber-400 hover:text-amber-300 rounded-xl transition-all cursor-pointer"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                      <span className="text-[10px] font-bold">Novos Pedidos</span>
+                      {simulatedOrders.filter(o => o.status === 'pendente').length > 0 && (
+                        <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[8px] font-bold text-black animate-bounce">
+                          {simulatedOrders.filter(o => o.status === 'pendente').length}
+                        </span>
+                      )}
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* ── FLOATING DRAWER: Pedidos Pendentes ─────────────────────────────── */}
               {isDrawerOpen && (
@@ -2543,91 +2562,839 @@ export function CaixaPanel({
                 </div>
               )}
 
-              {/* ══════════════════════════════════════════════════════════
-                   KANBAN — 3 Colunas Reestruturadas
-                   Col 1: Produção Local (item a item)
-                   Col 2: Delivery & Retirada
-                   Col 3: Fechamento & Contas
-              ══════════════════════════════════════════════════════════ */}
-              <CaixaKanbanBoard
-                localProductionRounds={localProductionRounds}
-                simulatedOrders={simulatedOrders}
-                groupedTableOrdersReady={groupedTableOrdersReady}
-                orders={orders}
-                modoExclusivoSalao={modoExclusivoSalao}
-                plano={restaurante?.plano}
-                activeMotoboysList={activeMotoboysList}
-                isLoading={isLoading}
-                taxaServicoAtiva={taxaServicoAtiva}
-                serviceTaxRate={serviceTaxRate}
-                handleProntoItemAction={handleProntoItemAction}
-                handleProntoRoundAction={handleProntoRoundAction}
-                handleDespacharPedido={handleDespacharPedido}
-                handleUpdateDeliveryStatus={handleUpdateDeliveryStatus}
-                handleFinalizarPedido={handleFinalizarPedido}
-                setSelectedMotoboys={setSelectedMotoboys}
-                setSelectedOrder={setSelectedOrder}
-                setShowCheckoutModal={setShowCheckoutModal}
-                setCheckoutServiceTax={setCheckoutServiceTax}
-                setSplitPeople={setSplitPeople}
-                setSelectedItemIds={setSelectedItemIds}
-                setPaymentValor={setPaymentValor}
-                openSimulatedOrderDetails={openSimulatedOrderDetails}
-                setSelectedKanbanOrder={setSelectedKanbanOrder}
-              />
+              {/* Kanban columns (always 2 columns: Preparo + Fechar/Rota) */}
+              <div className={clsx('flex-1', 'grid', 'grid-cols-1', 'md:grid-cols-3', 'gap-4')}>
+
+                {/* COLUMN 1: Em produção */}
+                <div className={clsx('bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden')}>
+                  <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
+                    <span className={clsx('font-bold', 'text-gray-300', 'font-serif')}>Cozinha (Mesa)</span>
+                    <span className={clsx('bg-[#10b981]/10', 'text-[#10b981]', 'font-bold', 'px-2', 'py-0.5', 'rounded-full', 'font-mono', 'text-[9px]')}>
+                      {tableOrdersInProduction.length}
+                    </span>
+                  </div>
+
+                  <div className={clsx('p-3', 'flex-1', 'overflow-y-auto', 'space-y-3')}>
+                    {tableOrdersInProduction.length === 0 ? (
+                      <div className={clsx('py-20', 'text-center', 'text-gray-500', 'italic', 'text-[10px]')}>Nenhum pedido local em produção</div>
+                    ) : (
+                      <>
+                        {/* Pedidos do Salão (Mesa) em Produção */}
+                        {tableOrdersInProduction.map((order) => {
+                          const itemCounts: Record<string, number> = {};
+                          const preparingItems = order.itens.filter(item => item.status === 'preparando');
+                          preparingItems.forEach(item => {
+                            const name = item.nome || 'Item';
+                            itemCounts[name] = (itemCounts[name] || 0) + 1;
+                          });
+                          const itemsStr = Object.entries(itemCounts)
+                            .map(([name, qty]) => `${qty}x ${name}`)
+                            .join(' + ');
+
+                          return (
+                            <div 
+                              key={`table-prod-${order.id}`} 
+                              onClick={() => setSelectedKanbanOrder(order)}
+                              className={clsx('bg-[#121214]', 'border', 'border-[#27272A]/60', 'hover:border-[#10b981]/30', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all', 'text-left', 'cursor-pointer')}
+                            >
+                              <div className={clsx('flex', 'justify-between', 'items-start')}>
+                                <div>
+                                  <div className="flex gap-1.5 flex-wrap mb-1">
+                                    <span className={clsx('px-1.5', 'py-0.5', 'text-[8px]', 'uppercase', 'tracking-wider', 'font-bold', 'bg-[#10b981]/15', 'text-[#10b981]', 'rounded', 'font-mono', 'block', 'w-fit')}>
+                                      {order.mesaId && order.mesaId > 0 ? `Mesa ${order.mesaId}` : 'Balcão'}
+                                    </span>
+                                    {order.mesaOrigemId && Number(order.mesaOrigemId) !== Number(order.mesaId) && (
+                                      <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/35 rounded font-sans block w-fit shadow-xs" title="Essa mesa possui consumo mesclado de outra">
+                                        🔗 Mesclado de Mesa {order.mesaOrigemId}
+                                      </span>
+                                    )}
+                                    {order.mesaTransferidaDe && Number(order.mesaTransferidaDe) !== Number(order.mesaId) && (
+                                      <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-purple-500/20 text-purple-300 border border-purple-500/35 rounded font-sans block w-fit shadow-xs" title="Essa mesa teve consumo transferido de outra">
+                                        🔗 Transferido da Mesa {order.mesaTransferidaDe}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <strong className={clsx('text-white', 'text-xs', 'block')}>
+                                    {(order as any).identificador || (order.mesaId && order.mesaId > 0 ? `Consumo Mesa ${order.mesaId}` : 'Consumo Balcão')}
+                                  </strong>
+                                  <span className={clsx('text-[9px]', 'text-gray-500', 'block')}>Atendente: {order.garcomNome || 'Garçom'}</span>
+                                </div>
+                                <span className={clsx('text-[9px]', 'text-gray-500', 'font-mono')}>#{order.id.slice(-4)}</span>
+                              </div>
+
+                              <p className={clsx('text-[10px]', 'text-[#10b981]', 'bg-[#09090B]', 'p-1.5', 'rounded', 'border', 'border-[#27272A]/30', 'leading-relaxed', 'font-mono')}>
+                                {itemsStr}
+                              </p>
+
+                              <button
+                                type="button"
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  if (isLoading) return;
+                                  setIsLoading(true);
+                                  try {
+                                    await Promise.all(preparingItems.map(item =>
+                                      fetch(`${apiBaseUrl}/comandas/itens/${item.id}/status?status=pronto`, {
+                                        method: "PUT",
+                                        headers: authHeaders
+                                      })
+                                    ));
+                                    onRefreshOrders();
+                                  } catch (err) {
+                                    console.error(err);
+                                  } finally {
+                                    setIsLoading(false);
+                                  }
+                                }}
+                                className={clsx('w-full', 'py-1.5', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1')}
+                              >
+                                <Check size={11} />
+                                <span>Pronto</span>
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* COLUMN 2: Delivery & Retirada (Preparo) */}
+                <div className={clsx('bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden')}>
+                  <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
+                    <span className={clsx('font-bold', 'text-gray-300', 'font-serif')}>Delivery & Retirada (Preparo)</span>
+                    <span className={clsx('bg-orange-500/10', 'text-orange-400', 'font-bold', 'px-2', 'py-0.5', 'rounded-full', 'font-mono', 'text-[9px]')}>
+                      {modoExclusivoSalao ? 0 : simulatedOrders.filter(o => o.status === 'producao').length}
+                    </span>
+                  </div>
+
+                  <div className={clsx('p-3', 'flex-1', 'overflow-y-auto', 'space-y-3')}>
+                    {(modoExclusivoSalao ? 0 : simulatedOrders.filter(o => o.status === 'producao').length) === 0 ? (
+                      <div className={clsx('py-20', 'text-center', 'text-gray-500', 'italic', 'text-[10px]')}>Nenhum pedido online em preparo</div>
+                    ) : (
+                      <>
+                        {!modoExclusivoSalao && simulatedOrders.filter(o => o.status === 'producao').map((order) => {
+                          const hasAddress = !!order.endereco;
+                          let badgeText = 'RETIRADA - PREPARANDO';
+                          let badgeColor = 'bg-amber-500/10 text-amber-400';
+                          
+                          if (hasAddress) {
+                            badgeText = 'DELIVERY - PREPARANDO';
+                            badgeColor = 'bg-orange-500/10 text-orange-400';
+                          } else if (order.mesaId && order.mesaId > 0) {
+                            badgeText = `MESA ${order.mesaId} - PREPARANDO`;
+                            badgeColor = 'bg-emerald-500/10 text-emerald-400';
+                          }
+
+                          const buttonText = hasAddress ? 'SAIU PARA ENTREGA' : 'PEDIDO PRONTO';
+                          const buttonColor = hasAddress ? 'bg-orange-600 hover:bg-orange-700 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white';
+
+                          return (
+                            <div 
+                              key={order.id} 
+                              onClick={() => openSimulatedOrderDetails(order)}
+                              className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'hover:border-[#10b981]/30', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all', 'cursor-pointer')}
+                            >
+                              <div className={clsx('flex', 'justify-between', 'items-start')}>
+                                <div>
+                                  <span className={clsx('px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold rounded font-mono block w-fit mb-1', badgeColor)}>{badgeText}</span>
+                                  <strong className={clsx('text-white', 'text-xs', 'block')}>{order.cliente}</strong>
+                                  <span className={clsx('text-[9px]', 'text-gray-400', 'block')}>{order.telefone}</span>
+                                </div>
+                                <span className={clsx('font-bold', 'text-white', 'font-mono', 'text-[11px]', 'shrink-0')}>R$ {order.total.toFixed(2)}</span>
+                              </div>
+
+                              <p className={clsx('text-[10px]', 'text-gray-300', 'bg-[#09090B]', 'p-1.5', 'rounded', 'border', 'border-[#27272A]/30', 'leading-relaxed', 'font-mono')}>
+                                {order.itens}
+                              </p>
+
+                              {order.endereco && (
+                                <span className={clsx('text-[9px]', 'text-gray-400', 'flex', 'items-start', 'gap-1', 'block')}>
+                                  <MapPin size={10} className={clsx('shrink-0', 'text-rose-500', 'mt-0.5')} />
+                                  <span className="leading-relaxed">{order.endereco}</span>
+                                </span>
+                              )}
+
+                              <button
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  if (isLoading) return;
+                                  handleUpdateDeliveryStatus(order.id, 'transito');
+                                }}
+                                className={clsx('w-full', 'py-1.5', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1', buttonColor)}
+                              >
+                                <span>{buttonText}</span>
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* COLUMN 3: Fechar Conta (Mesas + Delivery/Retirada em trânsito) */}
+                <div className={clsx('bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden')}>
+                  <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
+                    <span className={clsx('font-bold', 'text-gray-300', 'font-serif')}>Fechar Conta</span>
+                    <span className={clsx('bg-blue-500/10', 'text-blue-400', 'font-bold', 'px-2', 'py-0.5', 'rounded-full', 'font-mono', 'text-[9px]')}>
+                      {tableOrdersReady.length + (modoExclusivoSalao ? 0 : simulatedOrders.filter(o => o.status === 'transito').length)}
+                    </span>
+                  </div>
+
+                  <div className={clsx('p-3', 'flex-1', 'overflow-y-auto', 'space-y-3')}>
+                    {tableOrdersReady.length === 0 && (modoExclusivoSalao || simulatedOrders.filter(o => o.status === 'transito').length === 0) ? (
+                      <div className={clsx('py-20', 'text-center', 'text-gray-500', 'italic', 'text-[10px]')}>Nenhuma conta ou entrega pendente</div>
+                    ) : (
+                      <>
+                        {/* 1. Mesas/Consumo Local aguardando pagamento */}
+                        {tableOrdersReady.map((order) => {
+                          const itemCounts: Record<string, number> = {};
+                          order.itens.forEach(item => {
+                            const name = item.nome || 'Item';
+                            itemCounts[name] = (itemCounts[name] || 0) + 1;
+                          });
+                          const itemsStr = Object.entries(itemCounts)
+                            .map(([name, qty]) => `${qty}x ${name}`)
+                            .join(' + ') || 'Nenhum item';
+                          const contaPedida = !!(order as any).contaPedida;
+                          const badgeText = (order.mesaId && order.mesaId > 0)
+                            ? (contaPedida ? `Mesa ${order.mesaId} — Conta Pedida` : `Mesa ${order.mesaId} — Pronto p/ Receber`)
+                            : (contaPedida ? 'Balcão — Conta Pedida' : 'Balcão — Pronto');
+                          return (
+                            <div key={`close-${order.id}`} onClick={() => setSelectedKanbanOrder(order)} className={clsx('bg-[#121214]', 'border', contaPedida ? 'border-blue-500/40 hover:border-blue-500/60' : 'border-emerald-500/30 hover:border-emerald-500/50', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all', 'text-left', 'cursor-pointer')}>
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <div className="flex gap-1.5 flex-wrap mb-1">
+                                    <span className={clsx('px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold rounded font-mono block w-fit', contaPedida ? 'bg-blue-500/10 text-blue-400' : 'bg-emerald-500/10 text-emerald-400')}>{badgeText}</span>
+                                    {!contaPedida && order.temItensEmPreparo && (
+                                      <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-amber-500/10 text-amber-400 rounded font-mono block w-fit" title="Outros itens desta mesa ainda estão sendo preparados">
+                                        ⏳ Outros itens em preparo
+                                      </span>
+                                    )}
+                                    {order.mesaOrigemId && Number(order.mesaOrigemId) !== Number(order.mesaId) && (
+                                      <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/35 rounded font-sans block w-fit shadow-xs" title="Essa mesa possui consumo mesclado de outra">
+                                        🔗 Mesclado de Mesa {order.mesaOrigemId}
+                                      </span>
+                                    )}
+                                    {order.mesaTransferidaDe && Number(order.mesaTransferidaDe) !== Number(order.mesaId) && (
+                                      <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-purple-500/20 text-purple-300 border border-purple-500/35 rounded font-sans block w-fit shadow-xs" title="Essa mesa teve consumo transferido de outra">
+                                        🔗 Transferido da Mesa {order.mesaTransferidaDe}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <strong className="text-white text-xs block">{order.identificador || ((order.mesaId && order.mesaId > 0) ? `Consumo Mesa ${order.mesaId}` : 'Consumo Balcão')}</strong>
+                                  <span className="text-[9px] text-gray-500 block">Atendente: {order.garcomNome || 'Garçom'}</span>
+                                </div>
+                                <span className="text-[9px] text-gray-500 font-mono">#{order.id.slice(-4)}</span>
+                              </div>
+                              <p className={clsx('text-[10px] bg-[#09090B] p-1.5 rounded border border-[#27272A]/30 leading-relaxed font-mono', contaPedida ? 'text-blue-300' : 'text-emerald-300')}>{itemsStr}</p>
+                              <button
+                                type="button"
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  if (isLoading) return;
+                                  // Usa comandaId para buscar a comanda completa (order.id é lancamentoId no caminho B)
+                                  const fullOrder = orders.find(o => o.id === order.comandaId);
+                                  if (!fullOrder) return;
+                                  setSelectedOrder({
+                                    ...fullOrder,
+                                    itens: fullOrder.itens.map((item: any) => ({
+                                      id: item.id, produtoId: item.produto_id || item.produtoId,
+                                      nome: item.nome || `Item ${item.produtoId}`, preco: item.preco_unit || item.preco,
+                                      observacao: item.observacao || '', clienteNome: item.cliente_nome || item.clienteNome || 'Consumo Geral',
+                                      status: item.status, pago: item.pago
+                                    }))
+                                  });
+                                  setShowCheckoutModal(true);
+                                  setCheckoutServiceTax(true);
+                                  setSplitPeople('1');
+                                  // Inicia com itens desmarcados por padrão
+                                  setSelectedItemIds([]);
+                                  const sub = fullOrder.itens.filter((item: any) => !item.pago).reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
+                                  setPaymentValor((sub * (1.0 + (taxaServicoAtiva ? serviceTaxRate / 100 : 0))).toFixed(2));
+                                }}
+                                className={clsx('w-full', 'py-1.5', contaPedida ? 'bg-blue-600 hover:bg-blue-700' : 'bg-emerald-600 hover:bg-emerald-700', 'text-white', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1')}
+                              >
+                                <Check size={11} /><span>{contaPedida ? 'Fechar Conta' : 'Receber Item'}</span>
+                              </button>
+                            </div>
+                          );
+                        })}
+
+                        {/* 2. Delivery/Retirada em trânsito (aguardando retorno/pagamento) */}
+                        {!modoExclusivoSalao && simulatedOrders.filter(o => o.status === 'transito').map((order) => {
+                          const hasAddress = !!order.endereco;
+                          const badgeText = hasAddress ? 'DELIVERY - EM ROTA' : 'RETIRADA - NÃO PAGO';
+                          const badgeColor = 'bg-blue-500/10 text-blue-300';
+                          return (
+                            <div 
+                              key={`transito-${order.id}`} 
+                              onClick={() => openSimulatedOrderDetails(order)}
+                              className={clsx('bg-[#121214]', 'border', 'border-blue-500/20', 'hover:border-blue-500/40', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all', 'cursor-pointer')}
+                            >
+                              <div className={clsx('flex', 'justify-between', 'items-start')}>
+                                <div>
+                                  <span className={clsx('px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold rounded font-mono block w-fit mb-1', badgeColor)}>{badgeText}</span>
+                                  <strong className={clsx('text-white', 'text-xs', 'block')}>{order.cliente}</strong>
+                                  <span className={clsx('text-[9px]', 'text-gray-400', 'block')}>{order.telefone}</span>
+                                </div>
+                                <span className={clsx('font-bold', 'text-blue-300', 'font-mono', 'text-[11px]', 'shrink-0')}>R$ {order.total.toFixed(2)}</span>
+                              </div>
+
+                              <p className={clsx('text-[10px]', 'text-gray-300', 'bg-[#09090B]', 'p-1.5', 'rounded', 'border', 'border-[#27272A]/30', 'leading-relaxed', 'font-mono')}>
+                                {order.itens}
+                              </p>
+
+                              {order.endereco && (
+                                <span className={clsx('text-[9px]', 'text-gray-400', 'flex', 'items-start', 'gap-1', 'block')}>
+                                  <MapPin size={10} className={clsx('shrink-0', 'text-rose-500', 'mt-0.5')} />
+                                  <span className="leading-relaxed">{order.endereco}</span>
+                                </span>
+                              )}
+
+                              <button
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  if (isLoading) return;
+                                  const fullOrder = orders.find(o => o.id === order.id);
+                                  if (fullOrder) {
+                                    setSelectedOrder({
+                                      ...fullOrder,
+                                      itens: fullOrder.itens.map((item: any) => ({
+                                        id: item.id, produtoId: item.produto_id || item.produtoId,
+                                        nome: item.nome || `Item ${item.produtoId}`, preco: item.preco_unit || item.preco,
+                                        observacao: item.observacao || '', clienteNome: item.cliente_nome || item.clienteNome || 'Consumo Geral',
+                                        status: item.status, pago: item.pago
+                                      }))
+                                    });
+                                    setShowCheckoutModal(true);
+                                    setCheckoutServiceTax(false);
+                                    setSplitPeople('1');
+                                    setSelectedItemIds([]);
+                                    const sub = fullOrder.itens.filter((item: any) => !item.pago).reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
+                                    setPaymentValor(sub.toFixed(2));
+                                  } else {
+                                    handleFinalizarPedido(order.id);
+                                  }
+                                }}
+                                className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[9px] transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1"
+                              >
+                                <Check size={11} /><span>Receber / Finalizar</span>
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
+                  </div>
+                </div>
+
+              </div>
             </div>
           )}
 
-
-
           {/* VIEW 2: PDV (Pedidos Balcão) */}
           {activeSubTab === 'pdv' && (
-            <CaixaBalcaoTab
-              products={dynamicMenu}
-              pdvCart={pdvCart}
-              setPdvCart={setPdvCart}
-              pdvSearch={pdvSearch}
-              setPdvSearch={setPdvSearch}
-              pdvOrderType={pdvOrderType}
-              setPdvOrderType={setPdvOrderType}
-              pdvCustomerName={pdvCustomerName}
-              setPdvCustomerName={setPdvCustomerName}
-              pdvCustomerPhone={pdvCustomerPhone}
-              setPdvCustomerPhone={setPdvCustomerPhone}
-              pdvDeliveryAddress={pdvDeliveryAddress}
-              setPdvDeliveryAddress={setPdvDeliveryAddress}
-              pdvDeliveryTaxa={pdvDeliveryTaxa}
-              setPdvDeliveryTaxa={setPdvDeliveryTaxa}
-              pdvTargetMesaId={pdvTargetMesaId}
-              setPdvTargetMesaId={setPdvTargetMesaId}
-              salonTables={salonTables}
-              orders={orders}
-              modoExclusivoSalao={modoExclusivoSalao}
-              handlePdvSubmitOrder={handlePdvSubmitOrder}
-              isLoading={isLoading}
-            />
+            <div className={clsx('h-full', 'flex', 'gap-5', 'overflow-hidden')}>
+
+              {/* Product grid column */}
+              <div className={clsx('flex-1', 'flex', 'flex-col', 'space-y-4', 'overflow-hidden')}>
+                <div className={clsx('space-y-3', 'shrink-0')}>
+                  <div className={clsx('flex', 'gap-2')}>
+                    <div className="flex-1">
+                      <input
+                        id="pdv-search-input"
+                        type="text"
+                        placeholder="Pesquisar prato no menu..."
+                        value={pdvSearch}
+                        onChange={(e) => setPdvSearch(e.target.value)}
+                        className={clsx('w-full', 'px-4', 'py-2', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'focus:outline-none', 'focus:border-[#10b981]', 'text-white')}
+                      />
+                      <span className={clsx('text-[8px]', 'text-gray-500', 'font-mono', 'block', 'mt-1', 'text-left')}>Atalho: Pressione [F1] para pesquisar</span>
+                    </div>
+                    {pdvSearch && (
+                      <button
+                        onClick={() => setPdvSearch('')}
+                        className={clsx('px-3', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-gray-400', 'hover:text-white')}
+                      >
+                        Limpar
+                      </button>
+                    )}
+                  </div>
+
+                  <div className={clsx('flex', 'gap-1.5', 'overflow-x-auto', 'pb-1.5', 'scrollbar-thin')}>
+                    <button
+                      type="button"
+                      onClick={() => setPdvSelectedCategory('todos')}
+                      className={`px-3 py-1.5 text-[10px] font-bold rounded-lg cursor-pointer whitespace-nowrap transition-all border ${pdvSelectedCategory === 'todos'
+                        ? 'bg-emerald-600 text-white border-transparent'
+                        : 'bg-[#121214] border-[#27272A] text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
+                        }`}
+                    >
+                      Todos
+                    </button>
+                    {CATEGORIES.map(cat => (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setPdvSelectedCategory(cat)}
+                        className={`px-3 py-1.5 text-[10px] font-bold rounded-lg cursor-pointer whitespace-nowrap transition-all border ${pdvSelectedCategory === cat
+                          ? 'bg-emerald-600 text-white border-transparent'
+                          : 'bg-[#121214] border-[#27272A] text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
+                          }`}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className={clsx('flex-1', 'overflow-y-auto', 'pr-1')}>
+                  <div className={clsx('grid', 'grid-cols-2', 'sm:grid-cols-3', 'xl:grid-cols-4', 'gap-3')}>
+                    {filteredProducts.map(p => (
+                      <div
+                        key={p.id}
+                        onClick={() => handlePdvAddToCart(p)}
+                        className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'hover:border-[#10b981]/30', 'p-3', 'rounded-xl', 'flex', 'flex-col', 'justify-between', 'gap-3', 'cursor-pointer', 'group', 'hover:shadow-md', 'transition-all', 'text-left')}
+                      >
+                        <div>
+                          <h4 className={clsx('font-serif', 'font-bold', 'text-white', 'group-hover:text-[#10b981]', 'transition-colors')}>{p.nome}</h4>
+                          <p className={clsx('text-[9px]', 'text-gray-500', 'mt-1', 'line-clamp-2')}>{p.descricao}</p>
+                        </div>
+                        <div className={clsx('flex', 'justify-between', 'items-center')}>
+                          <span className={clsx('font-bold', 'text-white', 'font-mono')}>R$ {p.preco.toFixed(2)}</span>
+                          <span className={clsx('p-1', 'bg-[#1C1C1F]', 'group-hover:bg-[#10b981]', 'text-gray-400', 'group-hover:text-[#121214]', 'rounded-lg', 'transition-colors', 'border', 'border-[#27272A]/50')}>
+                            <Plus size={12} />
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Shopping cart sidebar */}
+              <div className={clsx('w-80', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden', 'shrink-0')}>
+                <div className={clsx('bg-[#18181B]', 'px-4', 'py-3', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
+                  <span className={clsx('font-bold', 'text-white', 'font-serif', 'flex', 'items-center', 'gap-1.5')}>
+                    <ShoppingCart size={14} className="text-[#10b981]" />
+                    <span>Carrinho de Vendas</span>
+                  </span>
+                  <span className={clsx('bg-[#10b981]/10', 'text-[#10b981]', 'font-bold', 'px-2', 'py-0.5', 'rounded-full', 'font-mono', 'text-[9px]')}>
+                    {pdvCart.reduce((sum, item) => sum + item.quantity, 0)} itens
+                  </span>
+                </div>
+
+                <div className={clsx('flex-1', 'overflow-y-auto', 'p-3', 'space-y-2')}>
+                  {pdvCart.length === 0 ? (
+                    <div className={clsx('py-24', 'text-center', 'space-y-2', 'text-gray-500', 'italic')}>
+                      <p>Carrinho Vazio</p>
+                      <p className={clsx('text-[9px]', 'text-gray-600')}>Clique nos produtos ao lado para lançar</p>
+                    </div>
+                  ) : (
+                    pdvCart.map((item, idx) => (
+                      <div key={`${item.product.id}-${idx}`} className={clsx('bg-[#1C1C1F]', 'p-2.5', 'rounded-xl', 'border', 'border-[#27272A]', 'space-y-2')}>
+                        <div className={clsx('flex', 'justify-between', 'items-start')}>
+                          <div className="space-y-0.5">
+                            <strong className={clsx('text-white', 'block', 'truncate', 'w-40')}>{item.product.nome}</strong>
+                            <span className={clsx('text-[9px]', 'text-[#10b981]', 'font-mono')}>R$ {item.product.preco.toFixed(2)} / un</span>
+                          </div>
+                          <button
+                            onClick={() => handlePdvRemoveCartItem(idx)}
+                            className={clsx('text-gray-500', 'hover:text-rose-500', 'p-0.5', 'cursor-pointer')}
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+
+                        <div className={clsx('flex', 'justify-between', 'items-center')}>
+                          <div className={clsx('flex', 'items-center', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'overflow-hidden')}>
+                            <button
+                              type="button"
+                              onClick={() => handlePdvUpdateCartQty(idx, -1)}
+                              className={clsx('px-2', 'py-1', 'text-gray-400', 'hover:text-white', 'cursor-pointer', 'hover:bg-[#1C1C1F]')}
+                            >
+                              -
+                            </button>
+                            <span className={clsx('px-2', 'text-[10px]', 'font-bold', 'font-mono', 'text-white')}>{item.quantity}</span>
+                            <button
+                              type="button"
+                              onClick={() => handlePdvUpdateCartQty(idx, 1)}
+                              className={clsx('px-2', 'py-1', 'text-gray-400', 'hover:text-white', 'cursor-pointer', 'hover:bg-[#1C1C1F]')}
+                            >
+                              +
+                            </button>
+                          </div>
+                          <input
+                            type="text"
+                            placeholder="Obs..."
+                            value={item.obs}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setPdvCart(prev => {
+                                const c = [...prev];
+                                c[idx].obs = val;
+                                return c;
+                              });
+                            }}
+                            className={clsx('w-24', 'px-1.5', 'py-1', 'text-[9px]', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded', 'focus:outline-none', 'focus:border-[#10b981]', 'text-white')}
+                          />
+                        </div>
+
+                        {/* Presets de Observação Dinâmicos do Terminal Balcão */}
+                        {(() => {
+                          const presets = getProductPresets(item.product);
+                          if (presets.length === 0) return null;
+                          const parts = item.obs ? item.obs.split(',').map(p => p.trim()) : [];
+                          return (
+                            <div className="flex flex-wrap gap-1 mt-2 justify-end">
+                              {presets.map(preset => {
+                                const isActive = parts.some(p => p.toLowerCase() === preset.toLowerCase());
+                                return (
+                                  <button
+                                    key={preset}
+                                    type="button"
+                                    onClick={() => {
+                                      const currentParts = item.obs ? item.obs.split(',').map(p => p.trim()) : [];
+                                      const exists = currentParts.some(p => p.toLowerCase() === preset.toLowerCase());
+                                      const updatedParts = exists
+                                        ? currentParts.filter(p => p.toLowerCase() !== preset.toLowerCase() && p !== '')
+                                        : [...currentParts.filter(p => p !== ''), preset];
+                                      
+                                      const updatedObs = updatedParts.join(', ');
+                                      setPdvCart(prev => {
+                                        const c = [...prev];
+                                        c[idx].obs = updatedObs;
+                                        return c;
+                                      });
+                                    }}
+                                    className={`px-1.5 py-0.5 text-[8px] rounded border transition-colors cursor-pointer font-medium ${
+                                      isActive
+                                        ? 'bg-emerald-600/20 border-emerald-500/40 text-emerald-400'
+                                        : 'bg-[#27272A] hover:bg-emerald-600/25 text-gray-400 hover:text-white border-[#27272A]'
+                                    }`}
+                                  >
+                                    {isActive ? preset : `+${preset}`}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <form onSubmit={handlePdvSubmitOrder} className={clsx('bg-[#18181B]', 'p-3', 'border-t', 'border-[#27272A]', 'space-y-3', 'shrink-0')}>
+                  {!modoExclusivoSalao && (
+                    <div className="space-y-1">
+                      <div className={clsx('flex', 'gap-1', 'p-0.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'shrink-0')}>
+                        <button
+                          type="button"
+                          onClick={() => setPdvOrderType('balcao')}
+                          className={`flex-1 py-1 text-[8.5px] font-bold rounded transition-all cursor-pointer ${pdvOrderType === 'balcao' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'
+                            }`}
+                        >
+                          Balcão
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPdvOrderType('entrega')}
+                          className={`flex-1 py-1 text-[8.5px] font-bold rounded transition-all cursor-pointer ${pdvOrderType === 'entrega' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'
+                            }`}
+                        >
+                          Delivery
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPdvOrderType('mesa')}
+                          className={`flex-1 py-1 text-[8.5px] font-bold rounded transition-all cursor-pointer ${pdvOrderType === 'mesa' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'
+                            }`}
+                        >
+                          Mesa
+                        </button>
+                      </div>
+                      <span className={clsx('text-[7.5px]', 'text-gray-500', 'font-mono', 'block', 'text-left')}>Atalhos de Tipo: [F2] Balcão • [F3] Mesa • [F8] Delivery</span>
+                    </div>
+                  )}
+
+                  {pdvOrderType === 'mesa' && (
+                    <div className="space-y-1">
+                      <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Mesa Destino:</label>
+                      <select
+                        id="pdv-mesa-select"
+                        value={pdvTargetMesaId}
+                        onChange={(e) => setPdvTargetMesaId(parseInt(e.target.value))}
+                        className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'focus:border-[#10b981]', 'text-white', 'text-[10px]')}
+                      >
+                        <option value={0}>Selecione uma mesa...</option>
+                        {salonTables.map(t => (
+                          <option key={t.id} value={t.id}>Mesa {t.id} (Cap: {t.capacidade})</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {pdvOrderType === 'balcao' && (
+                    <div className={clsx('grid', 'grid-cols-2', 'gap-1.5')}>
+                      <div className="space-y-1">
+                        <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Nome Cliente:</label>
+                        <input
+                          id="pdv-customer-name-input"
+                          type="text"
+                          placeholder="Ex: Maria"
+                          required={pdvCart.length > 0}
+                          value={pdvCustomerName}
+                          onChange={(e) => setPdvCustomerName(e.target.value)}
+                          className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'text-white', 'text-[10px]')}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Telefone:</label>
+                        <input
+                          type="text"
+                          placeholder="(81) 9..."
+                          value={pdvCustomerPhone}
+                          onChange={(e) => setPdvCustomerPhone(e.target.value)}
+                          className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'text-white', 'text-[10px]')}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {pdvOrderType === 'entrega' && (
+                    <div className="space-y-2.5">
+                      <div className={clsx('grid', 'grid-cols-2', 'gap-1.5')}>
+                        <div className="space-y-1">
+                          <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Nome Cliente:</label>
+                          <input
+                            id="pdv-customer-name-input"
+                            type="text"
+                            placeholder="Ex: Maria"
+                            required={pdvCart.length > 0}
+                            value={pdvCustomerName}
+                            onChange={(e) => setPdvCustomerName(e.target.value)}
+                            className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'text-white', 'text-[10px]')}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Telefone:</label>
+                          <input
+                            type="text"
+                            placeholder="(81) 9..."
+                            value={pdvCustomerPhone}
+                            onChange={(e) => setPdvCustomerPhone(e.target.value)}
+                            className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'text-white', 'text-[10px]')}
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Endereço de Entrega:</label>
+                        <input
+                          type="text"
+                          placeholder="Rua, Número, Bairro, Complemento"
+                          required={pdvCart.length > 0}
+                          value={pdvDeliveryAddress}
+                          onChange={(e) => setPdvDeliveryAddress(e.target.value)}
+                          className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'text-white', 'text-[10px]')}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Taxa de Entrega (R$):</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          placeholder="5.00"
+                          value={pdvDeliveryTaxa}
+                          onChange={(e) => setPdvDeliveryTaxa(e.target.value)}
+                          className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'text-white', 'text-[10px]')}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className={clsx('flex', 'justify-between', 'items-center', 'font-mono', 'border-t', 'border-[#27272A]', 'pt-2', 'text-[11px]', 'font-bold', 'text-white')}>
+                    <span>Total Pedido:</span>
+                    <span className={clsx('text-[#10b981]', 'text-sm')}>
+                      R$ {(
+                        pdvCart.reduce((sum, item) => sum + (item.product.preco * item.quantity), 0) +
+                        (pdvOrderType === 'entrega' ? parseFloat(pdvDeliveryTaxa) || 0 : 0)
+                      ).toFixed(2)}
+                    </span>
+                  </div>
+
+                  {modoExclusivoSalao && (pdvOrderType !== 'mesa' || !pdvTargetMesaId || pdvTargetMesaId === 0) && (
+                    <div className={clsx('text-[9.5px]', 'text-amber-500', 'border', 'border-amber-500/20', 'bg-amber-500/5', 'px-2.5', 'py-1.5', 'rounded-lg', 'text-left', 'leading-relaxed')}>
+                      Durante o modo de testes de salão, todos os pedidos de venda devem ser vinculados a uma Mesa física ativa.
+                    </div>
+                  )}
+
+                  <button
+                    id="pdv-submit-btn"
+                    type="submit"
+                    disabled={modoExclusivoSalao && (pdvOrderType !== 'mesa' || !pdvTargetMesaId || pdvTargetMesaId === 0)}
+                    className={clsx('w-full', 'py-2', 'bg-emerald-600', 'hover:bg-emerald-700', 'disabled:bg-zinc-800', 'disabled:text-zinc-500', 'disabled:border-zinc-800', 'disabled:cursor-not-allowed', 'text-white', 'rounded-lg', 'font-bold', 'text-[9px]', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'flex', 'flex-col', 'items-center', 'justify-center', 'gap-0.5', 'shadow')}
+                  >
+                    <div className={clsx('flex', 'items-center', 'gap-1')}>
+                      <Check size={12} />
+                      <span>Lançar Pedido</span>
+                    </div>
+                    <span className={clsx('text-[7.5px]', 'text-emerald-200/80', 'font-mono', 'font-normal')}>Pressione [F4] para finalizar</span>
+                  </button>
+                </form>
+              </div>
+
+            </div>
           )}
 
           {/* VIEW 3: MAPA DE MESAS (Salão) */}
           {activeSubTab === 'salon' && (
-            <CaixaSalaoTab
-              salonTables={salonTables}
-              orders={orders}
-              pagamentosPendentes={pagamentosPendentes}
-              setShowAddMesaModal={setShowAddMesaModal}
-              onUpdateMesa={onUpdateMesa}
-              handleDeleteMesaAction={handleDeleteMesaAction}
-              handleForceFreeTable={handleForceFreeTable}
-              setSelectedOrder={setSelectedOrder}
-              setShowCheckoutModal={setShowCheckoutModal}
-              setCheckoutServiceTax={setCheckoutServiceTax}
-              setSplitPeople={setSplitPeople}
-              setSelectedItemIds={setSelectedItemIds}
-              setPaymentValor={setPaymentValor}
-              serviceTaxRate={serviceTaxRate}
-              checkoutServiceTax={checkoutServiceTax}
-              isLoading={isLoading}
-            />
+            <div className={clsx('h-full', 'flex', 'flex-col', 'space-y-4')}>
+              <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-3', 'rounded-2xl', 'flex', 'justify-between', 'items-center', 'gap-3')}>
+                <span className={clsx('font-serif', 'font-bold', 'text-gray-300')}>Estrutura Física do Salão</span>
+                <button
+                  onClick={() => setShowAddMesaModal(true)}
+                  className={clsx('px-4', 'py-2', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'font-bold', 'rounded-xl', 'flex', 'items-center', 'gap-1.5', 'cursor-pointer', 'text-[10px]', 'uppercase', 'tracking-wider', 'shadow')}
+                >
+                  <Plus size={12} />
+                  <span>Adicionar Mesa</span>
+                </button>
+              </div>
+
+              <div className={clsx('flex-1', 'bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'overflow-y-auto')}>
+                <div className={clsx('grid', 'grid-cols-1', 'sm:grid-cols-2', 'md:grid-cols-3', 'lg:grid-cols-4', 'xl:grid-cols-6', 'gap-4')}>
+                  {salonTables.map((table) => {
+                    const mergedIntoMesaId = orders.find(o => o.mesaOrigemId === table.id)?.mesaId || null;
+                    const isMerged = mergedIntoMesaId !== null;
+                    const displayMesaId = isMerged ? mergedIntoMesaId : table.id;
+                    const tableOrders = orders.filter(o => o.mesaId === displayMesaId);
+                    const isOcupada = tableOrders.length > 0;
+                    const hasPendingPayment = pagamentosPendentes.some(pag => 
+                      tableOrders.some(o => o.id === pag.comanda_id)
+                    );
+
+                    return (
+                      <div
+                        key={table.id}
+                        className={`bg-[#121214] border rounded-2xl p-3 flex flex-col justify-between gap-3 transition-all relative group ${hasPendingPayment
+                          ? 'border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.2)] animate-pulse'
+                          : isMerged
+                            ? 'border-dashed border-zinc-700 opacity-60 bg-zinc-950/20'
+                            : isOcupada
+                              ? 'border-rose-500/40 hover:border-rose-500'
+                              : 'border-[#27272A] hover:border-[#10b981]/30'
+                          }`}
+                      >
+                        <div className={clsx('flex', 'justify-between', 'items-start')}>
+                          <div>
+                            <span className={clsx('text-[9px]', 'font-bold', 'text-gray-500', 'uppercase', 'tracking-widest', 'block')}>Mesa</span>
+                            <strong className={clsx('text-xl', 'font-serif', 'text-white', 'leading-none')}>{table.id}</strong>
+                            {table.nome && table.nome !== `Mesa ${table.id}` && (
+                              <span className={clsx('text-[9px]', 'text-[#10b981]', 'block', 'mt-0.5')}>{table.nome}</span>
+                            )}
+                          </div>
+                          <div className={clsx('flex', 'gap-1', 'opacity-0', 'group-hover:opacity-100', 'transition-opacity')}>
+                            <button
+                              onClick={() => {
+                                const newName = prompt(`Novo nome/identificação para Mesa ${table.id} (Deixe em branco para padrão):`, table.nome || '');
+                                const newCap = prompt(`Nova capacidade (lugares) para Mesa ${table.id}?`, table.capacidade.toString());
+                                if (newCap && !isNaN(parseInt(newCap))) {
+                                  onUpdateMesa(table.id, parseInt(newCap), newName !== null ? (newName.trim() || `Mesa ${table.id}`) : undefined);
+                                } else if (newName !== null) {
+                                  onUpdateMesa(table.id, table.capacidade, newName.trim() || `Mesa ${table.id}`);
+                                }
+                              }}
+                              className={clsx('p-1', 'text-gray-400', 'hover:text-[#10b981]')}
+                              title="Editar capacidade"
+                            >
+                              <Edit3 size={10} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteMesaAction(table.id)}
+                              className={clsx('p-1', 'text-gray-400', 'hover:text-emerald-500')}
+                              title="Excluir mesa"
+                            >
+                              <Trash2 size={10} />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          {hasPendingPayment ? (
+                            <span className={clsx('px-2', 'py-0.5', 'text-[8px]', 'bg-amber-500/10', 'text-amber-400', 'font-bold', 'rounded-md', 'block', 'w-fit', 'border', 'border-amber-500/20', 'uppercase', 'tracking-wider animate-pulse')}>Confirmar Dinheiro</span>
+                          ) : isMerged ? (
+                            <span className={clsx('px-2', 'py-0.5', 'text-[8px]', 'bg-zinc-800', 'text-zinc-400', 'font-bold', 'rounded-md', 'block', 'w-fit', 'border', 'border-zinc-700/30', 'uppercase', 'tracking-wider')}>Mesclada na Mesa {mergedIntoMesaId}</span>
+                          ) : isOcupada ? (
+                            <span className={clsx('px-2', 'py-0.5', 'text-[8px]', 'bg-rose-500/10', 'text-rose-400', 'font-bold', 'rounded-md', 'block', 'w-fit', 'border', 'border-rose-500/10', 'uppercase', 'tracking-wider')}>Ocupada</span>
+                          ) : (
+                            <span className={clsx('px-2', 'py-0.5', 'text-[8px]', 'bg-emerald-500/10', 'text-emerald-400', 'rounded-md', 'block', 'w-fit', 'border', 'border-emerald-500/10', 'uppercase', 'tracking-wider')}>Livre</span>
+                          )}
+                          {(() => {
+                            const origemId = tableOrders.find(o => o.mesaOrigemId && Number(o.mesaOrigemId) !== Number(displayMesaId))?.mesaOrigemId;
+                            const transfId = tableOrders.find(o => o.mesaTransferidaDe && Number(o.mesaTransferidaDe) !== Number(displayMesaId))?.mesaTransferidaDe;
+                            if (origemId) {
+                              return (
+                                <span className="px-2 py-0.5 text-[8px] bg-emerald-500/10 text-emerald-300 font-bold rounded-md block w-fit border border-emerald-500/20 uppercase tracking-wider animate-pulse-subtle" title={`Consumo mesclado da Mesa ${origemId}`}>
+                                  🔗 Mesclado de Mesa {origemId}
+                                </span>
+                              );
+                            }
+                            if (transfId) {
+                              return (
+                                <span className="px-2 py-0.5 text-[8px] bg-purple-500/10 text-purple-300 font-bold rounded-md block w-fit border border-purple-500/20 uppercase tracking-wider" title={`Consumo transferido da Mesa ${transfId}`}>
+                                  🔗 Transferido da Mesa {transfId}
+                                </span>
+                              );
+                            }
+                            return null;
+                          })()}
+                        </div>
+
+                        {isOcupada && (
+                          <div className={clsx('flex', 'gap-1', 'pt-1.5', 'border-t', 'border-[#27272A]')}>
+                            <button
+                              onClick={() => {
+                                const order = tableOrders[0];
+                                setSelectedOrder({
+                                  ...order,
+                                  itens: order.itens.map((item: any) => ({
+                                    id: item.id,
+                                    produtoId: item.produto_id || item.produtoId,
+                                    nome: item.nome || `Item ${item.produtoId}`,
+                                    preco: item.preco_unit || item.preco,
+                                    observacao: item.observacao || '',
+                                    clienteNome: item.cliente_nome || 'Consumo Geral',
+                                    status: item.status,
+                                    pago: item.pago
+                                  }))
+                                });
+                                setShowCheckoutModal(true);
+                                setCheckoutServiceTax(true);
+                                setSplitPeople('1');
+                                setSelectedItemIds([]);
+                                const sub = order.itens.filter((item: any) => !item.pago).reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
+                                setPaymentValor((sub * (1.0 + (checkoutServiceTax ? serviceTaxRate / 100 : 0))).toFixed(2));
+                              }}
+                              className={clsx('flex-1', 'py-1', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'rounded', 'font-bold', 'text-[8px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider')}
+                            >
+                              Checkout
+                            </button>
+                            <button
+                              onClick={() => handleForceFreeTable(table.id)}
+                              className={clsx('p-1', 'bg-emerald-600/20', 'hover:bg-emerald-600', 'text-[#C46A74]', 'hover:text-white', 'rounded', 'transition-colors', 'cursor-pointer')}
+                            >
+                              <X size={10} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
           )}
 
           {/* VIEW 4: MEU DESEMPENHO (Analytics) */}
@@ -2644,7 +3411,7 @@ export function CaixaPanel({
                 <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-4', 'rounded-2xl')}>
                   <span className={clsx('text-[9px]', 'uppercase', 'tracking-wider', 'font-bold', 'text-gray-400', 'block')}>Em análise agora</span>
                   <strong className={clsx('text-xl', 'text-amber-500', 'font-mono', 'block', 'mt-1')}>
-                    {simulatedOrders.filter(o => o.status === 'pendente' || o.status === 'analise').length}
+                    {simulatedOrders.filter(o => o.status === 'analise').length}
                   </strong>
                 </div>
                 <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-4', 'rounded-2xl')}>
@@ -2656,7 +3423,7 @@ export function CaixaPanel({
                 <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-4', 'rounded-2xl')}>
                   <span className={clsx('text-[9px]', 'uppercase', 'tracking-wider', 'font-bold', 'text-gray-400', 'block')}>Pronto para entrega</span>
                   <strong className={clsx('text-xl', 'text-emerald-500', 'font-mono', 'block', 'mt-1')}>
-                    {simulatedOrders.filter(o => o.status === 'transito' || o.status === 'pronto').length}
+                    {simulatedOrders.filter(o => o.status === 'pronto').length}
                   </strong>
                 </div>
               </div>
@@ -3024,8 +3791,7 @@ export function CaixaPanel({
             <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5')}>
 
               {/* Waiters permissions switches (Left Column) */}
-              {!isDelivery && (
-                <div className={clsx(isPocket ? 'lg:col-span-3' : 'lg:col-span-2', 'bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'flex', 'flex-col', 'overflow-hidden')}>
+              <div className={clsx('lg:col-span-2', 'bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'flex', 'flex-col', 'overflow-hidden')}>
                 <div className={clsx('border-b', 'border-[#27272A]', 'pb-3', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
                   <span className={clsx('font-serif', 'font-bold', 'text-gray-300')}>Configurações de Permissões do App do Garçom</span>
                 </div>
@@ -3062,15 +3828,15 @@ export function CaixaPanel({
                         { title: "Permitir que garçons cancelem pedidos", desc: "Permite a exclusão direta de itens ou comandas pelo aplicativo sem aprovação do gerente.", checked: permCancel, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_cancelar: val }) },
                         { title: "Permitir exibição de status de pedidos no mapa de mesas", desc: "Gera ícones de produção ('Em preparo', 'Pronto') sobre as mesas no mapa.", checked: permShowStatus, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_status: val }) },
                         { title: "Permitir que garçons abram comandas sem pedido", desc: "Permite reservar uma mesa com status 'ocupada' sem lançar nenhum item.", checked: permOpenEmpty, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_abrir_vazia: val }) },
-                        { title: "Permitir impressão automática dos pedidos feitos pelo Garçom", desc: "Dispara a via térmica de produção no balcão imediatamente após o garçom confirmar.", checked: plano === 'pocket' ? false : permAutoPrint, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_print: val }), disabled: plano === 'pocket' }
+                        { title: "Permitir impressão automática dos pedidos feitos pelo Garçom", desc: "Dispara a via térmica de produção no balcão imediatamente após o garçom confirmar.", checked: permAutoPrint, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_print: val }) }
                       ].map((item, idx) => (
                         <div key={idx} className={clsx('flex', 'justify-between', 'items-start', 'gap-4')}>
                           <div className="space-y-0.5">
-                            <strong className={clsx('text-white', 'block', 'font-semibold', item.disabled && 'opacity-50')}>{item.title}</strong>
-                            <span className={clsx('text-[9px]', 'text-gray-500', 'block', 'leading-relaxed', item.disabled && 'opacity-50')}>{item.desc}</span>
+                            <strong className={clsx('text-white', 'block', 'font-semibold')}>{item.title}</strong>
+                            <span className={clsx('text-[9px]', 'text-gray-500', 'block', 'leading-relaxed')}>{item.desc}</span>
                           </div>
-                          <label className={clsx('relative', 'inline-flex', 'items-center', 'shrink-0', 'mt-0.5', item.disabled ? 'cursor-not-allowed opacity-40' : 'cursor-pointer')}>
-                            <input type="checkbox" checked={item.checked} disabled={item.disabled} onChange={(e) => item.onChange(e.target.checked)} className={clsx('sr-only', 'peer')} />
+                          <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer', 'shrink-0', 'mt-0.5')}>
+                            <input type="checkbox" checked={item.checked} onChange={(e) => item.onChange(e.target.checked)} className={clsx('sr-only', 'peer')} />
                             <div className={clsx('w-8', 'h-4.5', 'bg-[#27272A]', 'peer-focus:outline-none', 'rounded-full', 'peer', 'peer-checked:after:translate-x-full', 'peer-checked:after:border-white', "after:content-['']", 'after:absolute', 'after:top-[2px]', 'after:left-[2px]', 'after:bg-white', 'after:border-gray-300', 'after:border', 'after:rounded-full', 'after:h-3.5', 'after:w-3.5', 'after:transition-all', 'peer-checked:bg-emerald-600')}></div>
                           </label>
                         </div>
@@ -3132,126 +3898,144 @@ export function CaixaPanel({
                       )}
                     </div>
                   )}
+
                 </div>
               </div>
-            )}
 
               {/* Printer messages & test (Right Column) */}
-              {!isPocket && (
-                <div className={clsx(isDelivery ? 'lg:col-span-3' : 'lg:col-span-1', 'bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'flex', 'flex-col', 'justify-between')}>
-                  <div className="space-y-4">
-                    <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Impressoras térmicas</span>
+              <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'flex', 'flex-col', 'justify-between')}>
+                <div className="space-y-4">
+                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Impressoras térmicas</span>
 
-                    <div className={clsx('space-y-3', 'text-left')}>
-                      <div className="space-y-1">
-                        <label className={clsx('text-[9px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Mensagem de Cabeçalho:</label>
-                        <input
-                          type="text"
-                          value={printHeader}
-                          onChange={(e) => {
-                            setPrintHeader(e.target.value);
-                            localStorage.setItem("koma_print_header", e.target.value);
-                          }}
-                          className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-[10px]')}
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className={clsx('text-[9px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Mensagem de Rodapé:</label>
-                        <input
-                          type="text"
-                          value={printFooter}
-                          onChange={(e) => {
-                            setPrintFooter(e.target.value);
-                            localStorage.setItem("koma_print_footer", e.target.value);
-                          }}
-                          className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-[10px]')}
-                        />
-                      </div>
-
-                      <div className={clsx('flex', 'justify-between', 'items-center', 'pt-2')}>
-                        <span className={clsx('text-[10px]', 'text-gray-300', 'font-semibold')}>Unificar Vias de Delivery (Via Única)</span>
-                        <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer')}>
-                          <input
-                            type="checkbox"
-                            checked={unificarViasDelivery}
-                            onChange={(e) => {
-                              setUnificarViasDelivery(e.target.checked);
-                              updateConfiguracoes({ unificar_vias_delivery: e.target.checked });
-                            }}
-                            className={clsx('sr-only', 'peer')}
-                          />
-                          <div className={clsx('w-9', 'h-5', 'bg-[#27272A]', 'peer-focus:outline-none', 'rounded-full', 'peer', 'peer-checked:after:translate-x-full', 'peer-checked:after:border-white', "after:content-['']", 'after:absolute', 'after:top-[2px]', 'after:left-[2px]', 'after:bg-white', 'after:border-gray-300', 'after:border', 'after:rounded-full', 'after:h-4', 'after:w-4', 'after:transition-all', 'peer-checked:bg-emerald-600')}></div>
-                        </label>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <button
-                        onClick={handleSearchPrinters}
-                        className={clsx('w-full', 'py-1.5', 'bg-[#1C1C1F]', 'hover:bg-[#27272A]', 'border', 'border-[#27272A]', 'text-gray-300', 'font-bold', 'rounded-lg', 'text-[9px]', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1.5', 'cursor-pointer')}
-                      >
-                        <Printer size={12} />
-                        <span>{isSearchingPrinters ? 'Procurando...' : 'Achar Impressoras'}</span>
-                      </button>
-
-                      {detectedPrinters.length > 0 && (
-                        <div className={clsx('space-y-1', 'animate-scale-in')}>
-                          {detectedPrinters.map((p, idx) => (
-                            <div key={idx} className={clsx('p-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'text-[9px]', 'text-gray-400', 'font-mono', 'flex', 'justify-between', 'items-center')}>
-                              <span>{p}</span>
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  try {
-                                    const res = await API.testeImpressao(apiBaseUrl, authHeaders, {});
-                                    if (res.ok) {
-                                      alert('Cupom de teste enviado para a impressora Gertec G250!');
-                                    } else {
-                                      alert('Erro ao disparar teste de impressão.');
-                                    }
-                                  } catch (e) {
-                                    console.error(e);
-                                    alert('Erro de conexão ao testar impressora.');
-                                  }
-                                }}
-                                className={clsx('text-[8px]', 'uppercase', 'tracking-wider', 'text-[#10b981]', 'font-bold', 'hover:text-white', 'cursor-pointer')}
-                              >
-                                Teste
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Mockup live preview coupon */}
-                  <div className={clsx('bg-[#FFFFFC]', 'text-black', 'p-4', 'rounded-xl', 'border', 'border-gray-300', 'font-mono', 'text-[9px]', 'space-y-3', 'shadow-inner', 'my-2')}>
-                    <div className={clsx('text-center', 'font-bold', 'border-b', 'border-dashed', 'border-gray-400', 'pb-1.5', 'uppercase', 'leading-normal')}>
-                      <span>{printHeader}</span>
-                    </div>
+                  <div className={clsx('space-y-3', 'text-left')}>
                     <div className="space-y-1">
-                      <div className={clsx('flex', 'justify-between')}>
-                        <span>1x Pastel Carne</span>
-                        <span>R$ 12,00</span>
-                      </div>
-                      <div className={clsx('flex', 'justify-between')}>
-                        <span>1x Coca-Cola</span>
-                        <span>R$ 6,00</span>
-                      </div>
+                      <label className={clsx('text-[9px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Mensagem de Cabeçalho:</label>
+                      <input
+                        type="text"
+                        value={printHeader}
+                        onChange={(e) => {
+                          setPrintHeader(e.target.value);
+                          localStorage.setItem("koma_print_header", e.target.value);
+                        }}
+                        className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-[10px]')}
+                      />
                     </div>
-                    <div className={clsx('flex', 'justify-between', 'font-bold', 'border-t', 'border-dashed', 'border-gray-400', 'pt-1', 'text-[10px]')}>
-                      <span>Total:</span>
-                      <span>R$ 18,00</span>
+
+                    <div className="space-y-1">
+                      <label className={clsx('text-[9px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Mensagem de Rodapé:</label>
+                      <input
+                        type="text"
+                        value={printFooter}
+                        onChange={(e) => {
+                          setPrintFooter(e.target.value);
+                          localStorage.setItem("koma_print_footer", e.target.value);
+                        }}
+                        className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-[10px]')}
+                      />
                     </div>
-                    <div className={clsx('text-center', 'text-[8px]', 'text-gray-600', 'border-t', 'border-dashed', 'border-gray-400', 'pt-1.5', 'uppercase', 'leading-normal')}>
-                      <span>{printFooter}</span>
+
+                    <div className={clsx('flex', 'justify-between', 'items-center', 'pt-2')}>
+                      <span className={clsx('text-[10px]', 'text-gray-300', 'font-semibold')}>Unificar Vias de Delivery (Via Única)</span>
+                      <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer')}>
+                        <input
+                          type="checkbox"
+                          checked={unificarViasDelivery}
+                          onChange={(e) => {
+                            setUnificarViasDelivery(e.target.checked);
+                            updateConfiguracoes({ unificar_vias_delivery: e.target.checked });
+                          }}
+                          className={clsx('sr-only', 'peer')}
+                        />
+                        <div className={clsx('w-9', 'h-5', 'bg-[#27272A]', 'peer-focus:outline-none', 'rounded-full', 'peer', 'peer-checked:after:translate-x-full', 'peer-checked:after:border-white', "after:content-['']", 'after:absolute', 'after:top-[2px]', 'after:left-[2px]', 'after:bg-white', 'after:border-gray-300', 'after:border', 'after:rounded-full', 'after:h-4', 'after:w-4', 'after:transition-all', 'peer-checked:bg-emerald-600')}></div>
+                      </label>
+                    </div>
+
+                    <div className={clsx('flex', 'justify-between', 'items-center', 'pt-2', 'border-t', 'border-[#27272A]/40')}>
+                      <span className={clsx('text-[10px]', 'text-gray-300', 'font-semibold')}>Modo Exclusivo de Salão (Kôma Lite)</span>
+                      <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer')}>
+                        <input
+                          type="checkbox"
+                          checked={modoExclusivoSalao}
+                          onChange={(e) => {
+                            setModoExclusivoSalao(e.target.checked);
+                            updateConfiguracoes({ modo_exclusivo_salao: e.target.checked });
+                          }}
+                          className={clsx('sr-only', 'peer')}
+                        />
+                        <div className={clsx('w-9', 'h-5', 'bg-[#27272A]', 'peer-focus:outline-none', 'rounded-full', 'peer', 'peer-checked:after:translate-x-full', 'peer-checked:after:border-white', "after:content-['']", 'after:absolute', 'after:top-[2px]', 'after:left-[2px]', 'after:bg-white', 'after:border-gray-300', 'after:border', 'after:rounded-full', 'after:h-4', 'after:w-4', 'after:transition-all', 'peer-checked:bg-emerald-600')}></div>
+                      </label>
                     </div>
                   </div>
 
+                  {/* Detected printers list / test search */}
+                  <div className="space-y-2">
+                    <button
+                      onClick={handleSearchPrinters}
+                      className={clsx('w-full', 'py-1.5', 'bg-[#1C1C1F]', 'hover:bg-[#27272A]', 'border', 'border-[#27272A]', 'text-gray-300', 'font-bold', 'rounded-lg', 'text-[9px]', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1.5', 'cursor-pointer')}
+                    >
+                      <Printer size={12} />
+                      <span>{isSearchingPrinters ? 'Procurando...' : 'Achar Impressoras'}</span>
+                    </button>
+
+                    {detectedPrinters.length > 0 && (
+                      <div className={clsx('space-y-1', 'animate-scale-in')}>
+                        {detectedPrinters.map((p, idx) => (
+                          <div key={idx} className={clsx('p-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'text-[9px]', 'text-gray-400', 'font-mono', 'flex', 'justify-between', 'items-center')}>
+                            <span>{p}</span>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  const res = await fetch(`${apiBaseUrl}/comandas/teste-impressao`, {
+                                    method: 'POST',
+                                    headers: authHeaders
+                                  });
+                                  if (res.ok) {
+                                    alert('Cupom de teste enviado para a impressora Gertec G250!');
+                                  } else {
+                                    alert('Erro ao disparar teste de impressão.');
+                                  }
+                                } catch (e) {
+                                  console.error(e);
+                                  alert('Erro de conexão ao testar impressora.');
+                                }
+                              }}
+                              className={clsx('text-[8px]', 'uppercase', 'tracking-wider', 'text-[#10b981]', 'font-bold', 'hover:text-white', 'cursor-pointer')}
+                            >
+                              Teste
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )}
+
+                {/* Mockup live preview coupon */}
+                <div className={clsx('bg-[#FFFFFC]', 'text-black', 'p-4', 'rounded-xl', 'border', 'border-gray-300', 'font-mono', 'text-[9px]', 'space-y-3', 'shadow-inner', 'my-2')}>
+                  <div className={clsx('text-center', 'font-bold', 'border-b', 'border-dashed', 'border-gray-400', 'pb-1.5', 'uppercase', 'leading-normal')}>
+                    <span>{printHeader}</span>
+                  </div>
+                  <div className="space-y-1">
+                    <div className={clsx('flex', 'justify-between')}>
+                      <span>1x Pastel Carne</span>
+                      <span>R$ 12,00</span>
+                    </div>
+                    <div className={clsx('flex', 'justify-between')}>
+                      <span>1x Coca-Cola</span>
+                      <span>R$ 6,00</span>
+                    </div>
+                  </div>
+                  <div className={clsx('flex', 'justify-between', 'font-bold', 'border-t', 'border-dashed', 'border-gray-400', 'pt-1', 'text-[10px]')}>
+                    <span>Total:</span>
+                    <span>R$ 18,00</span>
+                  </div>
+                  <div className={clsx('text-center', 'text-[8px]', 'text-gray-600', 'border-t', 'border-dashed', 'border-gray-400', 'pt-1.5', 'uppercase', 'leading-normal')}>
+                    <span>{printFooter}</span>
+                  </div>
+                </div>
+
+              </div>
 
             </div>
           )}
@@ -3524,17 +4308,13 @@ export function CaixaPanel({
 
                 <div className="space-y-3">
                   {[
-                    { id: 'pocket', name: 'Kôma Pocket', price: 'R$ 149/mês', features: ['Menu Digital QR Code', 'Atendimento Local Simples', '(Sem suporte a impressoras térmicas)'] },
-                    { id: 'bistro', name: 'Kôma Bistrô', price: 'R$ 219/mês', features: ['Gestão de Mesas', 'Atendimento Local de Salão', '(Sem suporte a Delivery)'] },
-                    { id: 'delivery', name: 'Kôma Delivery', price: 'R$ 219/mês', features: ['Gestão de Entregas', 'Taxas e Logística de Delivery', '(Sem suporte a Mesas)'] },
-                    { id: 'premium', name: 'Kôma Premium', price: 'R$ 349/mês', features: ['Versão Completa', 'Mesas, Delivery, Impressora e KDS'] }
+                    { id: 'bronze', name: 'Plano Bronze', price: 'R$ 99/mês', features: ['Menu Digital QR Code', 'Gestão de Mesas', 'Suporte por e-mail'] },
+                    { id: 'gold', name: 'Plano Ouro (Recomendado)', price: 'R$ 199/mês', features: ['Menu Digital + iFood', 'Robô de Atendimento IA', 'Suporte 24h WhatsApp'] },
+                    { id: 'platinum', name: 'Plano Platinum', price: 'R$ 349/mês', features: ['Multi-lojas Integrado', 'Gestão de Estoque Avançado', 'Gerente de Contas Dedicado'] }
                   ].map((plan) => (
                     <div
                       key={plan.id}
-                      onClick={() => {
-                        setSelectedPlan(plan.id as any);
-                        handleSavePlan(plan.id);
-                      }}
+                      onClick={() => setSelectedPlan(plan.id as any)}
                       className={`p-3.5 rounded-2xl border transition-all cursor-pointer text-left ${selectedPlan === plan.id
                         ? 'bg-emerald-600/15 border-[#10b981] shadow'
                         : 'bg-[#1C1C1F] border-[#27272A] hover:border-[#10b981]/30'
@@ -4244,7 +5024,7 @@ export function CaixaPanel({
                         return;
                       }
                       try {
-                        const res = await API.callCaixaApi(apiBaseUrl, authHeaders, `/produtos/categorias`, {
+                        const res = await fetch(`${apiBaseUrl}/produtos/categorias`, {
                           method: 'POST',
                           headers: {
                             ...authHeaders,
@@ -4296,7 +5076,7 @@ export function CaixaPanel({
                         const data = JSON.parse(text);
                         const items = Array.isArray(data) ? data : [data];
                         if (confirm(`Deseja importar/atualizar ${items.length} produtos no cardápio?`)) {
-                          const res = await API.callCaixaApi(apiBaseUrl, authHeaders, `/produtos/importar`, {
+                          const res = await fetch(`${apiBaseUrl}/produtos/importar`, {
                             method: 'POST',
                             headers: {
                               ...authHeaders,
@@ -4369,7 +5149,7 @@ export function CaixaPanel({
                                 onClick={async () => {
                                   if (confirm(`Deseja realmente remover "${prod.nome}" do cardápio? Esta ação não pode ser desfeita.`)) {
                                     try {
-                                      const res = await API.callCaixaApi(apiBaseUrl, authHeaders, `/produtos/${prod.id}`, {
+                                      const res = await fetch(`${apiBaseUrl}/produtos/${prod.id}`, {
                                         method: 'DELETE',
                                         headers: authHeaders
                                       });
@@ -4440,7 +5220,7 @@ export function CaixaPanel({
               if (confirm(`Deseja realmente ${active ? 'disponibilizar' : 'esgotar'} todos os itens relacionados a "${keyword}" (${targetProducts.length} itens)?`)) {
                 try {
                   await Promise.all(targetProducts.map(prod =>
-                    API.callCaixaApi(apiBaseUrl, authHeaders, `/produtos/${prod.id}`, {
+                    fetch(`${apiBaseUrl}/produtos/${prod.id}`, {
                       method: 'PUT',
                       headers: { ...authHeaders, 'Content-Type': 'application/json' },
                       body: JSON.stringify({ ativo: active })
@@ -4533,7 +5313,7 @@ export function CaixaPanel({
                               if (confirm(`Deseja realmente esgotar todos os itens da categoria "${catObj.nome}"?`)) {
                                 try {
                                   await Promise.all(prods.map(prod => 
-                                    API.callCaixaApi(apiBaseUrl, authHeaders, `/produtos/${prod.id}`, {
+                                    fetch(`${apiBaseUrl}/produtos/${prod.id}`, {
                                       method: 'PUT',
                                       headers: { ...authHeaders, 'Content-Type': 'application/json' },
                                       body: JSON.stringify({ ativo: false })
@@ -4556,7 +5336,7 @@ export function CaixaPanel({
                               if (confirm(`Deseja realmente disponibilizar todos os itens da categoria "${catObj.nome}"?`)) {
                                 try {
                                   await Promise.all(prods.map(prod => 
-                                    API.callCaixaApi(apiBaseUrl, authHeaders, `/produtos/${prod.id}`, {
+                                    fetch(`${apiBaseUrl}/produtos/${prod.id}`, {
                                       method: 'PUT',
                                       headers: { ...authHeaders, 'Content-Type': 'application/json' },
                                       body: JSON.stringify({ ativo: true })
@@ -4590,7 +5370,7 @@ export function CaixaPanel({
                               <button
                                 onClick={async () => {
                                   try {
-                                    const res = await API.callCaixaApi(apiBaseUrl, authHeaders, `/produtos/${prod.id}`, {
+                                    const res = await fetch(`${apiBaseUrl}/produtos/${prod.id}`, {
                                       method: 'PUT',
                                       headers: { ...authHeaders, 'Content-Type': 'application/json' },
                                       body: JSON.stringify({ ativo: !isAtivo })
@@ -4640,7 +5420,7 @@ export function CaixaPanel({
                       return;
                     }
                     try {
-                      const res = await API.callCaixaApi(apiBaseUrl, authHeaders, `/produtos/categorias`, {
+                      const res = await fetch(`${apiBaseUrl}/produtos/categorias`, {
                         method: 'POST',
                         headers: {
                           ...authHeaders,
@@ -4704,7 +5484,7 @@ export function CaixaPanel({
                                   return;
                                 }
                                 try {
-                                  const res = await API.callCaixaApi(apiBaseUrl, authHeaders, `/produtos/categorias/${cat.id}`, {
+                                  const res = await fetch(`${apiBaseUrl}/produtos/categorias/${cat.id}`, {
                                     method: 'PUT',
                                     headers: {
                                       ...authHeaders,
@@ -4735,7 +5515,7 @@ export function CaixaPanel({
                               onClick={async () => {
                                 if (confirm(`Deseja realmente excluir a categoria "${cat.nome}"?`)) {
                                   try {
-                                    const res = await API.callCaixaApi(apiBaseUrl, authHeaders, `/produtos/categorias/${cat.id}`, {
+                                    const res = await fetch(`${apiBaseUrl}/produtos/categorias/${cat.id}`, {
                                       method: 'DELETE',
                                       headers: authHeaders
                                     });
@@ -4868,7 +5648,7 @@ export function CaixaPanel({
               const formData = new FormData();
               formData.append('file', file);
               try {
-                const res = await API.callCaixaApi(apiBaseUrl, authHeaders, `/estoque/importar-xml`, {
+                const res = await fetch(`${apiBaseUrl}/estoque/importar-xml`, {
                   method: 'POST',
                   headers: authHeaders,
                   body: formData
@@ -4877,9 +5657,9 @@ export function CaixaPanel({
                 if (!res.ok) throw new Error(json.detail || 'Erro ao importar XML.');
                 setXmlUploadState(s => ({ ...s, loading: false, result: json }));
                 // Refresh all estoque data
-                API.callCaixaApi(apiBaseUrl, authHeaders, `/estoque/insumos`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setEstoqueInsumos(d); });
-                API.callCaixaApi(apiBaseUrl, authHeaders, `/estoque/notas`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setNotasEntrada(d); });
-                API.callCaixaApi(apiBaseUrl, authHeaders, `/estoque/distribuidores`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setDistribuidores(d); });
+                fetch(`${apiBaseUrl}/estoque/insumos`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setEstoqueInsumos(d); });
+                fetch(`${apiBaseUrl}/estoque/notas`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setNotasEntrada(d); });
+                fetch(`${apiBaseUrl}/estoque/distribuidores`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setDistribuidores(d); });
               } catch (err: any) {
                 setXmlUploadState(s => ({ ...s, loading: false, error: err.message || 'Erro desconhecido.' }));
               }
@@ -5448,19 +6228,171 @@ export function CaixaPanel({
 
           {/* VIEW: FRETISTAS & LOGÍSTICA */}
           {activeSubTab === 'entregadores' && (
-            <CaixaLogisticaTab
-              simulatedOrders={simulatedOrders}
-              motoboys={motoboys}
-              selectedMotoboys={selectedMotoboys}
-              setSelectedMotoboys={setSelectedMotoboys}
-              handleDespacharPedido={handleDespacharPedido}
-              handleFinalizarPedido={handleFinalizarPedido}
-              handleCadastrarMotoboy={handleCadastrarMotoboy}
-              novoMotoboyNome={novoMotoboyNome}
-              setNovoMotoboyNome={setNovoMotoboyNome}
-              novoMotoboyTelefone={novoMotoboyTelefone}
-              setNovoMotoboyTelefone={setNovoMotoboyTelefone}
-            />
+            <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5', 'animate-fade-in', 'text-left')}>
+
+              {/* Painel de Entregas (Colunas da Esquerda) */}
+              <div className={clsx('lg:col-span-2', 'bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-5', 'flex', 'flex-col', 'overflow-hidden')}>
+                <div className={clsx('border-b', 'border-[#27272A]', 'pb-3', 'shrink-0')}>
+                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'text-sm')}>Controle de Despacho e Entregas</span>
+                  <span className={clsx('text-[9px]', 'text-gray-500', 'block')}>Gerencie o fluxo de saída e entrega de pedidos de Delivery.</span>
+                </div>
+
+                {/* Pedidos Pendentes de Envio */}
+                <div className={clsx('space-y-3', 'flex-1', 'overflow-y-auto')}>
+                  <span className={clsx('text-[10px]', 'font-bold', 'text-[#10b981]', 'uppercase', 'tracking-wider', 'block')}>Pedidos para Despachar</span>
+
+                  {simulatedOrders.filter(o => o.status === 'producao' || o.status === 'analise').length === 0 ? (
+                    <div className={clsx('py-8', 'text-center', 'text-gray-500', 'text-xs', 'italic', 'bg-[#1C1C1F]/20', 'border', 'border-[#27272A]/40', 'rounded-2xl')}>
+                      Não há pedidos prontos ou em produção aguardando despacho no momento.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {simulatedOrders.filter(o => o.status === 'producao' || o.status === 'analise').map((order) => {
+                        const motoboyId = selectedMotoboys[order.id] || '';
+                        return (
+                          <div key={order.id} className={clsx('p-4', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'sm:flex-row', 'justify-between', 'gap-3', 'text-xs')}>
+                            <div className={clsx('space-y-1.5', 'flex-1')}>
+                              <div className={clsx('flex', 'items-center', 'gap-2')}>
+                                <span className={clsx('font-bold', 'text-white', 'text-[11px]')}>Pedido {order.id}</span>
+                                <span className={clsx('bg-[#10b981]/15', 'text-[#10b981]', 'text-[8px]', 'font-bold', 'px-1.5', 'py-0.5', 'rounded', 'border', 'border-[#10b981]/20', 'uppercase')}>
+                                  {order.canal}
+                                </span>
+                              </div>
+                              <span className={clsx('text-gray-300', 'font-bold', 'block')}>{order.cliente} • {order.telefone}</span>
+                              <span className={clsx('text-gray-400', 'text-[10px]', 'block', 'leading-relaxed')}>{order.endereco}</span>
+                              <span className={clsx('text-[9px]', 'text-gray-500', 'block', 'font-mono')}>Itens: {order.itens}</span>
+                            </div>
+
+                            <div className={clsx('flex', 'flex-col', 'sm:items-end', 'justify-between', 'gap-2', 'shrink-0')}>
+                              <span className={clsx('font-mono', 'font-bold', 'text-emerald-400', 'text-[11px]')}>R$ {order.total.toFixed(2)}</span>
+
+                              <div className={clsx('flex', 'items-center', 'gap-2')}>
+                                <select
+                                  value={motoboyId}
+                                  onChange={(e) => setSelectedMotoboys(prev => ({ ...prev, [order.id]: e.target.value }))}
+                                  className={clsx('py-1.5', 'px-2', 'bg-[#121214]', 'border', 'border-[#27272A]', 'text-white', 'rounded-xl', 'text-[10px]', 'focus:outline-none', 'focus:border-[#10b981]')}
+                                >
+                                  <option value="">Selecione o Entregador...</option>
+                                  {motoboys.filter(m => m.ativo).map(m => (
+                                    <option key={m.id} value={m.id}>{m.nome}</option>
+                                  ))}
+                                </select>
+                                <button
+                                  type="button"
+                                  disabled={!motoboyId}
+                                  onClick={() => handleDespacharPedido(order.id, parseInt(motoboyId))}
+                                  className={clsx('py-1.5', 'px-3', 'bg-emerald-600', 'hover:bg-[#9d2b3c]', 'disabled:opacity-50', 'text-white', 'font-bold', 'rounded-xl', 'text-[10px]', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
+                                >
+                                  Despachar
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Pedidos Em Trânsito */}
+                  <span className={clsx('text-[10px]', 'font-bold', 'text-[#10b981]', 'uppercase', 'tracking-wider', 'block', 'pt-4')}>Em Trânsito (Entregas Ativas)</span>
+
+                  {simulatedOrders.filter(o => o.status === 'pronto').length === 0 ? (
+                    <div className={clsx('py-8', 'text-center', 'text-gray-500', 'text-xs', 'italic', 'bg-[#1C1C1F]/20', 'border', 'border-[#27272A]/40', 'rounded-2xl')}>
+                      Nenhum pedido em trânsito no momento.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {simulatedOrders.filter(o => o.status === 'pronto').map((order) => {
+                        return (
+                          <div key={order.id} className={clsx('p-4', 'bg-[#1C1C1F]/40', 'border', 'border-[#27272A]/40', 'rounded-2xl', 'flex', 'flex-col', 'sm:flex-row', 'justify-between', 'gap-3', 'text-xs')}>
+                            <div className={clsx('space-y-1', 'flex-1')}>
+                              <div className={clsx('flex', 'items-center', 'gap-2')}>
+                                <span className={clsx('font-bold', 'text-white', 'text-[11px]')}>Pedido {order.id}</span>
+                                <span className={clsx('bg-emerald-500/10', 'text-emerald-400', 'text-[8px]', 'font-bold', 'px-1.5', 'py-0.5', 'rounded', 'border', 'border-emerald-500/20', 'uppercase', 'tracking-wider')}>
+                                  Em Trânsito
+                                </span>
+                              </div>
+                              <span className={clsx('text-gray-300', 'font-bold', 'block')}>{order.cliente} • {order.telefone}</span>
+                              <span className={clsx('text-gray-400', 'text-[10px]', 'block', 'leading-relaxed')}>{order.endereco}</span>
+                            </div>
+
+                            <div className={clsx('flex', 'flex-col', 'sm:items-end', 'justify-between', 'gap-2', 'shrink-0')}>
+                              <span className={clsx('font-mono', 'font-bold', 'text-emerald-400', 'text-[11px]')}>R$ {order.total.toFixed(2)}</span>
+
+                              <button
+                                type="button"
+                                onClick={() => handleFinalizarPedido(order.id)}
+                                className={clsx('py-1.5', 'px-3', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'font-bold', 'rounded-xl', 'text-[10px]', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
+                              >
+                                Concluir Entrega
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Gerenciamento de Fretistas (Coluna da Direita) */}
+              <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'flex', 'flex-col', 'justify-between', 'overflow-hidden')}>
+                <div className={clsx('space-y-4', 'flex-1', 'flex', 'flex-col', 'overflow-hidden')}>
+                  <div className={clsx('border-b', 'border-[#27272A]', 'pb-3', 'shrink-0')}>
+                    <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'text-sm')}>Fretistas Cadastrados</span>
+                    <span className={clsx('text-[9px]', 'text-gray-500', 'block')}>Lista de motoboys e entregadores de plantão.</span>
+                  </div>
+
+                  <div className={clsx('flex-1', 'overflow-y-auto', 'space-y-2.5')}>
+                    {motoboys.length === 0 ? (
+                      <span className={clsx('text-xs', 'text-gray-500', 'italic')}>Nenhum fretista cadastrado.</span>
+                    ) : (
+                      motoboys.map((m) => (
+                        <div key={m.id} className={clsx('p-3', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'flex', 'items-center', 'justify-between', 'gap-2')}>
+                          <div className="text-xs">
+                            <span className={clsx('font-bold', 'text-white', 'block')}>{m.nome}</span>
+                            <span className={clsx('text-[10px]', 'text-gray-400', 'block', 'font-mono')}>{m.telefone}</span>
+                          </div>
+                          <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ${m.ativo ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                            }`}>
+                            {m.ativo ? 'Ativo' : 'Inativo'}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Cadastro de novo Motoboy */}
+                <form onSubmit={handleCadastrarMotoboy} className={clsx('pt-4', 'border-t', 'border-[#27272A]', 'space-y-3', 'shrink-0')}>
+                  <span className={clsx('text-[10px]', 'font-bold', 'text-[#10b981]', 'uppercase', 'tracking-wider', 'block')}>Novo Fretista</span>
+
+                  <input
+                    type="text"
+                    required
+                    placeholder="Nome do Entregador"
+                    value={novoMotoboyNome}
+                    onChange={(e) => setNovoMotoboyNome(e.target.value)}
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-xs', 'focus:outline-none', 'focus:border-[#10b981]')}
+                  />
+                  <input
+                    type="text"
+                    required
+                    placeholder="Telefone (ex: 81 99999-8888)"
+                    value={novoMotoboyTelefone}
+                    onChange={(e) => setNovoMotoboyTelefone(e.target.value)}
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-xs', 'font-mono', 'focus:outline-none', 'focus:border-[#10b981]')}
+                  />
+                  <button
+                    type="submit"
+                    className={clsx('w-full', 'py-2', 'bg-emerald-600', 'hover:bg-[#9d2b3c]', 'text-white', 'font-bold', 'rounded-xl', 'text-[10px]', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
+                  >
+                    Adicionar Fretista
+                  </button>
+                </form>
+              </div>
+
+            </div>
           )}
 
           {/* MOCK VIEW: SETUP WIZARD (NICHO) */}
@@ -5717,7 +6649,7 @@ export function CaixaPanel({
           )}
 
         </div>
-      </main>
+      </main >
 
       {/* 1. MODAL: ABRIR CAIXA */}
       {
@@ -6072,73 +7004,75 @@ export function CaixaPanel({
                   })()}
 
                   {/* BOTÕES DE REIMPRESSÃO DO EXTRATO */}
-                  {plano !== 'pocket' && (
-                    <div className={clsx('bg-[#121214]/40', 'border', 'border-[#27272A]/50', 'p-4', 'rounded-2xl', 'space-y-3', 'text-left')}>
-                      <span className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Reimpressão de Extrato</span>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            try {
-                              const printHeader = localStorage.getItem("koma_print_header") || "";
-                              const printFooter = localStorage.getItem("koma_print_footer") || "";
-                              const response = await API.imprimirReciboMesa(
-                                apiBaseUrl,
-                                authHeaders,
-                                selectedOrder.mesaId,
-                                false,
-                                printHeader,
-                                printFooter
-                              );
-                              if (response.ok) {
-                                alert("Extrato completo enviado para a impressora!");
-                              } else {
-                                const err = await response.json();
-                                alert(`Erro ao imprimir: ${err.detail}`);
-                              }
-                            } catch (err) {
-                              console.error(err);
-                              alert("Erro de conexão ao imprimir extrato.");
+                  <div className={clsx('bg-[#121214]/40', 'border', 'border-[#27272A]/50', 'p-4', 'rounded-2xl', 'space-y-3', 'text-left')}>
+                    <span className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Reimpressão de Extrato</span>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const printHeader = localStorage.getItem("koma_print_header") || "";
+                            const printFooter = localStorage.getItem("koma_print_footer") || "";
+                            let url = `${apiBaseUrl}/mesas/${selectedOrder.mesaId}/imprimir-recibo?apenas_valores=false`;
+                            const params = new URLSearchParams();
+                            if (printHeader) params.append("print_header", printHeader);
+                            if (printFooter) params.append("print_footer", printFooter);
+                            if (params.toString()) url += `&${params.toString()}`;
+                            
+                            const response = await fetch(url, {
+                              method: 'POST',
+                              headers: authHeaders
+                            });
+                            if (response.ok) {
+                              alert("Extrato completo enviado para a impressora!");
+                            } else {
+                              const err = await response.json();
+                              alert(`Erro ao imprimir: ${err.detail}`);
                             }
-                          }}
-                          className={clsx('flex-1', 'py-2', 'bg-[#1C1C1F]', 'hover:bg-[#27272A]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-[10px]', 'font-bold', 'text-white', 'transition-all', 'cursor-pointer', 'text-center')}
-                          title="Imprime a via térmica completa com todos os itens consumidos"
-                         >
-                          🖨️ Completo
-                         </button>
-                         <button
-                          type="button"
-                          onClick={async () => {
-                            try {
-                              const printHeader = localStorage.getItem("koma_print_header") || "";
-                              const printFooter = localStorage.getItem("koma_print_footer") || "";
-                              const response = await API.imprimirReciboMesa(
-                                apiBaseUrl,
-                                authHeaders,
-                                selectedOrder.mesaId,
-                                true,
-                                printHeader,
-                                printFooter
-                              );
-                              if (response.ok) {
-                                alert("Extrato resumido (apenas valores) enviado para a impressora!");
-                              } else {
-                                const err = await response.json();
-                                alert(`Erro ao imprimir: ${err.detail}`);
-                              }
-                            } catch (err) {
-                              console.error(err);
-                              alert("Erro de conexão ao imprimir extrato resumido.");
+                          } catch (err) {
+                            console.error(err);
+                            alert("Erro de conexão ao imprimir extrato.");
+                          }
+                        }}
+                        className={clsx('flex-1', 'py-2', 'bg-[#1C1C1F]', 'hover:bg-[#27272A]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-[10px]', 'font-bold', 'text-white', 'transition-all', 'cursor-pointer', 'text-center')}
+                        title="Imprime a via térmica completa com todos os itens consumidos"
+                      >
+                        🖨️ Completo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const printHeader = localStorage.getItem("koma_print_header") || "";
+                            const printFooter = localStorage.getItem("koma_print_footer") || "";
+                            let url = `${apiBaseUrl}/mesas/${selectedOrder.mesaId}/imprimir-recibo?apenas_valores=true`;
+                            const params = new URLSearchParams();
+                            if (printHeader) params.append("print_header", printHeader);
+                            if (printFooter) params.append("print_footer", printFooter);
+                            if (params.toString()) url += `&${params.toString()}`;
+                            
+                            const response = await fetch(url, {
+                              method: 'POST',
+                              headers: authHeaders
+                            });
+                            if (response.ok) {
+                              alert("Extrato resumido (apenas valores) enviado para a impressora!");
+                            } else {
+                              const err = await response.json();
+                              alert(`Erro ao imprimir: ${err.detail}`);
                             }
-                          }}
-                          className={clsx('flex-1', 'py-2', 'bg-[#1C1C1F]', 'hover:bg-[#27272A]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-[10px]', 'font-bold', 'text-white', 'transition-all', 'cursor-pointer', 'text-center')}
-                          title="Imprime apenas o resumo de subtotais e taxas de serviço para economizar papel"
-                        >
-                          🖨️ Só Valores
-                        </button>
-                      </div>
+                          } catch (err) {
+                            console.error(err);
+                            alert("Erro de conexão ao imprimir extrato resumido.");
+                          }
+                        }}
+                        className={clsx('flex-1', 'py-2', 'bg-[#1C1C1F]', 'hover:bg-[#27272A]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-[10px]', 'font-bold', 'text-white', 'transition-all', 'cursor-pointer', 'text-center')}
+                        title="Imprime apenas o resumo de subtotais e taxas de serviço para economizar papel"
+                      >
+                        🖨️ Só Valores
+                      </button>
                     </div>
-                  )}
+                  </div>
                 </div>
 
                 <div className="space-y-4">
@@ -6455,34 +7389,32 @@ export function CaixaPanel({
                 ))}
               </div>
 
-              {!isPocket && (
-                <div className="flex gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        const res = await API.callCaixaApi(apiBaseUrl, authHeaders, `/comandas/lancamentos/${selectedKanbanOrder.id}/reimprimir`, {
-                          method: "POST",
-                          headers: authHeaders
-                        });
-                        if (res.ok) {
-                          alert("Pedido reenviado para a impressora com sucesso!");
-                          setSelectedKanbanOrder(null);
-                        } else {
-                          alert("Erro ao solicitar reimpressão.");
-                        }
-                      } catch (err) {
-                        console.error(err);
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const res = await fetch(`${apiBaseUrl}/comandas/lancamentos/${selectedKanbanOrder.id}/reimprimir`, {
+                        method: "POST",
+                        headers: authHeaders
+                      });
+                      if (res.ok) {
+                        alert("Pedido reenviado para a impressora com sucesso!");
+                        setSelectedKanbanOrder(null);
+                      } else {
                         alert("Erro ao solicitar reimpressão.");
                       }
-                    }}
-                    className="flex-1 py-2.5 bg-rose-950/40 border border-rose-900/50 text-rose-400 hover:bg-rose-900/20 text-white font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-[#10b981]/20 shadow-lg"
-                  >
-                    <Printer size={13} />
-                    <span>Reimprimir na Cozinha</span>
-                  </button>
-                </div>
-              )}
+                    } catch (err) {
+                      console.error(err);
+                      alert("Erro ao solicitar reimpressão.");
+                    }
+                  }}
+                  className="flex-1 py-2.5 bg-rose-950/40 border border-rose-900/50 text-rose-400 hover:bg-rose-900/20 text-white font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-[#10b981]/20 shadow-lg"
+                >
+                  <Printer size={13} />
+                  <span>Reimprimir na Cozinha</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -6522,13 +7454,13 @@ export function CaixaPanel({
 
                   let res;
                   if (editingProduct) {
-                    res = await API.callCaixaApi(apiBaseUrl, authHeaders, `/produtos/${editingProduct.id}`, {
+                    res = await fetch(`${apiBaseUrl}/produtos/${editingProduct.id}`, {
                       method: 'PUT',
                       headers: { ...authHeaders, 'Content-Type': 'application/json' },
                       body: JSON.stringify(payload)
                     });
                   } else {
-                    res = await API.callCaixaApi(apiBaseUrl, authHeaders, `/produtos/`, {
+                    res = await fetch(`${apiBaseUrl}/produtos/`, {
                       method: 'POST',
                       headers: { ...authHeaders, 'Content-Type': 'application/json' },
                       body: JSON.stringify({
@@ -6620,7 +7552,7 @@ export function CaixaPanel({
                           return;
                         }
                         try {
-                          const res = await API.callCaixaApi(apiBaseUrl, authHeaders, `/produtos/categorias`, {
+                          const res = await fetch(`${apiBaseUrl}/produtos/categorias`, {
                             method: 'POST',
                             headers: {
                               ...authHeaders,
