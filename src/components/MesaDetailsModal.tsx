@@ -37,7 +37,7 @@ interface MesaDetailsModalProps {
   historicClients?: string[];
   restaurantName?: string;
   onClearTableOrders?: () => void;
-  onPrintReceipt?: () => Promise<void>;
+  onPrintReceipt?: (apenasValores?: boolean) => Promise<void>;
   onPrintKitchenLaunch?: (lancamentoId: string) => Promise<void>;
   salonTables?: Table[];
   liveProdutos?: Product[];
@@ -1103,34 +1103,64 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
             )}
 
             {/* Simulated Print Button */}
-            <button
-              id="finalize-physical-print-mock-btn"
-              onClick={async () => {
-                if (onPrintReceipt) {
-                  try {
-                    await onPrintReceipt();
+            <div className="flex gap-2 w-full">
+              <button
+                id="finalize-physical-print-mock-btn"
+                onClick={async () => {
+                  if (onPrintReceipt) {
+                    try {
+                      await onPrintReceipt(false);
+                      setPrintSuccess(true);
+                      setTimeout(() => {
+                        setPrintSuccess(false);
+                        setShowPrintPreview(false);
+                      }, 1500);
+                    } catch (err) {
+                      console.error("Error printing receipt:", err);
+                      alert("Erro ao enviar impressão do recibo completo");
+                    }
+                  } else {
                     setPrintSuccess(true);
                     setTimeout(() => {
                       setPrintSuccess(false);
                       setShowPrintPreview(false);
                     }, 1500);
-                  } catch (err) {
-                    console.error("Error printing receipt:", err);
-                    alert("Erro ao enviar impressão do recibo");
                   }
-                } else {
-                  setPrintSuccess(true);
-                  setTimeout(() => {
-                    setPrintSuccess(false);
-                    setShowPrintPreview(false);
-                  }, 1500);
-                }
-              }}
-              className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider border border-emerald-500/20 transition-all shadow-lg shadow-emerald-500/10"
-            >
-              <Printer size={13} className="text-white" />
-              <span>Imprimir Extrato</span>
-            </button>
+                }}
+                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider border border-emerald-500/20 transition-all shadow-lg shadow-emerald-500/10"
+              >
+                <Printer size={13} className="text-white" />
+                <span>Extrato Completo</span>
+              </button>
+
+              <button
+                onClick={async () => {
+                  if (onPrintReceipt) {
+                    try {
+                      await onPrintReceipt(true);
+                      setPrintSuccess(true);
+                      setTimeout(() => {
+                        setPrintSuccess(false);
+                        setShowPrintPreview(false);
+                      }, 1500);
+                    } catch (err) {
+                      console.error("Error printing receipt:", err);
+                      alert("Erro ao enviar impressão do extrato resumido");
+                    }
+                  } else {
+                    setPrintSuccess(true);
+                    setTimeout(() => {
+                      setPrintSuccess(false);
+                      setShowPrintPreview(false);
+                    }, 1500);
+                  }
+                }}
+                className="flex-1 py-3 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider border border-amber-500/20 transition-all shadow-lg shadow-amber-500/10"
+              >
+                <Printer size={13} className="text-white" />
+                <span>Apenas Valores</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -2619,7 +2619,12 @@ export function CaixaPanel({
                                   </strong>
                                   <span className={clsx('text-[9px]', 'text-gray-500', 'block')}>Atendente: {order.garcomNome || 'Garçom'}</span>
                                 </div>
-                                <span className={clsx('text-[9px]', 'text-gray-500', 'font-mono')}>#{order.id.slice(-4)}</span>
+                                <div className="text-right shrink-0">
+                                  <span className={clsx('text-[9px]', 'text-gray-500', 'font-mono', 'block')}>#{order.id.slice(-4)}</span>
+                                  <span className="font-bold text-white font-mono text-[11px] block mt-1">
+                                    R$ {order.itens.reduce((sum: number, it: any) => sum + (it.preco_unit || it.preco || 0), 0).toFixed(2)}
+                                  </span>
+                                </div>
                               </div>
 
                               <p className={clsx('text-[10px]', 'text-[#10b981]', 'bg-[#09090B]', 'p-1.5', 'rounded', 'border', 'border-[#27272A]/30', 'leading-relaxed', 'font-mono')}>
@@ -2786,7 +2791,12 @@ export function CaixaPanel({
                                   <strong className="text-white text-xs block">{order.identificador || ((order.mesaId && order.mesaId > 0) ? `Consumo Mesa ${order.mesaId}` : 'Consumo Balcão')}</strong>
                                   <span className="text-[9px] text-gray-500 block">Atendente: {order.garcomNome || 'Garçom'}</span>
                                 </div>
-                                <span className="text-[9px] text-gray-500 font-mono">#{order.id.slice(-4)}</span>
+                                <div className="text-right shrink-0">
+                                  <span className="text-[9px] text-gray-500 font-mono block">#{order.id.slice(-4)}</span>
+                                  <span className="font-bold text-white font-mono text-[11px] block mt-1">
+                                    R$ {order.itens.reduce((sum: number, it: any) => sum + (it.preco_unit || it.preco || 0), 0).toFixed(2)}
+                                  </span>
+                                </div>
                               </div>
                               <p className={clsx('text-[10px] bg-[#09090B] p-1.5 rounded border border-[#27272A]/30 leading-relaxed font-mono', contaPedida ? 'text-blue-300' : 'text-emerald-300')}>{itemsStr}</p>
                               <button
@@ -7389,32 +7399,106 @@ export function CaixaPanel({
                 ))}
               </div>
 
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      const res = await fetch(`${apiBaseUrl}/comandas/lancamentos/${selectedKanbanOrder.id}/reimprimir`, {
-                        method: "POST",
-                        headers: authHeaders
-                      });
-                      if (res.ok) {
-                        alert("Pedido reenviado para a impressora com sucesso!");
-                        setSelectedKanbanOrder(null);
-                      } else {
+              {!isPocket && (
+                <div className="flex flex-col gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const res = await fetch(`${apiBaseUrl}/comandas/lancamentos/${selectedKanbanOrder.id}/reimprimir`, {
+                          method: "POST",
+                          headers: authHeaders
+                        });
+                        if (res.ok) {
+                          alert("Pedido reenviado para a impressora com sucesso!");
+                          setSelectedKanbanOrder(null);
+                        } else {
+                          alert("Erro ao solicitar reimpressão.");
+                        }
+                      } catch (err) {
+                        console.error(err);
                         alert("Erro ao solicitar reimpressão.");
                       }
-                    } catch (err) {
-                      console.error(err);
-                      alert("Erro ao solicitar reimpressão.");
-                    }
-                  }}
-                  className="flex-1 py-2.5 bg-rose-950/40 border border-rose-900/50 text-rose-400 hover:bg-rose-900/20 text-white font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-[#10b981]/20 shadow-lg"
-                >
-                  <Printer size={13} />
-                  <span>Reimprimir na Cozinha</span>
-                </button>
-              </div>
+                    }}
+                    className="w-full py-2.5 bg-rose-950/40 hover:bg-rose-900/20 text-rose-400 font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-rose-900/50 shadow-lg"
+                  >
+                    <Printer size={13} />
+                    <span>Reimprimir na Cozinha</span>
+                  </button>
+
+                  {selectedKanbanOrder.mesaId && selectedKanbanOrder.mesaId > 0 && (
+                    <div className="flex gap-2 w-full">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const printHeader = localStorage.getItem("koma_print_header") || "";
+                            const printFooter = localStorage.getItem("koma_print_footer") || "";
+                            let url = `${apiBaseUrl}/mesas/${selectedKanbanOrder.mesaId}/imprimir-recibo?apenas_valores=false`;
+                            const params = new URLSearchParams();
+                            if (printHeader) params.append("print_header", printHeader);
+                            if (printFooter) params.append("print_footer", printFooter);
+                            if (params.toString()) url += `&${params.toString()}`;
+                            
+                            const response = await fetch(url, {
+                              method: 'POST',
+                              headers: authHeaders
+                            });
+                            if (response.ok) {
+                              alert("Extrato completo enviado para a impressora!");
+                              setSelectedKanbanOrder(null);
+                            } else {
+                              const err = await response.json();
+                              alert(`Erro ao imprimir comanda inteira: ${err.detail}`);
+                            }
+                          } catch (err) {
+                            console.error(err);
+                            alert("Erro ao imprimir comanda inteira.");
+                          }
+                        }}
+                        className="flex-1 py-2.5 bg-[#1C1C1F] hover:bg-[#27272A] text-gray-300 hover:text-white font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-[#27272A] shadow-lg"
+                      >
+                        <Printer size={13} />
+                        <span>Comanda Inteira</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const printHeader = localStorage.getItem("koma_print_header") || "";
+                            const printFooter = localStorage.getItem("koma_print_footer") || "";
+                            let url = `${apiBaseUrl}/mesas/${selectedKanbanOrder.mesaId}/imprimir-recibo?apenas_valores=true`;
+                            const params = new URLSearchParams();
+                            if (printHeader) params.append("print_header", printHeader);
+                            if (printFooter) params.append("print_footer", printFooter);
+                            if (params.toString()) url += `&${params.toString()}`;
+                            
+                            const response = await fetch(url, {
+                              method: 'POST',
+                              headers: authHeaders
+                            });
+                            if (response.ok) {
+                              alert("Extrato resumido (apenas valores) enviado para a impressora!");
+                              setSelectedKanbanOrder(null);
+                            } else {
+                              const err = await response.json();
+                              alert(`Erro ao imprimir apenas valores: ${err.detail}`);
+                            }
+                          } catch (err) {
+                            console.error(err);
+                            alert("Erro ao imprimir apenas valores.");
+                          }
+                        }}
+                        className="flex-1 py-2.5 bg-[#1C1C1F] hover:bg-[#27272A] text-gray-300 hover:text-white font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-[#27272A] shadow-lg"
+                      >
+                        <Printer size={13} />
+                        <span>Só Valores</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
