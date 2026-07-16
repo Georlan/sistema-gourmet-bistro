@@ -148,7 +148,7 @@ export default function App() {
       const searchParams = new URLSearchParams(window.location.search);
       const viewParam = searchParams.get('view');
       const hash = window.location.hash;
-      let newPortal = (viewParam === 'caixa' || viewParam === 'gerencia' || hash === '#caixa' || hash === '#gerencia') ? 'caixa' : 'garcom';
+      let newPortal: 'caixa' | 'garcom' = (viewParam === 'caixa' || viewParam === 'gerencia' || hash === '#caixa' || hash === '#gerencia') ? 'caixa' : 'garcom';
 
       if (restauranteConfig?.plano?.toLowerCase() === 'delivery') {
         newPortal = 'caixa';
