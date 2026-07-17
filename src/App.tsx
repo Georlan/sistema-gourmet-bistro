@@ -263,7 +263,7 @@ export default function App() {
   }, []);
 
   // 1.5. Dynamic Salon Tables State and Fetcher
-  const [salonTables, setSalonTables] = useState<Table[]>(TABLES);
+  const [salonTables, setSalonTables] = useState<Table[]>([]);
 
   const fetchTablesAbortControllerRef = useRef<AbortController | null>(null);
   const fetchOrdersAbortControllerRef = useRef<AbortController | null>(null);

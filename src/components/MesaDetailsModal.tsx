@@ -115,7 +115,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
   const permanenceTime = formatElapsedTime(firstTimestamp, currentTime);
 
   // Get other tables that are available for transfer (any table except the original one)
-  const tablesList = salonTables || TABLES;
+  const tablesList = salonTables || [];
   const availableTablesForTransfer = tablesList.filter(t => t.id !== table.id);
 
   // Tables with active orders (for merge target — merge only makes sense into an occupied table)
