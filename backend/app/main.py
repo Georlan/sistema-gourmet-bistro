@@ -216,6 +216,13 @@ async def add_sentry_context_and_tenant(request: Request, call_next):
     
     auth_header = request.headers.get("Authorization")
     if auth_header:
+        origin = request.headers.get("Origin", "https://sistema-gourmet-bistro.pages.dev")
+        cors_headers = {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
+        }
         if auth_header.startswith("Bearer "):
             try:
                 parts = auth_header.split(" ")
@@ -230,19 +237,22 @@ async def add_sentry_context_and_tenant(request: Request, call_next):
                 from fastapi.responses import JSONResponse
                 return JSONResponse(
                     status_code=401,
-                    content={"detail": f"Token de autenticação inválido ou expirado: {str(e)}"}
+                    content={"detail": f"Token de autenticação inválido ou expirado: {str(e)}"},
+                    headers=cors_headers
                 )
             except Exception:
                 from fastapi.responses import JSONResponse
                 return JSONResponse(
                     status_code=401,
-                    content={"detail": "Falha na validação do token de autenticação."}
+                    content={"detail": "Falha na validação do token de autenticação."},
+                    headers=cors_headers
                 )
         else:
             from fastapi.responses import JSONResponse
             return JSONResponse(
                 status_code=401,
-                content={"detail": "Cabeçalho de autorização mal-formatado. Formato esperado: 'Bearer <token>'."}
+                content={"detail": "Cabeçalho de autorização mal-formatado. Formato esperado: 'Bearer <token>'."},
+                headers=cors_headers
             )
 
     sentry_sdk.set_tag("tenant_id", tenant_id)
