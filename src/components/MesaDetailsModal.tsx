@@ -41,6 +41,7 @@ interface MesaDetailsModalProps {
   onPrintKitchenLaunch?: (lancamentoId: string) => Promise<void>;
   salonTables?: Table[];
   liveProdutos?: Product[];
+  liveCategorias?: any[];
   restauranteConfig?: any;
   onUpdateItemDetails?: (itemId: string, observacao: string, clienteNome: string, quantidadeAdicional?: number) => Promise<void>;
   isSubmitting?: boolean;
@@ -80,6 +81,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
   onPrintKitchenLaunch,
   salonTables,
   liveProdutos = [],
+  liveCategorias = [],
   restauranteConfig,
   onUpdateItemDetails,
   onMergeTables,
@@ -664,6 +666,8 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
               onSubmitDraft={onSubmitDraft}
               historicClients={historicClients}
               isSubmitting={isSubmitting}
+              liveProdutos={liveProdutos}
+              liveCategorias={liveCategorias}
             />
           )}
 

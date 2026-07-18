@@ -21,6 +21,7 @@ interface MenuPanelProps {
   onSubmitDraft: (orderType: 'Consumo no Local' | 'Retirada' | 'Entrega') => void;
   historicClients?: string[];
   liveProdutos?: Product[];
+  liveCategorias?: any[];
   isSubmitting?: boolean;
 }
 
@@ -36,6 +37,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
   onSubmitDraft,
   historicClients = [],
   liveProdutos = [],
+  liveCategorias = [],
   isSubmitting = false,
 }) => {
   // Build availability map: productId -> boolean (true = available)
@@ -60,10 +62,22 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
   };
   // Navigation state: starts showing the Cart (carrinho) by default
   const [view, setView] = useState<'cart' | 'menu'>('cart');
-  const [selectedCategory, setSelectedCategory] = useState<string>('Hambúrgueres Bovinos');
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [showSettings, setShowSettings] = useState<boolean>(false);
   const [expandedDraftObs, setExpandedDraftObs] = useState<string | null>(null);
+
+  const categoriesList = React.useMemo(() => {
+    return liveCategorias && liveCategorias.length > 0
+      ? liveCategorias
+      : CATEGORIES.map(c => ({ id: c, nome: c }));
+  }, [liveCategorias]);
+
+  React.useEffect(() => {
+    if (categoriesList.length > 0 && !selectedCategory) {
+      setSelectedCategory(categoriesList[0].nome);
+    }
+  }, [categoriesList, selectedCategory]);
 
   // Selected product to configure
   const [selectedProductToConfigure, setSelectedProductToConfigure] = useState<Product | null>(null);
@@ -492,27 +506,27 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
 
               {/* Category selector */}
               <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
-                {CATEGORIES.map((cat) => (
+                {categoriesList.map((catObj) => (
                   <button
-                    key={cat}
-                    id={`cat-btn-${cat.toLowerCase().replace(/\s+/g, '-')}`}
+                    key={catObj.id}
+                    id={`cat-btn-${catObj.nome.toLowerCase().replace(/\s+/g, '-')}`}
                     onClick={() => {
-                      setSelectedCategory(cat);
+                      setSelectedCategory(catObj.nome);
                       setSearchQuery('');
                       setTimeout(() => {
-                        const element = document.getElementById(`category-sec-${cat.toLowerCase().replace(/\s+/g, '-')}`);
+                        const element = document.getElementById(`category-sec-${catObj.nome.toLowerCase().replace(/\s+/g, '-')}`);
                         if (element) {
                           element.scrollIntoView({ behavior: 'smooth', block: 'start' });
                         }
                       }, 50);
                     }}
                     className={`px-4 py-2 text-xs font-semibold rounded-lg whitespace-nowrap transition-all cursor-pointer ${
-                      selectedCategory === cat
+                      selectedCategory === catObj.nome
                         ? 'bg-rose-900/40 border border-rose-800/50 text-white shadow-md'
                         : 'bg-[#1C1C1F] hover:bg-[#27272A] text-gray-300 hover:text-white border border-[#27272A]'
                     }`}
                   >
-                    {cat}
+                    {catObj.nome}
                   </button>
                 ))}
               </div>
@@ -522,9 +536,15 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
             <div className="flex flex-col gap-6 sm:max-h-[50vh] sm:overflow-y-auto max-h-none overflow-y-visible pr-1 scroll-smooth">
               {(() => {
                 let totalRendered = 0;
-                const renderedSections = CATEGORIES.map((cat) => {
-                  const categoryProducts = PRODUCTS.filter((product) => {
-                    const matchesCategory = product.categoria === cat;
+                const productsList = liveProdutos && liveProdutos.length > 0
+                  ? liveProdutos
+                  : PRODUCTS;
+
+                const renderedSections = categoriesList.map((catObj) => {
+                  const categoryProducts = productsList.filter((product) => {
+                    const matchesCategory = liveProdutos && liveProdutos.length > 0
+                      ? (product as any).categoria_id === catObj.id || (product.categoria && (product.categoria.id === catObj.id || product.categoria.nome === catObj.nome))
+                      : product.categoria === catObj.nome;
                     const matchesSearch = !searchQuery ||
                                           product.nome.toLowerCase().includes(searchQuery.toLowerCase()) ||
                                           product.descricao.toLowerCase().includes(searchQuery.toLowerCase());
@@ -536,12 +556,12 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
 
                   return (
                     <div 
-                      key={cat} 
-                      id={`category-sec-${cat.toLowerCase().replace(/\s+/g, '-')}`}
+                      key={catObj.id} 
+                      id={`category-sec-${catObj.nome.toLowerCase().replace(/\s+/g, '-')}`}
                       className="space-y-3 scroll-mt-[105px] sm:scroll-mt-2 pt-2"
                     >
                       <h4 className="font-serif text-xs font-bold text-[#10b981] uppercase tracking-wider border-b border-[#27272A] pb-1.5 pt-1">
-                        {cat}
+                        {catObj.nome}
                       </h4>
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                         {categoryProducts.map((product) => {

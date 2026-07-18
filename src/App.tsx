@@ -388,7 +388,7 @@ export default function App() {
       const tokenKey = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
       const token = localStorage.getItem(tokenKey);
       const headers: any = token ? { Authorization: `Bearer ${token}` } : {};
-      const res = await fetch(`${API_BASE_URL}/produtos`, { headers });
+      const res = await fetch(`${API_BASE_URL}/produtos/`, { headers });
       if (res.status === 401) {
         handleLogout();
         return;
@@ -1848,6 +1848,7 @@ export default function App() {
             onPrintReceipt={(apenasValores) => handlePrintReceipt(selectedTable.id, apenasValores)}
             onPrintKitchenLaunch={handlePrintKitchenLaunch}
             liveProdutos={liveProdutos}
+            liveCategorias={liveCategorias}
             restauranteConfig={restauranteConfig}
             onUpdateItemDetails={handleUpdateItemDetails}
             onMergeTables={handleMergeTables}
