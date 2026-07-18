@@ -29,6 +29,7 @@ interface CaixaPanelProps {
   liveCategorias?: any[];
   onRefreshCategorias?: () => Promise<void>;
   restauranteConfig?: any;
+  fetchError?: string | null;
 }
 
 // Simulated dynamic lists for tabs that don't need real backend persistence yet
@@ -98,7 +99,8 @@ export function CaixaPanel({
   liveProdutos = [],
   liveCategorias = [],
   onRefreshCategorias,
-  restauranteConfig
+  restauranteConfig,
+  fetchError
 }: CaixaPanelProps) {
   const plano = restauranteConfig?.plano?.toLowerCase() || 'premium';
   const isPocket = plano === 'pocket';
@@ -3370,9 +3372,20 @@ export function CaixaPanel({
 
               <div className={clsx('flex-1', 'bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'overflow-y-auto')}>
                 <div className={clsx('grid', 'grid-cols-1', 'sm:grid-cols-2', 'md:grid-cols-3', 'lg:grid-cols-4', 'xl:grid-cols-6', 'gap-4')}>
-                  {salonTables.length === 0 ? (
+                   {salonTables.length === 0 ? (
                     <div className="col-span-full py-16 text-center text-zinc-500 font-serif text-sm">
-                      Nenhuma mesa encontrada ou carregando layout...
+                      {fetchError ? (
+                        <div className="space-y-2">
+                          <span className="text-rose-400 block font-mono text-xs">
+                            ⚠️ Erro de comunicação com o servidor:
+                          </span>
+                          <span className="text-zinc-400 block font-mono text-xs bg-black/40 p-3 rounded-lg border border-zinc-800 max-w-md mx-auto">
+                            {fetchError}
+                          </span>
+                        </div>
+                      ) : (
+                        "Nenhuma mesa encontrada ou carregando layout..."
+                      )}
                     </div>
                   ) : (
                     salonTables.map((table) => {

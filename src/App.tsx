@@ -264,6 +264,7 @@ export default function App() {
 
   // 1.5. Dynamic Salon Tables State and Fetcher
   const [salonTables, setSalonTables] = useState<Table[]>([]);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const fetchTablesAbortControllerRef = useRef<AbortController | null>(null);
   const fetchOrdersAbortControllerRef = useRef<AbortController | null>(null);
@@ -276,6 +277,7 @@ export default function App() {
     fetchTablesAbortControllerRef.current = controller;
 
     try {
+      setFetchError(null);
       const res = await fetch(`${API_BASE_URL}/mesas`, { 
         headers: getAuthHeaders(),
         signal: controller.signal
@@ -288,10 +290,13 @@ export default function App() {
         const data = await res.json();
         setSalonTables(data);
         setIsTablesLoaded(true);
+      } else {
+        setFetchError(`Erro HTTP mesas ${res.status}: ${res.statusText}`);
       }
     } catch (err: any) {
       if (err.name !== 'AbortError') {
         console.error("Error fetching tables", err);
+        setFetchError(err.message || String(err));
       }
     }
   };
@@ -828,10 +833,11 @@ export default function App() {
       }
       if (!response.ok) {
         console.error("Failed to fetch comandas from backend");
+        setFetchError(`Erro HTTP comandas ${response.status}: ${response.statusText}`);
         return;
       }
       const comandas = await response.json();
-
+ 
       const mappedOrders = comandas.map((comanda: any) => {
         return {
           id: comanda.id,
@@ -867,6 +873,7 @@ export default function App() {
     } catch (err: any) {
       if (err.name !== 'AbortError') {
         console.error("Connection error to backend:", err);
+        setFetchError(`Erro de conexão comandas: ${err.message || String(err)}`);
       }
     }
   };
@@ -1674,6 +1681,7 @@ export default function App() {
             liveCategorias={liveCategorias}
             onRefreshCategorias={fetchLiveCategorias}
             restauranteConfig={restauranteConfig}
+            fetchError={fetchError}
           />
         ) : (
           /* VIEW 2: SALÃO (WAITERS OR CASHIER DASHBOARD) */
