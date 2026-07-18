@@ -8,6 +8,7 @@ import { Menu, X, User, Wifi, WifiOff } from 'lucide-react';
 import { Table, Order, DraftItem, AppSettings, AppRole, Product } from './types';
 import { TABLES, WAITERS, RESTAURANT_CONFIG, PRODUCTS } from './data';
 import { getTableTotal } from './domain';
+import { supabase } from './cardapio/SupabaseClient';
 import { MesaCard } from './components/MesaCard';
 import { MesaDetailsModal } from './components/MesaDetailsModal';
 import { KitchenPanel } from './components/KitchenPanel';
@@ -278,7 +279,7 @@ export default function App() {
 
     try {
       setFetchError(null);
-      const res = await fetch(`${API_BASE_URL}/mesas`, { 
+      const res = await fetch(`${API_BASE_URL}/mesas/`, { 
         headers: getAuthHeaders(),
         signal: controller.signal
       });
@@ -897,6 +898,26 @@ export default function App() {
     }, 4000);
     return () => clearInterval(interval);
   }, [isAuthenticated, isWsConnected, activeRole]);
+
+  // Supabase Realtime: sincroniza mesas em tempo real com o banco de dados
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const channel = supabase
+      .channel('realtime-mesas')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'mesas' },
+        () => {
+          fetchTables();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isAuthenticated]);
 
   // Login handler
   const handleLoginSubmit = async (e: React.FormEvent) => {
