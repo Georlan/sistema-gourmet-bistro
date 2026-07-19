@@ -3,7 +3,7 @@ import {
   DollarSign, ArrowUpRight, ArrowDownRight, Lock, Unlock, Users,
   Receipt, ShoppingCart, Percent, CreditCard, Check, AlertTriangle,
   Clock, X, RefreshCw, Edit3, Trash2, Plus, ChevronRight,
-  MapPin, ClipboardList, BarChart2, Package, Shield, Star,
+  MapPin, ClipboardList, BarChart2, Package, Shield, ShieldCheck, Star,
   MessageSquare, Send, Printer, Cpu, HelpCircle, Smartphone,
   Gift, Tag, TrendingUp, Heart, Globe
 } from 'lucide-react';
@@ -115,9 +115,8 @@ export function CaixaPanel({
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState('');
 
-  // active sidebar tab (the 9 main sections)
   const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'operacao' | 'cardapio' | 'estoque' | 'financeiro' | 'clientes' | 'relatorios' | 'robo_ia' | 'configuracoes'
+    'dashboard' | 'operacao' | 'cardapio' | 'estoque' | 'financeiro' | 'clientes' | 'relatorios' | 'robo_ia' | 'configuracoes' | 'permissoes_cargos' | 'impressao_salao' | 'assinatura_pix' | 'config_cardapio'
   >('operacao');
 
   // active sub-tab under each main tab
@@ -236,7 +235,7 @@ export function CaixaPanel({
     return list;
   })();
 
-  const handleTabChange = (tabId: 'dashboard' | 'operacao' | 'cardapio' | 'estoque' | 'financeiro' | 'clientes' | 'relatorios' | 'robo_ia' | 'configuracoes') => {
+  const handleTabChange = (tabId: 'dashboard' | 'operacao' | 'cardapio' | 'estoque' | 'financeiro' | 'clientes' | 'relatorios' | 'robo_ia' | 'configuracoes' | 'permissoes_cargos' | 'impressao_salao' | 'assinatura_pix' | 'config_cardapio') => {
     setActiveTab(tabId);
     switch (tabId) {
       case 'dashboard':
@@ -262,6 +261,18 @@ export function CaixaPanel({
         break;
       case 'robo_ia':
         setActiveSubTab('prompt');
+        break;
+      case 'permissoes_cargos':
+        setActiveSubTab('equipe');
+        break;
+      case 'impressao_salao':
+        setActiveSubTab('impressoras');
+        break;
+      case 'assinatura_pix':
+        setActiveSubTab('planos');
+        break;
+      case 'config_cardapio':
+        setActiveSubTab('config_cardapio');
         break;
       case 'configuracoes':
         setActiveSubTab('equipe');
@@ -2140,25 +2151,43 @@ export function CaixaPanel({
               {
                 category: 'Parâmetros do Sistema',
                 items: [
-                  { id: 'configuracoes', label: 'Ajustes de Retaguarda', icon: Smartphone },
+                  { id: 'permissoes_cargos', label: 'Permissões & Cargos', icon: ShieldCheck },
+                  { id: 'impressao_salao', label: 'Impressão & Salão', icon: Printer },
+                  { id: 'assinatura_pix', label: 'Assinatura & Pix', icon: CreditCard },
                   { id: 'config_cardapio', label: 'Configurações do Cardápio', icon: Globe }
                 ]
               }
             ].map((group, gIdx) => (
               <div key={gIdx} className="space-y-1">
-                <span className={clsx('text-[8px]', 'uppercase', 'tracking-wider', 'text-gray-500', 'font-bold', 'px-3.5', 'block', 'mb-1')}>
+                <span className={clsx('text-[8px]', 'uppercase', 'tracking-wider', 'text-[#10b981]', 'font-bold', 'px-3.5', 'block', 'mb-1')}>
                   {group.category}
                 </span>
                 {group.items.map((tab) => {
                   const Icon = tab.icon;
-                  const isActive = activeTab === tab.id;
+                  const isActive = (
+                    tab.id === 'config_cardapio' ? (activeTab === 'config_cardapio' || activeSubTab === 'config_cardapio')
+                    : tab.id === 'permissoes_cargos' ? (activeTab === 'permissoes_cargos' || (activeTab === 'configuracoes' && activeSubTab === 'equipe'))
+                    : tab.id === 'impressao_salao' ? (activeTab === 'impressao_salao' || (activeTab === 'configuracoes' && activeSubTab === 'impressoras'))
+                    : tab.id === 'assinatura_pix' ? (activeTab === 'assinatura_pix' || (activeTab === 'configuracoes' && activeSubTab === 'planos'))
+                    : tab.id === 'chat_copiloto' ? (activeTab === 'operacao' && activeSubTab === 'chat_copiloto')
+                    : activeTab === tab.id
+                  );
                   return (
                     <button
                       key={tab.id}
                       onClick={() => {
                         if (tab.id === 'config_cardapio') {
-                          setActiveTab('configuracoes');
+                          setActiveTab('config_cardapio');
                           setActiveSubTab('config_cardapio');
+                        } else if (tab.id === 'permissoes_cargos') {
+                          setActiveTab('permissoes_cargos');
+                          setActiveSubTab('equipe');
+                        } else if (tab.id === 'impressao_salao') {
+                          setActiveTab('impressao_salao');
+                          setActiveSubTab('impressoras');
+                        } else if (tab.id === 'assinatura_pix') {
+                          setActiveTab('assinatura_pix');
+                          setActiveSubTab('planos');
                         } else if (tab.id === 'chat_copiloto') {
                           setActiveTab('operacao');
                           setActiveSubTab('chat_copiloto');
@@ -2166,13 +2195,13 @@ export function CaixaPanel({
                           handleTabChange(tab.id as any);
                         }
                       }}
-                      className={`w-full px-3.5 py-1.5 rounded-xl text-left font-semibold transition-all flex items-center justify-between cursor-pointer group ${(tab.id === 'config_cardapio' ? (activeTab === 'configuracoes' && activeSubTab === 'config_cardapio') : tab.id === 'chat_copiloto' ? (activeTab === 'operacao' && activeSubTab === 'chat_copiloto') : activeTab === tab.id)
+                      className={`w-full px-3.5 py-1.5 rounded-xl text-left font-semibold transition-all flex items-center justify-between cursor-pointer group ${isActive
                         ? 'bg-[#10b981]/15 text-[#10b981] border border-[#10b981]/10 font-bold shadow-inner'
                         : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]/50 border border-transparent'
                         }`}
                     >
                       <div className={clsx('flex', 'items-center', 'gap-3')}>
-                        <Icon size={13} className={(tab.id === 'config_cardapio' ? (activeTab === 'configuracoes' && activeSubTab === 'config_cardapio') : tab.id === 'chat_copiloto' ? (activeTab === 'operacao' && activeSubTab === 'chat_copiloto') : activeTab === tab.id) ? 'text-[#10b981]' : 'text-gray-500 group-hover:text-white'} />
+                        <Icon size={13} className={isActive ? 'text-[#10b981]' : 'text-gray-500 group-hover:text-white'} />
                         <span className="text-[10px]">{tab.label}</span>
                       </div>
                       {tab.id === 'operacao' && (tableOrdersInProduction.length + simulatedOrders.filter(o => ['pendente', 'analise', 'producao', 'pronto', 'transito'].includes(o.status)).length + tableOrdersReady.length) > 0 && (
@@ -2233,7 +2262,10 @@ export function CaixaPanel({
             {activeTab === 'clientes' && 'Carteira de Clientes e CRM'}
             {activeTab === 'relatorios' && 'Relatórios e Estatísticas Avançadas'}
             {activeTab === 'robo_ia' && 'Assistente de Atendimento IA'}
-            {activeTab === 'configuracoes' && 'Configurações e Parâmetros'}
+            {(activeTab === 'permissoes_cargos' || (activeTab === 'configuracoes' && activeSubTab === 'equipe')) && 'Permissões e Gestão de Equipe'}
+            {(activeTab === 'impressao_salao' || (activeTab === 'configuracoes' && activeSubTab === 'impressoras')) && 'Configurações de Impressão e Salão'}
+            {(activeTab === 'assinatura_pix' || (activeTab === 'configuracoes' && activeSubTab === 'planos')) && 'Planos de Assinatura e Recebimento Pix'}
+            {(activeTab === 'config_cardapio' || activeSubTab === 'config_cardapio') && 'Cardápio Digital — Identidade Whitelabel'}
           </h2>
 
           <div className={clsx('flex', 'items-center', 'gap-3')}>
@@ -2391,23 +2423,7 @@ export function CaixaPanel({
             </button>
           ))}
 
-          {activeTab === 'configuracoes' && [
-            { id: 'equipe', label: 'Cargos & Permissões' },
-            { id: 'impressoras', label: 'Roteamento de Impressoras' },
-            { id: 'nicho_wizard', label: 'Setup Wizard (Nicho)' },
-            { id: 'planos', label: 'Planos & Integrações' }
-          ].map(sub => (
-            <button
-              key={sub.id}
-              onClick={() => setActiveSubTab(sub.id)}
-              className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${activeSubTab === sub.id
-                ? 'bg-[#10b981] text-[#121214]'
-                : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
-                }`}
-            >
-              {sub.label}
-            </button>
-          ))}
+
         </div>
 
         {/* Dynamic Inner views */}
@@ -3304,7 +3320,7 @@ export function CaixaPanel({
                           placeholder="Rua, Número, Bairro, Complemento"
                           required={pdvCart.length > 0}
                           value={pdvDeliveryAddress}
-                          onChange={(e) => setPdvDeliveryAddress(e.target.value)}
+                          onChange={(e) => setPdDeliveryAddress(e.target.value)}
                           className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'text-white', 'text-[10px]')}
                         />
                       </div>
@@ -3762,7 +3778,7 @@ export function CaixaPanel({
           )}
 
           {/* VIEW 6: GESTÃO DE SALÃO (CRUD Garçons & Taxas) */}
-          {activeSubTab === 'equipe' && (
+          {(activeTab === 'permissoes_cargos' || activeSubTab === 'equipe') && (
             <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5')}>
 
               {/* CRUD table list */}
@@ -3908,7 +3924,7 @@ export function CaixaPanel({
           )}
 
           {/* VIEW 7: CONFIGURAÇÕES SALÃO (App Garçom & Impressoras) */}
-          {activeSubTab === 'impressoras' && (
+          {(activeTab === 'impressao_salao' || activeSubTab === 'impressoras') && (
             <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5')}>
 
               {/* Waiters permissions switches (Left Column) */}
@@ -6516,137 +6532,8 @@ export function CaixaPanel({
             </div>
           )}
 
-          {/* MOCK VIEW: SETUP WIZARD (NICHO) */}
-          {activeTab === 'configuracoes' && activeSubTab === 'nicho_wizard' && (
-            <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-6', 'text-left', 'max-w-2xl', 'mx-auto', 'space-y-6', 'animate-fade-in')}>
-              <div className={clsx('border-b', 'border-[#27272A]', 'pb-3')}>
-                <span className={clsx('font-serif', 'font-bold', 'text-base', 'text-white', 'block')}>Setup Wizard — Assistente de Configuração</span>
-                <span className={clsx('text-[10px]', 'text-gray-400', 'block', 'mt-1')}>Configure as regras de operação e a estrutura do cardápio de acordo com o nicho de mercado do seu restaurante.</span>
-              </div>
-
-              {/* Nicho selector Grid */}
-              <div className="space-y-2">
-                <label className={clsx('text-[9px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Escolha seu Nicho Operacional:</label>
-                <div className={clsx('grid', 'grid-cols-2', 'sm:grid-cols-5', 'gap-3')}>
-                  {[
-                    { id: 'hamburgueria', label: 'Hamburgueria', icon: '🍔' },
-                    { id: 'pizzaria', label: 'Pizzaria', icon: '🍕' },
-                    { id: 'doceria', label: 'Doceria/Café', icon: '🍰' },
-                    { id: 'alacarte', label: 'À La Carte', icon: '🍽️' },
-                    { id: 'selfservice', label: 'Self-service', icon: '🥗' }
-                  ].map(n => (
-                    <button
-                      key={n.id}
-                      type="button"
-                      onClick={() => {
-                        setRestaurantNicho(n.id as any);
-                        // Auto configurations
-                        if (n.id === 'doceria') {
-                          setModulesActive({ salon: false, delivery: true });
-                        } else if (n.id === 'selfservice') {
-                          setModulesActive({ salon: true, delivery: false });
-                        } else {
-                          setModulesActive({ salon: true, delivery: true });
-                        }
-                      }}
-                      className={`p-4 rounded-2xl border text-center transition-all flex flex-col items-center justify-center gap-2 cursor-pointer ${restaurantNicho === n.id
-                        ? 'bg-[#10b981]/15 border-[#10b981] text-[#10b981] shadow-inner font-bold'
-                        : 'bg-[#1C1C1F]/40 border-[#27272A] text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
-                        }`}
-                    >
-                      <span className="text-xl">{n.icon}</span>
-                      <span className={clsx('text-[9px]', 'block', 'whitespace-nowrap')}>{n.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Módulos de UI Actives */}
-              <div className={clsx('bg-[#1C1C1F]/40', 'border', 'border-[#27272A]', 'rounded-2xl', 'p-4.5', 'space-y-4')}>
-                <span className={clsx('text-[10px]', 'font-bold', 'text-white', 'block', 'uppercase', 'tracking-wider')}>Módulos Ativos do Sistema</span>
-                <div className={clsx('grid', 'grid-cols-2', 'gap-4')}>
-                  <div className={clsx('flex', 'justify-between', 'items-center', 'p-3', 'bg-[#121214]', 'border', 'border-[#27272A]/60', 'rounded-xl')}>
-                    <div>
-                      <strong className={clsx('text-[10px]', 'text-white', 'block', 'font-bold')}>Mapa de Mesas (Salão)</strong>
-                      <span className={clsx('text-[8px]', 'text-gray-500', 'block')}>Exibe grid físico de comandas e consumo local</span>
-                    </div>
-                    <button
-                      onClick={() => setModulesActive(prev => ({ ...prev, salon: !prev.salon }))}
-                      className={`w-9 h-5 rounded-full p-0.5 transition-colors duration-200 focus:outline-none cursor-pointer ${modulesActive.salon ? 'bg-emerald-600' : 'bg-[#27272A]'}`}
-                    >
-                      <div className={`w-4 h-4 rounded-full bg-[#121214] shadow-md transform duration-200 ${modulesActive.salon ? 'translate-x-4' : 'translate-x-0'}`} />
-                    </button>
-                  </div>
-
-                  <div className={clsx('flex', 'justify-between', 'items-center', 'p-3', 'bg-[#121214]', 'border', 'border-[#27272A]/60', 'rounded-xl')}>
-                    <div>
-                      <strong className={clsx('text-[10px]', 'text-white', 'block', 'font-bold')}>Entrega / Delivery</strong>
-                      <span className={clsx('text-[8px]', 'text-gray-500', 'block')}>Ativa triagem de entregadores e taxas por bairro</span>
-                    </div>
-                    <button
-                      onClick={() => setModulesActive(prev => ({ ...prev, delivery: !prev.delivery }))}
-                      className={`w-9 h-5 rounded-full p-0.5 transition-colors duration-200 focus:outline-none cursor-pointer ${modulesActive.delivery ? 'bg-emerald-600' : 'bg-[#27272A]'}`}
-                    >
-                      <div className={`w-4 h-4 rounded-full bg-[#121214] shadow-md transform duration-200 ${modulesActive.delivery ? 'translate-x-4' : 'translate-x-0'}`} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Nicho-specific customized settings card */}
-              <div className={clsx('bg-[#10b981]/5', 'border', 'border-[#10b981]/15', 'rounded-2xl', 'p-4.5', 'space-y-3')}>
-                <span className={clsx('text-[10px]', 'font-bold', 'text-[#10b981]', 'flex', 'items-center', 'gap-1.5', 'uppercase', 'tracking-wider')}>
-                  🍕 Configurações Automáticas do Nicho: {restaurantNicho.toUpperCase()}
-                </span>
-                <ul className={clsx('text-[9px]', 'text-gray-400', 'space-y-1.5', 'list-disc', 'pl-4', 'leading-relaxed')}>
-                  {restaurantNicho === 'pizzaria' && (
-                    <>
-                      <li><strong>Pedidos Fracionados:</strong> Ativado cálculo de pizza meio a meio (Preço baseado no sabor mais caro).</li>
-                      <li><strong>Grupo de Modificadores:</strong> Criados grupos pré-definidos: *Bordas Recheadas*, *Remover Insegredientes*, *Adicionais*.</li>
-                      <li><strong>Painel de Vendas:</strong> Layout otimizado para divisão de frações por sabor.</li>
-                    </>
-                  )}
-                  {restaurantNicho === 'hamburgueria' && (
-                    <>
-                      <li><strong>Acompanhamentos Genéricos:</strong> Ativados modificadores de ponto da carne e escolha de molhos adicionais.</li>
-                      <li><strong>Upsell Automático:</strong> IA configurada para oferecer *Batata Frita Crinkle* e *Refri Lata* na triagem do WhatsApp.</li>
-                    </>
-                  )}
-                  {restaurantNicho === 'doceria' && (
-                    <>
-                      <li><strong>Layout Simplificado:</strong> Mapa de mesas desativado. Tela inicial foca 100% em vendas rápidas de Balcão e Delivery.</li>
-                      <li><strong>Impressão:</strong> Impressão de vias de cozinha configurada para o balcão de montagem de doces.</li>
-                    </>
-                  )}
-                  {restaurantNicho === 'alacarte' && (
-                    <>
-                      <li><strong>Serviço de Salão Avançado:</strong> Mapa de mesas ativado com controle de tempo de ociosidade das mesas.</li>
-                      <li><strong>Layout:</strong> Exibição detalhada de garçons ativos com suas taxas de serviço.</li>
-                    </>
-                  )}
-                  {restaurantNicho === 'selfservice' && (
-                    <>
-                      <li><strong>Configuração de Balança:</strong> Integração com porta serial para importação de peso de prato balcão.</li>
-                      <li><strong>Mapeamento:</strong> Delivery desativado, priorizando faturamento rápido por quilo.</li>
-                    </>
-                  )}
-                </ul>
-              </div>
-
-              <div className={clsx('pt-4', 'border-t', 'border-[#27272A]', 'flex', 'justify-end')}>
-                <button
-                  type="button"
-                  onClick={() => alert(`Nicho ${restaurantNicho.toUpperCase()} configurado com sucesso! Módulos de interface atualizados.`)}
-                  className={clsx('px-5', 'py-2.5', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'font-bold', 'rounded-xl', 'text-[9px]', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-lg')}
-                >
-                  Salvar Configurações de Nicho
-                </button>
-              </div>
-            </div>
-          )}
-
           {/* CONFIGURAÇÃO CARDÁPIO DIGITAL WHITELABEL */}
-          {activeTab === 'configuracoes' && activeSubTab === 'config_cardapio' && (
+          {(activeTab === 'config_cardapio' || activeSubTab === 'config_cardapio') && (
             <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-6', 'text-left', 'max-w-2xl', 'mx-auto', 'space-y-6', 'animate-fade-in')}>
               <div className={clsx('border-b', 'border-[#27272A]', 'pb-3')}>
                 <span className={clsx('font-serif', 'font-bold', 'text-base', 'text-white', 'block')}>Configurações do Cardápio Digital</span>
