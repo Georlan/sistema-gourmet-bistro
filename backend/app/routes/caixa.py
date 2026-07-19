@@ -7,7 +7,10 @@ import datetime
 import logging
 
 import re
+import os
+import httpx
 
+from ..config import settings
 from ..database import get_db, current_restaurante_id
 from ..models import Usuario, Comanda, Item, CaixaTurno, CaixaMovimentacao, Pagamento
 from ..schemas import (
@@ -98,7 +101,40 @@ def cadastrar_funcionario(
     db.commit()
     db.refresh(novo_usuario)
     
-    logger.info(f"[WHATSAPP SIMULADO] Enviar convite para {tel_clean}: https://sistema-gourmet-bistro.pages.dev/ativar?token={token_convite}")
+    # Tenta enviar convite real via Evolution API
+    evolution_sent = False
+    evolution_url = getattr(settings, "EVOLUTION_API_URL", None) or os.getenv("EVOLUTION_API_URL", "")
+    evolution_key = getattr(settings, "EVOLUTION_API_KEY", None) or os.getenv("EVOLUTION_API_KEY", "")
+    evolution_instance = getattr(settings, "EVOLUTION_INSTANCE_NAME", None) or os.getenv("EVOLUTION_INSTANCE_NAME", "")
+
+    convite_link = f"https://sistema-gourmet-bistro.pages.dev/ativar?token={token_convite}"
+    mensagem_texto = f"Olá {novo_usuario.nome}! Você foi convidado para trabalhar no Kôma. Clique no link para criar sua senha e ativar sua conta: {convite_link}"
+
+    if evolution_url and evolution_key and evolution_instance:
+        try:
+            url_disparo = f"{evolution_url.rstrip('/')}/message/sendText/{evolution_instance}"
+            headers = {
+                "Content-Type": "application/json",
+                "apikey": evolution_key
+            }
+            payload = {
+                "number": tel_clean,
+                "text": mensagem_texto
+            }
+            
+            with httpx.Client(timeout=5.0) as client:
+                res = client.post(url_disparo, headers=headers, json=payload)
+                if res.status_code in [200, 201]:
+                    evolution_sent = True
+                    logger.info(f"[EVOLUTION API] Convite enviado via WhatsApp para {tel_clean}: {res.status_code}")
+                else:
+                    logger.warning(f"[EVOLUTION API] Falha HTTP {res.status_code} ao enviar convite: {res.text}")
+        except Exception as err:
+            logger.warning(f"[EVOLUTION API] Exceção de rede ao enviar convite via WhatsApp: {err}")
+
+    if not evolution_sent:
+        logger.info(f"[WHATSAPP SIMULADO] Enviar convite para {tel_clean}: {convite_link}")
+
     return novo_usuario
 
 

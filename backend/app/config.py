@@ -30,4 +30,9 @@ class Settings:
     PRINTER_WIDTH: int = int(os.getenv("PRINTER_WIDTH", "40"))
     PRINT_JOBS_DIR: str = os.getenv("PRINT_JOBS_DIR", "./print_jobs")
 
+    # Evolution API (WhatsApp)
+    EVOLUTION_API_URL: str = os.getenv("EVOLUTION_API_URL", "")
+    EVOLUTION_API_KEY: str = os.getenv("EVOLUTION_API_KEY", "")
+    EVOLUTION_INSTANCE_NAME: str = os.getenv("EVOLUTION_INSTANCE_NAME", "")
+
 settings = Settings()
