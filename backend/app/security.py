@@ -26,7 +26,13 @@ def get_password_hash(password: str) -> str:
     hashed = bcrypt.hashpw(password.encode("utf-8"), salt)
     return hashed.decode("utf-8")
 
-def create_access_token(subject: Union[str, Any], restaurante_id: int = 1, expires_delta: timedelta = None) -> str:
+def create_access_token(
+    subject: Union[str, Any],
+    restaurante_id: int = 1,
+    expires_delta: timedelta = None,
+    role: Optional[str] = None,
+    extra_claims: Optional[dict] = None
+) -> str:
     """Creates a JWT access token for persistent login session."""
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
@@ -34,6 +40,11 @@ def create_access_token(subject: Union[str, Any], restaurante_id: int = 1, expir
         expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     
     to_encode = {"exp": expire, "sub": str(subject), "restaurante_id": restaurante_id}
+    if role is not None:
+        to_encode["role"] = role
+    if extra_claims:
+        to_encode.update(extra_claims)
+
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
 

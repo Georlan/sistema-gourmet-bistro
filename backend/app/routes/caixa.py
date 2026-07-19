@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import uuid
@@ -11,7 +12,8 @@ from ..schemas import (
     CaixaTurnoCreate, CaixaTurnoResponse, CaixaTurnoFechar, CaixaTurnoDetalhe,
     CaixaMovimentacaoCreate, CaixaMovimentacaoResponse, PagamentoRequest, PagamentoResponse
 )
-from ..security import get_current_garcom_optional
+from ..security import get_current_garcom_optional, get_current_user
+from .auth import require_admin
 from .websocket import manager
 
 logger = logging.getLogger("koma.caixa")
@@ -353,6 +355,17 @@ def registrar_pagamento_comanda(
         db.commit()
     except HTTPException:
         raise
+    except IntegrityError:
+        db.rollback()
+        if pag_in.idempotency_key:
+            existing = db.query(Pagamento).filter(Pagamento.idempotency_key == pag_in.idempotency_key).first()
+            if existing:
+                return existing
+        logger.exception("Falha de integridade ao processar pagamento idempotente")
+        raise HTTPException(
+            status_code=500,
+            detail="Erro interno ao processar pagamento."
+        )
     except Exception:
         db.rollback()
         logger.exception("Falha ao processar dado sensível criptografado")
@@ -471,7 +484,10 @@ from ..schemas import ConfiguracaoRestauranteResponse, ConfiguracaoRestauranteUp
 from sqlalchemy.orm import joinedload
 
 @router.get("/configuracoes", response_model=ConfiguracaoRestauranteResponse)
-def obter_configuracoes(db: Session = Depends(get_db)):
+def obter_configuracoes(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
     config = db.query(ConfiguracaoRestaurante).options(joinedload(ConfiguracaoRestaurante.restaurante)).first()
     if not config:
         config = ConfiguracaoRestaurante(
@@ -507,9 +523,11 @@ def obter_configuracoes(db: Session = Depends(get_db)):
 def atualizar_configuracoes(
     config_in: ConfiguracaoRestauranteUpdate,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
 ):
     config = db.query(ConfiguracaoRestaurante).options(joinedload(ConfiguracaoRestaurante.restaurante)).first()
+    require_admin(current_user)
     if not config:
         config = ConfiguracaoRestaurante()
         db.add(config)

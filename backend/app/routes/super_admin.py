@@ -4,10 +4,13 @@ import logging
 import uuid
 from datetime import datetime
 from typing import Dict, Any, List, Optional
+
+import jwt
 from fastapi import APIRouter, Depends, HTTPException, status, Header, Body, BackgroundTasks
 from pydantic import BaseModel
 
-# Import our modular isolated services
+from ..config import settings
+from ..security import create_access_token, verify_password
 from .super_admin_services import (
     SupabaseService,
     CloudflareService,
@@ -80,21 +83,43 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str
 
+def _get_superadmin_credentials() -> tuple[str, str]:
+    username = os.getenv("SUPERADMIN_USERNAME")
+    password_hash = os.getenv("SUPERADMIN_PASSWORD_HASH")
+    if not username or not password_hash:
+        raise RuntimeError("SUPERADMIN_USERNAME and SUPERADMIN_PASSWORD_HASH must be configured.")
+    return username, password_hash
+
 @router.post("/token", response_model=TokenResponse)
 def login_for_access_token(payload: TokenRequest):
     """
-    Verifies superadmin credentials and encodes a JWT token for session security.
+    Verifies superadmin credentials and encodes a signed JWT token for session security.
     """
-    if payload.username == "georlandbz@gmail.com" and payload.password == "admin123":
-        return {
-            "access_token": "mock_jwt_payload_superadmin_georlandbz_gmail_com_9823",
-            "token_type": "bearer"
-        }
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Incorrect username or password",
-        headers={"WWW-Authenticate": "Bearer"},
+    try:
+        expected_username, expected_password_hash = _get_superadmin_credentials()
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc)
+        )
+
+    if payload.username != expected_username or not verify_password(payload.password, expected_password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    access_token = create_access_token(
+        subject=payload.username,
+        restaurante_id=0,
+        role="superadmin"
     )
+    return {
+        "access_token": access_token,
+        "token_type": "bearer"
+    }
+
 
 def get_current_admin(authorization: str = Header(None)) -> Dict[str, Any]:
     if not authorization or not authorization.startswith("Bearer "):
@@ -102,7 +127,35 @@ def get_current_admin(authorization: str = Header(None)) -> Dict[str, Any]:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Valid authorization bearer token required."
         )
-    return {"user": "georlandbz@gmail.com", "role": "superadmin"}
+
+    token = authorization.split(" ", 1)[1].strip()
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Valid authorization bearer token required."
+        )
+
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+    except jwt.PyJWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Valid authorization bearer token required."
+        )
+
+    if payload.get("role") != "superadmin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acesso restrito a superadministradores."
+        )
+
+    if payload.get("sub") is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Valid authorization bearer token required."
+        )
+
+    return {"user": payload.get("sub"), "role": payload.get("role")}
 
 
 # --- TENANTS MANAGEMENT ---

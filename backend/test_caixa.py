@@ -3,9 +3,10 @@ os.environ["DATABASE_URL"] = "sqlite:///./test_caixa.db"
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session, sessionmaker
 import datetime
+import uuid
 
 from app.database import Base, get_db
 from app.models import Usuario, Produto, Categoria, Mesa, Comanda, Item, Lancamento, CaixaTurno, CaixaMovimentacao, Pagamento
@@ -216,3 +217,126 @@ def test_manage_tables():
     # 5. Check it was deleted
     resp = client.get("/mesas/35", headers=headers)
     assert resp.status_code == 404
+
+
+def test_configuracoes_requires_auth_and_admin():
+    client = TestClient(app)
+
+    # Anonymous GET should be rejected with 401
+    resp = client.get("/caixa/configuracoes")
+    assert resp.status_code == 401
+
+    # Garçom token should be rejected with 403 on PUT
+    headers_garcom = get_auth_headers(client, "garcom", "123")
+    resp = client.put(
+        "/caixa/configuracoes",
+        json={"taxa_servico_padrao": 12.5},
+        headers=headers_garcom
+    )
+    assert resp.status_code == 403
+
+    # Admin token should be able to update successfully
+    db = TestingSessionLocal()
+    admin_user = Usuario(id="u-admin", nome="Admin Test", usuario="admin", senha_hash=get_password_hash("123"), role="admin")
+    db.add(admin_user)
+    db.commit()
+    db.close()
+
+    headers_admin = get_auth_headers(client, "admin", "123")
+    resp = client.put(
+        "/caixa/configuracoes",
+        json={"taxa_servico_padrao": 12.5},
+        headers=headers_admin
+    )
+    assert resp.status_code == 200
+    assert resp.json()["taxa_servico_padrao"] == 12.5
+
+
+def test_pagamento_idempotency_race_condition():
+    client = TestClient(app)
+    headers_caixa = get_auth_headers(client, "caixa", "123")
+    headers_garcom = get_auth_headers(client, "garcom", "123")
+
+    # Create a new comanda with a single item
+    resp = client.post("/comandas/", json={"mesa_id": 1, "garcom_id": "u-garcom", "tipo": "Consumo no Local"}, headers=headers_garcom)
+    assert resp.status_code == 201
+    comanda_id = resp.json()["id"]
+
+    resp = client.post(f"/comandas/{comanda_id}/lancamentos", json={
+        "garcom_id": "u-garcom",
+        "itens": [
+            {"produto_id": "p-1", "observacao": "", "cliente_nome": "Cliente A"}
+        ]
+    }, headers=headers_garcom)
+    assert resp.status_code == 201
+
+    resp_turno = client.post("/caixa/turno/abrir", json={"saldo_inicial": 100.0}, headers=headers_caixa)
+    assert resp_turno.status_code == 201
+    turno_id = resp_turno.json()["id"]
+
+    idempotency_key = "race-test-key-001"
+    race_payment_id = f"p-race-{uuid.uuid4().hex[:6]}"
+    integrity_error_triggered = False
+
+    original_get_db = app.dependency_overrides.get(get_db)
+
+    def override_get_db_race():
+        db = TestingSessionLocal()
+        original_commit = db.commit
+
+        def monkey_commit():
+            nonlocal integrity_error_triggered
+            # Simulate a concurrent transaction inserting the exact same idempotency_key RIGHT BEFORE db.commit()
+            db_concurrent = TestingSessionLocal()
+            try:
+                concurrent_payment = Pagamento(
+                    id=race_payment_id,
+                    comanda_id=comanda_id,
+                    turno_id=turno_id,
+                    valor=20.0,
+                    metodo="pix",
+                    status="aprovado",
+                    idempotency_key=idempotency_key,
+                    criado_em=datetime.datetime.now(datetime.timezone.utc)
+                )
+                db_concurrent.add(concurrent_payment)
+                db_concurrent.commit()
+            finally:
+                db_concurrent.close()
+
+            # Now call original commit, which WILL fail with IntegrityError because idempotency_key is UNIQUE
+            integrity_error_triggered = True
+            original_commit()
+
+        db.commit = monkey_commit
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[get_db] = override_get_db_race
+    try:
+        response = client.post(
+            f"/caixa/comandas/{comanda_id}/pagar",
+            json={"valor": 20.0, "metodo": "pix", "idempotency_key": idempotency_key},
+            headers=headers_caixa
+        )
+    finally:
+        if original_get_db:
+            app.dependency_overrides[get_db] = original_get_db
+        else:
+            app.dependency_overrides.pop(get_db, None)
+
+    assert integrity_error_triggered, "Expected monkey_commit to execute and trigger IntegrityError"
+    assert response.status_code == 201
+    assert response.json()["idempotency_key"] == idempotency_key
+    assert response.json()["id"] == race_payment_id
+
+    db = TestingSessionLocal()
+    try:
+        count = db.query(Pagamento).filter(Pagamento.idempotency_key == idempotency_key).count()
+        assert count == 1
+        persisted = db.query(Pagamento).filter(Pagamento.idempotency_key == idempotency_key).first()
+        assert persisted.id == race_payment_id
+    finally:
+        db.close()
