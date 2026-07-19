@@ -32,13 +32,41 @@ class Restaurante(Base):
 class Usuario(Base):
     __tablename__ = "usuarios"
     
-    id = Column(String, primary_key=True, index=True)  # ex: "g-01", "c-01"
-    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False)
-    nome = Column(String, nullable=False)
-    usuario = Column(String, unique=True, index=True, nullable=False)  # Login handle
-    senha_hash = Column(String, nullable=False)  # bcrypt hashed password
-    role = Column(String, default="garcom", nullable=False)  # "garcom" | "caixa" | "admin"
-    
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    nome = Column(String(100), nullable=False)
+    telefone = Column(String(15), unique=True, index=True, nullable=False)
+    cargo = Column(String(20), nullable=False, default="garcom")  # 'caixa' | 'garcom' | 'gerente' | 'motoboy' | 'admin'
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id", ondelete="CASCADE"), default=lambda: current_restaurante_id.get(), nullable=True)
+    senha_hash = Column(String(255), nullable=True)
+    token_convite = Column(String, nullable=True)
+    token_expira_em = Column(DateTime(timezone=True), nullable=True)
+    status = Column(String(20), default="pendente_ativacao")  # 'pendente_ativacao' | 'ativo' | 'inativo'
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+    @hybrid_property
+    def role(self):
+        return self.cargo
+
+    @role.setter
+    def role(self, value):
+        self.cargo = value
+
+    @role.expression
+    def role(cls):
+        return cls.cargo
+
+    @hybrid_property
+    def usuario(self):
+        return self.telefone
+
+    @usuario.setter
+    def usuario(self, value):
+        self.telefone = value
+
+    @usuario.expression
+    def usuario(cls):
+        return cls.telefone
+
     # Relationships
     comandas_abertas = relationship("Comanda", back_populates="criada_por")
     lancamentos_feitos = relationship("Lancamento", back_populates="garcom")

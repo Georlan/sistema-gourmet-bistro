@@ -10,16 +10,24 @@ class LoginRequest(BaseModel):
 class UsuarioResponse(BaseModel):
     id: str
     nome: str
-    usuario: str
-    role: str
+    telefone: Optional[str] = None
+    cargo: Optional[str] = "garcom"
+    restaurante_id: Optional[int] = None
+    status: Optional[str] = "pendente_ativacao"
+    created_at: Optional[datetime] = None
+    usuario: Optional[str] = None
+    role: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
 class UsuarioCreate(BaseModel):
     nome: str
-    usuario: str
-    senha: str
-    role: str = "garcom"
+    telefone: Optional[str] = None
+    cargo: Optional[str] = "garcom"
+    restaurante_id: Optional[int] = None
+    usuario: Optional[str] = None
+    senha: Optional[str] = None
+    role: Optional[str] = "garcom"
 
 class LoginResponse(BaseModel):
     access_token: str
