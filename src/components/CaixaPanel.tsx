@@ -2047,6 +2047,7 @@ export function CaixaPanel({
   const filteredProducts = dynamicMenu.filter(p => {
     const catName = obterNomeCategoria(p.categoria);
     const matchesCategory = pdvSelectedCategory === 'todos' || catName === pdvSelectedCategory || p.categoria === pdvSelectedCategory;
+    const matchesSearch = !pdvSearch || p.nome.toLowerCase().includes(pdvSearch.toLowerCase()) || (p.descricao && p.descricao.toLowerCase().includes(pdvSearch.toLowerCase()));
     return matchesSearch && matchesCategory;
   });
 
