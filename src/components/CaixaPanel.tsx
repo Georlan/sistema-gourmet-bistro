@@ -2112,7 +2112,7 @@ export function CaixaPanel({
                 category: 'Fluxo Operacional',
                 items: [
                   { id: 'operacao', label: 'Painel de Vendas', icon: ShoppingCart },
-                  { id: 'cardapio', label: 'Gestão de Menu', icon: ClipboardList },
+                  { id: 'cardapio', label: 'Gestão do Cardápio', icon: ClipboardList },
                   { id: 'estoque', label: 'Controle de Estoque', icon: Package }
                 ]
               },
@@ -2292,7 +2292,7 @@ export function CaixaPanel({
             { id: 'cardapio_lista', label: 'Cardápio' },
             { id: 'ficha_tecnica', label: 'Custos e CMV' },
             { id: 'disponibilidade', label: 'Disponibilidade' },
-            { id: 'categorias_lista', label: 'Categorias de Menu' }
+            { id: 'categorias_lista', label: 'Categorias do Cardápio' }
           ].map(sub => (
             <button
               key={sub.id}
@@ -3004,7 +3004,7 @@ export function CaixaPanel({
                       <input
                         id="pdv-search-input"
                         type="text"
-                        placeholder="Pesquisar prato no menu..."
+                        placeholder="Pesquisar prato no cardápio..."
                         value={pdvSearch}
                         onChange={(e) => setPdvSearch(e.target.value)}
                         className={clsx('w-full', 'px-4', 'py-2', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'focus:outline-none', 'focus:border-[#10b981]', 'text-white')}
@@ -4429,8 +4429,8 @@ export function CaixaPanel({
 
                 <div className="space-y-3">
                   {[
-                    { id: 'bronze', name: 'Plano Bronze', price: 'R$ 99/mês', features: ['Menu Digital QR Code', 'Gestão de Mesas', 'Suporte por e-mail'] },
-                    { id: 'gold', name: 'Plano Ouro (Recomendado)', price: 'R$ 199/mês', features: ['Menu Digital + iFood', 'Robô de Atendimento IA', 'Suporte 24h WhatsApp'] },
+                    { id: 'bronze', name: 'Plano Bronze', price: 'R$ 99/mês', features: ['Cardápio Digital QR Code', 'Gestão de Mesas', 'Suporte por e-mail'] },
+                    { id: 'gold', name: 'Plano Ouro (Recomendado)', price: 'R$ 199/mês', features: ['Cardápio Digital + iFood', 'Robô de Atendimento IA', 'Suporte 24h WhatsApp'] },
                     { id: 'platinum', name: 'Plano Platinum', price: 'R$ 349/mês', features: ['Multi-lojas Integrado', 'Gestão de Estoque Avançado', 'Gerente de Contas Dedicado'] }
                   ].map((plan) => (
                     <div
@@ -5526,7 +5526,7 @@ export function CaixaPanel({
             <div className={clsx('space-y-4', 'animate-fade-in', 'text-left')}>
               <div className={clsx('flex', 'justify-between', 'items-center')}>
                 <div>
-                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'text-base', 'block')}>Categorias de Menu</span>
+                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'text-base', 'block')}>Categorias do Cardápio</span>
                   <span className={clsx('text-[9px]', 'text-gray-500')}>{apiCategorias.length} categorias cadastradas</span>
                 </div>
                 <button
@@ -6521,7 +6521,7 @@ export function CaixaPanel({
             <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-6', 'text-left', 'max-w-2xl', 'mx-auto', 'space-y-6', 'animate-fade-in')}>
               <div className={clsx('border-b', 'border-[#27272A]', 'pb-3')}>
                 <span className={clsx('font-serif', 'font-bold', 'text-base', 'text-white', 'block')}>Setup Wizard — Assistente de Configuração</span>
-                <span className={clsx('text-[10px]', 'text-gray-400', 'block', 'mt-1')}>Configure as regras de operação e a estrutura do menu de acordo com o nicho de mercado do seu restaurante.</span>
+                <span className={clsx('text-[10px]', 'text-gray-400', 'block', 'mt-1')}>Configure as regras de operação e a estrutura do cardápio de acordo com o nicho de mercado do seu restaurante.</span>
               </div>
 
               {/* Nicho selector Grid */}
