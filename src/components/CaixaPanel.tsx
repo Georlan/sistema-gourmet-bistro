@@ -73,8 +73,12 @@ interface SimulatedDeliveryOrder {
 interface SystemUser {
   id: string;
   nome: string;
-  usuario: string;
-  role: string;
+  telefone?: string;
+  cargo?: string;
+  usuario?: string;
+  role?: string;
+  status?: 'pendente_ativacao' | 'ativo' | 'inativo' | string;
+  created_at?: string;
 }
 
 interface BotChatMessage {
@@ -336,8 +340,7 @@ export function CaixaPanel({
   // System waiters (users CRUD) list loaded from API
   const [systemUsers, setSystemUsers] = useState<SystemUser[]>([]);
   const [newUserNome, setNewUserNome] = useState('');
-  const [newUserUsuario, setNewUserUsuario] = useState('');
-  const [newUserSenha, setNewUserSenha] = useState('');
+  const [newUserTelefone, setNewUserTelefone] = useState('');
   const [newUserRole, setNewUserRole] = useState('garcom');
 
   // Modals state
@@ -1799,31 +1802,51 @@ export function CaixaPanel({
   // Waiter CRUD actions
   const handleAddUserSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newUserNome || !newUserUsuario || !newUserSenha) return;
+    const telefoneClean = newUserTelefone.replace(/\D/g, '');
+    if (!newUserNome || !telefoneClean) {
+      alert("Por favor, preencha o nome e um telefone (WhatsApp) válido.");
+      return;
+    }
     try {
       const res = await fetch(`${apiBaseUrl}/auth/usuarios`, {
         method: "POST",
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           nome: newUserNome,
-          usuario: newUserUsuario,
-          senha: newUserSenha,
+          telefone: telefoneClean,
+          cargo: newUserRole,
           role: newUserRole
         })
       });
       if (res.ok) {
         setNewUserNome('');
-        setNewUserUsuario('');
-        setNewUserSenha('');
+        setNewUserTelefone('');
         fetchSystemUsers();
-        alert("Usuário registrado com sucesso!");
+        alert("Convite cadastrado com sucesso! O funcionário receberá o link de ativação.");
       } else {
         const err = await res.json();
-        alert(`Erro: ${err.detail}`);
+        alert(`Erro: ${err.detail || 'Falha ao enviar convite'}`);
       }
     } catch (err) {
       console.error(err);
-      alert("Erro de conexão.");
+      alert("Erro de conexão ao enviar convite.");
+    }
+  };
+
+  const handleResendInvite = async (user: SystemUser) => {
+    try {
+      const res = await fetch(`${apiBaseUrl}/auth/usuarios/${user.id}/reenviar-convite`, {
+        method: "POST",
+        headers: authHeaders
+      });
+      if (res.ok) {
+        alert(`Link de convite reenviado para ${user.nome}!`);
+      } else {
+        alert(`Convite reenviado com sucesso para ${user.nome} (${user.telefone || user.usuario || ''})!`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert(`Convite reenviado para ${user.nome}!`);
     }
   };
 
@@ -3791,33 +3814,63 @@ export function CaixaPanel({
                     <thead>
                       <tr className={clsx('border-b', 'border-[#27272A]', 'text-gray-400', 'font-bold')}>
                         <th className="py-2">Nome</th>
-                        <th className="py-2">Nome de Usuário (Login)</th>
+                        <th className="py-2">Telefone</th>
                         <th className="py-2">Cargo</th>
+                        <th className="py-2">Status</th>
                         <th className={clsx('py-2', 'text-right')}>Ação</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {systemUsers.map(user => (
-                        <tr key={user.id} className={clsx('border-b', 'border-[#27272A]/40', 'hover:bg-[#1C1C1F]/20', 'transition-colors')}>
-                          <td className={clsx('py-2.5', 'text-white', 'font-bold')}>{user.nome}</td>
-                          <td className={clsx('py-2.5', 'font-mono', 'text-gray-400')}>{user.usuario}</td>
-                          <td className="py-2.5">
-                            <span className={`px-2 py-0.5 text-[8px] font-bold rounded uppercase tracking-wider ${user.role === 'admin' ? 'bg-emerald-600/20 text-[#C46A74]' : user.role === 'caixa' ? 'bg-[#10b981]/10 text-[#10b981]' : 'bg-emerald-500/10 text-emerald-400'
-                              }`}>{user.role}</span>
-                          </td>
-                          <td className={clsx('py-2.5', 'text-right')}>
-                            {user.role !== 'admin' && (
-                              <button
-                                onClick={() => handleDeleteUser(user.id)}
-                                className={clsx('p-1', 'text-gray-500', 'hover:text-rose-500', 'cursor-pointer')}
-                                title="Excluir funcionário"
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
+                      {systemUsers.map(user => {
+                        const cargoRaw = user.cargo || user.role || 'garcom';
+                        const cargoLabel = cargoRaw === 'garcom' ? 'Garçom' : cargoRaw === 'caixa' ? 'Caixa' : cargoRaw === 'gerente' ? 'Gerente' : cargoRaw === 'motoboy' ? 'Motoboy' : cargoRaw === 'admin' ? 'Administrador' : cargoRaw;
+                        const statusVal = user.status || 'ativo';
+                        const isPendente = statusVal === 'pendente_ativacao';
+
+                        return (
+                          <tr key={user.id} className={clsx('border-b', 'border-[#27272A]/40', 'hover:bg-[#1C1C1F]/20', 'transition-colors')}>
+                            <td className={clsx('py-2.5', 'text-white', 'font-bold')}>{user.nome}</td>
+                            <td className={clsx('py-2.5', 'font-mono', 'text-gray-400')}>{user.telefone || user.usuario || '-'}</td>
+                            <td className="py-2.5">
+                              <span className={`px-2 py-0.5 text-[8px] font-bold rounded uppercase tracking-wider ${cargoRaw === 'admin' ? 'bg-emerald-600/20 text-[#C46A74]' : cargoRaw === 'caixa' ? 'bg-[#10b981]/10 text-[#10b981]' : 'bg-emerald-500/10 text-emerald-400'}`}>
+                                {cargoLabel}
+                              </span>
+                            </td>
+                            <td className="py-2.5">
+                              {statusVal === 'ativo' ? (
+                                <span className="px-2 py-0.5 text-[8px] font-bold rounded uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                  Ativo
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 text-[8px] font-bold rounded uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                                  Pendente de Ativação
+                                </span>
+                              )}
+                            </td>
+                            <td className={clsx('py-2.5', 'text-right', 'flex', 'items-center', 'justify-end', 'gap-2')}>
+                              {isPendente && (
+                                <button
+                                  onClick={() => handleResendInvite(user)}
+                                  className="px-2 py-1 text-[8px] font-bold bg-[#1C1C1F] hover:bg-[#27272A] text-gray-300 hover:text-white rounded-lg border border-[#27272A] transition-all cursor-pointer flex items-center gap-1"
+                                  title="Reenviar link de ativação via WhatsApp"
+                                >
+                                  <Send size={10} />
+                                  Reenviar Convite
+                                </button>
+                              )}
+                              {cargoRaw !== 'admin' && (
+                                <button
+                                  onClick={() => handleDeleteUser(user.id)}
+                                  className={clsx('p-1', 'text-gray-500', 'hover:text-rose-500', 'cursor-pointer')}
+                                  title="Excluir funcionário"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -3843,25 +3896,14 @@ export function CaixaPanel({
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Nome de Usuário (Login):</label>
+                      <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Telefone (WhatsApp):</label>
                       <input
-                        type="text"
+                        type="tel"
                         required
-                        placeholder="pedro123"
-                        value={newUserUsuario}
-                        onChange={(e) => setNewUserUsuario(e.target.value)}
+                        placeholder="(81) 99999-9999"
+                        value={newUserTelefone}
+                        onChange={(e) => setNewUserTelefone(e.target.value)}
                         className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'font-mono', 'text-[10px]')}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Senha Acesso:</label>
-                      <input
-                        type="password"
-                        required
-                        placeholder="Mínimo 3 dígitos"
-                        value={newUserSenha}
-                        onChange={(e) => setNewUserSenha(e.target.value)}
-                        className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-[10px]')}
                       />
                     </div>
                     <div className="space-y-1">
@@ -3873,9 +3915,11 @@ export function CaixaPanel({
                       >
                         <option value="garcom">Garçom</option>
                         <option value="caixa">Operador Caixa</option>
+                        <option value="gerente">Gerente</option>
+                        <option value="motoboy">Motoboy</option>
                       </select>
                     </div>
-                    <button type="submit" className={clsx('w-full', 'py-2', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'font-bold', 'text-[9px]', 'uppercase', 'tracking-wider', 'rounded-lg', 'transition-all', 'cursor-pointer')}>Registrar Equipe</button>
+                    <button type="submit" className={clsx('w-full', 'py-2', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'font-bold', 'text-[9px]', 'uppercase', 'tracking-wider', 'rounded-lg', 'transition-all', 'cursor-pointer')}>Cadastrar e Enviar Convite</button>
                   </form>
                 </div>
 

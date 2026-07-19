@@ -162,8 +162,12 @@ export interface SimulatedDeliveryOrder {
 export interface SystemUser {
   id: string;
   nome: string;
-  usuario: string;
-  role: string;
+  telefone?: string;
+  cargo?: string;
+  usuario?: string;
+  role?: string;
+  status?: 'pendente_ativacao' | 'ativo' | 'inativo' | string;
+  created_at?: string;
 }
 
 export interface BotChatMessage {
