@@ -941,12 +941,12 @@ export default function App() {
     e.preventDefault();
     setLoginError("");
     setIsLoggingIn(true);
-    const usernameLimpo = loginUsername.replace(/\D/g, '') || loginUsername.trim().toLowerCase();
+    const usernameClean = loginUsername.trim().toLowerCase();
     try {
       const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: usernameLimpo, password: loginPassword })
+        body: JSON.stringify({ username: usernameClean, password: loginPassword })
       });
       if (!response.ok) {
         const err = await response.json();
@@ -1461,15 +1461,15 @@ export default function App() {
             )}
 
             <div className="space-y-1.5">
-              <label htmlFor="login-username" className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">TELEFONE (WHATSAPP)</label>
+              <label htmlFor="login-username" className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">E-MAIL</label>
               <input
                 id="login-username"
-                type="tel"
+                type="email"
                 required
                 value={loginUsername}
-                onChange={(e) => setLoginUsername(aplicarMascaraTelefoneInput(e.target.value))}
-                placeholder="(81) 99999-9999"
-                className="w-full bg-[#090D16] text-white border border-[#27272A]/40 rounded-xl px-4 py-3 text-sm font-semibold font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 placeholder-gray-600"
+                onChange={(e) => setLoginUsername(e.target.value)}
+                placeholder="seu@email.com"
+                className="w-full bg-[#090D16] text-white border border-[#27272A]/40 rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 placeholder-gray-600"
               />
             </div>
 

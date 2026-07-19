@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Lock, CheckCircle, AlertCircle, ShieldCheck } from 'lucide-react';
+import { Lock, Mail, CheckCircle, AlertCircle, ShieldCheck } from 'lucide-react';
 import clsx from 'clsx';
 import { API_BASE_URL } from '../config/api';
 
@@ -10,6 +10,7 @@ interface CaixaAtivarPageProps {
 export function CaixaAtivarPage({ token }: CaixaAtivarPageProps) {
   const tokenConvite = token || new URLSearchParams(window.location.search).get('token') || '';
   
+  const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [confirmaSenha, setConfirmaSenha] = useState('');
   const [loading, setLoading] = useState(false);
@@ -22,6 +23,11 @@ export function CaixaAtivarPage({ token }: CaixaAtivarPageProps) {
 
     if (!tokenConvite) {
       setErrorMsg('Token de convite não encontrado no link.');
+      return;
+    }
+
+    if (!email || !email.includes('@')) {
+      setErrorMsg('Por favor, informe um e-mail de login válido.');
       return;
     }
 
@@ -43,6 +49,7 @@ export function CaixaAtivarPage({ token }: CaixaAtivarPageProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           token_convite: tokenConvite,
+          email: email.trim().toLowerCase(),
           senha: senha
         })
       });
@@ -107,6 +114,21 @@ export function CaixaAtivarPage({ token }: CaixaAtivarPageProps) {
                 <span>{errorMsg}</span>
               </div>
             )}
+
+            <div className="space-y-1 text-left">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">E-mail de Login</label>
+              <div className="relative">
+                <input
+                  type="email"
+                  required
+                  placeholder="seu@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2.5 bg-[#09090B] border border-[#27272A] rounded-xl text-white text-xs focus:border-emerald-500 focus:outline-none transition-all"
+                />
+                <Mail size={14} className="absolute left-3 top-3 text-gray-500" />
+              </div>
+            </div>
 
             <div className="space-y-1 text-left">
               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Nova Senha</label>

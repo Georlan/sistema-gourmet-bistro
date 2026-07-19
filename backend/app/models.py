@@ -34,7 +34,8 @@ class Usuario(Base):
     
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     nome = Column(String(100), nullable=False)
-    telefone = Column(String(50), unique=True, index=True, nullable=False)
+    telefone = Column(String(50), unique=True, index=True, nullable=True)
+    email = Column(String(100), unique=True, index=True, nullable=True)
     cargo = Column(String(20), nullable=False, default="garcom")  # 'caixa' | 'garcom' | 'gerente' | 'motoboy' | 'admin'
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id", ondelete="CASCADE"), default=lambda: current_restaurante_id.get(), nullable=True)
     senha_hash = Column(String(255), nullable=True)
@@ -57,15 +58,18 @@ class Usuario(Base):
 
     @hybrid_property
     def usuario(self):
-        return self.telefone
+        return self.email or self.telefone
 
     @usuario.setter
     def usuario(self, value):
-        self.telefone = value
+        if value and "@" in value:
+            self.email = value
+        else:
+            self.telefone = value
 
     @usuario.expression
     def usuario(cls):
-        return cls.telefone
+        return cls.email
 
     # Relationships
     comandas_abertas = relationship("Comanda", back_populates="criada_por")

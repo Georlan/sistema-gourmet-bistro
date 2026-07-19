@@ -367,18 +367,19 @@ def test_cadastrar_e_ativar_funcionario():
     finally:
         db.close()
 
-    # 2. Ativar conta via /auth/ativar
+    # 2. Ativar conta via /auth/ativar (passando e-mail e senha)
     resp_ativar = client.post("/auth/ativar", json={
         "token_convite": token_convite,
+        "email": "joao@exemplo.com",
         "senha": "minhasenhanova"
     })
     assert resp_ativar.status_code == 200
     data_ativar = resp_ativar.json()
     assert "access_token" in data_ativar
 
-    # 3. Test logging in with newly set password and phone number
+    # 3. Test logging in with newly set email and password
     resp_login = client.post("/auth/login", json={
-        "username": "81988887777",
+        "username": "joao@exemplo.com",
         "password": "minhasenhanova"
     })
     assert resp_login.status_code == 200

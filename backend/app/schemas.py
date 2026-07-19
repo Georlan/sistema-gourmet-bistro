@@ -11,6 +11,7 @@ class UsuarioResponse(BaseModel):
     id: str
     nome: str
     telefone: Optional[str] = None
+    email: Optional[str] = None
     cargo: Optional[str] = "garcom"
     restaurante_id: Optional[int] = None
     status: Optional[str] = "pendente_ativacao"
@@ -23,6 +24,7 @@ class UsuarioResponse(BaseModel):
 class UsuarioCreate(BaseModel):
     nome: str
     telefone: Optional[str] = None
+    email: Optional[str] = None
     cargo: Optional[str] = "garcom"
     restaurante_id: Optional[int] = None
     usuario: Optional[str] = None
@@ -37,6 +39,7 @@ class LoginResponse(BaseModel):
 
 class AtivarContaRequest(BaseModel):
     token_convite: str
+    email: str
     senha: str
 
 

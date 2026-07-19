@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from typing import List
 import uuid
@@ -26,13 +27,16 @@ router = APIRouter(
 @router.post("/login", response_model=LoginResponse)
 def login(login_data: LoginRequest, db: Session = Depends(get_db)):
     """
-    Realiza a autenticação do usuário.
+    Realiza a autenticação do usuário por e-mail ou telefone.
     Retorna o token JWT e as informações do usuário.
     """
     from ..database import current_restaurante_id
+    username_val = (login_data.username or "").strip().lower()
     token_var = current_restaurante_id.set(None)
     try:
-        usuario = db.query(Usuario).filter(Usuario.usuario == login_data.username).first()
+        usuario = db.query(Usuario).filter(
+            or_(Usuario.email == username_val, Usuario.telefone == username_val, Usuario.usuario == username_val)
+        ).first()
     finally:
         current_restaurante_id.reset(token_var)
 
@@ -69,12 +73,20 @@ def login(login_data: LoginRequest, db: Session = Depends(get_db)):
 def ativar_conta(payload: AtivarContaRequest, db: Session = Depends(get_db)):
     """
     Ativa a conta do usuário através do token_convite.
-    Define a nova senha, mude o status para 'ativo' e limpa o token.
+    Recebe email e senha, valida unicidade do e-mail, salva a senha e mude o status para 'ativo'.
     Retorna o token JWT e dados do usuário para login automático.
     """
     from datetime import datetime, timezone
     
     token_str = payload.token_convite.strip()
+    email_clean = payload.email.strip().lower()
+    
+    if not email_clean or "@" not in email_clean:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Informe um e-mail válido para a conta."
+        )
+        
     now_utc = datetime.now(timezone.utc)
     
     usuario = db.query(Usuario).filter(Usuario.token_convite == token_str).first()
@@ -100,7 +112,16 @@ def ativar_conta(payload: AtivarContaRequest, db: Session = Depends(get_db)):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Link de ativação inválido ou expirado"
             )
+
+    # Validar se o e-mail já não está em uso por outro usuário
+    existente_email = db.query(Usuario).filter(Usuario.email == email_clean).first()
+    if existente_email and existente_email.id != usuario.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Este e-mail já está cadastrado no sistema."
+        )
             
+    usuario.email = email_clean
     usuario.senha_hash = get_password_hash(payload.senha)
     usuario.status = "ativo"
     usuario.token_convite = None
