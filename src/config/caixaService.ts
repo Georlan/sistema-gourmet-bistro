@@ -2,7 +2,7 @@ import { API_BASE_URL } from './api';
 import { SystemUser } from '../types';
 
 const getAuthHeaders = (): Record<string, string> => {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('koma_caixa_token') || localStorage.getItem('token') || localStorage.getItem('koma_waiter_token');
   return token ? { 'Authorization': `Bearer ${token}` } : {};
 };
 
