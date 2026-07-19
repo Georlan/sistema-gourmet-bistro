@@ -231,6 +231,7 @@ class CaixaTurno(Base):
     __tablename__ = "caixa_turnos"
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
     aberto_por_id = Column(String, ForeignKey("usuarios.id"), nullable=False)
     aberto_em = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
     fechado_em = Column(DateTime, nullable=True)
@@ -436,6 +437,7 @@ class ActivityLog(Base):
     __tablename__ = "activity_logs"
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
     garcom_id = Column(String, ForeignKey("usuarios.id"), nullable=False)
     action = Column(String, nullable=False)  # e.g., "CANCEL_ITEM", "APPLY_DISCOUNT", "REOPEN_CAIXA", "GDPR_DELETE"
     details = Column(String, default="")
