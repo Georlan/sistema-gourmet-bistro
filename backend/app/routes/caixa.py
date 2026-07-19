@@ -6,11 +6,14 @@ import uuid
 import datetime
 import logging
 
+import re
+
 from ..database import get_db, current_restaurante_id
 from ..models import Usuario, Comanda, Item, CaixaTurno, CaixaMovimentacao, Pagamento
 from ..schemas import (
     CaixaTurnoCreate, CaixaTurnoResponse, CaixaTurnoFechar, CaixaTurnoDetalhe,
-    CaixaMovimentacaoCreate, CaixaMovimentacaoResponse, PagamentoRequest, PagamentoResponse
+    CaixaMovimentacaoCreate, CaixaMovimentacaoResponse, PagamentoRequest, PagamentoResponse,
+    UsuarioResponse, UsuarioCreate
 )
 from ..security import get_current_garcom_optional, get_current_user
 from .auth import require_admin
@@ -34,6 +37,70 @@ def check_caixa_permission(user: Usuario):
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Acesso restrito a operadores de caixa ou administradores"
         )
+
+# ----------------- FUNCIONÁRIOS / EQUIPE ENDPOINTS -----------------
+
+@router.get("/funcionarios", response_model=List[UsuarioResponse])
+def obter_funcionarios(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_garcom_optional)
+):
+    """Retorna a lista de usuários pertencentes ao restaurante_id do contexto ativo."""
+    check_caixa_permission(current_user)
+    rest_id = current_restaurante_id.get() or 1
+    return db.query(Usuario).filter(Usuario.restaurante_id == rest_id).all()
+
+
+@router.post("/funcionarios", response_model=UsuarioResponse, status_code=status.HTTP_201_CREATED)
+def cadastrar_funcionario(
+    user_in: UsuarioCreate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_garcom_optional)
+):
+    """Cadastra um novo funcionário por convite de telefone."""
+    check_caixa_permission(current_user)
+    
+    tel_raw = user_in.telefone or user_in.usuario or ""
+    tel_clean = re.sub(r"\D", "", tel_raw)
+    if not tel_clean:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Telefone é obrigatório para cadastrar um funcionário."
+        )
+
+    # Verificar se o telefone já está cadastrado no sistema
+    existente = db.query(Usuario).filter(Usuario.telefone == tel_clean).first()
+    if existente:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Este telefone já está cadastrado no sistema"
+        )
+        
+    rest_id = current_restaurante_id.get() or user_in.restaurante_id or 1
+    token_convite = str(uuid.uuid4())
+    token_expira_em = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)
+    cargo_val = user_in.cargo or user_in.role or "garcom"
+
+    novo_usuario = Usuario(
+        id=str(uuid.uuid4())[:8],
+        nome=user_in.nome,
+        telefone=tel_clean,
+        cargo=cargo_val,
+        restaurante_id=rest_id,
+        senha_hash=None,
+        token_convite=token_convite,
+        token_expira_em=token_expira_em,
+        status="pendente_ativacao",
+        created_at=datetime.datetime.now(datetime.timezone.utc)
+    )
+    
+    db.add(novo_usuario)
+    db.commit()
+    db.refresh(novo_usuario)
+    
+    logger.info(f"[WHATSAPP SIMULADO] Enviar convite para {tel_clean}: https://sistema-gourmet-bistro.pages.dev/ativar?token={token_convite}")
+    return novo_usuario
+
 
 # ----------------- TURNO ENDPOINTS -----------------
 

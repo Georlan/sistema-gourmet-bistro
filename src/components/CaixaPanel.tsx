@@ -10,6 +10,7 @@ import {
 import { Order, OrderItem, CaixaTurno, CaixaMovimentacao, Pagamento, Table, Product } from '../types';
 import { PRODUCTS, CATEGORIES } from '../data';
 import { getProductPresets, obterNomeCategoria } from '../domain';
+import { API } from '../config/caixaService';
 import clsx from 'clsx';
 
 interface CaixaPanelProps {
@@ -86,6 +87,17 @@ interface BotChatMessage {
   text: string;
   timestamp: string;
 }
+
+const formatarTelefoneTabela = (tel?: string) => {
+  if (!tel) return '-';
+  const limpo = tel.replace(/\D/g, '');
+  if (limpo.length === 11) {
+    return `(${limpo.slice(0, 2)}) ${limpo.slice(2, 7)}-${limpo.slice(7)}`;
+  } else if (limpo.length === 10) {
+    return `(${limpo.slice(0, 2)}) ${limpo.slice(2, 6)}-${limpo.slice(6)}`;
+  }
+  return tel; // Retorna o valor original se contiver letras (como os usuários legados 'georlan', 'caixa1')
+};
 
 export function CaixaPanel({
   orders,
@@ -1008,13 +1020,19 @@ export function CaixaPanel({
   // Fetch registered users (waiters CRUD)
   const fetchSystemUsers = async () => {
     try {
-      const res = await fetch(`${apiBaseUrl}/auth/usuarios`, { headers: authHeaders });
-      if (res.ok) {
-        const data = await res.json();
-        setSystemUsers(data);
-      }
+      const data = await API.getFuncionarios();
+      setSystemUsers(data);
     } catch (err) {
-      console.error('Error fetching users list', err);
+      console.error('Error fetching users list via API.getFuncionarios, trying fallback', err);
+      try {
+        const res = await fetch(`${apiBaseUrl}/auth/usuarios`, { headers: authHeaders });
+        if (res.ok) {
+          const data = await res.json();
+          setSystemUsers(data);
+        }
+      } catch (fallbackErr) {
+        console.error('Fallback error fetching users list', fallbackErr);
+      }
     }
   };
 
@@ -1808,28 +1826,18 @@ export function CaixaPanel({
       return;
     }
     try {
-      const res = await fetch(`${apiBaseUrl}/auth/usuarios`, {
-        method: "POST",
-        headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nome: newUserNome,
-          telefone: telefoneClean,
-          cargo: newUserRole,
-          role: newUserRole
-        })
+      await API.cadastrarFuncionario({
+        nome: newUserNome,
+        telefone: telefoneClean,
+        cargo: newUserRole
       });
-      if (res.ok) {
-        setNewUserNome('');
-        setNewUserTelefone('');
-        fetchSystemUsers();
-        alert("Convite cadastrado com sucesso! O funcionário receberá o link de ativação.");
-      } else {
-        const err = await res.json();
-        alert(`Erro: ${err.detail || 'Falha ao enviar convite'}`);
-      }
-    } catch (err) {
+      setNewUserNome('');
+      setNewUserTelefone('');
+      fetchSystemUsers();
+      alert("Convite cadastrado com sucesso! O funcionário receberá o link de ativação.");
+    } catch (err: any) {
       console.error(err);
-      alert("Erro de conexão ao enviar convite.");
+      alert(`Erro: ${err.message || 'Falha ao enviar convite'}`);
     }
   };
 
@@ -3830,7 +3838,7 @@ export function CaixaPanel({
                         return (
                           <tr key={user.id} className={clsx('border-b', 'border-[#27272A]/40', 'hover:bg-[#1C1C1F]/20', 'transition-colors')}>
                             <td className={clsx('py-2.5', 'text-white', 'font-bold')}>{user.nome}</td>
-                            <td className={clsx('py-2.5', 'font-mono', 'text-gray-400')}>{user.telefone || user.usuario || '-'}</td>
+                            <td className={clsx('py-2.5', 'font-mono', 'text-gray-400')}>{formatarTelefoneTabela(user.telefone || user.usuario || '')}</td>
                             <td className="py-2.5">
                               <span className={`px-2 py-0.5 text-[8px] font-bold rounded uppercase tracking-wider ${cargoRaw === 'admin' ? 'bg-emerald-600/20 text-[#C46A74]' : cargoRaw === 'caixa' ? 'bg-[#10b981]/10 text-[#10b981]' : 'bg-emerald-500/10 text-emerald-400'}`}>
                                 {cargoLabel}
