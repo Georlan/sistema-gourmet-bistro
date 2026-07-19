@@ -34,7 +34,7 @@ class Usuario(Base):
     
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     nome = Column(String(100), nullable=False)
-    telefone = Column(String(15), unique=True, index=True, nullable=False)
+    telefone = Column(String(50), unique=True, index=True, nullable=False)
     cargo = Column(String(20), nullable=False, default="garcom")  # 'caixa' | 'garcom' | 'gerente' | 'motoboy' | 'admin'
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id", ondelete="CASCADE"), default=lambda: current_restaurante_id.get(), nullable=True)
     senha_hash = Column(String(255), nullable=True)
