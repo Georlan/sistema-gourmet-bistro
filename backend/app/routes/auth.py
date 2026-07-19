@@ -12,10 +12,10 @@ from ..security import verify_password, create_access_token, get_password_hash, 
 logger = logging.getLogger("koma.auth")
 
 def require_admin(user: Usuario):
-    if user.role != "admin":
+    if user.role not in ["admin", "caixa", "gerente"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Acesso restrito a administradores."
+            detail="Acesso restrito a administradores, caixas e gerentes."
         )
 
 router = APIRouter(

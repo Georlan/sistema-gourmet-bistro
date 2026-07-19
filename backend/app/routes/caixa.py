@@ -597,6 +597,7 @@ from ..models import Restaurante
 from ..schemas import RestauranteConfigResponse, RestauranteConfigUpdate
 
 @router.get("/restaurante/config", response_model=RestauranteConfigResponse)
+@router.get("/config-cardapio", response_model=RestauranteConfigResponse)
 def obter_configuracao_restaurante(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_garcom_optional)
