@@ -35,6 +35,10 @@ class LoginResponse(BaseModel):
     garcom: UsuarioResponse
     usuario: UsuarioResponse
 
+class AtivarContaRequest(BaseModel):
+    token_convite: str
+    senha: str
+
 
 # ----------------- CATEGORY & OBSERVATION -----------------
 class CategoriaResponse(BaseModel):

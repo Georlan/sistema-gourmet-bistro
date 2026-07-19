@@ -6,7 +6,7 @@ import logging
 
 from ..database import get_db, current_restaurante_id
 from ..models import Usuario
-from ..schemas import LoginRequest, LoginResponse, UsuarioCreate, UsuarioResponse
+from ..schemas import LoginRequest, LoginResponse, UsuarioCreate, UsuarioResponse, AtivarContaRequest
 from ..security import verify_password, create_access_token, get_password_hash, get_current_user
 
 logger = logging.getLogger("koma.auth")
@@ -48,6 +48,67 @@ def login(login_data: LoginRequest, db: Session = Depends(get_db)):
             detail="Usuário ou senha incorretos"
         )
         
+    access_token = create_access_token(subject=usuario.id, restaurante_id=usuario.restaurante_id)
+    
+    user_data = {
+        "id": usuario.id,
+        "nome": usuario.nome,
+        "usuario": usuario.usuario,
+        "role": usuario.role
+    }
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "garcom": user_data,
+        "usuario": user_data
+    }
+
+
+@router.post("/ativar", response_model=LoginResponse)
+def ativar_conta(payload: AtivarContaRequest, db: Session = Depends(get_db)):
+    """
+    Ativa a conta do usuário através do token_convite.
+    Define a nova senha, mude o status para 'ativo' e limpa o token.
+    Retorna o token JWT e dados do usuário para login automático.
+    """
+    from datetime import datetime, timezone
+    
+    token_str = payload.token_convite.strip()
+    now_utc = datetime.now(timezone.utc)
+    
+    usuario = db.query(Usuario).filter(Usuario.token_convite == token_str).first()
+    
+    if not usuario:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Link de ativação inválido ou expirado"
+        )
+        
+    if usuario.status != "pendente_ativacao":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Esta conta já foi ativada previamente."
+        )
+        
+    if usuario.token_expira_em is not None:
+        token_exp = usuario.token_expira_em
+        if token_exp.tzinfo is None:
+            token_exp = token_exp.replace(tzinfo=timezone.utc)
+        if now_utc > token_exp:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Link de ativação inválido ou expirado"
+            )
+            
+    usuario.senha_hash = get_password_hash(payload.senha)
+    usuario.status = "ativo"
+    usuario.token_convite = None
+    usuario.token_expira_em = None
+    
+    db.commit()
+    db.refresh(usuario)
+    
     access_token = create_access_token(subject=usuario.id, restaurante_id=usuario.restaurante_id)
     
     user_data = {

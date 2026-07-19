@@ -340,3 +340,45 @@ def test_pagamento_idempotency_race_condition():
         assert persisted.id == race_payment_id
     finally:
         db.close()
+
+
+def test_cadastrar_e_ativar_funcionario():
+    client = TestClient(app)
+    headers_caixa = get_auth_headers(client, "caixa", "123")
+    
+    # 1. Cadastrar funcionário via /caixa/funcionarios
+    resp = client.post("/caixa/funcionarios", json={
+        "nome": "João Garçom",
+        "telefone": "(81) 98888-7777",
+        "cargo": "garcom"
+    }, headers=headers_caixa)
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["status"] == "pendente_ativacao"
+    assert data["telefone"] == "81988887777"
+
+    # Get token_convite from DB
+    db = TestingSessionLocal()
+    try:
+        user_db = db.query(Usuario).filter(Usuario.telefone == "81988887777").first()
+        assert user_db is not None
+        assert user_db.token_convite is not None
+        token_convite = user_db.token_convite
+    finally:
+        db.close()
+
+    # 2. Ativar conta via /auth/ativar
+    resp_ativar = client.post("/auth/ativar", json={
+        "token_convite": token_convite,
+        "senha": "minhasenhanova"
+    })
+    assert resp_ativar.status_code == 200
+    data_ativar = resp_ativar.json()
+    assert "access_token" in data_ativar
+
+    # 3. Test logging in with newly set password and phone number
+    resp_login = client.post("/auth/login", json={
+        "username": "81988887777",
+        "password": "minhasenhanova"
+    })
+    assert resp_login.status_code == 200

@@ -88,6 +88,15 @@ interface BotChatMessage {
   timestamp: string;
 }
 
+const aplicarMascaraTelefoneInput = (valor: string) => {
+  const apenasNumeros = valor.replace(/\D/g, '').slice(0, 11);
+  if (apenasNumeros.length === 0) return '';
+  if (apenasNumeros.length <= 2) return `(${apenasNumeros}`;
+  if (apenasNumeros.length <= 6) return `(${apenasNumeros.slice(0, 2)}) ${apenasNumeros.slice(2)}`;
+  if (apenasNumeros.length <= 10) return `(${apenasNumeros.slice(0, 2)}) ${apenasNumeros.slice(2, 6)}-${apenasNumeros.slice(6)}`;
+  return `(${apenasNumeros.slice(0, 2)}) ${apenasNumeros.slice(2, 7)}-${apenasNumeros.slice(7)}`;
+};
+
 const formatarTelefoneTabela = (tel?: string) => {
   if (!tel) return '-';
   const limpo = tel.replace(/\D/g, '');
@@ -3910,7 +3919,7 @@ export function CaixaPanel({
                         required
                         placeholder="(81) 99999-9999"
                         value={newUserTelefone}
-                        onChange={(e) => setNewUserTelefone(e.target.value)}
+                        onChange={(e) => setNewUserTelefone(aplicarMascaraTelefoneInput(e.target.value))}
                         className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'font-mono', 'text-[10px]')}
                       />
                     </div>

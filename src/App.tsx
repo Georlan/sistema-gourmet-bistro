@@ -17,7 +17,7 @@ const MemoizedCaixaPanel = React.memo(CaixaPanel);
 import clsx from 'clsx';
 import CardapioPage from './cardapio/CardapioPage';
 import SuperAdminPanel from './super-admin/SuperAdminPanel';
-
+import { CaixaAtivarPage } from './components/CaixaAtivarPage';
 
 import { API_BASE_URL } from './config/api';
 
@@ -39,6 +39,14 @@ export default function App() {
 
   if (isSuperAdmin) {
     return <SuperAdminPanel />;
+  }
+
+  // Detect activation page (?view=ativar or /ativar)
+  const isAtivar = window.location.pathname.startsWith('/ativar') ||
+                   window.location.search.includes('view=ativar');
+  if (isAtivar) {
+    const tokenFromUrl = new URLSearchParams(window.location.search).get('token');
+    return <CaixaAtivarPage token={tokenFromUrl} />;
   }
 
   // Detect if access is client cardapio (online menu)
