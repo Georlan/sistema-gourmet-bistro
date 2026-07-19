@@ -34,6 +34,15 @@ const parseBackendDateTime = (dateStr: string): number => {
   return new Date(dateStr).getTime();
 };
 
+const aplicarMascaraTelefoneInput = (valor: string) => {
+  const apenasNumeros = valor.replace(/\D/g, '').slice(0, 11);
+  if (apenasNumeros.length === 0) return '';
+  if (apenasNumeros.length <= 2) return `(${apenasNumeros}`;
+  if (apenasNumeros.length <= 6) return `(${apenasNumeros.slice(0, 2)}) ${apenasNumeros.slice(2)}`;
+  if (apenasNumeros.length <= 10) return `(${apenasNumeros.slice(0, 2)}) ${apenasNumeros.slice(2, 6)}-${apenasNumeros.slice(6)}`;
+  return `(${apenasNumeros.slice(0, 2)}) ${apenasNumeros.slice(2, 7)}-${apenasNumeros.slice(7)}`;
+};
+
 export default function App() {
   const isSuperAdmin = window.location.pathname.startsWith('/super-admin');
 
@@ -932,11 +941,12 @@ export default function App() {
     e.preventDefault();
     setLoginError("");
     setIsLoggingIn(true);
+    const usernameLimpo = loginUsername.replace(/\D/g, '') || loginUsername.trim().toLowerCase();
     try {
       const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: loginUsername.toLowerCase(), password: loginPassword })
+        body: JSON.stringify({ username: usernameLimpo, password: loginPassword })
       });
       if (!response.ok) {
         const err = await response.json();
@@ -1451,15 +1461,15 @@ export default function App() {
             )}
 
             <div className="space-y-1.5">
-              <label htmlFor="login-username" className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Usuário</label>
+              <label htmlFor="login-username" className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">TELEFONE (WHATSAPP)</label>
               <input
                 id="login-username"
-                type="text"
+                type="tel"
                 required
                 value={loginUsername}
-                onChange={(e) => setLoginUsername(e.target.value)}
-                placeholder="Ex: georlan"
-                className="w-full bg-[#090D16] text-white border border-[#27272A]/40 rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 placeholder-gray-600"
+                onChange={(e) => setLoginUsername(aplicarMascaraTelefoneInput(e.target.value))}
+                placeholder="(81) 99999-9999"
+                className="w-full bg-[#090D16] text-white border border-[#27272A]/40 rounded-xl px-4 py-3 text-sm font-semibold font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 placeholder-gray-600"
               />
             </div>
 
