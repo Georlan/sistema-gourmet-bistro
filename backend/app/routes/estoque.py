@@ -402,6 +402,7 @@ def ajustar_insumo(
     
     details = f"Insumo {insumo.id} ({insumo.nome}) ajustado de {old_qty} {insumo.unidade_medida} para {insumo.estoque_atual} {insumo.unidade_medida}. Justificativa: {data.justificativa}"
     log = ActivityLog(
+        restaurante_id=current_restaurante_id.get(),
         garcom_id=current_user.id if current_user else "sistema",
         action="MANUAL_STOCK_ADJUSTMENT",
         details=details

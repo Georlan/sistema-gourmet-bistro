@@ -6,7 +6,7 @@ import uuid
 import datetime
 import logging
 
-from ..database import get_db
+from ..database import get_db, current_restaurante_id
 from ..models import Usuario, Comanda, Item, CaixaTurno, CaixaMovimentacao, Pagamento
 from ..schemas import (
     CaixaTurnoCreate, CaixaTurnoResponse, CaixaTurnoFechar, CaixaTurnoDetalhe,
@@ -55,6 +55,7 @@ def abrir_turno(
         )
         
     novo_turno = CaixaTurno(
+        restaurante_id=current_restaurante_id.get(),
         aberto_por_id=current_user.id,
         aberto_em=datetime.datetime.now(datetime.timezone.utc),
         saldo_inicial=turno_in.saldo_inicial,
@@ -267,6 +268,7 @@ def registrar_pagamento_comanda(
     # Create the Pagamento transaction
     novo_pagamento = Pagamento(
         id=f"p-{uuid.uuid4().hex[:8]}",
+        restaurante_id=current_restaurante_id.get(),
         comanda_id=comanda_id,
         turno_id=turno.id,
         valor=pag_in.valor,

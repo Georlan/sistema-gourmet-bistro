@@ -61,8 +61,8 @@ def criar_pedido_online(
     notificando o caixa em tempo real.
     """
     # 1. Verificar se o restaurante existe
-    # (Usaremos o restaurante_id do payload para definir o tenant correto)
-    rest_id = payload.restaurante_id
+    # (Usaremos o restaurante_id do payload ou do contexto ativo para definir o tenant correto)
+    rest_id = payload.restaurante_id or current_restaurante_id.get()
     
     # 2. Obter um garçom padrão (usuário ativo) do restaurante para satisfazer a constraint FK
     garcom = db.query(Usuario).filter(Usuario.restaurante_id == rest_id).first()

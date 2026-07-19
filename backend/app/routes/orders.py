@@ -6,7 +6,7 @@ from sqlalchemy import func
 from typing import List, Optional
 import logging
 
-from ..database import get_db
+from ..database import get_db, current_restaurante_id
 from ..models import Comanda, Mesa, Usuario, Produto, Lancamento, Item, ActivityLog, Motoboy, ConfiguracaoRestaurante
 from ..schemas import (
     ComandaResponse, ComandaDetail, ComandaCreate,
@@ -218,6 +218,7 @@ def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_ta
         if comanda.mesa_id:
             nova_comanda = Comanda(
                 id=f"c-{uuid.uuid4().hex[:8]}",
+                restaurante_id=current_restaurante_id.get(),
                 mesa_id=comanda.mesa_id,
                 garcom_id=lancamento_in.garcom_id,
                 tipo="Consumo no Local",
@@ -401,6 +402,7 @@ def dividir_comanda(comanda_id: str, itens_ids: List[str], novo_identificador: s
         # 3. Criar a nova comanda compartilhando o mesmo numero_pedido e mesa
         nova_comanda = Comanda(
             id=f"c-{uuid.uuid4().hex[:8]}",
+            restaurante_id=current_restaurante_id.get(),
             mesa_id=comanda_origem.mesa_id,
             garcom_id=comanda_origem.garcom_id,
             tipo=comanda_origem.tipo,
@@ -551,6 +553,7 @@ def reabrir_comanda(
     
     # Audit log
     audit = ActivityLog(
+        restaurante_id=current_restaurante_id.get(),
         garcom_id=current_garcom.id,
         action="REOPEN_COMANDA",
         details=f"Comanda ID {comanda_id} reaberta."
@@ -609,6 +612,7 @@ def cancelar_item(
     
     # Audit log
     audit = ActivityLog(
+        restaurante_id=current_restaurante_id.get(),
         garcom_id=current_garcom.id,
         action="CANCEL_ITEM",
         details=f"Item ID {item_id} (Produto {item.produto_id}) cancelado na comanda {item.comanda_id}."
@@ -667,6 +671,7 @@ def transferir_item(
         
         comanda_destino = Comanda(
             id=f"c-{uuid.uuid4().hex[:8]}",
+            restaurante_id=current_restaurante_id.get(),
             mesa_id=nova_mesa_id,
             garcom_id=garcom_id,
             tipo=comanda_origem.tipo if comanda_origem else "Consumo no Local",

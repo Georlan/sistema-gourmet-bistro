@@ -4,7 +4,7 @@ from typing import List
 import uuid
 import logging
 
-from ..database import get_db
+from ..database import get_db, current_restaurante_id
 from ..models import Usuario
 from ..schemas import LoginRequest, LoginResponse, UsuarioCreate, UsuarioResponse
 from ..security import verify_password, create_access_token, get_password_hash, get_current_user
@@ -169,6 +169,7 @@ def gdpr_opt_out(req: GdprOptOutRequest, db: Session = Depends(get_db), current_
 
         # Write immutable log record
         log = ActivityLog(
+            restaurante_id=current_restaurante_id.get(),
             garcom_id="admin",
             action="GDPR_DELETE",
             details=detail_msg
