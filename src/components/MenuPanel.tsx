@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { Search, Plus, Minus, Trash2, SlidersHorizontal, ArrowRight, FileText, Info, ArrowLeft, ShoppingCart, X } from 'lucide-react';
 import { Product, DraftItem, AppSettings, Order } from '../types';
 import { CATEGORIES, PRODUCTS } from '../data';
-import { getProductPresets } from '../domain';
+import { getProductPresets, obterNomeCategoria } from '../domain';
 
 interface MenuPanelProps {
   tableId: number;
@@ -542,9 +542,10 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
 
                 const renderedSections = categoriesList.map((catObj) => {
                   const categoryProducts = productsList.filter((product) => {
+                    const prodCatName = obterNomeCategoria(product.categoria);
                     const matchesCategory = liveProdutos && liveProdutos.length > 0
-                      ? (product as any).categoria_id === catObj.id || (product.categoria && (product.categoria.id === catObj.id || product.categoria.nome === catObj.nome))
-                      : product.categoria === catObj.nome;
+                      ? (product as any).categoria_id === catObj.id || (product.categoria && (product.categoria.id === catObj.id || prodCatName === catObj.nome))
+                      : prodCatName === catObj.nome;
                     const matchesSearch = !searchQuery ||
                                           product.nome.toLowerCase().includes(searchQuery.toLowerCase()) ||
                                           product.descricao.toLowerCase().includes(searchQuery.toLowerCase());
@@ -672,7 +673,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
             {/* Modal Header */}
             <div className="flex justify-between items-start border-b border-[#27272A] pb-3">
               <div>
-                <span className="text-[10px] font-bold text-[#10b981] uppercase tracking-wider">{selectedProductToConfigure.categoria}</span>
+                <span className="text-[10px] font-bold text-[#10b981] uppercase tracking-wider">{obterNomeCategoria(selectedProductToConfigure.categoria)}</span>
                 <h4 className="font-serif font-bold text-lg text-white mt-0.5">{selectedProductToConfigure.nome}</h4>
               </div>
               <button

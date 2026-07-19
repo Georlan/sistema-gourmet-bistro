@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { Order, OrderItem, CaixaTurno, CaixaMovimentacao, Pagamento, Table, Product } from '../types';
 import { PRODUCTS, CATEGORIES } from '../data';
-import { getProductPresets } from '../domain';
+import { getProductPresets, obterNomeCategoria } from '../domain';
 import clsx from 'clsx';
 
 interface CaixaPanelProps {
@@ -2034,8 +2034,8 @@ export function CaixaPanel({
 
   // FILTERED menu list for PDV
   const filteredProducts = dynamicMenu.filter(p => {
-    const matchesSearch = p.nome.toLowerCase().includes(pdvSearch.toLowerCase()) || p.descricao.toLowerCase().includes(pdvSearch.toLowerCase());
-    const matchesCategory = pdvSelectedCategory === 'todos' || p.categoria === pdvSelectedCategory;
+    const catName = obterNomeCategoria(p.categoria);
+    const matchesCategory = pdvSelectedCategory === 'todos' || catName === pdvSelectedCategory || p.categoria === pdvSelectedCategory;
     return matchesSearch && matchesCategory;
   });
 
@@ -5332,7 +5332,7 @@ export function CaixaPanel({
 
                 // Fallback
                 const catObj = (p as any).categoria;
-                const cat = typeof catObj === 'object' && catObj ? catObj.nome.toLowerCase() : (typeof catObj === 'string' ? catObj.toLowerCase() : '');
+                const cat = obterNomeCategoria(catObj).toLowerCase();
                 return name.includes(keyword) || cat.includes(keyword) || catId.includes(keyword);
               });
 
@@ -5361,7 +5361,7 @@ export function CaixaPanel({
             const byCat: Record<string, typeof source> = {};
             filtered.forEach(p => {
               const catObj = (p as any).categoria;
-              const cat = typeof catObj === 'object' && catObj ? catObj.nome : (typeof catObj === 'string' ? catObj : 'Geral');
+              const cat = obterNomeCategoria(catObj) || 'Geral';
               if (!byCat[cat]) byCat[cat] = [];
               byCat[cat].push(p);
             });

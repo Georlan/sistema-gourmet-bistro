@@ -75,14 +75,25 @@ export function formatElapsedTime(firstOrderTimestamp: number | undefined, curre
 }
 
 /**
+ * Safely extracts category name string from a string or JSON object.
+ */
+export function obterNomeCategoria(categoria: any): string {
+  if (!categoria) return "";
+  if (typeof categoria === 'object') {
+    return categoria.nome || categoria.name || "";
+  }
+  return String(categoria);
+}
+
+/**
  * Dynamically generates observation presets based on product attributes and category.
  */
-export function getProductPresets(product: { nome: string; descricao: string; categoria: string }): string[] {
+export function getProductPresets(product: { nome: string; descricao: string; categoria: any }): string[] {
   const presets: string[] = ['VIAGEM', 'PRA MESA'];
   
   const desc = (product.descricao || '').toLowerCase();
   const name = (product.nome || '').toLowerCase();
-  const cat = (product.categoria || '').toLowerCase();
+  const cat = obterNomeCategoria(product.categoria).toLowerCase();
 
   // Check ingredients in name/description
   if (desc.includes('salada') || name.includes('salada')) presets.push('sem salada');
