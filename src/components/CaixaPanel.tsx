@@ -2120,7 +2120,7 @@ export function CaixaPanel({
   const filteredProducts = dynamicMenu.filter(p => {
     const catName = obterNomeCategoria(p.categoria);
     const matchesCategory = pdvSelectedCategory === 'todos' || catName === pdvSelectedCategory || p.categoria === pdvSelectedCategory;
-    const matchesSearch = !pdvSearch || smartSearchMatch(p.nome, pdvSearch) || smartSearchMatch(p.descricao, pdvSearch);
+    const matchesSearch = !pdvSearch || smartSearchMatch(`${p.nome} ${p.descricao || ''}`, pdvSearch);
     return matchesSearch && matchesCategory;
   });
 

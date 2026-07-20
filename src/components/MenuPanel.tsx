@@ -546,9 +546,8 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                     const matchesCategory = liveProdutos && liveProdutos.length > 0
                       ? (product as any).categoria_id === catObj.id || (product.categoria && (product.categoria.id === catObj.id || prodCatName === catObj.nome))
                       : prodCatName === catObj.nome;
-                    const matchesSearch = !searchQuery ||
-                                          smartSearchMatch(product.nome, searchQuery) ||
-                                          smartSearchMatch(product.descricao, searchQuery);
+                    const fullProductText = `${product.nome} ${product.descricao || ''}`;
+                    const matchesSearch = !searchQuery || smartSearchMatch(fullProductText, searchQuery);
                     return matchesCategory && matchesSearch;
                   });
 

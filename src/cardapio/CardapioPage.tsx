@@ -717,12 +717,9 @@ export default function CardapioPage() {
           ? activeBrand.products.slice(0, 3)
           : activeBrand.products.filter(item => item.category === cat);
         
-        const filtered = sectionProducts.filter(item => {
-          const matchesSearch =
-            smartSearchMatch(item.name, searchQuery) ||
-            smartSearchMatch(item.description, searchQuery);
-          return matchesSearch;
-        });
+        const filtered = sectionProducts.filter(item =>
+          smartSearchMatch(`${item.name} ${item.description || ''}`, searchQuery)
+        );
 
         return filtered.length > 0;
       })
@@ -1016,8 +1013,7 @@ export default function CardapioPage() {
                   : activeBrand.products.filter(item => item.category === cat);
                 
                 const filteredCatProducts = sectionProducts.filter(item =>
-                  smartSearchMatch(item.name, searchQuery) ||
-                  smartSearchMatch(item.description, searchQuery)
+                  smartSearchMatch(`${item.name} ${item.description || ''}`, searchQuery)
                 );
 
                 return (

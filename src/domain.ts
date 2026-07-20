@@ -197,6 +197,7 @@ export function levenshteinDistance(a: string, b: string): number {
  * 1. Accent & diacritics insensitivity ("por do" -> "pôr do sol")
  * 2. Case insensitive
  * 3. Typo-tolerant fuzzy matching ("burgurr" -> "burguer", "chese" -> "cheese", "pasrel" -> "pastel")
+ * 4. Multi-word search with stopword handling ("pasrel de frango" -> "Pastel de Frango")
  */
 export function smartSearchMatch(text: string | undefined | null, query: string): boolean {
   if (!query || !query.trim()) return true;
@@ -205,18 +206,22 @@ export function smartSearchMatch(text: string | undefined | null, query: string)
   const normText = normalizeText(text);
   const normQuery = normalizeText(query);
 
-  // 1. Direct normalized substring match (handles accents perfectly)
+  // 1. Direct normalized substring match (handles accents & full phrases instantly)
   if (normText.includes(normQuery)) return true;
 
-  const queryTokens = normQuery.split(/\s+/).filter(Boolean);
+  const rawQueryTokens = normQuery.split(/\s+/).filter(Boolean);
   const textTokens = normText.split(/\s+/).filter(Boolean);
 
-  if (queryTokens.length === 0) return true;
+  if (rawQueryTokens.length === 0) return true;
 
-  // 2. Token-by-token check: every query token must match at least one text token (or fuzzy match)
+  // Filter out 1-2 letter connective stopwords ("de", "do", "da", "e", "a", "o") unless query is only short words
+  const mainQueryTokens = rawQueryTokens.filter(t => t.length > 2);
+  const queryTokens = mainQueryTokens.length > 0 ? mainQueryTokens : rawQueryTokens;
+
+  // 2. Token-by-token check: every relevant query token must match at least one text token
   return queryTokens.every(qToken => {
-    // Exact or substring match
-    if (textTokens.some(tToken => tToken.includes(qToken) || qToken.includes(tToken))) {
+    // Exact or substring match (e.g. "pas" matches "pastel", "frango" matches "hamburguer-frango")
+    if (textTokens.some(tToken => tToken.includes(qToken) || (tToken.length >= 3 && qToken.startsWith(tToken)))) {
       return true;
     }
 
