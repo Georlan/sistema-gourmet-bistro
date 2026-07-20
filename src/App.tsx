@@ -1228,8 +1228,22 @@ export default function App() {
     }
   };
 
+  // Optimistic Item Status Update (Instant 0ms UI response)
+  const handleOptimisticUpdateItemStatus = (itemId: string | string[], newStatus: 'preparando' | 'pronto' | 'entregue') => {
+    const itemIds = Array.isArray(itemId) ? itemId : [itemId];
+    setOrders(prevOrders =>
+      prevOrders.map(order => ({
+        ...order,
+        itens: order.itens.map(item =>
+          itemIds.includes(item.id) ? { ...item, status: newStatus } : item
+        )
+      }))
+    );
+  };
+
   // 11. Delivery (Waiter serves a ready dish)
   const handleDeliverItem = async (orderId: string, itemId: string) => {
+    handleOptimisticUpdateItemStatus(itemId, 'entregue');
     try {
       const res = await fetch(`${API_BASE_URL}/comandas/itens/${itemId}/status?status=entregue`, {
         method: "PUT",
@@ -1237,12 +1251,13 @@ export default function App() {
       });
       if (!res.ok) {
         alert("Erro ao entregar item no backend.");
+        fetchOrdersFromAPI();
         return;
       }
-      fetchOrdersFromAPI();
     } catch (err) {
       console.error(err);
       alert("Erro de conexão ao marcar item como entregue.");
+      fetchOrdersFromAPI();
     }
   };
 
@@ -1279,6 +1294,7 @@ export default function App() {
 
   // 12. Kitchen - Chef completes cooking a plate
   const handleFinishPreparation = async (orderId: string, itemId: string) => {
+    handleOptimisticUpdateItemStatus(itemId, 'pronto');
     try {
       const res = await fetch(`${API_BASE_URL}/comandas/itens/${itemId}/status?status=pronto`, {
         method: "PUT",
@@ -1286,12 +1302,13 @@ export default function App() {
       });
       if (!res.ok) {
         alert("Erro ao finalizar preparação no backend.");
+        fetchOrdersFromAPI();
         return;
       }
-      fetchOrdersFromAPI();
     } catch (err) {
       console.error(err);
       alert("Erro de conexão ao finalizar preparação.");
+      fetchOrdersFromAPI();
     }
   };
 
@@ -1721,6 +1738,7 @@ export default function App() {
             onRefreshCategorias={fetchLiveCategorias}
             restauranteConfig={restauranteConfig}
             fetchError={fetchError}
+            onOptimisticUpdateItemStatus={handleOptimisticUpdateItemStatus}
           />
         ) : (
           /* VIEW 2: SALÃO (WAITERS OR CASHIER DASHBOARD) */

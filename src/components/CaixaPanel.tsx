@@ -31,6 +31,7 @@ interface CaixaPanelProps {
   onRefreshCategorias?: () => Promise<void>;
   restauranteConfig?: any;
   fetchError?: string | null;
+  onOptimisticUpdateItemStatus?: (itemId: string | string[], newStatus: 'preparando' | 'pronto' | 'entregue') => void;
 }
 
 // Simulated dynamic lists for tabs that don't need real backend persistence yet
@@ -123,9 +124,9 @@ export function CaixaPanel({
   isWsConnected = false,
   liveProdutos = [],
   liveCategorias = [],
-  onRefreshCategorias,
   restauranteConfig,
-  fetchError
+  fetchError,
+  onOptimisticUpdateItemStatus
 }: CaixaPanelProps) {
   const plano = restauranteConfig?.plano?.toLowerCase() || 'premium';
   const isPocket = plano === 'pocket';
@@ -1907,18 +1908,22 @@ export function CaixaPanel({
 
   // KDS Kitchen actions (status updates)
   const handleUpdateItemStatus = async (itemId: string, newStatus: 'preparando' | 'pronto' | 'entregue') => {
+    // 1. Atualização Otimista Instantânea (0ms no front-end)
+    if (onOptimisticUpdateItemStatus) {
+      onOptimisticUpdateItemStatus(itemId, newStatus);
+    }
     try {
       const res = await fetch(`${apiBaseUrl}/comandas/itens/${itemId}/status?status=${newStatus}`, {
         method: "PUT",
         headers: authHeaders
       });
-      if (res.ok) {
-        onRefreshOrders();
-      } else {
+      if (!res.ok) {
         alert("Erro ao atualizar status na cozinha.");
+        onRefreshOrders();
       }
     } catch (err) {
       console.error(err);
+      onRefreshOrders();
     }
   };
 
@@ -2785,17 +2790,21 @@ export function CaixaPanel({
                                 onClick={async (e) => {
                                   e.stopPropagation();
                                   if (isLoading) return;
+                                  const ids = preparingItems.map(item => item.id);
+                                  if (onOptimisticUpdateItemStatus && ids.length > 0) {
+                                    onOptimisticUpdateItemStatus(ids, 'pronto');
+                                  }
                                   setIsLoading(true);
                                   try {
-                                    await Promise.all(preparingItems.map(item =>
-                                      fetch(`${apiBaseUrl}/comandas/itens/${item.id}/status?status=pronto`, {
+                                    await Promise.all(ids.map(id =>
+                                      fetch(`${apiBaseUrl}/comandas/itens/${id}/status?status=pronto`, {
                                         method: "PUT",
                                         headers: authHeaders
                                       })
                                     ));
-                                    onRefreshOrders();
                                   } catch (err) {
                                     console.error(err);
+                                    onRefreshOrders();
                                   } finally {
                                     setIsLoading(false);
                                   }
