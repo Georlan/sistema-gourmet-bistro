@@ -222,9 +222,9 @@ def test_manage_tables():
 def test_configuracoes_requires_auth_and_admin():
     client = TestClient(app)
 
-    # Anonymous GET should be rejected with 401
+    # Anonymous GET now returns 200 (public read, required for instant UI loading)
     resp = client.get("/caixa/configuracoes")
-    assert resp.status_code == 401
+    assert resp.status_code == 200
 
     # Garçom token should be rejected with 403 on PUT
     headers_garcom = get_auth_headers(client, "garcom", "123")

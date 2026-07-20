@@ -1078,6 +1078,10 @@ export default function App() {
     const sourceComandas = orders.filter(o => o.mesaId === sourceTableId);
     if (sourceComandas.length === 0) return;
 
+    // 0ms Optimistic UI update
+    handleTransferTableOptimistic(sourceTableId, targetTableId);
+    setSelectedTableId(null);
+
     try {
       for (const comanda of sourceComandas) {
         const res = await fetch(`${API_BASE_URL}/comandas/${comanda.id}/transferir/${targetTableId}`, {
@@ -1087,19 +1091,22 @@ export default function App() {
         if (!res.ok) {
           const errData = await res.json();
           alert(`Erro ao transferir comanda: ${errData.detail}`);
+          fetchOrdersFromAPI();
           return;
         }
       }
-      setSelectedTableId(null);
-      fetchOrdersFromAPI();
     } catch (err) {
       console.error(err);
       alert("Erro de conexão ao transferir mesas.");
+      fetchOrdersFromAPI();
     }
   };
 
   // 8.5. Unify/Split (Merge and Unmerge) Tables
   const handleMergeTables = async (sourceMesaId: number, targetMesaId: number) => {
+    // 0ms Optimistic UI update: merge itens da mesa origem na mesa destino
+    handleTransferTableOptimistic(sourceMesaId, targetMesaId);
+    setSelectedTableId(null);
     try {
       const res = await fetch(`${API_BASE_URL}/comandas/mesclar?mesa_origem_id=${sourceMesaId}&mesa_destino_id=${targetMesaId}`, {
         method: "POST",
@@ -1107,15 +1114,16 @@ export default function App() {
       });
       if (res.ok) {
         showToast(`Mesa ${sourceMesaId} mesclada na Mesa ${targetMesaId} com sucesso!`);
-        setSelectedTableId(null);
         fetchOrdersFromAPI();
       } else {
         const errData = await res.json();
         alert(`Erro ao mesclar mesas: ${errData.detail}`);
+        fetchOrdersFromAPI();
       }
     } catch (err) {
       console.error(err);
       alert("Erro de conexão ao mesclar mesas.");
+      fetchOrdersFromAPI();
     }
   };
 
@@ -1238,6 +1246,18 @@ export default function App() {
           itemIds.includes(item.id) ? { ...item, status: newStatus } : item
         )
       }))
+    );
+  };
+
+  // Optimistic Payment Removal (Instant 0ms UI response)
+  const handleRemovePendingPaymentOptimistic = (pagamentoId: string) => {
+    setPagamentosPendentes(prev => prev.filter(p => p.id !== pagamentoId));
+  };
+
+  // Optimistic Table Transfer (Instant 0ms UI response)
+  const handleTransferTableOptimistic = (sourceTableId: number, targetTableId: number) => {
+    setOrders(prev =>
+      prev.map(o => o.mesaId === sourceTableId ? { ...o, mesaId: targetTableId } : o)
     );
   };
 
@@ -1739,6 +1759,7 @@ export default function App() {
             restauranteConfig={restauranteConfig}
             fetchError={fetchError}
             onOptimisticUpdateItemStatus={handleOptimisticUpdateItemStatus}
+            onRemovePendingPaymentOptimistic={handleRemovePendingPaymentOptimistic}
           />
         ) : (
           /* VIEW 2: SALÃO (WAITERS OR CASHIER DASHBOARD) */

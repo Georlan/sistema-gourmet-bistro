@@ -32,6 +32,7 @@ interface CaixaPanelProps {
   restauranteConfig?: any;
   fetchError?: string | null;
   onOptimisticUpdateItemStatus?: (itemId: string | string[], newStatus: 'preparando' | 'pronto' | 'entregue') => void;
+  onRemovePendingPaymentOptimistic?: (pagamentoId: string) => void;
 }
 
 // Simulated dynamic lists for tabs that don't need real backend persistence yet
@@ -126,7 +127,8 @@ export function CaixaPanel({
   liveCategorias = [],
   restauranteConfig,
   fetchError,
-  onOptimisticUpdateItemStatus
+  onOptimisticUpdateItemStatus,
+  onRemovePendingPaymentOptimistic
 }: CaixaPanelProps) {
   const plano = restauranteConfig?.plano?.toLowerCase() || 'premium';
   const isPocket = plano === 'pocket';
@@ -140,6 +142,12 @@ export function CaixaPanel({
   const [errorMsg, setErrorMsg] = useState('');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState('');
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(null), 3000);
+  };
 
   const [activeTab, setActiveTab] = useState<
     'dashboard' | 'operacao' | 'cardapio' | 'estoque' | 'financeiro' | 'clientes' | 'relatorios' | 'robo_ia' | 'configuracoes' | 'permissoes_cargos' | 'impressao_salao' | 'assinatura_pix' | 'config_cardapio'
@@ -546,6 +554,30 @@ export function CaixaPanel({
     perm_garcom_chamar?: boolean;
     perm_garcom_ociosas?: boolean;
   }) => {
+    // 1. Atualização Otimista Instantânea (0ms) de todos os toggles
+    if (updates.taxa_servico_ativa !== undefined) {
+      setCheckoutServiceTax(updates.taxa_servico_ativa);
+      setTaxaServicoAtiva(updates.taxa_servico_ativa);
+    }
+    if (updates.taxa_servico_padrao !== undefined) setServiceTaxRate(updates.taxa_servico_padrao);
+    if (updates.unificar_vias_delivery !== undefined) setUnificarViasDelivery(updates.unificar_vias_delivery);
+    if (updates.modo_exclusivo_salao !== undefined) setModoExclusivoSalao(updates.modo_exclusivo_salao);
+    if (updates.perm_garcom_delivery !== undefined) setPermDelivery(updates.perm_garcom_delivery);
+    if (updates.perm_garcom_editar !== undefined) setPermEdit(updates.perm_garcom_editar);
+    if (updates.perm_garcom_taxas !== undefined) setPermAddCharges(updates.perm_garcom_taxas);
+    if (updates.perm_garcom_cancelar !== undefined) setPermCancel(updates.perm_garcom_cancelar);
+    if (updates.perm_garcom_status !== undefined) setPermShowStatus(updates.perm_garcom_status);
+    if (updates.perm_garcom_abrir_vazia !== undefined) setPermOpenEmpty(updates.perm_garcom_abrir_vazia);
+    if (updates.perm_garcom_print !== undefined) setPermAutoPrint(updates.perm_garcom_print);
+    if (updates.perm_garcom_fechar !== undefined) setPermCloseAccount(updates.perm_garcom_fechar);
+    if (updates.perm_garcom_desconto !== undefined) setPermDiscount(updates.perm_garcom_desconto);
+    if (updates.perm_garcom_acrescimo !== undefined) setPermSurcharge(updates.perm_garcom_acrescimo);
+    if (updates.perm_garcom_pessoas !== undefined) setPermPeopleCount(updates.perm_garcom_pessoas);
+    if (updates.perm_garcom_transferir_mesa !== undefined) setPermTransferTables(updates.perm_garcom_transferir_mesa);
+    if (updates.perm_garcom_transferir_item !== undefined) setPermTransferItems(updates.perm_garcom_transferir_item);
+    if (updates.perm_garcom_chamar !== undefined) setPermClientCall(updates.perm_garcom_chamar);
+    if (updates.perm_garcom_ociosas !== undefined) setPermShowIdleTables(updates.perm_garcom_ociosas);
+
     try {
       const res = await fetch(`${apiBaseUrl}/caixa/configuracoes`, {
         method: 'PUT',
@@ -555,31 +587,12 @@ export function CaixaPanel({
         },
         body: JSON.stringify(updates)
       });
-      if (res.ok) {
-        const data = await res.json();
-        setCheckoutServiceTax(data.taxa_servico_ativa);
-        setTaxaServicoAtiva(data.taxa_servico_ativa);
-        setServiceTaxRate(data.taxa_servico_padrao);
-        setUnificarViasDelivery(data.unificar_vias_delivery);
-        setModoExclusivoSalao(data.modo_exclusivo_salon || data.modo_exclusivo_salao);
-        setPermDelivery(data.perm_garcom_delivery);
-        setPermEdit(data.perm_garcom_editar);
-        setPermAddCharges(data.perm_garcom_taxas);
-        setPermCancel(data.perm_garcom_cancelar);
-        setPermShowStatus(data.perm_garcom_status);
-        setPermOpenEmpty(data.perm_garcom_abrir_vazia);
-        setPermAutoPrint(data.perm_garcom_print);
-        setPermCloseAccount(data.perm_garcom_fechar);
-        setPermDiscount(data.perm_garcom_desconto);
-        setPermSurcharge(data.perm_garcom_acrescimo);
-        setPermPeopleCount(data.perm_garcom_pessoas);
-        setPermTransferTables(data.perm_garcom_transferir_mesa);
-        setPermTransferItems(data.perm_garcom_transferir_item);
-        setPermClientCall(data.perm_garcom_chamar);
-        setPermShowIdleTables(data.perm_garcom_ociosas);
+      if (!res.ok) {
+        fetchConfiguracoes();
       }
     } catch (e) {
       console.error('Error saving configurations:', e);
+      fetchConfiguracoes();
     }
   };
 
@@ -839,30 +852,28 @@ export function CaixaPanel({
   };
 
   const handleUpdateDeliveryStatus = async (orderId: string, statusNovo: string) => {
-    if (isLoading) return;
-    setIsLoading(true);
+    // 0ms Optimistic UI update
+    setDeliveryOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: statusNovo } : o));
     try {
       const res = await fetch(`${apiBaseUrl}/comandas/${orderId}/delivery/status?status_novo=${statusNovo}`, {
         method: 'PUT',
         headers: authHeaders
       });
-      if (res.ok) {
-        fetchDeliveryOrders();
-      } else {
+      if (!res.ok) {
         alert('Erro ao atualizar status do pedido.');
+        fetchDeliveryOrders();
       }
     } catch (e) {
       console.error(e);
       alert('Erro de conexão ao atualizar status.');
-    } finally {
-      setIsLoading(false);
+      fetchDeliveryOrders();
     }
   };
 
   const handleRecusarPedido = async (orderId: string) => {
-    if (isLoading) return;
     if (!confirm('Deseja realmente recusar e cancelar este pedido?')) return;
-    setIsLoading(true);
+    // 0ms Optimistic UI update
+    setDeliveryOrders(prev => prev.filter(o => o.id !== orderId));
     try {
       await fetch(`${apiBaseUrl}/comandas/${orderId}/delivery/status?status_novo=finalizado`, {
         method: 'PUT',
@@ -872,18 +883,17 @@ export function CaixaPanel({
         method: 'PUT',
         headers: authHeaders
       });
-      fetchDeliveryOrders();
       onRefreshOrders();
     } catch (e) {
       console.error(e);
-    } finally {
-      setIsLoading(false);
+      fetchDeliveryOrders();
     }
   };
 
   const handleDespacharPedido = async (orderId: string, motoboyId: number) => {
-    if (isLoading) return;
-    setIsLoading(true);
+    const motoboy = motoboysList.find(m => m.id === motoboyId);
+    // 0ms Optimistic UI update
+    setDeliveryOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'transito', motoboy_nome: motoboy?.nome || 'Motoboy' } : o));
     try {
       const res = await fetch(`${apiBaseUrl}/comandas/${orderId}/delivery/despachar`, {
         method: 'POST',
@@ -891,23 +901,22 @@ export function CaixaPanel({
         body: JSON.stringify({ motoboy_id: motoboyId })
       });
       if (res.ok) {
-        alert('Pedido despachado com sucesso!');
-        fetchDeliveryOrders();
+        showToast('Pedido despachado com sucesso!');
       } else {
         const err = await res.json();
         alert(`Erro ao despachar: ${err.detail}`);
+        fetchDeliveryOrders();
       }
     } catch (e) {
       console.error(e);
       alert('Erro de conexão ao despachar.');
-    } finally {
-      setIsLoading(false);
+      fetchDeliveryOrders();
     }
   };
 
   const handleFinalizarPedido = async (orderId: string) => {
-    if (isLoading) return;
-    setIsLoading(true);
+    // 0ms Optimistic UI update
+    setDeliveryOrders(prev => prev.filter(o => o.id !== orderId));
     try {
       await fetch(`${apiBaseUrl}/comandas/${orderId}/delivery/status?status_novo=finalizado`, {
         method: 'PUT',
@@ -918,17 +927,15 @@ export function CaixaPanel({
         headers: authHeaders
       });
       if (res.ok) {
-        alert('Pedido finalizado e comanda fechada com sucesso!');
-        fetchDeliveryOrders();
         onRefreshOrders();
       } else {
         alert('Erro ao fechar comanda.');
+        fetchDeliveryOrders();
       }
     } catch (e) {
       console.error(e);
       alert('Erro de conexão ao finalizar pedido.');
-    } finally {
-      setIsLoading(false);
+      fetchDeliveryOrders();
     }
   };
 
@@ -2140,6 +2147,13 @@ export function CaixaPanel({
     <div className={`flex h-[88vh] bg-[#0B0B0C] text-white overflow-hidden rounded-3xl border border-[#27272A] font-sans selection:bg-[#10b981]/30 text-xs ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''
       }`}>
 
+      {/* TOAST DE FEEDBACK NÃO-BLOQUEANTE */}
+      {toastMsg && (
+        <div className="fixed bottom-6 right-6 z-[9999] bg-[#10b981] text-[#0B0B0C] font-bold px-5 py-3 rounded-2xl shadow-2xl text-sm animate-fade-in pointer-events-none">
+          {toastMsg}
+        </div>
+      )}
+
       {/* SIDEBAR - ANOTA AI / KOMA THEME */}
       <aside className={clsx('w-64', 'bg-[#121214]', 'border-r', 'border-[#27272A]', 'flex', 'flex-col', 'justify-between', 'shrink-0')}>
         <div className={clsx('space-y-6', 'pt-5')}>
@@ -2541,18 +2555,22 @@ export function CaixaPanel({
                             <button
                               type="button"
                               onClick={async () => {
+                                if (onRemovePendingPaymentOptimistic) onRemovePendingPaymentOptimistic(pag.id);
                                 try {
                                   const res = await fetch(`${apiBaseUrl}/caixa/pagamentos/${pag.id}/aprovar`, {
                                     method: 'POST',
                                     headers: authHeaders
                                   });
                                   if (res.ok) {
-                                    alert("Pagamento em dinheiro confirmado com sucesso!");
+                                    showToast("Pagamento em dinheiro confirmado!");
                                     onRefreshOrders();
+                                    if (onRefreshPagamentosPendentes) onRefreshPagamentosPendentes();
+                                  } else {
                                     if (onRefreshPagamentosPendentes) onRefreshPagamentosPendentes();
                                   }
                                 } catch (e) {
                                   console.error(e);
+                                  if (onRefreshPagamentosPendentes) onRefreshPagamentosPendentes();
                                 }
                               }}
                               className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[9px] uppercase tracking-wider transition-all cursor-pointer"
@@ -2562,18 +2580,22 @@ export function CaixaPanel({
                             <button
                               type="button"
                               onClick={async () => {
+                                if (onRemovePendingPaymentOptimistic) onRemovePendingPaymentOptimistic(pag.id);
                                 try {
                                   const res = await fetch(`${apiBaseUrl}/caixa/pagamentos/${pag.id}/recusar`, {
                                     method: 'POST',
                                     headers: authHeaders
                                   });
                                   if (res.ok) {
-                                    alert("Pagamento recusado.");
+                                    showToast("Pagamento recusado.");
                                     onRefreshOrders();
+                                    if (onRefreshPagamentosPendentes) onRefreshPagamentosPendentes();
+                                  } else {
                                     if (onRefreshPagamentosPendentes) onRefreshPagamentosPendentes();
                                   }
                                 } catch (e) {
                                   console.error(e);
+                                  if (onRefreshPagamentosPendentes) onRefreshPagamentosPendentes();
                                 }
                               }}
                               className="px-3 py-1.5 bg-rose-950/30 border border-rose-900/35 text-rose-400 hover:bg-rose-900/20 hover:text-white rounded-lg font-bold text-[9px] transition-all cursor-pointer"

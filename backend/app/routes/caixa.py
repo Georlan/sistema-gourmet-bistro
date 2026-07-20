@@ -591,7 +591,7 @@ from sqlalchemy.orm import joinedload
 @router.get("/configuracoes", response_model=ConfiguracaoRestauranteResponse)
 def obter_configuracoes(
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user)
+    current_user: Usuario = Depends(get_current_garcom_optional)
 ):
     config = db.query(ConfiguracaoRestaurante).options(joinedload(ConfiguracaoRestaurante.restaurante)).first()
     if not config:
