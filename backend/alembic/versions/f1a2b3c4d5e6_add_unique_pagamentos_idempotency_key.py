@@ -20,18 +20,24 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Cria índice único para evitar pagamentos duplicados por idempotency_key."""
-    try:
-        with op.batch_alter_table('pagamentos') as batch_op:
-            batch_op.create_index('ix_pagamentos_idempotency_key', ['idempotency_key'], unique=True)
-        print("✅ Índice único ix_pagamentos_idempotency_key criado com sucesso.")
-    except Exception as e:
-        print(f"⚠️ Ignorado erro ao criar índice único ix_pagamentos_idempotency_key: {e}")
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    if inspector.has_table('pagamentos'):
+        indexes = [idx['name'] for idx in inspector.get_indexes('pagamentos')]
+        if 'ix_pagamentos_idempotency_key' not in indexes:
+            with op.batch_alter_table('pagamentos') as batch_op:
+                batch_op.create_index('ix_pagamentos_idempotency_key', ['idempotency_key'], unique=True)
+            print("✅ Índice único ix_pagamentos_idempotency_key criado com sucesso.")
+        else:
+            print("⚠️ Índice ix_pagamentos_idempotency_key já existe. Ignorando criação.")
 
 
 def downgrade() -> None:
-    try:
-        with op.batch_alter_table('pagamentos') as batch_op:
-            batch_op.drop_index('ix_pagamentos_idempotency_key')
-        print("✅ Índice único ix_pagamentos_idempotency_key removido com sucesso.")
-    except Exception as e:
-        print(f"⚠️ Ignorado erro ao remover índice único ix_pagamentos_idempotency_key: {e}")
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    if inspector.has_table('pagamentos'):
+        indexes = [idx['name'] for idx in inspector.get_indexes('pagamentos')]
+        if 'ix_pagamentos_idempotency_key' in indexes:
+            with op.batch_alter_table('pagamentos') as batch_op:
+                batch_op.drop_index('ix_pagamentos_idempotency_key')
+            print("✅ Índice único ix_pagamentos_idempotency_key removido com sucesso.")

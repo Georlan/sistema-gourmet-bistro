@@ -20,22 +20,29 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+
     # ─── ALTERAÇÕES NA TABELA: restaurantes ───────────────────
-    with op.batch_alter_table('restaurantes') as batch_op:
-        batch_op.add_column(sa.Column('slug', sa.String(), nullable=True))
-        batch_op.add_column(sa.Column('subtitulo', sa.String(), nullable=True))
-        batch_op.add_column(sa.Column('google_maps_url', sa.String(), nullable=True))
-        batch_op.add_column(sa.Column('latitude', sa.Float(), nullable=True))
-        batch_op.add_column(sa.Column('longitude', sa.Float(), nullable=True))
-        batch_op.add_column(sa.Column('socials', sa.JSON(), nullable=True))
-        batch_op.add_column(sa.Column('horarios_funcionamento', sa.JSON(), nullable=True))
-        batch_op.add_column(sa.Column('formas_pagamento_aceitas', sa.JSON(), nullable=True))
+    if inspector.has_table('restaurantes'):
+        existing_cols = {c['name'] for c in inspector.get_columns('restaurantes')}
+        with op.batch_alter_table('restaurantes') as batch_op:
+            for col_name, col_type in [
+                ('slug', sa.String()),
+                ('subtitulo', sa.String()),
+                ('google_maps_url', sa.String()),
+                ('latitude', sa.Float()),
+                ('longitude', sa.Float()),
+                ('socials', sa.JSON()),
+                ('horarios_funcionamento', sa.JSON()),
+                ('formas_pagamento_aceitas', sa.JSON())
+            ]:
+                if col_name not in existing_cols:
+                    batch_op.add_column(sa.Column(col_name, col_type, nullable=True))
 
     # ─── RECRIAÇÃO DA TABELA: clientes (para suporte a UUID e UniqueConstraint composta) ───
-    try:
+    if inspector.has_table('clientes'):
         op.drop_table('clientes')
-    except Exception:
-        pass
 
     op.create_table(
         'clientes',
