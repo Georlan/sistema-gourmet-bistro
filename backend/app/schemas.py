@@ -1,6 +1,7 @@
-from pydantic import BaseModel, ConfigDict
-from typing import List, Optional
+from pydantic import BaseModel, ConfigDict, field_validator
+from typing import List, Optional, Union, Any
 from datetime import datetime
+import uuid
 
 # ----------------- AUTHENTICATION -----------------
 class LoginRequest(BaseModel):
@@ -18,7 +19,14 @@ class UsuarioResponse(BaseModel):
     created_at: Optional[datetime] = None
     usuario: Optional[str] = None
     role: Optional[str] = None
-    token_convite: Optional[str] = None
+    token_convite: Optional[Union[str, Any]] = None
+
+    @field_validator('token_convite', mode='before')
+    @classmethod
+    def convert_uuid_to_str(cls, v):
+        if v is not None:
+            return str(v)
+        return v
 
     model_config = ConfigDict(from_attributes=True)
 
