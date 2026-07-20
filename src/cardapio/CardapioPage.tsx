@@ -20,6 +20,7 @@ import CardapioDigital from "./components/CardapioDigital";
 import CardapioStoreInfoDrawer from "./components/CardapioStoreInfoDrawer";
 import CardapioAiChefAssistant from "./components/CardapioAiChefAssistant";
 import { ShoppingBag, Eye, X, ArrowRight } from "lucide-react";
+import { smartSearchMatch } from "../domain";
 
 const getCategoryId = (name: string) =>
   'sec-' + name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-');
@@ -718,8 +719,8 @@ export default function CardapioPage() {
         
         const filtered = sectionProducts.filter(item => {
           const matchesSearch =
-            item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            item.description.toLowerCase().includes(searchQuery.toLowerCase());
+            smartSearchMatch(item.name, searchQuery) ||
+            smartSearchMatch(item.description, searchQuery);
           return matchesSearch;
         });
 
@@ -1015,8 +1016,8 @@ export default function CardapioPage() {
                   : activeBrand.products.filter(item => item.category === cat);
                 
                 const filteredCatProducts = sectionProducts.filter(item =>
-                  item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                  item.description.toLowerCase().includes(searchQuery.toLowerCase())
+                  smartSearchMatch(item.name, searchQuery) ||
+                  smartSearchMatch(item.description, searchQuery)
                 );
 
                 return (

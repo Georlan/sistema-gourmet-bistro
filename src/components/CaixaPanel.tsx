@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { Order, OrderItem, CaixaTurno, CaixaMovimentacao, Pagamento, Table, Product } from '../types';
 import { PRODUCTS, CATEGORIES } from '../data';
-import { getProductPresets, obterNomeCategoria } from '../domain';
+import { getProductPresets, obterNomeCategoria, smartSearchMatch } from '../domain';
 import { API } from '../config/caixaService';
 import clsx from 'clsx';
 
@@ -2120,7 +2120,7 @@ export function CaixaPanel({
   const filteredProducts = dynamicMenu.filter(p => {
     const catName = obterNomeCategoria(p.categoria);
     const matchesCategory = pdvSelectedCategory === 'todos' || catName === pdvSelectedCategory || p.categoria === pdvSelectedCategory;
-    const matchesSearch = !pdvSearch || p.nome.toLowerCase().includes(pdvSearch.toLowerCase()) || (p.descricao && p.descricao.toLowerCase().includes(pdvSearch.toLowerCase()));
+    const matchesSearch = !pdvSearch || smartSearchMatch(p.nome, pdvSearch) || smartSearchMatch(p.descricao, pdvSearch);
     return matchesSearch && matchesCategory;
   });
 
@@ -5486,7 +5486,7 @@ export function CaixaPanel({
             };
 
             const filtered = disponibilidadeSearch.trim()
-              ? source.filter(p => p.nome.toLowerCase().includes(disponibilidadeSearch.toLowerCase()))
+              ? source.filter(p => smartSearchMatch(p.nome, disponibilidadeSearch) || smartSearchMatch(p.descricao, disponibilidadeSearch))
               : source;
             const byCat: Record<string, typeof source> = {};
             filtered.forEach(p => {
