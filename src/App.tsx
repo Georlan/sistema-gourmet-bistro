@@ -1001,6 +1001,61 @@ export default function App() {
     if (items.length === 0) return;
 
     setIsSubmitting(true);
+
+    // ─────────────────────────────────────────────────────────────────
+    // 0ms OPTIMISTIC UPDATE: Limpar o carrinho e adicionar itens localmente
+    // ─────────────────────────────────────────────────────────────────
+    const optimisticItems: any[] = items.flatMap(item => {
+      const qty = item.quantidade || 1;
+      return Array.from({ length: qty }, (_, i) => ({
+        id: `opt_${Date.now()}_${i}_${item.produtoId}`,
+        produtoId: item.produtoId,
+        nome: item.nome,
+        preco: item.preco,
+        observacao: item.observacao,
+        clienteNome: item.clienteNome.trim() || 'Consumo Geral',
+        status: 'preparando' as const,
+        pago: false,
+        garcomNome: activeWaiterNome,
+      }));
+    });
+
+    const existingComanda = orders.find(o => o.mesaId === mesaId);
+    let optimisticComandaId = existingComanda?.id;
+
+    if (existingComanda) {
+      // Adiciona itens na comanda existente
+      setOrders(prev => prev.map(o =>
+        o.mesaId === mesaId
+          ? { ...o, itens: [...o.itens, ...optimisticItems] }
+          : o
+      ));
+    } else {
+      // Cria comanda nova otimista
+      optimisticComandaId = `opt_comanda_${Date.now()}`;
+      const optimisticOrder: Order = {
+        id: optimisticComandaId,
+        mesaId,
+        garcomId: activeWaiterId,
+        garcomNome: activeWaiterNome,
+        timestamp: Date.now(),
+        itens: optimisticItems,
+        tipo: orderType,
+        valorPago: 0,
+      };
+      setOrders(prev => [...prev, optimisticOrder]);
+    }
+
+    // Limpa carrinho imediatamente (0ms)
+    setDrafts(prev => {
+      const copy = { ...prev };
+      delete copy[mesaId];
+      return copy;
+    });
+
+    // Exibe toast imediatamente
+    showToast('✅ Pedido enviado para a cozinha!', 'success');
+
     try {
       const activeComanda = orders.find(o => o.mesaId === mesaId);
       let comandaId = activeComanda?.id;
@@ -1019,6 +1074,7 @@ export default function App() {
           const errData = await openRes.json();
           alert(`Erro ao abrir comanda: ${errData.detail || openRes.statusText}`);
           setIsSubmitting(false);
+          fetchOrdersFromAPI(); // Rollback
           return;
         }
         const newComanda = await openRes.json();
@@ -1047,6 +1103,7 @@ export default function App() {
       if (!launchRes.ok) {
         const errData = await launchRes.json();
         alert(`Erro ao lançar itens: ${errData.detail || launchRes.statusText}`);
+        fetchOrdersFromAPI(); // Rollback
         setIsSubmitting(false);
         return;
       }
@@ -1054,20 +1111,14 @@ export default function App() {
       const launchData = await launchRes.json();
       if (launchData.dispensado_impressao) {
         showToast('✅ Pedido registrado! (Itens sem impressão física)', 'info');
-      } else {
-        showToast('✅ Pedido enviado para a cozinha!', 'success');
       }
 
-      setDrafts(prev => {
-        const copy = { ...prev };
-        delete copy[mesaId];
-        return copy;
-      });
-
+      // Sync real com dados do servidor (substitui itens otimistas pelos reais com IDs corretos)
       fetchOrdersFromAPI();
     } catch (err) {
       console.error(err);
       alert("Erro ao conectar ao servidor para enviar o pedido.");
+      fetchOrdersFromAPI(); // Rollback
     } finally {
       setIsSubmitting(false);
     }
@@ -1157,6 +1208,11 @@ export default function App() {
     const tableComandas = orders.filter(o => o.mesaId === mesaId);
     if (tableComandas.length === 0) return;
 
+    // 0ms: remove a mesa do estado local imediatamente
+    setOrders(prev => prev.filter(o => o.mesaId !== mesaId));
+    setSelectedTableId(null);
+    showToast(`✅ Mesa ${mesaId} encerrada e liberada!`, 'success');
+
     try {
       for (const comanda of tableComandas) {
         const res = await fetch(`${API_BASE_URL}/comandas/${comanda.id}/fechar`, {
@@ -1166,15 +1222,15 @@ export default function App() {
         if (!res.ok) {
           const errData = await res.json();
           alert(`Erro ao fechar comanda: ${errData.detail}`);
+          fetchOrdersFromAPI(); // Rollback
           return;
         }
       }
-      setSelectedTableId(null);
       fetchOrdersFromAPI();
-      showToast(`✅ Mesa ${mesaId} encerrada e liberada!`, 'success');
     } catch (err) {
       console.error(err);
       alert("Erro de conexão ao encerrar mesa.");
+      fetchOrdersFromAPI(); // Rollback
     }
   };
 
@@ -1334,6 +1390,10 @@ export default function App() {
 
   // 13. Transfer single item to a different table
   const handleTransferItem = async (itemId: string, targetTableId: number) => {
+    // 0ms: remove item da mesa origem imediatamente
+    setOrders(prev => prev.map(o => ({ ...o, itens: o.itens.filter(it => it.id !== itemId) })));
+    showToast(`✅ Item transferido para a Mesa ${targetTableId}!`, 'success');
+
     try {
       const res = await fetch(`${API_BASE_URL}/comandas/itens/${itemId}/transferir/${targetTableId}`, {
         method: "POST",
@@ -1342,47 +1402,52 @@ export default function App() {
       if (!res.ok) {
         const errData = await res.json();
         alert(`Erro ao transferir item: ${errData.detail}`);
+        fetchOrdersFromAPI(); // Rollback
         return;
       }
-      alert(`Item transferido com sucesso para a Mesa ${targetTableId}!`);
       fetchOrdersFromAPI();
     } catch (err) {
       console.error(err);
       alert("Erro de conexão ao transferir item.");
+      fetchOrdersFromAPI(); // Rollback
     }
   };
 
   const handleTransferItems = async (itemIds: string[], targetTableId: number) => {
+    // 0ms: remove itens da mesa origem imediatamente
+    const idSet = new Set(itemIds);
+    setOrders(prev => prev.map(o => ({ ...o, itens: o.itens.filter(it => !idSet.has(it.id)) })));
+    showToast(`✅ ${itemIds.length} item(ns) transferido(s) para a Mesa ${targetTableId}!`, 'success');
+
     try {
-      let successCount = 0;
       let failMessage = "";
       for (const itemId of itemIds) {
         const res = await fetch(`${API_BASE_URL}/comandas/itens/${itemId}/transferir/${targetTableId}`, {
           method: "POST",
           headers: getAuthHeaders()
         });
-        if (res.ok) {
-          successCount++;
-        } else {
+        if (!res.ok) {
           const errData = await res.json();
           failMessage = errData.detail || "Erro desconhecido";
         }
       }
-      if (successCount > 0) {
-        alert(`${successCount} item(ns) transferido(s) com sucesso para a Mesa ${targetTableId}!`);
-      }
-      if (successCount < itemIds.length) {
+      if (failMessage) {
         alert(`Falha ao transferir alguns itens: ${failMessage}`);
       }
       fetchOrdersFromAPI();
     } catch (err) {
       console.error(err);
       alert("Erro de conexão ao transferir itens.");
+      fetchOrdersFromAPI(); // Rollback
     }
   };
 
   // 14. Cancel single item
   const handleCancelItem = async (itemId: string) => {
+    // 0ms: remove item do estado local imediatamente
+    setOrders(prev => prev.map(o => ({ ...o, itens: o.itens.filter(it => it.id !== itemId) })));
+    showToast('✅ Item cancelado!', 'success');
+
     try {
       const res = await fetch(`${API_BASE_URL}/comandas/itens/${itemId}/cancelar`, {
         method: "PUT",
@@ -1391,17 +1456,27 @@ export default function App() {
       if (!res.ok) {
         const errData = await res.json();
         alert(`Erro ao cancelar item: ${errData.detail}`);
+        fetchOrdersFromAPI(); // Rollback
         return;
       }
-      showToast('✅ Item cancelado!', 'success');
       fetchOrdersFromAPI();
     } catch (err) {
       console.error(err);
       alert("Erro de conexão ao cancelar item.");
+      fetchOrdersFromAPI(); // Rollback
     }
   };
 
   const handleUpdateItemDetails = async (itemId: string, observacao: string, clienteNome: string, quantidadeAdicional?: number) => {
+    // 0ms: atualiza observação e nome do cliente localmente
+    setOrders(prev => prev.map(o => ({
+      ...o,
+      itens: o.itens.map(it =>
+        it.id === itemId ? { ...it, observacao, clienteNome } : it
+      )
+    })));
+    showToast('✅ Item atualizado!', 'success');
+
     try {
       const res = await fetch(`${API_BASE_URL}/comandas/itens/${itemId}`, {
         method: "PUT",
@@ -1418,13 +1493,14 @@ export default function App() {
       if (!res.ok) {
         const errData = await res.json();
         alert(`Erro ao editar item: ${errData.detail}`);
+        fetchOrdersFromAPI(); // Rollback
         return;
       }
-      showToast('✅ Item atualizado!', 'success');
       fetchOrdersFromAPI();
     } catch (err) {
       console.error(err);
       alert("Erro de conexão ao atualizar item.");
+      fetchOrdersFromAPI(); // Rollback
     }
   };
 
