@@ -173,8 +173,8 @@ async def run_migrations_on_startup():
                 ))
                 conn.commit()
 
-        print("[ALEMBIC] Rodando upgrade head...")
-        command.upgrade(alembic_cfg, "head")
+        print("[ALEMBIC] Rodando upgrade heads...")
+        command.upgrade(alembic_cfg, "heads")
         print("[ALEMBIC] ✅ Migrações concluídas com sucesso.")
 
         # Executar DDL de emergência caso a coluna mesa_transferida_de não exista na tabela comandas
