@@ -1046,12 +1046,13 @@ export default function App() {
       setOrders(prev => [...prev, optimisticOrder]);
     }
 
-    // Limpa carrinho imediatamente (0ms)
+    // Limpa carrinho e fecha modal da mesa imediatamente (0ms) para voltar ao mapa de mesas
     setDrafts(prev => {
       const copy = { ...prev };
       delete copy[mesaId];
       return copy;
     });
+    setSelectedTableId(null);
 
     // Exibe toast imediatamente
     showToast('✅ Pedido enviado para a cozinha!', 'success');
