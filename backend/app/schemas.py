@@ -18,6 +18,7 @@ class UsuarioResponse(BaseModel):
     created_at: Optional[datetime] = None
     usuario: Optional[str] = None
     role: Optional[str] = None
+    token_convite: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

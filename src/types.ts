@@ -168,6 +168,7 @@ export interface SystemUser {
   role?: string;
   status?: 'pendente_ativacao' | 'ativo' | 'inativo' | string;
   created_at?: string;
+  token_convite?: string;
 }
 
 export interface BotChatMessage {

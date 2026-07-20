@@ -333,9 +333,13 @@ def reenviar_convite_usuario(
         except Exception as err:
             logger.warning(f"[EVOLUTION API] Exceção de rede ao reenviar convite: {err}")
 
-    if not evolution_sent:
-        logger.info(f"[WHATSAPP SIMULADO] Reenviar convite para {tel_clean}: {convite_link}")
-
-    return {"message": f"Convite reenviado com sucesso para {usuario.nome}."}
+    return {
+        "message": f"Convite gerado com sucesso para {usuario.nome}.",
+        "token_convite": usuario.token_convite,
+        "telefone": tel_clean,
+        "nome": usuario.nome,
+        "link": convite_link,
+        "mensagem": mensagem_texto
+    }
 
 

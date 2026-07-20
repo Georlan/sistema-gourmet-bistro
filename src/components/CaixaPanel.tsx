@@ -1827,6 +1827,17 @@ export function CaixaPanel({
   };
 
   // Waiter CRUD actions
+  const openWaInvite = (telefone: string, nome: string, token: string) => {
+    let clean = (telefone || '').replace(/\D/g, '');
+    if (!clean.startsWith('55') && (clean.length === 10 || clean.length === 11)) {
+      clean = '55' + clean;
+    }
+    const link = `https://sistema-gourmet-bistro.pages.dev/ativar?token=${token}`;
+    const msg = `Olá ${nome}! Você foi convidado para trabalhar no Kôma. Clique no link para criar sua senha e ativar sua conta: ${link}`;
+    const waUrl = `https://wa.me/${clean}?text=${encodeURIComponent(msg)}`;
+    window.open(waUrl, '_blank');
+  };
+
   const handleAddUserSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const telefoneClean = newUserTelefone.replace(/\D/g, '');
@@ -1835,7 +1846,7 @@ export function CaixaPanel({
       return;
     }
     try {
-      await API.cadastrarFuncionario({
+      const createdUser = await API.cadastrarFuncionario({
         nome: newUserNome,
         telefone: telefoneClean,
         cargo: newUserRole
@@ -1843,7 +1854,12 @@ export function CaixaPanel({
       setNewUserNome('');
       setNewUserTelefone('');
       fetchSystemUsers();
-      alert("Convite cadastrado com sucesso! O funcionário receberá o link de ativação.");
+
+      if (createdUser && createdUser.token_convite) {
+        openWaInvite(telefoneClean, createdUser.nome, createdUser.token_convite);
+      } else {
+        alert("Convite cadastrado com sucesso!");
+      }
     } catch (err: any) {
       console.error(err);
       alert(`Erro: ${err.message || 'Falha ao enviar convite'}`);
@@ -1857,13 +1873,18 @@ export function CaixaPanel({
         headers: authHeaders
       });
       if (res.ok) {
-        alert(`Link de convite reenviado para ${user.nome}!`);
+        const data = await res.json();
+        if (data.token_convite) {
+          openWaInvite(data.telefone || user.telefone || '', data.nome || user.nome, data.token_convite);
+        } else {
+          alert(`Link de convite gerado para ${user.nome}!`);
+        }
       } else {
-        alert(`Convite reenviado com sucesso para ${user.nome} (${user.telefone || user.usuario || ''})!`);
+        alert(`Não foi possível reenviar o convite no momento.`);
       }
     } catch (err) {
       console.error(err);
-      alert(`Convite reenviado para ${user.nome}!`);
+      alert(`Erro de conexão.`);
     }
   };
 
