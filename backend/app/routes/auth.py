@@ -270,3 +270,72 @@ def gdpr_opt_out(req: GdprOptOutRequest, db: Session = Depends(get_db), current_
     
     return {"status": "success", "detail": detail_msg}
 
+
+@router.post("/usuarios/{user_id}/reenviar-convite")
+def reenviar_convite_usuario(
+    user_id: str,
+    db: Session = Depends(get_db)
+):
+    """Reenvia o link de convite por WhatsApp para o usuário pendente de ativação."""
+    import os
+    import datetime
+    from datetime import timezone
+    import httpx
+    from ..config import settings
+
+    usuario = db.query(Usuario).filter(Usuario.id == user_id).first()
+    if not usuario:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuário não encontrado."
+        )
+
+    if usuario.status != "pendente_ativacao":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Este usuário já ativou sua conta."
+        )
+
+    # Gera ou renova o token se não existir ou se expirado
+    if not usuario.token_convite:
+        usuario.token_convite = str(uuid.uuid4())
+    usuario.token_expira_em = datetime.datetime.now(timezone.utc) + datetime.timedelta(hours=24)
+    db.commit()
+    db.refresh(usuario)
+
+    tel_clean = usuario.telefone or ""
+    convite_link = f"https://sistema-gourmet-bistro.pages.dev/ativar?token={usuario.token_convite}"
+    mensagem_texto = f"Olá {usuario.nome}! Você foi convidado para trabalhar no Kôma. Clique no link para criar sua senha e ativar sua conta: {convite_link}"
+
+    evolution_sent = False
+    evolution_url = getattr(settings, "EVOLUTION_API_URL", None) or os.getenv("EVOLUTION_API_URL", "")
+    evolution_key = getattr(settings, "EVOLUTION_API_KEY", None) or os.getenv("EVOLUTION_API_KEY", "")
+    evolution_instance = getattr(settings, "EVOLUTION_INSTANCE_NAME", None) or os.getenv("EVOLUTION_INSTANCE_NAME", "")
+
+    if evolution_url and evolution_key and evolution_instance:
+        try:
+            url_disparo = f"{evolution_url.rstrip('/')}/message/sendText/{evolution_instance}"
+            headers = {
+                "Content-Type": "application/json",
+                "apikey": evolution_key
+            }
+            payload = {
+                "number": tel_clean,
+                "text": mensagem_texto
+            }
+            with httpx.Client(timeout=5.0) as client:
+                res = client.post(url_disparo, headers=headers, json=payload)
+                if res.status_code in [200, 201]:
+                    evolution_sent = True
+                    logger.info(f"[EVOLUTION API] Convite reenviado para {tel_clean}: {res.status_code}")
+                else:
+                    logger.warning(f"[EVOLUTION API] Falha HTTP {res.status_code} ao reenviar convite: {res.text}")
+        except Exception as err:
+            logger.warning(f"[EVOLUTION API] Exceção de rede ao reenviar convite: {err}")
+
+    if not evolution_sent:
+        logger.info(f"[WHATSAPP SIMULADO] Reenviar convite para {tel_clean}: {convite_link}")
+
+    return {"message": f"Convite reenviado com sucesso para {usuario.nome}."}
+
+
