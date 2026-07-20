@@ -227,8 +227,18 @@ export function smartSearchMatch(text: string | undefined | null, query: string)
     const maxDistance = qLen >= 8 ? 2 : 1;
 
     return textTokens.some(tToken => {
-      if (Math.abs(tToken.length - qLen) > maxDistance) return false;
-      return levenshteinDistance(qToken, tToken) <= maxDistance;
+      // 1. Full word fuzzy match
+      if (Math.abs(tToken.length - qLen) <= maxDistance && levenshteinDistance(qToken, tToken) <= maxDistance) {
+        return true;
+      }
+      // 2. Partial prefix fuzzy match (e.g. "pasr" matching "pastel", "burgr" matching "burguer")
+      if (tToken.length >= qLen) {
+        const tPrefix = tToken.slice(0, qLen);
+        if (levenshteinDistance(qToken, tPrefix) <= maxDistance) {
+          return true;
+        }
+      }
+      return false;
     });
   });
 }
