@@ -11,6 +11,7 @@ import { Order, OrderItem, CaixaTurno, CaixaMovimentacao, Pagamento, Table, Prod
 import { PRODUCTS, CATEGORIES } from '../data';
 import { getProductPresets, obterNomeCategoria, smartSearchMatch } from '../domain';
 import { API } from '../config/caixaService';
+import { ComandaActionsModal } from './ComandaActionsModal';
 import clsx from 'clsx';
 
 interface CaixaPanelProps {
@@ -157,6 +158,7 @@ export function CaixaPanel({
   // active sub-tab under each main tab
   const [activeSubTab, setActiveSubTab] = useState<string>('pedidos');
   const [selectedKanbanOrder, setSelectedKanbanOrder] = useState<any>(null);
+  const [quickActionsOrder, setQuickActionsOrder] = useState<Order | null>(null);
 
   // Configurações do Cardápio Digital Whitelabel
   const [cardapioStatusOverride, setCardapioStatusOverride] = useState<string>('Automático');
@@ -7711,6 +7713,16 @@ export function CaixaPanel({
                 <div className="flex flex-col gap-2 pt-2">
                   <button
                     type="button"
+                    onClick={() => {
+                      setQuickActionsOrder(selectedKanbanOrder);
+                    }}
+                    className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 text-[#121214] font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 shadow-lg"
+                  >
+                    ⚡ Ações Rápidas (Rateio / Desconto / Pagamento)
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={async () => {
                       try {
                         const res = await fetch(`${apiBaseUrl}/comandas/lancamentos/${selectedKanbanOrder.id}/reimprimir`, {
@@ -8703,7 +8715,7 @@ export function CaixaPanel({
               onSubmit={async (e) => {
                 e.preventDefault();
                 if (!distFormNomeFantasia.trim()) {
-                  alert('Preencha o nome fantasia!');
+                  showToast('Preencha o nome fantasia!', 'info');
                   return;
                 }
                 await handleSaveDistribuidor(false);
@@ -8783,6 +8795,77 @@ export function CaixaPanel({
           </div>
         </div>
       )}
+
+      {/* MODAL DE AÇÕES RÁPIDAS (RATEIO / DESCONTO / CHECKOUT) */}
+      <ComandaActionsModal
+        isOpen={Boolean(quickActionsOrder)}
+        onClose={() => setQuickActionsOrder(null)}
+        comanda={quickActionsOrder}
+        onPrintKitchen={async (comandaId) => {
+          try {
+            const res = await fetch(`${apiBaseUrl}/comandas/lancamentos/${comandaId}/reimprimir`, {
+              method: "POST",
+              headers: authHeaders
+            });
+            if (res.ok) {
+              showToast("Ticket enviado para a cozinha com sucesso!");
+            } else {
+              const err = await res.json();
+              showToast(`Erro ao reimprimir: ${err.detail}`, 'error');
+            }
+          } catch (err) {
+            console.error(err);
+            showToast("Erro ao solicitar impressão.", 'error');
+          }
+        }}
+        onPrintBill={async (comandaId) => {
+          try {
+            const targetOrder = orders.find(o => o.id === comandaId) || quickActionsOrder;
+            const mesaId = targetOrder?.mesaId || 0;
+            const printHeader = localStorage.getItem("koma_print_header") || "";
+            const printFooter = localStorage.getItem("koma_print_footer") || "";
+            let url = `${apiBaseUrl}/mesas/${mesaId}/imprimir-recibo?apenas_valores=true`;
+            const params = new URLSearchParams();
+            if (printHeader) params.append("print_header", printHeader);
+            if (printFooter) params.append("print_footer", printFooter);
+            if (params.toString()) url += `&${params.toString()}`;
+
+            const res = await fetch(url, {
+              method: 'POST',
+              headers: authHeaders
+            });
+            if (res.ok) {
+              showToast("Pré-conta (apenas valores) enviada para a impressora!");
+            } else {
+              const err = await res.json();
+              showToast(`Erro ao imprimir pré-conta: ${err.detail}`, 'error');
+            }
+          } catch (err) {
+            console.error(err);
+            showToast("Erro ao solicitar pré-conta.", 'error');
+          }
+        }}
+        onFinalizeOrder={async (comandaId, totalFinal, metodoPagamento) => {
+          try {
+            const res = await fetch(`${apiBaseUrl}/comandas/${comandaId}/fechar`, {
+              method: "PUT",
+              headers: authHeaders
+            });
+            if (res.ok) {
+              showToast(`✅ Comanda #${comandaId.slice(-4)} finalizada (${metodoPagamento.toUpperCase()}) — R$ ${totalFinal.toFixed(2)}`);
+              onRefreshOrders();
+              fetchDeliveryOrders();
+              setSelectedKanbanOrder(null);
+            } else {
+              const err = await res.json();
+              showToast(`Erro ao fechar comanda: ${err.detail}`, 'error');
+            }
+          } catch (err) {
+            console.error(err);
+            showToast("Erro de conexão ao fechar comanda.", 'error');
+          }
+        }}
+      />
 
     </div>
   );
