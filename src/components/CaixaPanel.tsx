@@ -2363,7 +2363,7 @@ export function CaixaPanel({
             { id: 'pedidos', label: 'Fila de Pedidos' },
             { id: 'pdv', label: 'Terminal Balcão' },
             { id: 'salon', label: 'Layout do Salão', show: modulesActive.salon },
-            { id: 'entregadores', label: 'Fretistas & Logística', show: !modoExclusivoSalao && modulesActive.delivery }
+            { id: 'entregadores', label: 'Fretistas & Logística', show: !modoExclusivoSalao && !isBistro && modulesActive.delivery }
           ].filter(sub => sub.show !== false).map(sub => (
             <button
               key={sub.id}
@@ -2587,7 +2587,7 @@ export function CaixaPanel({
               )}
 
               {/* Controls bar */}
-              {!modoExclusivoSalao && (
+              {!modoExclusivoSalao && !isBistro && (
                 <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-3', 'rounded-2xl', 'flex', 'flex-col', 'sm:flex-row', 'justify-between', 'items-start', 'sm:items-center', 'gap-3')}>
                   <div className={clsx('flex', 'items-center', 'gap-4')}>
                     <label className={clsx('flex', 'items-center', 'gap-2', 'cursor-pointer', 'font-semibold', 'text-gray-300')}>
@@ -2820,8 +2820,8 @@ export function CaixaPanel({
                   </div>
                 </div>
 
-                {/* COLUMN 2: Delivery & Retirada (Preparo) */}
-                <div className={clsx('bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden')}>
+                {/* COLUMN 2: Delivery & Retirada (Preparo) — oculto no modo bistrô */}
+                {!isBistro && <div className={clsx('bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden')}>
                   <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
                     <span className={clsx('font-bold', 'text-gray-300', 'font-serif')}>Delivery & Retirada (Preparo)</span>
                     <span className={clsx('bg-orange-500/10', 'text-orange-400', 'font-bold', 'px-2', 'py-0.5', 'rounded-full', 'font-mono', 'text-[9px]')}>
@@ -2892,19 +2892,19 @@ export function CaixaPanel({
                       </>
                     )}
                   </div>
-                </div>
+                </div>}
 
                 {/* COLUMN 3: Fechar Conta (Mesas + Delivery/Retirada em trânsito) */}
                 <div className={clsx('bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden')}>
                   <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
                     <span className={clsx('font-bold', 'text-gray-300', 'font-serif')}>Fechar Conta</span>
                     <span className={clsx('bg-blue-500/10', 'text-blue-400', 'font-bold', 'px-2', 'py-0.5', 'rounded-full', 'font-mono', 'text-[9px]')}>
-                      {tableOrdersReady.length + (modoExclusivoSalao ? 0 : simulatedOrders.filter(o => o.status === 'transito').length)}
+                      {tableOrdersReady.length + ((modoExclusivoSalao || isBistro) ? 0 : simulatedOrders.filter(o => o.status === 'transito').length)}
                     </span>
                   </div>
 
                   <div className={clsx('p-3', 'flex-1', 'overflow-y-auto', 'space-y-3')}>
-                    {tableOrdersReady.length === 0 && (modoExclusivoSalao || simulatedOrders.filter(o => o.status === 'transito').length === 0) ? (
+                    {tableOrdersReady.length === 0 && (modoExclusivoSalao || isBistro || simulatedOrders.filter(o => o.status === 'transito').length === 0) ? (
                       <div className={clsx('py-20', 'text-center', 'text-gray-500', 'italic', 'text-[10px]')}>Nenhuma conta ou entrega pendente</div>
                     ) : (
                       <>
@@ -3006,7 +3006,7 @@ export function CaixaPanel({
                         })}
 
                         {/* 2. Delivery/Retirada em trânsito (aguardando retorno/pagamento) */}
-                        {!modoExclusivoSalao && simulatedOrders.filter(o => o.status === 'transito').map((order) => {
+                        {!modoExclusivoSalao && !isBistro && simulatedOrders.filter(o => o.status === 'transito').map((order) => {
                           const hasAddress = !!order.endereco;
                           const badgeText = hasAddress ? 'DELIVERY - EM ROTA' : 'RETIRADA - NÃO PAGO';
                           const badgeColor = 'bg-blue-500/10 text-blue-300';
@@ -3271,7 +3271,7 @@ export function CaixaPanel({
                 </div>
 
                 <form onSubmit={handlePdvSubmitOrder} className={clsx('bg-[#18181B]', 'p-3', 'border-t', 'border-[#27272A]', 'space-y-3', 'shrink-0')}>
-                  {!modoExclusivoSalao && (
+                  {!modoExclusivoSalao && !isBistro && (
                     <div className="space-y-1">
                       <div className={clsx('flex', 'gap-1', 'p-0.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'shrink-0')}>
                         <button
