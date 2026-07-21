@@ -1968,20 +1968,43 @@ export function CaixaPanel({
         return;
       }
     }
+
+    // Snapshots dos dados do pedido para envio
+    const cartItems = [...pdvCart];
+    const customerName = pdvCustomerName;
+    const mesaId = pdvTargetMesaId;
+    const orderType = pdvOrderType;
+    const customerPhone = pdvCustomerPhone;
+    const deliveryAddress = pdvDeliveryAddress;
+    const deliveryTaxa = pdvDeliveryTaxa;
+
+    // ⚡ TRANSIÇÃO INSTANTÂNEA DE TELA (0ms delay)
+    setActiveTab('operacao');
+    setActiveSubTab('pedidos');
+    showToast("⚡ Enviando pedido para a cozinha...", 'success');
+
+    // Reseta os campos do carrinho imediatamente
+    setPdvCart([]);
+    setPdvCustomerName('');
+    setPdvCustomerPhone('');
+    setPdvCustomerCPF('');
+    setPdvDeliveryAddress('');
+    setPdvDeliveryTaxa('0.00');
+
     setIsLoading(true);
     try {
       const openRes = await fetch(`${apiBaseUrl}/comandas/`, {
         method: "POST",
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          mesa_id: pdvOrderType === 'mesa' ? pdvTargetMesaId : null,
+          mesa_id: orderType === 'mesa' ? mesaId : null,
           garcom_id: 'c-01', // Cashier operator ID
-          tipo: pdvOrderType === 'mesa' ? 'Consumo no Local' : (pdvOrderType === 'entrega' ? 'Entrega' : 'Retirada'),
-          identificador: pdvCustomerName || undefined,
-          delivery_status: pdvOrderType === 'entrega' ? 'producao' : undefined,
-          delivery_telefone: pdvOrderType === 'entrega' ? pdvCustomerPhone : undefined,
-          delivery_endereco: pdvOrderType === 'entrega' ? pdvDeliveryAddress : undefined,
-          delivery_taxa: pdvOrderType === 'entrega' ? parseFloat(pdvDeliveryTaxa) || 0.0 : 0.0
+          tipo: orderType === 'mesa' ? 'Consumo no Local' : (orderType === 'entrega' ? 'Entrega' : 'Retirada'),
+          identificador: customerName || undefined,
+          delivery_status: orderType === 'entrega' ? 'producao' : undefined,
+          delivery_telefone: orderType === 'entrega' ? customerPhone : undefined,
+          delivery_endereco: orderType === 'entrega' ? deliveryAddress : undefined,
+          delivery_taxa: orderType === 'entrega' ? parseFloat(deliveryTaxa) || 0.0 : 0.0
         })
       });
       if (!openRes.ok) {
@@ -1992,11 +2015,11 @@ export function CaixaPanel({
       }
       const newComanda = await openRes.json();
 
-      const itemsList = pdvCart.flatMap(item =>
+      const itemsList = cartItems.flatMap(item =>
         Array.from({ length: item.quantity }, () => ({
           produto_id: item.product.id,
           observacao: item.obs,
-          cliente_nome: pdvCustomerName || 'Consumo Geral'
+          cliente_nome: customerName || 'Consumo Geral'
         }))
       );
 
@@ -2009,17 +2032,8 @@ export function CaixaPanel({
         })
       });
       if (launchRes.ok) {
-        setPdvCart([]);
-        setPdvCustomerName('');
-        setPdvCustomerPhone('');
-        setPdvCustomerCPF('');
-        setPdvDeliveryAddress('');
-        setPdvDeliveryTaxa('0.00');
         onRefreshOrders();
         fetchDeliveryOrders();
-        showToast("✅ Pedido lançado com sucesso!", 'success');
-        setActiveTab('operacao');
-        setActiveSubTab('pedidos');
       } else {
         const err = await launchRes.json();
         showToast(`Erro ao lançar itens: ${err.detail}`, 'error');
