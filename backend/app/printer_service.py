@@ -337,64 +337,92 @@ class PrinterService:
         
         grand_total = 0.0
         
+        # Agrupa itens ativos por cliente (usado nos dois modos)
+        grouped_by_client = {}
+        for comanda in comandas_details:
+            comanda_items = comanda.get("itens", [])
+            for item in comanda_items:
+                if item.get("status") == "cancelado":
+                    continue
+                client = (
+                    item.get("cliente_nome")
+                    or item.get("cliente_nome_custom")
+                    or comanda.get("identificador")
+                    or "Consumo Geral"
+                )
+                client = client.strip() or "Consumo Geral"
+                grouped_by_client.setdefault(client, []).append(item)
+
+        is_split = len(grouped_by_client) > 1
+
         if apenas_valores:
+            # Modo simplificado: Qtdx ITEM   R$ TOTAL — sem coluna UNIT
             lines.append(draw_separator("-", width))
-            
-            # Calculate grand total without printing items
-            for comanda in comandas_details:
-                comanda_items = comanda.get("itens", [])
-                for item in comanda_items:
-                    if item.get("status") != "cancelado":
-                        grand_total += item.get("preco_unit", 0.0)
-        else:
-            # Table of items header
-            lines.append("ITEM".ljust(21) + "QTD".rjust(4) + "UNIT".rjust(7) + "TOTAL".rjust(8))
-            lines.append(draw_separator("-", width))
-            
-            # Group all active items from all comandas by client name
-            grouped_by_client = {}
-            for comanda in comandas_details:
-                comanda_items = comanda.get("itens", [])
-                for item in comanda_items:
-                    if item.get("status") == "cancelado":
-                        continue
-                    # Normalize client name
-                    client = item.get("cliente_nome") or item.get("cliente_nome_custom") or comanda.get("identificador") or "Consumo Geral"
-                    client = client.strip()
-                    if not client or client.lower() == "consumo geral":
-                        # Check if comanda identificador is more specific
-                        comanda_ident = comanda.get("identificador")
-                        if comanda_ident and comanda_ident.strip():
-                            client = comanda_ident.strip()
-                        else:
-                            client = "Consumo Geral"
-                    if client not in grouped_by_client:
-                        grouped_by_client[client] = []
-                    grouped_by_client[client].append(item)
-                    
-            # Loop over clients to output split values and items
+
             for client, items_list in grouped_by_client.items():
-                lines.append(align_center(f"--- CLIENTE: {client.upper()} ---", width))
-                
+                if is_split:
+                    lines.append(align_center(f"--- {client.upper()} ---", width))
+
+                # Agrupa itens repetidos: (nome, preco_unit) → qty
                 grouped_items = {}
                 for item in items_list:
                     key = (item["produto"]["nome"], item["preco_unit"])
                     grouped_items[key] = grouped_items.get(key, 0) + 1
-                    
+
+                client_subtotal = 0.0
+                for (p_name, p_price), qty in grouped_items.items():
+                    item_total = qty * p_price
+                    client_subtotal += item_total
+                    # "2x PRODUTO            R$ 20,00"
+                    left = f"{qty}x {p_name.upper()}"
+                    right = f"R$ {item_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                    max_left = max(width - len(right) - 1, 1)
+                    if len(left) > max_left:
+                        left = left[:max_left]
+                    spaces = max(width - len(left) - len(right), 1)
+                    lines.append(left + " " * spaces + right)
+
+                grand_total += client_subtotal
+
+                if is_split:
+                    lines.append(draw_separator("-", width))
+                    right_sub = f"R$ {client_subtotal:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                    left_sub = f"SUBTOTAL {client.upper()}"
+                    max_l = max(width - len(right_sub) - 1, 1)
+                    if len(left_sub) > max_l:
+                        left_sub = left_sub[:max_l]
+                    lines.append(left_sub + " " * max(width - len(left_sub) - len(right_sub), 1) + right_sub)
+
+            lines.append(draw_separator("-", width))
+        else:
+            # Modo completo: cabeçalho de colunas ITEM / QTD / UNIT / TOTAL
+            lines.append("ITEM".ljust(21) + "QTD".rjust(4) + "UNIT".rjust(7) + "TOTAL".rjust(8))
+            lines.append(draw_separator("-", width))
+
+            for client, items_list in grouped_by_client.items():
+                if is_split:
+                    lines.append(align_center(f"--- CLIENTE: {client.upper()} ---", width))
+
+                grouped_items = {}
+                for item in items_list:
+                    key = (item["produto"]["nome"], item["preco_unit"])
+                    grouped_items[key] = grouped_items.get(key, 0) + 1
+
                 client_subtotal = 0.0
                 for (p_name, p_price), qty in grouped_items.items():
                     item_total = qty * p_price
                     client_subtotal += item_total
                     lines.append(format_item_line(p_name, qty, p_price, width))
-                    
-                lines.append(align_right(f"Subtotal {client}: R$ {client_subtotal:.2f}", width))
+
+                if is_split:
+                    lines.append(align_right(f"Subtotal {client}: R$ {client_subtotal:.2f}", width))
+                    lines.append(draw_separator(".", width))
                 grand_total += client_subtotal
-                lines.append(draw_separator(".", width))
-                
+
             # Remove last dot separator
             if lines and lines[-1] == draw_separator(".", width):
                 lines.pop()
-                
+
             lines.append(draw_separator("-", width))
         
         # Tax and grand total calculations
