@@ -6776,7 +6776,10 @@ export function CaixaPanel({
       {/* 1. MODAL: ABRIR CAIXA */}
       {
         showAbrirModal && (
-          <div className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4')}>
+          <div
+            onClick={(e) => { if (e.target === e.currentTarget) setShowAbrirModal(false); }}
+            className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4', 'cursor-pointer')}
+          >
             <form onSubmit={handleAbrirCaixa} className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-3xl', 'w-full', 'max-w-sm', 'p-6', 'space-y-5', 'shadow-2xl', 'animate-scale-in')}>
               <div className={clsx('flex', 'justify-between', 'items-center', 'border-b', 'border-[#27272A]', 'pb-3')}>
                 <h3 className={clsx('font-serif', 'font-bold', 'text-lg', 'text-white')}>Abertura de Caixa</h3>
@@ -6816,7 +6819,10 @@ export function CaixaPanel({
       {/* 2. MODAL: FECHAR CAIXA */}
       {
         showFecharModal && (
-          <div className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4')}>
+          <div
+            onClick={(e) => { if (e.target === e.currentTarget) setShowFecharModal(false); }}
+            className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4', 'cursor-pointer')}
+          >
             <form onSubmit={handleFecharCaixa} className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-3xl', 'w-full', 'max-w-md', 'p-6', 'space-y-5', 'shadow-2xl', 'animate-scale-in')}>
               <div className={clsx('flex', 'justify-between', 'items-center', 'border-b', 'border-[#27272A]', 'pb-3')}>
                 <h3 className={clsx('font-serif', 'font-bold', 'text-lg', 'text-white')}>Fechamento do Caixa</h3>
@@ -6894,7 +6900,10 @@ export function CaixaPanel({
       {/* 3. MODAL: SUPRIMENTO / SANGRIA */}
       {
         showMovModal && (
-          <div className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4')}>
+          <div
+            onClick={(e) => { if (e.target === e.currentTarget) setShowMovModal(false); }}
+            className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4', 'cursor-pointer')}
+          >
             <form onSubmit={handleMovimentar} className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-3xl', 'w-full', 'max-w-sm', 'p-6', 'space-y-5', 'shadow-2xl', 'animate-scale-in')}>
               <div className={clsx('flex', 'justify-between', 'items-center', 'border-b', 'border-[#27272A]', 'pb-3')}>
                 <h3 className={clsx('font-serif', 'font-bold', 'text-lg', 'text-white')}>Suprimento / Sangria</h3>
@@ -7408,7 +7417,10 @@ export function CaixaPanel({
       {/* 5. MODAL: ADICIONAR MESA */}
       {
         showAddMesaModal && (
-          <div className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4')}>
+          <div
+            onClick={(e) => { if (e.target === e.currentTarget) setShowAddMesaModal(false); }}
+            className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4', 'cursor-pointer')}
+          >
             <form onSubmit={handleAddMesaSubmit} className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-3xl', 'w-full', 'max-w-sm', 'p-6', 'space-y-4', 'shadow-2xl', 'animate-scale-in')}>
               <div className={clsx('flex', 'justify-between', 'items-center', 'border-b', 'border-[#27272A]', 'pb-3')}>
                 <h3 className={clsx('font-serif', 'font-bold', 'text-lg', 'text-white')}>Criar Nova Mesa</h3>
@@ -7464,7 +7476,10 @@ export function CaixaPanel({
       {/* 5.1 MODAL: EDITAR / EXCLUIR MESA */}
       {
         editingTable && (
-          <div className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4')}>
+          <div
+            onClick={(e) => { if (e.target === e.currentTarget) { setEditingTable(null); setIsConfirmingDelete(false); } }}
+            className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4', 'cursor-pointer')}
+          >
             <div className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-3xl', 'w-full', 'max-w-sm', 'p-6', 'space-y-4', 'shadow-2xl', 'animate-scale-in')}>
               <div className={clsx('flex', 'justify-between', 'items-center', 'border-b', 'border-[#27272A]', 'pb-3')}>
                 <h3 className={clsx('font-serif', 'font-bold', 'text-lg', 'text-white')}>Editar Mesa {editingTable.id}</h3>
@@ -7595,7 +7610,10 @@ export function CaixaPanel({
       {/* 5.2 MODAL: CONFIRMAR LIBERAÇÃO DE MESA */}
       {
         confirmingFreeTableId !== null && (
-          <div className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4')}>
+          <div
+            onClick={(e) => { if (e.target === e.currentTarget) setConfirmingFreeTableId(null); }}
+            className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4', 'cursor-pointer')}
+          >
             <div className={clsx('bg-[#1C1C1F]', 'border', 'border-rose-900/40', 'rounded-3xl', 'w-full', 'max-w-sm', 'p-6', 'space-y-4', 'shadow-2xl', 'animate-scale-in')}>
               <div className="text-center space-y-3">
                 <span className="text-2xl block">⚠️</span>
@@ -7652,7 +7670,10 @@ export function CaixaPanel({
 
       {/* 6. MODAL: INSPECIONAR E REIMPRIMIR PEDIDO DO KANBAN */}
       {selectedKanbanOrder && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) setSelectedKanbanOrder(null); }}
+          className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 cursor-pointer"
+        >
           <div className="w-full max-w-md bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in">
             <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
               <div>
@@ -7819,7 +7840,10 @@ export function CaixaPanel({
 
       {/* 7. MODAL: ADICIONAR / EDITAR PRODUTO */}
       {showProductModal && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) setShowProductModal(false); }}
+          className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto cursor-pointer"
+        >
           <div className="w-full max-w-md bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
             <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
               <h3 className="font-serif text-sm font-bold text-white font-serif">
@@ -8038,7 +8062,10 @@ export function CaixaPanel({
       )}
 
       {editingCrmUser && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) setEditingCrmUser(null); }}
+          className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto cursor-pointer"
+        >
           <div className="w-full max-w-md bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
             <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
               <h3 className="font-serif text-sm font-bold text-white">
@@ -8137,7 +8164,10 @@ export function CaixaPanel({
       )}
 
       {showNewCrmModal && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) setShowNewCrmModal(false); }}
+          className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto cursor-pointer"
+        >
           <div className="w-full max-w-md bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
             <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
               <h3 className="font-serif text-sm font-bold text-white">
@@ -8220,7 +8250,10 @@ export function CaixaPanel({
       )}
 
       {showNewInsumoModal && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) setShowNewInsumoModal(false); }}
+          className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto cursor-pointer"
+        >
           <div className="w-full max-w-md bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
             <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
               <h3 className="font-serif text-sm font-bold text-white">
@@ -8341,7 +8374,10 @@ export function CaixaPanel({
       )}
 
       {showEditInsumoModal && selectedInsumo && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) setShowEditInsumoModal(false); }}
+          className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto cursor-pointer"
+        >
           <div className="w-full max-w-md bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
             <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
               <h3 className="font-serif text-sm font-bold text-white">
@@ -8456,7 +8492,10 @@ export function CaixaPanel({
       )}
 
       {showAjusteInsumoModal && selectedInsumo && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) setShowAjusteInsumoModal(false); }}
+          className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto cursor-pointer"
+        >
           <div className="w-full max-w-md bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
             <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
               <h3 className="font-serif text-sm font-bold text-white">
@@ -8557,7 +8596,10 @@ export function CaixaPanel({
       )}
 
       {showNewDistModal && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) setShowNewDistModal(false); }}
+          className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto cursor-pointer"
+        >
           <div className="w-full max-w-md bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
             <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
               <h3 className="font-serif text-sm font-bold text-white">
@@ -8665,7 +8707,10 @@ export function CaixaPanel({
       )}
 
       {showEditDistModal && selectedDist && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) setShowEditDistModal(false); }}
+          className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto cursor-pointer"
+        >
           <div className="w-full max-w-md bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
             <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
               <h3 className="font-serif text-sm font-bold text-white">

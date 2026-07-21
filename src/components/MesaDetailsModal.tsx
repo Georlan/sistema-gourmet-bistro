@@ -949,7 +949,14 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
 
       {/* EMBEDDED PRINT PREVIEW (RECEIPT) POPUP MODAL */}
       {showPrintPreview && (
-        <div className="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50 animate-fade-in">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowPrintPreview(false);
+            }
+          }}
+          className="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50 animate-fade-in cursor-pointer"
+        >
           <div className="bg-[#1C1C1F] border border-[#27272A] rounded-3xl shadow-2xl max-w-sm w-full p-6 space-y-4 max-h-[85vh] flex flex-col justify-between">
             
             {/* Invoice Header */}
@@ -1171,7 +1178,14 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
 
       {/* REPRINT ORDER MODAL (VIA DE COZINHA) */}
       {selectedOrderToPrint && (
-        <div className="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50 animate-fade-in">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setSelectedOrderToPrint(null);
+            }
+          }}
+          className="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50 animate-fade-in cursor-pointer"
+        >
           <div className="bg-[#1C1C1F] border border-[#27272A] rounded-3xl shadow-2xl max-w-sm w-full p-6 space-y-4 max-h-[85vh] flex flex-col justify-between">
             
             {/* Invoice Header */}
@@ -1303,7 +1317,14 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
       )}
 
       {editingItem && (
-        <div className="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setEditingItem(null);
+            }
+          }}
+          className="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4 cursor-pointer"
+        >
           <div className="w-full max-w-sm bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in">
             <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
               <h3 className="font-serif text-sm font-bold text-white">Editar Item: {editingItem.nome}</h3>

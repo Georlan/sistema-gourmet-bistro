@@ -163,7 +163,11 @@ export default function CardapioOrderHistoryModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 animate-fade-in" id="order-history-overlay">
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 animate-fade-in cursor-pointer"
+      id="order-history-overlay"
+    >
       <div className="relative w-full max-w-md rounded-3xl bg-[#121420] border border-slate-800 p-6 shadow-2xl flex flex-col max-h-[85vh] animate-scale-up text-slate-100" id="order-history-card">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-3 shrink-0">

@@ -261,7 +261,11 @@ export default function CardapioUserProfileModal({
   const remainingStamps = Math.max(0, 10 - completedOrdersCount);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 animate-fade-in" id="user-profile-overlay">
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 animate-fade-in cursor-pointer"
+      id="user-profile-overlay"
+    >
       <div className="relative w-full max-w-md rounded-3xl bg-[#121420] border border-slate-800 p-6 shadow-2xl flex flex-col max-h-[90vh] text-slate-100 animate-scale-up" id="user-profile-card">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-800/60 pb-4 shrink-0">

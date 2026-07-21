@@ -179,7 +179,11 @@ export default function CardapioAuthModal({ onClose, onLoginSuccess, restaurante
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 animate-fade-in" id="auth-modal-overlay">
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 animate-fade-in cursor-pointer"
+      id="auth-modal-overlay"
+    >
       <div className="relative w-full max-w-sm rounded-3xl bg-[#0e1017] border border-gray-800/80 p-6 shadow-2xl animate-scale-up" id="auth-modal-card">
         
         {/* Close Button */}

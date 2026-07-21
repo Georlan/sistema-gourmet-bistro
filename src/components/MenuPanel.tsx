@@ -666,7 +666,14 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
 
       {/* 3. PRODUCT CONFIGURATION OVERLAY MODAL */}
       {selectedProductToConfigure && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 animate-fade-in">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setSelectedProductToConfigure(null);
+            }
+          }}
+          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 animate-fade-in cursor-pointer"
+        >
           <div className="bg-[#1C1C1F] border border-[#27272A] rounded-3xl w-full max-w-md p-6 space-y-4 shadow-2xl animate-scale-in">
             
             {/* Modal Header */}

@@ -134,7 +134,11 @@ export default function CardapioCartDrawer({
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex justify-end bg-black/60 animate-fade-in" id="cart-overlay">
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      className="fixed inset-0 z-40 flex justify-end bg-black/60 animate-fade-in cursor-pointer"
+      id="cart-overlay"
+    >
       {/* Drawer Card */}
       <div className="flex h-full w-full max-w-md flex-col bg-card-app border-l border-slate-500/10 shadow-2xl animate-slide-left" id="cart-drawer-container">
         {/* Drawer Header */}
