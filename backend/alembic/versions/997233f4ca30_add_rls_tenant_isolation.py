@@ -19,11 +19,15 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # NOTA DE SEGURANÇA (P0.1): Migrations do Alembic não devem conter credenciais ou senhas hardcoded.
+    # A role koma_app é mantida apenas como role de agrupamento de privilégios com NOLOGIN.
+    # Contas de login do PostgreSQL usadas pela aplicação em produção devem ser provisionadas
+    # externamente via infraestrutura/DevOps com credenciais injetadas por variáveis de ambiente.
     op.execute("""
         DO $$
         BEGIN
             IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'koma_app') THEN
-                CREATE ROLE koma_app LOGIN PASSWORD 'Minhamae314';
+                CREATE ROLE koma_app NOLOGIN;
             END IF;
         END
         $$;

@@ -10,14 +10,14 @@ services:
       - "8000:8000"
     environment:
       - NODE_ENV=production
-      - SUPABASE_DB_URL=postgresql://postgres:supabase@db.koma.supabase.co:5432/postgres
-      - SUPABASE_SERVICE_ROLE_KEY=sb_key_placeholder
-      - CLOUDFLARE_API_TOKEN=cf_token_placeholder
-      - CLOUDFLARE_ZONE_ID=zone_koma_1122
-      - TELEGRAM_BOT_TOKEN=123456789:AAF-KomaAdmin_SecretBotToken_9823
-      - TELEGRAM_CHAT_ID=987654321
-      - REDIS_URL=redis://redis:6379/0
-      - SENTRY_DSN=https://sentry_dsn_placeholder.sentry.io/123
+      - SUPABASE_DB_URL=${SUPABASE_DB_URL:?variável SUPABASE_DB_URL é obrigatória}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:?variável SUPABASE_SERVICE_ROLE_KEY é obrigatória}
+      - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN:?variável CLOUDFLARE_API_TOKEN é obrigatória}
+      - CLOUDFLARE_ZONE_ID=${CLOUDFLARE_ZONE_ID:-}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:?variável TELEGRAM_BOT_TOKEN é obrigatória}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:?variável TELEGRAM_CHAT_ID é obrigatória}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - SENTRY_DSN=${SENTRY_DSN:-}
     depends_on:
       - redis
       - elasticsearch

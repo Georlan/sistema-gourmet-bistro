@@ -59,8 +59,8 @@ export default function SuperAdminTelegram({
   onUpdateAlertRules,
   onClearFiredAlertsHistory
 }: SuperAdminTelegramProps) {
-  const [botToken, setBotToken] = useState("123456789:AAF-KomaAdmin_SecretBotToken_9823");
-  const [chatId, setChatId] = useState("987654321");
+  const [botToken, setBotToken] = useState("");
+  const [chatId, setChatId] = useState("");
   const [customText, setCustomText] = useState("");
   const [isSending, setIsSending] = useState(false);
   

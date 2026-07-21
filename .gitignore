@@ -15,16 +15,23 @@ __pycache__/
 print_jobs/
 backend/print_jobs/
 
-# Banco de dados local
+# Banco de dados local e dumps específicos
 *.db
 *.db-journal
 *.db-shm
 *.db-wal
+*.dump
+*.backup
+database-dump-*.sql
+local-dump-*.sql
 
 # Pastas de rascunho / indexação temporária
 scratch/
 
-# Arquivos de variáveis de ambiente/senhas
+# Arquivos de variáveis de ambiente, segredos e chaves públicas/privadas
 .env
-.env.local
+.env.*
+!.env.example
 *.key
+*.pem
+*.pfx

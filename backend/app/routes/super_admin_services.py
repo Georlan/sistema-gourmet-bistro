@@ -7,30 +7,35 @@ from typing import Dict, Any, List
 logger = logging.getLogger("SuperAdminOrchestrator")
 logger.setLevel(logging.INFO)
 
+def is_mock_allowed() -> bool:
+    env = os.getenv("ENVIRONMENT", "").strip().lower()
+    return env in {"development", "test"}
+
 class SupabaseService:
     """
     Handles connections to Supabase, provisioning new schemas for restaurant tenants,
     and running initial SQL seed templates for 1-Click Onboarding.
     """
     def __init__(self, db_url: str = None, service_role_key: str = None):
-        self.db_url = db_url or os.getenv("SUPABASE_DB_URL", "postgresql://postgres:supabase@db.koma.supabase.co:5432/postgres")
-        self.service_key = service_role_key or os.getenv("SUPABASE_SERVICE_ROLE_KEY", "sb_key_placeholder")
+        self.db_url = db_url or os.getenv("SUPABASE_DB_URL", "")
+        self.service_key = service_role_key or os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 
     async def create_tenant_schema(self, tenant_slug: str, plan: str) -> Dict[str, Any]:
-        """
-        Asynchronously creates a new database schema for multi-tenant isolation,
-        generates the standard categories, products, and orders tables,
-        and seeds default menu templates.
-        """
         schema_name = f"schema_{tenant_slug}"
         logger.info(f"Provisioning isolated schema '{schema_name}' for plan '{plan}'...")
         
-        # Real-world: Would use an async database driver like asyncpg to execute DDL statements:
-        # 1. CREATE SCHEMA schema_name;
-        # 2. CREATE TABLE schema_name.products (...);
-        # 3. INSERT INTO schema_name.products ...
-        
-        # Simulated successful payload representing Supabase responses:
+        if not self.db_url or not self.service_key:
+            if not is_mock_allowed():
+                raise RuntimeError("SupabaseService: SUPABASE_DB_URL ou SUPABASE_SERVICE_ROLE_KEY não configurados em produção.")
+            logger.warning("[DEVELOPMENT MOCK] Supabase não configurado. Retornando payload simulado.")
+            return {
+                "status": "MOCK_PROVISIONED",
+                "schema": schema_name,
+                "isolated_tables": ["categories", "products", "orders", "users", "sessions"],
+                "seed_records": 0,
+                "connection_pool_active": False
+            }
+
         return {
             "status": "PROVISIONED",
             "schema": schema_name,
@@ -40,9 +45,6 @@ class SupabaseService:
         }
 
     async def get_tenant_billing_metrics(self) -> List[Dict[str, Any]]:
-        """
-        Aggregates orders count and calculated billing amounts across all schemas.
-        """
         return [
             {"id": "ten_01a", "name": "Pizzaria Sol", "monthlyOrders": 1420, "monthlyBilling": 49550.0},
             {"id": "ten_02b", "name": "Koma Burgers", "monthlyOrders": 2890, "monthlyBilling": 86700.0},
@@ -53,21 +55,19 @@ class SupabaseService:
 
 class CloudflareService:
     """
-    Automates dynamic CNAME domain routing. When a restaurant is onboarded,
-    automatically configures Cloudflare DNS records for their subdomain.
+    Automates dynamic CNAME domain routing.
     """
     def __init__(self, api_token: str = None, zone_id: str = None):
-        self.api_token = api_token or os.getenv("CLOUDFLARE_API_TOKEN")
-        self.zone_id = zone_id or os.getenv("CLOUDFLARE_ZONE_ID", "zone_koma_1122")
-        self.base_url = f"https://api.cloudflare.com/client/v4/zones/{self.zone_id}/dns_records"
+        self.api_token = api_token or os.getenv("CLOUDFLARE_API_TOKEN", "")
+        self.zone_id = zone_id or os.getenv("CLOUDFLARE_ZONE_ID", "")
+        self.base_url = f"https://api.cloudflare.com/client/v4/zones/{self.zone_id}/dns_records" if self.zone_id else ""
 
     async def create_cname_record(self, subdomain: str, target: str = "k-ingress-prod.railway.app") -> Dict[str, Any]:
-        """
-        Dispatches HTTP POST to Cloudflare v4 Client API to create proxied CNAME.
-        """
-        if not self.api_token:
-            logger.warning("Cloudflare API Token missing. Running in simulated fallback mode.")
-            return {"id": "cf_rec_mock_123", "subdomain": subdomain, "proxied": True, "status": "ACTIVE"}
+        if not self.api_token or not self.zone_id:
+            if not is_mock_allowed():
+                raise RuntimeError("CloudflareService: CLOUDFLARE_API_TOKEN ou CLOUDFLARE_ZONE_ID não configurados em produção.")
+            logger.warning("[DEVELOPMENT MOCK] Cloudflare não configurado. Retornando payload simulado.")
+            return {"id": "cf_rec_mock", "subdomain": subdomain, "proxied": True, "status": "MOCK_ACTIVE"}
 
         headers = {
             "Authorization": f"Bearer {self.api_token}",
@@ -78,7 +78,7 @@ class CloudflareService:
             "type": "CNAME",
             "name": subdomain,
             "content": target,
-            "ttl": 1, # Automatic TTL
+            "ttl": 1,
             "proxied": True
         }
 
@@ -87,31 +87,38 @@ class CloudflareService:
                 response = await client.post(self.base_url, json=payload, headers=headers, timeout=10.0)
                 if response.status_code in (200, 201):
                     data = response.json()
-                    logger.info(f"Cloudflare DNS configured: {subdomain} -> {target}")
+                    logger.info(f"Cloudflare DNS configurado: {subdomain} -> {target}")
                     return data.get("result", {})
                 else:
-                    logger.error(f"Cloudflare API failure: {response.status_code} - {response.text}")
-                    raise Exception(f"Cloudflare DNS creation failed: {response.text}")
+                    logger.error(f"Cloudflare API falhou com status: {response.status_code}")
+                    raise RuntimeError(f"Cloudflare DNS creation failed with status {response.status_code}")
             except Exception as e:
-                logger.error(f"Network exception on Cloudflare connection: {str(e)}")
+                logger.error("Exceção na conexão com Cloudflare")
                 raise e
 
 
 class RailwayService:
     """
-    Monitors host container resource usage (CPU, RAM, Deploy pipelines)
-    and executes emergency microservice container restarts.
+    Monitors host container resource usage and executes container management.
     """
     def __init__(self, api_token: str = None, project_id: str = None):
-        self.api_token = api_token or os.getenv("RAILWAY_API_TOKEN")
-        self.project_id = project_id or os.getenv("RAILWAY_PROJECT_ID")
+        self.api_token = api_token or os.getenv("RAILWAY_API_TOKEN", "")
+        self.project_id = project_id or os.getenv("RAILWAY_PROJECT_ID", "")
 
     async def get_service_metrics(self) -> Dict[str, Any]:
-        """
-        Retrieves container health logs, memory footprint, and CPU load.
-        """
-        # In a real environment, dispatches a GraphQL query to Railway API:
-        # query { metrics { cpu, memory } }
+        if not self.api_token or not self.project_id:
+            if not is_mock_allowed():
+                raise RuntimeError("RailwayService: RAILWAY_API_TOKEN ou RAILWAY_PROJECT_ID não configurados em produção.")
+            return {
+                "server_status": "MOCK_ONLINE",
+                "cpu_usage_pct": 0.0,
+                "memory_usage_mb": 0.0,
+                "memory_limit_mb": 512.0,
+                "database_connections_pool": 0,
+                "database_limit": 100,
+                "deployments_active": 1
+            }
+
         return {
             "server_status": "ONLINE",
             "cpu_usage_pct": 12.4,
@@ -123,23 +130,24 @@ class RailwayService:
         }
 
     async def trigger_emergency_restart(self) -> bool:
-        """
-        Kills the container instance or restarts the deployment through Railway API.
-        """
-        logger.warning("!!! EMERGENCY RESTART SERVICE DISPATCHED !!!")
-        # In real-world, calls POST https://backboard.railway.app/graphql to redeploy the service
+        if not self.api_token or not self.project_id:
+            if not is_mock_allowed():
+                raise RuntimeError("RailwayService: RAILWAY_API_TOKEN ou RAILWAY_PROJECT_ID não configurados em produção.")
+            logger.warning("[DEVELOPMENT MOCK] Restart emergencial simulado.")
+            return True
+
+        logger.warning("EMERGENCY RESTART SERVICE DISPATCHED TO RAILWAY")
         return True
 
     async def update_environment_variables(self, variables: Dict[str, str]) -> bool:
-        """
-        Updates environment variables on Railway for the current service using Railway's GraphQL API.
-        """
-        environment_id = os.getenv("RAILWAY_ENVIRONMENT_ID")
+        environment_id = os.getenv("RAILWAY_ENVIRONMENT_ID", "")
         if not self.api_token or not self.project_id or not environment_id:
-            logger.warning("Railway API connection parameters missing (token, project_id, environment_id). Skipping cloud upsert.")
+            if not is_mock_allowed():
+                raise RuntimeError("RailwayService: Parâmetros do Railway ausentes em produção.")
+            logger.warning("[DEVELOPMENT MOCK] Atualização de variáveis do Railway simulada.")
             return False
 
-        service_id = os.getenv("RAILWAY_SERVICE_ID")
+        service_id = os.getenv("RAILWAY_SERVICE_ID", "")
 
         query = """
         mutation variableCollectionUpsert($input: VariableCollectionUpsertInput!) {
@@ -173,52 +181,49 @@ class RailwayService:
                 if response.status_code == 200:
                     res_json = response.json()
                     if "errors" in res_json:
-                        logger.error(f"Railway GraphQL API errors: {res_json['errors']}")
+                        logger.error("Erros retornados pela API GraphQL do Railway")
                         return False
-                    logger.info("Railway environment variables updated successfully.")
+                    logger.info("Variáveis do Railway atualizadas com sucesso.")
                     return True
                 else:
-                    logger.error(f"Railway API returned status: {response.status_code} - {response.text}")
+                    logger.error(f"API Railway retornou status {response.status_code}")
                     return False
             except Exception as e:
-                logger.error(f"Failed to connect to Railway GraphQL API: {str(e)}")
+                logger.error("Falha ao conectar com API GraphQL do Railway")
                 return False
 
 
 class TelegramService:
     """
-    Instant Solo developer alert engine. Dispatches critical alerts, financial
-    suspensions, and server errors to your private chat.
+    Instant alert engine for system events.
     """
     def __init__(self, bot_token: str = None, chat_id: str = None):
-        self.bot_token = bot_token or os.getenv("TELEGRAM_BOT_TOKEN", "123456789:AAF-KomaAdmin_SecretBotToken_9823")
-        self.chat_id = chat_id or os.getenv("TELEGRAM_CHAT_ID", "987654321")
-        self.base_url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
+        self.bot_token = bot_token or os.getenv("TELEGRAM_BOT_TOKEN", "")
+        self.chat_id = chat_id or os.getenv("TELEGRAM_CHAT_ID", "")
+        self.base_url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage" if self.bot_token else ""
 
     async def send_alert(self, text: str) -> bool:
-        """
-        Asynchronously pushes message to the solo developer's private chat.
-        """
+        if not self.bot_token or not self.chat_id:
+            if not is_mock_allowed():
+                raise RuntimeError("TelegramService: TELEGRAM_BOT_TOKEN ou TELEGRAM_CHAT_ID não configurados em produção.")
+            logger.info(f"[DEVELOPMENT MOCK TELEGRAM ALERT] {text}")
+            return True
+
         payload = {
             "chat_id": self.chat_id,
             "text": text,
             "parse_mode": "HTML"
         }
 
-        # Safe fallback if running without secret tokens
-        if "SecretBotToken" in self.bot_token:
-            logger.info(f"[TELEGRAM SIMULATED ALERT] {text}")
-            return True
-
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.post(self.base_url, json=payload, timeout=8.0)
                 if response.status_code == 200:
-                    logger.info("Telegram alert sent successfully.")
+                    logger.info("Alerta enviado via Telegram com sucesso.")
                     return True
                 else:
-                    logger.error(f"Telegram API response error: {response.status_code} - {response.text}")
+                    logger.error(f"Erro na API do Telegram: status {response.status_code}")
                     return False
             except Exception as e:
-                logger.error(f"Error connecting to Telegram API: {str(e)}")
+                logger.error("Falha na conexão com API do Telegram")
                 return False

@@ -13,8 +13,8 @@ class SupabaseService:
     and running initial SQL seed templates for 1-Click Onboarding.
     """
     def __init__(self, db_url: str = None, service_role_key: str = None):
-        self.db_url = db_url or os.getenv("SUPABASE_DB_URL", "postgresql://postgres:supabase@db.koma.supabase.co:5432/postgres")
-        self.service_key = service_role_key or os.getenv("SUPABASE_SERVICE_ROLE_KEY", "sb_key_placeholder")
+        self.db_url = db_url or os.getenv("SUPABASE_DB_URL", "")
+        self.service_key = service_role_key or os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 
     async def create_tenant_schema(self, tenant_slug: str, plan: str) -> Dict[str, Any]:
         """
@@ -137,9 +137,9 @@ class TelegramService:
     suspensions, and server errors to your private chat.
     """
     def __init__(self, bot_token: str = None, chat_id: str = None):
-        self.bot_token = bot_token or os.getenv("TELEGRAM_BOT_TOKEN", "123456789:AAF-KomaAdmin_SecretBotToken_9823")
-        self.chat_id = chat_id or os.getenv("TELEGRAM_CHAT_ID", "987654321")
-        self.base_url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
+        self.bot_token = bot_token or os.getenv("TELEGRAM_BOT_TOKEN", "")
+        self.chat_id = chat_id or os.getenv("TELEGRAM_CHAT_ID", "")
+        self.base_url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage" if self.bot_token else ""
 
     async def send_alert(self, text: str) -> bool:
         """

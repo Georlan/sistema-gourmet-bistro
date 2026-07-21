@@ -59,7 +59,7 @@ redis_cache = RedisCache()
 
 
 # Simple JWT Authentication Security Layer
-JWT_SECRET = os.getenv("JWT_SECRET", "superadmin_koma_hacker_token_secret_123")
+JWT_SECRET = os.getenv("JWT_SECRET", "")
 JWT_ALGORITHM = "HS256"
 
 class TokenRequest(BaseModel):
@@ -73,18 +73,11 @@ class TokenResponse(BaseModel):
 @app.post("/api/super-admin/token", response_model=TokenResponse, tags=["Authentication"])
 def login_for_access_token(payload: TokenRequest):
     """
-    Verifies superadmin credentials and encodes a JWT token for session security.
+    OBSOLETO: Utilizar /super-admin/token da API principal backend/app/routes/super_admin.py.
     """
-    if payload.username == "georlandbz@gmail.com" and payload.password == "admin123":
-        # Fake JWT creation
-        return {
-            "access_token": "mock_jwt_payload_superadmin_georlandbz_gmail_com_9823",
-            "token_type": "bearer"
-        }
     raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Incorrect username or password",
-        headers={"WWW-Authenticate": "Bearer"},
+        status_code=status.HTTP_410_GONE,
+        detail="Este backend legado foi arquivado. Utilize a API oficial /super-admin do backend principal."
     )
 
 def get_current_admin(authorization: str = Header(None)) -> Dict[str, Any]:

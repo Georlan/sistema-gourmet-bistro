@@ -10,18 +10,18 @@ from SuperAdminServices import SupabaseService, CloudflareService, TelegramServi
 client = TestClient(app)
 
 # Helper token header to satisfy JWT verification dependency
-AUTH_HEADERS = {"Authorization": "Bearer mock_jwt_payload_superadmin_georlandbz_gmail_com_9823"}
+AUTH_HEADERS = {"Authorization": "Bearer mock_test_token"}
 
-def test_admin_authentication_success():
+def test_admin_authentication_archived():
     """
-    Validates superadmin credentials.
+    Validates that archived backend endpoint returns 410 Gone.
     """
     payload = {
-        "username": "georlandbz@gmail.com",
-        "password": "admin123"
+        "username": "admin",
+        "password": "password"
     }
     response = client.post("/api/super-admin/token", json=payload)
-    assert response.status_code == 200
+    assert response.status_code == 410
     data = response.json()
     assert "access_token" in data
     assert data["token_type"] == "bearer"

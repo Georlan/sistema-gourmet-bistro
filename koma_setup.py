@@ -388,9 +388,9 @@ def wizard_novo_cliente():
         # Usuários padrão
         header("Usuários Padrão")
         usuarios_padrao = [
-            {"id": "a-01", "nome": "Admin", "usuario": "admin", "senha": "admin123", "role": "admin"},
-            {"id": "c-01", "nome": "Caixa 1", "usuario": "caixa1", "senha": "caixa123", "role": "caixa"},
-            {"id": "g-01", "nome": "Garçom 1", "usuario": "garcom1", "senha": "garcom123", "role": "garcom"},
+            {"id": "a-01", "nome": "Admin", "usuario": os.getenv("DEFAULT_ADMIN_USER", "admin"), "senha": os.getenv("DEFAULT_ADMIN_PASS", secrets.token_hex(8)), "role": "admin"},
+            {"id": "c-01", "nome": "Caixa 1", "usuario": os.getenv("DEFAULT_CAIXA_USER", "caixa1"), "senha": os.getenv("DEFAULT_CAIXA_PASS", secrets.token_hex(8)), "role": "caixa"},
+            {"id": "g-01", "nome": "Garçom 1", "usuario": os.getenv("DEFAULT_GARCOM_USER", "garcom1"), "senha": os.getenv("DEFAULT_GARCOM_PASS", secrets.token_hex(8)), "role": "garcom"},
         ]
         print(c(GRAY, "  Usuários padrão que serão criados:"))
         for u in usuarios_padrao:

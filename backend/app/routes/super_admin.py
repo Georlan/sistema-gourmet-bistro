@@ -55,24 +55,7 @@ sentryIssues = [
     { "id": "err_02", "timestamp": datetime.now().strftime("%H:%M:%S"), "level": "WARNING", "service": "PRINTER-GATEWAY", "message": "Connection drop from printer client Sushi Premium Co." }
 ]
 
-credentialsStore = {
-    "SENTRY_AUTH_TOKEN": sentry_auth_token or "sntryu_mock_token_1234567890",
-    "SENTRY_ORG": os.getenv("SENTRY_ORG", "koma-saas"),
-    "SENTRY_PROJECT": os.getenv("SENTRY_PROJECT", "api1-node-express"),
-    "CLOUDFLARE_TOKEN": os.getenv("CLOUDFLARE_API_TOKEN", "cf_token_mock_abcdef"),
-    "CLOUDFLARE_ZONE_ID": os.getenv("CLOUDFLARE_ZONE_ID", "zone_koma_1122"),
-    "CLOUDFLARE_DOMAIN": "koma.com",
-    "RAILWAY_TOKEN": os.getenv("RAILWAY_API_TOKEN", "railway_token_mock_123"),
-    "RAILWAY_PROJECT_ID": os.getenv("RAILWAY_PROJECT_ID", "project_koma_456"),
-    "RAILWAY_SERVICE_ID": railway_service_id or "00000000-0000-0000-0000-000000000000",
-    "GITHUB_TOKEN": os.getenv("GITHUB_TOKEN", "ghp_mock_token_value_98765"),
-    "GITHUB_OWNER": os.getenv("GITHUB_OWNER", "Georlan"),
-    "GITHUB_REPO": os.getenv("GITHUB_REPO", "sistema-gourmet-bistro"),
-    "TELEGRAM_BOT_TOKEN": os.getenv("TELEGRAM_BOT_TOKEN", "123456789:AAF-KomaAdmin_SecretBotToken_9823"),
-    "TELEGRAM_CHAT_ID": os.getenv("TELEGRAM_CHAT_ID", "987654321"),
-    "SUPABASE_URL": os.getenv("SUPABASE_URL", os.getenv("VITE_SUPABASE_URL", "https://iiowhekvahxiepwcdidm.supabase.co")),
-    "SUPABASE_KEY": os.getenv("SUPABASE_KEY", os.getenv("VITE_SUPABASE_ANON_KEY", "sb_publishable_VOLK7mO9OqOhIfm0MeJ0eg_oQ626X4T"))
-}
+# (credentialsStore removido conforme regra P0.1 - credenciais não devem ficar em memória global)
 
 # --- SECURITY / MOCK JWT VALIDATION ---
 class TokenRequest(BaseModel):
@@ -339,105 +322,26 @@ async def trigger_developer_alert(
 # --- CREDENTIALS MANAGEMENT ---
 @router.get("/credentials")
 async def get_credentials(admin: dict = Depends(get_current_admin)):
-    # Return masked credentials for security UI representation
-    masked = {}
-    for k, v in credentialsStore.items():
-        if len(v) > 8:
-            masked[k] = v[:4] + "..." + v[-4:]
-        else:
-            masked[k] = "..."
-    return masked
-
-def save_credentials_to_env(updates: dict):
-    env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../.env"))
-    lines = []
-    if os.path.exists(env_path):
-        with open(env_path, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-            
-    key_line_index = {}
-    for idx, line in enumerate(lines):
-        clean_line = line.strip()
-        if clean_line and not clean_line.startswith("#") and "=" in clean_line:
-            parts = clean_line.split("=", 1)
-            key = parts[0].strip()
-            key_line_index[key] = idx
-            
-    for key, val in updates.items():
-        if not val or val.startswith("..."):
-            continue
-            
-        mapped_keys = [key]
-        if key == "CLOUDFLARE_TOKEN":
-            mapped_keys.append("CLOUDFLARE_API_TOKEN")
-        elif key == "RAILWAY_TOKEN":
-            mapped_keys.append("RAILWAY_API_TOKEN")
-        elif key == "SUPABASE_KEY":
-            mapped_keys.append("SUPABASE_SERVICE_ROLE_KEY")
-            mapped_keys.append("VITE_SUPABASE_ANON_KEY")
-        elif key == "SUPABASE_URL":
-            mapped_keys.append("VITE_SUPABASE_URL")
-            
-        for m_key in mapped_keys:
-            os.environ[m_key] = val
-            line_content = f'{m_key}="{val}"\n'
-            if m_key in key_line_index:
-                lines[key_line_index[m_key]] = line_content
-            else:
-                lines.append(line_content)
-                key_line_index[m_key] = len(lines) - 1
-                
-    try:
-        with open(env_path, "w", encoding="utf-8") as f:
-            f.writelines(lines)
-    except Exception as e:
-        logger.error(f"Failed to write credentials to .env file (possibly read-only container): {str(e)}")
+    return {
+        "sentry": {"configured": bool(os.getenv("SENTRY_AUTH_TOKEN"))},
+        "cloudflare": {"configured": bool(os.getenv("CLOUDFLARE_API_TOKEN"))},
+        "railway": {"configured": bool(os.getenv("RAILWAY_API_TOKEN"))},
+        "github": {"configured": bool(os.getenv("GITHUB_TOKEN"))},
+        "telegram": {
+            "configured": bool(os.getenv("TELEGRAM_BOT_TOKEN"))
+            and bool(os.getenv("TELEGRAM_CHAT_ID"))
+        },
+        "supabase": {
+            "configured": bool(os.getenv("SUPABASE_SERVICE_ROLE_KEY"))
+        }
+    }
 
 @router.post("/credentials")
-async def update_credentials(
-    payload: Dict[str, Any] = Body(...),
-    background_tasks: BackgroundTasks = BackgroundTasks(),
-    admin: dict = Depends(get_current_admin)
-):
-    credentials = payload.get("credentials", payload)
-    if not isinstance(credentials, dict):
-        credentials = payload
-        
-    for k, v in credentials.items():
-        if k in credentialsStore and v and not v.startswith("..."):
-            credentialsStore[k] = v
-            
-    save_credentials_to_env(credentials)
-    
-    # Construct a flat map of environment variables to synchronize to Railway in the background
-    railway_updates = {}
-    for key, val in credentials.items():
-        if not val or val.startswith("..."):
-            continue
-            
-        mapped_keys = [key]
-        if key == "CLOUDFLARE_TOKEN":
-            mapped_keys.append("CLOUDFLARE_API_TOKEN")
-        elif key == "RAILWAY_TOKEN":
-            mapped_keys.append("RAILWAY_API_TOKEN")
-        elif key == "SUPABASE_KEY":
-            mapped_keys.append("SUPABASE_SERVICE_ROLE_KEY")
-            mapped_keys.append("VITE_SUPABASE_ANON_KEY")
-        elif key == "SUPABASE_URL":
-            mapped_keys.append("VITE_SUPABASE_URL")
-            
-        for m_key in mapped_keys:
-            railway_updates[m_key] = val
-            
-    if railway_updates:
-        # Get the latest Railway API Token and Project ID from the updated store
-        railway_token = credentialsStore.get("RAILWAY_TOKEN")
-        railway_project = credentialsStore.get("RAILWAY_PROJECT_ID")
-        if railway_token and not railway_token.startswith("..."):
-            railway_svc = RailwayService(api_token=railway_token, project_id=railway_project)
-            background_tasks.add_task(railway_svc.update_environment_variables, railway_updates)
-            
-    return {"success": True, "message": "Credentials updated, written to .env, and scheduled for cloud synchronization."}
+async def update_credentials(admin: dict = Depends(get_current_admin)):
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail="Armazenamento seguro de credenciais não configurado."
+    )
 
 @router.post("/test-connection")
 async def test_connection(payload: Dict[str, str] = Body(...), admin: dict = Depends(get_current_admin)):
