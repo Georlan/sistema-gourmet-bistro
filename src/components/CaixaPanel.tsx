@@ -3010,7 +3010,7 @@ export function CaixaPanel({
                                 }}
                                 className={clsx('w-full', 'py-1.5', contaPedida ? 'bg-blue-600 hover:bg-blue-700' : 'bg-emerald-600 hover:bg-emerald-700', 'text-white', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1')}
                               >
-                                <Check size={11} /><span>{contaPedida ? 'Fechar Conta' : 'Receber Item'}</span>
+                                <Check size={11} /><span>Fechar Conta</span>
                               </button>
                             </div>
                           );
