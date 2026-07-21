@@ -13,12 +13,12 @@ if settings.DATABASE_URL.startswith("sqlite"):
 Base = declarative_base()
 
 # ContextVar to track the logical restaurante_id for the current request context
-current_restaurante_id: ContextVar[int] = ContextVar("current_restaurante_id", default=1)
+current_restaurante_id: ContextVar[int | None] = ContextVar("current_restaurante_id", default=None)
 
 class TenantSession(Session):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.restaurante_id = 1
+        self.restaurante_id: int | None = None
 
 @event.listens_for(Session, "do_orm_execute")
 def _add_tenant_id_filtering_criteria(execute_state):
@@ -90,7 +90,7 @@ def get_db(request: Request = None):
     try:
         import sentry_sdk
         sentry_sdk.set_tag("tenant_id", tenant_id)
-        sentry_sdk.set_tag("restaurante_id", str(restaurante_id))
+        sentry_sdk.set_tag("restaurante_id", str(restaurante_id) if restaurante_id is not None else "")
     except Exception:
         pass
 
@@ -98,17 +98,23 @@ def get_db(request: Request = None):
     db.restaurante_id = restaurante_id
 
     # Injeta 'SET LOCAL' na sessão do PostgreSQL para o RLS (Row Level Security)
-    # Se o restaurante_id for None, 0 ou inválido, usa string vazia para que o RLS bloqueie o acesso
-    if restaurante_id and restaurante_id != 0:
+    # Quando o tenant estiver ausente, zero ou inválido, usa string vazia para que o RLS bloqueie o acesso
+    if restaurante_id is not None and isinstance(restaurante_id, int) and restaurante_id > 0:
         target_id_str = str(restaurante_id)
     else:
         target_id_str = ""
 
-    try:
-        db.execute(text("SET LOCAL app.current_restaurante_id = :id"), {"id": target_id_str})
-    except Exception:
-        # SQLite em ambiente de testes não aceita o comando PostgreSQL SET LOCAL e levantará exceção, que é ignorada com segurança
+    if settings.DATABASE_URL.startswith("sqlite"):
+        # SQLite em ambiente de testes unitários não suporta o comando PostgreSQL SET LOCAL e é ignorado com segurança
         pass
+    else:
+        try:
+            db.execute(text("SET LOCAL app.current_restaurante_id = :id"), {"id": target_id_str})
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Falha ao configurar SET LOCAL app.current_restaurante_id no PostgreSQL: {e}")
+            raise
 
     try:
         yield db

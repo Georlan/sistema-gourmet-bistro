@@ -28,25 +28,40 @@ def get_password_hash(password: str) -> str:
 
 def create_access_token(
     subject: Union[str, Any],
-    restaurante_id: int = 1,
-    expires_delta: timedelta = None,
+    restaurante_id: int,
+    expires_delta: Optional[timedelta] = None,
     role: Optional[str] = None,
     extra_claims: Optional[dict] = None
 ) -> str:
     """Creates a JWT access token for persistent login session."""
+    if restaurante_id is None or not isinstance(restaurante_id, int) or isinstance(restaurante_id, bool):
+        raise ValueError("restaurante_id é obrigatório e deve ser um inteiro válido.")
+
+    if restaurante_id < 0 or (restaurante_id == 0 and role != "superadmin"):
+        raise ValueError("restaurante_id deve ser um inteiro positivo válido.")
+
+    if subject is None or str(subject).strip() == "":
+        raise ValueError("subject é obrigatório.")
+
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
     else:
         expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     
-    to_encode = {"exp": expire, "sub": str(subject), "restaurante_id": restaurante_id}
-    if role is not None:
-        to_encode["role"] = role
+    to_encode = {}
     if extra_claims:
         to_encode.update(extra_claims)
 
+    # Garantir que reivindicações essenciais não sejam sobrescritas por extra_claims
+    to_encode["sub"] = str(subject)
+    to_encode["exp"] = expire
+    to_encode["restaurante_id"] = restaurante_id
+    if role is not None:
+        to_encode["role"] = role
+
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
+
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
