@@ -7668,18 +7668,6 @@ export function CaixaPanel({
               </button>
             </div>
 
-            {/* BOTÃO DE AÇÕES RÁPIDAS — sempre visível, no topo */}
-            <button
-              type="button"
-              onClick={() => setQuickActionsOrder(selectedKanbanOrder)}
-              className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 text-[#121214] font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-950/30"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-              Ações Rápidas — Desconto / Rateio / Pagamento
-            </button>
-
 
             {/* Itens e info extras */}
             <div className="space-y-3">
