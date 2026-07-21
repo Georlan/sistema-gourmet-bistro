@@ -6,7 +6,7 @@ from sqlalchemy import func
 from typing import List, Optional
 import logging
 
-from ..database import get_db, current_restaurante_id
+from ..database import get_db, current_restaurante_id, require_tenant_id
 from ..models import Comanda, Mesa, Usuario, Produto, Lancamento, Item, ActivityLog, Motoboy, ConfiguracaoRestaurante
 from ..schemas import (
     ComandaResponse, ComandaDetail, ComandaCreate,
@@ -49,7 +49,7 @@ def print_in_background(printer_name: str, ticket_text: str, document_type: str 
         from ..models import PrintJob
         db = SessionLocal()
         try:
-            rest_id = current_restaurante_id.get() or 1
+            rest_id = require_tenant_id()
             dest_clean = "COZINHA"
             p_upper = (printer_name or "").upper()
             if "FECHAMENTO" in p_upper or "RECIBO" in p_upper or "VALORES" in p_upper:

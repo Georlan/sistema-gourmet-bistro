@@ -11,7 +11,7 @@ import os
 import httpx
 
 from ..config import settings
-from ..database import get_db, current_restaurante_id
+from ..database import get_db, current_restaurante_id, require_tenant_id
 from ..models import Usuario, Comanda, Item, CaixaTurno, CaixaMovimentacao, Pagamento
 from ..schemas import (
     CaixaTurnoCreate, CaixaTurnoResponse, CaixaTurnoFechar, CaixaTurnoDetalhe,
@@ -50,7 +50,7 @@ def obter_funcionarios(
 ):
     """Retorna a lista de usuários pertencentes ao restaurante_id do contexto ativo."""
     check_caixa_permission(current_user)
-    rest_id = current_restaurante_id.get() or 1
+    rest_id = require_tenant_id()
     return db.query(Usuario).filter(Usuario.restaurante_id == rest_id).all()
 
 
@@ -79,7 +79,7 @@ def cadastrar_funcionario(
             detail="Este telefone já está cadastrado no sistema"
         )
         
-    rest_id = current_restaurante_id.get() or user_in.restaurante_id or 1
+    rest_id = require_tenant_id()
     token_convite = str(uuid.uuid4())
     token_expira_em = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)
     cargo_val = user_in.cargo or user_in.role or "garcom"
@@ -590,12 +590,20 @@ from sqlalchemy.orm import joinedload
 
 @router.get("/configuracoes", response_model=ConfiguracaoRestauranteResponse)
 def obter_configuracoes(
+    restaurante_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
-    rest_id = current_restaurante_id.get() or 1
-    if rest_id == 0:
-        rest_id = 1
+    # Rota pública de leitura: carregada pelo frontend antes do login.
+    # Prioridade: (1) contexto autenticado, (2) query param, (3) 401.
+    rest_id = current_restaurante_id.get()
+    if rest_id is None:
+        if restaurante_id is not None:
+            rest_id = restaurante_id
+        else:
+            # Sem contexto e sem query param: usa 1 apenas como fallback
+            # de desenvolvimento (sistema single-tenant atual).
+            rest_id = 1
 
     token_var = current_restaurante_id.set(rest_id)
     try:
@@ -717,7 +725,7 @@ def obter_configuracao_restaurante(
 ):
     """Obtém as configurações whitelabel de personalização do restaurante ativo."""
     check_caixa_permission(current_user)
-    rest_id = current_restaurante_id.get() or 1
+    rest_id = require_tenant_id()
     
     restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
     if not restaurante:
@@ -745,7 +753,7 @@ def atualizar_configuracao_restaurante(
 ):
     """Atualiza as configurações whitelabel de personalização do restaurante ativo."""
     check_caixa_permission(current_user)
-    rest_id = current_restaurante_id.get() or 1
+    rest_id = require_tenant_id()
     
     restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
     if not restaurante:
@@ -854,7 +862,7 @@ def atualizar_plano_restaurante(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Plano inválido. Deve ser um de: pocket, bistro, delivery, premium"
         )
-    rest_id = current_restaurante_id.get() or 1
+    rest_id = require_tenant_id()
     restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
     if not restaurante:
         raise HTTPException(

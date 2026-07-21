@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from pydantic import BaseModel
 
-from ..database import get_db, current_restaurante_id
+from ..database import get_db, current_restaurante_id, require_tenant_id
 from ..models import Usuario, Insumo, Distribuidor, NotaEntrada, ItemNotaEntrada, ActivityLog
 from ..schemas import InsumoResponse, DistribuidorResponse, NotaEntradaResponse
 from ..security import get_current_garcom_optional
@@ -40,7 +40,7 @@ async def importar_xml(
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
     check_caixa_permission(current_user)
-    rest_id = current_restaurante_id.get() or 1
+    rest_id = require_tenant_id()
 
     try:
         xml_content = await file.read()
@@ -318,7 +318,7 @@ def create_insumo(
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
     check_caixa_permission(current_user)
-    rest_id = current_restaurante_id.get() or 1
+    rest_id = require_tenant_id()
     
     existente = db.query(Insumo).filter_by(id=data.id, restaurante_id=rest_id).first()
     if existente:
@@ -347,7 +347,7 @@ def update_insumo(
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
     check_caixa_permission(current_user)
-    rest_id = current_restaurante_id.get() or 1
+    rest_id = require_tenant_id()
     insumo = db.query(Insumo).filter_by(id=insumo_id, restaurante_id=rest_id).first()
     if not insumo:
         raise HTTPException(status_code=404, detail="Insumo não encontrado.")
@@ -366,7 +366,7 @@ def delete_insumo(
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
     check_caixa_permission(current_user)
-    rest_id = current_restaurante_id.get() or 1
+    rest_id = require_tenant_id()
     insumo = db.query(Insumo).filter_by(id=insumo_id, restaurante_id=rest_id).first()
     if not insumo:
         raise HTTPException(status_code=404, detail="Insumo não encontrado.")
@@ -383,7 +383,7 @@ def ajustar_insumo(
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
     check_caixa_permission(current_user)
-    rest_id = current_restaurante_id.get() or 1
+    rest_id = require_tenant_id()
     insumo = db.query(Insumo).filter_by(id=insumo_id, restaurante_id=rest_id).first()
     if not insumo:
         raise HTTPException(status_code=404, detail="Insumo não encontrado.")
@@ -420,7 +420,7 @@ def create_distribuidor(
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
     check_caixa_permission(current_user)
-    rest_id = current_restaurante_id.get() or 1
+    rest_id = require_tenant_id()
     
     existente = db.query(Distribuidor).filter_by(id=data.id, restaurante_id=rest_id).first()
     if existente:
@@ -447,7 +447,7 @@ def update_distribuidor(
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
     check_caixa_permission(current_user)
-    rest_id = current_restaurante_id.get() or 1
+    rest_id = require_tenant_id()
     distribuidor = db.query(Distribuidor).filter_by(id=dist_id, restaurante_id=rest_id).first()
     if not distribuidor:
         raise HTTPException(status_code=404, detail="Distribuidor não encontrado.")
@@ -466,7 +466,7 @@ def delete_distribuidor(
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
     check_caixa_permission(current_user)
-    rest_id = current_restaurante_id.get() or 1
+    rest_id = require_tenant_id()
     distribuidor = db.query(Distribuidor).filter_by(id=dist_id, restaurante_id=rest_id).first()
     if not distribuidor:
         raise HTTPException(status_code=404, detail="Distribuidor não encontrado.")

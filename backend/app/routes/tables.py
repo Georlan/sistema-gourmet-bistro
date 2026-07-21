@@ -2,7 +2,7 @@ import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from ..database import get_db, current_restaurante_id
+from ..database import get_db, current_restaurante_id, require_tenant_id
 from ..models import Mesa, ObservacaoPredefinida, Comanda, Item, Usuario
 from ..schemas import MesaResponse, MesaUpdate, MesaCreate, ObservacaoPredefinidaResponse
 from ..security import get_current_garcom_optional, get_current_user
@@ -216,7 +216,7 @@ def imprimir_recibo_mesa(
         )
         
         from ..models import PrintJob
-        rest_id = current_restaurante_id.get() or 1
+        rest_id = require_tenant_id()
         ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d%H%M%S%f")
         ikey = f"fechamento:mesa:{mesa_id}:{ts}"
         

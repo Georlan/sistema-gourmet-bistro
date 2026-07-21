@@ -5,7 +5,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 import logging
 
-from ..database import get_db
+from ..database import get_db, require_tenant_id
 from ..models import Comanda, Insumo, ConfigFidelizacao, HistoricoFidelidade, ActivityLog, Pagamento, Cliente
 from ..schemas import InsumoResponse, ConfigFidelizacaoResponse, HistoricoFidelidadeResponse
 from ..security import get_current_garcom_optional, get_current_user
@@ -94,10 +94,10 @@ def get_estatisticas_geral(
     Retorna estatísticas consolidadas de vendas para o painel de BI (dashboard financeiro).
     """
     import datetime
-    from ..database import current_restaurante_id
+    from ..database import current_restaurante_id, require_tenant_id
     from ..models import Pagamento, Comanda, Produto
     
-    rest_id = current_restaurante_id.get() or 1
+    rest_id = require_tenant_id()
     
     def parse_date(date_str: Optional[str]):
         if not date_str:
@@ -468,10 +468,10 @@ def get_garcons_relatorio(
     Calcula o total de pedidos atendidos e a comissão acumulada (10% de serviço).
     """
     import datetime
-    from ..database import current_restaurante_id
+    from ..database import current_restaurante_id, require_tenant_id
     from ..models import Comanda
     
-    rest_id = current_restaurante_id.get() or 1
+    rest_id = require_tenant_id()
     
     def parse_date(date_str: Optional[str]):
         if not date_str:

@@ -3,7 +3,7 @@ import json
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional, Union, Dict, Any
-from ..database import get_db, current_restaurante_id
+from ..database import get_db, current_restaurante_id, require_tenant_id
 from ..models import Produto, Categoria, ObservacaoPredefinida, Usuario
 from ..security import get_current_user
 from ..schemas import ProdutoResponse, ProdutoCreate, ProdutoUpdate, CategoriaResponse
@@ -384,7 +384,7 @@ def importar_cardapio(
     Produtos antigos que não estão no novo cardápio serão inativados (ativo = False).
     Reescreve o arquivo backend/dump.json e notifica via WebSocket.
     """
-    rest_id = current_restaurante_id.get() or 1
+    rest_id = require_tenant_id()
 
     if isinstance(payload, CardapioImportPayload):
         produtos_data = payload.products or []

@@ -15,6 +15,22 @@ Base = declarative_base()
 # ContextVar to track the logical restaurante_id for the current request context
 current_restaurante_id: ContextVar[int | None] = ContextVar("current_restaurante_id", default=None)
 
+
+def require_tenant_id() -> int:
+    """
+    Retorna o restaurante_id do contexto autenticado atual.
+    Lança HTTP 401 se o contexto não estiver preenchido.
+    Nunca retorna fallback como 1 — cada rota deve ter tenant explícito.
+    """
+    from fastapi import HTTPException
+    rid = current_restaurante_id.get()
+    if rid is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Sessão sem tenant identificado. Faça login novamente."
+        )
+    return rid
+
 class TenantSession(Session):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
