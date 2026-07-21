@@ -199,14 +199,8 @@ async def run_migrations_on_startup():
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://sistema-gourmet-bistro.pages.dev",
-        "https://sistema-gourmet-bistro-production.up.railway.app",
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "http://localhost:8000",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=["*"],
+    allow_origin_regex=r"https://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -214,20 +208,20 @@ app.add_middleware(
 
 @app.middleware("http")
 async def add_sentry_context_and_tenant(request: Request, call_next):
+    origin = request.headers.get("Origin", "*")
+    cors_headers = {
+        "Access-Control-Allow-Origin": origin,
+        "Access-Control-Allow-Credentials": "true",
+        "Access-Control-Allow-Methods": "*",
+        "Access-Control-Allow-Headers": "*",
+    }
     if request.method == "OPTIONS":
-        return await call_next(request)
+        return JSONResponse(status_code=200, content={"status": "ok"}, headers=cors_headers)
     tenant_id = request.headers.get("X-Tenant-ID", "default")
     restaurante_id: int | None = None
     
     auth_header = request.headers.get("Authorization")
     if auth_header:
-        origin = request.headers.get("Origin", "https://sistema-gourmet-bistro.pages.dev")
-        cors_headers = {
-            "Access-Control-Allow-Origin": origin,
-            "Access-Control-Allow-Credentials": "true",
-            "Access-Control-Allow-Methods": "*",
-            "Access-Control-Allow-Headers": "*",
-        }
         if auth_header.startswith("Bearer "):
             try:
                 parts = auth_header.split(" ")
