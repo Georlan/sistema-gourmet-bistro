@@ -214,11 +214,28 @@ def imprimir_recibo_mesa(
             apenas_valores=apenas_valores
         )
         
-        printer_service.send_to_printer("recibo", receipt_text)
+        from ..models import PrintJob
+        rest_id = current_restaurante_id.get() or 1
+        ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d%H%M%S%f")
+        ikey = f"fechamento:mesa:{mesa_id}:{ts}"
+        
+        job = PrintJob(
+            restaurante_id=rest_id,
+            document_type="fechamento",
+            destination="FECHAMENTO",
+            source_type="comanda",
+            source_id=str(mesa_id),
+            payload_text=receipt_text,
+            status="pending",
+            idempotency_key=ikey
+        )
+        db.add(job)
+        db.commit()
+        print(f"[PRINT JOB ENQUEUED] Job de fechamento ID {job.id} enfileirado para o Kôma Agent!")
     except Exception as print_err:
         raise HTTPException(
             status_code=500,
-            detail=f"Erro na impressora: {print_err}"
+            detail=f"Erro ao enfileirar impressão do recibo: {print_err}"
         )
         
-    return {"status": "success", "detail": "Impressão do recibo enviada com sucesso"}
+    return {"status": "success", "detail": "Impressão do recibo enviada com sucesso para a fila de impressão"}

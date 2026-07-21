@@ -42,13 +42,44 @@ def gerar_novo_numero_pedido(db: Session) -> int:
     ).order_by(Comanda.numero_pedido.desc()).limit(1).with_for_update().scalar()
     return (max_pedido or 0) + 1
 
-def print_in_background(printer_name: str, ticket_text: str):
+def print_in_background(printer_name: str, ticket_text: str, document_type: str = "producao", source_type: str = "pedido", source_id: str = "1"):
     try:
-        from ..printer_service import printer_service
-        # Chamada direta e segura, já rodando sob a thread pool do AnyIO
-        printer_service.send_to_printer(printer_name, ticket_text)
+        import datetime
+        from ..database import SessionLocal, current_restaurante_id
+        from ..models import PrintJob
+        db = SessionLocal()
+        try:
+            rest_id = current_restaurante_id.get() or 1
+            dest_clean = "COZINHA"
+            p_upper = (printer_name or "").upper()
+            if "FECHAMENTO" in p_upper or "RECIBO" in p_upper or "VALORES" in p_upper:
+                dest_clean = "FECHAMENTO"
+            elif "DELIVERY" in p_upper or "MOTOBOY" in p_upper or "ENTREGA" in p_upper:
+                dest_clean = "ENTREGA"
+            elif "BAR" in p_upper:
+                dest_clean = "BAR"
+            
+            doc_type_clean = "entrega" if "delivery" in p_upper or "motoboy" in p_upper else document_type.lower()
+            ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d%H%M%S%f")
+            ikey = f"{doc_type_clean}:{source_type}:{source_id}:{printer_name}:{ts}"
+            
+            job = PrintJob(
+                restaurante_id=rest_id,
+                document_type=doc_type_clean,
+                destination=dest_clean,
+                source_type=source_type.lower(),
+                source_id=str(source_id),
+                payload_text=ticket_text,
+                status="pending",
+                idempotency_key=ikey
+            )
+            db.add(job)
+            db.commit()
+            print(f"[PRINT JOB ENQUEUED] Job ID {job.id} enfileirado para o Kôma Print Agent!")
+        finally:
+            db.close()
     except Exception as e:
-        print(f"[PRINT ERROR] Falha no disparo em background para {printer_name}: {e}")
+        print(f"[PRINT JOB ERROR] Falha ao enfileirar PrintJob: {e}")
 
 # ----------------- READ ENDPOINTS -----------------
 
