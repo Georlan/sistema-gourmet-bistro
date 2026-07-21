@@ -593,36 +593,46 @@ def obter_configuracoes(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
-    config = db.query(ConfiguracaoRestaurante).options(joinedload(ConfiguracaoRestaurante.restaurante)).first()
-    if not config:
-        config = ConfiguracaoRestaurante(
-            nicho="hamburgueria",
-            mapa_mesas_ativo=True,
-            delivery_ativo=True,
-            taxa_servico_ativa=True,
-            taxa_servico_padrao=10.0,
-            unificar_vias_delivery=False,
-            modo_exclusivo_salao=True,
-            perm_garcom_delivery=True,
-            perm_garcom_editar=True,
-            perm_garcom_taxas=False,
-            perm_garcom_cancelar=False,
-            perm_garcom_status=True,
-            perm_garcom_abrir_vazia=False,
-            perm_garcom_print=True,
-            perm_garcom_fechar=False,
-            perm_garcom_desconto=False,
-            perm_garcom_acrescimo=False,
-            perm_garcom_pessoas=True,
-            perm_garcom_transferir_mesa=True,
-            perm_garcom_transferir_item=True,
-            perm_garcom_chamar=True,
-            perm_garcom_ociosas=True
-        )
-        db.add(config)
-        db.commit()
-        db.refresh(config)
-    return config
+    rest_id = current_restaurante_id.get() or 1
+    if rest_id == 0:
+        rest_id = 1
+
+    token_var = current_restaurante_id.set(rest_id)
+    try:
+        config = db.query(ConfiguracaoRestaurante).options(joinedload(ConfiguracaoRestaurante.restaurante)).filter(ConfiguracaoRestaurante.restaurante_id == rest_id).first()
+        if not config:
+            config = ConfiguracaoRestaurante(
+                restaurante_id=rest_id,
+                nicho="hamburgueria",
+                mapa_mesas_ativo=True,
+                delivery_ativo=True,
+                taxa_servico_ativa=True,
+                taxa_servico_padrao=10.0,
+                unificar_vias_delivery=False,
+                modo_exclusivo_salao=True,
+                perm_garcom_delivery=True,
+                perm_garcom_editar=True,
+                perm_garcom_taxas=False,
+                perm_garcom_cancelar=False,
+                perm_garcom_status=True,
+                perm_garcom_abrir_vazia=False,
+                perm_garcom_print=True,
+                perm_garcom_fechar=False,
+                perm_garcom_desconto=False,
+                perm_garcom_acrescimo=False,
+                perm_garcom_pessoas=True,
+                perm_garcom_transferir_mesa=True,
+                perm_garcom_transferir_item=True,
+                perm_garcom_chamar=True,
+                perm_garcom_ociosas=True
+            )
+            db.add(config)
+            db.commit()
+            db.refresh(config)
+        return config
+    finally:
+        current_restaurante_id.reset(token_var)
+
 
 @router.put("/configuracoes", response_model=ConfiguracaoRestauranteResponse)
 def atualizar_configuracoes(
