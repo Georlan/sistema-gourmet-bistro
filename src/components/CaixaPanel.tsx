@@ -2004,13 +2004,8 @@ export function CaixaPanel({
         onRefreshOrders();
         fetchDeliveryOrders();
         showToast("✅ Pedido lançado com sucesso!", 'success');
-        if (pdvOrderType === 'mesa') {
-          setActiveTab('operacao');
-          setActiveSubTab('salon');
-        } else {
-          setActiveTab('operacao');
-          setActiveSubTab('pedidos');
-        }
+        setActiveTab('operacao');
+        setActiveSubTab('pedidos');
       } else {
         const err = await launchRes.json();
         showToast(`Erro ao lançar itens: ${err.detail}`, 'error');
