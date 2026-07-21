@@ -216,7 +216,7 @@ async def add_sentry_context_and_tenant(request: Request, call_next):
     if request.method == "OPTIONS":
         return await call_next(request)
     tenant_id = request.headers.get("X-Tenant-ID", "default")
-    restaurante_id = 0  # Sentinel: nenhuma rota autenticada deve chegar aqui com valor 0
+    restaurante_id: int | None = None
     
     auth_header = request.headers.get("Authorization")
     if auth_header:
@@ -238,15 +238,31 @@ async def add_sentry_context_and_tenant(request: Request, call_next):
                 payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
                 rid = payload.get("restaurante_id")
                 role = payload.get("role", "")
-                # Superadmin usa restaurante_id=0 por design — permitir passagem
-                # Para todos os outros: rejeitar se restaurante_id ausente ou inválido
-                if rid is None or (int(rid) == 0 and role != "superadmin"):
+
+                if isinstance(rid, bool):
                     return JSONResponse(
                         status_code=401,
                         content={"detail": "Identificação do restaurante inválida ou ausente no token."},
                         headers=cors_headers
                     )
-                restaurante_id = int(rid)
+
+                try:
+                    parsed_rid = int(rid)
+                except (TypeError, ValueError):
+                    return JSONResponse(
+                        status_code=401,
+                        content={"detail": "Identificação do restaurante inválida ou ausente no token."},
+                        headers=cors_headers
+                    )
+
+                if parsed_rid < 0 or (parsed_rid == 0 and role != "superadmin"):
+                    return JSONResponse(
+                        status_code=401,
+                        content={"detail": "Identificação do restaurante inválida ou ausente no token."},
+                        headers=cors_headers
+                    )
+
+                restaurante_id = parsed_rid
             except jwt.PyJWTError as e:
                 from fastapi.responses import JSONResponse
                 return JSONResponse(
@@ -270,7 +286,7 @@ async def add_sentry_context_and_tenant(request: Request, call_next):
             )
 
     sentry_sdk.set_tag("tenant_id", tenant_id)
-    sentry_sdk.set_tag("restaurante_id", str(restaurante_id))
+    sentry_sdk.set_tag("restaurante_id", str(restaurante_id) if restaurante_id is not None else "")
 
     # Define a variável de contexto do tenant de forma segura para esta requisição
     token_context = current_restaurante_id.set(restaurante_id)

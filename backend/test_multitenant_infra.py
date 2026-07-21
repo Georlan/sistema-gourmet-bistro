@@ -1,8 +1,10 @@
 import pytest
+from fastapi.testclient import TestClient
 from unittest.mock import AsyncMock
 from app.database import current_restaurante_id, get_tenant_id_str
 from app.security import create_access_token
 from app.websocket_manager import ConnectionManager
+from app.main import app
 
 def test_current_restaurante_id_default_is_none_outside_request():
     """Prova que current_restaurante_id.get() retorna None por padrão fora de uma requisição."""
@@ -33,6 +35,26 @@ def test_create_access_token_requires_valid_restaurante_id():
 
     with pytest.raises(ValueError, match="restaurante_id é obrigatório"):
         create_access_token(subject="user1", restaurante_id=True)  # type: ignore
+
+def test_unauthenticated_request_leaves_context_var_none():
+    """Prova que uma requisição sem tenant não define o ContextVar com valor implícito de 0."""
+    async def tenant_debug():
+        return {"tenant": current_restaurante_id.get()}
+
+    existing_routes = []
+    for route in app.routes:
+        if hasattr(route, "path"):
+            existing_routes.append(route.path)
+
+    if "/tenant-debug" not in existing_routes:
+        app.add_api_route("/tenant-debug", tenant_debug, methods=["GET"], include_in_schema=False)
+
+    client = TestClient(app)
+    response = client.get("/tenant-debug")
+
+    assert response.status_code == 200
+    assert response.json()["tenant"] is None
+
 
 def test_create_access_token_rejects_reserved_claims_in_extra_claims():
     """Prova que extra_claims não pode conter sub, exp, restaurante_id ou role."""
