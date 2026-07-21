@@ -142,11 +142,11 @@ export function CaixaPanel({
   const [errorMsg, setErrorMsg] = useState('');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState('');
-  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [toastData, setToastData] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null);
 
-  const showToast = (msg: string) => {
-    setToastMsg(msg);
-    setTimeout(() => setToastMsg(null), 3000);
+  const showToast = (msg: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setToastData({ msg, type });
+    setTimeout(() => setToastData(null), 3000);
   };
 
   const [activeTab, setActiveTab] = useState<
@@ -343,24 +343,20 @@ export function CaixaPanel({
     setNewCouponCode("");
   };
 
-  const handleSaveFidelityConfig = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveFidelidadeConfig = async () => {
     try {
-      const res = await fetch(`${apiBaseUrl}/fidelidade/config`, {
+      const res = await fetch(`${apiBaseUrl}/fidelidade/configuracao`, {
         method: 'POST',
-        headers: {
-          ...authHeaders,
-          'Content-Type': 'application/json'
-        },
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify(fidelidadeConfig)
       });
       if (res.ok) {
-        alert('Configurações do Programa de Fidelidade salvas com sucesso!');
+        showToast('Configurações do Programa de Fidelidade salvas com sucesso!');
       } else {
-        alert('Falha ao salvar as configurações.');
+        showToast('Falha ao salvar as configurações.', 'error');
       }
-    } catch (err) {
-      console.error('Error saving fidelity config:', err);
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -689,8 +685,8 @@ export function CaixaPanel({
   const [simulatedOrders, setSimulatedOrders] = useState<SimulatedDeliveryOrder[]>([]);
   const [motoboys, setMotoboys] = useState<any[]>([]);
   const [selectedMotoboys, setSelectedMotoboys] = useState<{ [orderId: string]: string }>({});
-  const [novoMotoboyNome, setNovoMotoboyNome] = useState('');
-  const [novoMotoboyTelefone, setNovoMotoboyTelefone] = useState('');
+  const [novoMotoboyNome, setNewMotoboyNome] = useState('');
+  const [novoMotoboyTelefone, setNewMotoboyTelefone] = useState('');
 
   // ── Gaveta de Aceite (Floating Drawer) ──────────────────────────────────────
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -852,113 +848,86 @@ export function CaixaPanel({
   };
 
   const handleUpdateDeliveryStatus = async (orderId: string, statusNovo: string) => {
-    // 0ms Optimistic UI update
-    setDeliveryOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: statusNovo } : o));
     try {
       const res = await fetch(`${apiBaseUrl}/comandas/${orderId}/delivery/status?status_novo=${statusNovo}`, {
         method: 'PUT',
         headers: authHeaders
       });
-      if (!res.ok) {
-        alert('Erro ao atualizar status do pedido.');
+      if (res.ok) {
         fetchDeliveryOrders();
+        showToast('Status do pedido atualizado!');
+      } else {
+        showToast('Erro ao atualizar status do pedido.', 'error');
       }
-    } catch (e) {
-      console.error(e);
-      alert('Erro de conexão ao atualizar status.');
-      fetchDeliveryOrders();
+    } catch (err) {
+      console.error(err);
+      showToast('Erro de conexão ao atualizar status.', 'error');
     }
   };
 
-  const handleRecusarPedido = async (orderId: string) => {
-    if (!confirm('Deseja realmente recusar e cancelar este pedido?')) return;
-    // 0ms Optimistic UI update
-    setDeliveryOrders(prev => prev.filter(o => o.id !== orderId));
-    try {
-      await fetch(`${apiBaseUrl}/comandas/${orderId}/delivery/status?status_novo=finalizado`, {
-        method: 'PUT',
-        headers: authHeaders
-      });
-      await fetch(`${apiBaseUrl}/comandas/${orderId}/fechar`, {
-        method: 'PUT',
-        headers: authHeaders
-      });
-      onRefreshOrders();
-    } catch (e) {
-      console.error(e);
-      fetchDeliveryOrders();
+  const handleDespacharKanban = async (orderId: string, selectedMotoboyId: string) => {
+    if (!selectedMotoboyId) {
+      showToast('Selecione um motoboy para despachar o pedido!', 'info');
+      return;
     }
-  };
-
-  const handleDespacharPedido = async (orderId: string, motoboyId: number) => {
-    const motoboy = motoboysList.find(m => m.id === motoboyId);
-    // 0ms Optimistic UI update
-    setDeliveryOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'transito', motoboy_nome: motoboy?.nome || 'Motoboy' } : o));
     try {
-      const res = await fetch(`${apiBaseUrl}/comandas/${orderId}/delivery/despachar`, {
+      const res = await fetch(`${apiBaseUrl}/comandas/${orderId}/despachar?motoboy_id=${selectedMotoboyId}`, {
         method: 'POST',
-        headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ motoboy_id: motoboyId })
+        headers: authHeaders
       });
       if (res.ok) {
         showToast('Pedido despachado com sucesso!');
+        setSelectedKanbanOrder(null);
+        fetchDeliveryOrders();
+        onRefreshOrders();
       } else {
         const err = await res.json();
-        alert(`Erro ao despachar: ${err.detail}`);
-        fetchDeliveryOrders();
+        showToast(`Erro ao despachar: ${err.detail}`, 'error');
       }
-    } catch (e) {
-      console.error(e);
-      alert('Erro de conexão ao despachar.');
-      fetchDeliveryOrders();
+    } catch (err) {
+      console.error(err);
+      showToast('Erro de conexão ao despachar.', 'error');
     }
   };
 
-  const handleFinalizarPedido = async (orderId: string) => {
-    // 0ms Optimistic UI update
-    setDeliveryOrders(prev => prev.filter(o => o.id !== orderId));
+  const handleFecharDelivery = async (orderId: string) => {
     try {
-      await fetch(`${apiBaseUrl}/comandas/${orderId}/delivery/status?status_novo=finalizado`, {
-        method: 'PUT',
-        headers: authHeaders
-      });
       const res = await fetch(`${apiBaseUrl}/comandas/${orderId}/fechar`, {
         method: 'PUT',
         headers: authHeaders
       });
       if (res.ok) {
+        showToast('Comanda de delivery encerrada com sucesso!');
+        setSelectedKanbanOrder(null);
+        fetchDeliveryOrders();
         onRefreshOrders();
       } else {
-        alert('Erro ao fechar comanda.');
-        fetchDeliveryOrders();
+        showToast('Erro ao fechar comanda.', 'error');
       }
-    } catch (e) {
-      console.error(e);
-      alert('Erro de conexão ao finalizar pedido.');
-      fetchDeliveryOrders();
+    } catch (err) {
+      console.error(err);
+      showToast('Erro de conexão ao finalizar pedido.', 'error');
     }
   };
 
-  const handleCadastrarMotoboy = async (e: React.FormEvent) => {
+  const handleAddMotoboy = async (e: React.FormEvent, newMotoboyNome: string, newMotoboyTelefone: string) => {
     e.preventDefault();
-    if (!novoMotoboyNome || !novoMotoboyTelefone) return;
+    if (!newMotoboyNome.trim() || !newMotoboyTelefone.trim()) return;
     try {
-      const res = await fetch(`${apiBaseUrl}/comandas/motoboys/cadastro`, {
+      const res = await fetch(`${apiBaseUrl}/comandas/motoboys`, {
         method: 'POST',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome: novoMotoboyNome, telefone: novoMotoboyTelefone })
+        body: JSON.stringify({ nome: newMotoboyNome, telefone: newMotoboyTelefone, ativo: true })
       });
       if (res.ok) {
-        alert('Fretista cadastrado com sucesso!');
-        setNovoMotoboyNome('');
-        setNovoMotoboyTelefone('');
+        showToast('Fretista cadastrado com sucesso!');
         fetchMotoboys();
       } else {
-        alert('Erro ao cadastrar fretista.');
+        showToast('Erro ao cadastrar fretista.', 'error');
       }
-    } catch (e) {
-      console.error(e);
-      alert('Erro de conexão ao cadastrar fretista.');
+    } catch (err) {
+      console.error(err);
+      showToast('Erro de conexão ao cadastrar fretista.', 'error');
     }
   };
 
@@ -1973,12 +1942,12 @@ export function CaixaPanel({
     e.preventDefault();
     if (isLoading) return;
     if (pdvCart.length === 0) {
-      alert("Seu carrinho de vendas está vazio.");
+      showToast("Seu carrinho de vendas está vazio.", 'info');
       return;
     }
     if (modoExclusivoSalao) {
       if (pdvOrderType !== 'mesa' || !pdvTargetMesaId || pdvTargetMesaId === 0) {
-        alert("Durante o modo de testes de salão, todos os pedidos de venda devem ser vinculados a uma Mesa física ativa.");
+        showToast("Durante o modo de testes de salão, todos os pedidos de venda devem ser vinculados a uma Mesa física ativa.", 'info');
         return;
       }
     }
@@ -2000,7 +1969,7 @@ export function CaixaPanel({
       });
       if (!openRes.ok) {
         const err = await openRes.json();
-        alert(`Erro ao abrir comanda: ${err.detail}`);
+        showToast(`Erro ao abrir comanda: ${err.detail}`, 'error');
         setIsLoading(false);
         return;
       }
@@ -2031,7 +2000,7 @@ export function CaixaPanel({
         setPdvDeliveryTaxa('0.00');
         onRefreshOrders();
         fetchDeliveryOrders();
-        alert("Pedido lançado com sucesso!");
+        showToast("✅ Pedido lançado com sucesso!", 'success');
         if (pdvOrderType === 'mesa') {
           setActiveTab('operacao');
           setActiveSubTab('salon');
@@ -2041,11 +2010,11 @@ export function CaixaPanel({
         }
       } else {
         const err = await launchRes.json();
-        alert(`Erro ao lançar itens: ${err.detail}`);
+        showToast(`Erro ao lançar itens: ${err.detail}`, 'error');
       }
     } catch (err) {
       console.error(err);
-      alert("Erro ao conectar ao servidor.");
+      showToast("Erro ao conectar ao servidor.", 'error');
     } finally {
       setIsLoading(false);
     }
@@ -2148,9 +2117,14 @@ export function CaixaPanel({
       }`}>
 
       {/* TOAST DE FEEDBACK NÃO-BLOQUEANTE */}
-      {toastMsg && (
-        <div className="fixed bottom-6 right-6 z-[9999] bg-[#10b981] text-[#0B0B0C] font-bold px-5 py-3 rounded-2xl shadow-2xl text-sm animate-fade-in pointer-events-none">
-          {toastMsg}
+      {toastData && (
+        <div className={clsx(
+          "fixed bottom-6 right-6 z-[9999] font-bold px-5 py-3 rounded-2xl shadow-2xl text-sm animate-fade-in pointer-events-none border backdrop-blur-md",
+          toastData.type === 'error' ? "bg-rose-900/90 border-rose-700/50 text-rose-100" :
+          toastData.type === 'info' ? "bg-amber-900/90 border-amber-700/50 text-amber-100" :
+          "bg-[#10b981] text-[#0B0B0C] border-[#10b981]"
+        )}>
+          {toastData.msg}
         </div>
       )}
 

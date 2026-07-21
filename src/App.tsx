@@ -331,7 +331,7 @@ export default function App() {
         await fetchTables();
       } else {
         const err = await res.json();
-        alert(`Erro ao criar mesa: ${err.detail}`);
+        showToast(`Erro ao criar mesa: ${err.detail}`, 'error');
       }
     } catch (err) {
       console.error(err);
@@ -350,7 +350,7 @@ export default function App() {
         await fetchTables();
       } else {
         const err = await res.json();
-        alert(`Erro ao atualizar mesa: ${err.detail}`);
+        showToast(`Erro ao atualizar mesa: ${err.detail}`, 'error');
       }
     } catch (err) {
       console.error(err);
@@ -374,11 +374,11 @@ export default function App() {
         } catch (_) {
           errMsg = res.statusText || errMsg;
         }
-        alert(`Erro ao excluir mesa: ${errMsg}`);
+        showToast(`Erro ao excluir mesa: ${errMsg}`, 'error');
       }
     } catch (err: any) {
       console.error(err);
-      alert(`Erro de conexão ao excluir mesa: ${err.message}`);
+      showToast(`Erro de conexão ao excluir mesa: ${err.message}`, 'error');
     }
   };
 
@@ -1073,7 +1073,7 @@ export default function App() {
         });
         if (!openRes.ok) {
           const errData = await openRes.json();
-          alert(`Erro ao abrir comanda: ${errData.detail || openRes.statusText}`);
+          showToast(`Erro ao abrir comanda: ${errData.detail || openRes.statusText}`, 'error');
           setIsSubmitting(false);
           fetchOrdersFromAPI(); // Rollback
           return;
@@ -1103,7 +1103,7 @@ export default function App() {
       });
       if (!launchRes.ok) {
         const errData = await launchRes.json();
-        alert(`Erro ao lançar itens: ${errData.detail || launchRes.statusText}`);
+        showToast(`Erro ao lançar itens: ${errData.detail || launchRes.statusText}`, 'error');
         fetchOrdersFromAPI(); // Rollback
         setIsSubmitting(false);
         return;
@@ -1118,7 +1118,7 @@ export default function App() {
       fetchOrdersFromAPI();
     } catch (err) {
       console.error(err);
-      alert("Erro ao conectar ao servidor para enviar o pedido.");
+      showToast("Erro ao conectar ao servidor para enviar o pedido.", 'error');
       fetchOrdersFromAPI(); // Rollback
     } finally {
       setIsSubmitting(false);
@@ -1142,14 +1142,14 @@ export default function App() {
         });
         if (!res.ok) {
           const errData = await res.json();
-          alert(`Erro ao transferir comanda: ${errData.detail}`);
+          showToast(`Erro ao transferir comanda: ${errData.detail}`, 'error');
           fetchOrdersFromAPI();
           return;
         }
       }
     } catch (err) {
       console.error(err);
-      alert("Erro de conexão ao transferir mesas.");
+      showToast("Erro de conexão ao transferir mesas.", 'error');
       fetchOrdersFromAPI();
     }
   };
@@ -1169,12 +1169,12 @@ export default function App() {
         fetchOrdersFromAPI();
       } else {
         const errData = await res.json();
-        alert(`Erro ao mesclar mesas: ${errData.detail}`);
+        showToast(`Erro ao mesclar mesas: ${errData.detail}`, 'error');
         fetchOrdersFromAPI();
       }
     } catch (err) {
       console.error(err);
-      alert("Erro de conexão ao mesclar mesas.");
+      showToast("Erro de conexão ao mesclar mesas.", 'error');
       fetchOrdersFromAPI();
     }
   };
@@ -1191,18 +1191,18 @@ export default function App() {
         fetchOrdersFromAPI();
       } else {
         const errData = await res.json();
-        alert(`Erro ao desmembrar mesa: ${errData.detail}`);
+        showToast(`Erro ao desmembrar mesa: ${errData.detail}`, 'error');
       }
     } catch (err) {
       console.error(err);
-      alert("Erro de conexão ao desmembrar mesa.");
+      showToast("Erro de conexão ao desmembrar mesa.", 'error');
     }
   };
 
   // 9. Close Table (Settle whole balance) - Restricted to Cashier
   const handleCloseTable = async (mesaId: number) => {
     if (activeRole !== 'caixa') {
-      alert('Apenas o operador de Caixa possui autorização para encerrar contas.');
+      showToast('Apenas o operador de Caixa possui autorização para encerrar contas.', 'error');
       return;
     }
 
@@ -1222,7 +1222,7 @@ export default function App() {
         });
         if (!res.ok) {
           const errData = await res.json();
-          alert(`Erro ao fechar comanda: ${errData.detail}`);
+          showToast(`Erro ao fechar comanda: ${errData.detail}`, 'error');
           fetchOrdersFromAPI(); // Rollback
           return;
         }
@@ -1230,7 +1230,7 @@ export default function App() {
       fetchOrdersFromAPI();
     } catch (err) {
       console.error(err);
-      alert("Erro de conexão ao encerrar mesa.");
+      showToast("Erro de conexão ao encerrar mesa.", 'error');
       fetchOrdersFromAPI(); // Rollback
     }
   };
@@ -1255,7 +1255,7 @@ export default function App() {
   // 10. Settle single customer consumption (Partial payment) - Restricted to Cashier
   const handleSettleCustomer = async (mesaId: number, customerName: string) => {
     if (activeRole !== 'caixa') {
-      alert('Apenas o Caixa pode liquidar o consumo de um cliente específico.');
+      showToast('Apenas o Caixa pode liquidar o consumo de um cliente específico.', 'error');
       return;
     }
 
@@ -1272,7 +1272,7 @@ export default function App() {
       });
 
       if (!targetComanda) {
-        alert("Comanda do cliente não encontrada para liquidar.");
+        showToast("Comanda do cliente não encontrada para liquidar.", 'error');
         return;
       }
 
@@ -1282,14 +1282,14 @@ export default function App() {
       });
       if (!res.ok) {
         const errData = await res.json();
-        alert(`Erro ao liquidar comanda do cliente: ${errData.detail}`);
+        showToast(`Erro ao liquidar comanda do cliente: ${errData.detail}`, 'error');
         return;
       }
       showToast(`✅ Consumo de "${customerName}" liquidado!`, 'success');
       fetchOrdersFromAPI();
     } catch (err) {
       console.error(err);
-      alert("Erro de conexão ao liquidar cliente.");
+      showToast("Erro de conexão ao liquidar cliente.", 'error');
     }
   };
 
@@ -1327,13 +1327,13 @@ export default function App() {
         headers: getAuthHeaders()
       });
       if (!res.ok) {
-        alert("Erro ao entregar item no backend.");
+        showToast("Erro ao entregar item no backend.", 'error');
         fetchOrdersFromAPI();
         return;
       }
     } catch (err) {
       console.error(err);
-      alert("Erro de conexão ao marcar item como entregue.");
+      showToast("Erro de conexão ao marcar item como entregue.", 'error');
       fetchOrdersFromAPI();
     }
   };
@@ -1378,13 +1378,13 @@ export default function App() {
         headers: getAuthHeaders()
       });
       if (!res.ok) {
-        alert("Erro ao finalizar preparação no backend.");
+        showToast("Erro ao finalizar preparação no backend.", 'error');
         fetchOrdersFromAPI();
         return;
       }
     } catch (err) {
       console.error(err);
-      alert("Erro de conexão ao finalizar preparação.");
+      showToast("Erro de conexão ao finalizar preparação.", 'error');
       fetchOrdersFromAPI();
     }
   };
@@ -1402,14 +1402,14 @@ export default function App() {
       });
       if (!res.ok) {
         const errData = await res.json();
-        alert(`Erro ao transferir item: ${errData.detail}`);
+        showToast(`Erro ao transferir item: ${errData.detail}`, 'error');
         fetchOrdersFromAPI(); // Rollback
         return;
       }
       fetchOrdersFromAPI();
     } catch (err) {
       console.error(err);
-      alert("Erro de conexão ao transferir item.");
+      showToast("Erro de conexão ao transferir item.", 'error');
       fetchOrdersFromAPI(); // Rollback
     }
   };
@@ -1433,12 +1433,12 @@ export default function App() {
         }
       }
       if (failMessage) {
-        alert(`Falha ao transferir alguns itens: ${failMessage}`);
+        showToast(`Falha ao transferir alguns itens: ${failMessage}`, 'error');
       }
       fetchOrdersFromAPI();
     } catch (err) {
       console.error(err);
-      alert("Erro de conexão ao transferir itens.");
+      showToast("Erro de conexão ao transferir itens.", 'error');
       fetchOrdersFromAPI(); // Rollback
     }
   };
@@ -1456,14 +1456,14 @@ export default function App() {
       });
       if (!res.ok) {
         const errData = await res.json();
-        alert(`Erro ao cancelar item: ${errData.detail}`);
+        showToast(`Erro ao cancelar item: ${errData.detail}`, 'error');
         fetchOrdersFromAPI(); // Rollback
         return;
       }
       fetchOrdersFromAPI();
     } catch (err) {
       console.error(err);
-      alert("Erro de conexão ao cancelar item.");
+      showToast("Erro de conexão ao cancelar item.", 'error');
       fetchOrdersFromAPI(); // Rollback
     }
   };
@@ -1493,14 +1493,14 @@ export default function App() {
       });
       if (!res.ok) {
         const errData = await res.json();
-        alert(`Erro ao editar item: ${errData.detail}`);
+        showToast(`Erro ao editar item: ${errData.detail}`, 'error');
         fetchOrdersFromAPI(); // Rollback
         return;
       }
       fetchOrdersFromAPI();
     } catch (err) {
       console.error(err);
-      alert("Erro de conexão ao atualizar item.");
+      showToast("Erro de conexão ao atualizar item.", 'error');
       fetchOrdersFromAPI(); // Rollback
     }
   };
