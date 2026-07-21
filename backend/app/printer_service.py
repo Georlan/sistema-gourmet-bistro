@@ -315,9 +315,9 @@ class PrinterService:
         
         # Header
         lines.append(draw_separator("=", width))
-        lines.append(align_center("*** CONFERÊNCIA DE CONSUMO ***", width))
-        header_text = print_header if print_header else "KÔMA GOURMET BISTRÔ"
-        lines.append(align_center(header_text.upper(), width))
+        header_text = print_header if print_header else ""
+        if header_text:
+            lines.append(align_center(header_text.upper(), width))
         lines.append(draw_separator("=", width))
         
         # Metadata — type highlighted at top
@@ -338,7 +338,6 @@ class PrinterService:
         grand_total = 0.0
         
         if apenas_valores:
-            lines.append(align_center("*** RESUMO FINANCEIRO (APENAS VALORES) ***", width))
             lines.append(draw_separator("-", width))
             
             # Calculate grand total without printing items
@@ -410,7 +409,7 @@ class PrinterService:
             lines.append(split_justified("TOTAL GERAL DA MESA:", f"R$ {grand_total:.2f}", width))
         lines.append(draw_separator("=", width))
         
-        lines.append(align_center("Obrigado pela preferência!", width))
+        lines.append(align_center("Gerenciado por Kôma", width))
         if print_footer:
             lines.append(align_center(print_footer, width))
         lines.append(align_center("Documento não fiscal", width))
