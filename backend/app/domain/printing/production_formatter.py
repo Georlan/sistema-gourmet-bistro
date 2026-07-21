@@ -18,17 +18,20 @@ def _justify(left: str, right: str, width: int) -> str:
     spaces = max(width - len(l_str) - len(r_str), 1)
     return l_str + (" " * spaces) + r_str
 
+def _format_curr(value: float) -> str:
+    return f"{value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
 def format_production_document(data: OrderPrintData, width: PaperWidth = PaperWidth.WIDTH_80MM) -> str:
     """
-    Gera o texto puro formatado para o documento TIPO 1 - PRODUÇÃO.
-    
+    Gera o texto puro formatado para o documento TIPO 1 - PRODUÇÃO (cozinha).
+
     Regras:
-    - NÃO imprime preços, subtotais, totais, descontos, ingredientes ou endereço.
-    - Filtra itens com destino NENHUM (devem ser filtrados antes ou durante a formatação).
+    - Imprime o total do item alinhado à direita (sem preço unitário separado).
+    - Filtra itens com destino NENHUM.
     - Agrupa itens por cliente. Omite o nome 'GERAL' se for cliente único sem identificação.
-    - Somente agrupa quantidades de itens se produto e observação forem exatamente iguais.
-    - Observações aparecem abaixo do item sem o rótulo 'Observação:'.
-    - Economiza papel ao máximo.
+    - Somente agrupa quantidades se produto e observação forem exatamente iguais.
+    - Observações aparecem indentadas abaixo do item.
+    - Economiza papel ao máximo — sem cabeçalho de colunas.
     """
     w = width.value if isinstance(width, PaperWidth) else int(width)
     lines: List[str] = []
@@ -87,13 +90,14 @@ def format_production_document(data: OrderPrintData, width: PaperWidth = PaperWi
         grouped_c_items = group_equivalent_items(c_items, match_observations=True)
 
         for item in grouped_c_items:
-            code_str = f"{item.codigo} " if item.codigo else ""
-            item_line = f"{item.quantidade}x {code_str}{item.nome.upper()}".strip()
+            code_str = f"{item.codigo} - " if item.codigo else ""
+            left = f"{item.quantidade} x {code_str}{item.nome.upper()}".strip()
+            right = f"R$ {_format_curr(item.total)}"
+            item_line = _justify(left, right, w)
             lines.append(item_line)
 
             obs = normalize_observation(item.observacao)
             if obs:
-                # Imprime observação indentada abaixo do item
                 lines.append(f"   {obs.upper()}")
 
     lines.append(_separator("-", w))

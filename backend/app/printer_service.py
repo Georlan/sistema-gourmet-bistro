@@ -395,8 +395,7 @@ class PrinterService:
 
             lines.append(draw_separator("-", width))
         else:
-            # Modo completo: cabeçalho de colunas ITEM / QTD / UNIT / TOTAL
-            lines.append("ITEM".ljust(21) + "QTD".rjust(4) + "UNIT".rjust(7) + "TOTAL".rjust(8))
+            # Modo completo: sem cabeçalho de colunas — formato "Qty x NOME  [unit]  total"
             lines.append(draw_separator("-", width))
 
             for client, items_list in grouped_by_client.items():
@@ -412,15 +411,35 @@ class PrinterService:
                 for (p_name, p_price), qty in grouped_items.items():
                     item_total = qty * p_price
                     client_subtotal += item_total
-                    lines.append(format_item_line(p_name, qty, p_price, width))
+
+                    def _fc(v):
+                        return f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+                    left = f"{qty} x {p_name.upper()}"
+                    right = f"R$ {_fc(item_total)}"
+                    max_l = max(width - len(right) - 1, 1)
+                    if len(left) > max_l:
+                        left = left[:max_l]
+                    spaces = max(width - len(left) - len(right), 1)
+                    lines.append(left + " " * spaces + right)
+
+                    # Quando qty > 1: mostra o unit para o garçom conferir
+                    if qty > 1:
+                        unit_info = f"   ({qty}x R$ {_fc(p_price)} cada)"
+                        lines.append(unit_info)
 
                 if is_split:
-                    lines.append(align_right(f"Subtotal {client}: R$ {client_subtotal:.2f}", width))
-                    lines.append(draw_separator(".", width))
+                    lines.append(draw_separator("-", width))
+                    right_sub = f"R$ {_fc(client_subtotal)}"
+                    left_sub = f"SUBTOTAL {client.upper()}"
+                    max_l = max(width - len(right_sub) - 1, 1)
+                    if len(left_sub) > max_l:
+                        left_sub = left_sub[:max_l]
+                    lines.append(left_sub + " " * max(width - len(left_sub) - len(right_sub), 1) + right_sub)
                 grand_total += client_subtotal
 
-            # Remove last dot separator
-            if lines and lines[-1] == draw_separator(".", width):
+            # Remove last separator se houver
+            if lines and lines[-1] == draw_separator("-", width):
                 lines.pop()
 
             lines.append(draw_separator("-", width))
