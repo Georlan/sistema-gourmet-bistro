@@ -33,6 +33,7 @@ interface CaixaPanelProps {
   restauranteConfig?: any;
   fetchError?: string | null;
   onOptimisticUpdateItemStatus?: (itemId: string | string[], newStatus: 'preparando' | 'pronto' | 'entregue') => void;
+  onOptimisticAddOrder?: (newOrder: any) => void;
   onRemovePendingPaymentOptimistic?: (pagamentoId: string) => void;
 }
 
@@ -129,6 +130,7 @@ export function CaixaPanel({
   restauranteConfig,
   fetchError,
   onOptimisticUpdateItemStatus,
+  onOptimisticAddOrder,
   onRemovePendingPaymentOptimistic
 }: CaixaPanelProps) {
   const plano = restauranteConfig?.plano?.toLowerCase() || 'bistro';
@@ -1982,6 +1984,40 @@ export function CaixaPanel({
     setActiveTab('operacao');
     setActiveSubTab('pedidos');
     showToast("⚡ Enviando pedido para a cozinha...", 'success');
+
+    // ⚡ CRIAÇÃO OTIMISTA DO PEDIDO (Aparece imediatamente no Kanban a 0ms)
+    if (onOptimisticAddOrder) {
+      const tempId = `temp-${Date.now()}`;
+      const tempItems = cartItems.flatMap((item, idx) =>
+        Array.from({ length: item.quantity }, (_, qtyIdx) => ({
+          id: `temp-item-${idx}-${qtyIdx}-${Date.now()}`,
+          produtoId: item.product.id,
+          nome: item.product.nome,
+          preco: item.product.preco,
+          observacao: item.obs || '',
+          clienteNome: customerName || 'Consumo Geral',
+          status: 'preparando',
+          lancamentoId: `temp-l-${Date.now()}`
+        }))
+      );
+
+      const optimisticOrder = {
+        id: tempId,
+        mesaId: orderType === 'mesa' ? (mesaId || 0) : 0,
+        garcomId: 'c-01',
+        garcomNome: activeWaiterNome || 'Caixa 1',
+        timestamp: new Date(),
+        tipo: orderType === 'mesa' ? 'Consumo no Local' : 'Retirada',
+        valorPago: 0,
+        identificador: customerName || null,
+        statusComanda: null,
+        deliveryStatus: null,
+        mesaOrigemId: null,
+        mesaTransferidaDe: null,
+        itens: tempItems
+      };
+      onOptimisticAddOrder(optimisticOrder);
+    }
 
     // Reseta os campos do carrinho imediatamente
     setPdvCart([]);

@@ -286,6 +286,8 @@ export default function App() {
 
   const fetchTablesAbortControllerRef = useRef<AbortController | null>(null);
   const fetchOrdersAbortControllerRef = useRef<AbortController | null>(null);
+  const optimisticItemStatusRef = useRef<Record<string, { status: 'preparando' | 'pronto' | 'entregue'; ts: number }>>({});
+
 
   const fetchTables = async () => {
     if (fetchTablesAbortControllerRef.current) {
@@ -855,7 +857,8 @@ export default function App() {
         return;
       }
       const comandas = await response.json();
- 
+      const now = Date.now();
+
       const mappedOrders = comandas.map((comanda: any) => {
         return {
           id: comanda.id,
@@ -873,21 +876,39 @@ export default function App() {
           mesaTransferidaDe: comanda.mesa_transferida_de || null,
           itens: comanda.itens
             .filter((item: any) => item.status !== 'cancelado')
-            .map((item: any) => ({
-              id: item.id,
-              produtoId: item.produto_id,
-              // Use name from API (produto populated by SQLAlchemy relationship)
-              nome: item.produto?.nome || PRODUCTS.find(p => p.id === item.produto_id)?.nome || `Item #${item.produto_id}`,
-              preco: item.preco_unit,
-              observacao: item.observacao || '',
-              clienteNome: item.cliente_nome || 'Consumo Geral',
-              status: item.status,
-              lancamentoId: item.lancamento_id
-            }))
+            .map((item: any) => {
+              const opt = optimisticItemStatusRef.current[item.id];
+              let effectiveStatus = item.status;
+              if (opt && (now - opt.ts < 8000)) {
+                if (opt.status === item.status) {
+                  delete optimisticItemStatusRef.current[item.id];
+                } else {
+                  effectiveStatus = opt.status;
+                }
+              }
+              return {
+                id: item.id,
+                produtoId: item.produto_id,
+                // Use name from API (produto populated by SQLAlchemy relationship)
+                nome: item.produto?.nome || PRODUCTS.find(p => p.id === item.produto_id)?.nome || `Item #${item.produto_id}`,
+                preco: item.preco_unit,
+                observacao: item.observacao || '',
+                clienteNome: item.cliente_nome || 'Consumo Geral',
+                status: effectiveStatus,
+                lancamentoId: item.lancamento_id
+              };
+            })
         };
       });
-      setOrders(mappedOrders);
+
+      setOrders(prevOrders => {
+        const tempOrders = prevOrders.filter(p =>
+          String(p.id).startsWith('temp-') && !mappedOrders.some(m => m.mesaId > 0 && m.mesaId === p.mesaId)
+        );
+        return [...mappedOrders, ...tempOrders];
+      });
       setIsOrdersLoaded(true);
+
     } catch (err: any) {
       if (err.name !== 'AbortError') {
         console.error("Connection error to backend:", err);
@@ -1296,6 +1317,10 @@ export default function App() {
   // Optimistic Item Status Update (Instant 0ms UI response)
   const handleOptimisticUpdateItemStatus = (itemId: string | string[], newStatus: 'preparando' | 'pronto' | 'entregue') => {
     const itemIds = Array.isArray(itemId) ? itemId : [itemId];
+    const now = Date.now();
+    itemIds.forEach(id => {
+      optimisticItemStatusRef.current[id] = { status: newStatus, ts: now };
+    });
     setOrders(prevOrders =>
       prevOrders.map(order => ({
         ...order,
@@ -1305,6 +1330,12 @@ export default function App() {
       }))
     );
   };
+
+  // Optimistic Add Order (Instant 0ms UI response for PDV)
+  const handleOptimisticAddOrder = (newOrder: Order) => {
+    setOrders(prev => [newOrder, ...prev]);
+  };
+
 
   // Optimistic Payment Removal (Instant 0ms UI response)
   const handleRemovePendingPaymentOptimistic = (pagamentoId: string) => {
@@ -1836,6 +1867,7 @@ export default function App() {
             restauranteConfig={restauranteConfig}
             fetchError={fetchError}
             onOptimisticUpdateItemStatus={handleOptimisticUpdateItemStatus}
+            onOptimisticAddOrder={handleOptimisticAddOrder}
             onRemovePendingPaymentOptimistic={handleRemovePendingPaymentOptimistic}
           />
         ) : (
