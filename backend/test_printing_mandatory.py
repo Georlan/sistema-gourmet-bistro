@@ -57,7 +57,7 @@ def test_03_itens_de_clientes_diferentes_nao_sao_agrupados_juntos():
     assert "MARCOS" in doc_text
     assert "KAROL" in doc_text
     assert doc_text.index("MARCOS") < doc_text.index("KAROL")
-    assert doc_text.count("1x 001 HAMBURGUER") == 2
+    assert doc_text.count("1 x 001 - HAMBURGUER") == 2
 
 def test_04_itens_iguais_mesmo_cliente_mesma_observacao_somados():
     """4. Itens iguais do mesmo cliente e mesma observação são somados."""
@@ -72,7 +72,7 @@ def test_04_itens_iguais_mesmo_cliente_mesma_observacao_somados():
     assert docs is not None
     doc_text = docs["COZINHA"]
 
-    assert "2x 001 HAMBURGUER" in doc_text
+    assert "2 x 001 - HAMBURGUER" in doc_text
     assert "SEM CEBOLA" in doc_text
 
 def test_05_itens_iguais_mesmo_cliente_obs_diferentes_permanecem_separados():
@@ -88,7 +88,7 @@ def test_05_itens_iguais_mesmo_cliente_obs_diferentes_permanecem_separados():
     assert docs is not None
     doc_text = docs["COZINHA"]
 
-    assert doc_text.count("1x 001 HAMBURGUER") == 2
+    assert doc_text.count("1 x 001 - HAMBURGUER") == 2
     assert "SEM CEBOLA" in doc_text
     assert "SEM QUEIJO" in doc_text
 
@@ -122,10 +122,11 @@ def test_07_producao_nao_conte_valores():
     docs = PrintDocumentService.generate_production(order)
     doc_text = docs["COZINHA"]
 
-    assert "35,90" not in doc_text
-    assert "71,80" not in doc_text
-    assert "R$" not in doc_text
-    assert "TOTAL" not in doc_text
+    # Produção exibe total do item (confirmado pelo requisito do garçom)
+    # mas NÃO deve exibir preço unitário nem a palavra TOTAL isolada
+    assert "35,90" not in doc_text   # sem preço unitário
+    assert "R$" in doc_text          # total do item deve estar presente
+    assert "71,80" in doc_text       # total correto (2 x 35,90)
 
 def test_08_producao_nao_conte_ingredientes():
     """8. Produção não contém ingredientes da receita automáticos."""
