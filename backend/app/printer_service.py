@@ -315,24 +315,19 @@ class PrinterService:
         
         # Header
         lines.append(draw_separator("=", width))
-        header_text = print_header if print_header else ""
-        if header_text:
-            lines.append(align_center(header_text.upper(), width))
+        header_text = (print_header or "KÔMA GOURMET BISTRÔ").upper()
+        lines.append(align_center(header_text, width))
         lines.append(draw_separator("=", width))
-        
-        # Metadata — type highlighted at top
-        mesa_str = f"MESA: {mesa_id}" if mesa_id is not None else "RETIRADA / BALCAO"
-        # Prominent order type
-        lines.append(draw_separator("*", width))
-        lines.append(align_center(f"  {tipo.upper()}  ", width))
-        lines.append(draw_separator("*", width))
+
+        # Identificação da mesa — informação mais crítica para o garçom
+        mesa_str = f"MESA: {mesa_id}" if mesa_id is not None else "RETIRADA / BALCÃO"
         lines.append(split_justified(f"PEDIDO: #{num_pedido}", mesa_str, width))
         lines.append(split_justified(
             "DATA: " + datetime.datetime.now().strftime("%d/%m/%Y"),
             "HORA: " + datetime.datetime.now().strftime("%H:%M"),
             width
         ))
-        lines.append(split_justified(f"GARCOM: {garcom_nome}", "", width))
+        lines.append(split_justified(f"GARÇOM: {garcom_nome}", tipo.upper(), width))
         lines.append(draw_separator("-", width))
         
         grand_total = 0.0
