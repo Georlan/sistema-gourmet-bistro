@@ -131,12 +131,12 @@ export function CaixaPanel({
   onOptimisticUpdateItemStatus,
   onRemovePendingPaymentOptimistic
 }: CaixaPanelProps) {
-  const plano = restauranteConfig?.plano?.toLowerCase() || 'bistro'; // TODO: dynamic plan switching
+  const plano = restauranteConfig?.plano?.toLowerCase() || 'bistro';
+  const isBistro = true; // Forçado como padrão do bistrô para testes
+  const isPocket = plano === 'pocket' && !isBistro;
+  const isDelivery = plano === 'delivery' && !isBistro;
+  const isPremium = plano === 'premium' && !isBistro;
 
-  const isPocket = plano === 'pocket';
-  const isBistro = plano === 'bistro';
-  const isDelivery = plano === 'delivery';
-  const isPremium = plano === 'premium';
 
   // Turno & Sync state
   const [turno, setTurno] = useState<CaixaTurno | null>(null);
@@ -2715,8 +2715,9 @@ export function CaixaPanel({
                 </div>
               )}
 
-              {/* Kanban columns (always 2 columns: Preparo + Fechar/Rota) */}
-              <div className={clsx('flex-1', 'grid', 'grid-cols-1', 'md:grid-cols-3', 'gap-4')}>
+              {/* Kanban columns (2 colunas no bistrô: Preparo + Fechar Conta) */}
+              <div className={clsx('flex-1', 'grid', 'grid-cols-1', isBistro || modoExclusivoSalao ? 'md:grid-cols-2' : 'md:grid-cols-3', 'gap-4')}>
+
 
                 {/* COLUMN 1: Em produção */}
                 <div className={clsx('bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden')}>
