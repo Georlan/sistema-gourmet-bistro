@@ -88,9 +88,13 @@ def ativar_conta(payload: AtivarContaRequest, db: Session = Depends(get_db)):
         )
         
     now_utc = datetime.now(timezone.utc)
-    
-    usuario = db.query(Usuario).filter(Usuario.token_convite == token_str).first()
-    
+
+    token_var = current_restaurante_id.set(None)
+    try:
+        usuario = db.query(Usuario).filter(Usuario.token_convite == token_str).first()
+    finally:
+        current_restaurante_id.reset(token_var)
+
     if not usuario:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

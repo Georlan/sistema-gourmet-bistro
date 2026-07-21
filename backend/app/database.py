@@ -96,6 +96,20 @@ def get_db(request: Request = None):
 
     db = SessionLocal()
     db.restaurante_id = restaurante_id
+
+    # Injeta 'SET LOCAL' na sessão do PostgreSQL para o RLS (Row Level Security)
+    # Se o restaurante_id for None, 0 ou inválido, usa string vazia para que o RLS bloqueie o acesso
+    if restaurante_id and restaurante_id != 0:
+        target_id_str = str(restaurante_id)
+    else:
+        target_id_str = ""
+
+    try:
+        db.execute(text("SET LOCAL app.current_restaurante_id = :id"), {"id": target_id_str})
+    except Exception:
+        # SQLite em ambiente de testes não aceita o comando PostgreSQL SET LOCAL e levantará exceção, que é ignorada com segurança
+        pass
+
     try:
         yield db
     finally:
