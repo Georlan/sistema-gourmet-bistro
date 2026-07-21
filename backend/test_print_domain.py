@@ -63,10 +63,6 @@ def test_tipo1_producao_rules_and_grouping():
     assert output.count("MARCOS") == 1
     assert output.count("KAROL") == 1
 
-    # 5. Lançamento e Rodapé
-    assert "LANÇAMENTO: #0123" in output
-    assert "OBRIGADO!" in output
-
 
 def test_tipo1_producao_separated_observations():
     """
@@ -133,7 +129,6 @@ def test_tipo2_fechamento_split_account():
     # 4. Total geral (66.90 + 25.00 = 91.90)
     assert "TOTAL" in output
     assert "91,90" in output
-    assert "OBRIGADO!" in output
 
 
 def test_tipo2_fechamento_single_account():

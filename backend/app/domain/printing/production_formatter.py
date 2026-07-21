@@ -97,11 +97,4 @@ def format_production_document(data: OrderPrintData, width: PaperWidth = PaperWi
                 lines.append(f"   {obs.upper()}")
 
     lines.append(_separator("-", w))
-
-    if data.numero_lancamento:
-        lanc_str = f"LANÇAMENTO: #{data.numero_lancamento}" if not str(data.numero_lancamento).startswith("#") else f"LANÇAMENTO: {data.numero_lancamento}"
-        lines.append(_center(lanc_str, w))
-
-    lines.append(_center("OBRIGADO!", w))
-
     return "\n".join(lines)

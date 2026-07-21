@@ -105,6 +105,4 @@ def format_closing_document(data: CommandPrintData, width: PaperWidth = PaperWid
         total_geral = max(0.0, total_geral - data.desconto)
 
     lines.append(_justify("TOTAL", _format_curr(total_geral), w))
-    lines.append(_center("OBRIGADO!", w))
-
     return "\n".join(lines)

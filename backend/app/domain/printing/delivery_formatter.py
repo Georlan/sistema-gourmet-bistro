@@ -121,6 +121,4 @@ def format_delivery_document(data: DeliveryOrderPrintData, width: PaperWidth = P
             lines.append(wrap_line)
 
     lines.append(_separator("-", w))
-    lines.append(_center("OBRIGADO!", w))
-
     return "\n".join(lines)

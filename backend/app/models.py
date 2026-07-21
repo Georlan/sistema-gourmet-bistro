@@ -573,5 +573,42 @@ class ItemNotaEntrada(Base):
     insumo = relationship("Insumo")
 
 
+class PrintJob(Base):
+    __tablename__ = "print_jobs"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
+    document_type = Column(String, nullable=False)  # "producao" | "fechamento" | "entrega"
+    destination = Column(String, nullable=False, default="COZINHA")  # "COZINHA" | "BAR" | "FECHAMENTO" | "ENTREGA"
+    source_type = Column(String, nullable=False)  # "pedido" | "comanda" | "delivery"
+    source_id = Column(String, nullable=False)
+    payload_text = Column(String, nullable=False)
+    status = Column(String, nullable=False, default="pending", index=True)  # "pending" | "claimed" | "printing" | "printed" | "failed" | "cancelled"
+    attempts = Column(Integer, nullable=False, default=0)
+    idempotency_key = Column(String, nullable=False, index=True)
+    agent_id = Column(String, nullable=True)
+    printer_name = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    claimed_at = Column(DateTime(timezone=True), nullable=True)
+    printed_at = Column(DateTime(timezone=True), nullable=True)
+    last_error = Column(String, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("restaurante_id", "idempotency_key", name="uq_print_jobs_restaurante_idempotency"),
+    )
 
 
+class PrintAgentToken(Base):
+    __tablename__ = "print_agent_tokens"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
+    agent_id = Column(String, nullable=False)  # ex: "caixa-principal"
+    token_hash = Column(String, nullable=False)  # SHA-256 hash (nunca token puro!)
+    ativo = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    last_seen_at = Column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("restaurante_id", "agent_id", name="uq_print_agent_tokens_restaurante_agent"),
+    )

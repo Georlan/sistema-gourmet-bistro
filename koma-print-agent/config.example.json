@@ -1,0 +1,12 @@
+{
+  "api_url": "http://localhost:8000",
+  "agent_token": "koma_ag_SEU_TOKEN_AQUI",
+  "agent_id": "caixa-principal",
+  "poll_interval_seconds": 2,
+  "adapter": "dummy",
+  "printers": {
+    "COZINHA": "COZINHA",
+    "FECHAMENTO": "RECIBO",
+    "ENTREGA": "RECIBO"
+  }
+}
