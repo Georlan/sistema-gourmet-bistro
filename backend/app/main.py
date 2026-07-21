@@ -208,6 +208,7 @@ app.add_middleware(
 
 @app.middleware("http")
 async def add_sentry_context_and_tenant(request: Request, call_next):
+    from fastapi.responses import JSONResponse
     origin = request.headers.get("Origin", "*")
     cors_headers = {
         "Access-Control-Allow-Origin": origin,

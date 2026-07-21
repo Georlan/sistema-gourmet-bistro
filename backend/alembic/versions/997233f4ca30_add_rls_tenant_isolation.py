@@ -19,6 +19,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    if bind.dialect.name != "postgresql":
+        return
     # NOTA DE SEGURANÇA (P0.1): Migrations do Alembic não devem conter credenciais ou senhas hardcoded.
     # A role koma_app é mantida apenas como role de agrupamento de privilégios com NOLOGIN.
     # Contas de login do PostgreSQL usadas pela aplicação em produção devem ser provisionadas
