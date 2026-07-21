@@ -53,13 +53,15 @@ def get_current_agent(
         )
 
     # Define o contexto do tenant
-    current_restaurante_id.set(agent_record.restaurante_id)
+    token_var = current_restaurante_id.set(agent_record.restaurante_id)
 
     # Atualiza o visto por último (heartbeat implícito)
-    agent_record.last_seen_at = datetime.datetime.now(datetime.timezone.utc)
-    db.commit()
-
-    return agent_record
+    try:
+        agent_record.last_seen_at = datetime.datetime.now(datetime.timezone.utc)
+        db.commit()
+        yield agent_record
+    finally:
+        current_restaurante_id.reset(token_var)
 
 # --- SCHEMAS ---
 class RegisterAgentRequest(BaseModel):
