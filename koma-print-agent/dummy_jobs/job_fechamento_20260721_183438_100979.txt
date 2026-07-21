@@ -1,16 +1,14 @@
 === DUMMY PRINT JOB [FECHAMENTO] ===
 Printer: IMPRESSORA_RECIBO
-Timestamp: 2026-07-21T18:23:39.337664
+Timestamp: 2026-07-21T18:34:38.101121
 ----------------------------------------
 ========================================
-     *** CONFERÊNCIA DE CONSUMO ***     
-          KÔMA GOURMET BISTRÔ           
 ========================================
 ****************************************
             CONSUMO NO LOCAL            
 ****************************************
 PEDIDO: #261                     MESA: 5
-DATA: 21/07/2026             HORA: 21:23
+DATA: 21/07/2026             HORA: 21:34
 GARCOM: Georlan                         
 ----------------------------------------
 ITEM                  QTD   UNIT   TOTAL
@@ -28,7 +26,7 @@ Tailandesa
 ----------------------------------------
 TOTAL GERAL DA MESA:            R$ 91.90
 ========================================
-       Obrigado pela preferência!       
+          Gerenciado por Kôma           
           Documento não fiscal          
 
                  [CUT]                  
