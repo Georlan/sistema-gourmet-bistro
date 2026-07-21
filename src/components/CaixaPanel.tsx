@@ -153,13 +153,27 @@ export function CaixaPanel({
 
   const [activeTab, setActiveTab] = useState<
     'dashboard' | 'operacao' | 'cardapio' | 'estoque' | 'financeiro' | 'clientes' | 'relatorios' | 'robo_ia' | 'configuracoes' | 'permissoes_cargos' | 'impressao_salao' | 'assinatura_pix' | 'config_cardapio'
-  >('operacao');
+  >(() => {
+    const saved = sessionStorage.getItem('koma_active_tab');
+    return (saved as any) || 'operacao';
+  });
 
-  // active sub-tab under each main tab
-  // active sub-tab under each main tab
-  const [activeSubTab, setActiveSubTab] = useState<string>('pedidos');
+  const [activeSubTab, setActiveSubTab] = useState<string>(() => {
+    const saved = sessionStorage.getItem('koma_active_subtab');
+    return saved || 'pedidos';
+  });
+
+  useEffect(() => {
+    sessionStorage.setItem('koma_active_tab', activeTab);
+  }, [activeTab]);
+
+  useEffect(() => {
+    sessionStorage.setItem('koma_active_subtab', activeSubTab);
+  }, [activeSubTab]);
+
   const [selectedKanbanOrder, setSelectedKanbanOrder] = useState<any>(null);
   const [quickActionsOrder, setQuickActionsOrder] = useState<Order | null>(null);
+
 
   // Configurações do Cardápio Digital Whitelabel
   const [cardapioStatusOverride, setCardapioStatusOverride] = useState<string>('Automático');
