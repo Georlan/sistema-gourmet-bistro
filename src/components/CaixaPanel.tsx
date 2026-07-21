@@ -3476,75 +3476,85 @@ export function CaixaPanel({
                       const displayMesaId = isMerged ? mergedIntoMesaId : table.id;
                       const tableOrders = orders.filter(o => o.mesaId === displayMesaId);
                       const isOcupada = tableOrders.length > 0;
-                      const hasPendingPayment = pagamentosPendentes.some(pag => 
+                      const hasPendingPayment = pagamentosPendentes.some(pag =>
                         tableOrders.some(o => o.id === pag.comanda_id)
                       );
+                      const totalConsumoMesa = tableOrders.reduce((sum, order) => {
+                        return sum + (order.itens || []).reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
+                      }, 0);
 
                       return (
                         <div
                           key={table.id}
-                          className={`bg-[#121214] border rounded-2xl p-3 flex flex-col justify-between gap-3 transition-all relative group ${hasPendingPayment
-                            ? 'border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.2)] animate-pulse'
+                          className={`bg-[#121214] border rounded-2xl p-3.5 flex flex-col justify-between gap-3 transition-all relative group shadow-sm ${hasPendingPayment
+                            ? 'border-amber-500/80 shadow-[0_0_15px_rgba(245,158,11,0.2)] animate-pulse'
                             : isMerged
-                              ? 'border-dashed border-zinc-700 opacity-60 bg-zinc-950/20'
+                              ? 'border-dashed border-zinc-800 opacity-60 bg-zinc-950/20'
                               : isOcupada
-                                ? 'border-rose-500/40 hover:border-rose-500'
-                                : 'border-[#27272A] hover:border-[#10b981]/30'
+                                ? 'border-rose-500/40 hover:border-rose-500/80 bg-rose-950/10'
+                                : 'border-[#27272A] hover:border-[#10b981]/40'
                             }`}
                         >
-                          <div className={clsx('flex', 'justify-between', 'items-start')}>
+                          {/* Header Mesa + Edit */}
+                          <div className="flex justify-between items-start">
                             <div>
-                              <span className={clsx('text-[9px]', 'font-bold', 'text-gray-500', 'uppercase', 'tracking-widest', 'block')}>Mesa</span>
-                              <strong className={clsx('text-xl', 'font-serif', 'text-white', 'leading-none')}>{table.id}</strong>
+                              <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest block">Mesa</span>
+                              <strong className="text-xl font-serif text-white leading-none">{table.id}</strong>
                               {table.nome && table.nome !== `Mesa ${table.id}` && (
-                                <span className={clsx('text-[9px]', 'text-[#10b981]', 'block', 'mt-0.5')}>{table.nome}</span>
+                                <span className="text-[9px] text-[#10b981] block mt-0.5 font-medium">{table.nome}</span>
                               )}
                             </div>
-                            <div className="flex items-center gap-1.5">
-                              {table.capacidade && (
-                                <span className={clsx('text-[8px]', 'bg-zinc-800', 'text-zinc-400', 'px-1.5', 'py-0.5', 'rounded-md', 'font-mono')}>
-                                  {table.capacidade} pax
-                                </span>
-                              )}
+                            <div className="flex items-center gap-1">
+                              <span className={`px-2 py-0.5 text-[8.5px] font-bold uppercase tracking-wider rounded-full ${isMerged
+                                ? 'bg-zinc-800 text-zinc-500'
+                                : isOcupada
+                                  ? 'bg-rose-500/15 text-rose-400 border border-rose-500/20'
+                                  : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                }`}
+                              >
+                                {isMerged ? 'Mesclada' : isOcupada ? 'Ocupada' : 'Livre'}
+                              </span>
                               <button
                                 onClick={() => {
                                   setEditingTable(table);
-                                  setEditTableCap(table.capacidade.toString());
+                                  setEditTableCap(table.capacidade ? table.capacidade.toString() : '4');
                                   setEditTableNome(table.nome || '');
                                   setIsConfirmingDelete(false);
                                 }}
-                                className={clsx('opacity-0', 'group-hover:opacity-100', 'p-1', 'hover:bg-zinc-800', 'text-zinc-400', 'hover:text-white', 'rounded', 'transition-all', 'cursor-pointer')}
+                                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded transition-all cursor-pointer"
                                 title="Editar mesa"
                               >
-                                <Edit3 size={10} />
+                                <Edit3 size={11} />
                               </button>
                             </div>
                           </div>
 
-                          <div className="space-y-1.5">
-                            <span className={`inline-block px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider rounded ${isMerged
-                              ? 'bg-zinc-800 text-zinc-500'
-                              : isOcupada
-                                ? 'bg-rose-500/10 text-rose-400'
-                                : 'bg-[#10b981]/10 ' + (hasPendingPayment ? 'text-amber-400' : 'text-[#10b981]')
-                              }`}
-                            >
-                              {isMerged ? 'Mesclada' : isOcupada ? 'Ocupada' : 'Livre'}
-                            </span>
+                          {/* Consumo Total e Tags */}
+                          <div className="space-y-1.5 min-h-[36px] flex flex-col justify-center">
+                            {isOcupada ? (
+                              <div>
+                                <span className="text-[9px] text-zinc-400 font-medium block uppercase tracking-wider">Consumo Total</span>
+                                <span className="text-sm font-extrabold text-emerald-400 font-mono">
+                                  R$ {totalConsumoMesa.toFixed(2)}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-[10px] text-zinc-600 italic">Disponível</span>
+                            )}
 
                             {(() => {
                               const origemId = tableOrders.find(o => o.mesaOrigemId && Number(o.mesaOrigemId) !== Number(displayMesaId))?.mesaOrigemId;
                               const transfId = tableOrders.find(o => o.mesaTransferidaDe && Number(o.mesaTransferidaDe) !== Number(displayMesaId))?.mesaTransferidaDe;
                               if (origemId) {
                                 return (
-                                  <span className="px-2 py-0.5 text-[8px] bg-emerald-500/10 text-emerald-300 font-bold rounded-md block w-fit border border-emerald-500/20 uppercase tracking-wider animate-pulse-subtle" title={`Consumo mesclado da Mesa ${origemId}`}>
-                                    🔗 Mesclado de Mesa {origemId}
+                                  <span className="px-1.5 py-0.5 text-[8px] bg-emerald-500/10 text-emerald-300 font-bold rounded block w-fit border border-emerald-500/20 uppercase tracking-wider animate-pulse-subtle" title={`Consumo mesclado da Mesa ${origemId}`}>
+                                    🔗 Mesclado da Mesa {origemId}
                                   </span>
                                 );
                               }
                               if (transfId) {
                                 return (
-                                  <span className="px-2 py-0.5 text-[8px] bg-purple-500/10 text-purple-300 font-bold rounded-md block w-fit border border-purple-500/20 uppercase tracking-wider" title={`Consumo transferido da Mesa ${transfId}`}>
+                                  <span className="px-1.5 py-0.5 text-[8px] bg-purple-500/10 text-purple-300 font-bold rounded block w-fit border border-purple-500/20 uppercase tracking-wider" title={`Consumo transferido da Mesa ${transfId}`}>
                                     🔗 Transferido da Mesa {transfId}
                                   </span>
                                 );
@@ -3553,8 +3563,9 @@ export function CaixaPanel({
                             })()}
                           </div>
 
+                          {/* Ações */}
                           {isOcupada && (
-                            <div className={clsx('flex', 'gap-1', 'pt-1.5', 'border-t', 'border-[#27272A]')}>
+                            <div className="flex gap-1.5 pt-2 border-t border-[#27272A]">
                               <button
                                 onClick={() => {
                                   const order = tableOrders[0];
@@ -3578,16 +3589,16 @@ export function CaixaPanel({
                                   const sub = order.itens.filter((item: any) => !item.pago).reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
                                   setPaymentValor((sub * (1.0 + (checkoutServiceTax ? serviceTaxRate / 100 : 0))).toFixed(2));
                                 }}
-                                className={clsx('flex-1', 'py-1', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'rounded', 'font-bold', 'text-[8px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider')}
+                                className="flex-1 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-[#121214] rounded-lg font-bold text-[9px] transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1 shadow-sm"
                               >
                                 Checkout
                               </button>
                               <button
                                 onClick={() => setConfirmingFreeTableId(table.id)}
-                                className={clsx('p-1', 'bg-emerald-600/20', 'hover:bg-emerald-600', 'text-[#C46A74]', 'hover:text-white', 'rounded', 'transition-colors', 'cursor-pointer')}
+                                className="p-1.5 bg-rose-950/40 hover:bg-rose-900/40 text-rose-400 border border-rose-900/30 rounded-lg transition-colors cursor-pointer"
                                 title="Liberar mesa de forma forçada"
                               >
-                                <X size={10} />
+                                <X size={12} />
                               </button>
                             </div>
                           )}
