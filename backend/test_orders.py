@@ -3,7 +3,7 @@ os.environ["DATABASE_URL"] = "sqlite:///./test.db"
 
 import pytest
 from fastapi.testclient import TestClient
-from app.database import SessionLocal, Base, engine
+from app.database import SessionLocal, Base, engine, current_restaurante_id
 from app.main import app
 from app.models import Garcom, Produto, Categoria, Mesa, Comanda, Item
 from app.security import get_password_hash, create_access_token
@@ -12,46 +12,51 @@ client = TestClient(app)
 
 @pytest.fixture(scope="module")
 def setup_db():
-    # Recreate tables for clean testing
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
-    
-    db = SessionLocal()
+    token_var = current_restaurante_id.set(1)
     try:
-        # Create a category
-        cat = Categoria(id="cat-1", nome="Bebidas")
-        db.add(cat)
+        # Recreate tables for clean testing
+        Base.metadata.drop_all(bind=engine)
+        Base.metadata.create_all(bind=engine)
         
-        # Create products
-        p1 = Produto(id="p-1", nome="Coca-Cola", categoria_id="cat-1", preco=5.0, ativo=True)
-        p2 = Produto(id="p-2", nome="Cerveja Inativa", categoria_id="cat-1", preco=10.0, ativo=False)
-        db.add_all([p1, p2])
+        db = SessionLocal()
+        try:
+            # Create a category
+            cat = Categoria(id="cat-1", restaurante_id=1, nome="Bebidas")
+            db.add(cat)
+            
+            # Create products
+            p1 = Produto(id="p-1", restaurante_id=1, nome="Coca-Cola", categoria_id="cat-1", preco=5.0, ativo=True)
+            p2 = Produto(id="p-2", restaurante_id=1, nome="Cerveja Inativa", categoria_id="cat-1", preco=10.0, ativo=False)
+            db.add_all([p1, p2])
+            
+            # Create a waiter
+            garcom = Garcom(
+                id="g-1",
+                restaurante_id=1,
+                nome="Georlan",
+                usuario="georlan",
+                senha_hash=get_password_hash("123")
+            )
+            db.add(garcom)
+            
+            # Create mesas
+            m1 = Mesa(id=1, restaurante_id=1, capacidade=4, nome="Mesa 1")
+            m2 = Mesa(id=2, restaurante_id=1, capacidade=6, nome="Mesa 2")
+            m3 = Mesa(id=3, restaurante_id=1, capacidade=4, nome="Mesa 3")
+            m4 = Mesa(id=4, restaurante_id=1, capacidade=4, nome="Mesa 4")
+            m5 = Mesa(id=5, restaurante_id=1, capacidade=4, nome="Mesa 5")
+            db.add_all([m1, m2, m3, m4, m5])
+            
+            db.commit()
+        finally:
+            db.close()
         
-        # Create a waiter
-        garcom = Garcom(
-            id="g-1",
-            nome="Georlan",
-            usuario="georlan",
-            senha_hash=get_password_hash("123")
-        )
-        db.add(garcom)
+        yield
         
-        # Create mesas
-        m1 = Mesa(id=1, capacidade=4, nome="Mesa 1")
-        m2 = Mesa(id=2, capacidade=6, nome="Mesa 2")
-        m3 = Mesa(id=3, capacidade=4, nome="Mesa 3")
-        m4 = Mesa(id=4, capacidade=4, nome="Mesa 4")
-        m5 = Mesa(id=5, capacidade=4, nome="Mesa 5")
-        db.add_all([m1, m2, m3, m4, m5])
-        
-        db.commit()
+        # Clean up after tests
+        Base.metadata.drop_all(bind=engine)
     finally:
-        db.close()
-    
-    yield
-    
-    # Clean up after tests
-    Base.metadata.drop_all(bind=engine)
+        current_restaurante_id.reset(token_var)
 
 def test_flow(setup_db):
     # 1. Login to get token

@@ -79,6 +79,11 @@ def insert_default_restaurant(target, connection, **kw):
         text("INSERT INTO restaurantes (id, nome, plano) VALUES (1, 'Kôma Bistrô', 'pocket') ON CONFLICT (id) DO NOTHING")
     )
 
+def get_tenant_id_str(restaurante_id: int | None) -> str:
+    if restaurante_id is not None and isinstance(restaurante_id, int) and not isinstance(restaurante_id, bool) and restaurante_id > 0:
+        return str(restaurante_id)
+    return "0"
+
 # DB Session dependency generator supporting dynamic tenant databases
 def get_db(request: Request = None):
     tenant_id = "default"
@@ -98,11 +103,8 @@ def get_db(request: Request = None):
     db.restaurante_id = restaurante_id
 
     # Injeta 'SET LOCAL' na sessão do PostgreSQL para o RLS (Row Level Security)
-    # Quando o tenant estiver ausente, zero ou inválido, usa string vazia para que o RLS bloqueie o acesso
-    if restaurante_id is not None and isinstance(restaurante_id, int) and restaurante_id > 0:
-        target_id_str = str(restaurante_id)
-    else:
-        target_id_str = ""
+    # Quando o tenant estiver ausente, zero ou inválido, usa o sentinela textual "0" para que o RLS bloqueie o acesso sem erro de sintaxe SQL
+    target_id_str = get_tenant_id_str(restaurante_id)
 
     if settings.DATABASE_URL.startswith("sqlite"):
         # SQLite em ambiente de testes unitários não suporta o comando PostgreSQL SET LOCAL e é ignorado com segurança

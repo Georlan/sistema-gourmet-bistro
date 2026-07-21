@@ -7,12 +7,15 @@ from .config import settings
 from .database import engine, Base, current_restaurante_id
 from .routes import auth, products, tables, orders, websocket, caixa, optimization, estoque, cardapio, super_admin, ai
 
-# Inicializa o Sentry antes de qualquer coisa no app
-sentry_sdk.init(
-    dsn=settings.SENTRY_DSN,
-    send_default_pii=True,  # Envia dados adicionais como IP para ajudar no diagnóstico
-    traces_sample_rate=1.0,  # Captura transações para monitorar lentidão
-)
+import os
+# Inicializa o Sentry antes de qualquer coisa no app (desativado em testes)
+if os.getenv("ENVIRONMENT") != "test" and settings.SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        send_default_pii=True,  # Envia dados adicionais como IP para ajudar no diagnóstico
+        traces_sample_rate=1.0,  # Captura transações para monitorar lentidão
+    )
+
 
 # Automatically create database tables and run migrations on startup (DISABLED: Controlled via Alembic)
 # try:

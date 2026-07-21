@@ -26,6 +26,8 @@ def get_password_hash(password: str) -> str:
     hashed = bcrypt.hashpw(password.encode("utf-8"), salt)
     return hashed.decode("utf-8")
 
+RESERVED_CLAIMS = {"sub", "exp", "restaurante_id", "role"}
+
 def create_access_token(
     subject: Union[str, Any],
     restaurante_id: int,
@@ -34,6 +36,11 @@ def create_access_token(
     extra_claims: Optional[dict] = None
 ) -> str:
     """Creates a JWT access token for persistent login session."""
+    if extra_claims:
+        conflicts = RESERVED_CLAIMS.intersection(extra_claims.keys())
+        if conflicts:
+            raise ValueError(f"extra_claims não pode conter chaves reservadas: {', '.join(sorted(conflicts))}")
+
     if restaurante_id is None or not isinstance(restaurante_id, int) or isinstance(restaurante_id, bool):
         raise ValueError("restaurante_id é obrigatório e deve ser um inteiro válido.")
 
@@ -52,7 +59,6 @@ def create_access_token(
     if extra_claims:
         to_encode.update(extra_claims)
 
-    # Garantir que reivindicações essenciais não sejam sobrescritas por extra_claims
     to_encode["sub"] = str(subject)
     to_encode["exp"] = expire
     to_encode["restaurante_id"] = restaurante_id
@@ -61,6 +67,7 @@ def create_access_token(
 
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
+
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)

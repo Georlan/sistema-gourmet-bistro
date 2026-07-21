@@ -7,7 +7,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 import datetime
 
-from app.database import Base, get_db
+from app.database import Base, get_db, current_restaurante_id
 from app.models import Usuario, Produto, Categoria, Mesa, Comanda, Item, Insumo, ConfigFidelizacao, HistoricoFidelidade, ActivityLog, Restaurante, Lancamento
 from app.security import get_password_hash
 from app.main import app
@@ -25,33 +25,39 @@ def override_get_db():
 
 @pytest.fixture(autouse=True)
 def setup_database():
-    app.dependency_overrides[get_db] = override_get_db
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
-    db = TestingSessionLocal()
-    
-    # Create test restaurant if not exists
-    existente = db.query(Restaurante).filter(Restaurante.id == 1).first()
-    if not existente:
-        db.add(Restaurante(id=1, nome="Restaurante Teste"))
+    token_var = current_restaurante_id.set(1)
+    try:
+        app.dependency_overrides[get_db] = override_get_db
+        Base.metadata.drop_all(bind=engine)
+        Base.metadata.create_all(bind=engine)
+        db = TestingSessionLocal()
+        
+        # Create test restaurant if not exists
+        existente = db.query(Restaurante).filter(Restaurante.id == 1).first()
+        if not existente:
+            db.add(Restaurante(id=1, nome="Restaurante Teste"))
+            db.commit()
+        
+        # Create test users
+        db.add(Usuario(id="g-1", restaurante_id=1, nome="Mateus Garcom", usuario="mateus", senha_hash=get_password_hash("123"), role="garcom"))
+        db.add(Usuario(id="c-1", restaurante_id=1, nome="Caixa Geral", usuario="caixa", senha_hash=get_password_hash("123"), role="caixa"))
+        
+        # Create category, product, table
+        cat = Categoria(id="cat-1", restaurante_id=1, nome="Bebidas")
+        db.add(cat)
+        db.add(Produto(id="p-1", restaurante_id=1, nome="Coca-Cola", categoria_id="cat-1", preco=6.0, ativo=True))
+        db.add(Mesa(id=1, restaurante_id=1, capacidade=4, nome=None))
+        
+        # Pre-populate some inputs
+        db.add(Insumo(id="i-1", restaurante_id=1, nome="Pão Brioche", estoque_atual=5.0, estoque_minimo=10.0, estoque_maximo=50.0, unidade_medida="un", preco_medio_custo=1.50))
+        db.add(Insumo(id="i-2", restaurante_id=1, nome="Carne Burger", estoque_atual=30.0, estoque_minimo=20.0, estoque_maximo=100.0, unidade_medida="un", preco_medio_custo=4.20))
+        
         db.commit()
-    
-    # Create test users
-    db.add(Usuario(id="g-1", nome="Mateus Garcom", usuario="mateus", senha_hash=get_password_hash("123"), role="garcom"))
-    db.add(Usuario(id="c-1", nome="Caixa Geral", usuario="caixa", senha_hash=get_password_hash("123"), role="caixa"))
-    
-    # Create category, product, table
-    cat = Categoria(id="cat-1", nome="Bebidas")
-    db.add(cat)
-    db.add(Produto(id="p-1", nome="Coca-Cola", categoria_id="cat-1", preco=6.0, ativo=True))
-    db.add(Mesa(id=1, capacidade=4, nome=None))
-    
-    # Pre-populate some inputs
-    db.add(Insumo(id="i-1", nome="Pão Brioche", estoque_atual=5.0, estoque_minimo=10.0, estoque_maximo=50.0, unidade_medida="un", preco_medio_custo=1.50))
-    db.add(Insumo(id="i-2", nome="Carne Burger", estoque_atual=30.0, estoque_minimo=20.0, estoque_maximo=100.0, unidade_medida="un", preco_medio_custo=4.20))
-    
-    db.commit()
-    db.close()
+        db.close()
+        yield
+    finally:
+        current_restaurante_id.reset(token_var)
+
 
 def get_auth_headers(client, username, password):
     resp = client.post("/auth/login", json={"username": username, "password": password})

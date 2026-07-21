@@ -3,7 +3,7 @@ os.environ["DATABASE_URL"] = "sqlite:///./test_delivery.db"
 
 import pytest
 from fastapi.testclient import TestClient
-from app.database import SessionLocal, Base, engine
+from app.database import SessionLocal, Base, engine, current_restaurante_id
 from app.main import app
 from app.models import Usuario, Produto, Categoria, Comanda, Motoboy
 from app.security import get_password_hash
@@ -12,34 +12,40 @@ client = TestClient(app)
 
 @pytest.fixture(scope="module")
 def setup_db():
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
-    
-    db = SessionLocal()
+    token_var = current_restaurante_id.set(1)
     try:
-        # Create category
-        cat = Categoria(id="cat-del", nome="Lanches")
-        db.add(cat)
+        Base.metadata.drop_all(bind=engine)
+        Base.metadata.create_all(bind=engine)
         
-        # Create product
-        prod = Produto(id="p-del", nome="Burguer Simples", categoria_id="cat-del", preco=15.0, ativo=True)
-        db.add(prod)
-        
-        # Create user
-        user = Usuario(
-            id="u-del-01",
-            nome="Delivery Agent",
-            usuario="delagent",
-            senha_hash=get_password_hash("123"),
-            role="garcom"
-        )
-        db.add(user)
-        db.commit()
+        db = SessionLocal()
+        try:
+            # Create category
+            cat = Categoria(id="cat-del", restaurante_id=1, nome="Lanches")
+            db.add(cat)
+            
+            # Create product
+            prod = Produto(id="p-del", restaurante_id=1, nome="Burguer Simples", categoria_id="cat-del", preco=15.0, ativo=True)
+            db.add(prod)
+            
+            # Create user
+            user = Usuario(
+                id="u-del-01",
+                restaurante_id=1,
+                nome="Delivery Agent",
+                usuario="delagent",
+                senha_hash=get_password_hash("123"),
+                role="garcom"
+            )
+            db.add(user)
+            db.commit()
+        finally:
+            db.close()
+            
+        yield
+        Base.metadata.drop_all(bind=engine)
     finally:
-        db.close()
-        
-    yield
-    Base.metadata.drop_all(bind=engine)
+        current_restaurante_id.reset(token_var)
+
 
 def test_delivery_and_motoboy_flow(setup_db):
     # 1. Login

@@ -3,7 +3,7 @@ os.environ["DATABASE_URL"] = "sqlite:///./test.db"
 
 import pytest
 from fastapi.testclient import TestClient
-from app.database import SessionLocal, Base, engine
+from app.database import SessionLocal, Base, engine, current_restaurante_id
 from app.main import app
 from app.models import Comanda, MensagemWhatsApp, RascunhoPedido, ActivityLog, Usuario
 from app.crypt import encrypt_field, decrypt_field
@@ -13,36 +13,42 @@ client = TestClient(app)
 
 @pytest.fixture(scope="module")
 def setup_db():
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
-    
-    db = SessionLocal()
+    token_var = current_restaurante_id.set(1)
     try:
-        # Create standard admin user
-        admin = Usuario(
-            id="admin",
-            nome="Admin",
-            usuario="admin",
-            senha_hash=get_password_hash("123"),
-            role="admin"
-        )
-        db.add(admin)
+        Base.metadata.drop_all(bind=engine)
+        Base.metadata.create_all(bind=engine)
         
-        # Create standard garcom user
-        garcom = Usuario(
-            id="garcom_test",
-            nome="Garcom",
-            usuario="garcom_test",
-            senha_hash=get_password_hash("123"),
-            role="garcom"
-        )
-        db.add(garcom)
-        
-        db.commit()
+        db = SessionLocal()
+        try:
+            # Create standard admin user
+            admin = Usuario(
+                id="admin",
+                restaurante_id=1,
+                nome="Admin",
+                usuario="admin",
+                senha_hash=get_password_hash("123"),
+                role="admin"
+            )
+            db.add(admin)
+            
+            # Create standard garcom user
+            garcom = Usuario(
+                id="garcom_test",
+                restaurante_id=1,
+                nome="Garcom",
+                usuario="garcom_test",
+                senha_hash=get_password_hash("123"),
+                role="garcom"
+            )
+            db.add(garcom)
+            
+            db.commit()
+        finally:
+            db.close()
+        yield
+        Base.metadata.drop_all(bind=engine)
     finally:
-        db.close()
-    yield
-    Base.metadata.drop_all(bind=engine)
+        current_restaurante_id.reset(token_var)
 
 def test_field_encryption():
     # Test encryption helper directly

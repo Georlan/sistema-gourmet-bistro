@@ -11,6 +11,10 @@ class ConnectionManager:
     async def connect(self, websocket: WebSocket, restaurante_id: int) -> None:
         if not isinstance(restaurante_id, int) or isinstance(restaurante_id, bool) or restaurante_id <= 0:
             logger.warning("Conexão WebSocket rejeitada: restaurante_id ausente ou inválido.")
+            try:
+                await websocket.close(code=1008)
+            except Exception:
+                pass
             return
         await websocket.accept()
         if restaurante_id not in self.active_connections:

@@ -14,7 +14,7 @@ os.environ["PRINT_JOBS_DIR"] = "./test_print_jobs"
 # Make sure imports find the backend app modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "app")))
 
-from app.database import Base
+from app.database import Base, current_restaurante_id
 from app.models import Garcom, Categoria, Produto, Mesa, Comanda, Item, Lancamento
 from app.printer_service import printer_service
 
@@ -57,10 +57,13 @@ class TestKomaAllPhases(unittest.TestCase):
             shutil.rmtree("./test_print_jobs")
 
     def setUp(self):
+        self.token_var = current_restaurante_id.set(1)
         self.db = self.SessionLocal()
         
     def tearDown(self):
         self.db.close()
+        current_restaurante_id.reset(self.token_var)
+
 
     def test_fase1_2_database_constraints(self):
         """Fase 1 & 2: Verifica integridade de chaves estrangeiras e relacionamentos"""

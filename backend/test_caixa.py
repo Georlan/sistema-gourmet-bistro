@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, sessionmaker
 import datetime
 import uuid
 
-from app.database import Base, get_db
+from app.database import Base, get_db, current_restaurante_id
 from app.models import Usuario, Produto, Categoria, Mesa, Comanda, Item, Lancamento, CaixaTurno, CaixaMovimentacao, Pagamento
 from app.security import get_password_hash
 from app.main import app
@@ -28,26 +28,31 @@ def override_get_db():
 
 @pytest.fixture(autouse=True)
 def setup_database():
-    app.dependency_overrides[get_db] = override_get_db
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
-    db = TestingSessionLocal()
-    
-    # Create test users
-    db.add(Usuario(id="u-garcom", nome="Garcom Test", usuario="garcom", senha_hash=get_password_hash("123"), role="garcom"))
-    db.add(Usuario(id="u-caixa", nome="Caixa Test", usuario="caixa", senha_hash=get_password_hash("123"), role="caixa"))
-    
-    # Create category, product, table
-    cat = Categoria(id="cat-1", nome="Comida")
-    db.add(cat)
-    db.add(Produto(id="p-1", nome="Burguer", categoria_id="cat-1", preco=20.0, ativo=True))
-    db.add(Mesa(id=1, capacidade=4, nome=None))
-    
-    db.commit()
-    db.close()
-    yield
-    Base.metadata.drop_all(bind=engine)
-    app.dependency_overrides.clear()
+    token_var = current_restaurante_id.set(1)
+    try:
+        app.dependency_overrides[get_db] = override_get_db
+        Base.metadata.drop_all(bind=engine)
+        Base.metadata.create_all(bind=engine)
+        db = TestingSessionLocal()
+        
+        # Create test users
+        db.add(Usuario(id="u-garcom", restaurante_id=1, nome="Garcom Test", usuario="garcom", senha_hash=get_password_hash("123"), role="garcom"))
+        db.add(Usuario(id="u-caixa", restaurante_id=1, nome="Caixa Test", usuario="caixa", senha_hash=get_password_hash("123"), role="caixa"))
+        
+        # Create category, product, table
+        cat = Categoria(id="cat-1", restaurante_id=1, nome="Comida")
+        db.add(cat)
+        db.add(Produto(id="p-1", restaurante_id=1, nome="Burguer", categoria_id="cat-1", preco=20.0, ativo=True))
+        db.add(Mesa(id=1, restaurante_id=1, capacidade=4, nome=None))
+        
+        db.commit()
+        db.close()
+        yield
+        Base.metadata.drop_all(bind=engine)
+        app.dependency_overrides.clear()
+    finally:
+        current_restaurante_id.reset(token_var)
+
 
 def get_auth_headers(client, username, password):
     resp = client.post("/auth/login", json={"username": username, "password": password})
