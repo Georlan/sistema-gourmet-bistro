@@ -131,7 +131,8 @@ export function CaixaPanel({
   onOptimisticUpdateItemStatus,
   onRemovePendingPaymentOptimistic
 }: CaixaPanelProps) {
-  const plano = restauranteConfig?.plano?.toLowerCase() || 'premium';
+  const plano = restauranteConfig?.plano?.toLowerCase() || 'bistro'; // TODO: dynamic plan switching
+
   const isPocket = plano === 'pocket';
   const isBistro = plano === 'bistro';
   const isDelivery = plano === 'delivery';
