@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from ..database import get_db
+from ..database import get_db, current_restaurante_id
 from ..models import Mesa, ObservacaoPredefinida, Comanda, Item, Usuario
 from ..schemas import MesaResponse, MesaUpdate, MesaCreate, ObservacaoPredefinidaResponse
 from ..security import get_current_garcom_optional, get_current_user
