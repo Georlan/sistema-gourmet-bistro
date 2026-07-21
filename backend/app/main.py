@@ -1,6 +1,7 @@
 import sentry_sdk
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from .config import settings
 from .database import engine, Base, current_restaurante_id
@@ -212,7 +213,7 @@ async def add_sentry_context_and_tenant(request: Request, call_next):
     if request.method == "OPTIONS":
         return await call_next(request)
     tenant_id = request.headers.get("X-Tenant-ID", "default")
-    restaurante_id = 1
+    restaurante_id = 0  # Sentinel: nenhuma rota autenticada deve chegar aqui com valor 0
     
     auth_header = request.headers.get("Authorization")
     if auth_header:
@@ -232,7 +233,17 @@ async def add_sentry_context_and_tenant(request: Request, call_next):
                 token = parts[1]
                 import jwt
                 payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-                restaurante_id = int(payload.get("restaurante_id", 1))
+                rid = payload.get("restaurante_id")
+                role = payload.get("role", "")
+                # Superadmin usa restaurante_id=0 por design — permitir passagem
+                # Para todos os outros: rejeitar se restaurante_id ausente ou inválido
+                if rid is None or (int(rid) == 0 and role != "superadmin"):
+                    return JSONResponse(
+                        status_code=401,
+                        content={"detail": "Identificação do restaurante inválida ou ausente no token."},
+                        headers=cors_headers
+                    )
+                restaurante_id = int(rid)
             except jwt.PyJWTError as e:
                 from fastapi.responses import JSONResponse
                 return JSONResponse(
