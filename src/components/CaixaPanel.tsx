@@ -7650,7 +7650,8 @@ export function CaixaPanel({
           onClick={(e) => { if (e.target === e.currentTarget) setSelectedKanbanOrder(null); }}
           className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 cursor-pointer"
         >
-          <div className="w-full max-w-md bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in">
+          <div className="w-full max-w-md bg-[#121214] border border-[#27272A] rounded-3xl p-5 space-y-3 text-left shadow-2xl relative animate-scale-in">
+            {/* Header */}
             <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
               <div>
                 <h3 className="font-serif text-sm font-bold text-white">
@@ -7658,16 +7659,30 @@ export function CaixaPanel({
                 </h3>
                 <span className="text-[9px] text-gray-500 font-mono block mt-0.5">Lote: #{selectedKanbanOrder.id.slice(-4)}</span>
               </div>
-              <button 
-                type="button" 
-                onClick={() => setSelectedKanbanOrder(null)} 
+              <button
+                type="button"
+                onClick={() => setSelectedKanbanOrder(null)}
                 className="p-1 text-gray-400 hover:text-white transition-colors cursor-pointer"
               >
                 <X size={16} />
               </button>
             </div>
 
-            <div className="space-y-4">
+            {/* BOTÃO DE AÇÕES RÁPIDAS — sempre visível, no topo */}
+            <button
+              type="button"
+              onClick={() => setQuickActionsOrder(selectedKanbanOrder)}
+              className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 text-[#121214] font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-950/30"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              Ações Rápidas — Desconto / Rateio / Pagamento
+            </button>
+
+
+            {/* Itens e info extras */}
+            <div className="space-y-3">
               {selectedKanbanOrder.mesaOrigemId && Number(selectedKanbanOrder.mesaOrigemId) !== Number(selectedKanbanOrder.mesaId) && (
                 <div className="bg-emerald-950/20 p-3 rounded-2xl border border-emerald-900/40 text-xs text-emerald-300 flex items-center justify-between shadow-sm font-sans">
                   <div>
@@ -7695,7 +7710,7 @@ export function CaixaPanel({
                 </div>
               )}
 
-              <div className="space-y-2 max-h-60 overflow-y-auto">
+              <div className="space-y-2 max-h-48 overflow-y-auto">
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Itens do Lote:</span>
                 {selectedKanbanOrder.itens.map((item: any, idx: number) => (
                   <div key={idx} className="flex justify-between items-start bg-[#1C1C1F]/40 p-2.5 rounded-xl border border-[#27272A]/40 text-xs">
@@ -7709,116 +7724,97 @@ export function CaixaPanel({
                 ))}
               </div>
 
-              {!isPocket && (
-                <div className="flex flex-col gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setQuickActionsOrder(selectedKanbanOrder);
-                    }}
-                    className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 text-[#121214] font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 shadow-lg"
-                  >
-                    ⚡ Ações Rápidas (Rateio / Desconto / Pagamento)
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        const res = await fetch(`${apiBaseUrl}/comandas/lancamentos/${selectedKanbanOrder.id}/reimprimir`, {
-                          method: "POST",
-                          headers: authHeaders
-                        });
-                        if (res.ok) {
-                          alert("Pedido reenviado para a impressora com sucesso!");
-                          setSelectedKanbanOrder(null);
-                        } else {
-                          alert("Erro ao solicitar reimpressão.");
-                        }
-                      } catch (err) {
-                        console.error(err);
-                        alert("Erro ao solicitar reimpressão.");
+              {/* Botões de impressão */}
+              <div className="flex flex-col gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const res = await fetch(`${apiBaseUrl}/comandas/lancamentos/${selectedKanbanOrder.id}/reimprimir`, {
+                        method: "POST",
+                        headers: authHeaders
+                      });
+                      if (res.ok) {
+                        showToast("Pedido reenviado para a cozinha!", 'success');
+                        setSelectedKanbanOrder(null);
+                      } else {
+                        showToast("Erro ao solicitar reimpressão.", 'error');
                       }
-                    }}
-                    className="w-full py-2.5 bg-rose-950/40 hover:bg-rose-900/20 text-rose-400 font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-rose-900/50 shadow-lg"
-                  >
-                    <Printer size={13} />
-                    <span>Reimprimir na Cozinha</span>
-                  </button>
+                    } catch (err) {
+                      console.error(err);
+                      showToast("Erro ao solicitar reimpressão.", 'error');
+                    }
+                  }}
+                  className="w-full py-2.5 bg-rose-950/40 hover:bg-rose-900/20 text-rose-400 font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-rose-900/50 shadow-lg"
+                >
+                  <Printer size={13} />
+                  <span>Reimprimir na Cozinha</span>
+                </button>
 
-                  {selectedKanbanOrder.mesaId && selectedKanbanOrder.mesaId > 0 && (
-                    <div className="flex gap-2 w-full">
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          try {
-                            const printHeader = localStorage.getItem("koma_print_header") || "";
-                            const printFooter = localStorage.getItem("koma_print_footer") || "";
-                            let url = `${apiBaseUrl}/mesas/${selectedKanbanOrder.mesaId}/imprimir-recibo?apenas_valores=false`;
-                            const params = new URLSearchParams();
-                            if (printHeader) params.append("print_header", printHeader);
-                            if (printFooter) params.append("print_footer", printFooter);
-                            if (params.toString()) url += `&${params.toString()}`;
-                            
-                            const response = await fetch(url, {
-                              method: 'POST',
-                              headers: authHeaders
-                            });
-                            if (response.ok) {
-                              alert("Extrato completo enviado para a impressora!");
-                              setSelectedKanbanOrder(null);
-                            } else {
-                              const err = await response.json();
-                              alert(`Erro ao imprimir comanda inteira: ${err.detail}`);
-                            }
-                          } catch (err) {
-                            console.error(err);
-                            alert("Erro ao imprimir comanda inteira.");
+                {selectedKanbanOrder.mesaId && selectedKanbanOrder.mesaId > 0 && (
+                  <div className="flex gap-2 w-full">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const printHeader = localStorage.getItem("koma_print_header") || "";
+                          const printFooter = localStorage.getItem("koma_print_footer") || "";
+                          let url = `${apiBaseUrl}/mesas/${selectedKanbanOrder.mesaId}/imprimir-recibo?apenas_valores=false`;
+                          const params = new URLSearchParams();
+                          if (printHeader) params.append("print_header", printHeader);
+                          if (printFooter) params.append("print_footer", printFooter);
+                          if (params.toString()) url += `&${params.toString()}`;
+                          const response = await fetch(url, { method: 'POST', headers: authHeaders });
+                          if (response.ok) {
+                            showToast("Extrato completo enviado!", 'success');
+                            setSelectedKanbanOrder(null);
+                          } else {
+                            const errD = await response.json();
+                            showToast(`Erro: ${errD.detail}`, 'error');
                           }
-                        }}
-                        className="flex-1 py-2.5 bg-[#1C1C1F] hover:bg-[#27272A] text-gray-300 hover:text-white font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-[#27272A] shadow-lg"
-                      >
-                        <Printer size={13} />
-                        <span>Comanda Inteira</span>
-                      </button>
+                        } catch (err) {
+                          console.error(err);
+                          showToast("Erro ao imprimir comanda inteira.", 'error');
+                        }
+                      }}
+                      className="flex-1 py-2.5 bg-[#1C1C1F] hover:bg-[#27272A] text-gray-300 hover:text-white font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-[#27272A] shadow-lg"
+                    >
+                      <Printer size={13} />
+                      <span>Comanda Inteira</span>
+                    </button>
 
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          try {
-                            const printHeader = localStorage.getItem("koma_print_header") || "";
-                            const printFooter = localStorage.getItem("koma_print_footer") || "";
-                            let url = `${apiBaseUrl}/mesas/${selectedKanbanOrder.mesaId}/imprimir-recibo?apenas_valores=true`;
-                            const params = new URLSearchParams();
-                            if (printHeader) params.append("print_header", printHeader);
-                            if (printFooter) params.append("print_footer", printFooter);
-                            if (params.toString()) url += `&${params.toString()}`;
-                            
-                            const response = await fetch(url, {
-                              method: 'POST',
-                              headers: authHeaders
-                            });
-                            if (response.ok) {
-                              alert("Extrato resumido (apenas valores) enviado para a impressora!");
-                              setSelectedKanbanOrder(null);
-                            } else {
-                              const err = await response.json();
-                              alert(`Erro ao imprimir apenas valores: ${err.detail}`);
-                            }
-                          } catch (err) {
-                            console.error(err);
-                            alert("Erro ao imprimir apenas valores.");
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const printHeader = localStorage.getItem("koma_print_header") || "";
+                          const printFooter = localStorage.getItem("koma_print_footer") || "";
+                          let url = `${apiBaseUrl}/mesas/${selectedKanbanOrder.mesaId}/imprimir-recibo?apenas_valores=true`;
+                          const params = new URLSearchParams();
+                          if (printHeader) params.append("print_header", printHeader);
+                          if (printFooter) params.append("print_footer", printFooter);
+                          if (params.toString()) url += `&${params.toString()}`;
+                          const response = await fetch(url, { method: 'POST', headers: authHeaders });
+                          if (response.ok) {
+                            showToast("Extrato resumido enviado!", 'success');
+                            setSelectedKanbanOrder(null);
+                          } else {
+                            const errD = await response.json();
+                            showToast(`Erro: ${errD.detail}`, 'error');
                           }
-                        }}
-                        className="flex-1 py-2.5 bg-[#1C1C1F] hover:bg-[#27272A] text-gray-300 hover:text-white font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-[#27272A] shadow-lg"
-                      >
-                        <Printer size={13} />
-                        <span>Só Valores</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
+                        } catch (err) {
+                          console.error(err);
+                          showToast("Erro ao imprimir apenas valores.", 'error');
+                        }
+                      }}
+                      className="flex-1 py-2.5 bg-[#1C1C1F] hover:bg-[#27272A] text-gray-300 hover:text-white font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-[#27272A] shadow-lg"
+                    >
+                      <Printer size={13} />
+                      <span>Só Valores</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
