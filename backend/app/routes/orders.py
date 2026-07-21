@@ -11,7 +11,7 @@ from ..models import Comanda, Mesa, Usuario, Produto, Lancamento, Item, Activity
 from ..schemas import (
     ComandaResponse, ComandaDetail, ComandaCreate,
     LancamentoResponse, LancamentoCreate, ItemResponse, ItemUpdate,
-    MotoboyCreate, MotoboyResponse
+    MotoboyCreate, MotoboyResponse, VendaDiretaCreate
 )
 from ..security import get_current_garcom_optional, get_current_user
 from ..websocket_manager import manager
@@ -207,6 +207,137 @@ def abrir_comanda(comanda_in: ComandaCreate, background_tasks: BackgroundTasks, 
     db.refresh(nova_comanda)
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
     return nova_comanda
+
+
+@router.post("/venda-direta", response_model=ComandaDetail, status_code=status.HTTP_201_CREATED)
+def criar_venda_direta(
+    venda_in: VendaDiretaCreate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
+    """
+    Cria uma comanda e insere todos os itens em uma ÚNICA transação atômica.
+    Elimina a necessidade de 2 chamadas HTTP separadas no PDV.
+    """
+    garcom_id = venda_in.garcom_id or current_user.id
+    garcom = db.query(Usuario).filter(Usuario.id == garcom_id).first()
+    if not garcom:
+        garcom_id = current_user.id
+        garcom = current_user
+
+    if venda_in.mesa_id is not None:
+        mesa = db.query(Mesa).filter(Mesa.id == venda_in.mesa_id).first()
+        if not mesa:
+            raise HTTPException(status_code=404, detail=f"Mesa {venda_in.mesa_id} não encontrada")
+        comanda_aberta = db.query(Comanda).filter(Comanda.mesa_id == venda_in.mesa_id, Comanda.fechada == False).first()
+        numero_pedido = comanda_aberta.numero_pedido if comanda_aberta else gerar_novo_numero_pedido(db)
+    else:
+        numero_pedido = gerar_novo_numero_pedido(db)
+
+    auto_delivery_status = venda_in.delivery_status
+    if venda_in.tipo in ("Entrega", "Delivery") and auto_delivery_status is None:
+        auto_delivery_status = "pendente"
+    elif venda_in.tipo == "Retirada" and auto_delivery_status is None:
+        auto_delivery_status = "producao"
+
+    comanda_id = f"c-{uuid.uuid4().hex[:8]}"
+    lancamento_id = f"l-{uuid.uuid4().hex[:8]}"
+
+    try:
+        nova_comanda = Comanda(
+            id=comanda_id,
+            mesa_id=venda_in.mesa_id,
+            garcom_id=garcom_id,
+            tipo=venda_in.tipo,
+            identificador=venda_in.identificador,
+            numero_pedido=numero_pedido,
+            fechada=False,
+            criado_em=datetime.datetime.now(datetime.timezone.utc),
+            delivery_status=auto_delivery_status,
+            delivery_telefone=venda_in.delivery_telefone,
+            delivery_endereco=venda_in.delivery_endereco,
+            delivery_taxa=venda_in.delivery_taxa
+        )
+        db.add(nova_comanda)
+
+        novo_lancamento = Lancamento(
+            id=lancamento_id,
+            comanda_id=comanda_id,
+            garcom_id=garcom_id,
+            criado_em=datetime.datetime.now(datetime.timezone.utc)
+        )
+        db.add(novo_lancamento)
+
+        itens_cozinha = []
+        for item_in in venda_in.itens:
+            produto = db.query(Produto).filter(Produto.id == item_in.produto_id).first()
+            if not produto:
+                continue
+            novo_item = Item(
+                id=f"i-{uuid.uuid4().hex[:8]}",
+                comanda_id=comanda_id,
+                lancamento_id=lancamento_id,
+                produto_id=item_in.produto_id,
+                preco_unit=produto.preco,
+                observacao=item_in.observacao or "",
+                cliente_nome=item_in.cliente_nome or "Consumo Geral",
+                status="preparando"
+            )
+            db.add(novo_item)
+            dest = (produto.destino_impressao or "COZINHA").upper()
+            if dest not in ("NENHUM", "NONE", ""):
+                itens_cozinha.append(novo_item)
+
+        db.commit()
+
+        # Enfileira impressões se houver itens para cozinha
+        if itens_cozinha:
+            from ..domain.printing import PrintDocumentService
+            from ..domain.printing.models import OrderPrintData, PrintItem as DomainPrintItem
+            
+            p_items = [
+                DomainPrintItem(
+                    codigo=it.produto.codigo if hasattr(it.produto, "codigo") else "",
+                    nome=it.produto.nome,
+                    quantidade=1,
+                    preco_unit=it.preco_unit,
+                    observacao=it.observacao,
+                    cliente_nome=it.cliente_nome,
+                    destino_impressao=it.produto.destino_impressao or "COZINHA"
+                )
+                for it in itens_cozinha
+            ]
+            doc_data = OrderPrintData(
+                numero_pedido=str(numero_pedido),
+                mesa=str(venda_in.mesa_id) if venda_in.mesa_id else "BALCAO",
+                tipo_pedido=venda_in.tipo,
+                garcom_nome=garcom.nome if garcom else "CAIXA",
+                horario=datetime.datetime.now().strftime("%H:%M"),
+                itens=p_items,
+                restaurante_nome="KÔMA"
+            )
+            docs = PrintDocumentService.generate_production(doc_data)
+            for dest_name, ticket_text in docs.items():
+                background_tasks.add_task(
+                    print_in_background,
+                    printer_name=dest_name,
+                    ticket_text=ticket_text,
+                    document_type="producao",
+                    source_type="pedido",
+                    source_id=comanda_id
+                )
+
+        background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
+        comanda_completa = db.query(Comanda).options(
+            joinedload(Comanda.itens).joinedload(Item.produto),
+            joinedload(Comanda.criada_por)
+        ).filter(Comanda.id == comanda_id).first()
+        return comanda_completa
+    except Exception as e:
+        db.rollback()
+        logger.exception(f"Erro ao criar venda direta atômica: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno ao registrar venda direta.")
 
 
 @router.put("/{comanda_id}/pedir-conta", response_model=ComandaResponse)

@@ -838,6 +838,21 @@ export function CaixaPanel({
     }
   };
 
+  useEffect(() => {
+    fetchDeliveryOrders();
+    fetchMotoboys();
+
+    const handleDeliveryUpdate = () => {
+      fetchDeliveryOrders();
+      fetchMotoboys();
+    };
+
+    window.addEventListener('koma_orders_updated', handleDeliveryUpdate);
+    return () => {
+      window.removeEventListener('koma_orders_updated', handleDeliveryUpdate);
+    };
+  }, [apiBaseUrl, authHeaders]);
+
   const openSimulatedOrderDetails = (order: SimulatedDeliveryOrder) => {
     const fullComanda = orders.find(o => o.id === order.id);
     const itemsMapped = fullComanda
@@ -2029,50 +2044,36 @@ export function CaixaPanel({
 
     setIsLoading(true);
     try {
-      const openRes = await fetch(`${apiBaseUrl}/comandas/`, {
+      const itemsList = cartItems.flatMap(item =>
+        Array.from({ length: item.quantity }, () => ({
+          produto_id: item.product.id,
+          observacao: item.obs || '',
+          cliente_nome: customerName || 'Consumo Geral'
+        }))
+      );
+
+      const res = await fetch(`${apiBaseUrl}/comandas/venda-direta`, {
         method: "POST",
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           mesa_id: orderType === 'mesa' ? mesaId : null,
-          garcom_id: 'c-01', // Cashier operator ID
           tipo: orderType === 'mesa' ? 'Consumo no Local' : (orderType === 'entrega' ? 'Entrega' : 'Retirada'),
           identificador: customerName || undefined,
           delivery_status: orderType === 'entrega' ? 'producao' : undefined,
           delivery_telefone: orderType === 'entrega' ? customerPhone : undefined,
           delivery_endereco: orderType === 'entrega' ? deliveryAddress : undefined,
-          delivery_taxa: orderType === 'entrega' ? parseFloat(deliveryTaxa) || 0.0 : 0.0
-        })
-      });
-      if (!openRes.ok) {
-        const err = await openRes.json();
-        showToast(`Erro ao abrir comanda: ${err.detail}`, 'error');
-        setIsLoading(false);
-        return;
-      }
-      const newComanda = await openRes.json();
-
-      const itemsList = cartItems.flatMap(item =>
-        Array.from({ length: item.quantity }, () => ({
-          produto_id: item.product.id,
-          observacao: item.obs,
-          cliente_nome: customerName || 'Consumo Geral'
-        }))
-      );
-
-      const launchRes = await fetch(`${apiBaseUrl}/comandas/${newComanda.id}/lancamentos`, {
-        method: "POST",
-        headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          garcom_id: 'c-01',
+          delivery_taxa: orderType === 'entrega' ? parseFloat(deliveryTaxa) || 0.0 : 0.0,
           itens: itemsList
         })
       });
-      if (launchRes.ok) {
+
+      if (res.ok) {
         onRefreshOrders();
         fetchDeliveryOrders();
+        window.dispatchEvent(new Event('koma_orders_updated'));
       } else {
-        const err = await launchRes.json();
-        showToast(`Erro ao lançar itens: ${err.detail}`, 'error');
+        const err = await res.json();
+        showToast(`Erro ao registrar venda: ${err.detail || 'Falha no servidor'}`, 'error');
       }
     } catch (err) {
       console.error(err);

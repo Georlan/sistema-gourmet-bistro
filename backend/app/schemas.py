@@ -196,6 +196,22 @@ class ItemCreate(BaseModel):
     observacao: str = ""
     cliente_nome: str = "Consumo Geral"
 
+class VendaDiretaItemSchema(BaseModel):
+    produto_id: str
+    observacao: Optional[str] = None
+    cliente_nome: Optional[str] = None
+
+class VendaDiretaCreate(BaseModel):
+    mesa_id: Optional[int] = None
+    garcom_id: Optional[str] = None
+    tipo: str = "Retirada"
+    identificador: Optional[str] = None
+    delivery_status: Optional[str] = None
+    delivery_telefone: Optional[str] = None
+    delivery_endereco: Optional[str] = None
+    delivery_taxa: float = 0.0
+    itens: List[VendaDiretaItemSchema]
+
 class LancamentoCreate(BaseModel):
     garcom_id: str
     itens: List[ItemCreate]

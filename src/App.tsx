@@ -609,6 +609,7 @@ export default function App() {
           if (data.event === "new_delivery_order") {
             playNotificationSound();
             showToast(`🛎️ NOVO PEDIDO ONLINE: ${data.message || 'Recebido no caixa!'}`, 'success', 8000);
+            window.dispatchEvent(new Event('koma_orders_updated'));
           }
           if (data.event === "tables_updated") {
             if (wsUpdateTimeout) {
@@ -623,6 +624,7 @@ export default function App() {
               if (activeRole === 'caixa' || activeRole === 'admin') {
                 fetchPagamentosPendentes();
               }
+              window.dispatchEvent(new Event('koma_orders_updated'));
             }, 300);
             if (data.detail && data.detail.type === "pagamento_registrado" && data.detail.status === "pendente") {
               showToast(`💵 CONFIRMAR DINHEIRO: R$ ${data.detail.valor.toFixed(2)} - Garçom ${data.detail.garcom_nome}`, 'info', 5000);
