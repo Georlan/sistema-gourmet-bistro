@@ -208,23 +208,7 @@ export default function CardapioDigital({
             const remainingCashback = useCashback ? Math.max(0, cashbackBalance - appliedCashback) : cashbackBalance;
             const newCashback = remainingCashback + accumulatedCashback;
 
-            const { data: existingClient } = await supabase
-              .from("clientes")
-              .select("id")
-              .or(`telefone.eq.${userPhone},phone.eq.${userPhone}`)
-              .maybeSingle();
-
-            if (existingClient) {
-              await supabase
-                .from("clientes")
-                .update({
-                  cashback: newCashback,
-                  saldo_cashback: newCashback,
-                  updated_at: new Date().toISOString()
-                })
-                .eq("id", existingClient.id);
-            }
-
+            // Cashback e saldos de fidelidade são processados exclusivamente no backend por segurança
             const updatedProfile = { 
               ...profile, 
               cashback: newCashback, 
@@ -233,7 +217,7 @@ export default function CardapioDigital({
             localStorage.setItem("koma_cliente_perfil", JSON.stringify(updatedProfile));
             localStorage.setItem("whitelabel_menu_current_user", JSON.stringify(updatedProfile));
           } catch (e) {
-            console.warn("Erro ao atualizar cashback pós-pedido:", e);
+            console.warn("Erro ao atualizar visualização de cashback pós-pedido:", e);
           }
         }
 

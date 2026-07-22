@@ -227,6 +227,8 @@ def identificar_cliente(payload: CardapioIdentificarRequest, db: Session = Depen
         current_restaurante_id.set(None)
 
 
+import secrets
+
 @router.post("/enviar-otp")
 def enviar_otp(payload: CardapioIdentificarRequest):
     telefone_clean = limpar_telefone(payload.telefone)
@@ -235,16 +237,33 @@ def enviar_otp(payload: CardapioIdentificarRequest):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Número de telefone inválido."
         )
-        
-    # Gerar código OTP de 4 dígitos
-    otp = f"{random.randint(1000, 9999)}"
     
-    # Salvar OTP em memória com expiração de 5 minutos
-    expira_em = time.time() + 300
-    otp_store[(payload.restaurante_id, telefone_clean)] = (otp, expira_em)
+    key = (payload.restaurante_id, telefone_clean)
+    now = time.time()
+
+    # Rate Limit: proíbe novas solicitações com menos de 30 segundos de intervalo
+    if key in otp_store:
+        entry = otp_store[key]
+        if isinstance(entry, dict) and (now - entry.get("last_sent", 0)) < 30:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Aguarde 30 segundos antes de solicitar um novo código."
+            )
+
+    # Gerar código OTP criptograficamente seguro de 4 dígitos
+    otp = f"{secrets.randbelow(9000) + 1000}"
     
-    # Simulação do WhatsApp printando no log
-    print(f"🔥 [OTP WhatsApp Simulação] Código de verificação para {telefone_clean} no restaurante {payload.restaurante_id}: {otp}")
+    # Salvar OTP em memória com expiração de 5 minutos, timestamp de envio e contagem de tentativas
+    expira_em = now + 300
+    otp_store[key] = {
+        "otp": otp,
+        "expira_em": expira_em,
+        "attempts": 0,
+        "last_sent": now
+    }
+    
+    # Log seguro sem expor dígitos brutos
+    print(f"[OTP WhatsApp] Código gerado para telefone ***{telefone_clean[-4:] if len(telefone_clean) >= 4 else ''} no restaurante {payload.restaurante_id}")
     
     return {
         "success": True,
@@ -255,24 +274,44 @@ def enviar_otp(payload: CardapioIdentificarRequest):
 @router.post("/verificar-otp")
 def verificar_otp(payload: CardapioVerificarOtpRequest, db: Session = Depends(get_db)):
     telefone_clean = limpar_telefone(payload.telefone)
+    key = (payload.restaurante_id, telefone_clean)
     
     # Validar OTP no cache de memória
-    stored = otp_store.get((payload.restaurante_id, telefone_clean))
+    stored = otp_store.get(key)
     if not stored:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Código de verificação não gerado ou expirado."
         )
+
+    # Normalização de compatibilidade de dicionário/tupla
+    if isinstance(stored, tuple):
+        otp_code, expira_em = stored
+        attempts = 0
+    else:
+        otp_code = stored["otp"]
+        expira_em = stored["expira_em"]
+        attempts = stored.get("attempts", 0)
         
-    otp_code, expira_em = stored
     if time.time() > expira_em:
-        # Expirou, remove do cache
-        otp_store.pop((payload.restaurante_id, telefone_clean), None)
+        otp_store.pop(key, None)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Código de verificação expirado. Por favor, solicite um novo."
         )
-        
+
+    # Incrementar e bloquear após 5 tentativas incorretas
+    attempts += 1
+    if isinstance(stored, dict):
+        stored["attempts"] = attempts
+
+    if attempts > 5:
+        otp_store.pop(key, None)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Número máximo de tentativas excedido. Solicite um novo código."
+        )
+
     if otp_code != payload.otp:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -280,7 +319,7 @@ def verificar_otp(payload: CardapioVerificarOtpRequest, db: Session = Depends(ge
         )
         
     # OTP validado com sucesso! Remove do cache para segurança (uso único)
-    otp_store.pop((payload.restaurante_id, telefone_clean), None)
+    otp_store.pop(key, None)
     
     token_context = current_restaurante_id.set(payload.restaurante_id)
     try:
