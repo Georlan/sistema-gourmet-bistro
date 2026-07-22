@@ -2359,8 +2359,11 @@ export function CaixaPanel({
               </div>
               {turno?.status === 'aberto' ? (
                 <button
-                  onClick={() => setShowFecharModal(true)}
-                  className={clsx('px-2', 'py-1', 'bg-emerald-600', 'hover:bg-[#601823]', 'text-white', 'text-[9px]', 'font-bold', 'rounded-lg', 'cursor-pointer', 'transition-all', 'uppercase', 'tracking-wider')}
+                  onClick={() => {
+                    setActiveTab('financeiro');
+                    setActiveSubTab('fechamento');
+                  }}
+                  className={clsx('px-2', 'py-1', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'text-[9px]', 'font-bold', 'rounded-lg', 'cursor-pointer', 'transition-all', 'uppercase', 'tracking-wider')}
                 >
                   Fechar
                 </button>
@@ -2524,7 +2527,7 @@ export function CaixaPanel({
             {activeTab === 'operacao' && 'Gestão de Atendimento Local'}
             {activeTab === 'cardapio' && 'Gestão e Engenharia do Cardápio'}
             {activeTab === 'estoque' && 'GESTÃO DE ESTOQUE'}
-            {activeTab === 'financeiro' && 'Tesouraria e Fluxo de Caixa'}
+            {activeTab === 'financeiro' && 'GESTÃO DO CAIXA'}
             {activeTab === 'clientes' && 'Carteira de Clientes e CRM'}
             {(activeTab === 'permissoes_cargos' || (activeTab === 'configuracoes' && activeSubTab === 'equipe')) && 'Permissões e Gestão de Equipe'}
             {(activeTab === 'impressao_salao' || (activeTab === 'configuracoes' && activeSubTab === 'impressoras')) && 'Configurações de Impressão e Salão'}

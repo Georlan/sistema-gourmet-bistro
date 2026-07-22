@@ -148,3 +148,12 @@ def test_fechamento_caixa_conferencia_cega():
     assert fech["esperado_dinheiro"] == 80.0
     assert fech["declarado_dinheiro"] == 85.0
     assert fech["diferenca_dinheiro"] == 5.0
+
+    # Bloqueio de nova movimentação (sangria/suprimento) após fechamento
+    res_post_sangria = client.post("/caixa/sangria", json={"valor": 10.0, "motivo": "Teste"}, headers=headers)
+    assert res_post_sangria.status_code == 400
+    assert "Não há nenhum turno de caixa aberto" in res_post_sangria.json()["detail"]
+
+    res_post_suprimento = client.post("/caixa/suprimento", json={"valor": 10.0, "motivo": "Teste"}, headers=headers)
+    assert res_post_suprimento.status_code == 400
+    assert "Não há nenhum turno de caixa aberto" in res_post_suprimento.json()["detail"]
