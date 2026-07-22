@@ -5,7 +5,7 @@ from typing import List, Optional
 from ..database import get_db, current_restaurante_id, require_tenant_id
 from ..models import Mesa, ObservacaoPredefinida, Comanda, Item, Usuario
 from ..schemas import MesaResponse, MesaUpdate, MesaCreate, ObservacaoPredefinidaResponse
-from ..security import get_current_garcom_optional, get_current_user
+from ..security import get_current_garcom_optional, get_current_user, require_roles
 from ..websocket_manager import manager
 
 router = APIRouter(
@@ -36,7 +36,7 @@ def update_mesa(
     update_data: MesaUpdate, 
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user)
+    current_user: Usuario = Depends(require_roles("admin", "gerente", "caixa"))
 ):
     """Permite alterar a capacidade ou o nome personalizado da mesa."""
     db_mesa = db.query(Mesa).filter(Mesa.id == mesa_id).first()
@@ -61,7 +61,7 @@ def create_mesa(
     mesa_in: MesaCreate, 
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user)
+    current_user: Usuario = Depends(require_roles("admin", "gerente", "caixa"))
 ):
     """Cria uma nova mesa dinamicamente no salão."""
     existing = db.query(Mesa).filter(Mesa.id == mesa_in.id).first()
@@ -86,7 +86,7 @@ def delete_mesa(
     mesa_id: int, 
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user)
+    current_user: Usuario = Depends(require_roles("admin", "gerente", "caixa"))
 ):
     """Remove uma mesa do salão se ela não tiver nenhuma comanda ativa aberta."""
     mesa = db.query(Mesa).filter(Mesa.id == mesa_id).first()

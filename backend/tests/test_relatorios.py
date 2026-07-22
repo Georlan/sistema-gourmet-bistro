@@ -49,23 +49,23 @@ def setup_database():
         db.add(Usuario(
             id="u-admin", restaurante_id=1, nome="Admin Test",
             usuario="admin", senha_hash=get_password_hash("123"),
-            role="admin", cargo="admin"
+            role="admin", cargo="admin", status="ativo"
         ))
         db.add(Usuario(
             id="u-garcom", restaurante_id=1, nome="Garcom Test",
             usuario="garcom", senha_hash=get_password_hash("123"),
-            role="garcom", cargo="garcom"
+            role="garcom", cargo="garcom", status="ativo"
         ))
         db.add(Usuario(
             id="u-caixa", restaurante_id=1, nome="Caixa Test",
             usuario="caixa", senha_hash=get_password_hash("123"),
-            role="caixa", cargo="caixa"
+            role="caixa", cargo="caixa", status="ativo"
         ))
         # Tenant 2 — deve ser completamente isolado
         db.add(Usuario(
             id="u-t2", restaurante_id=2, nome="Outro Tenant",
             usuario="outro", senha_hash=get_password_hash("123"),
-            role="garcom", cargo="garcom"
+            role="garcom", cargo="garcom", status="ativo"
         ))
 
         # --- Produto e Categoria ---

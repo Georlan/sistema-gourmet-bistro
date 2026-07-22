@@ -13,7 +13,7 @@ from ..schemas import (
     LancamentoResponse, LancamentoCreate, ItemResponse, ItemUpdate,
     MotoboyCreate, MotoboyResponse, VendaDiretaCreate
 )
-from ..security import get_current_garcom_optional, get_current_user
+from ..security import get_current_garcom_optional, get_current_user, require_roles
 from ..websocket_manager import manager
 
 logger = logging.getLogger("koma.orders")
@@ -660,7 +660,14 @@ def fechar_comanda(
     valor_pago = comanda.valor_pago or 0.0
     
     # Verifica se há saldo devedor
-    if not force:
+    if force:
+        user_role = (current_garcom.role or current_garcom.cargo or "garcom").lower().strip()
+        if user_role not in ("admin", "superadmin", "gerente", "caixa"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Apenas caixa, gerente ou administrador podem forçar o fechamento de uma comanda com saldo em aberto."
+            )
+    else:
         if valor_pago < subtotal and valor_pago < total_com_taxa:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, 
@@ -694,7 +701,7 @@ def reabrir_comanda(
     comanda_id: str,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_garcom: Usuario = Depends(get_current_user)
+    current_garcom: Usuario = Depends(require_roles("admin", "gerente", "caixa"))
 ):
     """
     Reabre uma comanda fechada (requer autenticação do garçom).

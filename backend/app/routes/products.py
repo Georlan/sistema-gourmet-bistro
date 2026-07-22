@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional, Union, Dict, Any
 from ..database import get_db, current_restaurante_id, require_tenant_id
 from ..models import Produto, Categoria, ObservacaoPredefinida, Usuario
-from ..security import get_current_user
+from ..security import get_current_user, require_roles
 from ..schemas import ProdutoResponse, ProdutoCreate, ProdutoUpdate, CategoriaResponse
 from ..websocket_manager import manager
 from pydantic import BaseModel, ConfigDict
@@ -130,7 +130,7 @@ def create_categoria(
     data: CategoriaCreate, 
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user)
+    current_user: Usuario = Depends(require_roles("admin", "gerente"))
 ):
     """Cria uma nova categoria (setup wizard interno)."""
     if db.query(Categoria).filter_by(id=data.id).first():
@@ -150,7 +150,7 @@ def update_categoria(
     data: CategoriaUpdate,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user)
+    current_user: Usuario = Depends(require_roles("admin", "gerente"))
 ):
     """Atualiza nome e/ou destino de impressão de uma categoria."""
     cat = db.query(Categoria).filter_by(id=categoria_id).first()
@@ -175,7 +175,7 @@ def delete_categoria(
     categoria_id: str, 
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user)
+    current_user: Usuario = Depends(require_roles("admin", "gerente"))
 ):
     """Remove uma categoria (só se não tiver produtos vinculados)."""
     cat = db.query(Categoria).filter_by(id=categoria_id).first()
@@ -201,7 +201,7 @@ def get_observacoes(categoria_id: Optional[str] = None, db: Session = Depends(ge
     return q.all()
 
 @router.post("/observacoes", response_model=ObservacaoResponse, status_code=status.HTTP_201_CREATED)
-def create_observacao(data: ObservacaoCreate, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+def create_observacao(data: ObservacaoCreate, db: Session = Depends(get_db), current_user: Usuario = Depends(require_roles("admin", "gerente"))):
     """Adiciona uma nova observação predefinida a uma categoria."""
     if not db.query(Categoria).filter_by(id=data.categoria_id).first():
         raise HTTPException(status_code=404, detail="Categoria não encontrada.")
@@ -212,7 +212,7 @@ def create_observacao(data: ObservacaoCreate, db: Session = Depends(get_db), cur
     return obs
 
 @router.delete("/observacoes/{obs_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_observacao(obs_id: int, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+def delete_observacao(obs_id: int, db: Session = Depends(get_db), current_user: Usuario = Depends(require_roles("admin", "gerente"))):
     """Remove uma observação predefinida pelo ID."""
     obs = db.query(ObservacaoPredefinida).filter_by(id=obs_id).first()
     if not obs:
@@ -272,7 +272,7 @@ def create_produto(
     produto_data: ProdutoCreate, 
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user)
+    current_user: Usuario = Depends(require_roles("admin", "gerente"))
 ):
     """Cadastra um novo produto no cardápio."""
     # Check if category exists
@@ -306,7 +306,7 @@ def update_produto(
     update_data: ProdutoUpdate, 
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user)
+    current_user: Usuario = Depends(require_roles("admin", "gerente"))
 ):
     """Atualiza as informações de um produto, incluindo seu preço ou status de ativação."""
     db_produto = db.query(Produto).filter(Produto.id == produto_id).first()
@@ -342,7 +342,7 @@ def delete_produto(
     produto_id: str, 
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user)
+    current_user: Usuario = Depends(require_roles("admin", "gerente"))
 ):
     """Remove definitivamente um produto do cardápio."""
     db_produto = db.query(Produto).filter(Produto.id == produto_id).first()
@@ -376,7 +376,7 @@ def importar_cardapio(
     payload: Union[List[ProdutoImportItem], CardapioImportPayload],
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user)
+    current_user: Usuario = Depends(require_roles("admin", "gerente"))
 ):
     """
     Importa uma lista de produtos sobrescrevendo o cardápio atual.

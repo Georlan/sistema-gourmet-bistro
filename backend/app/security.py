@@ -119,6 +119,37 @@ def get_current_user(
     user = db.query(Usuario).filter(Usuario.id == garcom_id).first()
     if user is None:
         raise credentials_exception
+        
+    status_val = getattr(user, "status", "ativo") or "ativo"
+    if status_val in ("pendente_ativacao", "inativo", "blocked", "disabled"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Conta de usuário inativa ou pendente de ativação."
+        )
     return user
+
+
+def require_roles(*allowed_roles: str):
+    """
+    Dependency factory que verifica se o usuário autenticado é ativo e possui
+    um dos cargos autorizados. Admin/superadmin sempre têm acesso total.
+    """
+    def role_checker(current_user: Usuario = Depends(get_current_user)) -> Usuario:
+        user_role = (current_user.role or current_user.cargo or "garcom").lower().strip()
+        allowed = [r.lower().strip() for r in allowed_roles]
+
+        # Admin e superadmin possuem bypass automático para todas as verificações de autorização
+        if user_role in ("admin", "superadmin") or "admin" in allowed:
+            if user_role in ("admin", "superadmin"):
+                return current_user
+
+        if user_role not in allowed:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Acesso negado: o cargo '{user_role}' não possui permissão para esta operação."
+            )
+        return current_user
+
+    return role_checker
 
 

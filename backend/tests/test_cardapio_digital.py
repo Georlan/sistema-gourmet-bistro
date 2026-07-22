@@ -40,12 +40,18 @@ def test_setup():
                 nome="Gerente Teste 999",
                 email="test999@koma.com",
                 cargo="admin",
+                role="admin",
+                status="ativo",
                 restaurante_id=999
             )
             db.add(user)
-            db.commit()
+        else:
+            user.role = "admin"
+            user.cargo = "admin"
+            user.status = "ativo"
+        db.commit()
 
-        auth_token = create_access_token(subject=user.id, restaurante_id=999)
+        auth_token = create_access_token(subject=user.id, restaurante_id=999, role="admin")
         yield {"user": user, "token": auth_token, "rest_id": 999}
     finally:
         current_restaurante_id.set(None)
