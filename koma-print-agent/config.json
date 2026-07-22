@@ -1,12 +1,12 @@
 {
-  "api_url": "https://sistema-gourmet-bistro-production.up.railway.app",
-  "agent_token": "koma_ag_prod_5NFQ7r6j-rR3OMfspPpByPqSYqLVQ6h66j2EueJWYCU",
+  "api_url": "http://localhost:8000",
+  "agent_token": "koma_ag_test_Ob89aYAJP59brim8DcOhKQ",
   "agent_id": "caixa-principal",
   "poll_interval_seconds": 2,
-  "adapter": "dummy",
+  "adapter": "linux",
   "printers": {
-    "COZINHA": "IMPRESSORA_COZINHA",
-    "FECHAMENTO": "IMPRESSORA_RECIBO",
-    "ENTREGA": "IMPRESSORA_RECIBO"
+    "COZINHA": "/dev/usb/lp0",
+    "FECHAMENTO": "/dev/usb/lp0",
+    "ENTREGA": "/dev/usb/lp0"
   }
 }
