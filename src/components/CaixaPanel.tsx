@@ -5728,7 +5728,6 @@ export function CaixaPanel({
                   <table className={clsx('w-full', 'text-left', 'border-collapse', 'font-sans', 'text-[11px]')}>
                     <thead>
                       <tr className={clsx('border-b', 'border-[#27272A]', 'bg-[#18181B]/50', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider')}>
-                        <th className={clsx('p-4')}>ID</th>
                         <th className={clsx('p-4')}>Nome</th>
                         <th className={clsx('p-4')}>Impressão</th>
                         <th className={clsx('p-4', 'text-right')}>Ações</th>
@@ -5737,7 +5736,6 @@ export function CaixaPanel({
                     <tbody className={clsx('divide-y', 'divide-[#27272A]/40')}>
                       {apiCategorias.map((cat) => (
                         <tr key={cat.id} className={clsx('hover:bg-[#1C1C1F]/30', 'transition-colors', 'text-white')}>
-                          <td className={clsx('p-4', 'font-mono', 'text-gray-400')}>{cat.id}</td>
                           <td className={clsx('p-4', 'font-semibold')}>{cat.nome}</td>
                           <td className={clsx('p-4')}>
                             <span className={clsx('px-2', 'py-0.5', 'text-[9px]', 'font-bold', 'rounded-md', 'border', 
