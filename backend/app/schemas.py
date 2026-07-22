@@ -260,16 +260,76 @@ class CaixaMovimentacaoCreate(BaseModel):
     tipo: str  # "suprimento" | "sangria"
     valor: float
     descricao: str = ""
+    motivo: Optional[str] = None
+    observacao: Optional[str] = None
+
+class SangriaCreate(BaseModel):
+    valor: float
+    motivo: Optional[str] = None
+    observacao: Optional[str] = None
+
+class SuprimentoCreate(BaseModel):
+    valor: float
+    motivo: Optional[str] = None
+    observacao: Optional[str] = None
 
 class CaixaMovimentacaoResponse(BaseModel):
     id: int
     turno_id: int
+    usuario_id: Optional[str] = None
+    usuario_nome: Optional[str] = None
     tipo: str
     valor: float
-    descricao: str
+    saldo_anterior: float = 0.0
+    saldo_posterior: float = 0.0
+    descricao: str = ""
+    observacao: str = ""
     criado_em: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+class CaixaTurnoResumoResponse(BaseModel):
+    turno_id: Optional[int] = None
+    status: str
+    operador_id: Optional[str] = None
+    operador_nome: Optional[str] = None
+    aberto_em: Optional[datetime] = None
+    tempo_aberto_minutos: int = 0
+    saldo_inicial: float = 0.0
+    total_vendas: float = 0.0
+    total_dinheiro: float = 0.0
+    total_pix: float = 0.0
+    total_cartao: float = 0.0
+    total_sangrias: float = 0.0
+    total_suprimentos: float = 0.0
+    saldo_esperado_dinheiro: float = 0.0
+    total_pedidos_pagos: int = 0
+    ultima_movimentacao: Optional[dict] = None
+    resumo_dia: Optional[dict] = None
+
+class FechamentoCaixaRequest(BaseModel):
+    declarado_dinheiro: float
+    declarado_cartao: float = 0.0
+    declarado_pix: float = 0.0
+    observacao: str = ""
+
+class FechamentoCaixaResponse(BaseModel):
+    turno_id: int
+    status: str
+    fechado_em: datetime
+    fechado_por_nome: str
+    declarado_dinheiro: float
+    esperado_dinheiro: float
+    diferenca_dinheiro: float
+    declarado_cartao: float
+    esperado_cartao: float
+    diferenca_cartao: float
+    declarado_pix: float
+    esperado_pix: float
+    diferenca_pix: float
+    total_declarado: float
+    total_esperado: float
+    diferenca_total: float
 
 class PagamentoRequest(BaseModel):
     valor: float

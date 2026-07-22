@@ -247,18 +247,30 @@ class CaixaTurno(Base):
     declarado_dinheiro = Column(Float, nullable=True)
     declarado_pix = Column(Float, nullable=True)
     declarado_cartao = Column(Float, nullable=True)
+    observacao = Column(String, default="")
     status = Column(String, default="aberto", index=True)  # "aberto" | "fechado"
+
+    aberto_por = relationship("Usuario", foreign_keys=[aberto_por_id])
+    fechado_por = relationship("Usuario", foreign_keys=[fechado_por_id])
 
 
 class CaixaMovimentacao(Base):
     __tablename__ = "caixa_movimentacoes"
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
     turno_id = Column(Integer, ForeignKey("caixa_turnos.id"), nullable=False, index=True)
+    usuario_id = Column(String, ForeignKey("usuarios.id"), nullable=True)
     tipo = Column(String, nullable=False)  # "suprimento" | "sangria"
     valor = Column(Float, nullable=False)
+    saldo_anterior = Column(Float, default=0.0)
+    saldo_posterior = Column(Float, default=0.0)
     descricao = Column(String, default="")
+    observacao = Column(String, default="")
     criado_em = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+    turno = relationship("CaixaTurno")
+    usuario = relationship("Usuario", foreign_keys=[usuario_id])
 
 
 class Pagamento(Base):

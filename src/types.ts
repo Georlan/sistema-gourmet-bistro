@@ -105,10 +105,64 @@ export interface CaixaTurno {
 export interface CaixaMovimentacao {
   id: number;
   turno_id: number;
-  tipo: 'suprimento' | 'sangria';
+  usuario_id?: string | null;
+  usuario_nome?: string | null;
+  tipo: 'suprimento' | 'sangria' | string;
   valor: number;
+  saldo_anterior?: number;
+  saldo_posterior?: number;
   descricao: string;
+  observacao?: string;
   criado_em: string;
+}
+
+export interface CaixaTurnoResumo {
+  turno_id?: number | null;
+  status: 'aberto' | 'fechado' | 'sem_turno' | string;
+  operador_id?: string | null;
+  operador_nome?: string | null;
+  aberto_em?: string | null;
+  tempo_aberto_minutos: number;
+  saldo_inicial: number;
+  total_vendas: number;
+  total_dinheiro: number;
+  total_pix: number;
+  total_cartao: number;
+  total_sangrias: number;
+  total_suprimentos: number;
+  saldo_esperado_dinheiro: number;
+  total_pedidos_pagos: number;
+  ultima_movimentacao?: {
+    id: number;
+    tipo: string;
+    valor: number;
+    descricao: string;
+    criado_em?: string;
+    operador_nome?: string;
+  } | null;
+  resumo_dia?: {
+    total_vendas: number;
+    pedidos_pagos: number;
+  } | null;
+}
+
+export interface FechamentoCaixaResult {
+  turno_id: number;
+  status: 'fechado' | string;
+  fechado_em: string;
+  fechado_por_nome: string;
+  declarado_dinheiro: number;
+  esperado_dinheiro: number;
+  diferenca_dinheiro: number;
+  declarado_cartao: number;
+  esperado_cartao: number;
+  diferenca_cartao: number;
+  declarado_pix: number;
+  esperado_pix: number;
+  diferenca_pix: number;
+  total_declarado: number;
+  total_esperado: number;
+  diferenca_total: number;
 }
 
 export interface Pagamento {

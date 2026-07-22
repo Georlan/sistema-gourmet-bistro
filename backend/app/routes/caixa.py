@@ -16,7 +16,8 @@ from ..models import Usuario, Comanda, Item, CaixaTurno, CaixaMovimentacao, Paga
 from ..schemas import (
     CaixaTurnoCreate, CaixaTurnoResponse, CaixaTurnoFechar, CaixaTurnoDetalhe,
     CaixaMovimentacaoCreate, CaixaMovimentacaoResponse, PagamentoRequest, PagamentoResponse,
-    UsuarioResponse, UsuarioCreate
+    UsuarioResponse, UsuarioCreate, SangriaCreate, SuprimentoCreate, CaixaTurnoResumoResponse,
+    FechamentoCaixaRequest, FechamentoCaixaResponse
 )
 from ..security import get_current_garcom_optional, get_current_user
 from .auth import require_admin
@@ -170,43 +171,135 @@ def abrir_turno(
     return novo_turno
 
 
+# ----------------- TURNO DE CAIXA / OPERACIONAL ENDPOINTS -----------------
+
+@router.get("/turno-atual/resumo", response_model=CaixaTurnoResumoResponse)
+@router.get("/turno/resumo", response_model=CaixaTurnoResumoResponse)
+def obter_resumo_turno_atual(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_garcom_optional)
+):
+    """Retorna dados consolidados e métricas em tempo real do turno de caixa aberto para o tenant."""
+    check_caixa_permission(current_user)
+    rest_id = require_tenant_id()
+
+    turno = db.query(CaixaTurno).filter_by(restaurante_id=rest_id, status="aberto").first()
+    if not turno:
+        return CaixaTurnoResumoResponse(
+            turno_id=None,
+            status="sem_turno",
+            operador_id=None,
+            operador_nome=None,
+            aberto_em=None,
+            tempo_aberto_minutos=0,
+            saldo_inicial=0.0,
+            total_vendas=0.0,
+            total_dinheiro=0.0,
+            total_pix=0.0,
+            total_cartao=0.0,
+            total_sangrias=0.0,
+            total_suprimentos=0.0,
+            saldo_esperado_dinheiro=0.0,
+            total_pedidos_pagos=0,
+            ultima_movimentacao=None,
+            resumo_dia=None
+        )
+
+    operador = db.query(Usuario).filter_by(id=turno.aberto_por_id, restaurante_id=rest_id).first()
+    operador_nome = operador.nome if operador else "Operador"
+
+    pags = db.query(Pagamento).filter(
+        Pagamento.restaurante_id == rest_id,
+        Pagamento.turno_id == turno.id,
+        Pagamento.status == "aprovado"
+    ).all()
+
+    total_vendas = sum(p.valor for p in pags)
+    total_dinheiro = sum(p.valor for p in pags if p.metodo == "dinheiro")
+    total_pix = sum(p.valor for p in pags if p.metodo == "pix")
+    total_cartao = sum(p.valor for p in pags if p.metodo in ["cartao", "cartao_debito", "cartao_credito"])
+    pedidos_pagos_set = {p.comanda_id for p in pags if p.comanda_id}
+
+    movs = db.query(CaixaMovimentacao).filter_by(turno_id=turno.id).order_by(CaixaMovimentacao.criado_em.desc()).all()
+    total_sangrias = sum(m.valor for m in movs if m.tipo == "sangria")
+    total_suprimentos = sum(m.valor for m in movs if m.tipo == "suprimento")
+
+    saldo_esperado = turno.saldo_inicial + total_dinheiro + total_suprimentos - total_sangrias
+
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    aberto_dt = turno.aberto_em
+    if aberto_dt.tzinfo is None:
+        aberto_dt = aberto_dt.replace(tzinfo=datetime.timezone.utc)
+    tempo_minutos = int((now_utc - aberto_dt).total_seconds() / 60)
+
+    ult_mov = None
+    if movs:
+        m_top = movs[0]
+        u_mov = db.query(Usuario).filter_by(id=m_top.usuario_id).first() if m_top.usuario_id else None
+        ult_mov = {
+            "id": m_top.id,
+            "tipo": m_top.tipo,
+            "valor": m_top.valor,
+            "descricao": m_top.descricao or m_top.observacao or "",
+            "criado_em": m_top.criado_em.isoformat() if m_top.criado_em else None,
+            "operador_nome": u_mov.nome if u_mov else operador_nome
+        }
+
+    return CaixaTurnoResumoResponse(
+        turno_id=turno.id,
+        status="aberto",
+        operador_id=turno.aberto_por_id,
+        operador_nome=operador_nome,
+        aberto_em=turno.aberto_em,
+        tempo_aberto_minutos=max(0, tempo_minutos),
+        saldo_inicial=turno.saldo_inicial,
+        total_vendas=total_vendas,
+        total_dinheiro=total_dinheiro,
+        total_pix=total_pix,
+        total_cartao=total_cartao,
+        total_sangrias=total_sangrias,
+        total_suprimentos=total_suprimentos,
+        saldo_esperado_dinheiro=saldo_esperado,
+        total_pedidos_pagos=len(pedidos_pagos_set),
+        ultima_movimentacao=ult_mov,
+        resumo_dia={"total_vendas": total_vendas, "pedidos_pagos": len(pedidos_pagos_set)}
+    )
+
+
 @router.get("/turno/atual", response_model=Optional[CaixaTurnoDetalhe])
 def obter_turno_atual(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
-    """Retorna os dados do turno de caixa atual aberto com o faturamento parcial esperado."""
+    """Retorna os dados do turno de caixa atual aberto para o tenant."""
     check_caixa_permission(current_user)
-    
-    turno = db.query(CaixaTurno).filter(CaixaTurno.status == "aberto").first()
+    rest_id = require_tenant_id()
+
+    turno = db.query(CaixaTurno).filter_by(restaurante_id=rest_id, status="aberto").first()
     if not turno:
         return None
-        
-    # Get all movements (suprimentos and sangrias)
-    movs = db.query(CaixaMovimentacao).filter(CaixaMovimentacao.turno_id == turno.id).all()
-    
-    # Get all payments processed in this shift
-    pags = db.query(Pagamento).filter(Pagamento.turno_id == turno.id).all()
-    
-    # Calculate totals
+
+    movs = db.query(CaixaMovimentacao).filter_by(turno_id=turno.id).all()
+    pags = db.query(Pagamento).filter_by(restaurante_id=rest_id, turno_id=turno.id, status="aprovado").all()
+
     total_esperado_dinheiro = turno.saldo_inicial
     total_esperado_pix = 0.0
     total_esperado_cartao = 0.0
-    
+
     for m in movs:
         if m.tipo == "suprimento":
             total_esperado_dinheiro += m.valor
         elif m.tipo == "sangria":
             total_esperado_dinheiro -= m.valor
-            
+
     for p in pags:
         if p.metodo == "dinheiro":
             total_esperado_dinheiro += p.valor
         elif p.metodo == "pix":
             total_esperado_pix += p.valor
-        elif p.metodo == "cartao":
+        elif p.metodo in ["cartao", "cartao_debito", "cartao_credito"]:
             total_esperado_cartao += p.valor
-            
+
     return {
         "id": turno.id,
         "aberto_por_id": turno.aberto_por_id,
@@ -226,67 +319,272 @@ def obter_turno_atual(
     }
 
 
-@router.post("/turno/fechar", response_model=CaixaTurnoResponse)
-def fechar_turno(
-    fechamento_in: CaixaTurnoFechar,
+@router.get("/movimentacoes", response_model=List[CaixaMovimentacaoResponse])
+def listar_movimentacoes_caixa(
+    data_inicio: Optional[str] = None,
+    data_fim: Optional[str] = None,
+    tipo: Optional[str] = None,
+    operador_id: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
-    """Encerra o turno de caixa ativo e registra os valores contados fisicamente."""
+    """Lista histórico de movimentações de caixa para o tenant autenticado."""
     check_caixa_permission(current_user)
-    
-    turno = db.query(CaixaTurno).filter(CaixaTurno.status == "aberto").first()
-    if not turno:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Não há nenhum turno de caixa aberto atualmente."
-        )
-        
-    turno.fechado_por_id = current_user.id
-    turno.fechado_em = datetime.datetime.now(datetime.timezone.utc)
-    turno.declarado_dinheiro = fechamento_in.declarado_dinheiro
-    turno.declarado_pix = fechamento_in.declarado_pix
-    turno.declarado_cartao = fechamento_in.declarado_cartao
-    turno.status = "fechado"
-    
-    db.commit()
-    db.refresh(turno)
-    return turno
+    rest_id = require_tenant_id()
+
+    query = db.query(CaixaMovimentacao).join(CaixaTurno, CaixaMovimentacao.turno_id == CaixaTurno.id).filter(
+        CaixaTurno.restaurante_id == rest_id
+    )
+
+    if tipo:
+        query = query.filter(CaixaMovimentacao.tipo == tipo)
+    if operador_id:
+        query = query.filter(CaixaMovimentacao.usuario_id == operador_id)
+    if data_inicio:
+        try:
+            dt_ini = datetime.datetime.fromisoformat(data_inicio)
+            query = query.filter(CaixaMovimentacao.criado_em >= dt_ini)
+        except ValueError:
+            pass
+    if data_fim:
+        try:
+            dt_fim = datetime.datetime.fromisoformat(data_fim)
+            query = query.filter(CaixaMovimentacao.criado_em <= dt_fim)
+        except ValueError:
+            pass
+
+    movs = query.order_by(CaixaMovimentacao.criado_em.desc()).all()
+
+    result = []
+    for m in movs:
+        op_nome = None
+        if m.usuario_id:
+            op_user = db.query(Usuario).filter_by(id=m.usuario_id).first()
+            if op_user:
+                op_nome = op_user.nome
+
+        result.append(CaixaMovimentacaoResponse(
+            id=m.id,
+            turno_id=m.turno_id,
+            usuario_id=m.usuario_id,
+            usuario_nome=op_nome,
+            tipo=m.tipo,
+            valor=m.valor,
+            saldo_anterior=m.saldo_anterior or 0.0,
+            saldo_posterior=m.saldo_posterior or 0.0,
+            descricao=m.descricao or "",
+            observacao=m.observacao or "",
+            criado_em=m.criado_em
+        ))
+    return result
 
 
-@router.post("/turno/movimentar", response_model=CaixaMovimentacaoResponse, status_code=status.HTTP_201_CREATED)
-def movimentar_caixa(
-    mov_in: CaixaMovimentacaoCreate,
+@router.post("/sangria", response_model=CaixaMovimentacaoResponse, status_code=status.HTTP_201_CREATED)
+def registrar_sangria(
+    sangria_in: SangriaCreate,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
-    """Registra uma entrada de troco extra (suprimento) ou retirada de dinheiro (sangria)."""
+    """Registra uma sangria no turno aberto com validação de saldo disponível."""
     check_caixa_permission(current_user)
-    
-    turno = db.query(CaixaTurno).filter(CaixaTurno.status == "aberto").first()
+    rest_id = require_tenant_id()
+
+    if sangria_in.valor <= 0:
+        raise HTTPException(status_code=400, detail="O valor da sangria deve ser maior que zero.")
+
+    turno = db.query(CaixaTurno).filter_by(restaurante_id=rest_id, status="aberto").first()
     if not turno:
+        raise HTTPException(status_code=400, detail="Não há nenhum turno de caixa aberto no momento.")
+
+    pags_dinheiro = db.query(Pagamento).filter(
+        Pagamento.restaurante_id == rest_id,
+        Pagamento.turno_id == turno.id,
+        Pagamento.metodo == "dinheiro",
+        Pagamento.status == "aprovado"
+    ).all()
+    total_dinheiro = sum(p.valor for p in pags_dinheiro)
+
+    movs = db.query(CaixaMovimentacao).filter_by(turno_id=turno.id).all()
+    total_suprimentos = sum(m.valor for m in movs if m.tipo == "suprimento")
+    total_sangrias = sum(m.valor for m in movs if m.tipo == "sangria")
+
+    saldo_disponivel = turno.saldo_inicial + total_dinheiro + total_suprimentos - total_sangrias
+
+    if sangria_in.valor > saldo_disponivel:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="O caixa precisa estar aberto para registrar movimentações de suprimento ou sangria."
+            status_code=400,
+            detail=f"Sangria de R$ {sangria_in.valor:.2f} excede o saldo em dinheiro disponível no caixa (R$ {saldo_disponivel:.2f})."
         )
-        
-    if mov_in.tipo not in ["suprimento", "sangria"]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Tipo de movimentação inválido. Deve ser 'suprimento' ou 'sangria'."
-        )
-        
+
+    saldo_posterior = saldo_disponivel - sangria_in.valor
+    motivo_txt = sangria_in.motivo or "Sangria de caixa"
+
     nova_mov = CaixaMovimentacao(
+        restaurante_id=rest_id,
         turno_id=turno.id,
-        tipo=mov_in.tipo,
-        valor=mov_in.valor,
-        descricao=mov_in.descricao,
+        usuario_id=current_user.id if current_user else None,
+        tipo="sangria",
+        valor=sangria_in.valor,
+        saldo_anterior=saldo_disponivel,
+        saldo_posterior=saldo_posterior,
+        descricao=motivo_txt,
+        observacao=sangria_in.observacao or "",
         criado_em=datetime.datetime.now(datetime.timezone.utc)
     )
     db.add(nova_mov)
     db.commit()
     db.refresh(nova_mov)
-    return nova_mov
+
+    return CaixaMovimentacaoResponse(
+        id=nova_mov.id,
+        turno_id=nova_mov.turno_id,
+        usuario_id=nova_mov.usuario_id,
+        usuario_nome=current_user.nome if current_user else None,
+        tipo=nova_mov.tipo,
+        valor=nova_mov.valor,
+        saldo_anterior=nova_mov.saldo_anterior,
+        saldo_posterior=nova_mov.saldo_posterior,
+        descricao=nova_mov.descricao,
+        observacao=nova_mov.observacao,
+        criado_em=nova_mov.criado_em
+    )
+
+
+@router.post("/suprimento", response_model=CaixaMovimentacaoResponse, status_code=status.HTTP_201_CREATED)
+def registrar_suprimento(
+    suprimento_in: SuprimentoCreate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_garcom_optional)
+):
+    """Registra um suprimento no turno aberto do tenant."""
+    check_caixa_permission(current_user)
+    rest_id = require_tenant_id()
+
+    if suprimento_in.valor <= 0:
+        raise HTTPException(status_code=400, detail="O valor do suprimento deve ser maior que zero.")
+
+    turno = db.query(CaixaTurno).filter_by(restaurante_id=rest_id, status="aberto").first()
+    if not turno:
+        raise HTTPException(status_code=400, detail="Não há nenhum turno de caixa aberto no momento.")
+
+    pags_dinheiro = db.query(Pagamento).filter(
+        Pagamento.restaurante_id == rest_id,
+        Pagamento.turno_id == turno.id,
+        Pagamento.metodo == "dinheiro",
+        Pagamento.status == "aprovado"
+    ).all()
+    total_dinheiro = sum(p.valor for p in pags_dinheiro)
+
+    movs = db.query(CaixaMovimentacao).filter_by(turno_id=turno.id).all()
+    total_suprimentos = sum(m.valor for m in movs if m.tipo == "suprimento")
+    total_sangrias = sum(m.valor for m in movs if m.tipo == "sangria")
+
+    saldo_anterior = turno.saldo_inicial + total_dinheiro + total_suprimentos - total_sangrias
+    saldo_posterior = saldo_anterior + suprimento_in.valor
+    motivo_txt = suprimento_in.motivo or "Suprimento de troco"
+
+    nova_mov = CaixaMovimentacao(
+        restaurante_id=rest_id,
+        turno_id=turno.id,
+        usuario_id=current_user.id if current_user else None,
+        tipo="suprimento",
+        valor=suprimento_in.valor,
+        saldo_anterior=saldo_anterior,
+        saldo_posterior=saldo_posterior,
+        descricao=motivo_txt,
+        observacao=suprimento_in.observacao or "",
+        criado_em=datetime.datetime.now(datetime.timezone.utc)
+    )
+    db.add(nova_mov)
+    db.commit()
+    db.refresh(nova_mov)
+
+    return CaixaMovimentacaoResponse(
+        id=nova_mov.id,
+        turno_id=nova_mov.turno_id,
+        usuario_id=nova_mov.usuario_id,
+        usuario_nome=current_user.nome if current_user else None,
+        tipo=nova_mov.tipo,
+        valor=nova_mov.valor,
+        saldo_anterior=nova_mov.saldo_anterior,
+        saldo_posterior=nova_mov.saldo_posterior,
+        descricao=nova_mov.descricao,
+        observacao=nova_mov.observacao,
+        criado_em=nova_mov.criado_em
+    )
+
+
+@router.post("/fechamento", response_model=FechamentoCaixaResponse)
+@router.post("/turno/fechar", response_model=FechamentoCaixaResponse)
+def fechar_turno_caixa(
+    req: FechamentoCaixaRequest,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_garcom_optional)
+):
+    """Encerra o turno de caixa ativo via conferência cega e calcula sobra ou falta."""
+    check_caixa_permission(current_user)
+    rest_id = require_tenant_id()
+
+    turno = db.query(CaixaTurno).filter_by(restaurante_id=rest_id, status="aberto").first()
+    if not turno:
+        raise HTTPException(status_code=400, detail="Não há nenhum turno de caixa aberto para ser fechado.")
+
+    if req.declarado_dinheiro < 0 or req.declarado_cartao < 0 or req.declarado_pix < 0:
+        raise HTTPException(status_code=400, detail="Os valores declarados não podem ser negativos.")
+
+    pags = db.query(Pagamento).filter(
+        Pagamento.restaurante_id == rest_id,
+        Pagamento.turno_id == turno.id,
+        Pagamento.status == "aprovado"
+    ).all()
+
+    esperado_dinheiro_vendas = sum(p.valor for p in pags if p.metodo == "dinheiro")
+    esperado_pix = sum(p.valor for p in pags if p.metodo == "pix")
+    esperado_cartao = sum(p.valor for p in pags if p.metodo in ["cartao", "cartao_debito", "cartao_credito"])
+
+    movs = db.query(CaixaMovimentacao).filter_by(turno_id=turno.id).all()
+    total_suprimentos = sum(m.valor for m in movs if m.tipo == "suprimento")
+    total_sangrias = sum(m.valor for m in movs if m.tipo == "sangria")
+
+    esperado_dinheiro = turno.saldo_inicial + esperado_dinheiro_vendas + total_suprimentos - total_sangrias
+
+    diferenca_dinheiro = req.declarado_dinheiro - esperado_dinheiro
+    diferenca_cartao = req.declarado_cartao - esperado_cartao
+    diferenca_pix = req.declarado_pix - esperado_pix
+
+    total_declarado = req.declarado_dinheiro + req.declarado_cartao + req.declarado_pix
+    total_esperado = esperado_dinheiro + esperado_cartao + esperado_pix
+    diferenca_total = total_declarado - total_esperado
+
+    fechado_em = datetime.datetime.now(datetime.timezone.utc)
+    turno.fechado_em = fechado_em
+    turno.fechado_por_id = current_user.id if current_user else None
+    turno.declarado_dinheiro = req.declarado_dinheiro
+    turno.declarado_cartao = req.declarado_cartao
+    turno.declarado_pix = req.declarado_pix
+    turno.observacao = req.observacao
+    turno.status = "fechado"
+
+    db.commit()
+
+    return FechamentoCaixaResponse(
+        turno_id=turno.id,
+        status="fechado",
+        fechado_em=fechado_em,
+        fechado_por_nome=current_user.nome if current_user else "Operador",
+        declarado_dinheiro=req.declarado_dinheiro,
+        esperado_dinheiro=esperado_dinheiro,
+        diferenca_dinheiro=diferenca_dinheiro,
+        declarado_cartao=req.declarado_cartao,
+        esperado_cartao=esperado_cartao,
+        diferenca_cartao=diferenca_cartao,
+        declarado_pix=req.declarado_pix,
+        esperado_pix=esperado_pix,
+        diferenca_pix=diferenca_pix,
+        total_declarado=total_declarado,
+        total_esperado=total_esperado,
+        diferenca_total=diferenca_total
+    )
 
 
 # ----------------- COMPATIBLE/INTEGRATED PAYMENTS ENDPOINT -----------------

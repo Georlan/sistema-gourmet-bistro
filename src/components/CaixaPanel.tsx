@@ -9,13 +9,19 @@ import {
   MessageSquare, Send, Printer, Cpu, HelpCircle, Smartphone,
   Gift, Tag, TrendingUp, Heart, Globe
 , Upload} from 'lucide-react';
-import { Order, OrderItem, CaixaTurno, CaixaMovimentacao, Pagamento, Table, Product, EntradaEstoque, MovimentacaoEstoque, SessaoContagemEstoque } from '../types';
+import { Order, OrderItem, CaixaTurno, CaixaMovimentacao, Pagamento, Table, Product, EntradaEstoque, MovimentacaoEstoque, SessaoContagemEstoque, CaixaTurnoResumo, FechamentoCaixaResult } from '../types';
 import { EstoqueEntradasTab } from './estoque/EstoqueEntradasTab';
 import { EntradaManualModal } from './estoque/EntradaManualModal';
 import { EstoqueMovimentacoesTab } from './estoque/EstoqueMovimentacoesTab';
 import { MovimentacaoEstoqueModal } from './estoque/MovimentacaoEstoqueModal';
 import { EstoqueContagemTab } from './estoque/EstoqueContagemTab';
 import { ContagemEstoqueModal } from './estoque/ContagemEstoqueModal';
+import { CaixaTurnoAtualTab } from './caixa/CaixaTurnoAtualTab';
+import { CaixaMovimentacoesTab } from './caixa/CaixaMovimentacoesTab';
+import { SangriaModal } from './caixa/SangriaModal';
+import { SuprimentoModal } from './caixa/SuprimentoModal';
+import { CaixaFechamentoTab } from './caixa/CaixaFechamentoTab';
+import { RelatorioFinanceiroTab } from './relatorios/RelatorioFinanceiroTab';
 import { PRODUCTS, CATEGORIES } from '../data';
 import { getProductPresets, obterNomeCategoria, smartSearchMatch } from '../domain';
 import { API } from '../config/caixaService';
@@ -179,7 +185,11 @@ export function CaixaPanel({
     if (saved === 'layout_salao' || saved === 'salon') return 'mesas';
     if (['insumos', 'estoque_insumos'].includes(saved)) return 'insumos';
     if (['xml', 'notas', 'entradas'].includes(saved)) return 'xml';
-    if (['fornecedores', 'distribuidores'].includes(saved)) return 'fornecedores';
+    // Caixa mappings
+    if (['fluxo', 'turno_atual'].includes(saved)) return 'turno_atual';
+    if (['ajustes', 'ajustes_caixa', 'movimentacoes', 'suprimento', 'sangria'].includes(saved)) return 'movimentacoes';
+    if (['conferencia', 'conferencia_cega', 'fechamento'].includes(saved)) return 'fechamento';
+    if (['demonstrativo_dre', 'dre', 'fluxo_caixa', 'financeiro'].includes(saved)) return 'financeiro';
     // Relatórios mappings
     if (['desempenho', 'minha_performance', 'dashboard', 'indicadores'].includes(saved)) return 'visao_geral';
     if (['metas', 'metas_previsoes'].includes(saved)) return 'metas';
@@ -191,7 +201,7 @@ export function CaixaPanel({
     if (['robo_ia', 'prompt', 'prompt_atendente', 'configuracao'].includes(saved)) return 'configuracao';
     if (['simulador', 'simulador_chat'].includes(saved)) return 'simulador';
     // Placeholders redirection
-    if (['fiscal', 'notas_fiscais'].includes(saved)) return 'fluxo';
+    if (['fiscal', 'notas_fiscais'].includes(saved)) return 'turno_atual';
     if (['recuperador', 'carrinhos_abandonados'].includes(saved)) return 'crm';
     return saved;
   });
@@ -441,6 +451,13 @@ export function CaixaPanel({
   const [showMovimentacaoModal, setShowMovimentacaoModal] = useState<boolean>(false);
   const [showContagemModal, setShowContagemModal] = useState<boolean>(false);
   const [selectedContagemId, setSelectedContagemId] = useState<string | null>(null);
+
+  // Caixa Reorganization States
+  const [turnoResumo, setTurnoResumo] = useState<CaixaTurnoResumo | null>(null);
+  const [caixaMovimentacoes, setCaixaMovimentacoes] = useState<CaixaMovimentacao[]>([]);
+  const [fechamentoResult, setFechamentoResult] = useState<FechamentoCaixaResult | null>(null);
+  const [showSangriaModal, setShowSangriaModal] = useState<boolean>(false);
+  const [showSuprimentoModal, setShowSuprimentoModal] = useState<boolean>(false);
   const [xmlUploadState, setXmlUploadState] = useState<{ loading: boolean, result: any | null, error: string | null, isDragging: boolean }>({ loading: false, result: null, error: null, isDragging: false });
   const xmlFileInputRef = useRef<HTMLInputElement>(null);
   const [horariosPico, setHorariosPico] = useState<{ dia_semana_label: string, dia_semana: number, hora: string, total_pedidos: number }[]>([]);
@@ -1435,6 +1452,77 @@ export function CaixaPanel({
     return () => clearInterval(interval);
   }, [isWsConnected]);
 
+  // Caixa API Handlers
+  const fetchTurnoResumo = async () => {
+    try {
+      const res = await fetch(`${apiBaseUrl}/caixa/turno-atual/resumo`, { headers: authHeaders });
+      if (res.ok) {
+        const data = await res.json();
+        setTurnoResumo(data);
+      }
+    } catch (e) {
+      console.error("Erro ao buscar resumo do turno:", e);
+    }
+  };
+
+  const fetchCaixaMovimentacoes = async () => {
+    try {
+      const res = await fetch(`${apiBaseUrl}/caixa/movimentacoes`, { headers: authHeaders });
+      if (res.ok) {
+        const data = await res.json();
+        setCaixaMovimentacoes(data);
+      }
+    } catch (e) {
+      console.error("Erro ao buscar movimentações de caixa:", e);
+    }
+  };
+
+  const handleRegistrarSangria = async (payload: { valor: number; motivo: string; observacao: string }) => {
+    const res = await fetch(`${apiBaseUrl}/caixa/sangria`, {
+      method: 'POST',
+      headers: { ...authHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Erro ao registrar sangria.');
+    }
+    showToast('Sangria registrada com sucesso!');
+    await fetchTurnoResumo();
+    await fetchCaixaMovimentacoes();
+  };
+
+  const handleRegistrarSuprimento = async (payload: { valor: number; motivo: string; observacao: string }) => {
+    const res = await fetch(`${apiBaseUrl}/caixa/suprimento`, {
+      method: 'POST',
+      headers: { ...authHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Erro ao registrar suprimento.');
+    }
+    showToast('Suprimento registrado com sucesso!');
+    await fetchTurnoResumo();
+    await fetchCaixaMovimentacoes();
+  };
+
+  const handleConfirmarFechamento = async (payload: { declarado_dinheiro: number; declarado_cartao: number; declarado_pix: number; observacao: string }) => {
+    const res = await fetch(`${apiBaseUrl}/caixa/fechamento`, {
+      method: 'POST',
+      headers: { ...authHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Erro ao fechar caixa.');
+    }
+    const resultData = await res.json();
+    setFechamentoResult(resultData);
+    showToast('Turno de caixa encerrado com sucesso!');
+    await fetchTurnoResumo();
+  };
+
   // Fetch optimized statistics, stock, and reports
   useEffect(() => {
     const endDate = new Date();
@@ -1443,6 +1531,10 @@ export function CaixaPanel({
     const startStr = startDate.toISOString().split('T')[0];
     const endStr = endDate.toISOString().split('T')[0];
 
+    if (activeTab === 'financeiro') {
+      fetchTurnoResumo();
+      fetchCaixaMovimentacoes();
+    }
     if ((activeTab === 'relatorios' || activeTab === 'dashboard') && ['equipe', 'relatorio_garçons'].includes(activeSubTab)) {
       fetch(`${apiBaseUrl}/garcons/relatorio?data_inicio=${startStr}&data_fim=${endStr}`, { headers: authHeaders })
         .then(res => res.json())
@@ -2459,6 +2551,7 @@ export function CaixaPanel({
         <div className={clsx('bg-[#121214]/60', 'border-b', 'border-[#27272A]', 'px-6', 'py-1.5', 'flex', 'gap-2', 'shrink-0', 'overflow-x-auto', 'scrollbar-none')}>
           {(activeTab === 'relatorios' || activeTab === 'dashboard') && [
             { id: 'visao_geral', label: 'Visão Geral' },
+            { id: 'financeiro', label: 'Financeiro' },
             { id: 'metas', label: 'Metas' },
             { id: 'produtos_mais_vendidos', label: 'Produtos Mais Vendidos' },
             { id: 'vendas', label: 'Vendas' },
@@ -2466,6 +2559,7 @@ export function CaixaPanel({
           ].map(sub => {
             const isSubActive = (
               (sub.id === 'visao_geral' && ['visao_geral', 'desempenho', 'minha_performance'].includes(activeSubTab)) ||
+              (sub.id === 'financeiro' && ['financeiro', 'demonstrativo_dre', 'dre', 'fluxo_caixa'].includes(activeSubTab)) ||
               (sub.id === 'metas' && ['metas', 'metas_previsoes'].includes(activeSubTab)) ||
               (sub.id === 'produtos_mais_vendidos' && ['produtos_mais_vendidos', 'top10', 'mais_vendidos'].includes(activeSubTab)) ||
               (sub.id === 'vendas' && ['vendas', 'relatorio_geral', 'consolidado_vendas'].includes(activeSubTab)) ||
@@ -2572,21 +2666,29 @@ export function CaixaPanel({
           })}
 
           {activeTab === 'financeiro' && [
-            { id: 'fluxo', label: 'Demonstrativo DRE' },
-            { id: 'fechamento', label: 'Conferência Cega' },
-            { id: 'suprimento', label: 'Ajustes de Caixa' }
-          ].map(sub => (
-            <button
-              key={sub.id}
-              onClick={() => setActiveSubTab(sub.id)}
-              className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${activeSubTab === sub.id
-                ? 'bg-[#10b981] text-[#121214]'
-                : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
-                }`}
-            >
-              {sub.label}
-            </button>
-          ))}
+            { id: 'turno_atual', label: 'Turno Atual' },
+            { id: 'movimentacoes', label: 'Movimentações' },
+            { id: 'fechamento', label: 'Fechamento' }
+          ].map(sub => {
+            const isSubActive = (
+              (sub.id === 'turno_atual' && ['turno_atual', 'fluxo'].includes(activeSubTab)) ||
+              (sub.id === 'movimentacoes' && ['movimentacoes', 'ajustes', 'ajustes_caixa', 'suprimento', 'sangria'].includes(activeSubTab)) ||
+              (sub.id === 'fechamento' && ['fechamento', 'conferencia', 'conferencia_cega'].includes(activeSubTab)) ||
+              activeSubTab === sub.id
+            );
+            return (
+              <button
+                key={sub.id}
+                onClick={() => setActiveSubTab(sub.id)}
+                className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${isSubActive
+                  ? 'bg-[#10b981] text-[#121214]'
+                  : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
+                  }`}
+              >
+                {sub.label}
+              </button>
+            );
+          })}
 
           {activeTab === 'clientes' && [
             { id: 'crm', label: 'Banco de Clientes' },
@@ -4981,6 +5083,11 @@ export function CaixaPanel({
 
 
 
+          {/* VIEW: RELATÓRIO FINANCEIRO (DRE) */}
+          {(activeTab === 'relatorios' || activeTab === 'dashboard') && ['financeiro', 'demonstrativo_dre', 'dre', 'fluxo_caixa'].includes(activeSubTab) && (
+            <RelatorioFinanceiroTab apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
+          )}
+
           {/* VIEW: RELATÓRIO GERAL / VENDAS / VISÃO GERAL */}
           {(activeTab === 'relatorios' || activeTab === 'dashboard') && ['vendas', 'relatorio_geral', 'consolidado_vendas', 'visao_geral', 'desempenho', 'minha_performance'].includes(activeSubTab) && (
             <div className={clsx('space-y-5', 'text-left', 'animate-fade-in')}>
@@ -6107,78 +6214,34 @@ export function CaixaPanel({
             </div>
           )}
 
-          {/* MOCK VIEW: FLUXO DE CAIXA DRE */}
-          {activeTab === 'financeiro' && activeSubTab === 'fluxo' && (
-            <div className={clsx('space-y-5', 'text-left', 'animate-fade-in')}>
-              <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-4.5', 'rounded-3xl', 'space-y-2')}>
-                <h3 className={clsx('font-serif', 'font-bold', 'text-base', 'text-white')}>Demonstrativo de Fluxo de Caixa</h3>
-                <p className={clsx('text-[10px]', 'text-gray-400', 'leading-relaxed')}>
-                  Resumo simplificado de receitas, custos e despesas operacionais do mês atual.
-                </p>
-              </div>
-
-              <div className={clsx('grid', 'grid-cols-1', 'md:grid-cols-3', 'gap-5', 'font-mono', 'text-[10px]')}>
-                <div className={clsx('bg-emerald-500/5', 'border', 'border-emerald-500/10', 'p-5', 'rounded-3xl', 'space-y-2')}>
-                  <span className={clsx('font-sans', 'font-bold', 'text-emerald-400', 'uppercase', 'tracking-widest', 'text-[8px]', 'block')}>Receitas Totais</span>
-                  <strong className={clsx('text-xl', 'text-white', 'block')}>R$ 51.140,06</strong>
-                  <span className={clsx('text-gray-500', 'text-[8px]', 'block')}>Entradas consolidadas do caixa de vendas.</span>
-                </div>
-                <div className={clsx('bg-rose-500/5', 'border', 'border-rose-500/10', 'p-5', 'rounded-3xl', 'space-y-2')}>
-                  <span className={clsx('font-sans', 'font-bold', 'text-rose-400', 'uppercase', 'tracking-widest', 'text-[8px]', 'block')}>Custos e CMV</span>
-                  <strong className={clsx('text-xl', 'text-white', 'block')}>R$ 18.420,10</strong>
-                  <span className={clsx('text-gray-500', 'text-[8px]', 'block')}>Com base na ficha técnica de insumos baixados.</span>
-                </div>
-                <div className={clsx('bg-sky-500/5', 'border', 'border-sky-500/10', 'p-5', 'rounded-3xl', 'space-y-2')}>
-                  <span className={clsx('font-sans', 'font-bold', 'text-sky-400', 'uppercase', 'tracking-widest', 'text-[8px]', 'block')}>Lucro Líquido Estimado</span>
-                  <strong className={clsx('text-xl', 'text-emerald-400', 'block')}>R$ 32.719,96</strong>
-                  <span className={clsx('text-gray-500', 'text-[8px]', 'block')}>Margem líquida aproximada de 63.9%.</span>
-                </div>
-              </div>
-            </div>
+          {/* MÓDULO CAIXA REORGANIZADO */}
+          {activeTab === 'financeiro' && (activeSubTab === 'turno_atual' || activeSubTab === 'fluxo') && (
+            <CaixaTurnoAtualTab
+              turnoResumo={turnoResumo}
+              isLoading={isLoading}
+              onRefresh={fetchTurnoResumo}
+              onNavigateToFechamento={() => setActiveSubTab('fechamento')}
+              onOpenNovoTurnoModal={() => setShowAbrirModal(true)}
+            />
           )}
 
-          {/* MOCK VIEW: FECHAMENTO CEGO */}
-          {activeTab === 'financeiro' && activeSubTab === 'fechamento' && (
-            <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'text-left', 'animate-fade-in', 'max-w-md')}>
-              <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'border-b', 'border-[#27272A]', 'pb-2')}>Fechamento Cego de Turno</span>
-              <p className={clsx('text-[10px]', 'text-gray-400', 'leading-relaxed')}>
-                Declare os valores físicos presentes na gaveta para encerrar o caixa. O sistema fará a conferência de quebras sem exibir o saldo esperado para evitar fraudes.
-              </p>
-              <div className="space-y-3">
-                <div className="space-y-1">
-                  <label className={clsx('text-[8px]', 'font-bold', 'text-gray-400', 'block', 'uppercase')}>Dinheiro Físico (R$):</label>
-                  <input type="number" placeholder="R$ 0,00" className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'font-mono', 'text-[10px]')} />
-                </div>
-                <div className="space-y-1">
-                  <label className={clsx('text-[8px]', 'font-bold', 'text-gray-400', 'block', 'uppercase')}>Comprovantes Cartão (R$):</label>
-                  <input type="number" placeholder="R$ 0,00" className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'font-mono', 'text-[10px]')} />
-                </div>
-                <button type="button" onClick={() => alert('Turno fechado com sucesso!')} className={clsx('w-full', 'py-2', 'bg-emerald-600', 'hover:bg-[#8d2a3a]', 'text-white', 'font-bold', 'rounded-xl', 'text-[9px]', 'uppercase', 'tracking-wider', 'cursor-pointer')}>
-                  Confirmar Encerramento de Turno
-                </button>
-              </div>
-            </div>
+          {activeTab === 'financeiro' && (activeSubTab === 'movimentacoes' || activeSubTab === 'ajustes' || activeSubTab === 'suprimento' || activeSubTab === 'sangria') && (
+            <CaixaMovimentacoesTab
+              movimentacoes={caixaMovimentacoes}
+              isLoading={isLoading}
+              onOpenSangriaModal={() => setShowSangriaModal(true)}
+              onOpenSuprimentoModal={() => setShowSuprimentoModal(true)}
+              onRefresh={fetchCaixaMovimentacoes}
+            />
           )}
 
-          {/* MOCK VIEW: SUPRIMENTO / SANGRIA */}
-          {activeTab === 'financeiro' && activeSubTab === 'suprimento' && (
-            <div className={clsx('grid', 'grid-cols-1', 'md:grid-cols-2', 'gap-5', 'text-left', 'animate-fade-in')}>
-              <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-5', 'rounded-3xl', 'space-y-4')}>
-                <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Sangria (Retirada de Caixa)</span>
-                <div className="space-y-3">
-                  <input type="number" placeholder="Valor R$" className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'font-mono', 'text-[10px]')} />
-                  <input type="text" placeholder="Motivo da Sangria" className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-[10px]')} />
-                  <button type="button" onClick={() => alert('Sangria efetuada')} className={clsx('px-4', 'py-2', 'bg-emerald-600', 'text-white', 'font-bold', 'rounded-xl', 'text-[9px]', 'uppercase', 'tracking-wider', 'cursor-pointer')}>Confirmar Sangria</button>
-                </div>
-              </div>
-              <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-5', 'rounded-3xl', 'space-y-4')}>
-                <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Suprimento (Entrada de Troco)</span>
-                <div className="space-y-3">
-                  <input type="number" placeholder="Valor R$" className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'font-mono', 'text-[10px]')} />
-                  <button type="button" onClick={() => alert('Suprimento efetuado')} className={clsx('px-4', 'py-2', 'bg-emerald-600', 'text-white', 'font-bold', 'rounded-xl', 'text-[9px]', 'uppercase', 'tracking-wider', 'cursor-pointer')}>Confirmar Suprimento</button>
-                </div>
-              </div>
-            </div>
+          {activeTab === 'financeiro' && (activeSubTab === 'fechamento' || activeSubTab === 'conferencia') && (
+            <CaixaFechamentoTab
+              isTurnoAberto={turnoResumo?.status === 'aberto'}
+              fechamentoResult={fechamentoResult}
+              onConfirmFechamento={handleConfirmarFechamento}
+              onOpenNovoTurnoModal={() => setShowAbrirModal(true)}
+            />
           )}
 
           {/* MOCK VIEW: PAINEL FISCAL NFCE */}
@@ -8995,6 +9058,23 @@ export function CaixaPanel({
             fetch(`${apiBaseUrl}/estoque/movimentacoes`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setMovimentacoesEstoque(d); });
             fetch(`${apiBaseUrl}/estoque/contagens`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setSessoesContagemEstoque(d); });
           }}
+        />
+      )}
+
+      {/* MODAL DE SANGRIA */}
+      {showSangriaModal && (
+        <SangriaModal
+          saldoDisponivelDinheiro={turnoResumo?.saldo_esperado_dinheiro || 0}
+          onClose={() => setShowSangriaModal(false)}
+          onSubmit={handleRegistrarSangria}
+        />
+      )}
+
+      {/* MODAL DE SUPRIMENTO */}
+      {showSuprimentoModal && (
+        <SuprimentoModal
+          onClose={() => setShowSuprimentoModal(false)}
+          onSubmit={handleRegistrarSuprimento}
         />
       )}
 
