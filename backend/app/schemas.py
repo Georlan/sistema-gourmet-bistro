@@ -491,9 +491,9 @@ class RestauranteConfigResponse(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     status_override: Optional[str] = "Automático"
-    socials: Optional[dict] = None
-    horarios_funcionamento: Optional[dict] = None
-    formas_pagamento_aceitas: Optional[dict] = None
+    socials: Optional[Any] = None
+    horarios_funcionamento: Optional[Any] = None
+    formas_pagamento_aceitas: Optional[Any] = None
     cor_primaria: Optional[str] = "#00b894"
     cor_fundo: Optional[str] = "#090a0f"
 
@@ -511,9 +511,9 @@ class RestauranteConfigUpdate(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     status_override: Optional[str] = None
-    socials: Optional[dict] = None
-    horarios_funcionamento: Optional[dict] = None
-    formas_pagamento_aceitas: Optional[dict] = None
+    socials: Optional[Any] = None
+    horarios_funcionamento: Optional[Any] = None
+    formas_pagamento_aceitas: Optional[Any] = None
     cor_primaria: Optional[str] = None
     cor_fundo: Optional[str] = None
 
