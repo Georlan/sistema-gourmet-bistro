@@ -25,6 +25,7 @@ import { RelatorioFinanceiroTab } from './relatorios/RelatorioFinanceiroTab';
 import { RelatoriosVisaoGeralTab } from './relatorios/RelatoriosVisaoGeralTab';
 import { RelatoriosProdutosTab } from './relatorios/RelatoriosProdutosTab';
 import { EquipeDesempenhoTab } from './equipe/EquipeDesempenhoTab';
+import { EquipeCargosTab } from './equipe/EquipeCargosTab';
 import { PRODUCTS, CATEGORIES } from '../data';
 import { getProductPresets, obterNomeCategoria, smartSearchMatch } from '../domain';
 import { API } from '../config/caixaService';
@@ -4168,7 +4169,7 @@ export function CaixaPanel({
                     <tbody>
                       {systemUsers.map(user => {
                         const cargoRaw = user.cargo || user.role || 'garcom';
-                        const cargoLabel = cargoRaw === 'garcom' ? 'Garçom' : cargoRaw === 'caixa' ? 'Caixa' : cargoRaw === 'gerente' ? 'Gerente' : cargoRaw === 'motoboy' ? 'Motoboy' : cargoRaw === 'admin' ? 'Administrador' : cargoRaw;
+                        const cargoLabel = cargoRaw === 'garcom' ? 'Garçom' : cargoRaw === 'caixa' ? 'Caixa' : cargoRaw === 'operador_caixa' ? 'Op. Caixa' : cargoRaw === 'gerente' ? 'Gerente' : cargoRaw === 'atendente' ? 'Atendente' : cargoRaw === 'cozinha' ? 'Cozinha' : cargoRaw === 'admin' ? 'Administrador' : cargoRaw;
                         const statusVal = user.status || 'ativo';
                         const isPendente = statusVal === 'pendente_ativacao';
 
@@ -4260,8 +4261,9 @@ export function CaixaPanel({
                       >
                         <option value="garcom">Garçom</option>
                         <option value="caixa">Operador Caixa</option>
+                        <option value="atendente">Atendente</option>
                         <option value="gerente">Gerente</option>
-                        <option value="motoboy">Motoboy</option>
+                        <option value="cozinha">Cozinha</option>
                       </select>
                     </div>
                     <button type="submit" className={clsx('w-full', 'py-2', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'font-bold', 'text-[9px]', 'uppercase', 'tracking-wider', 'rounded-lg', 'transition-all', 'cursor-pointer')}>Cadastrar e Enviar Convite</button>
@@ -4272,57 +4274,9 @@ export function CaixaPanel({
               </div>
           )}
 
-          {/* VIEW: EQUIPE — CARGOS E PERMISSÕES */}
+          {/* VIEW: EQUIPE — CARGOS E PERMISSÕES (dados reais da API) */}
           {activeTab === 'permissoes_cargos' && ['cargos_permissoes', 'cargos', 'permissoes'].includes(activeSubTab) && (
-            <div className={clsx('space-y-6', 'animate-fade-in', 'text-left')}>
-              <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4')}>
-                <div className={clsx('border-b', 'border-[#27272A]', 'pb-2', 'flex', 'items-center', 'justify-between')}>
-                  <span className={clsx('font-serif', 'font-bold', 'text-sm', 'text-white')}>Cargos e Permissões</span>
-                  <span className="text-[9px] text-gray-500">Controle de acesso por função</span>
-                </div>
-                <div className="overflow-x-auto border border-[#27272A]/40 rounded-2xl">
-                  <table className="w-full text-left text-[10px]">
-                    <thead className="bg-[#1C1C1F] border-b border-[#27272A] text-gray-400 uppercase tracking-wider font-bold">
-                      <tr>
-                        <th className="p-3.5">Cargo</th>
-                        <th className="p-3.5">Acesso a Pedidos</th>
-                        <th className="p-3.5">Acesso ao Caixa</th>
-                        <th className="p-3.5">Acesso a Relatórios</th>
-                        <th className="p-3.5">Gestão de Equipe</th>
-                        <th className="p-3.5">Administração</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#27272A]/40">
-                      {([
-                        { cargo: 'Administrador', pedidos: true, caixa: true, relatorios: true, equipe: true, admin: true },
-                        { cargo: 'Gerente', pedidos: true, caixa: true, relatorios: true, equipe: true, admin: false },
-                        { cargo: 'Operador Caixa', pedidos: true, caixa: true, relatorios: false, equipe: false, admin: false },
-                        { cargo: 'Garçom', pedidos: true, caixa: false, relatorios: false, equipe: false, admin: false },
-                        { cargo: 'Atendente', pedidos: true, caixa: false, relatorios: false, equipe: false, admin: false },
-                        { cargo: 'Cozinha', pedidos: false, caixa: false, relatorios: false, equipe: false, admin: false },
-                        { cargo: 'Motoboy', pedidos: true, caixa: false, relatorios: false, equipe: false, admin: false },
-                      ] as { cargo: string; pedidos: boolean; caixa: boolean; relatorios: boolean; equipe: boolean; admin: boolean }[]).map((row) => (
-                        <tr key={row.cargo} className="hover:bg-[#1C1C1F]/40 transition-colors">
-                          <td className="p-3.5 font-bold text-white">{row.cargo}</td>
-                          {(['pedidos', 'caixa', 'relatorios', 'equipe', 'admin'] as const).map(col => (
-                            <td key={col} className="p-3.5">
-                              <span className={`px-2 py-0.5 text-[8px] font-bold rounded uppercase tracking-wider ${
-                                row[col] ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-[#1C1C1F] text-gray-600'
-                              }`}>
-                                {row[col] ? 'Sim' : 'Não'}
-                              </span>
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <p className="text-[9px] text-gray-500 pt-1">
-                  * Permissões gerenciadas automaticamente pelo sistema conforme o cargo cadastrado. Para ajustes customizados, entre em contato com o suporte Kôma.
-                </p>
-              </div>
-            </div>
+            <EquipeCargosTab apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
           )}
 
 

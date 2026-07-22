@@ -64,7 +64,7 @@ def get_relatorio_visao_geral(
         for item in c.itens:
             if item.status != "cancelado":
                 p_unit = float(getattr(item, 'preco_unit', getattr(item, 'preco_unitario', 0.0)) or 0.0)
-                faturamento_total += p_unit * int(item.quantidade or 1)
+                faturamento_total += p_unit * int(getattr(item, "quantidade", 1) or 1)
 
     ticket_medio = faturamento_total / total_pedidos if total_pedidos > 0 else 0.0
 
@@ -82,7 +82,7 @@ def get_relatorio_visao_geral(
         for item in c.itens:
             if item.status != "cancelado":
                 p_unit = float(getattr(item, 'preco_unit', getattr(item, 'preco_unitario', 0.0)) or 0.0)
-                fat_prev += p_unit * int(item.quantidade or 1)
+                fat_prev += p_unit * int(getattr(item, "quantidade", 1) or 1)
 
     var_fat_pct = ((faturamento_total - fat_prev) / fat_prev * 100.0) if fat_prev > 0 else 0.0
     var_pedidos_pct = ((total_pedidos - pedidos_prev) / pedidos_prev * 100.0) if pedidos_prev > 0 else 0.0
@@ -109,7 +109,7 @@ def get_relatorio_visao_geral(
         for item in c.itens:
             if item.status != "cancelado":
                 p_unit = float(getattr(item, 'preco_unit', getattr(item, 'preco_unitario', 0.0)) or 0.0)
-                meta_realizada += p_unit * int(item.quantidade or 1)
+                meta_realizada += p_unit * int(getattr(item, "quantidade", 1) or 1)
 
     meta_restante = max(0.0, meta_mensal - meta_realizada)
     meta_percentual = round((meta_realizada / meta_mensal * 100.0), 1) if meta_mensal > 0 else 0.0
@@ -138,7 +138,7 @@ def get_relatorio_visao_geral(
             d_str = c.fechado_em.strftime("%Y-%m-%d")
             if d_str in vendas_diarias_map:
                 vendas_diarias_map[d_str]["quantidade_pedidos"] += 1
-                c_fat = sum(float(getattr(i, 'preco_unit', getattr(i, 'preco_unitario', 0.0)) or 0.0) * int(i.quantidade or 1) for i in c.itens if i.status != "cancelado")
+                c_fat = sum(float(getattr(i, 'preco_unit', getattr(i, 'preco_unitario', 0.0)) or 0.0) * int(getattr(i, "quantidade", 1) or 1) for i in c.itens if i.status != "cancelado")
                 vendas_diarias_map[d_str]["total"] += c_fat
 
     vendas_por_dia = sorted(list(vendas_diarias_map.values()), key=lambda x: x["data"])
@@ -149,7 +149,7 @@ def get_relatorio_visao_geral(
         if c.fechado_em:
             h = c.fechado_em.hour
             pico_map[h]["total_pedidos"] += 1
-            c_fat = sum(float(getattr(i, 'preco_unit', getattr(i, 'preco_unitario', 0.0)) or 0.0) * int(i.quantidade or 1) for i in c.itens if i.status != "cancelado")
+            c_fat = sum(float(getattr(i, 'preco_unit', getattr(i, 'preco_unitario', 0.0)) or 0.0) * int(getattr(i, "quantidade", 1) or 1) for i in c.itens if i.status != "cancelado")
             pico_map[h]["faturamento"] += c_fat
 
     horarios_pico = list(pico_map.values())
@@ -235,7 +235,7 @@ def get_vendas_detalhes(
 
     result = []
     for c in comandas:
-        c_fat = sum(float(getattr(i, 'preco_unit', getattr(i, 'preco_unitario', 0.0)) or 0.0) * int(i.quantidade or 1) for i in c.itens if i.status != "cancelado")
+        c_fat = sum(float(getattr(i, 'preco_unit', getattr(i, 'preco_unitario', 0.0)) or 0.0) * int(getattr(i, "quantidade", 1) or 1) for i in c.itens if i.status != "cancelado")
         operador = user_map.get(c.garcom_id, "Operador Caixa")
         forma_pag = comanda_payment_map.get(str(c.id), "Dinheiro / Cartão")
         result.append({
@@ -294,8 +294,8 @@ def get_relatorio_produtos(
             if pid not in prod_sales:
                 prod_sales[pid] = {"qtd": 0, "total": 0.0}
             p_unit = float(getattr(item, 'preco_unit', getattr(item, 'preco_unitario', 0.0)) or 0.0)
-            prod_sales[pid]["qtd"] += int(item.quantidade or 1)
-            prod_sales[pid]["total"] += p_unit * int(item.quantidade or 1)
+            prod_sales[pid]["qtd"] += int(getattr(item, "quantidade", 1) or 1)
+            prod_sales[pid]["total"] += p_unit * int(getattr(item, "quantidade", 1) or 1)
 
     res_list = []
     for p in produtos:
@@ -326,7 +326,7 @@ def get_relatorio_produtos(
     return res_list
 
 
-# Commercial/front-of-house roles included by default in performance ranking
+# Commercial/front-of-house roles for default performance ranking (Bistro plan — no delivery/motoboy)
 COMMERCIAL_ROLES = {"garcom", "caixa", "atendente", "operador_caixa"}
 
 
@@ -359,11 +359,15 @@ def get_equipe_desempenho(
         member_role = (member.role or "garcom").lower().strip()
 
         # Filter by cargo param if provided; otherwise restrict to commercial roles
-        if cargo and cargo.lower().strip() != "todos":
-            if member_role != cargo.lower().strip():
+        cargo_clean = (cargo or "").lower().strip()
+        if cargo_clean == "todos":
+            pass  # no filter — include all roles
+        elif cargo_clean:
+            # Specific role requested
+            if member_role != cargo_clean:
                 continue
         else:
-            # Default: only show commercial / front-of-house roles
+            # Default (empty cargo): only show commercial / front-of-house roles
             if member_role not in COMMERCIAL_ROLES:
                 continue
 
@@ -382,7 +386,7 @@ def get_equipe_desempenho(
             for item in c.itens:
                 if item.status != "cancelado":
                     p_unit = float(getattr(item, 'preco_unit', getattr(item, 'preco_unitario', 0.0)) or 0.0)
-                    fat += p_unit * int(item.quantidade or 1)
+                    fat += p_unit * int(getattr(item, "quantidade", 1) or 1)
 
         t_medio = fat / pedidos_atendidos if pedidos_atendidos > 0 else 0.0
         # Commission is PROPORTIONAL to the member's individual sales!
@@ -409,3 +413,64 @@ def get_equipe_desempenho(
         "membros": results
     }
 
+
+# Static permission matrix for each cargo slug (Bistro plan: no motoboy)
+CARGO_PERMISSIONS: Dict[str, Dict[str, Any]] = {
+    "admin": {"label": "Administrador", "pedidos": True, "caixa": True, "relatorios": True, "equipe": True, "admin": True},
+    "gerente": {"label": "Gerente", "pedidos": True, "caixa": True, "relatorios": True, "equipe": True, "admin": False},
+    "caixa": {"label": "Operador Caixa", "pedidos": True, "caixa": True, "relatorios": False, "equipe": False, "admin": False},
+    "operador_caixa": {"label": "Operador Caixa", "pedidos": True, "caixa": True, "relatorios": False, "equipe": False, "admin": False},
+    "garcom": {"label": "Gar\u00e7om", "pedidos": True, "caixa": False, "relatorios": False, "equipe": False, "admin": False},
+    "atendente": {"label": "Atendente", "pedidos": True, "caixa": False, "relatorios": False, "equipe": False, "admin": False},
+    "cozinha": {"label": "Cozinha", "pedidos": False, "caixa": False, "relatorios": False, "equipe": False, "admin": False},
+}
+
+
+@router.get("/cargos-permissoes")
+def get_cargos_permissoes(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
+    """Returns cargo permission matrix with real employee counts per role for this tenant."""
+    rest_id = require_tenant_id()
+
+    # Count employees per role (real DB data)
+    membros = db.query(Usuario).filter(Usuario.restaurante_id == rest_id).all()
+    counts_by_role: Dict[str, int] = {}
+    for m in membros:
+        role = (m.role or m.cargo or "garcom").lower().strip()
+        counts_by_role[role] = counts_by_role.get(role, 0) + 1
+
+    # Build result: only include roles that exist in this tenant OR are in the static matrix
+    present_roles = set(counts_by_role.keys())
+    all_roles = set(CARGO_PERMISSIONS.keys()) | present_roles
+
+    cargos = []
+    for role_key in ["admin", "gerente", "caixa", "operador_caixa", "garcom", "atendente", "cozinha"]:
+        perm = CARGO_PERMISSIONS.get(role_key, {"label": role_key.capitalize(), "pedidos": False, "caixa": False, "relatorios": False, "equipe": False, "admin": False})
+        total = counts_by_role.get(role_key, 0)
+        if total > 0 or role_key in CARGO_PERMISSIONS:
+            cargos.append({
+                "slug": role_key,
+                "label": perm["label"],
+                "total_funcionarios": total,
+                "permissoes": {
+                    "pedidos": perm["pedidos"],
+                    "caixa": perm["caixa"],
+                    "relatorios": perm["relatorios"],
+                    "equipe": perm["equipe"],
+                    "admin": perm["admin"],
+                }
+            })
+
+    # Also include any unknown roles actually present in the tenant
+    for role_key, count in counts_by_role.items():
+        if role_key not in CARGO_PERMISSIONS:
+            cargos.append({
+                "slug": role_key,
+                "label": role_key.capitalize(),
+                "total_funcionarios": count,
+                "permissoes": {"pedidos": False, "caixa": False, "relatorios": False, "equipe": False, "admin": False}
+            })
+
+    return {"cargos": cargos}

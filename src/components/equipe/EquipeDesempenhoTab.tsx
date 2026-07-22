@@ -28,7 +28,6 @@ const CARGO_OPTIONS = [
   { value: 'caixa', label: 'Caixa' },
   { value: 'atendente', label: 'Atendente' },
   { value: 'gerente', label: 'Gerente' },
-  { value: 'motoboy', label: 'Motoboy' },
   { value: 'cozinha', label: 'Cozinha' },
   { value: 'admin', label: 'Administrador' },
 ];
@@ -36,12 +35,11 @@ const CARGO_OPTIONS = [
 const ROLE_LABEL: Record<string, string> = {
   garcom: 'Garçom',
   caixa: 'Caixa',
+  operador_caixa: 'Op. Caixa',
   atendente: 'Atendente',
   gerente: 'Gerente',
-  motoboy: 'Motoboy',
   admin: 'Administrador',
   cozinha: 'Cozinha',
-  operador_caixa: 'Op. Caixa',
 };
 
 export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
