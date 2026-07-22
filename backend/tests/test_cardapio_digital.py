@@ -19,6 +19,9 @@ VALID_PNG_BYTES = (
 
 @pytest.fixture(autouse=True)
 def test_setup():
+    from app.config import settings
+    settings.SUPABASE_URL = "https://iiowhekvahxiepwcdidm.supabase.co"
+    settings.SUPABASE_SERVICE_ROLE_KEY = "test_service_role_key_12345"
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     token_var = current_restaurante_id.set(999)

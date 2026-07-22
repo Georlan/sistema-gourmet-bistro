@@ -197,6 +197,14 @@ async def run_migrations_on_startup():
         import traceback
         traceback.print_exc()
 
+ALLOWED_ORIGINS = [
+    "https://sistema-gourmet-bistro.pages.dev",
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:5173",
+]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -211,10 +219,10 @@ async def add_sentry_context_and_tenant(request: Request, call_next):
     from fastapi.responses import JSONResponse
     origin = request.headers.get("Origin", "*")
     cors_headers = {
-        "Access-Control-Allow-Origin": origin,
+        "Access-Control-Allow-Origin": origin if origin != "*" else "*",
         "Access-Control-Allow-Credentials": "true",
-        "Access-Control-Allow-Methods": "*",
-        "Access-Control-Allow-Headers": "*",
+        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Tenant-ID, Accept, Origin",
     }
     if request.method == "OPTIONS":
         return JSONResponse(status_code=200, content={"status": "ok"}, headers=cors_headers)
@@ -288,11 +296,15 @@ async def add_sentry_context_and_tenant(request: Request, call_next):
     current_restaurante_id.set(restaurante_id)
     try:
         response = await call_next(request)
+        if origin and origin != "*":
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, X-Tenant-ID, Accept, Origin"
+        return response
     finally:
         # Garante a limpeza do contexto após o término da requisição
         current_restaurante_id.set(None)
-
-    return response
 
 # Register routers
 app.include_router(auth.router)

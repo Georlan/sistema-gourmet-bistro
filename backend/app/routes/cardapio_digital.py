@@ -4,6 +4,7 @@ import httpx
 import logging
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from sqlalchemy.orm import Session
+from ..config import settings
 from ..database import get_db, require_tenant_id
 from ..models import Restaurante, Usuario
 from ..routes.auth import get_current_user
@@ -17,8 +18,30 @@ MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
 
 
 def get_supabase_config():
-    supabase_url = os.getenv("SUPABASE_URL", "https://iiowhekvahxiepwcdidm.supabase.co").rstrip("/")
-    service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    supabase_url = (settings.SUPABASE_URL or os.getenv("SUPABASE_URL", "")).rstrip("/")
+    service_key = settings.SUPABASE_SERVICE_ROLE_KEY or os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+
+    if not supabase_url:
+        logger.error("[CARDAPIO ASSETS ERROR] SUPABASE_URL ausente nas variáveis de ambiente.")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Servidor de armazenamento não configurado corretamente."
+        )
+
+    if not service_key:
+        logger.error("[CARDAPIO ASSETS ERROR] SUPABASE_SERVICE_ROLE_KEY ausente nas variáveis de ambiente.")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Servidor de armazenamento não autenticado."
+        )
+
+    if service_key.startswith("sb_publishable_"):
+        logger.error("[CARDAPIO ASSETS ERROR] SUPABASE_SERVICE_ROLE_KEY é uma chave anon/publishable pública.")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Credencial de armazenamento do servidor é inválida."
+        )
+
     return supabase_url, service_key
 
 
@@ -79,7 +102,7 @@ async def upload_asset_to_supabase(asset_type: str, file: UploadFile, db: Sessio
 
     supabase_url, service_key = get_supabase_config()
     headers = {
-        "Authorization": f"Bearer {service_key}" if service_key else "",
+        "Authorization": f"Bearer {service_key}",
         "apikey": service_key,
         "Content-Type": file.content_type or f"image/{ext}",
         "x-upsert": "true"
@@ -92,8 +115,17 @@ async def upload_asset_to_supabase(asset_type: str, file: UploadFile, db: Sessio
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             res = await client.post(storage_upload_url, headers=headers, content=content)
+            
+            logger.info(
+                f"[CARDAPIO ASSETS] Upload attempt -> asset_type={asset_type}, path={relative_path}, "
+                f"status={res.status_code}, response={res.text[:300]}"
+            )
+
             if res.status_code not in (200, 201):
-                logger.error(f"Erro ao enviar arquivo para Supabase Storage: status={res.status_code}, response={res.text}")
+                logger.error(
+                    f"[CARDAPIO ASSETS ERROR] Supabase storage upload failed -> asset_type={asset_type}, "
+                    f"path={relative_path}, status={res.status_code}, response={res.text}"
+                )
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail="Falha ao salvar o arquivo no servidor de armazenamento."
@@ -101,10 +133,10 @@ async def upload_asset_to_supabase(asset_type: str, file: UploadFile, db: Sessio
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Erro de rede ao conectar ao Supabase Storage")
+        logger.exception(f"[CARDAPIO ASSETS EXCEPTION] Erro de rede ao conectar ao Supabase Storage para {relative_path}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Erro de comunicação ao enviar imagem para o storage."
+            detail="Erro de comunicação com o servidor de armazenamento."
         )
 
     # Step 2: Update Database
@@ -128,7 +160,7 @@ async def upload_asset_to_supabase(asset_type: str, file: UploadFile, db: Sessio
                 await client.request("DELETE", del_url, headers=headers, json={"prefixes": [relative_path]})
         except Exception:
             pass
-        logger.exception("Erro ao persistir caminho do asset no banco. Upload cancelado.")
+        logger.exception(f"[CARDAPIO ASSETS DB ERROR] Erro ao salvar referência no banco para {relative_path}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Erro ao salvar a configuração no banco de dados."
@@ -141,7 +173,7 @@ async def upload_asset_to_supabase(asset_type: str, file: UploadFile, db: Sessio
                 del_url = f"{supabase_url}/storage/v1/object/cardapio-assets"
                 await client.request("DELETE", del_url, headers=headers, json={"prefixes": [old_path]})
         except Exception as e:
-            logger.warning(f"Não foi possível remover o arquivo antigo {old_path} do Storage: {e}")
+            logger.warning(f"[CARDAPIO ASSETS WARNING] Não foi possível remover arquivo antigo {old_path}: {e}")
 
     return restaurante
 
@@ -189,7 +221,7 @@ async def delete_logo(
     if old_path:
         supabase_url, service_key = get_supabase_config()
         headers = {
-            "Authorization": f"Bearer {service_key}" if service_key else "",
+            "Authorization": f"Bearer {service_key}",
             "apikey": service_key,
         }
         try:
@@ -197,7 +229,7 @@ async def delete_logo(
                 del_url = f"{supabase_url}/storage/v1/object/cardapio-assets"
                 await client.request("DELETE", del_url, headers=headers, json={"prefixes": [old_path]})
         except Exception as e:
-            logger.warning(f"Erro ao remover logo {old_path} do Storage: {e}")
+            logger.warning(f"[CARDAPIO ASSETS WARNING] Erro ao remover logo {old_path} do Storage: {e}")
 
     return restaurante
 
@@ -227,7 +259,7 @@ async def delete_banner(
     if old_path:
         supabase_url, service_key = get_supabase_config()
         headers = {
-            "Authorization": f"Bearer {service_key}" if service_key else "",
+            "Authorization": f"Bearer {service_key}",
             "apikey": service_key,
         }
         try:
@@ -235,6 +267,6 @@ async def delete_banner(
                 del_url = f"{supabase_url}/storage/v1/object/cardapio-assets"
                 await client.request("DELETE", del_url, headers=headers, json={"prefixes": [old_path]})
         except Exception as e:
-            logger.warning(f"Erro ao remover banner {old_path} do Storage: {e}")
+            logger.warning(f"[CARDAPIO ASSETS WARNING] Erro ao remover banner {old_path} do Storage: {e}")
 
     return restaurante
