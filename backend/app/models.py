@@ -15,6 +15,8 @@ class Restaurante(Base):
     slug = Column(String, nullable=True)
     logo_url = Column(String, nullable=True)
     banner_url = Column(String, nullable=True)
+    cardapio_logo_path = Column(String, nullable=True)
+    cardapio_banner_path = Column(String, nullable=True)
     subtitulo = Column(String, nullable=True)
     sobre_nos = Column(String, nullable=True)
     endereco = Column(String, nullable=True)

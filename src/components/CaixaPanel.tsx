@@ -1,3 +1,4 @@
+import { CardapioAssetUploader } from './CardapioAssetUploader';
 import { supabase } from '../cardapio/SupabaseClient';
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -6731,134 +6732,28 @@ export function CaixaPanel({
                   </div>
                 </div>
 
-                {/* Upload de Logo e Banner para Supabase Storage (Bucket: cardapio-assets) */}
-                {(() => {
-                  const currentRestId = (restauranteConfig?.restaurante_id || restauranteConfig?.id) || (() => {
-                    try {
-                      const t = localStorage.getItem('koma_token') || sessionStorage.getItem('koma_token');
-                      if (t) return JSON.parse(atob(t.split('.')[1])).restaurante_id;
-                    } catch(e) {}
-                    return 0;
-                  })();
+                {/* Upload de Logo e Banner para Supabase Storage via Endpoints Backend */}
+                <div className="space-y-4">
+                  <CardapioAssetUploader
+                    label="Logotipo do Restaurante"
+                    type="logo"
+                    currentUrl={cardapioLogoUrl}
+                    apiBaseUrl={apiBaseUrl}
+                    authHeaders={authHeaders}
+                    onSuccess={(newUrl) => setCardapioLogoUrl(newUrl || '')}
+                  />
 
-                  const handleAssetUpload = async (file: File, assetType: 'logo' | 'banner') => {
-                    if (!file) return;
-                    const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
-                    if (!validTypes.includes(file.type.toLowerCase())) {
-                      alert('Formato de arquivo inválido. Selecione uma imagem PNG, JPG, JPEG ou WEBP.');
-                      return;
-                    }
-                    if (file.size > 5 * 1024 * 1024) {
-                      alert('Tamanho de arquivo excedido. O limite máximo permitido é 5MB.');
-                      return;
-                    }
-                    if (!currentRestId || currentRestId <= 0) {
-                      alert('ID de restaurante inválido ou não autenticado.');
-                      return;
-                    }
-                    try {
-                      const oldUrl = assetType === 'logo' ? cardapioLogoUrl : cardapioBannerUrl;
-                      if (oldUrl && oldUrl.includes('/cardapio-assets/')) {
-                        const parts = oldUrl.split('/cardapio-assets/');
-                        if (parts[1]) {
-                          await supabase.storage.from('cardapio-assets').remove([decodeURIComponent(parts[1])]);
-                        }
-                      }
-                      const ext = file.name.split('.').pop() || 'png';
-                      const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
-                      const filePath = `${currentRestId}/${assetType}/${fileName}`;
+                  <CardapioAssetUploader
+                    label="Banner Promocional / Capa"
+                    type="banner"
+                    currentUrl={cardapioBannerUrl}
+                    apiBaseUrl={apiBaseUrl}
+                    authHeaders={authHeaders}
+                    onSuccess={(newUrl) => setCardapioBannerUrl(newUrl || '')}
+                  />
+                </div>
 
-                      const { error } = await supabase.storage
-                        .from('cardapio-assets')
-                        .upload(filePath, file, { cacheControl: '3600', upsert: true });
-
-                      if (error) {
-                        alert(`Erro no upload (${assetType}): ${error.message}`);
-                        return;
-                      }
-
-                      const { data } = supabase.storage
-                        .from('cardapio-assets')
-                        .getPublicUrl(filePath);
-
-                      if (data?.publicUrl) {
-                        if (assetType === 'logo') setCardapioLogoUrl(data.publicUrl);
-                        else setCardapioBannerUrl(data.publicUrl);
-                      }
-                    } catch (err: any) {
-                      console.error('Erro de upload:', err);
-                      alert('Erro ao enviar a imagem. A imagem atual foi mantida.');
-                    }
-                  };
-
-                  const handleAssetRemove = async (assetType: 'logo' | 'banner') => {
-                    const currentUrl = assetType === 'logo' ? cardapioLogoUrl : cardapioBannerUrl;
-                    if (currentUrl && currentUrl.includes('/cardapio-assets/')) {
-                      const parts = currentUrl.split('/cardapio-assets/');
-                      if (parts[1]) {
-                        await supabase.storage.from('cardapio-assets').remove([decodeURIComponent(parts[1])]);
-                      }
-                    }
-                    if (assetType === 'logo') setCardapioLogoUrl('');
-                    else setCardapioBannerUrl('');
-                  };
-
-                  return (
-                    <div className="space-y-4">
-                      {/* Logotipo Upload */}
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-bold text-gray-300 uppercase tracking-wider block">Logotipo do Restaurante:</label>
-                        {cardapioLogoUrl ? (
-                          <div className="bg-[#09090B] border border-[#27272A] rounded-xl p-3 flex items-center justify-between gap-3">
-                            <img src={cardapioLogoUrl} alt="Logo" className="h-14 max-w-[150px] object-contain rounded-lg bg-[#121214] p-1 border border-[#27272A]" />
-                            <div className="flex gap-2">
-                              <label className="px-3 py-1.5 bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] text-gray-200 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1">
-                                <Upload size={12} /> Substituir
-                                <input type="file" accept="image/png,image/jpeg,image/jpg,image/webp" className="hidden" onChange={(e) => e.target.files?.[0] && handleAssetUpload(e.target.files[0], 'logo')} />
-                              </label>
-                              <button type="button" onClick={() => handleAssetRemove('logo')} className="px-3 py-1.5 bg-rose-950/20 hover:bg-rose-900/30 border border-rose-900/40 text-rose-400 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1">
-                                <Trash2 size={12} /> Remover
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <label className="border-2 border-dashed border-[#27272A] hover:border-[#10b981]/50 bg-[#09090B] hover:bg-[#121214] rounded-xl p-5 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-1.5 group">
-                            <Upload size={18} className="text-gray-400 group-hover:text-[#10b981]" />
-                            <span className="text-xs font-semibold text-gray-300">Clique ou arraste o Logotipo aqui</span>
-                            <span className="text-[9px] text-gray-500">PNG, JPG, JPEG ou WEBP (máx. 5MB)</span>
-                            <input type="file" accept="image/png,image/jpeg,image/jpg,image/webp" className="hidden" onChange={(e) => e.target.files?.[0] && handleAssetUpload(e.target.files[0], 'logo')} />
-                          </label>
-                        )}
-                      </div>
-
-                      {/* Banner Upload */}
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-bold text-gray-300 uppercase tracking-wider block">Banner Promocional / Capa:</label>
-                        {cardapioBannerUrl ? (
-                          <div className="bg-[#09090B] border border-[#27272A] rounded-xl p-3 flex flex-col gap-2">
-                            <img src={cardapioBannerUrl} alt="Banner" className="w-full h-24 object-cover rounded-lg border border-[#27272A]" />
-                            <div className="flex justify-end gap-2">
-                              <label className="px-3 py-1.5 bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] text-gray-200 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1">
-                                <Upload size={12} /> Substituir
-                                <input type="file" accept="image/png,image/jpeg,image/jpg,image/webp" className="hidden" onChange={(e) => e.target.files?.[0] && handleAssetUpload(e.target.files[0], 'banner')} />
-                              </label>
-                              <button type="button" onClick={() => handleAssetRemove('banner')} className="px-3 py-1.5 bg-rose-950/20 hover:bg-rose-900/30 border border-rose-900/40 text-rose-400 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1">
-                                <Trash2 size={12} /> Remover
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <label className="border-2 border-dashed border-[#27272A] hover:border-[#10b981]/50 bg-[#09090B] hover:bg-[#121214] rounded-xl p-5 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-1.5 group">
-                            <Upload size={18} className="text-gray-400 group-hover:text-[#10b981]" />
-                            <span className="text-xs font-semibold text-gray-300">Clique ou arraste o Banner aqui</span>
-                            <span className="text-[9px] text-gray-500">PNG, JPG, JPEG ou WEBP (máx. 5MB)</span>
-                            <input type="file" accept="image/png,image/jpeg,image/jpg,image/webp" className="hidden" onChange={(e) => e.target.files?.[0] && handleAssetUpload(e.target.files[0], 'banner')} />
-                          </label>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}{/* Sobre Nós */}
+                {/* Sobre Nós */}
                 <div className="space-y-1.5">
                   <label className={clsx('text-[10px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Sobre Nós:</label>
                   <textarea
