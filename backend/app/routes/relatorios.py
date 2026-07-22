@@ -2,7 +2,7 @@ import datetime
 import calendar
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, extract, and_
 
 from ..database import get_db, require_tenant_id
@@ -37,7 +37,7 @@ def get_relatorio_visao_geral(
     data_inicio: Optional[str] = Query(None),
     data_fim: Optional[str] = Query(None),
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_roles("admin", "gerente"))
+    current_user: Usuario = Depends(require_roles("admin", "gerente", "caixa"))
 ):
     rest_id = require_tenant_id()
 
@@ -50,8 +50,8 @@ def get_relatorio_visao_geral(
     prev_inicio = dt_inicio - datetime.timedelta(days=period_days)
     prev_fim = dt_inicio - datetime.timedelta(seconds=1)
 
-    # 1. Main period closed comandas
-    comandas_curr = db.query(Comanda).filter(
+    # 1. Main period closed comandas with eager loading
+    comandas_curr = db.query(Comanda).options(joinedload(Comanda.itens)).filter(
         Comanda.restaurante_id == rest_id,
         Comanda.fechada == True,
         Comanda.fechado_em >= dt_inicio,
@@ -68,8 +68,8 @@ def get_relatorio_visao_geral(
 
     ticket_medio = faturamento_total / total_pedidos if total_pedidos > 0 else 0.0
 
-    # 2. Previous period closed comandas for comparison
-    comandas_prev = db.query(Comanda).filter(
+    # 2. Previous period closed comandas with eager loading
+    comandas_prev = db.query(Comanda).options(joinedload(Comanda.itens)).filter(
         Comanda.restaurante_id == rest_id,
         Comanda.fechada == True,
         Comanda.fechado_em >= prev_inicio,
@@ -98,7 +98,7 @@ def get_relatorio_visao_geral(
     month_days = calendar.monthrange(now.year, now.month)[1]
     day_of_month = now.day
 
-    comandas_mes = db.query(Comanda).filter(
+    comandas_mes = db.query(Comanda).options(joinedload(Comanda.itens)).filter(
         Comanda.restaurante_id == rest_id,
         Comanda.fechada == True,
         Comanda.fechado_em >= month_start
@@ -206,7 +206,7 @@ def get_vendas_detalhes(
     data_inicio: Optional[str] = Query(None),
     data_fim: Optional[str] = Query(None),
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_roles("admin", "gerente"))
+    current_user: Usuario = Depends(require_roles("admin", "gerente", "caixa"))
 ):
     rest_id = require_tenant_id()
     dt_fim = parse_date(data_fim) or datetime.datetime.now()
@@ -259,7 +259,7 @@ def get_relatorio_produtos(
     busca: Optional[str] = Query(None),
     categoria_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_roles("admin", "gerente"))
+    current_user: Usuario = Depends(require_roles("admin", "gerente", "caixa"))
 ):
     rest_id = require_tenant_id()
     dt_fim = parse_date(data_fim) or datetime.datetime.now()
@@ -336,7 +336,7 @@ def get_equipe_desempenho(
     data_fim: Optional[str] = Query(None),
     cargo: Optional[str] = Query(None, description="Filter by role slug (garcom, caixa, atendente, gerente...). Empty = commercial roles only."),
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_roles("admin", "gerente"))
+    current_user: Usuario = Depends(require_roles("admin", "gerente", "caixa"))
 ):
     rest_id = require_tenant_id()
     dt_fim = parse_date(data_fim) or datetime.datetime.now()
@@ -429,7 +429,7 @@ CARGO_PERMISSIONS: Dict[str, Dict[str, Any]] = {
 @router.get("/cargos-permissoes")
 def get_cargos_permissoes(
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_roles("admin", "gerente"))
+    current_user: Usuario = Depends(require_roles("admin", "gerente", "caixa"))
 ):
     """Returns cargo permission matrix with real employee counts per role for this tenant."""
     rest_id = require_tenant_id()

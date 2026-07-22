@@ -142,8 +142,13 @@ def get_estatisticas_geral(
         Pagamento.criado_em <= today_end
     ).scalar() or 0.0
     
-    # 2. Total de comandas fechadas
-    comandas_query = db.query(Comanda).filter(
+    from sqlalchemy.orm import joinedload
+    from ..models import Item as ComandaItem
+
+    # 2. Total de comandas fechadas (com eager loading joinedload para evitar N+1 no Sentry)
+    comandas_query = db.query(Comanda).options(
+        joinedload(Comanda.itens).joinedload(ComandaItem.produto)
+    ).filter(
         Comanda.restaurante_id == rest_id,
         Comanda.fechada == True
     )
