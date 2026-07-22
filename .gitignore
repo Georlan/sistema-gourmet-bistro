@@ -35,3 +35,4 @@ scratch/
 *.key
 *.pem
 *.pfx
+koma-print-agent/config.json

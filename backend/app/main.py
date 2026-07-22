@@ -193,9 +193,11 @@ async def run_migrations_on_startup():
                     conn.commit()
 
     except Exception as e:
-        print(f"[ALEMBIC] ⚠️ Erro ao rodar migrações automáticas: {e}")
+        print(f"[ALEMBIC] ❌ Erro ao rodar migrações automáticas: {e}")
         import traceback
         traceback.print_exc()
+        if os.getenv("ENVIRONMENT") != "test":
+            raise RuntimeError(f"Falha crítica na migração de inicialização do banco: {e}") from e
 
 ALLOWED_ORIGINS = [
     "https://sistema-gourmet-bistro.pages.dev",
@@ -220,9 +222,15 @@ async def global_exception_handler(request: Request, exc: Exception):
     origin = request.headers.get("Origin", "")
     cors_origin = origin if origin else "*"
     print(f"[GLOBAL UNHANDLED ERROR] {request.method} {request.url.path}:\n{traceback.format_exc()}")
+    
+    is_dev = os.getenv("ENVIRONMENT") == "development"
+    body = {"detail": "Erro interno do servidor."}
+    if is_dev:
+        body["error"] = str(exc)
+
     return JSONResponse(
         status_code=500,
-        content={"detail": "Erro interno do servidor.", "error": str(exc)},
+        content=body,
         headers={
             "Access-Control-Allow-Origin": cors_origin,
             "Access-Control-Allow-Credentials": "true",
@@ -365,9 +373,11 @@ def read_root():
     }
 
 
-# Rota temporária para testar se o Sentry do Backend está capturando erros
+# Rota temporária para testar se o Sentry do Backend está capturando erros (desativada em produção)
 @app.get("/sentry-debug")
 def trigger_backend_error():
+    if os.getenv("ENVIRONMENT") == "production":
+        raise HTTPException(status_code=404, detail="Endpoint indisponível.")
     division_by_zero = 1 / 0
     return {"status": division_by_zero}
 
@@ -381,7 +391,8 @@ def health_check():
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
     except Exception as e:
-        db_status = f"unhealthy: {e}"
+        is_dev = os.getenv("ENVIRONMENT") == "development"
+        db_status = f"unhealthy: {e}" if is_dev else "unhealthy"
 
     # 2. Contar arquivos na fila de impressão
     print_jobs_count = 0
