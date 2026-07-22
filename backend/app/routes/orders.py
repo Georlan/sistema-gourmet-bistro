@@ -205,7 +205,7 @@ def abrir_comanda(comanda_in: ComandaCreate, background_tasks: BackgroundTasks, 
             detail="Erro ao processar dado sensível, contate o suporte."
         )
     db.refresh(nova_comanda)
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
     return nova_comanda
 
 
@@ -328,7 +328,7 @@ def criar_venda_direta(
                     source_id=comanda_id
                 )
 
-        background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
+        background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
         comanda_completa = db.query(Comanda).options(
             joinedload(Comanda.itens).joinedload(Item.produto),
             joinedload(Comanda.criada_por)
@@ -359,7 +359,7 @@ def pedir_conta(
     comanda.status_comanda = "aguardando_pagamento"
     db.commit()
     db.refresh(comanda)
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
     return comanda
 
 @router.post("/{comanda_id}/lancamentos", response_model=LancamentoResponse, status_code=status.HTTP_201_CREATED)
@@ -520,7 +520,7 @@ def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_ta
     except Exception as print_err:
         print(f"Error printing kitchen ticket: {print_err}")
 
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
     return novo_lancamento
 
 @router.post("/{comanda_id}/dividir", response_model=List[ComandaResponse])
@@ -592,7 +592,7 @@ def dividir_comanda(comanda_id: str, itens_ids: List[str], novo_identificador: s
         )
     db.refresh(comanda_origem)
     db.refresh(nova_comanda)
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
     return [comanda_origem, nova_comanda]
 
 @router.post("/{comanda_id}/transferir/{nova_mesa_id}", response_model=ComandaResponse)
@@ -627,7 +627,7 @@ def transferir_comanda(comanda_id: str, nova_mesa_id: int, background_tasks: Bac
     comanda.mesa_origem_id = None  # Libera a mesclagem!
     db.commit()
     db.refresh(comanda)
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
     return comanda
 
 
@@ -671,7 +671,7 @@ def fechar_comanda(
     comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
     db.commit()
     db.refresh(comanda)
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
     if comanda.mesa_id:
         other_open = db.query(Comanda).filter(
             Comanda.mesa_id == comanda.mesa_id,
@@ -723,7 +723,7 @@ def reabrir_comanda(
     db.add(audit)
     db.commit()
     db.refresh(comanda)
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
     return comanda
 
 # ----------------- ITEM CANCELLATION ENDPOINT -----------------
@@ -782,7 +782,7 @@ def cancelar_item(
     db.add(audit)
     db.commit()
     db.refresh(item)
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
     return item
 
 @router.post("/itens/{item_id}/transferir/{nova_mesa_id}", response_model=ItemResponse)
@@ -849,7 +849,7 @@ def transferir_item(
     item.comanda_id = comanda_destino.id
     db.commit()
     db.refresh(item)
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
     return item
 
 @router.put("/itens/{item_id}", response_model=ItemResponse)
@@ -946,7 +946,7 @@ def update_item_details(
     except Exception as e:
         print(f"Error printing edited item ticket: {e}")
 
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
     return item
 
 @router.put("/itens/{item_id}/status", response_model=ItemResponse)
@@ -974,7 +974,7 @@ def update_item_status(
     item.status = status
     db.commit()
     db.refresh(item)
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
     return item
 
 
@@ -1123,7 +1123,7 @@ def atualizar_status_delivery(
     comanda.delivery_status = status_novo
     db.commit()
     db.refresh(comanda)
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
     return comanda
 
 
@@ -1173,7 +1173,7 @@ def despachar_delivery(
         
     db.commit()
     db.refresh(comanda)
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
     return comanda
 
 

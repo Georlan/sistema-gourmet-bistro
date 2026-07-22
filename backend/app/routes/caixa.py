@@ -557,7 +557,7 @@ def aprovar_pagamento(
     db.refresh(pagamento)
     db.refresh(comanda)
     
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
     return pagamento
 
 
@@ -580,7 +580,7 @@ def recusar_pagamento(
     db.commit()
     db.refresh(pagamento)
     
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
     return pagamento
 
 
@@ -708,7 +708,7 @@ def atualizar_configuracoes(
         
     db.commit()
     db.refresh(config)
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
     return config
 
 

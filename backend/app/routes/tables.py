@@ -53,7 +53,7 @@ def update_mesa(
         
     db.commit()
     db.refresh(db_mesa)
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
     return db_mesa
 
 @router.post("/", response_model=MesaResponse, status_code=status.HTTP_201_CREATED)
@@ -78,7 +78,7 @@ def create_mesa(
     db.add(nova_mesa)
     db.commit()
     db.refresh(nova_mesa)
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
     return nova_mesa
 
 @router.delete("/{mesa_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -105,7 +105,7 @@ def delete_mesa(
     db.query(Comanda).filter(Comanda.mesa_id == mesa_id).update({Comanda.mesa_id: None}, synchronize_session=False)
     db.delete(mesa)
     db.commit()
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
     return
 
 

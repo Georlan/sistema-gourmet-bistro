@@ -140,8 +140,8 @@ def create_categoria(
     db.commit()
     db.refresh(cat)
     sincronizar_cardapio_json(db)
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
-    background_tasks.add_task(manager.broadcast, {"type": "catalog_updated", "message": "Categoria criada"}, current_user.restaurante_id)
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
+    background_tasks.add_task(manager.broadcast, {"type": "catalog_updated", "message": "Categoria criada"}, require_tenant_id())
     return cat
 
 @router.put("/categorias/{categoria_id}", response_model=CategoriaResponse)
@@ -165,9 +165,9 @@ def update_categoria(
     db.commit()
     db.refresh(cat)
     sincronizar_cardapio_json(db)
-    background_tasks.add_task(manager.broadcast, {"event": "config_updated"})
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
-    background_tasks.add_task(manager.broadcast, {"type": "catalog_updated", "message": "Categoria atualizada"}, current_user.restaurante_id)
+    background_tasks.add_task(manager.broadcast, {"event": "config_updated"}, require_tenant_id())
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
+    background_tasks.add_task(manager.broadcast, {"type": "catalog_updated", "message": "Categoria atualizada"}, require_tenant_id())
     return cat
 
 @router.delete("/categorias/{categoria_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -186,8 +186,8 @@ def delete_categoria(
     db.delete(cat)
     db.commit()
     sincronizar_cardapio_json(db)
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
-    background_tasks.add_task(manager.broadcast, {"type": "catalog_updated", "message": "Categoria excluída"}, current_user.restaurante_id)
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
+    background_tasks.add_task(manager.broadcast, {"type": "catalog_updated", "message": "Categoria excluída"}, require_tenant_id())
     return
 
 
@@ -296,8 +296,8 @@ def create_produto(
     db.commit()
     db.refresh(novo_produto)
     sincronizar_cardapio_json(db)
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
-    background_tasks.add_task(manager.broadcast, {"type": "catalog_updated", "message": "Produto criado"}, current_user.restaurante_id)
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
+    background_tasks.add_task(manager.broadcast, {"type": "catalog_updated", "message": "Produto criado"}, require_tenant_id())
     return novo_produto
 
 @router.put("/{produto_id}", response_model=ProdutoResponse)
@@ -333,8 +333,8 @@ def update_produto(
     db.commit()
     db.refresh(db_produto)
     sincronizar_cardapio_json(db)
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
-    background_tasks.add_task(manager.broadcast, {"type": "catalog_updated", "message": "Produto atualizado"}, current_user.restaurante_id)
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
+    background_tasks.add_task(manager.broadcast, {"type": "catalog_updated", "message": "Produto atualizado"}, require_tenant_id())
     return db_produto
 
 @router.delete("/{produto_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -354,8 +354,8 @@ def delete_produto(
     db.delete(db_produto)
     db.commit()
     sincronizar_cardapio_json(db)
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
-    background_tasks.add_task(manager.broadcast, {"type": "catalog_updated", "message": "Produto excluído"}, current_user.restaurante_id)
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
+    background_tasks.add_task(manager.broadcast, {"type": "catalog_updated", "message": "Produto excluído"}, require_tenant_id())
     return
 
 class ProdutoImportItem(BaseModel):
@@ -479,8 +479,8 @@ def importar_cardapio(
     sincronizar_cardapio_json(db)
     
     # 7. Notificar os terminais em tempo real
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"})
-    background_tasks.add_task(manager.broadcast, {"type": "catalog_updated", "message": "Cardápio importado"}, current_user.restaurante_id)
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
+    background_tasks.add_task(manager.broadcast, {"type": "catalog_updated", "message": "Cardápio importado"}, require_tenant_id())
     
     return imported_products
 
