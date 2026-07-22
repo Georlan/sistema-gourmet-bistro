@@ -36,15 +36,11 @@ class Settings:
     EVOLUTION_INSTANCE_NAME: str = os.getenv("EVOLUTION_INSTANCE_NAME", "")
 
     # Supabase (Storage & Service Role)
-    SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
-    SUPABASE_SERVICE_ROLE_KEY: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    SUPABASE_URL: str = os.getenv("SUPABASE_URL", "https://iiowhekvahxiepwcdidm.supabase.co")
+    SUPABASE_SERVICE_ROLE_KEY: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", os.getenv("SUPABASE_SERVICE_KEY", ""))
 
     if os.getenv("ENVIRONMENT") != "test":
-        if not SUPABASE_URL:
-            raise RuntimeError("A variável de ambiente 'SUPABASE_URL' é obrigatória e não foi configurada.")
-        if not SUPABASE_SERVICE_ROLE_KEY:
-            raise RuntimeError("A variável de ambiente 'SUPABASE_SERVICE_ROLE_KEY' é obrigatória e não foi configurada.")
-        if SUPABASE_SERVICE_ROLE_KEY.startswith("sb_publishable_"):
+        if SUPABASE_SERVICE_ROLE_KEY and SUPABASE_SERVICE_ROLE_KEY.startswith("sb_publishable_"):
             raise RuntimeError("A chave 'SUPABASE_SERVICE_ROLE_KEY' fornecida é uma chave pública (publishable). É obrigatório utilizar a Service Role Key do Supabase no backend.")
 
 settings = Settings()
