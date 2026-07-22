@@ -715,6 +715,23 @@ def create_movimentacao(
     ).filter_by(id=mov.id).first()
 
 
+@router.delete("/distribuidores/{dist_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_distribuidor(
+    dist_id: str,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_garcom_optional)
+):
+    rest_id = require_tenant_id()
+    dist = db.query(Distribuidor).filter(
+        Distribuidor.id == dist_id,
+        Distribuidor.restaurante_id == rest_id
+    ).first()
+    if dist:
+        db.delete(dist)
+        db.commit()
+    return None
+
+
 # ─── ROTAS DE CONTAGEM FÍSICA (INVENTÁRIO) ───────────────────────────────────
 @router.post("/contagens", response_model=SessaoContagemEstoqueResponse, status_code=status.HTTP_201_CREATED)
 def create_sessao_contagem(

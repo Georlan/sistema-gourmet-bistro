@@ -307,6 +307,7 @@ class ConfiguracaoRestaurante(Base):
     delivery_ativo = Column(Boolean, default=True)
     taxa_servico_ativa = Column(Boolean, default=True)
     taxa_servico_padrao = Column(Float, default=10.0)
+    meta_mensal = Column(Float, default=0.0)
     unificar_vias_delivery = Column(Boolean, default=False)
     modo_exclusivo_salao = Column(Boolean, default=True)
     perm_garcom_delivery = Column(Boolean, default=True)

@@ -371,6 +371,7 @@ class ConfiguracaoRestauranteResponse(BaseModel):
     delivery_ativo: bool
     taxa_servico_ativa: bool
     taxa_servico_padrao: float
+    meta_mensal: Optional[float] = 0.0
     unificar_vias_delivery: bool
     modo_exclusivo_salao: bool
     perm_garcom_delivery: bool
@@ -400,6 +401,7 @@ class ConfiguracaoRestauranteUpdate(BaseModel):
     delivery_ativo: Optional[bool] = None
     taxa_servico_ativa: Optional[bool] = None
     taxa_servico_padrao: Optional[float] = None
+    meta_mensal: Optional[float] = None
     unificar_vias_delivery: Optional[bool] = None
     modo_exclusivo_salao: Optional[bool] = None
     perm_garcom_delivery: Optional[bool] = None

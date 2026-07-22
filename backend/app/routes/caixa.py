@@ -379,6 +379,21 @@ def listar_movimentacoes_caixa(
     return result
 
 
+@router.post("/turno/movimentar", response_model=CaixaMovimentacaoResponse, status_code=status.HTTP_201_CREATED)
+def movimentar_turno(
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_garcom_optional)
+):
+    tipo = str(payload.get("tipo", "")).lower()
+    valor = float(payload.get("valor", 0.0))
+    desc = str(payload.get("descricao", payload.get("observacao", "")))
+    if tipo == "sangria":
+        return registrar_sangria(SangriaCreate(valor=valor, observacao=desc), db=db, current_user=current_user)
+    else:
+        return registrar_suprimento(SuprimentoCreate(valor=valor, observacao=desc), db=db, current_user=current_user)
+
+
 @router.post("/sangria", response_model=CaixaMovimentacaoResponse, status_code=status.HTTP_201_CREATED)
 def registrar_sangria(
     sangria_in: SangriaCreate,

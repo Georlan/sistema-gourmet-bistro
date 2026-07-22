@@ -22,6 +22,9 @@ import { SangriaModal } from './caixa/SangriaModal';
 import { SuprimentoModal } from './caixa/SuprimentoModal';
 import { CaixaFechamentoTab } from './caixa/CaixaFechamentoTab';
 import { RelatorioFinanceiroTab } from './relatorios/RelatorioFinanceiroTab';
+import { RelatoriosVisaoGeralTab } from './relatorios/RelatoriosVisaoGeralTab';
+import { RelatoriosProdutosTab } from './relatorios/RelatoriosProdutosTab';
+import { EquipeDesempenhoTab } from './equipe/EquipeDesempenhoTab';
 import { PRODUCTS, CATEGORIES } from '../data';
 import { getProductPresets, obterNomeCategoria, smartSearchMatch } from '../domain';
 import { API } from '../config/caixaService';
@@ -191,11 +194,12 @@ export function CaixaPanel({
     if (['conferencia', 'conferencia_cega', 'fechamento'].includes(saved)) return 'fechamento';
     if (['demonstrativo_dre', 'dre', 'fluxo_caixa', 'financeiro'].includes(saved)) return 'financeiro';
     // Relatórios mappings
-    if (['desempenho', 'minha_performance', 'dashboard', 'indicadores'].includes(saved)) return 'visao_geral';
-    if (['metas', 'metas_previsoes'].includes(saved)) return 'metas';
-    if (['top10', 'mais_vendidos', 'produtos_mais_vendidos'].includes(saved)) return 'produtos_mais_vendidos';
-    if (['relatorio_geral', 'consolidado_vendas', 'vendas'].includes(saved)) return 'vendas';
-    if (['relatorio_garçons', 'faturamento_garcom', 'equipe'].includes(saved)) return 'equipe';
+    if (['visao_geral', 'metas', 'vendas', 'indicadores', 'dashboard'].includes(saved)) return 'visao_geral';
+    if (['produtos', 'produtos_mais_vendidos', 'top10'].includes(saved)) return 'produtos';
+    if (['financeiro', 'dre', 'demonstrativo_dre'].includes(saved)) return 'financeiro';
+    // Equipe mappings
+    if (['pessoas', 'equipe', 'convites', 'cargos'].includes(saved)) return 'pessoas';
+    if (['desempenho', 'faturamento_garcom', 'relatorio_garçons'].includes(saved)) return 'desempenho';
     // Clientes mappings
     if (['clientes', 'crm', 'banco_clientes', 'fidelidade', 'programa_fidelidade'].includes(saved)) return 'clientes';
     if (['cupons', 'cupom', 'descontos', 'cupons_desconto'].includes(saved)) return 'cupons';
@@ -359,7 +363,7 @@ export function CaixaPanel({
         setActiveSubTab('chat');
         break;
       case 'permissoes_cargos':
-        setActiveSubTab('equipe');
+        setActiveSubTab('pessoas');
         break;
       case 'impressao_salao':
         setActiveSubTab('impressoras');
@@ -2445,7 +2449,9 @@ export function CaixaPanel({
                           setActiveSubTab('cardapio_digital');
                         } else if (tab.id === 'permissoes_cargos') {
                           setActiveTab('permissoes_cargos');
-                          setActiveSubTab('equipe');
+                          if (!['pessoas', 'desempenho'].includes(activeSubTab)) {
+                            setActiveSubTab('pessoas');
+                          }
                         } else if (tab.id === 'impressao_salao') {
                           setActiveTab('impressao_salao');
                           setActiveSubTab('impressoras');
@@ -2454,7 +2460,7 @@ export function CaixaPanel({
                           setActiveSubTab('planos');
                         } else if (tab.id === 'relatorios') {
                           setActiveTab('relatorios');
-                          if (!['visao_geral', 'metas', 'produtos_mais_vendidos', 'vendas', 'equipe'].includes(activeSubTab)) {
+                          if (!['visao_geral', 'financeiro', 'produtos'].includes(activeSubTab)) {
                             setActiveSubTab('visao_geral');
                           }
                         } else if (tab.id === 'assistente_koma') {
@@ -2703,6 +2709,54 @@ export function CaixaPanel({
             const isSubActive = (
               (sub.id === 'clientes' && ['clientes', 'crm', 'banco_clientes', 'fidelidade', 'programa_fidelidade'].includes(activeSubTab)) ||
               (sub.id === 'cupons' && ['cupons', 'cupom', 'descontos', 'cupons_desconto'].includes(activeSubTab)) ||
+              activeSubTab === sub.id
+            );
+            return (
+              <button
+                key={sub.id}
+                onClick={() => setActiveSubTab(sub.id)}
+                className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${isSubActive
+                  ? 'bg-[#10b981] text-[#121214]'
+                  : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
+                  }`}
+              >
+                {sub.label}
+              </button>
+            );
+          })}
+
+          {(activeTab === 'relatorios' || activeTab === 'dashboard') && [
+            { id: 'visao_geral', label: 'Visão Geral' },
+            { id: 'financeiro', label: 'Financeiro' },
+            { id: 'produtos', label: 'Produtos' }
+          ].map(sub => {
+            const isSubActive = (
+              (sub.id === 'visao_geral' && ['visao_geral', 'metas', 'vendas', 'indicadores', 'desempenho'].includes(activeSubTab)) ||
+              (sub.id === 'financeiro' && ['financeiro', 'dre', 'demonstrativo_dre'].includes(activeSubTab)) ||
+              (sub.id === 'produtos' && ['produtos', 'produtos_mais_vendidos', 'top10'].includes(activeSubTab)) ||
+              activeSubTab === sub.id
+            );
+            return (
+              <button
+                key={sub.id}
+                onClick={() => setActiveSubTab(sub.id)}
+                className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${isSubActive
+                  ? 'bg-[#10b981] text-[#121214]'
+                  : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
+                  }`}
+              >
+                {sub.label}
+              </button>
+            );
+          })}
+
+          {(activeTab === 'permissoes_cargos' || (activeTab === 'configuracoes' && activeSubTab === 'equipe')) && [
+            { id: 'pessoas', label: 'Pessoas' },
+            { id: 'desempenho', label: 'Desempenho' }
+          ].map(sub => {
+            const isSubActive = (
+              (sub.id === 'pessoas' && ['pessoas', 'equipe', 'convites', 'cargos'].includes(activeSubTab)) ||
+              (sub.id === 'desempenho' && ['desempenho', 'faturamento_garcom', 'relatorio_garçons'].includes(activeSubTab)) ||
               activeSubTab === sub.id
             );
             return (
@@ -4098,8 +4152,8 @@ export function CaixaPanel({
             </div>
           )}
 
-          {/* VIEW 6: GESTÃO DE SALÃO (CRUD Garçons & Taxas) */}
-          {(activeTab === 'permissoes_cargos' || activeSubTab === 'equipe') && (
+          {/* VIEW: EQUIPE — PESSOAS */}
+          {(activeTab === 'permissoes_cargos' || activeSubTab === 'equipe') && ['pessoas', 'equipe', 'convites', 'cargos'].includes(activeSubTab) && (
             <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5')}>
 
               {/* CRUD table list */}
@@ -4220,54 +4274,58 @@ export function CaixaPanel({
                   </form>
                 </div>
 
-                {/* Service tax config */}
-                <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-3')}>
-                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Taxa de Serviço do Salão</span>
-
-                  <div className={clsx('flex', 'justify-between', 'items-center', 'pt-1')}>
-                    <span className={clsx('text-[10px]', 'text-gray-300', 'font-semibold')}>Ativar Taxa de 10% de Serviço</span>
-                    <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer')}>
-                      <input
-                        type="checkbox"
-                        checked={taxaServicoAtiva}
-                        onChange={(e) => {
-                          setTaxaServicoAtiva(e.target.checked);
-                          setCheckoutServiceTax(e.target.checked);
-                          updateConfiguracoes({ taxa_servico_ativa: e.target.checked });
-                        }}
-                        className={clsx('sr-only', 'peer')}
-                      />
-                      <div className={clsx('w-9', 'h-5', 'bg-[#27272A]', 'peer-focus:outline-none', 'rounded-full', 'peer', 'peer-checked:after:translate-x-full', 'peer-checked:after:border-white', "after:content-['']", 'after:absolute', 'after:top-[2px]', 'after:left-[2px]', 'after:bg-white', 'after:border-gray-300', 'after:border', 'after:rounded-full', 'after:h-4', 'after:w-4', 'after:transition-all', 'peer-checked:bg-emerald-600')}></div>
-                    </label>
-                  </div>
-
-                  {taxaServicoAtiva && (
-                    <div className={clsx('space-y-1', 'pt-1.5', 'animate-scale-in')}>
-                      <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Porcentagem Customizada (%):</label>
-                      <input
-                        type="number"
-                        min="1"
-                        max="30"
-                        value={serviceTaxRate}
-                        onChange={(e) => {
-                          const val = Math.max(1, parseInt(e.target.value) || 1);
-                          setServiceTaxRate(val);
-                          updateConfiguracoes({ taxa_servico_padrao: val });
-                        }}
-                        className={clsx('w-full', 'px-3', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'font-mono', 'text-[10px]')}
-                      />
-                    </div>
-                  )}
                 </div>
-
               </div>
+          )}
 
-            </div>
+          {/* VIEW: EQUIPE — DESEMPENHO */}
+          {(activeTab === 'permissoes_cargos' || activeSubTab === 'equipe') && activeSubTab === 'desempenho' && (
+            <EquipeDesempenhoTab apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} showToast={showToast} />
           )}
 
           {/* VIEW 7: CONFIGURAÇÕES SALÃO (App Garçom & Impressoras) */}
           {(activeTab === 'impressao_salao' || activeSubTab === 'impressoras') && (
             <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5')}>
+
+              {/* Service Tax config block moved to Salão e Impressão */}
+              <div className={clsx('lg:col-span-3', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-3')}>
+                <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Taxa de Serviço do Salão</span>
+
+                <div className={clsx('flex', 'justify-between', 'items-center', 'pt-1')}>
+                  <span className={clsx('text-[10px]', 'text-gray-300', 'font-semibold')}>Ativar Taxa de 10% de Serviço</span>
+                  <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer')}>
+                    <input
+                      type="checkbox"
+                      checked={taxaServicoAtiva}
+                      onChange={(e) => {
+                        setTaxaServicoAtiva(e.target.checked);
+                        setCheckoutServiceTax(e.target.checked);
+                        updateConfiguracoes({ taxa_servico_ativa: e.target.checked });
+                      }}
+                      className={clsx('sr-only', 'peer')}
+                    />
+                    <div className={clsx('w-9', 'h-5', 'bg-[#27272A]', 'peer-focus:outline-none', 'rounded-full', 'peer', 'peer-checked:after:translate-x-full', 'peer-checked:after:border-white', "after:content-['']", 'after:absolute', 'after:top-[2px]', 'after:left-[2px]', 'after:bg-white', 'after:border-gray-300', 'after:border', 'after:rounded-full', 'after:h-4', 'after:w-4', 'after:transition-all', 'peer-checked:bg-emerald-600')}></div>
+                  </label>
+                </div>
+
+                {taxaServicoAtiva && (
+                  <div className={clsx('space-y-1', 'pt-1.5', 'animate-scale-in', 'max-w-xs')}>
+                    <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Porcentagem Customizada (%):</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="30"
+                      value={serviceTaxRate}
+                      onChange={(e) => {
+                        const val = Math.max(1, parseInt(e.target.value) || 1);
+                        setServiceTaxRate(val);
+                        updateConfiguracoes({ taxa_servico_padrao: val });
+                      }}
+                      className={clsx('w-full', 'px-3', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'font-mono', 'text-[10px]')}
+                    />
+                  </div>
+                )}
+              </div>
 
               {/* Waiters permissions switches (Left Column) */}
               <div className={clsx('lg:col-span-2', 'bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'flex', 'flex-col', 'overflow-hidden')}>
@@ -5093,320 +5151,19 @@ export function CaixaPanel({
             </div>
           )}
 
+          {/* VIEW: RELATÓRIOS — VISÃO GERAL */}
+          {(activeTab === 'relatorios' || activeTab === 'dashboard') && ['visao_geral', 'metas', 'vendas', 'indicadores', 'relatorio_geral', 'consolidado_vendas'].includes(activeSubTab) && (
+            <RelatoriosVisaoGeralTab apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} showToast={showToast} />
+          )}
 
-
-          {/* VIEW: RELATÓRIO FINANCEIRO (DRE) */}
+          {/* VIEW: RELATÓRIOS — FINANCEIRO (DRE) */}
           {(activeTab === 'relatorios' || activeTab === 'dashboard') && ['financeiro', 'demonstrativo_dre', 'dre', 'fluxo_caixa'].includes(activeSubTab) && (
             <RelatorioFinanceiroTab apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
           )}
 
-          {/* VIEW: RELATÓRIO GERAL / VENDAS / VISÃO GERAL */}
-          {(activeTab === 'relatorios' || activeTab === 'dashboard') && ['vendas', 'relatorio_geral', 'consolidado_vendas', 'visao_geral', 'desempenho', 'minha_performance'].includes(activeSubTab) && (
-            <div className={clsx('space-y-5', 'text-left', 'animate-fade-in')}>
-              {/* Banner azul de informações */}
-              <div className={clsx('bg-sky-500/10', 'border', 'border-sky-500/20', 'text-sky-300', 'p-4', 'rounded-2xl', 'flex', 'items-start', 'gap-3', 'relative')}>
-                <button className={clsx('absolute', 'right-3', 'top-3', 'text-sky-300/60', 'hover:text-sky-300', 'cursor-pointer')}><X size={14} /></button>
-                <div className={clsx('p-1', 'bg-sky-500/20', 'rounded-full', 'shrink-0', 'text-sky-400', 'mt-0.5')}>
-                  <HelpCircle size={16} />
-                </div>
-                <div className="space-y-0.5">
-                  <strong className={clsx('text-[11px]', 'block', 'font-bold', 'text-white')}>Veja aqui informações sobre suas vendas. Filtre por datas e exporte as informações</strong>
-                  <span className={clsx('text-[9px]', 'text-sky-300/80', 'block', 'leading-relaxed')}>Este relatório mostra como está o faturamento e a quantidade vendida em seu estabelecimento no período desejado.</span>
-                </div>
-              </div>
-
-              {/* Date Filter selector bar */}
-              <div className={clsx('flex', 'justify-between', 'items-center', 'gap-3', 'flex-wrap')}>
-                <div className={clsx('flex', 'items-center', 'gap-3')}>
-                  <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'px-3', 'py-1.5', 'text-[10px]', 'text-gray-300', 'font-bold', 'font-mono')}>
-                    {getPeriodString()}
-                  </div>
-                  <div className={clsx('flex', 'gap-1', 'bg-[#09090B]', 'p-1', 'rounded-xl', 'border', 'border-[#27272A]')}>
-                    {[
-                      { id: '7', label: '7D' },
-                      { id: '15', label: '15D' },
-                      { id: '30', label: '30D' }
-                    ].map(r => (
-                      <button
-                        key={r.id}
-                        onClick={() => setDesempenhoRange(r.id as any)}
-                        className={`px-2 py-0.5 text-[9px] font-bold rounded-lg cursor-pointer transition-all ${desempenhoRange === r.id
-                          ? 'bg-emerald-600 text-white shadow'
-                          : 'text-gray-400 hover:text-white'
-                          }`}
-                      >
-                        {r.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className={clsx('flex', 'gap-2')}>
-                  <button 
-                    onClick={handleExportReports}
-                    className={clsx('px-3', 'py-1', 'bg-[#10b981]', 'text-[#121214]', 'hover:bg-[#059669]', 'rounded-xl', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}
-                  >
-                    Exportar Relatório (CSV)
-                  </button>
-                </div>
-              </div>
-
-              {/* Grid of KPI cards */}
-              <div className={clsx('grid', 'grid-cols-2', 'md:grid-cols-4', 'gap-4')}>
-                {[
-                  { label: "Faturamento", value: `R$ ${(generalStats?.faturamento ?? 0.00).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, color: "text-[#10b981]" },
-                  { label: "Ticket médio", value: `R$ ${(generalStats?.ticket_medio ?? 0.00).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, color: "text-white" },
-                  { label: "Total de pedidos", value: String(generalStats?.total_pedidos ?? 0), color: "text-white" },
-                  { label: "Clientes ativos", value: String(generalStats?.clientes_ativos ?? 0), color: "text-white" }
-                ].map((card, idx) => (
-                  <div key={idx} className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-2xl', 'p-4.5', 'space-y-1', 'flex', 'flex-col', 'justify-center')}>
-                    <span className={clsx('text-[9px]', 'text-gray-400', 'uppercase', 'tracking-widest', 'font-bold', 'block')}>{card.label}</span>
-                    <strong className={`text-base font-serif font-bold ${card.color}`}>{card.value}</strong>
-                  </div>
-                ))}
-              </div>
-
-              {/* SVG Double Bar Chart (Weekly Sales split by delivery vs local) */}
-              <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4')}>
-                <div className={clsx('flex', 'justify-between', 'items-center')}>
-                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block')}>Pedidos e Entregas (Semanal)</span>
-                  <div className={clsx('flex', 'gap-4', 'text-[9px]', 'font-bold')}>
-                    <div className={clsx('flex', 'items-center', 'gap-1.5', 'text-sky-400')}>
-                      <span className={clsx('h-2', 'w-2', 'bg-sky-400', 'rounded-sm')} />
-                      <span>Entrega</span>
-                    </div>
-                    <div className={clsx('flex', 'items-center', 'gap-1.5', 'text-blue-600')}>
-                      <span className={clsx('h-2', 'w-2', 'bg-blue-600', 'rounded-sm')} />
-                      <span>Pedidos</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className={clsx('pt-2', 'relative', 'h-48', 'w-full', 'flex', 'items-end', 'justify-between', 'px-4', 'border-b', 'border-[#27272A]', 'pb-4')}>
-                  {/* SVG Bar graphs */}
-                  {(generalStats?.weekly_chart ?? [
-                    { label: "Dom", delivery: 0, local: 0 },
-                    { label: "Seg", delivery: 0, local: 0 },
-                    { label: "Ter", delivery: 0, local: 0 },
-                    { label: "Qua", delivery: 0, local: 0 },
-                    { label: "Qui", delivery: 0, local: 0 },
-                    { label: "Sex", delivery: 0, local: 0 },
-                    { label: "Sab", delivery: 0, local: 0 }
-                  ]).map((day: any, idx: number) => {
-                    const maxScale = Math.max(10, ...((generalStats?.weekly_chart ?? []).flatMap((d: any) => [d.delivery, d.local])), 150);
-                    const delHeight = `${(day.delivery / maxScale) * 100}%`;
-                    const locHeight = `${(day.local / maxScale) * 100}%`;
-
-                    return (
-                      <div key={idx} className={clsx('flex', 'flex-col', 'items-center', 'gap-2', 'h-full', 'flex-1', 'relative')}>
-                        <div className={clsx('flex-1', 'w-full', 'flex', 'items-end', 'justify-center', 'gap-1.5', 'pb-1')}>
-                          {day.delivery > 0 ? (
-                            <div className={clsx('w-3', 'bg-sky-400', 'rounded-t-sm', 'group', 'relative')} style={{ height: delHeight }} title={`Entrega: ${day.delivery}`}>
-                              <span className={clsx('absolute', '-top-5', 'left-1/2', '-translate-x-1/2', 'bg-black', 'text-white', 'text-[8px]', 'font-bold', 'px-1', 'rounded', 'opacity-0', 'group-hover:opacity-100', 'transition-opacity', 'font-mono')}>{day.delivery}</span>
-                            </div>
-                          ) : (
-                            <div className={clsx('w-3', 'h-0.5', 'bg-zinc-800', 'rounded-t-sm')} />
-                          )}
-                          {day.local > 0 ? (
-                            <div className={clsx('w-3', 'bg-blue-600', 'rounded-t-sm', 'group', 'relative')} style={{ height: locHeight }} title={`Dine-in: ${day.local}`}>
-                              <span className={clsx('absolute', '-top-5', 'left-1/2', '-translate-x-1/2', 'bg-black', 'text-white', 'text-[8px]', 'font-bold', 'px-1', 'rounded', 'opacity-0', 'group-hover:opacity-100', 'transition-opacity', 'font-mono')}>{day.local}</span>
-                            </div>
-                          ) : (
-                            <div className={clsx('w-3', 'h-0.5', 'bg-zinc-800', 'rounded-t-sm')} />
-                          )}
-                        </div>
-                        <span className={clsx('text-[9px]', 'font-bold', 'text-gray-400', 'uppercase')}>{day.label}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* VIEW: RELATÓRIO DE GARÇONS / EQUIPE */}
-          {(activeTab === 'relatorios' || activeTab === 'dashboard') && ['equipe', 'relatorio_garçons', 'faturamento_garcom'].includes(activeSubTab) && (
-            <div className={clsx('space-y-5', 'text-left', 'animate-fade-in')}>
-              {/* Banner azul de informações */}
-              <div className={clsx('bg-sky-500/10', 'border', 'border-sky-500/20', 'text-sky-300', 'p-4', 'rounded-2xl', 'flex', 'items-start', 'gap-3', 'relative')}>
-                <button className={clsx('absolute', 'right-3', 'top-3', 'text-sky-300/60', 'hover:text-sky-300', 'cursor-pointer')}><X size={14} /></button>
-                <div className={clsx('p-1', 'bg-sky-500/20', 'rounded-full', 'shrink-0', 'text-sky-400', 'mt-0.5')}>
-                  <HelpCircle size={16} />
-                </div>
-                <div className="space-y-0.5">
-                  <strong className={clsx('text-[11px]', 'block', 'font-bold', 'text-white')}>Veja aqui informações sobre suas vendas. Filtre por datas e exporte as informações</strong>
-                  <span className={clsx('text-[9px]', 'text-sky-300/80', 'block', 'leading-relaxed')}>Este relatório mostra como está o faturamento e a quantidade vendida em seu estabelecimento usando o modo garçom.</span>
-                </div>
-              </div>
-
-              {/* Date Filter selector bar */}
-              <div className={clsx('flex', 'justify-between', 'items-center', 'gap-3', 'flex-wrap')}>
-                <div className={clsx('flex', 'items-center', 'gap-3')}>
-                  <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'px-3', 'py-1.5', 'text-[10px]', 'text-gray-300', 'font-bold', 'font-mono')}>
-                    {getPeriodString()}
-                  </div>
-                  <div className={clsx('flex', 'gap-1', 'bg-[#09090B]', 'p-1', 'rounded-xl', 'border', 'border-[#27272A]')}>
-                    {[
-                      { id: '7', label: '7D' },
-                      { id: '15', label: '15D' },
-                      { id: '30', label: '30D' }
-                    ].map(r => (
-                      <button
-                        key={r.id}
-                        onClick={() => setDesempenhoRange(r.id as any)}
-                        className={`px-2 py-0.5 text-[9px] font-bold rounded-lg cursor-pointer transition-all ${desempenhoRange === r.id
-                          ? 'bg-emerald-600 text-white shadow'
-                          : 'text-gray-400 hover:text-white'
-                          }`}
-                      >
-                        {r.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className={clsx('flex', 'gap-2')}>
-                  <button 
-                    onClick={handleExportReports}
-                    className={clsx('px-3', 'py-1', 'bg-[#10b981]', 'text-[#121214]', 'hover:bg-[#059669]', 'rounded-xl', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}
-                  >
-                    Exportar Relatório (CSV)
-                  </button>
-                </div>
-              </div>
-
-              {/* Grid of KPI cards */}
-              <div className={clsx('grid', 'grid-cols-2', 'md:grid-cols-5', 'gap-4')}>
-                {[
-                  { label: "Faturamento", value: `R$ ${(generalStats?.faturamento ?? 0.00).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, color: "text-[#10b981]" },
-                  { label: "Ticket médio", value: `R$ ${(generalStats?.ticket_medio ?? 0.00).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, color: "text-white" },
-                  { label: "Total de pedidos", value: String(generalStats?.total_pedidos ?? 0), color: "text-white" },
-                  { label: "Comissão Total", value: `R$ ${(waitersPerformance.reduce((acc, w) => acc + w.comissao_acumulada, 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, color: "text-white" },
-                  { label: "Garçons ativos", value: String(waitersPerformance.length), color: "text-white" }
-                ].map((card, idx) => (
-                  <div key={idx} className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-2xl', 'p-4', 'md:p-4.5', 'space-y-1', 'flex', 'flex-col', 'justify-center')}>
-                    <span className={clsx('text-[9px]', 'text-gray-400', 'uppercase', 'tracking-widest', 'font-bold', 'block')}>{card.label}</span>
-                    <strong className={`text-xs md:text-sm font-serif font-bold ${card.color}`}>{card.value}</strong>
-                  </div>
-                ))}
-              </div>
-
-              {/* Waiter Performance Table */}
-              <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'overflow-hidden', 'p-5', 'space-y-4')}>
-                <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block')}>Faturamento por Garçom (Comissão Acumulada)</span>
-                <div className={clsx('overflow-hidden', 'border', 'border-[#27272A]/40', 'rounded-2xl')}>
-                  <table className={clsx('w-full', 'text-left', 'text-[10px]')}>
-                    <thead>
-                      <tr className={clsx('bg-[#1C1C1F]', 'border-b', 'border-[#27272A]', 'text-gray-400', 'uppercase', 'tracking-wider', 'font-bold')}>
-                        <th className="p-3.5">Nome Garçom</th>
-                        <th className="p-3.5">Pedidos Atendidos</th>
-                        <th className={clsx('p-3.5', 'text-right', 'font-bold', 'text-emerald-400')}>Comissão Acumulada (10% Serviço)</th>
-                      </tr>
-                    </thead>
-                    <tbody className={clsx('divide-y', 'divide-[#27272A]/40')}>
-                      {waitersPerformance.map((waiter, idx) => (
-                        <tr key={idx} className={clsx('hover:bg-[#1C1C1F]/20', 'transition-colors')}>
-                          <td className={clsx('p-3.5', 'font-bold', 'text-white')}>{waiter.nome_garcon}</td>
-                          <td className={clsx('p-3.5', 'font-mono', 'text-gray-300')}>{waiter.pedidos_atendidos}</td>
-                          <td className={clsx('p-3.5', 'font-mono', 'text-emerald-400', 'font-bold', 'text-right')}>R$ {waiter.comissao_acumulada.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        </tr>
-                      ))}
-                      {waitersPerformance.length === 0 && (
-                        <tr>
-                          <td colSpan={3} className="p-8 text-center text-gray-500 italic">
-                            Nenhum garçom atendeu pedidos no período
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* MOCK VIEW: METAS DO TURNOS & PREVISÃO DE PICO (IA) */}
-          {(activeTab === 'relatorios' || activeTab === 'dashboard') && ['metas', 'metas_previsoes'].includes(activeSubTab) && (
-            <div className={clsx('grid', 'grid-cols-1', 'md:grid-cols-2', 'gap-5', 'text-left', 'animate-fade-in')}>
-              <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-5', 'rounded-3xl', 'space-y-4')}>
-                <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Painel de Metas do Dia</span>
-                <div className="space-y-3">
-                  {(() => {
-                    const meta = 3000.00;
-                    const hoje = generalStats?.faturamento_hoje ?? 0.00;
-                    const pct = Math.min(100, Math.max(0, (hoje / meta) * 100));
-                    const restante = Math.max(0, meta - hoje);
-                    return (
-                      <>
-                        <div className={clsx('flex', 'justify-between', 'text-[10px]')}>
-                          <span className="text-gray-400">Progresso da Meta (R$ {meta.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})</span>
-                          <strong className={clsx('text-white', 'font-mono')}>{pct.toFixed(1)}% (R$ {hoje.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})</strong>
-                        </div>
-                        <div className={clsx('h-3', 'w-full', 'bg-[#1C1C1F]', 'rounded-full', 'overflow-hidden', 'border', 'border-[#27272A]/40')}>
-                          <div className={clsx('h-full', 'bg-gradient-to-r', 'from-[#10b981]', 'to-[#10b981]', 'rounded-full')} style={{ width: `${pct}%` }} />
-                        </div>
-                        <span className={clsx('text-[8px]', 'text-gray-500', 'block', 'leading-tight')}>
-                          {restante > 0 
-                            ? `Faltam R$ ${restante.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} para atingir a meta diária estipulada pelo gestor.`
-                            : "Parabéns! A meta diária estipulada pelo gestor foi atingida!"
-                          }
-                        </span>
-                      </>
-                    );
-                  })()}
-                </div>
-              </div>
-
-              <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-5', 'rounded-3xl', 'space-y-4')}>
-                <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Horários de Pico (SQL Histórico)</span>
-                <p className={clsx('text-[10px]', 'text-gray-400', 'leading-relaxed')}>
-                  Gráfico de demanda histórica por hora, gerado via consultas SQL puras e indexadas a partir de comandas fechadas.
-                </p>
-                <div className={clsx('h-28', 'flex', 'items-end', 'justify-between', 'gap-1.5', 'border-b', 'border-[#27272A]', 'pb-2', 'pt-2', 'px-2')}>
-                  {(horariosPico.length > 0
-                    ? horariosPico.slice(0, 8).map(h => ({ hr: h.hora, val: Math.min(100, (h.total_pedidos / Math.max(1, ...horariosPico.map(x => x.total_pedidos))) * 100), count: h.total_pedidos }))
-                    : [
-                      { hr: "18h", val: 20, count: 20 },
-                      { hr: "19h", val: 55, count: 55 },
-                      { hr: "20h", val: 90, count: 90 },
-                      { hr: "21h", val: 100, count: 100 },
-                      { hr: "22h", val: 80, count: 80 },
-                      { hr: "23h", val: 40, count: 40 }
-                    ]
-                  ).map((h, i) => (
-                    <div key={i} className={clsx('flex-1', 'flex', 'flex-col', 'items-center', 'gap-1.5', 'h-full', 'justify-end')}>
-                      <div className={clsx('w-full', 'bg-emerald-600/80', 'rounded-t-sm', 'group', 'relative')} style={{ height: `${h.val}%` }}>
-                        <span className={clsx('absolute', '-top-5', 'left-1/2', '-translate-x-1/2', 'bg-black', 'text-white', 'text-[8px]', 'font-bold', 'px-1', 'rounded', 'opacity-0', 'group-hover:opacity-100', 'transition-opacity', 'font-mono')}>{h.count} ped.</span>
-                      </div>
-                      <span className={clsx('text-[8px]', 'font-bold', 'text-gray-500', 'font-mono')}>{h.hr}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* MOCK VIEW: RANKING TOP ITEMS */}
-          {(activeTab === 'relatorios' || activeTab === 'dashboard') && ['produtos_mais_vendidos', 'top10', 'mais_vendidos'].includes(activeSubTab) && (
-            <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'text-left', 'animate-fade-in', 'max-w-xl')}>
-              <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'border-b', 'border-[#27272A]', 'pb-2')}>Ranking Geral de Saídas</span>
-              <div className={clsx('divide-y', 'divide-[#27272A]/50')}>
-                {(generalStats?.top_itens ?? []).map((item: any, idx: number) => (
-                  <div key={idx} className={clsx('py-3.5', 'flex', 'justify-between', 'items-center')}>
-                    <div className={clsx('flex', 'items-center', 'gap-3.5')}>
-                      <span className={`h-6 w-6 rounded-lg flex items-center justify-center text-[10px] font-mono font-bold ${idx === 0 ? 'bg-emerald-600 text-white' : idx === 1 ? 'bg-[#10b981] text-[#121214]' : 'bg-[#1C1C1F] text-gray-400'
-                        }`}>{item.rank}</span>
-                      <div>
-                        <span className={clsx('font-medium', 'text-white', 'block', 'text-xs')}>{item.name}</span>
-                        <span className={clsx('text-[9px]', 'text-gray-500', 'font-mono')}>R$ {item.price.toFixed(2)}</span>
-                      </div>
-                    </div>
-                    <span className={clsx('text-[10px]', 'font-bold', 'text-emerald-400', 'font-mono')}>{item.count} saídas</span>
-                  </div>
-                ))}
-                {(generalStats?.top_itens ?? []).length === 0 && (
-                  <div className="py-8 text-center text-gray-500 italic text-[11px]">Nenhum item vendido no período</div>
-                )}
-              </div>
-            </div>
+          {/* VIEW: RELATÓRIOS — PRODUTOS */}
+          {(activeTab === 'relatorios' || activeTab === 'dashboard') && ['produtos', 'produtos_mais_vendidos', 'top10', 'mais_vendidos'].includes(activeSubTab) && (
+            <RelatoriosProdutosTab apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} showToast={showToast} />
           )}
 
           {/* MOCK VIEW: FICHA TÉCNICA (OCULTO - IMPLEMENTAÇÃO REAL FUTURA) */}
