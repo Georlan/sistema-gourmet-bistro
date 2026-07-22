@@ -47,13 +47,14 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
   const [editingMeta, setEditingMeta] = useState(false);
   const [newMetaInput, setNewMetaInput] = useState('');
 
-  // Report Data
   const [data, setData] = useState<any>(null);
+  const [hasError, setHasError] = useState(false);
   const [vendasDetalhes, setVendasDetalhes] = useState<VendaDetalheItem[]>([]);
   const [isLoadingVendas, setIsLoadingVendas] = useState(false);
 
   const fetchVisaoGeral = async (inicio: string, fim: string) => {
     setIsLoading(true);
+    setHasError(false);
     try {
       const res = await fetch(
         `${apiBaseUrl}/relatorios/visao-geral?data_inicio=${inicio}&data_fim=${fim}`,
@@ -62,9 +63,12 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
       if (res.ok) {
         const json = await res.json();
         setData(json);
+      } else {
+        setHasError(true);
       }
     } catch (err) {
       console.error('Erro ao buscar visão geral:', err);
+      setHasError(true);
     } finally {
       setIsLoading(false);
     }
@@ -196,6 +200,24 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
           </button>
         </div>
       </div>
+
+      {hasError && !isLoading && (
+        <div className="bg-[#121214] border border-rose-900/50 rounded-3xl p-8 text-center space-y-4 max-w-md mx-auto my-6 animate-fade-in">
+          <div className="w-12 h-12 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center mx-auto">
+            <span className="font-bold text-lg">!</span>
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-white font-bold text-sm">Não foi possível carregar os dados</h3>
+            <p className="text-gray-400 text-xs">Ocorreu uma falha ao comunicar com o servidor. Por favor, tente novamente.</p>
+          </div>
+          <button
+            onClick={() => fetchVisaoGeral(dataInicio, dataFim)}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition-all cursor-pointer"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      )}
 
       {/* Main Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -377,10 +399,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
         {/* Vendas por Dia */}
         <div className="bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-4">
           <div className="flex justify-between items-center border-b border-[#27272A] pb-2">
-            <span className="font-serif font-bold text-sm text-white">Pedidos por Dia (Plano Bistrô)</span>
-            <span className="text-[8px] font-bold bg-[#1C1C1F] text-gray-400 px-2 py-0.5 rounded-full uppercase">
-              Sem Delivery
-            </span>
+            <span className="font-serif font-bold text-sm text-white">Pedidos por Dia</span>
           </div>
 
           <div className="overflow-x-auto max-h-64 border border-[#27272A]/40 rounded-2xl">

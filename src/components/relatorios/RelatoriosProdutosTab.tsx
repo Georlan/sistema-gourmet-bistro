@@ -43,12 +43,13 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
 
   const [isLoading, setIsLoading] = useState(false);
   const [produtos, setProdutos] = useState<ProdutoRelatorioItem[]>([]);
-  const [categorias, setCategorias] = useState<{ id: number; nome: string }[]>([]);
+  const [categorias, setCategorias] = useState<{ id: any; nome: string }[]>([]);
   const [showCalendarModal, setShowCalendarModal] = useState(false);
+  const [hasError, setHasError] = useState(false);
 
   // Fetch categories list
   useEffect(() => {
-    fetch(`${apiBaseUrl}/products/categorias`, { headers: authHeaders })
+    fetch(`${apiBaseUrl}/produtos/categorias`, { headers: authHeaders })
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
         if (Array.isArray(data)) setCategorias(data);
@@ -59,6 +60,7 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
   // Fetch products report
   const fetchProdutosReport = async () => {
     setIsLoading(true);
+    setHasError(false);
     try {
       let url = `${apiBaseUrl}/relatorios/produtos?data_inicio=${dataInicio}&data_fim=${dataFim}&ordenacao=${ordenacao}`;
       if (busca && busca.trim()) {
@@ -72,9 +74,12 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
       if (res.ok) {
         const json = await res.json();
         setProdutos(json);
+      } else {
+        setHasError(true);
       }
     } catch (err) {
       console.error('Erro ao carregar relatório de produtos:', err);
+      setHasError(true);
     } finally {
       setIsLoading(false);
     }
@@ -140,6 +145,24 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
           </button>
         </div>
       </div>
+
+      {hasError && !isLoading && (
+        <div className="bg-[#121214] border border-rose-900/50 rounded-3xl p-8 text-center space-y-4 max-w-md mx-auto my-6 animate-fade-in">
+          <div className="w-12 h-12 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center mx-auto">
+            <span className="font-bold text-lg">!</span>
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-white font-bold text-sm">Não foi possível carregar os dados</h3>
+            <p className="text-gray-400 text-xs">Ocorreu uma falha ao comunicar com o servidor. Por favor, tente novamente.</p>
+          </div>
+          <button
+            onClick={() => fetchProdutosReport()}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition-all cursor-pointer"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      )}
 
       {/* Filters Toolbar */}
       <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-4', 'rounded-2xl', 'flex', 'flex-col', 'md:flex-row', 'items-center', 'justify-between', 'gap-3')}>

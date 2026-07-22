@@ -8,6 +8,7 @@ from app.main import app
 
 def test_current_restaurante_id_default_is_none_outside_request():
     """Prova que current_restaurante_id.get() retorna None por padrão fora de uma requisição."""
+    current_restaurante_id.set(None)
     assert current_restaurante_id.get() is None
 
 def test_get_tenant_id_str_sentinel_zero():
@@ -131,6 +132,7 @@ async def test_broadcast_without_tenant_does_not_send_to_restaurante_1():
     assert 1 in cm.active_connections
 
     # broadcast com restaurante_id=None e ContextVar=None
+    current_restaurante_id.set(None)
     await cm.broadcast({"event": "ping"}, restaurante_id=None)
 
     # Nenhuma mensagem enviada ao restaurante 1

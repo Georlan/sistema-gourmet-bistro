@@ -63,7 +63,8 @@ def get_relatorio_visao_geral(
     for c in comandas_curr:
         for item in c.itens:
             if item.status != "cancelado":
-                faturamento_total += float(item.preco_unitario or 0.0) * int(item.quantidade or 1)
+                p_unit = float(getattr(item, 'preco_unit', getattr(item, 'preco_unitario', 0.0)) or 0.0)
+                faturamento_total += p_unit * int(item.quantidade or 1)
 
     ticket_medio = faturamento_total / total_pedidos if total_pedidos > 0 else 0.0
 
@@ -80,7 +81,8 @@ def get_relatorio_visao_geral(
     for c in comandas_prev:
         for item in c.itens:
             if item.status != "cancelado":
-                fat_prev += float(item.preco_unitario or 0.0) * int(item.quantidade or 1)
+                p_unit = float(getattr(item, 'preco_unit', getattr(item, 'preco_unitario', 0.0)) or 0.0)
+                fat_prev += p_unit * int(item.quantidade or 1)
 
     var_fat_pct = ((faturamento_total - fat_prev) / fat_prev * 100.0) if fat_prev > 0 else 0.0
     var_pedidos_pct = ((total_pedidos - pedidos_prev) / pedidos_prev * 100.0) if pedidos_prev > 0 else 0.0
@@ -106,7 +108,8 @@ def get_relatorio_visao_geral(
     for c in comandas_mes:
         for item in c.itens:
             if item.status != "cancelado":
-                meta_realizada += float(item.preco_unitario or 0.0) * int(item.quantidade or 1)
+                p_unit = float(getattr(item, 'preco_unit', getattr(item, 'preco_unitario', 0.0)) or 0.0)
+                meta_realizada += p_unit * int(item.quantidade or 1)
 
     meta_restante = max(0.0, meta_mensal - meta_realizada)
     meta_percentual = round((meta_realizada / meta_mensal * 100.0), 1) if meta_mensal > 0 else 0.0
@@ -135,7 +138,7 @@ def get_relatorio_visao_geral(
             d_str = c.fechado_em.strftime("%Y-%m-%d")
             if d_str in vendas_diarias_map:
                 vendas_diarias_map[d_str]["quantidade_pedidos"] += 1
-                c_fat = sum(float(i.preco_unitario or 0.0) * int(i.quantidade or 1) for i in c.itens if i.status != "cancelado")
+                c_fat = sum(float(getattr(i, 'preco_unit', getattr(i, 'preco_unitario', 0.0)) or 0.0) * int(i.quantidade or 1) for i in c.itens if i.status != "cancelado")
                 vendas_diarias_map[d_str]["total"] += c_fat
 
     vendas_por_dia = sorted(list(vendas_diarias_map.values()), key=lambda x: x["data"])
@@ -146,7 +149,7 @@ def get_relatorio_visao_geral(
         if c.fechado_em:
             h = c.fechado_em.hour
             pico_map[h]["total_pedidos"] += 1
-            c_fat = sum(float(i.preco_unitario or 0.0) * int(i.quantidade or 1) for i in c.itens if i.status != "cancelado")
+            c_fat = sum(float(getattr(i, 'preco_unit', getattr(i, 'preco_unitario', 0.0)) or 0.0) * int(i.quantidade or 1) for i in c.itens if i.status != "cancelado")
             pico_map[h]["faturamento"] += c_fat
 
     horarios_pico = list(pico_map.values())
@@ -225,20 +228,20 @@ def get_vendas_detalhes(
         Pagamento.restaurante_id == rest_id,
         Pagamento.status == "aprovado"
     ).all()
-    comanda_payment_map: Dict[int, str] = {}
+    comanda_payment_map: Dict[str, str] = {}
     for p in payments:
         if p.comanda_id and p.metodo:
-            comanda_payment_map[p.comanda_id] = p.metodo
+            comanda_payment_map[str(p.comanda_id)] = p.metodo
 
     result = []
     for c in comandas:
-        c_fat = sum(float(i.preco_unitario or 0.0) * int(i.quantidade or 1) for i in c.itens if i.status != "cancelado")
+        c_fat = sum(float(getattr(i, 'preco_unit', getattr(i, 'preco_unitario', 0.0)) or 0.0) * int(i.quantidade or 1) for i in c.itens if i.status != "cancelado")
         operador = user_map.get(c.garcom_id, "Operador Caixa")
-        forma_pag = comanda_payment_map.get(c.id, "Dinheiro / Cartão")
+        forma_pag = comanda_payment_map.get(str(c.id), "Dinheiro / Cartão")
         result.append({
-            "id": c.id,
+            "id": str(c.id),
             "data_hora": c.fechado_em.isoformat() if c.fechado_em else c.criado_em.isoformat(),
-            "numero_pedido": c.numero or c.id,
+            "numero_pedido": c.numero_pedido if hasattr(c, 'numero_pedido') and c.numero_pedido else (getattr(c, 'numero', str(c.id))),
             "valor_total": round(c_fat, 2),
             "forma_pagamento": forma_pag,
             "operador": operador,
@@ -254,7 +257,7 @@ def get_relatorio_produtos(
     data_fim: Optional[str] = Query(None),
     ordenacao: str = Query("mais_vendidos"),  # "mais_vendidos" | "menos_vendidos" | "todos"
     busca: Optional[str] = Query(None),
-    categoria_id: Optional[int] = Query(None),
+    categoria_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user)
 ):
@@ -267,13 +270,13 @@ def get_relatorio_produtos(
     if busca and busca.strip():
         prod_query = prod_query.filter(Produto.nome.ilike(f"%{busca.strip()}%"))
     if categoria_id:
-        prod_query = prod_query.filter(Produto.categoria_id == categoria_id)
+        prod_query = prod_query.filter(Produto.categoria_id == str(categoria_id))
 
     produtos = prod_query.all()
 
     # Pre-fetch categories
     cats = db.query(Categoria).filter(Categoria.restaurante_id == rest_id).all()
-    cat_map = {c.id: c.nome for c in cats}
+    cat_map = {str(c.id): c.nome for c in cats}
 
     # Aggregate item sales from closed comandas in date range
     items = db.query(ComandaItem).join(Comanda).filter(
@@ -284,24 +287,25 @@ def get_relatorio_produtos(
         ComandaItem.status != "cancelado"
     ).all()
 
-    prod_sales: Dict[int, Dict[str, Any]] = {}
+    prod_sales: Dict[str, Dict[str, Any]] = {}
     for item in items:
-        pid = item.produto_id
+        pid = str(item.produto_id) if item.produto_id else None
         if pid:
             if pid not in prod_sales:
                 prod_sales[pid] = {"qtd": 0, "total": 0.0}
+            p_unit = float(getattr(item, 'preco_unit', getattr(item, 'preco_unitario', 0.0)) or 0.0)
             prod_sales[pid]["qtd"] += int(item.quantidade or 1)
-            prod_sales[pid]["total"] += float(item.preco_unitario or 0.0) * int(item.quantidade or 1)
+            prod_sales[pid]["total"] += p_unit * int(item.quantidade or 1)
 
     res_list = []
     for p in produtos:
-        s_data = prod_sales.get(p.id, {"qtd": 0, "total": 0.0})
+        s_data = prod_sales.get(str(p.id), {"qtd": 0, "total": 0.0})
         qtd = s_data["qtd"]
         tot = s_data["total"]
         t_medio = tot / qtd if qtd > 0 else 0.0
-        cat_nome = cat_map.get(p.categoria_id, "Sem Categoria")
+        cat_nome = cat_map.get(str(p.categoria_id), "Sem Categoria")
         res_list.append({
-            "produto_id": p.id,
+            "produto_id": str(p.id),
             "produto_nome": p.nome,
             "categoria_nome": cat_nome,
             "quantidade_vendida": qtd,
@@ -350,7 +354,7 @@ def get_equipe_desempenho(
         # Closed comandas for this member as garçom
         comandas = db.query(Comanda).filter(
             Comanda.restaurante_id == rest_id,
-            Comanda.garcom_id == member.id,
+            Comanda.garcom_id == str(member.id),
             Comanda.fechada == True,
             Comanda.fechado_em >= dt_inicio,
             Comanda.fechado_em <= dt_fim
@@ -361,14 +365,15 @@ def get_equipe_desempenho(
         for c in comandas:
             for item in c.itens:
                 if item.status != "cancelado":
-                    fat += float(item.preco_unitario or 0.0) * int(item.quantidade or 1)
+                    p_unit = float(getattr(item, 'preco_unit', getattr(item, 'preco_unitario', 0.0)) or 0.0)
+                    fat += p_unit * int(item.quantidade or 1)
 
         t_medio = fat / pedidos_atendidos if pedidos_atendidos > 0 else 0.0
         # Commission is PROPORTIONAL to the waiter's individual sales!
         comissao = (fat * (taxa_pct / 100.0)) if taxa_ativa else 0.0
 
         results.append({
-            "id": member.id,
+            "id": str(member.id),
             "nome": member.nome,
             "email": member.email,
             "role": member.role or "garcom",
