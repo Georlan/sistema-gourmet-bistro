@@ -162,7 +162,11 @@ export function CaixaPanel({
 
   const [activeSubTab, setActiveSubTab] = useState<string>(() => {
     const saved = sessionStorage.getItem('koma_active_subtab');
-    return saved || 'pedidos';
+    if (!saved) return 'pedidos';
+    if (saved === 'fila_pedidos') return 'pedidos';
+    if (saved === 'terminal_balcao' || saved === 'pdv') return 'balcao';
+    if (saved === 'layout_salao' || saved === 'salon') return 'mesas';
+    return saved;
   });
 
   useEffect(() => {
@@ -1494,7 +1498,7 @@ export function CaixaPanel({
 
   // Global Keyboard Shortcuts for PDV (Cashier)
   useEffect(() => {
-    if (activeSubTab !== 'pdv') return;
+    if (activeSubTab !== 'balcao') return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -2421,10 +2425,9 @@ export function CaixaPanel({
           ))}
 
           {activeTab === 'operacao' && [
-            { id: 'pedidos', label: 'Fila de Pedidos' },
-            { id: 'pdv', label: 'Terminal Balcão' },
-            { id: 'salon', label: 'Layout do Salão', show: modulesActive.salon },
-            { id: 'entregadores', label: 'Fretistas & Logística', show: !modoExclusivoSalao && !isBistro && modulesActive.delivery }
+            { id: 'pedidos', label: 'Pedidos' },
+            { id: 'balcao', label: 'Balcão' },
+            { id: 'mesas', label: 'Mesas', show: modulesActive.salon }
           ].filter(sub => sub.show !== false).map(sub => (
             <button
               key={sub.id}
@@ -2548,7 +2551,7 @@ export function CaixaPanel({
         <div className={clsx('flex-1', 'overflow-y-auto', 'p-5', 'relative')}>
 
           {/* CASHIER CLOSED WARNING BANNER */}
-          {turno?.status !== 'aberto' && ['pedidos', 'pdv', 'salon', 'kds'].includes(activeSubTab) && (
+          {turno?.status !== 'aberto' && ['pedidos', 'balcao', 'mesas', 'kds'].includes(activeSubTab) && (
             <div className={clsx('absolute', 'inset-0', 'bg-black/80', 'backdrop-blur-xs', 'z-30', 'flex', 'flex-col', 'items-center', 'justify-center', 'text-center', 'p-8', 'space-y-4')}>
               <div className={clsx('p-4', 'bg-[#1C1C1F]', 'rounded-full', 'border', 'border-amber-500/20', 'text-amber-500')}>
                 <Lock size={32} />
@@ -3140,7 +3143,7 @@ export function CaixaPanel({
           )}
 
           {/* VIEW 2: PDV (Pedidos Balcão) */}
-          {activeSubTab === 'pdv' && (
+          {activeSubTab === 'balcao' && (
             <div className={clsx('h-full', 'flex', 'gap-5', 'overflow-hidden')}>
 
               {/* Product grid column */}
@@ -3504,7 +3507,7 @@ export function CaixaPanel({
           )}
 
           {/* VIEW 3: MAPA DE MESAS (Salão) */}
-          {activeSubTab === 'salon' && (
+          {activeSubTab === 'mesas' && (
             <div className={clsx('h-full', 'flex', 'flex-col', 'space-y-4')}>
               <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-3', 'rounded-2xl', 'flex', 'justify-between', 'items-center', 'gap-3')}>
                 <span className={clsx('font-serif', 'font-bold', 'text-gray-300')}>Estrutura Física do Salão</span>
