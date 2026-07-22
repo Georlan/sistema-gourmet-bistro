@@ -265,7 +265,8 @@ export function CaixaPanel({
   const tableOrdersInProduction = (() => {
     const list: any[] = [];
     orders.forEach(comanda => {
-      if (comanda.tipo !== 'Consumo no Local' || !comanda.mesaId || comanda.mesaId <= 0) return;
+      const isDelivery = (comanda.tipo as string) === 'Delivery' || comanda.tipo === 'Entrega';
+      if (isDelivery) return;
       if ((comanda as any).statusComanda === 'aguardando_pagamento') return;
       const itemsByLancamento: Record<string, OrderItem[]> = {};
       comanda.itens.forEach(item => {
@@ -300,7 +301,8 @@ export function CaixaPanel({
     const groupedByMesa: Record<number, Array<{ comanda: any; itens: any[]; contaPedida: boolean }>> = {};
 
     orders.forEach(comanda => {
-      if (comanda.tipo !== 'Consumo no Local' || !comanda.mesaId || comanda.mesaId <= 0) return;
+      const isDelivery = (comanda.tipo as string) === 'Delivery' || comanda.tipo === 'Entrega';
+      if (isDelivery) return;
 
       const unpaid = comanda.itens.filter(i => (i.status as string) !== 'cancelado' && !i.pago);
       const readyItems = comanda.itens.filter(item => item.status === 'pronto' && !item.pago);
@@ -929,6 +931,7 @@ export function CaixaPanel({
       fetchDeliveryOrders();
       fetchMotoboys();
       fetchTurno();
+      if (onRefreshOrders) onRefreshOrders();
     };
 
     window.addEventListener('koma_orders_updated', handleDeliveryUpdate);

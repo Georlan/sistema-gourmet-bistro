@@ -625,7 +625,7 @@ export default function App() {
                 fetchPagamentosPendentes();
               }
               window.dispatchEvent(new Event('koma_orders_updated'));
-            }, 300);
+            }, 50);
             if (data.detail && data.detail.type === "pagamento_registrado" && data.detail.status === "pendente") {
               showToast(`💵 CONFIRMAR DINHEIRO: R$ ${data.detail.valor.toFixed(2)} - Garçom ${data.detail.garcom_nome}`, 'info', 5000);
             }

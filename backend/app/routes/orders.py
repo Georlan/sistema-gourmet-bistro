@@ -180,6 +180,7 @@ def abrir_comanda(comanda_in: ComandaCreate, background_tasks: BackgroundTasks, 
     try:
         nova_comanda = Comanda(
             id=f"c-{uuid.uuid4().hex[:8]}",
+            restaurante_id=current_restaurante_id.get(),
             mesa_id=comanda_in.mesa_id,
             garcom_id=comanda_in.garcom_id,
             tipo=comanda_in.tipo,
@@ -245,8 +246,10 @@ def criar_venda_direta(
     lancamento_id = f"l-{uuid.uuid4().hex[:8]}"
 
     try:
+        rid = current_restaurante_id.get() or current_user.restaurante_id
         nova_comanda = Comanda(
             id=comanda_id,
+            restaurante_id=rid,
             mesa_id=venda_in.mesa_id,
             garcom_id=garcom_id,
             tipo=venda_in.tipo,
@@ -265,7 +268,7 @@ def criar_venda_direta(
             id=lancamento_id,
             comanda_id=comanda_id,
             garcom_id=garcom_id,
-            criado_em=datetime.datetime.now(datetime.timezone.utc)
+            timestamp=datetime.datetime.now(datetime.timezone.utc)
         )
         db.add(novo_lancamento)
 
@@ -276,6 +279,7 @@ def criar_venda_direta(
                 continue
             novo_item = Item(
                 id=f"i-{uuid.uuid4().hex[:8]}",
+                restaurante_id=rid,
                 comanda_id=comanda_id,
                 lancamento_id=lancamento_id,
                 produto_id=item_in.produto_id,
