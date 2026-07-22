@@ -80,10 +80,13 @@ class Usuario(Base):
 
 class Categoria(Base):
     __tablename__ = "categorias"
+    __table_args__ = (
+        UniqueConstraint('restaurante_id', 'nome', name='uq_categorias_restaurante_nome'),
+    )
     
     id = Column(String, primary_key=True, index=True)  # ex: "cat-hamburgueres-bovinos"
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False)
-    nome = Column(String, unique=True, nullable=False)
+    nome = Column(String, nullable=False)
     destino_impressao = Column(String, default="COZINHA")  # "COZINHA" | "BAR" | "NENHUM"
     
     # Relationships
@@ -120,6 +123,7 @@ class ObservacaoPredefinida(Base):
     __tablename__ = "observacoes_predefinidas"
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
     categoria_id = Column(String, ForeignKey("categorias.id"), nullable=False)
     texto = Column(String, nullable=False)  # e.g., "Sem cebola", "Sem cheddar", "Pra viagem"
     
