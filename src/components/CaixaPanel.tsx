@@ -196,13 +196,16 @@ export function CaixaPanel({
     if (['top10', 'mais_vendidos', 'produtos_mais_vendidos'].includes(saved)) return 'produtos_mais_vendidos';
     if (['relatorio_geral', 'consolidado_vendas', 'vendas'].includes(saved)) return 'vendas';
     if (['relatorio_garçons', 'faturamento_garcom', 'equipe'].includes(saved)) return 'equipe';
+    // Clientes mappings
+    if (['clientes', 'crm', 'banco_clientes', 'fidelidade', 'programa_fidelidade'].includes(saved)) return 'clientes';
+    if (['cupons', 'cupom', 'descontos', 'cupons_desconto'].includes(saved)) return 'cupons';
     // Assistente Kôma mappings
     if (['chat_copiloto', 'chat'].includes(saved)) return 'chat';
     if (['robo_ia', 'prompt', 'prompt_atendente', 'configuracao'].includes(saved)) return 'configuracao';
     if (['simulador', 'simulador_chat'].includes(saved)) return 'simulador';
     // Placeholders redirection
     if (['fiscal', 'notas_fiscais'].includes(saved)) return 'turno_atual';
-    if (['recuperador', 'carrinhos_abandonados'].includes(saved)) return 'crm';
+    if (['recuperador', 'carrinhos_abandonados'].includes(saved)) return 'clientes';
     return saved;
   });
 
@@ -346,10 +349,10 @@ export function CaixaPanel({
         setActiveSubTab('insumos');
         break;
       case 'financeiro':
-        setActiveSubTab('fluxo');
+        setActiveSubTab('turno_atual');
         break;
       case 'clientes':
-        setActiveSubTab('crm');
+        setActiveSubTab('clientes');
         break;
       case 'robo_ia':
       case 'assistente_koma':
@@ -2528,7 +2531,7 @@ export function CaixaPanel({
             {activeTab === 'cardapio' && 'Gestão e Engenharia do Cardápio'}
             {activeTab === 'estoque' && 'GESTÃO DE ESTOQUE'}
             {activeTab === 'financeiro' && 'GESTÃO DO CAIXA'}
-            {activeTab === 'clientes' && 'Carteira de Clientes e CRM'}
+            {activeTab === 'clientes' && 'GESTÃO DE CLIENTES'}
             {(activeTab === 'permissoes_cargos' || (activeTab === 'configuracoes' && activeSubTab === 'equipe')) && 'Permissões e Gestão de Equipe'}
             {(activeTab === 'impressao_salao' || (activeTab === 'configuracoes' && activeSubTab === 'impressoras')) && 'Configurações de Impressão e Salão'}
             {(activeTab === 'assinatura_pix' || (activeTab === 'configuracoes' && activeSubTab === 'planos')) && 'Planos de Assinatura e Recebimento Pix'}
@@ -2694,21 +2697,27 @@ export function CaixaPanel({
           })}
 
           {activeTab === 'clientes' && [
-            { id: 'crm', label: 'Banco de Clientes' },
-            { id: 'fidelidade', label: 'Programa Fidelidade' },
-            { id: 'cupom', label: 'Cupons de Desconto' }
-          ].map(sub => (
-            <button
-              key={sub.id}
-              onClick={() => setActiveSubTab(sub.id)}
-              className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${activeSubTab === sub.id
-                ? 'bg-[#10b981] text-[#121214]'
-                : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
-                }`}
-            >
-              {sub.label}
-            </button>
-          ))}
+            { id: 'clientes', label: 'Clientes' },
+            { id: 'cupons', label: 'Cupons' }
+          ].map(sub => {
+            const isSubActive = (
+              (sub.id === 'clientes' && ['clientes', 'crm', 'banco_clientes', 'fidelidade', 'programa_fidelidade'].includes(activeSubTab)) ||
+              (sub.id === 'cupons' && ['cupons', 'cupom', 'descontos', 'cupons_desconto'].includes(activeSubTab)) ||
+              activeSubTab === sub.id
+            );
+            return (
+              <button
+                key={sub.id}
+                onClick={() => setActiveSubTab(sub.id)}
+                className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${isSubActive
+                  ? 'bg-[#10b981] text-[#121214]'
+                  : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
+                  }`}
+              >
+                {sub.label}
+              </button>
+            );
+          })}
 
 
 
@@ -4869,7 +4878,7 @@ export function CaixaPanel({
 
 
           {/* VIEW: CUPONS DE DESCONTO */}
-          {activeSubTab === 'cupom' && (
+          {['cupons', 'cupom', 'descontos', 'cupons_desconto'].includes(activeSubTab) && (
             <div className={clsx('grid', 'grid-cols-1', 'md:grid-cols-3', 'gap-5', 'text-left', 'animate-fade-in')}>
               <div className={clsx('md:col-span-1', 'bg-[#121214]', 'border', 'border-[#27272A]', 'p-5', 'rounded-3xl', 'space-y-4', 'h-fit')}>
                 <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Criar Novo Cupom</span>
@@ -6292,7 +6301,7 @@ export function CaixaPanel({
           )}
 
           {/* CRM CLIENTES — REAL DATA */}
-          {activeTab === 'clientes' && activeSubTab === 'crm' && (
+          {activeTab === 'clientes' && ['clientes', 'crm', 'banco_clientes', 'fidelidade', 'programa_fidelidade'].includes(activeSubTab) && (
             <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'text-left', 'animate-fade-in', 'max-w-3xl')}>
               <div className="flex justify-between items-center border-b border-[#27272A] pb-2">
                 <span className={clsx('font-serif', 'font-bold', 'text-gray-300')}>CRM — Cadastro de Clientes</span>
