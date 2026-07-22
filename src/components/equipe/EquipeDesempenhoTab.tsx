@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import clsx from 'clsx';
-import { Award, Calendar as CalendarIcon, Download, ShoppingBag, DollarSign, Percent } from 'lucide-react';
+import { Award, Calendar as CalendarIcon, Download, ShoppingBag, DollarSign, Percent, Filter } from 'lucide-react';
 import { PeriodoCalendarioModal } from '../relatorios/PeriodoCalendarioModal';
 
 interface EquipeDesempenhoTabProps {
@@ -21,6 +21,29 @@ export interface GarcomPerformanceItem {
   taxa_servico_usada: number;
 }
 
+const CARGO_OPTIONS = [
+  { value: '', label: 'Comercial (padrão)' },
+  { value: 'todos', label: 'Todos os cargos' },
+  { value: 'garcom', label: 'Garçom' },
+  { value: 'caixa', label: 'Caixa' },
+  { value: 'atendente', label: 'Atendente' },
+  { value: 'gerente', label: 'Gerente' },
+  { value: 'motoboy', label: 'Motoboy' },
+  { value: 'cozinha', label: 'Cozinha' },
+  { value: 'admin', label: 'Administrador' },
+];
+
+const ROLE_LABEL: Record<string, string> = {
+  garcom: 'Garçom',
+  caixa: 'Caixa',
+  atendente: 'Atendente',
+  gerente: 'Gerente',
+  motoboy: 'Motoboy',
+  admin: 'Administrador',
+  cozinha: 'Cozinha',
+  operador_caixa: 'Op. Caixa',
+};
+
 export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
   apiBaseUrl,
   authHeaders,
@@ -40,6 +63,7 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
   const [dataInicio, setDataInicio] = useState(defaults.inicio);
   const [dataFim, setDataFim] = useState(defaults.fim);
   const [isLoading, setIsLoading] = useState(false);
+  const [cargo, setCargo] = useState('');                   // '' = commercial default
 
   const [taxaAtiva, setTaxaAtiva] = useState(true);
   const [taxaPadrao, setTaxaPadrao] = useState(10.0);
@@ -49,8 +73,14 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
   const fetchDesempenho = async () => {
     setIsLoading(true);
     try {
+      const params = new URLSearchParams({
+        data_inicio: dataInicio,
+        data_fim: dataFim,
+      });
+      if (cargo) params.set('cargo', cargo);
+
       const res = await fetch(
-        `${apiBaseUrl}/relatorios/equipe/desempenho?data_inicio=${dataInicio}&data_fim=${dataFim}`,
+        `${apiBaseUrl}/relatorios/equipe/desempenho?${params.toString()}`,
         { headers: authHeaders }
       );
       if (res.ok) {
@@ -68,7 +98,7 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
 
   useEffect(() => {
     fetchDesempenho();
-  }, [dataInicio, dataFim]);
+  }, [dataInicio, dataFim, cargo]);
 
   const totalAtendimentos = membros.reduce((acc, m) => acc + m.pedidos_atendidos, 0);
   const totalFaturamento = membros.reduce((acc, m) => acc + m.faturamento, 0);
@@ -76,9 +106,11 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
 
   const handleExportCsv = () => {
     if (!membros.length) return;
-    let csv = 'Funcionário;Cargo;Pedidos Atendidos;Faturamento (R$);Ticket Médio (R$);Comissão Proporcional (R$)\n';
+    const periodo = `${dataInicio} até ${dataFim}`;
+    let csv = `Funcionário;Cargo;Pedidos Atendidos;Faturamento (R$);Ticket Médio (R$);Comissão Proporcional (R$);Período\n`;
     membros.forEach((m) => {
-      csv += `"${m.nome}";"${m.role}";${m.pedidos_atendidos};${m.faturamento.toFixed(2)};${m.ticket_medio.toFixed(2)};${m.comissao.toFixed(2)}\n`;
+      const label = ROLE_LABEL[m.role] || m.role;
+      csv += `"${m.nome}";"${label}";${m.pedidos_atendidos};${m.faturamento.toFixed(2)};${m.ticket_medio.toFixed(2)};${m.comissao.toFixed(2)};"${periodo}"\n`;
     });
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -88,7 +120,10 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    showToast('CSV exportado com sucesso!');
   };
+
+  const cargoLabel = CARGO_OPTIONS.find(o => o.value === cargo)?.label ?? 'Todos os cargos';
 
   return (
     <div className={clsx('space-y-6', 'text-left', 'animate-fade-in')}>
@@ -97,14 +132,33 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <Award size={18} className="text-[#10b981]" />
-            <h3 className="font-serif font-bold text-base text-white">Desempenho & Comissão da Equipe</h3>
+            <h3 className="font-serif font-bold text-base text-white">Desempenho Comercial da Equipe</h3>
           </div>
           <p className="text-[10px] text-gray-400">
-            Período: <strong className="text-gray-200">{dataInicio}</strong> até <strong className="text-gray-200">{dataFim}</strong> | Taxa de Serviço Vigente: <strong className="text-emerald-400">{taxaAtiva ? `${taxaPadrao}%` : 'Desativada'}</strong>
+            Período: <strong className="text-gray-200">{dataInicio}</strong> até <strong className="text-gray-200">{dataFim}</strong>
+            {' | '}Taxa de Serviço: <strong className="text-emerald-400">{taxaAtiva ? `${taxaPadrao}%` : 'Desativada'}</strong>
+            {' | '}Filtro: <strong className="text-sky-400">{cargoLabel}</strong>
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {/* Cargo Filter */}
+          <div className="relative flex items-center gap-1.5 bg-[#1C1C1F] border border-[#27272A] rounded-xl px-3 py-2">
+            <Filter size={12} className="text-[#10b981] shrink-0" />
+            <select
+              id="cargo-filter-select"
+              value={cargo}
+              onChange={e => setCargo(e.target.value)}
+              className="bg-transparent text-white text-[10px] font-bold cursor-pointer outline-none pr-1"
+            >
+              {CARGO_OPTIONS.map(opt => (
+                <option key={opt.value} value={opt.value} className="bg-[#1C1C1F]">
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <button
             type="button"
             onClick={() => setShowCalendarModal(true)}
@@ -136,7 +190,7 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
             </div>
           </div>
           <strong className="text-2xl text-white font-mono block">{totalAtendimentos}</strong>
-          <span className="text-[9px] text-gray-500 block">Comandas atendidas pelos garçons</span>
+          <span className="text-[9px] text-gray-500 block">Comandas atendidas pela equipe</span>
         </div>
 
         <div className="bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-2">
@@ -168,41 +222,46 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
 
       {/* Team Performance Table */}
       <div className="bg-[#121214] border border-[#27272A] rounded-3xl overflow-hidden p-5 space-y-4">
-        <div className="border-b border-[#27272A] pb-2">
+        <div className="border-b border-[#27272A] pb-2 flex items-center justify-between">
           <span className="font-serif font-bold text-sm text-white">Desempenho por Funcionário</span>
+          <span className="text-[9px] text-gray-500 font-mono">{membros.length} funcionário{membros.length !== 1 ? 's' : ''}</span>
         </div>
 
         {isLoading ? (
           <div className="p-12 text-center text-gray-400 text-xs animate-pulse">
-            Carregando desempenho dos garçons...
+            Carregando desempenho da equipe...
           </div>
         ) : membros.length === 0 ? (
           <div className="p-12 text-center text-gray-500 text-xs">
-            Nenhum funcionário encontrado no período.
+            Nenhum funcionário encontrado no período para o filtro selecionado.
           </div>
         ) : (
           <div className="overflow-x-auto border border-[#27272A]/40 rounded-2xl">
             <table className="w-full text-left text-[10px]">
               <thead className="bg-[#1C1C1F] border-b border-[#27272A] text-gray-400 uppercase tracking-wider font-bold">
                 <tr>
+                  <th className="p-3.5">#</th>
                   <th className="p-3.5">Funcionário</th>
                   <th className="p-3.5">Cargo</th>
                   <th className="p-3.5 text-center font-mono">Pedidos Atendidos</th>
                   <th className="p-3.5 text-right font-mono">Faturamento Individual</th>
                   <th className="p-3.5 text-right font-mono">Ticket Médio</th>
-                  <th className="p-3.5 text-right font-mono">Comissão Proporcional ({taxaPadrao}%)</th>
+                  <th className="p-3.5 text-right font-mono">Comissão ({taxaPadrao}%)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#27272A]/40">
-                {membros.map((m) => (
+                {membros.map((m, idx) => (
                   <tr key={m.id} className="hover:bg-[#1C1C1F]/40 transition-colors">
+                    <td className="p-3.5 font-mono text-gray-500 text-center">{idx + 1}</td>
                     <td className="p-3.5 font-bold text-white">
                       <div>
                         <span>{m.nome}</span>
                         {m.email && <span className="text-[8px] text-gray-500 block">{m.email}</span>}
                       </div>
                     </td>
-                    <td className="p-3.5 text-gray-300 capitalize">{m.role}</td>
+                    <td className="p-3.5 text-gray-300 capitalize">
+                      {ROLE_LABEL[m.role] || m.role}
+                    </td>
                     <td className="p-3.5 text-center font-mono font-bold text-sky-400">
                       {m.pedidos_atendidos}
                     </td>

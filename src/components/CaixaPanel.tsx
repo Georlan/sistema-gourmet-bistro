@@ -200,13 +200,14 @@ export function CaixaPanel({
     if (['ajustes', 'ajustes_caixa', 'movimentacoes', 'suprimento', 'sangria'].includes(saved)) return 'movimentacoes';
     if (['conferencia', 'conferencia_cega', 'fechamento'].includes(saved)) return 'fechamento';
     if (['demonstrativo_dre', 'dre', 'fluxo_caixa', 'financeiro'].includes(saved)) return 'financeiro';
-    // Relatórios mappings (Sanitização estrita: metas->visao_geral, vendas->visao_geral, produtos_mais_vendidos->produtos, equipe->visao_geral)
-    if (['visao_geral', 'metas', 'vendas', 'indicadores', 'dashboard', 'equipe', 'relatorio_garçons', 'faturamento_garcom'].includes(saved)) return 'visao_geral';
+    // Relatórios mappings — 'equipe' is now a valid sub-tab in relatórios
+    if (['visao_geral', 'metas', 'vendas', 'indicadores', 'dashboard', 'relatorio_garçons', 'faturamento_garcom'].includes(saved)) return 'visao_geral';
+    if (['equipe', 'desempenho_equipe', 'relatorio_garcons'].includes(saved)) return 'equipe';
     if (['produtos', 'produtos_mais_vendidos', 'top10', 'mais_vendidos'].includes(saved)) return 'produtos';
     if (['financeiro', 'dre', 'demonstrativo_dre'].includes(saved)) return 'financeiro';
-    // Equipe mappings
-    if (['pessoas', 'convites', 'cargos'].includes(saved)) return 'pessoas';
-    if (['desempenho'].includes(saved)) return 'desempenho';
+    // Equipe lateral mappings
+    if (['pessoas', 'convites'].includes(saved)) return 'pessoas';
+    if (['cargos', 'cargos_permissoes', 'permissoes'].includes(saved)) return 'cargos_permissoes';
     // Clientes mappings
     if (['clientes', 'crm', 'banco_clientes', 'fidelidade', 'programa_fidelidade'].includes(saved)) return 'clientes';
     if (['cupons', 'cupom', 'descontos', 'cupons_desconto'].includes(saved)) return 'cupons';
@@ -227,12 +228,15 @@ export function CaixaPanel({
   useEffect(() => {
     let sanitized = activeSubTab;
     if (activeTab === 'relatorios' || activeTab === 'dashboard') {
-      if (['metas', 'vendas', 'equipe', 'indicadores', 'relatorio_geral', 'faturamento_garcom'].includes(activeSubTab)) {
+      if (['metas', 'vendas', 'indicadores', 'relatorio_geral', 'faturamento_garcom'].includes(activeSubTab)) {
         sanitized = 'visao_geral';
         setActiveSubTab('visao_geral');
       } else if (['produtos_mais_vendidos', 'top10', 'mais_vendidos'].includes(activeSubTab)) {
         sanitized = 'produtos';
         setActiveSubTab('produtos');
+      } else if (['desempenho', 'relatorio_garcons', 'relatorio_garçons'].includes(activeSubTab)) {
+        sanitized = 'equipe';
+        setActiveSubTab('equipe');
       }
     }
     sessionStorage.setItem('koma_active_subtab', sanitized);
@@ -2714,17 +2718,20 @@ export function CaixaPanel({
           {(activeTab === 'relatorios' || activeTab === 'dashboard') && [
             { id: 'visao_geral', label: 'Visão Geral' },
             { id: 'financeiro', label: 'Financeiro' },
-            { id: 'produtos', label: 'Produtos' }
+            { id: 'produtos', label: 'Produtos' },
+            { id: 'equipe', label: 'Equipe' }
           ].map(sub => {
             const isSubActive = (
-              (sub.id === 'visao_geral' && ['visao_geral', 'metas', 'vendas', 'indicadores', 'desempenho'].includes(activeSubTab)) ||
+              (sub.id === 'visao_geral' && ['visao_geral', 'metas', 'vendas', 'indicadores'].includes(activeSubTab)) ||
               (sub.id === 'financeiro' && ['financeiro', 'dre', 'demonstrativo_dre'].includes(activeSubTab)) ||
               (sub.id === 'produtos' && ['produtos', 'produtos_mais_vendidos', 'top10'].includes(activeSubTab)) ||
+              (sub.id === 'equipe' && ['equipe', 'desempenho_equipe'].includes(activeSubTab)) ||
               activeSubTab === sub.id
             );
             return (
               <button
                 key={sub.id}
+                id={`relatorios-subtab-${sub.id}`}
                 onClick={() => setActiveSubTab(sub.id)}
                 className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${isSubActive
                   ? 'bg-[#10b981] text-[#121214]'
@@ -2736,18 +2743,19 @@ export function CaixaPanel({
             );
           })}
 
-          {(activeTab === 'permissoes_cargos' || (activeTab === 'configuracoes' && activeSubTab === 'equipe')) && [
+          {(activeTab === 'permissoes_cargos') && [
             { id: 'pessoas', label: 'Pessoas' },
-            { id: 'desempenho', label: 'Desempenho' }
+            { id: 'cargos_permissoes', label: 'Cargos e Permissões' }
           ].map(sub => {
             const isSubActive = (
-              (sub.id === 'pessoas' && ['pessoas', 'equipe', 'convites', 'cargos'].includes(activeSubTab)) ||
-              (sub.id === 'desempenho' && ['desempenho', 'faturamento_garcom', 'relatorio_garçons'].includes(activeSubTab)) ||
+              (sub.id === 'pessoas' && ['pessoas', 'equipe', 'convites'].includes(activeSubTab)) ||
+              (sub.id === 'cargos_permissoes' && ['cargos_permissoes', 'cargos', 'permissoes'].includes(activeSubTab)) ||
               activeSubTab === sub.id
             );
             return (
               <button
                 key={sub.id}
+                id={`equipe-subtab-${sub.id}`}
                 onClick={() => setActiveSubTab(sub.id)}
                 className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${isSubActive
                   ? 'bg-[#10b981] text-[#121214]'
@@ -4139,7 +4147,7 @@ export function CaixaPanel({
           )}
 
           {/* VIEW: EQUIPE — PESSOAS */}
-          {(activeTab === 'permissoes_cargos' || activeSubTab === 'equipe') && ['pessoas', 'equipe', 'convites', 'cargos'].includes(activeSubTab) && (
+          {activeTab === 'permissoes_cargos' && ['pessoas', 'equipe', 'convites'].includes(activeSubTab) && (
             <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5')}>
 
               {/* CRUD table list */}
@@ -4264,10 +4272,59 @@ export function CaixaPanel({
               </div>
           )}
 
-          {/* VIEW: EQUIPE — DESEMPENHO */}
-          {(activeTab === 'permissoes_cargos' || activeSubTab === 'equipe') && activeSubTab === 'desempenho' && (
-            <EquipeDesempenhoTab apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} showToast={showToast} />
+          {/* VIEW: EQUIPE — CARGOS E PERMISSÕES */}
+          {activeTab === 'permissoes_cargos' && ['cargos_permissoes', 'cargos', 'permissoes'].includes(activeSubTab) && (
+            <div className={clsx('space-y-6', 'animate-fade-in', 'text-left')}>
+              <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4')}>
+                <div className={clsx('border-b', 'border-[#27272A]', 'pb-2', 'flex', 'items-center', 'justify-between')}>
+                  <span className={clsx('font-serif', 'font-bold', 'text-sm', 'text-white')}>Cargos e Permissões</span>
+                  <span className="text-[9px] text-gray-500">Controle de acesso por função</span>
+                </div>
+                <div className="overflow-x-auto border border-[#27272A]/40 rounded-2xl">
+                  <table className="w-full text-left text-[10px]">
+                    <thead className="bg-[#1C1C1F] border-b border-[#27272A] text-gray-400 uppercase tracking-wider font-bold">
+                      <tr>
+                        <th className="p-3.5">Cargo</th>
+                        <th className="p-3.5">Acesso a Pedidos</th>
+                        <th className="p-3.5">Acesso ao Caixa</th>
+                        <th className="p-3.5">Acesso a Relatórios</th>
+                        <th className="p-3.5">Gestão de Equipe</th>
+                        <th className="p-3.5">Administração</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#27272A]/40">
+                      {([
+                        { cargo: 'Administrador', pedidos: true, caixa: true, relatorios: true, equipe: true, admin: true },
+                        { cargo: 'Gerente', pedidos: true, caixa: true, relatorios: true, equipe: true, admin: false },
+                        { cargo: 'Operador Caixa', pedidos: true, caixa: true, relatorios: false, equipe: false, admin: false },
+                        { cargo: 'Garçom', pedidos: true, caixa: false, relatorios: false, equipe: false, admin: false },
+                        { cargo: 'Atendente', pedidos: true, caixa: false, relatorios: false, equipe: false, admin: false },
+                        { cargo: 'Cozinha', pedidos: false, caixa: false, relatorios: false, equipe: false, admin: false },
+                        { cargo: 'Motoboy', pedidos: true, caixa: false, relatorios: false, equipe: false, admin: false },
+                      ] as { cargo: string; pedidos: boolean; caixa: boolean; relatorios: boolean; equipe: boolean; admin: boolean }[]).map((row) => (
+                        <tr key={row.cargo} className="hover:bg-[#1C1C1F]/40 transition-colors">
+                          <td className="p-3.5 font-bold text-white">{row.cargo}</td>
+                          {(['pedidos', 'caixa', 'relatorios', 'equipe', 'admin'] as const).map(col => (
+                            <td key={col} className="p-3.5">
+                              <span className={`px-2 py-0.5 text-[8px] font-bold rounded uppercase tracking-wider ${
+                                row[col] ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-[#1C1C1F] text-gray-600'
+                              }`}>
+                                {row[col] ? 'Sim' : 'Não'}
+                              </span>
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-[9px] text-gray-500 pt-1">
+                  * Permissões gerenciadas automaticamente pelo sistema conforme o cargo cadastrado. Para ajustes customizados, entre em contato com o suporte Kôma.
+                </p>
+              </div>
+            </div>
           )}
+
 
           {/* VIEW 7: CONFIGURAÇÕES SALÃO (App Garçom & Impressoras) */}
           {(activeTab === 'impressao_salao' || activeSubTab === 'impressoras') && (
@@ -5150,6 +5207,11 @@ export function CaixaPanel({
           {/* VIEW: RELATÓRIOS — PRODUTOS */}
           {(activeTab === 'relatorios' || activeTab === 'dashboard') && ['produtos', 'produtos_mais_vendidos', 'top10', 'mais_vendidos'].includes(activeSubTab) && (
             <RelatoriosProdutosTab apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} showToast={showToast} />
+          )}
+
+          {/* VIEW: RELATÓRIOS — EQUIPE (reutiliza o mesmo componente de desempenho) */}
+          {(activeTab === 'relatorios' || activeTab === 'dashboard') && activeSubTab === 'equipe' && (
+            <EquipeDesempenhoTab apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} showToast={showToast} />
           )}
 
           {/* MOCK VIEW: FICHA TÉCNICA (OCULTO - IMPLEMENTAÇÃO REAL FUTURA) */}

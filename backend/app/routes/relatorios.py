@@ -326,10 +326,15 @@ def get_relatorio_produtos(
     return res_list
 
 
+# Commercial/front-of-house roles included by default in performance ranking
+COMMERCIAL_ROLES = {"garcom", "caixa", "atendente", "operador_caixa"}
+
+
 @router.get("/equipe/desempenho")
 def get_equipe_desempenho(
     data_inicio: Optional[str] = Query(None),
     data_fim: Optional[str] = Query(None),
+    cargo: Optional[str] = Query(None, description="Filter by role slug (garcom, caixa, atendente, gerente...). Empty = commercial roles only."),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user)
 ):
@@ -351,6 +356,17 @@ def get_equipe_desempenho(
 
     results = []
     for member in equipe_members:
+        member_role = (member.role or "garcom").lower().strip()
+
+        # Filter by cargo param if provided; otherwise restrict to commercial roles
+        if cargo and cargo.lower().strip() != "todos":
+            if member_role != cargo.lower().strip():
+                continue
+        else:
+            # Default: only show commercial / front-of-house roles
+            if member_role not in COMMERCIAL_ROLES:
+                continue
+
         # Closed comandas for this member as garçom
         comandas = db.query(Comanda).filter(
             Comanda.restaurante_id == rest_id,
@@ -369,14 +385,14 @@ def get_equipe_desempenho(
                     fat += p_unit * int(item.quantidade or 1)
 
         t_medio = fat / pedidos_atendidos if pedidos_atendidos > 0 else 0.0
-        # Commission is PROPORTIONAL to the waiter's individual sales!
+        # Commission is PROPORTIONAL to the member's individual sales!
         comissao = (fat * (taxa_pct / 100.0)) if taxa_ativa else 0.0
 
         results.append({
             "id": str(member.id),
             "nome": member.nome,
             "email": member.email,
-            "role": member.role or "garcom",
+            "role": member_role,
             "pedidos_atendidos": pedidos_atendidos,
             "faturamento": round(fat, 2),
             "ticket_medio": round(t_medio, 2),
@@ -384,11 +400,12 @@ def get_equipe_desempenho(
             "taxa_servico_usada": taxa_pct if taxa_ativa else 0.0
         })
 
-    # Sort team members by sales descending
-    results.sort(key=lambda x: x["faturamento"], reverse=True)
+    # Sort: primary by faturamento desc; employees with zero orders still show (sorted last)
+    results.sort(key=lambda x: (x["faturamento"], x["pedidos_atendidos"]), reverse=True)
 
     return {
         "taxa_servico_ativa": taxa_ativa,
         "taxa_servico_padrao": taxa_pct,
         "membros": results
     }
+
