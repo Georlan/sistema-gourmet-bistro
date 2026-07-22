@@ -152,7 +152,23 @@ def get_next_job(
 ):
     """
     Retorna o próximo job pendente na fila do restaurante do agente.
+    Libera automaticamente jobs travados em 'claimed' há mais de 5 minutos.
     """
+    now = datetime.datetime.now(datetime.timezone.utc)
+    stuck_cutoff = now - datetime.timedelta(minutes=5)
+
+    # Libera jobs abandonados/travados
+    db.query(PrintJob).filter(
+        PrintJob.restaurante_id == agent.restaurante_id,
+        PrintJob.status == "claimed",
+        PrintJob.claimed_at < stuck_cutoff
+    ).update({
+        "status": "pending",
+        "claimed_at": None,
+        "agent_id": None
+    }, synchronize_session=False)
+    db.commit()
+
     job = db.query(PrintJob).filter(
         PrintJob.restaurante_id == agent.restaurante_id,
         PrintJob.status == "pending"
@@ -181,27 +197,37 @@ def claim_job(
     db: Session = Depends(get_db)
 ):
     """
-    Realiza o claim atômico de um job pendente pelo agente logado.
-    Dois agentes não podem assumir o mesmo job.
+    Realiza o claim 100% atômico de um job pendente pelo agente logado.
+    Garante que dois agentes concorrentes NUNCA assumam o mesmo job.
     """
-    job = db.query(PrintJob).filter(
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    # UPDATE atômico condicional — retorna o número de linhas realmente alteradas
+    rows_updated = db.query(PrintJob).filter(
         PrintJob.id == job_id,
-        PrintJob.restaurante_id == agent.restaurante_id
-    ).first()
+        PrintJob.restaurante_id == agent.restaurante_id,
+        PrintJob.status == "pending"
+    ).update({
+        "status": "claimed",
+        "claimed_at": now,
+        "agent_id": agent.agent_id
+    }, synchronize_session=False)
+    db.commit()
 
-    if not job:
-        raise HTTPException(status_code=404, detail="Job de impressão não encontrado")
+    if rows_updated == 0:
+        existing = db.query(PrintJob).filter(
+            PrintJob.id == job_id,
+            PrintJob.restaurante_id == agent.restaurante_id
+        ).first()
 
-    if job.status != "pending":
+        if not existing:
+            raise HTTPException(status_code=404, detail="Job de impressão não encontrado")
         raise HTTPException(
             status_code=409,
-            detail=f"Job não está pendente para claim (status atual: '{job.status}')"
+            detail=f"Job já foi assumido por outro agente ou não está pendente (status: '{existing.status}')"
         )
 
-    job.status = "claimed"
-    job.claimed_at = datetime.datetime.now(datetime.timezone.utc)
-    job.agent_id = agent.agent_id
-    db.commit()
+    job = db.query(PrintJob).filter(PrintJob.id == job_id).first()
 
     return {
         "id": job.id,
