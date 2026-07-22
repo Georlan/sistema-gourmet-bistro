@@ -171,9 +171,9 @@ export function CaixaPanel({
     if (saved === 'fila_pedidos') return 'pedidos';
     if (saved === 'terminal_balcao' || saved === 'pdv') return 'balcao';
     if (saved === 'layout_salao' || saved === 'salon') return 'mesas';
-    if (['cardapio', 'cardapio_lista', 'cmv', 'custos', 'ficha_tecnica'].includes(saved)) return 'produtos';
-    if (['categorias_cardapio', 'categorias_lista'].includes(saved)) return 'categorias';
-    if (['config_cardapio', 'configuracoes_cardapio'].includes(saved)) return 'cardapio_digital';
+    if (['insumos', 'estoque_insumos'].includes(saved)) return 'insumos';
+    if (['xml', 'notas', 'entradas'].includes(saved)) return 'xml';
+    if (['fornecedores', 'distribuidores'].includes(saved)) return 'fornecedores';
     // Relatórios mappings
     if (['desempenho', 'minha_performance', 'dashboard', 'indicadores'].includes(saved)) return 'visao_geral';
     if (['metas', 'metas_previsoes'].includes(saved)) return 'metas';
@@ -2261,16 +2261,16 @@ export function CaixaPanel({
               {
                 category: 'Fluxo Operacional',
                 items: [
-                  { id: 'operacao', label: 'Painel de Vendas', icon: ShoppingCart },
+                  { id: 'operacao', label: 'Vendas', icon: ShoppingCart },
                   { id: 'cardapio', label: 'Cardápio', icon: ClipboardList },
-                  { id: 'estoque', label: 'Controle de Estoque', icon: Package }
+                  { id: 'estoque', label: 'Estoque', icon: Package }
                 ]
               },
               {
                 category: 'Gestão de Tesouraria',
                 items: [
-                  { id: 'financeiro', label: 'Caixa & Notas', icon: DollarSign },
-                  { id: 'clientes', label: 'CRM & Fidelidade', icon: Users }
+                  { id: 'financeiro', label: 'Caixa', icon: DollarSign },
+                  { id: 'clientes', label: 'Clientes', icon: Users }
                 ]
               },
               {
@@ -2288,8 +2288,8 @@ export function CaixaPanel({
               {
                 category: 'Parâmetros do Sistema',
                 items: [
-                  { id: 'permissoes_cargos', label: 'Permissões & Cargos', icon: ShieldCheck },
-                  { id: 'impressao_salao', label: 'Impressão & Salão', icon: Printer },
+                  { id: 'permissoes_cargos', label: 'Equipe', icon: ShieldCheck },
+                  { id: 'impressao_salao', label: 'Salão e Impressão', icon: Printer },
                   { id: 'assinatura_pix', label: 'Assinatura & Pix', icon: CreditCard },
                   { id: 'cardapio_digital', label: 'Cardápio Digital', icon: Globe }
                 ]
@@ -2403,7 +2403,7 @@ export function CaixaPanel({
             {(activeTab === 'assistente_koma' || activeTab === 'robo_ia') && 'Assistente Kôma'}
             {activeTab === 'operacao' && 'Gestão de Atendimento Local'}
             {activeTab === 'cardapio' && 'Gestão e Engenharia do Cardápio'}
-            {activeTab === 'estoque' && 'Controle de Inventário e Insumos'}
+            {activeTab === 'estoque' && 'GESTÃO DE ESTOQUE'}
             {activeTab === 'financeiro' && 'Tesouraria e Fluxo de Caixa'}
             {activeTab === 'clientes' && 'Carteira de Clientes e CRM'}
             {(activeTab === 'permissoes_cargos' || (activeTab === 'configuracoes' && activeSubTab === 'equipe')) && 'Permissões e Gestão de Equipe'}
@@ -2518,9 +2518,9 @@ export function CaixaPanel({
           ))}
 
           {activeTab === 'estoque' && [
-            { id: 'insumos', label: 'Estoque de Insumos' },
-            { id: 'xml', label: 'Notas de Entrada' },
-            { id: 'fornecedores', label: 'Distribuidores' }
+            { id: 'insumos', label: 'Insumos' },
+            { id: 'xml', label: 'Entradas' },
+            { id: 'fornecedores', label: 'Fornecedores' }
           ].map(sub => (
             <button
               key={sub.id}
@@ -5846,7 +5846,7 @@ export function CaixaPanel({
             <div className={clsx('animate-fade-in', 'space-y-4', 'text-left')}>
               <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-3')}>
                 <div className="flex justify-between items-center border-b border-[#27272A] pb-2">
-                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300')}>Estoque de Insumos</span>
+                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300')}>Insumos</span>
                   <button
                     type="button"
                     onClick={() => {
@@ -6011,7 +6011,7 @@ export function CaixaPanel({
                 </div>
 
                 <div className={clsx('lg:col-span-2', 'bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4')}>
-                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Entradas de NF-e</span>
+                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Entradas</span>
                   <div className={clsx('overflow-hidden', 'border', 'border-[#27272A]/40', 'rounded-2xl')}>
                     <table className={clsx('w-full', 'text-left', 'text-[10px]')}>
                       <thead>
@@ -6045,7 +6045,7 @@ export function CaixaPanel({
           {activeTab === 'estoque' && activeSubTab === 'fornecedores' && (
             <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'text-left', 'animate-fade-in')}>
               <div className="flex justify-between items-center border-b border-[#27272A] pb-2">
-                <span className={clsx('font-serif', 'font-bold', 'text-gray-300')}>Distribuidores Cadastrados</span>
+                <span className={clsx('font-serif', 'font-bold', 'text-gray-300')}>Fornecedores</span>
                 <button
                   type="button"
                   onClick={() => {
@@ -6058,7 +6058,7 @@ export function CaixaPanel({
                   }}
                   className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm"
                 >
-                  + Novo Distribuidor
+                  + Novo Fornecedor
                 </button>
               </div>
               <div className={clsx('overflow-hidden', 'border', 'border-[#27272A]/40', 'rounded-2xl')}>
@@ -6074,7 +6074,7 @@ export function CaixaPanel({
                   </thead>
                   <tbody className={clsx('divide-y', 'divide-[#27272A]/40')}>
                     {distribuidores.length === 0 ? (
-                      <tr><td colSpan={5} className="p-8 text-center text-gray-500 italic">Nenhum distribuidor cadastrado. Clique em Novo Distribuidor ou importe uma NF-e.</td></tr>
+                      <tr><td colSpan={5} className="p-8 text-center text-gray-500 italic">Nenhum fornecedor cadastrado. Clique em Novo Fornecedor ou importe uma NF-e.</td></tr>
                     ) : distribuidores.map(dist => (
                       <tr key={dist.id} className={clsx('hover:bg-[#1C1C1F]/20', 'transition-colors')}>
                         <td className={clsx('p-3.5', 'font-bold', 'text-white')}>{dist.nome_fantasia || '—'} <span className="text-[8px] text-gray-500 block font-mono">ID: {dist.id}</span></td>
@@ -8639,7 +8639,7 @@ export function CaixaPanel({
           <div className="w-full max-w-md bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
             <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
               <h3 className="font-serif text-sm font-bold text-white">
-                Cadastrar Novo Distribuidor
+                Cadastrar Novo Fornecedor
               </h3>
               <button 
                 type="button" 
@@ -8750,7 +8750,7 @@ export function CaixaPanel({
           <div className="w-full max-w-md bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
             <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
               <h3 className="font-serif text-sm font-bold text-white">
-                Editar Distribuidor: {selectedDist.nome_fantasia}
+                Editar Fornecedor: {selectedDist.nome_fantasia}
               </h3>
               <button 
                 type="button" 
