@@ -9,7 +9,13 @@ import {
   MessageSquare, Send, Printer, Cpu, HelpCircle, Smartphone,
   Gift, Tag, TrendingUp, Heart, Globe
 , Upload} from 'lucide-react';
-import { Order, OrderItem, CaixaTurno, CaixaMovimentacao, Pagamento, Table, Product } from '../types';
+import { Order, OrderItem, CaixaTurno, CaixaMovimentacao, Pagamento, Table, Product, EntradaEstoque, MovimentacaoEstoque, SessaoContagemEstoque } from '../types';
+import { EstoqueEntradasTab } from './estoque/EstoqueEntradasTab';
+import { EntradaManualModal } from './estoque/EntradaManualModal';
+import { EstoqueMovimentacoesTab } from './estoque/EstoqueMovimentacoesTab';
+import { MovimentacaoEstoqueModal } from './estoque/MovimentacaoEstoqueModal';
+import { EstoqueContagemTab } from './estoque/EstoqueContagemTab';
+import { ContagemEstoqueModal } from './estoque/ContagemEstoqueModal';
 import { PRODUCTS, CATEGORIES } from '../data';
 import { getProductPresets, obterNomeCategoria, smartSearchMatch } from '../domain';
 import { API } from '../config/caixaService';
@@ -428,6 +434,13 @@ export function CaixaPanel({
   const [estoqueSugestoes, setEstoqueSugestoes] = useState<{ id: string, nome: string, estoque_atual: number, estoque_minimo: number, estoque_maximo: number, unidade_medida: string, quantidade_sugerida: number }[]>([]);
   const [notasEntrada, setNotasEntrada] = useState<{ id: string, numero_nota: string, chave_acesso: string, data_emissao: string, valor_total: number, distribuidor: { nome_fantasia: string, cnpj: string } | null }[]>([]);
   const [distribuidores, setDistribuidores] = useState<{ id: string, nome_fantasia: string, razao_social: string, cnpj: string, lead_time_dias: number }[]>([]);
+  const [entradasEstoque, setEntradasEstoque] = useState<EntradaEstoque[]>([]);
+  const [movimentacoesEstoque, setMovimentacoesEstoque] = useState<MovimentacaoEstoque[]>([]);
+  const [sessoesContagemEstoque, setSessoesContagemEstoque] = useState<SessaoContagemEstoque[]>([]);
+  const [showEntradaManualModal, setShowEntradaManualModal] = useState<boolean>(false);
+  const [showMovimentacaoModal, setShowMovimentacaoModal] = useState<boolean>(false);
+  const [showContagemModal, setShowContagemModal] = useState<boolean>(false);
+  const [selectedContagemId, setSelectedContagemId] = useState<string | null>(null);
   const [xmlUploadState, setXmlUploadState] = useState<{ loading: boolean, result: any | null, error: string | null, isDragging: boolean }>({ loading: false, result: null, error: null, isDragging: false });
   const xmlFileInputRef = useRef<HTMLInputElement>(null);
   const [horariosPico, setHorariosPico] = useState<{ dia_semana_label: string, dia_semana: number, hora: string, total_pedidos: number }[]>([]);
@@ -1466,6 +1479,21 @@ export function CaixaPanel({
         .then(res => res.json())
         .then(data => { if (Array.isArray(data)) setDistribuidores(data); })
         .catch(err => console.error('Error fetching distribuidores:', err));
+
+      fetch(`${apiBaseUrl}/estoque/entradas`, { headers: authHeaders })
+        .then(res => res.json())
+        .then(data => { if (Array.isArray(data)) setEntradasEstoque(data); })
+        .catch(err => console.error('Error fetching entradas:', err));
+
+      fetch(`${apiBaseUrl}/estoque/movimentacoes`, { headers: authHeaders })
+        .then(res => res.json())
+        .then(data => { if (Array.isArray(data)) setMovimentacoesEstoque(data); })
+        .catch(err => console.error('Error fetching movimentacoes:', err));
+
+      fetch(`${apiBaseUrl}/estoque/contagens`, { headers: authHeaders })
+        .then(res => res.json())
+        .then(data => { if (Array.isArray(data)) setSessoesContagemEstoque(data); })
+        .catch(err => console.error('Error fetching contagens:', err));
     }
     if ((activeTab === 'relatorios' || activeTab === 'dashboard') && ['metas', 'metas_previsoes'].includes(activeSubTab)) {
       fetch(`${apiBaseUrl}/comandas/estatisticas/pico`, { headers: authHeaders })
@@ -2519,20 +2547,29 @@ export function CaixaPanel({
 
           {activeTab === 'estoque' && [
             { id: 'insumos', label: 'Insumos' },
-            { id: 'xml', label: 'Entradas' },
+            { id: 'entradas', label: 'Entradas' },
+            { id: 'movimentacoes', label: 'Movimentações' },
+            { id: 'contagem', label: 'Contagem' },
             { id: 'fornecedores', label: 'Fornecedores' }
-          ].map(sub => (
-            <button
-              key={sub.id}
-              onClick={() => setActiveSubTab(sub.id)}
-              className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${activeSubTab === sub.id
-                ? 'bg-[#10b981] text-[#121214]'
-                : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
-                }`}
-            >
-              {sub.label}
-            </button>
-          ))}
+          ].map(sub => {
+            const isSubActive = (
+              (sub.id === 'entradas' && ['entradas', 'xml', 'notas_entrada'].includes(activeSubTab)) ||
+              (sub.id === 'fornecedores' && ['fornecedores', 'distribuidores'].includes(activeSubTab)) ||
+              activeSubTab === sub.id
+            );
+            return (
+              <button
+                key={sub.id}
+                onClick={() => setActiveSubTab(sub.id)}
+                className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${isSubActive
+                  ? 'bg-[#10b981] text-[#121214]'
+                  : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
+                  }`}
+              >
+                {sub.label}
+              </button>
+            );
+          })}
 
           {activeTab === 'financeiro' && [
             { id: 'fluxo', label: 'Demonstrativo DRE' },
@@ -5932,114 +5969,74 @@ export function CaixaPanel({
             </div>
           )}
 
-          {/* LIVE VIEW: ENTRADA DE XML NFE */}
-          {activeTab === 'estoque' && activeSubTab === 'xml' && (() => {
-            const handleXmlUpload = async (file: File) => {
-              if (!file || !file.name.endsWith('.xml')) {
-                setXmlUploadState(s => ({ ...s, error: 'Por favor, selecione um arquivo .xml válido.', result: null }));
-                return;
-              }
-              setXmlUploadState(s => ({ ...s, loading: true, error: null, result: null }));
-              const formData = new FormData();
-              formData.append('file', file);
-              try {
-                const res = await fetch(`${apiBaseUrl}/estoque/importar-xml`, {
-                  method: 'POST',
-                  headers: authHeaders,
-                  body: formData
-                });
-                const json = await res.json();
-                if (!res.ok) throw new Error(json.detail || 'Erro ao importar XML.');
-                setXmlUploadState(s => ({ ...s, loading: false, result: json }));
-                // Refresh all estoque data
-                fetch(`${apiBaseUrl}/estoque/insumos`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setEstoqueInsumos(d); });
-                fetch(`${apiBaseUrl}/estoque/notas`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setNotasEntrada(d); });
-                fetch(`${apiBaseUrl}/estoque/distribuidores`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setDistribuidores(d); });
-              } catch (err: any) {
-                setXmlUploadState(s => ({ ...s, loading: false, error: err.message || 'Erro desconhecido.' }));
-              }
-            };
-            return (
-              <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5', 'text-left', 'animate-fade-in')}>
-                <input ref={xmlFileInputRef} type="file" accept=".xml" className="hidden" onChange={e => { if (e.target.files?.[0]) handleXmlUpload(e.target.files[0]); e.target.value = ''; }} />
-                <div className={clsx('lg:col-span-1', 'space-y-4')}>
-                  <div
-                    className={clsx('bg-[#121214]', 'border-2', 'border-dashed', 'rounded-3xl', 'p-6', 'text-center', 'cursor-pointer', 'transition-all', 'space-y-3',
-                      xmlUploadState.isDragging ? 'border-[#10b981] bg-[#10b981]/5' : 'border-[#27272A] hover:border-[#10b981]/30'
-                    )}
-                    onClick={() => xmlFileInputRef.current?.click()}
-                    onDragOver={e => { e.preventDefault(); setXmlUploadState(s => ({ ...s, isDragging: true })); }}
-                    onDragLeave={() => setXmlUploadState(s => ({ ...s, isDragging: false }))}
-                    onDrop={e => { e.preventDefault(); setXmlUploadState(s => ({ ...s, isDragging: false })); const f = e.dataTransfer.files[0]; if (f) handleXmlUpload(f); }}
-                  >
-                    {xmlUploadState.loading ? (
-                      <div className="flex flex-col items-center gap-2 py-4">
-                        <div className="w-8 h-8 border-2 border-[#10b981] border-t-transparent rounded-full animate-spin" />
-                        <span className="text-[10px] text-[#10b981]">Processando NF-e...</span>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="text-3xl">📄</div>
-                        <span className="block text-[11px] font-semibold text-gray-300">Arraste ou clique para importar</span>
-                        <span className="block text-[9px] text-gray-500">Arquivo XML de NF-e (modelo 55)</span>
-                      </>
-                    )}
-                  </div>
+          {/* LIVE VIEW: ENTRADAS (MANUAIS E XML) */}
+          {activeTab === 'estoque' && ['entradas', 'xml', 'notas_entrada'].includes(activeSubTab) && (
+            <EstoqueEntradasTab
+              entradas={entradasEstoque}
+              notasEntradaXml={notasEntrada}
+              distribuidores={distribuidores}
+              insumos={estoqueInsumos}
+              isLoading={isLoading}
+              onOpenNovaEntradaModal={() => setShowEntradaManualModal(true)}
+              onUploadXmlFile={async (file: File) => {
+                if (!file || !file.name.endsWith('.xml')) {
+                  setXmlUploadState(s => ({ ...s, error: 'Por favor, selecione um arquivo .xml válido.', result: null }));
+                  return;
+                }
+                setXmlUploadState(s => ({ ...s, loading: true, error: null, result: null }));
+                const formData = new FormData();
+                formData.append('file', file);
+                try {
+                  const res = await fetch(`${apiBaseUrl}/estoque/importar-xml`, {
+                    method: 'POST',
+                    headers: authHeaders,
+                    body: formData
+                  });
+                  const json = await res.json();
+                  if (!res.ok) throw new Error(json.detail || 'Erro ao importar XML.');
+                  setXmlUploadState(s => ({ ...s, loading: false, result: json }));
+                  // Refresh all estoque data
+                  fetch(`${apiBaseUrl}/estoque/insumos`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setEstoqueInsumos(d); });
+                  fetch(`${apiBaseUrl}/estoque/notas`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setNotasEntrada(d); });
+                  fetch(`${apiBaseUrl}/estoque/entradas`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setEntradasEstoque(d); });
+                  fetch(`${apiBaseUrl}/estoque/distribuidores`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setDistribuidores(d); });
+                } catch (err: any) {
+                  setXmlUploadState(s => ({ ...s, loading: false, error: err.message || 'Erro desconhecido.' }));
+                }
+              }}
+              xmlUploadState={xmlUploadState}
+              onResetXmlState={() => setXmlUploadState(s => ({ ...s, result: null, error: null }))}
+              xmlFileInputRef={xmlFileInputRef}
+            />
+          )}
 
-                  {xmlUploadState.result && (
-                    <div className={clsx('bg-emerald-500/10', 'border', 'border-emerald-500/20', 'rounded-2xl', 'p-4', 'space-y-2', 'text-left')}>
-                      <span className="block text-[10px] font-bold text-emerald-400 uppercase tracking-wider">✓ NF-e Importada com Sucesso</span>
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[9px] text-gray-400 pt-1">
-                        <span>Fornecedor:</span><span className="text-white font-semibold">{xmlUploadState.result.fornecedor}</span>
-                        <span>Insumos criados:</span><span className="text-emerald-400 font-mono">{xmlUploadState.result.insumos_criados}</span>
-                        <span>Insumos atualizados:</span><span className="text-sky-400 font-mono">{xmlUploadState.result.insumos_atualizados}</span>
-                        <span>Valor total:</span><span className="text-white font-mono">R$ {Number(xmlUploadState.result.valor_total).toFixed(2)}</span>
-                      </div>
-                      <button onClick={() => setXmlUploadState(s => ({ ...s, result: null }))} className="text-[8px] text-gray-600 hover:text-gray-400 mt-1 cursor-pointer">Fechar</button>
-                    </div>
-                  )}
+          {/* LIVE VIEW: MOVIMENTAÇÕES DE ESTOQUE */}
+          {activeTab === 'estoque' && activeSubTab === 'movimentacoes' && (
+            <EstoqueMovimentacoesTab
+              movimentacoes={movimentacoesEstoque}
+              insumos={estoqueInsumos}
+              isLoading={isLoading}
+              onOpenNovaMovimentacaoModal={() => setShowMovimentacaoModal(true)}
+              onRefreshMovimentacoes={() => {
+                fetch(`${apiBaseUrl}/estoque/movimentacoes`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setMovimentacoesEstoque(d); });
+              }}
+            />
+          )}
 
-                  {xmlUploadState.error && (
-                    <div className={clsx('bg-red-500/10', 'border', 'border-red-500/20', 'rounded-2xl', 'p-4', 'text-left')}>
-                      <span className="block text-[10px] font-bold text-red-400 uppercase tracking-wider">✗ Erro na Importação</span>
-                      <p className="text-[9px] text-red-300 mt-1">{xmlUploadState.error}</p>
-                      <button onClick={() => setXmlUploadState(s => ({ ...s, error: null }))} className="text-[8px] text-gray-600 hover:text-gray-400 mt-1 cursor-pointer">Fechar</button>
-                    </div>
-                  )}
-
-                  <p className={clsx('text-[8px]', 'text-gray-600', 'leading-relaxed', 'px-1')}>O sistema extrai fornecedor, itens e valores automaticamente, cadastrando insumos novos e atualizando estoque via custo médio ponderado.</p>
-                </div>
-
-                <div className={clsx('lg:col-span-2', 'bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4')}>
-                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Entradas</span>
-                  <div className={clsx('overflow-hidden', 'border', 'border-[#27272A]/40', 'rounded-2xl')}>
-                    <table className={clsx('w-full', 'text-left', 'text-[10px]')}>
-                      <thead>
-                        <tr className={clsx('bg-[#1C1C1F]', 'border-b', 'border-[#27272A]', 'text-gray-400', 'uppercase', 'tracking-wider', 'font-bold')}>
-                          <th className="p-3">Nota</th>
-                          <th className="p-3">Fornecedor</th>
-                          <th className={clsx('p-3', 'font-mono')}>Valor</th>
-                          <th className={clsx('p-3', 'text-right')}>Emissão</th>
-                        </tr>
-                      </thead>
-                      <tbody className={clsx('divide-y', 'divide-[#27272A]/40')}>
-                        {notasEntrada.length === 0 ? (
-                          <tr><td colSpan={4} className="p-8 text-center text-gray-500 italic">Nenhuma nota importada ainda.</td></tr>
-                        ) : notasEntrada.map(nota => (
-                          <tr key={nota.id} className={clsx('hover:bg-[#1C1C1F]/20', 'transition-colors')}>
-                            <td className={clsx('p-3', 'font-mono', 'font-bold', 'text-white')}>NF-{nota.numero_nota}</td>
-                            <td className={clsx('p-3', 'text-gray-300')}>{nota.distribuidor?.nome_fantasia ?? '—'}</td>
-                            <td className={clsx('p-3', 'font-mono', 'text-emerald-400')}>R$ {Number(nota.valor_total).toFixed(2)}</td>
-                            <td className={clsx('p-3', 'text-gray-400', 'text-right')}>{nota.data_emissao ? new Date(nota.data_emissao).toLocaleDateString('pt-BR') : '—'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
+          {/* LIVE VIEW: CONTAGEM FÍSICA (INVENTÁRIO) */}
+          {activeTab === 'estoque' && activeSubTab === 'contagem' && (
+            <EstoqueContagemTab
+              contagens={sessoesContagemEstoque}
+              isLoading={isLoading}
+              onOpenNovaContagemModal={(sessaoId?: string) => {
+                setSelectedContagemId(sessaoId || null);
+                setShowContagemModal(true);
+              }}
+              onRefreshContagens={() => {
+                fetch(`${apiBaseUrl}/estoque/contagens`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setSessoesContagemEstoque(d); });
+              }}
+            />
+          )}
 
           {/* LIVE VIEW: DISTRIBUIDORES */}
           {activeTab === 'estoque' && activeSubTab === 'fornecedores' && (
@@ -8916,6 +8913,90 @@ export function CaixaPanel({
           }
         }}
       />
+
+      {/* MODAL DE ENTRADA MANUAL DE ESTOQUE */}
+      {showEntradaManualModal && (
+        <EntradaManualModal
+          distribuidores={distribuidores}
+          insumos={estoqueInsumos}
+          onClose={() => setShowEntradaManualModal(false)}
+          onSubmit={async (payload) => {
+            const res = await fetch(`${apiBaseUrl}/estoque/entradas/manual`, {
+              method: 'POST',
+              headers: { ...authHeaders, 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.detail || 'Erro ao gravar entrada manual.');
+            showToast('✓ Entrada manual gravada com sucesso!');
+            // Refresh stock data
+            fetch(`${apiBaseUrl}/estoque/insumos`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setEstoqueInsumos(d); });
+            fetch(`${apiBaseUrl}/estoque/entradas`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setEntradasEstoque(d); });
+            fetch(`${apiBaseUrl}/estoque/movimentacoes`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setMovimentacoesEstoque(d); });
+          }}
+        />
+      )}
+
+      {/* MODAL DE MOVIMENTAÇÃO DE ESTOQUE (PERDA / AJUSTES) */}
+      {showMovimentacaoModal && (
+        <MovimentacaoEstoqueModal
+          insumos={estoqueInsumos}
+          onClose={() => setShowMovimentacaoModal(false)}
+          onSubmit={async (payload) => {
+            const res = await fetch(`${apiBaseUrl}/estoque/movimentacoes`, {
+              method: 'POST',
+              headers: { ...authHeaders, 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.detail || 'Erro ao salvar movimentação.');
+            showToast('✓ Movimentação de estoque gravada!');
+            // Refresh stock data
+            fetch(`${apiBaseUrl}/estoque/insumos`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setEstoqueInsumos(d); });
+            fetch(`${apiBaseUrl}/estoque/movimentacoes`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setMovimentacoesEstoque(d); });
+          }}
+        />
+      )}
+
+      {/* MODAL DE INVENTÁRIO FÍSICO / CONTAGEM */}
+      {showContagemModal && (
+        <ContagemEstoqueModal
+          insumos={estoqueInsumos}
+          existingSessao={selectedContagemId ? sessoesContagemEstoque.find(s => s.id === selectedContagemId) : null}
+          onClose={() => {
+            setShowContagemModal(false);
+            setSelectedContagemId(null);
+          }}
+          onSaveDraft={async (payload) => {
+            const url = selectedContagemId ? `${apiBaseUrl}/estoque/contagens/${selectedContagemId}` : `${apiBaseUrl}/estoque/contagens`;
+            const method = selectedContagemId ? 'PUT' : 'POST';
+            const res = await fetch(url, {
+              method,
+              headers: { ...authHeaders, 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.detail || 'Erro ao salvar rascunho de contagem.');
+            showToast('✓ Rascunho de contagem salvo com sucesso!');
+            fetch(`${apiBaseUrl}/estoque/contagens`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setSessoesContagemEstoque(d); });
+          }}
+          onConfirm={async (payload) => {
+            const url = selectedContagemId ? `${apiBaseUrl}/estoque/contagens/${selectedContagemId}` : `${apiBaseUrl}/estoque/contagens`;
+            const method = selectedContagemId ? 'PUT' : 'POST';
+            const res = await fetch(url, {
+              method,
+              headers: { ...authHeaders, 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.detail || 'Erro ao confirmar contagem.');
+            showToast('✓ Contagem confirmada e estoques ajustados!');
+            fetch(`${apiBaseUrl}/estoque/insumos`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setEstoqueInsumos(d); });
+            fetch(`${apiBaseUrl}/estoque/movimentacoes`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setMovimentacoesEstoque(d); });
+            fetch(`${apiBaseUrl}/estoque/contagens`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setSessoesContagemEstoque(d); });
+          }}
+        />
+      )}
 
     </div>
   );

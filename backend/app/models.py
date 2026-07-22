@@ -575,6 +575,99 @@ class ItemNotaEntrada(Base):
     insumo = relationship("Insumo")
 
 
+class EntradaEstoque(Base):
+    __tablename__ = "entradas_estoque"
+    
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
+    distribuidor_id = Column(String, ForeignKey("distribuidores.id"), nullable=True)
+    numero_documento = Column(String, nullable=True)
+    data_emissao = Column(String, nullable=True)
+    observacao = Column(String, default="")
+    valor_total = Column(Float, default=0.0)
+    tipo_entrada = Column(String, default="MANUAL")  # MANUAL | XML
+    usuario_id = Column(String, ForeignKey("usuarios.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+    # Relationships
+    distribuidor = relationship("Distribuidor")
+    usuario = relationship("Usuario")
+    itens = relationship("ItemEntradaEstoque", back_populates="entrada", cascade="all, delete-orphan")
+
+
+class ItemEntradaEstoque(Base):
+    __tablename__ = "itens_entrada_estoque"
+    
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
+    entrada_id = Column(String, ForeignKey("entradas_estoque.id"), nullable=False)
+    insumo_id = Column(String, ForeignKey("insumos.id"), nullable=False)
+    quantidade = Column(Float, nullable=False)
+    unidade_medida = Column(String, default="un")
+    custo_unitario = Column(Float, nullable=False)
+    subtotal = Column(Float, nullable=False)
+
+    # Relationships
+    entrada = relationship("EntradaEstoque", back_populates="itens")
+    insumo = relationship("Insumo")
+
+
+class MovimentacaoEstoque(Base):
+    __tablename__ = "movimentacoes_estoque"
+    
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
+    insumo_id = Column(String, ForeignKey("insumos.id"), nullable=False, index=True)
+    tipo = Column(String, nullable=False, index=True)  # entrada | saida | perda | ajuste_positivo | ajuste_negativo | contagem
+    quantidade = Column(Float, nullable=False)
+    saldo_anterior = Column(Float, nullable=False)
+    saldo_posterior = Column(Float, nullable=False)
+    custo_unitario = Column(Float, default=0.0)
+    motivo = Column(String, nullable=False)
+    observacao = Column(String, default="")
+    origem = Column(String, default="movimentacao_manual")  # entrada_manual | xml | movimentacao_manual | contagem
+    referencia_id = Column(String, nullable=True)
+    usuario_id = Column(String, ForeignKey("usuarios.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+    # Relationships
+    insumo = relationship("Insumo")
+    usuario = relationship("Usuario")
+
+
+class SessaoContagemEstoque(Base):
+    __tablename__ = "sessoes_contagem_estoque"
+    
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
+    status = Column(String, default="rascunho", nullable=False, index=True)  # rascunho | confirmada
+    observacao = Column(String, default="")
+    usuario_id = Column(String, ForeignKey("usuarios.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    confirmada_em = Column(DateTime(timezone=True), nullable=True)
+
+    # Relationships
+    usuario = relationship("Usuario")
+    itens = relationship("ItemContagemEstoque", back_populates="contagem", cascade="all, delete-orphan")
+
+
+class ItemContagemEstoque(Base):
+    __tablename__ = "itens_contagem_estoque"
+    
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
+    contagem_id = Column(String, ForeignKey("sessoes_contagem_estoque.id"), nullable=False)
+    insumo_id = Column(String, ForeignKey("insumos.id"), nullable=False)
+    quantidade_sistema = Column(Float, nullable=False)
+    quantidade_contada = Column(Float, nullable=False)
+    diferenca = Column(Float, nullable=False)
+    ajustado = Column(Boolean, default=False)
+
+    # Relationships
+    contagem = relationship("SessaoContagemEstoque", back_populates="itens")
+    insumo = relationship("Insumo")
+
+
 class PrintJob(Base):
     __tablename__ = "print_jobs"
 

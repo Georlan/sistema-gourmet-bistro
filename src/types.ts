@@ -191,3 +191,83 @@ export interface PdvCartItem {
   client: string;
 }
 
+export interface Insumo {
+  id: string;
+  nome: string;
+  estoque_atual: number;
+  estoque_minimo: number;
+  estoque_maximo: number;
+  unidade_medida: string;
+  preco_medio_custo: number;
+}
+
+export interface Distribuidor {
+  id: string;
+  nome_fantasia: string;
+  razao_social?: string | null;
+  cnpj?: string | null;
+  lead_time_dias: number;
+}
+
+export interface ItemEntradaEstoque {
+  id?: number;
+  entrada_id?: string;
+  insumo_id: string;
+  quantidade: number;
+  unidade_medida: string;
+  custo_unitario: number;
+  subtotal: number;
+  insumo?: Insumo;
+}
+
+export interface EntradaEstoque {
+  id: string;
+  numero_documento?: string | null;
+  data_emissao?: string | null;
+  observacao: string;
+  valor_total: number;
+  tipo_entrada: 'MANUAL' | 'XML' | string;
+  distribuidor_id?: string | null;
+  distribuidor?: Distribuidor | null;
+  created_at: string;
+  itens: ItemEntradaEstoque[];
+}
+
+export interface MovimentacaoEstoque {
+  id: number;
+  insumo_id: string;
+  tipo: 'entrada' | 'saida' | 'perda' | 'ajuste_positivo' | 'ajuste_negativo' | 'contagem';
+  quantidade: number;
+  saldo_anterior: number;
+  saldo_posterior: number;
+  custo_unitario: number;
+  motivo: string;
+  observacao: string;
+  origem: string;
+  referencia_id?: string | null;
+  usuario_id?: string | null;
+  created_at: string;
+  insumo?: Insumo;
+}
+
+export interface ItemContagemEstoque {
+  id?: number;
+  contagem_id?: string;
+  insumo_id: string;
+  quantidade_sistema: number;
+  quantidade_contada: number;
+  diferenca: number;
+  ajustado?: boolean;
+  insumo?: Insumo;
+}
+
+export interface SessaoContagemEstoque {
+  id: string;
+  status: 'rascunho' | 'confirmada';
+  observacao: string;
+  usuario_id?: string | null;
+  created_at: string;
+  confirmada_em?: string | null;
+  itens: ItemContagemEstoque[];
+}
+

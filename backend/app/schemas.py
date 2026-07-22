@@ -475,6 +475,107 @@ class NotaEntradaResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+# ─── SCHEMAS EXPANDIDOS DE ESTOQUE ───────────────────────────────────────────
+class ItemEntradaEstoqueCreate(BaseModel):
+    insumo_id: str
+    insumo_nome: Optional[str] = None
+    quantidade: float
+    unidade_medida: str = "un"
+    custo_unitario: float
+
+class EntradaEstoqueManualCreate(BaseModel):
+    distribuidor_id: Optional[str] = None
+    distribuidor_nome_fantasia: Optional[str] = None
+    distribuidor_cnpj: Optional[str] = None
+    numero_documento: Optional[str] = None
+    data_emissao: Optional[str] = None
+    observacao: str = ""
+    itens: list[ItemEntradaEstoqueCreate]
+
+class ItemEntradaEstoqueResponse(BaseModel):
+    id: int
+    entrada_id: str
+    insumo_id: str
+    quantidade: float
+    unidade_medida: str
+    custo_unitario: float
+    subtotal: float
+    insumo: Optional[InsumoResponse] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+class EntradaEstoqueResponse(BaseModel):
+    id: str
+    numero_documento: Optional[str] = None
+    data_emissao: Optional[str] = None
+    observacao: str
+    valor_total: float
+    tipo_entrada: str
+    distribuidor_id: Optional[str] = None
+    distribuidor: Optional[DistribuidorResponse] = None
+    created_at: datetime
+    itens: list[ItemEntradaEstoqueResponse] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+class MovimentacaoEstoqueCreate(BaseModel):
+    insumo_id: str
+    tipo: str  # perda | ajuste_positivo | ajuste_negativo
+    quantidade: float
+    motivo: str
+    observacao: str = ""
+
+class MovimentacaoEstoqueResponse(BaseModel):
+    id: int
+    insumo_id: str
+    tipo: str
+    quantidade: float
+    saldo_anterior: float
+    saldo_posterior: float
+    custo_unitario: float
+    motivo: str
+    observacao: str
+    origem: str
+    referencia_id: Optional[str] = None
+    usuario_id: Optional[str] = None
+    created_at: datetime
+    insumo: Optional[InsumoResponse] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+class ItemContagemEstoqueCreate(BaseModel):
+    insumo_id: str
+    quantidade_contada: float
+
+class SessaoContagemEstoqueCreate(BaseModel):
+    observacao: str = ""
+    status: str = "rascunho"  # rascunho | confirmada
+    itens: list[ItemContagemEstoqueCreate]
+
+class ItemContagemEstoqueResponse(BaseModel):
+    id: int
+    contagem_id: str
+    insumo_id: str
+    quantidade_sistema: float
+    quantidade_contada: float
+    diferenca: float
+    ajustado: bool
+    insumo: Optional[InsumoResponse] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+class SessaoContagemEstoqueResponse(BaseModel):
+    id: str
+    status: str
+    observacao: str
+    usuario_id: Optional[str] = None
+    created_at: datetime
+    confirmada_em: Optional[datetime] = None
+    itens: list[ItemContagemEstoqueResponse] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 # ----------------- CONFIGURAÇÕES WHITELABEL DO RESTAURANTE -----------------
 class RestauranteConfigResponse(BaseModel):
     id: int

@@ -6,9 +6,19 @@ from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from pydantic import BaseModel
 
+from datetime import datetime, timezone
+import uuid
 from ..database import get_db, current_restaurante_id, require_tenant_id
-from ..models import Usuario, Insumo, Distribuidor, NotaEntrada, ItemNotaEntrada, ActivityLog
-from ..schemas import InsumoResponse, DistribuidorResponse, NotaEntradaResponse
+from ..models import (
+    Usuario, Insumo, Distribuidor, NotaEntrada, ItemNotaEntrada, ActivityLog,
+    EntradaEstoque, ItemEntradaEstoque, MovimentacaoEstoque, SessaoContagemEstoque, ItemContagemEstoque
+)
+from ..schemas import (
+    InsumoResponse, DistribuidorResponse, NotaEntradaResponse,
+    EntradaEstoqueManualCreate, EntradaEstoqueResponse,
+    MovimentacaoEstoqueCreate, MovimentacaoEstoqueResponse,
+    SessaoContagemEstoqueCreate, SessaoContagemEstoqueResponse
+)
 from ..security import get_current_garcom_optional
 
 router = APIRouter(
@@ -459,19 +469,479 @@ def update_distribuidor(
     db.refresh(distribuidor)
     return distribuidor
 
-@router.delete("/distribuidores/{dist_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_distribuidor(
-    dist_id: str,
+    db.delete(distribuidor)
+    db.commit()
+    return
+
+
+# ─── ROTAS DE ENTRADAS DE ESTOQUE (MANUAIS E XML) ─────────────────────────────
+@router.post("/entradas/manual", response_model=EntradaEstoqueResponse, status_code=status.HTTP_201_CREATED)
+def create_entrada_manual(
+    data: EntradaEstoqueManualCreate,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
     check_caixa_permission(current_user)
     rest_id = require_tenant_id()
-    distribuidor = db.query(Distribuidor).filter_by(id=dist_id, restaurante_id=rest_id).first()
-    if not distribuidor:
-        raise HTTPException(status_code=404, detail="Distribuidor não encontrado.")
-        
-    db.delete(distribuidor)
+
+    if not data.itens:
+        raise HTTPException(status_code=400, detail="A entrada deve possuir ao menos um item.")
+
+    try:
+        # 1. Resolve Distribuidor / Fornecedor
+        dist_id = data.distribuidor_id
+        if not dist_id and data.distribuidor_nome_fantasia:
+            dist_slug = f"dist-{slugify(data.distribuidor_nome_fantasia)}"
+            distribuidor = db.query(Distribuidor).filter_by(id=dist_slug, restaurante_id=rest_id).first()
+            if not distribuidor:
+                distribuidor = Distribuidor(
+                    id=dist_slug,
+                    restaurante_id=rest_id,
+                    nome_fantasia=data.distribuidor_nome_fantasia,
+                    cnpj=data.distribuidor_cnpj
+                )
+                db.add(distribuidor)
+                db.flush()
+            dist_id = distribuidor.id
+
+        # 2. Criar registro de EntradaEstoque
+        entrada = EntradaEstoque(
+            id=str(uuid.uuid4()),
+            restaurante_id=rest_id,
+            distribuidor_id=dist_id,
+            numero_documento=data.numero_documento,
+            data_emissao=data.data_emissao,
+            observacao=data.observacao,
+            tipo_entrada="MANUAL",
+            usuario_id=current_user.id if current_user else None,
+            valor_total=0.0
+        )
+        db.add(entrada)
+        db.flush()
+
+        total_entrada = 0.0
+
+        for item_in in data.itens:
+            if item_in.quantidade <= 0:
+                raise HTTPException(status_code=400, detail=f"Quantidade inválida para o insumo {item_in.insumo_id}.")
+            if item_in.custo_unitario < 0:
+                raise HTTPException(status_code=400, detail=f"Custo unitário inválido para o insumo {item_in.insumo_id}.")
+
+            # Busca insumo existente ou cria inline
+            insumo = db.query(Insumo).filter_by(id=item_in.insumo_id, restaurante_id=rest_id).first()
+            if not insumo and item_in.insumo_nome:
+                ins_id = slugify(item_in.insumo_nome) if not item_in.insumo_id else item_in.insumo_id
+                insumo = Insumo(
+                    id=ins_id,
+                    restaurante_id=rest_id,
+                    nome=item_in.insumo_nome,
+                    estoque_atual=0.0,
+                    estoque_minimo=10.0,
+                    estoque_maximo=50.0,
+                    unidade_medida=item_in.unidade_medida or "un",
+                    preco_medio_custo=item_in.custo_unitario
+                )
+                db.add(insumo)
+                db.flush()
+
+            if not insumo:
+                raise HTTPException(status_code=404, detail=f"Insumo '{item_in.insumo_id}' não encontrado.")
+
+            saldo_anterior = insumo.estoque_atual or 0.0
+            custo_antigo = insumo.preco_medio_custo or 0.0
+            qtd_entrada = item_in.quantidade
+            custo_unit = item_in.custo_unitario
+            subtotal = qtd_entrada * custo_unit
+
+            # Recálculo do custo médio ponderado
+            total_qtd = saldo_anterior + qtd_entrada
+            if saldo_anterior > 0 and total_qtd > 0:
+                novo_custo = ((saldo_anterior * custo_antigo) + (qtd_entrada * custo_unit)) / total_qtd
+            else:
+                novo_custo = custo_unit
+
+            insumo.estoque_atual = total_qtd
+            insumo.preco_medio_custo = novo_custo
+
+            item_db = ItemEntradaEstoque(
+                restaurante_id=rest_id,
+                entrada_id=entrada.id,
+                insumo_id=insumo.id,
+                quantidade=qtd_entrada,
+                unidade_medida=item_in.unidade_medida or insumo.unidade_medida,
+                custo_unitario=custo_unit,
+                subtotal=subtotal
+            )
+            db.add(item_db)
+
+            # Criar movimentação atômica
+            mov = MovimentacaoEstoque(
+                restaurante_id=rest_id,
+                insumo_id=insumo.id,
+                tipo="entrada",
+                quantidade=qtd_entrada,
+                saldo_anterior=saldo_anterior,
+                saldo_posterior=total_qtd,
+                custo_unitario=custo_unit,
+                motivo=f"Entrada manual doc #{data.numero_documento or 'S/N'}",
+                observacao=data.observacao,
+                origem="entrada_manual",
+                referencia_id=entrada.id,
+                usuario_id=current_user.id if current_user else None
+            )
+            db.add(mov)
+
+            total_entrada += subtotal
+
+        entrada.valor_total = total_entrada
+        db.commit()
+        db.refresh(entrada)
+        return db.query(EntradaEstoque).options(
+            joinedload(EntradaEstoque.distribuidor),
+            joinedload(EntradaEstoque.itens).joinedload(ItemEntradaEstoque.insumo)
+        ).filter_by(id=entrada.id).first()
+
+    except Exception as e:
+        db.rollback()
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=f"Erro ao processar entrada manual: {str(e)}")
+
+
+@router.get("/entradas", response_model=List[EntradaEstoqueResponse])
+def get_entradas(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_garcom_optional)
+):
+    check_caixa_permission(current_user)
+    rest_id = require_tenant_id()
+    return db.query(EntradaEstoque).filter_by(restaurante_id=rest_id).options(
+        joinedload(EntradaEstoque.distribuidor),
+        joinedload(EntradaEstoque.itens).joinedload(ItemEntradaEstoque.insumo)
+    ).order_by(EntradaEstoque.created_at.desc()).all()
+
+
+# ─── ROTAS DE MOVIMENTAÇÕES DE ESTOQUE ────────────────────────────────────────
+@router.get("/movimentacoes", response_model=List[MovimentacaoEstoqueResponse])
+def get_movimentacoes(
+    data_inicio: Optional[str] = None,
+    data_fim: Optional[str] = None,
+    insumo_id: Optional[str] = None,
+    tipo: Optional[str] = None,
+    usuario_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_garcom_optional)
+):
+    check_caixa_permission(current_user)
+    rest_id = require_tenant_id()
+
+    query = db.query(MovimentacaoEstoque).filter_by(restaurante_id=rest_id).options(
+        joinedload(MovimentacaoEstoque.insumo)
+    )
+
+    if insumo_id:
+        query = query.filter(MovimentacaoEstoque.insumo_id == insumo_id)
+    if tipo:
+        query = query.filter(MovimentacaoEstoque.tipo == tipo)
+    if usuario_id:
+        query = query.filter(MovimentacaoEstoque.usuario_id == usuario_id)
+    if data_inicio:
+        try:
+            dt_ini = datetime.fromisoformat(data_inicio)
+            query = query.filter(MovimentacaoEstoque.created_at >= dt_ini)
+        except ValueError:
+            pass
+    if data_fim:
+        try:
+            dt_fim = datetime.fromisoformat(data_fim)
+            query = query.filter(MovimentacaoEstoque.created_at <= dt_fim)
+        except ValueError:
+            pass
+
+    return query.order_by(MovimentacaoEstoque.created_at.desc()).all()
+
+
+@router.post("/movimentacoes", response_model=MovimentacaoEstoqueResponse, status_code=status.HTTP_201_CREATED)
+def create_movimentacao(
+    data: MovimentacaoEstoqueCreate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_garcom_optional)
+):
+    check_caixa_permission(current_user)
+    rest_id = require_tenant_id()
+
+    if data.tipo not in ["perda", "ajuste_positivo", "ajuste_negativo"]:
+        raise HTTPException(status_code=400, detail="Tipo de movimentação deve ser perda, ajuste_positivo ou ajuste_negativo.")
+
+    if data.quantidade <= 0:
+        raise HTTPException(status_code=400, detail="A quantidade deve ser maior que zero.")
+
+    if not data.motivo or not data.motivo.strip():
+        raise HTTPException(status_code=400, detail="O motivo da movimentação é obrigatório.")
+
+    insumo = db.query(Insumo).filter_by(id=data.insumo_id, restaurante_id=rest_id).first()
+    if not insumo:
+        raise HTTPException(status_code=404, detail="Insumo não encontrado.")
+
+    saldo_anterior = insumo.estoque_atual or 0.0
+
+    if data.tipo in ["perda", "ajuste_negativo"]:
+        if saldo_anterior - data.quantidade < 0:
+            raise HTTPException(status_code=400, detail="Saldo de estoque insuficiente para realizar esta saída/perda.")
+        saldo_posterior = saldo_anterior - data.quantidade
+    else:  # ajuste_positivo
+        saldo_posterior = saldo_anterior + data.quantidade
+
+    insumo.estoque_atual = saldo_posterior
+
+    mov = MovimentacaoEstoque(
+        restaurante_id=rest_id,
+        insumo_id=insumo.id,
+        tipo=data.tipo,
+        quantidade=data.quantidade,
+        saldo_anterior=saldo_anterior,
+        saldo_posterior=saldo_posterior,
+        custo_unitario=insumo.preco_medio_custo or 0.0,
+        motivo=data.motivo.strip(),
+        observacao=data.observacao,
+        origem="movimentacao_manual",
+        usuario_id=current_user.id if current_user else None
+    )
+    db.add(mov)
     db.commit()
-    return
+    db.refresh(mov)
+    return db.query(MovimentacaoEstoque).options(
+        joinedload(MovimentacaoEstoque.insumo)
+    ).filter_by(id=mov.id).first()
+
+
+# ─── ROTAS DE CONTAGEM FÍSICA (INVENTÁRIO) ───────────────────────────────────
+@router.post("/contagens", response_model=SessaoContagemEstoqueResponse, status_code=status.HTTP_201_CREATED)
+def create_sessao_contagem(
+    data: SessaoContagemEstoqueCreate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_garcom_optional)
+):
+    check_caixa_permission(current_user)
+    rest_id = require_tenant_id()
+
+    if data.status not in ["rascunho", "confirmada"]:
+        raise HTTPException(status_code=400, detail="Status deve ser 'rascunho' ou 'confirmada'.")
+
+    sessao = SessaoContagemEstoque(
+        id=str(uuid.uuid4()),
+        restaurante_id=rest_id,
+        status=data.status,
+        observacao=data.observacao,
+        usuario_id=current_user.id if current_user else None,
+        confirmada_em=datetime.now(timezone.utc) if data.status == "confirmada" else None
+    )
+    db.add(sessao)
+    db.flush()
+
+    for item_in in data.itens:
+        insumo = db.query(Insumo).filter_by(id=item_in.insumo_id, restaurante_id=rest_id).first()
+        if not insumo:
+            continue
+
+        qtd_sistema = insumo.estoque_atual or 0.0
+        qtd_contada = item_in.quantidade_contada
+        diferenca = qtd_contada - qtd_sistema
+
+        ajustado = False
+        if data.status == "confirmada" and diferenca != 0:
+            insumo.estoque_atual = qtd_contada
+            ajustado = True
+
+            mov = MovimentacaoEstoque(
+                restaurante_id=rest_id,
+                insumo_id=insumo.id,
+                tipo="contagem",
+                quantidade=abs(diferenca),
+                saldo_anterior=qtd_sistema,
+                saldo_posterior=qtd_contada,
+                custo_unitario=insumo.preco_medio_custo or 0.0,
+                motivo=f"Ajuste por inventário físico (Sessão {sessao.id[:8]})",
+                observacao=data.observacao,
+                origem="contagem",
+                referencia_id=sessao.id,
+                usuario_id=current_user.id if current_user else None
+            )
+            db.add(mov)
+
+        item_db = ItemContagemEstoque(
+            restaurante_id=rest_id,
+            contagem_id=sessao.id,
+            insumo_id=insumo.id,
+            quantidade_sistema=qtd_sistema,
+            quantidade_contada=qtd_contada,
+            diferenca=diferenca,
+            ajustado=ajustado
+        )
+        db.add(item_db)
+
+    db.commit()
+    return db.query(SessaoContagemEstoque).options(
+        joinedload(SessaoContagemEstoque.itens).joinedload(ItemContagemEstoque.insumo)
+    ).filter_by(id=sessao.id).first()
+
+
+@router.get("/contagens", response_model=List[SessaoContagemEstoqueResponse])
+def get_sessoes_contagem(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_garcom_optional)
+):
+    check_caixa_permission(current_user)
+    rest_id = require_tenant_id()
+
+    return db.query(SessaoContagemEstoque).filter_by(restaurante_id=rest_id).options(
+        joinedload(SessaoContagemEstoque.itens).joinedload(ItemContagemEstoque.insumo)
+    ).order_by(SessaoContagemEstoque.created_at.desc()).all()
+
+
+@router.get("/contagens/{contagem_id}", response_model=SessaoContagemEstoqueResponse)
+def get_sessao_contagem(
+    contagem_id: str,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_garcom_optional)
+):
+    check_caixa_permission(current_user)
+    rest_id = require_tenant_id()
+
+    sessao = db.query(SessaoContagemEstoque).filter_by(id=contagem_id, restaurante_id=rest_id).options(
+        joinedload(SessaoContagemEstoque.itens).joinedload(ItemContagemEstoque.insumo)
+    ).first()
+
+    if not sessao:
+        raise HTTPException(status_code=404, detail="Sessão de contagem não encontrada.")
+    return sessao
+
+
+@router.put("/contagens/{contagem_id}", response_model=SessaoContagemEstoqueResponse)
+def update_sessao_contagem(
+    contagem_id: str,
+    data: SessaoContagemEstoqueCreate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_garcom_optional)
+):
+    check_caixa_permission(current_user)
+    rest_id = require_tenant_id()
+
+    sessao = db.query(SessaoContagemEstoque).filter_by(id=contagem_id, restaurante_id=rest_id).first()
+    if not sessao:
+        raise HTTPException(status_code=404, detail="Sessão de contagem não encontrada.")
+
+    if sessao.status == "confirmada":
+        raise HTTPException(status_code=400, detail="Sessões de contagem já confirmadas não podem ser alteradas.")
+
+    sessao.observacao = data.observacao
+    if data.status == "confirmada":
+        sessao.status = "confirmada"
+        sessao.confirmada_em = datetime.now(timezone.utc)
+
+    # Re-criar/atualizar itens
+    db.query(ItemContagemEstoque).filter_by(contagem_id=sessao.id).delete()
+
+    for item_in in data.itens:
+        insumo = db.query(Insumo).filter_by(id=item_in.insumo_id, restaurante_id=rest_id).first()
+        if not insumo:
+            continue
+
+        qtd_sistema = insumo.estoque_atual or 0.0
+        qtd_contada = item_in.quantidade_contada
+        diferenca = qtd_contada - qtd_sistema
+
+        ajustado = False
+        if sessao.status == "confirmada" and diferenca != 0:
+            insumo.estoque_atual = qtd_contada
+            ajustado = True
+
+            mov = MovimentacaoEstoque(
+                restaurante_id=rest_id,
+                insumo_id=insumo.id,
+                tipo="contagem",
+                quantidade=abs(diferenca),
+                saldo_anterior=qtd_sistema,
+                saldo_posterior=qtd_contada,
+                custo_unitario=insumo.preco_medio_custo or 0.0,
+                motivo=f"Ajuste por inventário físico (Sessão {sessao.id[:8]})",
+                observacao=data.observacao,
+                origem="contagem",
+                referencia_id=sessao.id,
+                usuario_id=current_user.id if current_user else None
+            )
+            db.add(mov)
+
+        item_db = ItemContagemEstoque(
+            restaurante_id=rest_id,
+            contagem_id=sessao.id,
+            insumo_id=insumo.id,
+            quantidade_sistema=qtd_sistema,
+            quantidade_contada=qtd_contada,
+            diferenca=diferenca,
+            ajustado=ajustado
+        )
+        db.add(item_db)
+
+    db.commit()
+    return db.query(SessaoContagemEstoque).options(
+        joinedload(SessaoContagemEstoque.itens).joinedload(ItemContagemEstoque.insumo)
+    ).filter_by(id=sessao.id).first()
+
+
+@router.post("/contagens/{contagem_id}/confirmar", response_model=SessaoContagemEstoqueResponse)
+def confirmar_sessao_contagem(
+    contagem_id: str,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_garcom_optional)
+):
+    check_caixa_permission(current_user)
+    rest_id = require_tenant_id()
+
+    sessao = db.query(SessaoContagemEstoque).filter_by(id=contagem_id, restaurante_id=rest_id).options(
+        joinedload(SessaoContagemEstoque.itens)
+    ).first()
+
+    if not sessao:
+        raise HTTPException(status_code=404, detail="Sessão de contagem não encontrada.")
+
+    if sessao.status == "confirmada":
+        raise HTTPException(status_code=400, detail="Esta sessão de contagem já foi confirmada anteriormente.")
+
+    sessao.status = "confirmada"
+    sessao.confirmada_em = datetime.now(timezone.utc)
+
+    for item in sessao.itens:
+        insumo = db.query(Insumo).filter_by(id=item.insumo_id, restaurante_id=rest_id).first()
+        if not insumo:
+            continue
+
+        qtd_sistema = insumo.estoque_atual or 0.0
+        qtd_contada = item.quantidade_contada
+        diferenca = qtd_contada - qtd_sistema
+
+        if diferenca != 0:
+            insumo.estoque_atual = qtd_contada
+            item.ajustado = True
+
+            mov = MovimentacaoEstoque(
+                restaurante_id=rest_id,
+                insumo_id=insumo.id,
+                tipo="contagem",
+                quantidade=abs(diferenca),
+                saldo_anterior=qtd_sistema,
+                saldo_posterior=qtd_contada,
+                custo_unitario=insumo.preco_medio_custo or 0.0,
+                motivo=f"Ajuste por inventário físico (Sessão {sessao.id[:8]})",
+                observacao=sessao.observacao or "",
+                origem="contagem",
+                referencia_id=sessao.id,
+                usuario_id=current_user.id if current_user else None
+            )
+            db.add(mov)
+
+    db.commit()
+    return db.query(SessaoContagemEstoque).options(
+        joinedload(SessaoContagemEstoque.itens).joinedload(ItemContagemEstoque.insumo)
+    ).filter_by(id=sessao.id).first()
 
