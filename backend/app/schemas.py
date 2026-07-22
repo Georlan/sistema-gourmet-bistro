@@ -482,18 +482,20 @@ class RestauranteConfigResponse(BaseModel):
     slug: Optional[str] = None
     logo_url: Optional[str] = None
     banner_url: Optional[str] = None
+    cardapio_logo_path: Optional[str] = None
+    cardapio_banner_path: Optional[str] = None
     subtitulo: Optional[str] = None
     sobre_nos: Optional[str] = None
     endereco: Optional[str] = None
     google_maps_url: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
-    status_override: str
+    status_override: Optional[str] = "Automático"
     socials: Optional[dict] = None
     horarios_funcionamento: Optional[dict] = None
     formas_pagamento_aceitas: Optional[dict] = None
-    cor_primaria: str
-    cor_fundo: str
+    cor_primaria: Optional[str] = "#00b894"
+    cor_fundo: Optional[str] = "#090a0f"
 
     model_config = ConfigDict(from_attributes=True)
 

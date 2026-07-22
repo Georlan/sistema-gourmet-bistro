@@ -77,6 +77,31 @@ def validate_image_file(file: UploadFile, content: bytes) -> str:
         return "webp"
 
 
+async def ensure_bucket_exists(supabase_url: str, service_key: str):
+    headers = {
+        "Authorization": f"Bearer {service_key}",
+        "apikey": service_key,
+        "Content-Type": "application/json"
+    }
+    bucket_url = f"{supabase_url}/storage/v1/bucket"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            res = await client.post(
+                bucket_url,
+                headers=headers,
+                json={
+                    "id": "cardapio-assets",
+                    "name": "cardapio-assets",
+                    "public": True,
+                    "file_size_limit": 5242880,
+                    "allowed_mime_types": ["image/png", "image/jpeg", "image/jpg", "image/webp"]
+                }
+            )
+            logger.info(f"[CARDAPIO ASSETS] Bucket ensure status={res.status_code}")
+    except Exception as e:
+        logger.warning(f"[CARDAPIO ASSETS WARNING] Não foi possível verificar bucket via API: {e}")
+
+
 async def upload_asset_to_supabase(asset_type: str, file: UploadFile, db: Session, current_user: Usuario):
     # Require tenant ID strictly from authenticated JWT context
     rest_id = require_tenant_id()
@@ -113,6 +138,7 @@ async def upload_asset_to_supabase(asset_type: str, file: UploadFile, db: Sessio
 
     # Step 1: Upload new file to Supabase Storage
     try:
+        await ensure_bucket_exists(supabase_url, service_key)
         async with httpx.AsyncClient(timeout=15.0) as client:
             res = await client.post(storage_upload_url, headers=headers, content=content)
             
@@ -128,15 +154,17 @@ async def upload_asset_to_supabase(asset_type: str, file: UploadFile, db: Sessio
                 )
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Falha ao salvar o arquivo no servidor de armazenamento."
+                    detail=f"Falha ao salvar no armazenamento (Supabase HTTP {res.status_code}): {res.text[:120]}"
                 )
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception(f"[CARDAPIO ASSETS EXCEPTION] Erro de rede ao conectar ao Supabase Storage para {relative_path}")
+        import traceback
+        tb_str = traceback.format_exc()
+        logger.error(f"[CARDAPIO ASSETS TRACEBACK] Exceção durante upload para {relative_path}:\n{tb_str}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Erro de comunicação com o servidor de armazenamento."
+            detail=f"Erro no servidor ao processar imagem: {str(e)}"
         )
 
     # Step 2: Update Database

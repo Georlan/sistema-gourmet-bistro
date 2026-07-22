@@ -724,8 +724,12 @@ def obter_configuracao_restaurante(
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
     """Obtém as configurações whitelabel de personalização do restaurante ativo."""
-    check_caixa_permission(current_user)
     rest_id = require_tenant_id()
+    if not rest_id or rest_id <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Identificação do restaurante inválida no token de acesso."
+        )
     
     restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
     if not restaurante:

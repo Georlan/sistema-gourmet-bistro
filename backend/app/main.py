@@ -1,5 +1,5 @@
 import sentry_sdk
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
@@ -213,6 +213,38 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    import traceback
+    origin = request.headers.get("Origin", "")
+    cors_origin = origin if origin else "*"
+    print(f"[GLOBAL UNHANDLED ERROR] {request.method} {request.url.path}:\n{traceback.format_exc()}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Erro interno do servidor.", "error": str(exc)},
+        headers={
+            "Access-Control-Allow-Origin": cors_origin,
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Tenant-ID, Accept, Origin",
+        }
+    )
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    origin = request.headers.get("Origin", "")
+    cors_origin = origin if origin else "*"
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers={
+            "Access-Control-Allow-Origin": cors_origin,
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Tenant-ID, Accept, Origin",
+        }
+    )
 
 @app.middleware("http")
 async def add_sentry_context_and_tenant(request: Request, call_next):
