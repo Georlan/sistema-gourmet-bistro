@@ -156,10 +156,12 @@ export function CaixaPanel({
   };
 
   const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'operacao' | 'cardapio' | 'estoque' | 'financeiro' | 'clientes' | 'relatorios' | 'robo_ia' | 'configuracoes' | 'permissoes_cargos' | 'impressao_salao' | 'assinatura_pix' | 'cardapio_digital'
+    'operacao' | 'cardapio' | 'estoque' | 'financeiro' | 'clientes' | 'relatorios' | 'assistente_koma' | 'configuracoes' | 'permissoes_cargos' | 'impressao_salao' | 'assinatura_pix' | 'cardapio_digital' | 'dashboard' | 'robo_ia'
   >(() => {
     const saved = sessionStorage.getItem('koma_active_tab');
     if (saved === 'config_cardapio' || saved === 'configuracoes_cardapio') return 'cardapio_digital';
+    if (saved === 'dashboard' || saved === 'indicadores') return 'relatorios';
+    if (saved === 'robo_ia' || saved === 'chat_copiloto') return 'assistente_koma';
     return (saved as any) || 'operacao';
   });
 
@@ -172,6 +174,19 @@ export function CaixaPanel({
     if (['cardapio', 'cardapio_lista', 'cmv', 'custos', 'ficha_tecnica'].includes(saved)) return 'produtos';
     if (['categorias_cardapio', 'categorias_lista'].includes(saved)) return 'categorias';
     if (['config_cardapio', 'configuracoes_cardapio'].includes(saved)) return 'cardapio_digital';
+    // Relatórios mappings
+    if (['desempenho', 'minha_performance', 'dashboard', 'indicadores'].includes(saved)) return 'visao_geral';
+    if (['metas', 'metas_previsoes'].includes(saved)) return 'metas';
+    if (['top10', 'mais_vendidos', 'produtos_mais_vendidos'].includes(saved)) return 'produtos_mais_vendidos';
+    if (['relatorio_geral', 'consolidado_vendas', 'vendas'].includes(saved)) return 'vendas';
+    if (['relatorio_garçons', 'faturamento_garcom', 'equipe'].includes(saved)) return 'equipe';
+    // Assistente Kôma mappings
+    if (['chat_copiloto', 'chat'].includes(saved)) return 'chat';
+    if (['robo_ia', 'prompt', 'prompt_atendente', 'configuracao'].includes(saved)) return 'configuracao';
+    if (['simulador', 'simulador_chat'].includes(saved)) return 'simulador';
+    // Placeholders redirection
+    if (['fiscal', 'notas_fiscais'].includes(saved)) return 'fluxo';
+    if (['recuperador', 'carrinhos_abandonados'].includes(saved)) return 'crm';
     return saved;
   });
 
@@ -298,11 +313,12 @@ export function CaixaPanel({
     return list;
   })();
 
-  const handleTabChange = (tabId: 'dashboard' | 'operacao' | 'cardapio' | 'estoque' | 'financeiro' | 'clientes' | 'relatorios' | 'robo_ia' | 'configuracoes' | 'permissoes_cargos' | 'impressao_salao' | 'assinatura_pix' | 'cardapio_digital') => {
-    setActiveTab(tabId);
+  const handleTabChange = (tabId: string) => {
+    setActiveTab(tabId as any);
     switch (tabId) {
       case 'dashboard':
-        setActiveSubTab('desempenho');
+      case 'relatorios':
+        setActiveSubTab('visao_geral');
         break;
       case 'operacao':
         setActiveSubTab('pedidos');
@@ -319,11 +335,9 @@ export function CaixaPanel({
       case 'clientes':
         setActiveSubTab('crm');
         break;
-      case 'relatorios':
-        setActiveSubTab('relatorio_geral');
-        break;
       case 'robo_ia':
-        setActiveSubTab('prompt');
+      case 'assistente_koma':
+        setActiveSubTab('chat');
         break;
       case 'permissoes_cargos':
         setActiveSubTab('equipe');
@@ -1416,7 +1430,7 @@ export function CaixaPanel({
     const startStr = startDate.toISOString().split('T')[0];
     const endStr = endDate.toISOString().split('T')[0];
 
-    if (activeTab === 'relatorios' && activeSubTab === 'relatorio_garçons') {
+    if ((activeTab === 'relatorios' || activeTab === 'dashboard') && ['equipe', 'relatorio_garçons'].includes(activeSubTab)) {
       fetch(`${apiBaseUrl}/garcons/relatorio?data_inicio=${startStr}&data_fim=${endStr}`, { headers: authHeaders })
         .then(res => res.json())
         .then(data => {
@@ -1424,10 +1438,7 @@ export function CaixaPanel({
         })
         .catch(err => console.error('Error fetching waiter report:', err));
     }
-    if (
-      (activeTab === 'relatorios' && activeSubTab === 'relatorio_geral') ||
-      (activeTab === 'dashboard' && activeSubTab === 'desempenho')
-    ) {
+    if ((activeTab === 'relatorios' || activeTab === 'dashboard') && ['visao_geral', 'vendas', 'produtos_mais_vendidos', 'desempenho', 'relatorio_geral', 'top10'].includes(activeSubTab)) {
       fetch(`${apiBaseUrl}/comandas/estatisticas/geral?data_inicio=${startStr}&data_fim=${endStr}`, { headers: authHeaders })
         .then(res => res.json())
         .then(data => {
@@ -1456,7 +1467,7 @@ export function CaixaPanel({
         .then(data => { if (Array.isArray(data)) setDistribuidores(data); })
         .catch(err => console.error('Error fetching distribuidores:', err));
     }
-    if (activeTab === 'dashboard' && activeSubTab === 'metas') {
+    if ((activeTab === 'relatorios' || activeTab === 'dashboard') && ['metas', 'metas_previsoes'].includes(activeSubTab)) {
       fetch(`${apiBaseUrl}/comandas/estatisticas/pico`, { headers: authHeaders })
         .then(res => res.json())
         .then(data => {
@@ -2265,15 +2276,13 @@ export function CaixaPanel({
               {
                 category: 'Performance & BI',
                 items: [
-                  { id: 'dashboard', label: 'Indicadores', icon: BarChart2 },
-                  { id: 'relatorios', label: 'Histórico de Vendas', icon: TrendingUp }
+                  { id: 'relatorios', label: 'Relatórios', icon: TrendingUp }
                 ]
               },
               {
                 category: 'Processos Inteligentes',
                 items: [
-                  { id: 'robo_ia', label: 'Configurar Robô', icon: Cpu },
-                  { id: 'chat_copiloto', label: 'Chat Co-Piloto (IA)', icon: MessageSquare }
+                  { id: 'assistente_koma', label: 'Assistente Kôma', icon: Cpu }
                 ]
               },
               {
@@ -2297,7 +2306,8 @@ export function CaixaPanel({
                     : tab.id === 'permissoes_cargos' ? (activeTab === 'permissoes_cargos' || (activeTab === 'configuracoes' && activeSubTab === 'equipe'))
                     : tab.id === 'impressao_salao' ? (activeTab === 'impressao_salao' || (activeTab === 'configuracoes' && activeSubTab === 'impressoras'))
                     : tab.id === 'assinatura_pix' ? (activeTab === 'assinatura_pix' || (activeTab === 'configuracoes' && activeSubTab === 'planos'))
-                    : tab.id === 'chat_copiloto' ? (activeTab === 'operacao' && activeSubTab === 'chat_copiloto')
+                    : tab.id === 'relatorios' ? (activeTab === 'relatorios' || activeTab === 'dashboard')
+                    : tab.id === 'assistente_koma' ? (activeTab === 'assistente_koma' || activeTab === 'robo_ia' || (activeTab === 'operacao' && activeSubTab === 'chat_copiloto'))
                     : activeTab === tab.id
                   );
                   return (
@@ -2316,9 +2326,16 @@ export function CaixaPanel({
                         } else if (tab.id === 'assinatura_pix') {
                           setActiveTab('assinatura_pix');
                           setActiveSubTab('planos');
-                        } else if (tab.id === 'chat_copiloto') {
-                          setActiveTab('operacao');
-                          setActiveSubTab('chat_copiloto');
+                        } else if (tab.id === 'relatorios') {
+                          setActiveTab('relatorios');
+                          if (!['visao_geral', 'metas', 'produtos_mais_vendidos', 'vendas', 'equipe'].includes(activeSubTab)) {
+                            setActiveSubTab('visao_geral');
+                          }
+                        } else if (tab.id === 'assistente_koma') {
+                          setActiveTab('assistente_koma');
+                          if (!['chat', 'configuracao', 'simulador'].includes(activeSubTab)) {
+                            setActiveSubTab('chat');
+                          }
                         } else {
                           handleTabChange(tab.id as any);
                         }
@@ -2382,14 +2399,13 @@ export function CaixaPanel({
         {/* Top header bar */}
         <header className={clsx('h-14', 'border-b', 'border-[#27272A]', 'bg-[#121214]', 'px-6', 'flex', 'items-center', 'justify-between', 'shrink-0')}>
           <h2 className={clsx('font-serif', 'font-bold', 'text-sm', 'tracking-tight', 'text-white', 'uppercase', 'tracking-wider')}>
-            {activeTab === 'dashboard' && 'Painel Executivo e Metas'}
+            {(activeTab === 'relatorios' || activeTab === 'dashboard') && 'Relatórios'}
+            {(activeTab === 'assistente_koma' || activeTab === 'robo_ia') && 'Assistente Kôma'}
             {activeTab === 'operacao' && 'Gestão de Atendimento Local'}
             {activeTab === 'cardapio' && 'Gestão e Engenharia do Cardápio'}
             {activeTab === 'estoque' && 'Controle de Inventário e Insumos'}
             {activeTab === 'financeiro' && 'Tesouraria e Fluxo de Caixa'}
             {activeTab === 'clientes' && 'Carteira de Clientes e CRM'}
-            {activeTab === 'relatorios' && 'Relatórios e Estatísticas Avançadas'}
-            {activeTab === 'robo_ia' && 'Assistente de Atendimento IA'}
             {(activeTab === 'permissoes_cargos' || (activeTab === 'configuracoes' && activeSubTab === 'equipe')) && 'Permissões e Gestão de Equipe'}
             {(activeTab === 'impressao_salao' || (activeTab === 'configuracoes' && activeSubTab === 'impressoras')) && 'Configurações de Impressão e Salão'}
             {(activeTab === 'assinatura_pix' || (activeTab === 'configuracoes' && activeSubTab === 'planos')) && 'Planos de Assinatura e Recebimento Pix'}
@@ -2413,22 +2429,59 @@ export function CaixaPanel({
 
         {/* Sub-tabs Navigation Bar */}
         <div className={clsx('bg-[#121214]/60', 'border-b', 'border-[#27272A]', 'px-6', 'py-1.5', 'flex', 'gap-2', 'shrink-0', 'overflow-x-auto', 'scrollbar-none')}>
-          {activeTab === 'dashboard' && [
-            { id: 'desempenho', label: 'Minha Performance' },
-            { id: 'metas', label: 'Metas & Previsões' },
-            { id: 'top10', label: 'Itens Mais Vendidos' }
-          ].map(sub => (
-            <button
-              key={sub.id}
-              onClick={() => setActiveSubTab(sub.id)}
-              className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${activeSubTab === sub.id
-                ? 'bg-[#10b981] text-[#121214]'
-                : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
-                }`}
-            >
-              {sub.label}
-            </button>
-          ))}
+          {(activeTab === 'relatorios' || activeTab === 'dashboard') && [
+            { id: 'visao_geral', label: 'Visão Geral' },
+            { id: 'metas', label: 'Metas' },
+            { id: 'produtos_mais_vendidos', label: 'Produtos Mais Vendidos' },
+            { id: 'vendas', label: 'Vendas' },
+            { id: 'equipe', label: 'Equipe' }
+          ].map(sub => {
+            const isSubActive = (
+              (sub.id === 'visao_geral' && ['visao_geral', 'desempenho', 'minha_performance'].includes(activeSubTab)) ||
+              (sub.id === 'metas' && ['metas', 'metas_previsoes'].includes(activeSubTab)) ||
+              (sub.id === 'produtos_mais_vendidos' && ['produtos_mais_vendidos', 'top10', 'mais_vendidos'].includes(activeSubTab)) ||
+              (sub.id === 'vendas' && ['vendas', 'relatorio_geral', 'consolidado_vendas'].includes(activeSubTab)) ||
+              (sub.id === 'equipe' && ['equipe', 'relatorio_garçons', 'faturamento_garcom'].includes(activeSubTab)) ||
+              activeSubTab === sub.id
+            );
+            return (
+              <button
+                key={sub.id}
+                onClick={() => setActiveSubTab(sub.id)}
+                className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${isSubActive
+                  ? 'bg-[#10b981] text-[#121214]'
+                  : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
+                  }`}
+              >
+                {sub.label}
+              </button>
+            );
+          })}
+
+          {(activeTab === 'assistente_koma' || activeTab === 'robo_ia') && [
+            { id: 'chat', label: 'Chat' },
+            { id: 'configuracao', label: 'Configuração' },
+            { id: 'simulador', label: 'Simulador' }
+          ].map(sub => {
+            const isSubActive = (
+              (sub.id === 'chat' && ['chat', 'chat_copiloto'].includes(activeSubTab)) ||
+              (sub.id === 'configuracao' && ['configuracao', 'prompt', 'prompt_atendente'].includes(activeSubTab)) ||
+              (sub.id === 'simulador' && ['simulador', 'simulador_chat'].includes(activeSubTab)) ||
+              activeSubTab === sub.id
+            );
+            return (
+              <button
+                key={sub.id}
+                onClick={() => setActiveSubTab(sub.id)}
+                className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${isSubActive
+                  ? 'bg-[#10b981] text-[#121214]'
+                  : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
+                  }`}
+              >
+                {sub.label}
+              </button>
+            );
+          })}
 
           {activeTab === 'operacao' && [
             { id: 'pedidos', label: 'Pedidos' },
@@ -2484,8 +2537,7 @@ export function CaixaPanel({
           {activeTab === 'financeiro' && [
             { id: 'fluxo', label: 'Demonstrativo DRE' },
             { id: 'fechamento', label: 'Conferência Cega' },
-            { id: 'suprimento', label: 'Ajustes de Caixa' },
-            { id: 'fiscal', label: 'Notas Fiscais Emitidas' }
+            { id: 'suprimento', label: 'Ajustes de Caixa' }
           ].map(sub => (
             <button
               key={sub.id}
@@ -2502,8 +2554,7 @@ export function CaixaPanel({
           {activeTab === 'clientes' && [
             { id: 'crm', label: 'Banco de Clientes' },
             { id: 'fidelidade', label: 'Programa Fidelidade' },
-            { id: 'cupom', label: 'Cupons de Desconto' },
-            { id: 'recuperador', label: 'Carrinhos Abandonados' }
+            { id: 'cupom', label: 'Cupons de Desconto' }
           ].map(sub => (
             <button
               key={sub.id}
@@ -2517,37 +2568,6 @@ export function CaixaPanel({
             </button>
           ))}
 
-          {activeTab === 'relatorios' && [
-            { id: 'relatorio_geral', label: 'Consolidado de Vendas' },
-            { id: 'relatorio_garçons', label: 'Faturamento por Garçom' }
-          ].map(sub => (
-            <button
-              key={sub.id}
-              onClick={() => setActiveSubTab(sub.id)}
-              className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${activeSubTab === sub.id
-                ? 'bg-[#10b981] text-[#121214]'
-                : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
-                }`}
-            >
-              {sub.label}
-            </button>
-          ))}
-
-          {activeTab === 'robo_ia' && [
-            { id: 'prompt', label: 'Prompt do Atendente' },
-            { id: 'simulador', label: 'Simulador de Chat' }
-          ].map(sub => (
-            <button
-              key={sub.id}
-              onClick={() => setActiveSubTab(sub.id)}
-              className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${activeSubTab === sub.id
-                ? 'bg-[#10b981] text-[#121214]'
-                : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
-                }`}
-            >
-              {sub.label}
-            </button>
-          ))}
 
 
         </div>
@@ -4349,7 +4369,7 @@ export function CaixaPanel({
           )}
 
           {/* VIEW 8A: ROBÔ & IA - CONFIGURAÇÕES DO PROMPT & GOVERNANÇA */}
-          {activeTab === 'robo_ia' && activeSubTab === 'prompt' && (
+          {(activeTab === 'assistente_koma' || activeTab === 'robo_ia') && ['configuracao', 'prompt', 'prompt_atendente'].includes(activeSubTab) && (
             <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5', 'text-left', 'animate-fade-in')}>
               {/* Left Column: System Prompt */}
               <div className={clsx('lg:col-span-2', 'bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4')}>
@@ -4483,7 +4503,7 @@ export function CaixaPanel({
           )}
 
           {/* VIEW 8B: ROBÔ & IA - SIMULADOR DE CHAT */}
-          {activeTab === 'robo_ia' && activeSubTab === 'simulador' && (
+          {(activeTab === 'assistente_koma' || activeTab === 'robo_ia') && ['simulador', 'simulador_chat'].includes(activeSubTab) && (
             <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5', 'text-left', 'animate-fade-in')}>
               {/* Left Column: Interactive Chat Simulation */}
               <div className={clsx('lg:col-span-2', 'bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'flex', 'flex-col', 'overflow-hidden', 'h-[72vh]')}>
@@ -4924,8 +4944,8 @@ export function CaixaPanel({
 
 
 
-          {/* VIEW: RELATÓRIO GERAL */}
-          {activeSubTab === 'relatorio_geral' && (
+          {/* VIEW: RELATÓRIO GERAL / VENDAS / VISÃO GERAL */}
+          {(activeTab === 'relatorios' || activeTab === 'dashboard') && ['vendas', 'relatorio_geral', 'consolidado_vendas', 'visao_geral', 'desempenho', 'minha_performance'].includes(activeSubTab) && (
             <div className={clsx('space-y-5', 'text-left', 'animate-fade-in')}>
               {/* Banner azul de informações */}
               <div className={clsx('bg-sky-500/10', 'border', 'border-sky-500/20', 'text-sky-300', 'p-4', 'rounded-2xl', 'flex', 'items-start', 'gap-3', 'relative')}>
@@ -5047,8 +5067,8 @@ export function CaixaPanel({
             </div>
           )}
 
-          {/* VIEW: RELATÓRIO DE GARÇONS */}
-          {activeSubTab === 'relatorio_garçons' && (
+          {/* VIEW: RELATÓRIO DE GARÇONS / EQUIPE */}
+          {(activeTab === 'relatorios' || activeTab === 'dashboard') && ['equipe', 'relatorio_garçons', 'faturamento_garcom'].includes(activeSubTab) && (
             <div className={clsx('space-y-5', 'text-left', 'animate-fade-in')}>
               {/* Banner azul de informações */}
               <div className={clsx('bg-sky-500/10', 'border', 'border-sky-500/20', 'text-sky-300', 'p-4', 'rounded-2xl', 'flex', 'items-start', 'gap-3', 'relative')}>
@@ -5148,7 +5168,7 @@ export function CaixaPanel({
           )}
 
           {/* MOCK VIEW: METAS DO TURNOS & PREVISÃO DE PICO (IA) */}
-          {activeTab === 'dashboard' && activeSubTab === 'metas' && (
+          {(activeTab === 'relatorios' || activeTab === 'dashboard') && ['metas', 'metas_previsoes'].includes(activeSubTab) && (
             <div className={clsx('grid', 'grid-cols-1', 'md:grid-cols-2', 'gap-5', 'text-left', 'animate-fade-in')}>
               <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-5', 'rounded-3xl', 'space-y-4')}>
                 <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Painel de Metas do Dia</span>
@@ -5209,7 +5229,7 @@ export function CaixaPanel({
           )}
 
           {/* MOCK VIEW: RANKING TOP ITEMS */}
-          {activeTab === 'dashboard' && activeSubTab === 'top10' && (
+          {(activeTab === 'relatorios' || activeTab === 'dashboard') && ['produtos_mais_vendidos', 'top10', 'mais_vendidos'].includes(activeSubTab) && (
             <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'text-left', 'animate-fade-in', 'max-w-xl')}>
               <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'border-b', 'border-[#27272A]', 'pb-2')}>Ranking Geral de Saídas</span>
               <div className={clsx('divide-y', 'divide-[#27272A]/50')}>
@@ -6267,7 +6287,7 @@ export function CaixaPanel({
           )}
 
           {/* MOCK VIEW: CHAT CO-PILOTO */}
-          {activeTab === 'operacao' && activeSubTab === 'chat_copiloto' && (
+          {(activeTab === 'assistente_koma' || activeTab === 'robo_ia' || (activeTab === 'operacao' && activeSubTab === 'chat_copiloto')) && ['chat', 'chat_copiloto'].includes(activeSubTab) && (
             <div className={clsx('h-[calc(82vh-100px)]', 'flex', 'gap-4', 'text-left', 'animate-fade-in')}>
               {/* Left Column: Contatos */}
               <div className={clsx('w-1/4', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-3xl', 'flex', 'flex-col', 'overflow-hidden')}>
