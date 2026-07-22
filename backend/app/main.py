@@ -285,12 +285,12 @@ async def add_sentry_context_and_tenant(request: Request, call_next):
     sentry_sdk.set_tag("restaurante_id", str(restaurante_id) if restaurante_id is not None else "")
 
     # Define a variável de contexto do tenant de forma segura para esta requisição
-    token_context = current_restaurante_id.set(restaurante_id)
+    current_restaurante_id.set(restaurante_id)
     try:
         response = await call_next(request)
     finally:
         # Garante a limpeza do contexto após o término da requisição
-        current_restaurante_id.reset(token_context)
+        current_restaurante_id.set(None)
 
     return response
 

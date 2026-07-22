@@ -38,7 +38,7 @@ def login(login_data: LoginRequest, db: Session = Depends(get_db)):
             or_(Usuario.email == username_val, Usuario.telefone == username_val, Usuario.usuario == username_val)
         ).first()
     finally:
-        current_restaurante_id.reset(token_var)
+        current_restaurante_id.set(None)
 
     if not usuario:
         raise HTTPException(
@@ -93,7 +93,7 @@ def ativar_conta(payload: AtivarContaRequest, db: Session = Depends(get_db)):
     try:
         usuario = db.query(Usuario).filter(Usuario.token_convite == token_str).first()
     finally:
-        current_restaurante_id.reset(token_var)
+        current_restaurante_id.set(None)
 
     if not usuario:
         raise HTTPException(
