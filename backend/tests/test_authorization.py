@@ -52,11 +52,11 @@ def setup_database():
             usuario="garcom", senha_hash=get_password_hash("123"),
             role="garcom", cargo="garcom", status="ativo"
         ))
-        # Usuário pendente de ativação
+        # Usuário inativo
         db.add(Usuario(
-            id="u-pendente", restaurante_id=1, nome="Pendente Auth",
-            usuario="pendente", senha_hash=get_password_hash("123"),
-            role="garcom", cargo="garcom", status="pendente_ativacao"
+            id="u-inativo", restaurante_id=1, nome="Inativo Auth",
+            usuario="inativo", senha_hash=get_password_hash("123"),
+            role="garcom", cargo="garcom", status="inativo"
         ))
 
         db.commit()
@@ -97,11 +97,11 @@ def test_admin_allowed_relatorios():
     assert resp.status_code == 200
 
 
-def test_pending_activation_user_blocked():
-    """Usuário pendente de ativação deve ter acesso bloqueado (HTTP 403)."""
+def test_inactive_user_blocked():
+    """Usuário inativo deve ter acesso bloqueado (HTTP 403)."""
     client = TestClient(app)
-    headers = get_auth_headers(client, "pendente", "123")
+    headers = get_auth_headers(client, "inativo", "123")
 
     resp = client.get("/comandas/", headers=headers)
     assert resp.status_code == 403, f"Esperado 403, obteve {resp.status_code}"
-    assert "inativa ou pendente" in resp.json()["detail"]
+    assert "inativa ou bloqueada" in resp.json()["detail"]

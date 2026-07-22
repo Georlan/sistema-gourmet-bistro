@@ -120,11 +120,11 @@ def get_current_user(
     if user is None:
         raise credentials_exception
         
-    status_val = getattr(user, "status", "ativo") or "ativo"
-    if status_val in ("pendente_ativacao", "inativo", "blocked", "disabled"):
+    status_val = str(getattr(user, "status", "ativo") or "ativo").lower().strip()
+    if status_val in ("inativo", "blocked", "disabled"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Conta de usuário inativa ou pendente de ativação."
+            detail="Conta de usuário inativa ou bloqueada."
         )
     return user
 
