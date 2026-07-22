@@ -329,6 +329,7 @@ def criar_venda_direta(
                 )
 
         background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
+        background_tasks.add_task(manager.broadcast, {"event": "new_delivery_order", "message": f"Novo pedido #{numero_pedido}"}, require_tenant_id())
         comanda_completa = db.query(Comanda).options(
             joinedload(Comanda.itens).joinedload(Item.produto),
             joinedload(Comanda.criada_por)

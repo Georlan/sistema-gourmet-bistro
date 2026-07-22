@@ -928,6 +928,7 @@ export function CaixaPanel({
     const handleDeliveryUpdate = () => {
       fetchDeliveryOrders();
       fetchMotoboys();
+      fetchTurno();
     };
 
     window.addEventListener('koma_orders_updated', handleDeliveryUpdate);
@@ -1471,15 +1472,13 @@ export function CaixaPanel({
     fetchMotoboys();
     fetchConfiguracoes();
 
-    if (isWsConnected) return;
-
     const interval = setInterval(() => {
       fetchTurno();
       fetchDeliveryOrders();
-    }, 45000); // Polling lento de fallback se desconectado do WS
+    }, 5000); // Polling rápido 5s para sincronização em tempo real do Kanban
 
     return () => clearInterval(interval);
-  }, [isWsConnected]);
+  }, []);
 
   // Caixa API Handlers
   const fetchTurnoResumo = async () => {
