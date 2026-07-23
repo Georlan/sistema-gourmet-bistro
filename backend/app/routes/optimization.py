@@ -265,9 +265,18 @@ class CheckoutFidelidadeRequest(BaseModel):
 @router.get("/fidelidade/config", response_model=ConfigFidelizacaoResponse)
 def get_fidelidade_config(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """Retorna as configurações do programa de fidelidade do restaurante."""
-    config = db.query(ConfigFidelizacao).first()
+    restaurante_id = require_tenant_id()
+    config = db.query(ConfigFidelizacao).filter(
+        ConfigFidelizacao.restaurante_id == restaurante_id
+    ).first()
     if not config:
-        config = ConfigFidelizacao(ativo=True, tipo_recompensa="PONTOS", taxa_conversao=1.0, valor_ponto_em_dinheiro=0.05)
+        config = ConfigFidelizacao(
+            restaurante_id=restaurante_id,
+            ativo=True,
+            tipo_recompensa="PONTOS",
+            taxa_conversao=1.0,
+            valor_ponto_em_dinheiro=0.05,
+        )
         db.add(config)
         db.commit()
         db.refresh(config)
