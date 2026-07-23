@@ -228,7 +228,7 @@ def abrir_comanda(comanda_in: ComandaCreate, background_tasks: BackgroundTasks, 
 
 
 @router.post("/venda-direta", response_model=ComandaDetail, status_code=status.HTTP_201_CREATED)
-def criar_venda_direta(
+async def criar_venda_direta(
     venda_in: VendaDiretaCreate,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
@@ -238,6 +238,7 @@ def criar_venda_direta(
     Cria uma comanda e insere todos os itens em uma ÚNICA transação atômica.
     Elimina a necessidade de 2 chamadas HTTP separadas no PDV.
     """
+    venda = venda_in
     garcom_id = venda_in.garcom_id or current_user.id
     garcom = db.query(Usuario).filter(Usuario.id == garcom_id).first()
     if not garcom:
@@ -281,6 +282,9 @@ def criar_venda_direta(
         )
         db.add(nova_comanda)
 
+        if venda_in.mesa_id is not None:
+            mesa.comanda_atual_id = nova_comanda.id
+
         novo_lancamento = Lancamento(
             id=lancamento_id,
             comanda_id=comanda_id,
@@ -306,11 +310,19 @@ def criar_venda_direta(
                 status="preparando"
             )
             db.add(novo_item)
-            dest = (produto.destino_impressao or "COZINHA").upper()
+            dest_impressao_val = produto.categoria.destino_impressao if (produto and produto.categoria) else getattr(produto, 'local_impressao', getattr(produto, 'destino', 'COZINHA'))
+            dest = (dest_impressao_val or "COZINHA").upper()
             if dest not in ("NENHUM", "NONE", ""):
                 itens_cozinha.append(novo_item)
 
         db.commit()
+
+        if venda_in.mesa_id is not None:
+            await manager.broadcast({
+                "type": "MESA_UPDATED",
+                "mesa_id": venda.mesa_id,
+                "status": "OCUPADA"
+            }, tenant_id=current_user.tenant_id)
 
         # Enfileira impressões se houver itens para cozinha
         if itens_cozinha:
@@ -326,7 +338,7 @@ def criar_venda_direta(
                         preco_unit=it.preco_unit,
                         observacao=it.observacao,
                         cliente_nome=it.cliente_nome,
-                        destino_impressao=it.produto.destino_impressao or "COZINHA"
+                        destino_impressao=it.produto.categoria.destino_impressao if (it.produto and it.produto.categoria) else getattr(it.produto, 'local_impressao', getattr(it.produto, 'destino', 'COZINHA'))
                     )
                     for it in itens_cozinha
                 ]
@@ -363,6 +375,7 @@ def criar_venda_direta(
         db.rollback()
         logger.exception(f"Erro ao criar venda direta atômica: {e}")
         raise HTTPException(status_code=500, detail="Erro interno ao registrar venda direta.")
+
 
 
 @router.put("/{comanda_id}/pedir-conta", response_model=ComandaResponse)

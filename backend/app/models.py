@@ -66,6 +66,19 @@ class Usuario(Base):
     def role(self, value):
         self.cargo = value
 
+    @hybrid_property
+    def tenant_id(self):
+        return self.restaurante_id
+
+    @tenant_id.setter
+    def tenant_id(self, value):
+        self.restaurante_id = value
+
+    @tenant_id.expression
+    def tenant_id(cls):
+        return cls.restaurante_id
+
+
     @role.expression
     def role(cls):
         return cls.cargo
@@ -145,6 +158,8 @@ class Mesa(Base):
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False)
     capacidade = Column(Integer, nullable=False, default=4)
     nome = Column(String, nullable=True)  # Editable custom name (e.g. "Mesa VIP", "Varanda 1")
+    comanda_atual_id = Column(String, nullable=True)
+
 
 
 class ObservacaoPredefinida(Base):

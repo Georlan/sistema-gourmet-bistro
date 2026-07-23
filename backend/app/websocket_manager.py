@@ -35,8 +35,11 @@ class ConnectionManager:
                     if not connections:
                         del self.active_connections[rid]
 
-    async def broadcast(self, message: dict, restaurante_id: int | None = None) -> None:
+    async def broadcast(self, message: dict, restaurante_id: int | None = None, tenant_id: int | None = None) -> None:
+        if restaurante_id is None:
+            restaurante_id = tenant_id
         # Dynamically resolve restaurante_id from current context if not provided
+
         if restaurante_id is None:
             try:
                 from .database import current_restaurante_id

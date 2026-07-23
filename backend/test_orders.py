@@ -244,3 +244,37 @@ def test_transferir_e_mesclar_limites(setup_db):
     assert comanda_trans["mesa_id"] == 5
     assert comanda_trans["mesa_origem_id"] is None
     assert comanda_trans["mesa_transferida_de"] == 4
+
+
+def test_venda_direta(setup_db):
+    # 1. Login to get token
+    login_response = client.post("/auth/login", json={"username": "georlan", "password": "123"})
+    assert login_response.status_code == 200
+    token = login_response.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 2. Criar venda direta na Mesa 3
+    payload = {
+        "mesa_id": 3,
+        "garcom_id": "g-1",
+        "tipo": "Consumo no Local",
+        "itens": [
+            {"produto_id": "p-1", "observacao": "Sem açúcar", "cliente_nome": "Marcos"}
+        ]
+    }
+    resp = client.post("/comandas/venda-direta", json=payload, headers=headers)
+    assert resp.status_code == 201
+    comanda = resp.json()
+    assert comanda["mesa_id"] == 3
+    assert len(comanda["itens"]) == 1
+    assert comanda["itens"][0]["produto_id"] == "p-1"
+
+    # 3. Verificar no banco que a mesa 3 foi vinculada com comanda_atual_id
+    db = SessionLocal()
+    try:
+        mesa = db.query(Mesa).filter(Mesa.id == 3).first()
+        assert mesa is not None
+        assert mesa.comanda_atual_id == comanda["id"]
+    finally:
+        db.close()
+
