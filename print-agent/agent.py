@@ -245,14 +245,23 @@ def _imprimir_linux_simulacao(printer_name: str, raw_data: bytes) -> None:
 # ---------------------------------------------------------------------------
 
 class ApiClient:
-    """Wrapper de requests com autenticação e tratamento de erros."""
+    """Wrapper de requests com autenticação e tratamento de erros.
+    
+    O backend aceita o token de agente via 'X-Agent-Token' (header principal)
+    ou 'Authorization: Bearer <token>' (fallback). Enviamos ambos por segurança.
+    O token de agente é distinto do JWT do usuário — é gerado via
+    POST /api/print-agents/register e armazenado com hash SHA-256 no banco.
+    """
 
     def __init__(self, base_url: str, token: str) -> None:
         self.base_url = base_url.rstrip("/")
         self.session = requests.Session()
         self.session.headers.update(
             {
-                "Authorization": f"Bearer {token}",
+                # O backend usa X-Agent-Token como mecanismo de auth para agentes.
+                # NÃO enviar Authorization: Bearer — o middleware JWT interceptaria
+                # e rejeitaria o token de agente antes de chegar na rota.
+                "X-Agent-Token": token,
                 "Content-Type": "application/json",
                 "User-Agent": "koma-print-agent/1.0",
             }
