@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import or_
+from sqlalchemy import or_, text
 from sqlalchemy.orm import Session
 from typing import List
 import uuid
 import logging
 
-from ..database import get_db, current_restaurante_id
+from ..database import bind_session_to_tenant, get_db, current_restaurante_id
 from ..models import Usuario
 from ..schemas import LoginRequest, LoginResponse, UsuarioCreate, UsuarioResponse, AtivarContaRequest
 from ..security import verify_password, create_access_token, get_password_hash, get_current_user
@@ -24,34 +24,74 @@ router = APIRouter(
     tags=["Autenticação"]
 )
 
+
+def _lookup_user_before_tenant(db: Session, identifier: str):
+    """Resolve somente id/tenant antes do RLS conhecer o restaurante."""
+    if db.get_bind().dialect.name == "postgresql":
+        return db.execute(
+            text("SELECT id, restaurante_id, senha_hash FROM koma_internal.auth_user(:identifier)"),
+            {"identifier": identifier},
+        ).mappings().first()
+    usuario = db.query(Usuario).filter(
+        or_(
+            Usuario.email == identifier,
+            Usuario.telefone == identifier,
+            Usuario.usuario == identifier,
+        )
+    ).first()
+    if not usuario:
+        return None
+    return {
+        "id": usuario.id,
+        "restaurante_id": usuario.restaurante_id,
+        "senha_hash": usuario.senha_hash,
+    }
+
+
+def _lookup_invite_before_tenant(db: Session, token: str):
+    if db.get_bind().dialect.name == "postgresql":
+        return db.execute(
+            text("SELECT id, restaurante_id FROM koma_internal.auth_invite(:token)"),
+            {"token": token},
+        ).mappings().first()
+    usuario = db.query(Usuario).filter(Usuario.token_convite == token).first()
+    if not usuario:
+        return None
+    return {"id": usuario.id, "restaurante_id": usuario.restaurante_id}
+
 @router.post("/login", response_model=LoginResponse)
 def login(login_data: LoginRequest, db: Session = Depends(get_db)):
     """
     Realiza a autenticação do usuário por e-mail ou telefone.
     Retorna o token JWT e as informações do usuário.
     """
-    from ..database import current_restaurante_id
     username_val = (login_data.username or "").strip().lower()
-    token_var = current_restaurante_id.set(None)
-    try:
-        usuario = db.query(Usuario).filter(
-            or_(Usuario.email == username_val, Usuario.telefone == username_val, Usuario.usuario == username_val)
-        ).first()
-    finally:
-        current_restaurante_id.set(None)
+    identity = _lookup_user_before_tenant(db, username_val)
+    if not identity or not verify_password(login_data.password, identity["senha_hash"]):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuário ou senha incorretos"
+        )
 
+    restaurante_id = identity["restaurante_id"]
+    if not isinstance(restaurante_id, int) or restaurante_id <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuário ou senha incorretos"
+        )
+
+    bind_session_to_tenant(db, restaurante_id)
+    tenant_context = current_restaurante_id.set(restaurante_id)
+    try:
+        usuario = db.query(Usuario).filter(Usuario.id == identity["id"]).first()
+    finally:
+        current_restaurante_id.reset(tenant_context)
     if not usuario:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Usuário ou senha incorretos"
         )
-    
-    if not verify_password(login_data.password, usuario.senha_hash):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Usuário ou senha incorretos"
-        )
-        
+
     access_token = create_access_token(subject=usuario.id, restaurante_id=usuario.restaurante_id)
     
     user_data = {
@@ -89,11 +129,20 @@ def ativar_conta(payload: AtivarContaRequest, db: Session = Depends(get_db)):
         
     now_utc = datetime.now(timezone.utc)
 
-    token_var = current_restaurante_id.set(None)
+    identity = _lookup_invite_before_tenant(db, token_str)
+    if not identity or not isinstance(identity["restaurante_id"], int):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Link de ativação inválido ou expirado"
+        )
+
+    restaurante_id = identity["restaurante_id"]
+    bind_session_to_tenant(db, restaurante_id)
+    tenant_context = current_restaurante_id.set(restaurante_id)
     try:
-        usuario = db.query(Usuario).filter(Usuario.token_convite == token_str).first()
+        usuario = db.query(Usuario).filter(Usuario.id == identity["id"]).first()
     finally:
-        current_restaurante_id.set(None)
+        current_restaurante_id.reset(tenant_context)
 
     if not usuario:
         raise HTTPException(
@@ -345,5 +394,3 @@ def reenviar_convite_usuario(
         "link": convite_link,
         "mensagem": mensagem_texto
     }
-
-
