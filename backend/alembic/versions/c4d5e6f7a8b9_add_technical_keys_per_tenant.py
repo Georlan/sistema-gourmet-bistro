@@ -223,6 +223,8 @@ def _add_technical_primary_key(
     business_unique_name: str,
     business_columns: list[str],
 ) -> None:
+    primary_key = _inspector().get_pk_constraint(table)
+    primary_key_name = primary_key.get("name") or f"pk_{table}"
     legacy_global_uniques = []
     if table == "categorias":
         for constraint in _inspector().get_unique_constraints(table):
@@ -239,7 +241,7 @@ def _add_technical_primary_key(
         batch_op.add_column(
             sa.Column("pk", sa.Integer(), autoincrement=True, nullable=False)
         )
-        batch_op.drop_constraint(f"pk_{table}", type_="primary")
+        batch_op.drop_constraint(primary_key_name, type_="primary")
         for constraint_name in legacy_global_uniques:
             batch_op.drop_constraint(constraint_name, type_="unique")
         batch_op.create_primary_key(f"pk_{table}", ["pk"])
