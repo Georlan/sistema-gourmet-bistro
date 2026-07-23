@@ -607,8 +607,6 @@ export default function App() {
         try {
           const data = JSON.parse(event.data);
           if (data.event === "new_delivery_order") {
-            playNotificationSound();
-            showToast(`🛎️ NOVO PEDIDO ONLINE: ${data.message || 'Recebido no caixa!'}`, 'success', 8000);
             window.dispatchEvent(new Event('koma_orders_updated'));
           }
           if (data.event === "tables_updated") {
