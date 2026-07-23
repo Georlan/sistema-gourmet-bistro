@@ -163,6 +163,7 @@ export function CaixaPanel({
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const isProcessingPaymentRef = React.useRef(false); // Synchronous guard against double-click
   const [idempotencyKey, setIdempotencyKey] = useState('');
   const [toastData, setToastData] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null);
 
@@ -1860,7 +1861,8 @@ export function CaixaPanel({
   // Handle payment processing
   const handleProcessPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedOrder || isProcessingPayment) return;
+    if (!selectedOrder || isProcessingPaymentRef.current) return; // Sync ref guard
+    isProcessingPaymentRef.current = true;
     setErrorMsg('');
     setIsProcessingPayment(true);
 
@@ -1962,6 +1964,7 @@ export function CaixaPanel({
     } catch (err: any) {
       setErrorMsg(err.message || 'Erro de conexão ao servidor.');
     } finally {
+      isProcessingPaymentRef.current = false;
       setIsProcessingPayment(false);
     }
   };
@@ -2143,10 +2146,12 @@ export function CaixaPanel({
     setPdvCart(prev => prev.filter((_, i) => i !== idx));
   };
 
+  const isPdvSubmittingRef = React.useRef(false); // Synchronous guard for PDV order submission
+
   // Submit Order from PDV Counter
   const handlePdvSubmitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isLoading) return;
+    if (isPdvSubmittingRef.current) return; // Sync ref guard (faster than isLoading state check)
     if (pdvCart.length === 0) {
       showToast("Seu carrinho de vendas está vazio.", 'info');
       return;
@@ -2157,8 +2162,10 @@ export function CaixaPanel({
         return;
       }
     }
+    isPdvSubmittingRef.current = true;
+    setIsLoading(true);
 
-    // Snapshots dos dados do pedido para envio
+    // Snapshots dos dados do pedido para envio (capturados antes de qualquer reset de estado)
     const cartItems = [...pdvCart];
     const customerName = pdvCustomerName;
     const mesaId = pdvTargetMesaId;
@@ -2214,7 +2221,6 @@ export function CaixaPanel({
     setPdvDeliveryAddress('');
     setPdvDeliveryTaxa('0.00');
 
-    setIsLoading(true);
     try {
       const itemsList = cartItems.flatMap(item =>
         Array.from({ length: item.quantity }, () => ({
@@ -2251,6 +2257,7 @@ export function CaixaPanel({
       console.error(err);
       showToast("Erro ao conectar ao servidor.", 'error');
     } finally {
+      isPdvSubmittingRef.current = false;
       setIsLoading(false);
     }
   };

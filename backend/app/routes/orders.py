@@ -1285,7 +1285,9 @@ def cadastrar_motoboy(
     """
     Cadastra um novo motoboy.
     """
-    max_id = db.query(func.max(Motoboy.id)).scalar() or 0
+    max_id = db.query(func.max(Motoboy.id)).filter(
+        Motoboy.restaurante_id == require_tenant_id()
+    ).scalar() or 0
     novo_motoboy = Motoboy(
         id=max_id + 1,
         restaurante_id=require_tenant_id(),

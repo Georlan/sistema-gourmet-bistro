@@ -151,7 +151,11 @@ export default function CardapioDigital({
     };
   }, [isPixWaiting, pixOrderId]);
 
+  const isSubmittingRef = useRef(false);
+
   const handlePlaceOrder = async () => {
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     setErrorMessage("");
 
@@ -184,7 +188,8 @@ export default function CardapioDigital({
       endereco_entrega: deliveryMethod === "delivery" ? address : "Retirada no Balcão",
       taxa_entrega: Number(deliveryFee) || 0,
       forma_pagamento: paymentMethod === "PIX" ? "Pix" : paymentMethod,
-      tipo_pedido: deliveryMethod === "delivery" ? "delivery" : "retirada"
+      tipo_pedido: deliveryMethod === "delivery" ? "delivery" : "retirada",
+      idempotency_key: `cardapio-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
     };
 
     try {
@@ -236,6 +241,7 @@ export default function CardapioDigital({
       console.error("Erro ao enviar pedido para o backend:", err);
       setErrorMessage(err.message || "Não foi possível conectar ao servidor. Tente novamente.");
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };

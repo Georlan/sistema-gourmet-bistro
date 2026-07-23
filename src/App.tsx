@@ -714,6 +714,8 @@ export default function App() {
         ws.onerror = null;
         ws.close();
       }
+      // Nullify the ref so reconnect timers don't operate on a closed socket
+      wsRef.current = null;
     };
   }, [isAuthenticated, activeWaiterId]);
 

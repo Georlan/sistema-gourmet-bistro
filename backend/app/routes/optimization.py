@@ -365,9 +365,12 @@ def update_fidelidade_config(
     current_user: Usuario = Depends(require_permission("fidelidade:administrar"))
 ):
     """Atualiza as configurações do programa de fidelidade."""
-    config = db.query(ConfigFidelizacao).first()
+    restaurante_id = require_tenant_id()
+    config = db.query(ConfigFidelizacao).filter(
+        ConfigFidelizacao.restaurante_id == restaurante_id
+    ).first()
     if not config:
-        config = ConfigFidelizacao()
+        config = ConfigFidelizacao(restaurante_id=restaurante_id)
         db.add(config)
     
     config.ativo = config_in.ativo
@@ -390,19 +393,20 @@ def checkout_fidelidade(
     Se tipo_recompensa for PONTOS: calcula a pontuação (R$ 1 = X pontos) ou aplica resgate.
     Se for CASHBACK: acumula cashback (X% do total) ou deduz do saldo do cliente.
     """
-    config = db.query(ConfigFidelizacao).first()
+    config = db.query(ConfigFidelizacao).filter(
+        ConfigFidelizacao.restaurante_id == require_tenant_id()
+    ).first()
     if not config or not config.ativo:
         raise HTTPException(status_code=400, detail="Programa de fidelidade inativo.")
         
     telefone = req.cliente_telefone.strip()
     
     # Calcular saldo atual do cliente
-    # Otimizado: Busca apenas colunas brutas do banco de dados (evita instanciar objetos ORM lentos)
     historico = db.query(
         HistoricoFidelidade._cliente_telefone,
         HistoricoFidelidade.tipo_movimentacao,
         HistoricoFidelidade.valor_delta
-    ).all()
+    ).filter(HistoricoFidelidade.restaurante_id == require_tenant_id()).all()
     
     saldo_atual = 0.0
     for encrypted_tel, tipo_mov, delta in historico:

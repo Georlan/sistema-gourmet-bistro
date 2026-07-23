@@ -616,12 +616,18 @@ def registrar_pagamento_comanda(
     """Registra o recebimento financeiro parcial ou total de uma comanda."""
     # Idempotency Check
     if pag_in.idempotency_key:
-        existing = db.query(Pagamento).filter(Pagamento.idempotency_key == pag_in.idempotency_key).first()
+        existing = db.query(Pagamento).filter(
+            Pagamento.restaurante_id == require_tenant_id(),
+            Pagamento.idempotency_key == pag_in.idempotency_key
+        ).first()
         if existing:
             return existing
 
-    # 1. Check if there is an active shift
-    turno = db.query(CaixaTurno).filter(CaixaTurno.status == "aberto").first()
+    # 1. Check if there is an active shift FOR THIS TENANT
+    turno = db.query(CaixaTurno).filter(
+        CaixaTurno.restaurante_id == require_tenant_id(),
+        CaixaTurno.status == "aberto"
+    ).first()
     if not turno:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -738,7 +744,9 @@ def registrar_pagamento_comanda(
                         break
             
             if client_cpf:
-                fidel_config = db.query(ConfigFidelizacao).first()
+                fidel_config = db.query(ConfigFidelizacao).filter(
+                    ConfigFidelizacao.restaurante_id == comanda.restaurante_id
+                ).first()
                 if fidel_config and fidel_config.ativo:
                     total_pago = comanda.valor_pago
                     if fidel_config.tipo_recompensa == "PONTOS":
@@ -771,7 +779,10 @@ def registrar_pagamento_comanda(
     except IntegrityError:
         db.rollback()
         if pag_in.idempotency_key:
-            existing = db.query(Pagamento).filter(Pagamento.idempotency_key == pag_in.idempotency_key).first()
+            existing = db.query(Pagamento).filter(
+                Pagamento.restaurante_id == require_tenant_id(),
+                Pagamento.idempotency_key == pag_in.idempotency_key
+            ).first()
             if existing:
                 return existing
         logger.exception("Falha de integridade ao processar pagamento idempotente")
