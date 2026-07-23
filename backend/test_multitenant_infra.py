@@ -1,7 +1,14 @@
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, text
 from unittest.mock import AsyncMock
-from app.database import current_restaurante_id, get_tenant_id_str
+from app.database import (
+    TenantSession,
+    _set_postgres_tenant_for_transaction,
+    bind_session_to_tenant,
+    current_restaurante_id,
+    get_tenant_id_str,
+)
 from app.security import create_access_token
 from app.websocket_manager import ConnectionManager
 from app.main import app
@@ -19,6 +26,114 @@ def test_get_tenant_id_str_sentinel_zero():
     assert get_tenant_id_str("1") == "0"  # type: ignore
     assert get_tenant_id_str(True) == "0"  # type: ignore
     assert get_tenant_id_str(5) == "5"
+
+
+def test_tenant_session_can_be_rebound_only_between_transactions():
+    engine = create_engine("sqlite:///:memory:")
+    db = TenantSession(bind=engine, restaurante_id=1)
+    try:
+        db.execute(text("SELECT 1"))
+        assert db.in_transaction()
+
+        bind_session_to_tenant(db, 2)
+
+        assert not db.in_transaction()
+        assert db.restaurante_id == 2
+    finally:
+        db.close()
+        engine.dispose()
+
+
+@pytest.mark.parametrize("restaurante_id", [11, 22])
+def test_postgres_transaction_receives_explicit_tenant(restaurante_id):
+    class FakeDialect:
+        name = "postgresql"
+
+    class FakeConnection:
+        dialect = FakeDialect()
+
+        def __init__(self):
+            self.calls = []
+
+        def execute(self, statement, parameters):
+            self.calls.append((str(statement), parameters))
+
+    class FakeSession:
+        pass
+
+    session = FakeSession()
+    session.restaurante_id = restaurante_id
+
+    connection = FakeConnection()
+    _set_postgres_tenant_for_transaction(session, None, connection)
+
+    assert len(connection.calls) == 1
+    sql, parameters = connection.calls[0]
+    assert "set_config('app.current_restaurante_id'" in sql
+    assert parameters == {"id": str(restaurante_id)}
+
+
+def test_print_background_uses_explicit_tenant_for_each_job(monkeypatch):
+    from app import database
+    from app.routes.orders import print_in_background
+
+    created_sessions = []
+    created_jobs = []
+
+    class FakeDb:
+        def __init__(self, restaurante_id):
+            created_sessions.append(restaurante_id)
+
+        def add(self, job):
+            created_jobs.append(job)
+
+        def commit(self):
+            return None
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(
+        database,
+        "SessionLocal",
+        lambda *, restaurante_id: FakeDb(restaurante_id),
+    )
+
+    original_context = current_restaurante_id.set(999)
+    try:
+        print_in_background("cozinha", "tenant 11", restaurante_id=11)
+        print_in_background("cozinha", "tenant 22", restaurante_id=22)
+
+        assert created_sessions == [11, 22]
+        assert [job.restaurante_id for job in created_jobs] == [11, 22]
+        assert current_restaurante_id.get() == 999
+    finally:
+        current_restaurante_id.reset(original_context)
+
+
+def test_postgres_transaction_without_tenant_uses_blocking_sentinel():
+    class FakeDialect:
+        name = "postgresql"
+
+    class FakeConnection:
+        dialect = FakeDialect()
+
+        def __init__(self):
+            self.parameters = None
+
+        def execute(self, statement, parameters):
+            self.parameters = parameters
+
+    class FakeSession:
+        restaurante_id = None
+
+    context = current_restaurante_id.set(None)
+    try:
+        connection = FakeConnection()
+        _set_postgres_tenant_for_transaction(FakeSession(), None, connection)
+        assert connection.parameters == {"id": "0"}
+    finally:
+        current_restaurante_id.reset(context)
 
 def test_create_access_token_requires_valid_restaurante_id():
     """Prova que create_access_token falha se restaurante_id for ausente, zero ou inválido."""
