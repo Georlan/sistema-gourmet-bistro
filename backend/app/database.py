@@ -6,7 +6,7 @@ import os
 from .config import settings
 
 # AJUSTADO: connect_args agora é condicional para não travar no PostgreSQL (Supabase)
-connect_args = {}
+connect_args = {"connect_timeout": 10}
 if settings.DATABASE_URL.startswith("sqlite"):
     connect_args = {"check_same_thread": False, "timeout": 30.0}
 
@@ -169,6 +169,7 @@ def validate_postgres_runtime_role() -> None:
     if engine.dialect.name != "postgresql":
         return
 
+    print("[DATABASE] Validando role PostgreSQL de runtime...", flush=True)
     with engine.connect() as connection:
         role = connection.execute(text("""
             SELECT
@@ -213,3 +214,7 @@ def validate_postgres_runtime_role() -> None:
             f"role {role['role_name']!r} " + ", ".join(failures) + ". "
             "Use uma role LOGIN dedicada, sem SUPERUSER/BYPASSRLS e membro de koma_app."
         )
+    print(
+        f"[DATABASE] Role de runtime {role['role_name']!r} validada com segurança.",
+        flush=True,
+    )
