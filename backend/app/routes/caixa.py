@@ -148,8 +148,11 @@ def abrir_turno(
     """Abre um novo turno de caixa com um saldo de troco inicial."""
     check_caixa_permission(current_user)
     
-    # Check if there is already an open shift
-    turno_ativo = db.query(CaixaTurno).filter(CaixaTurno.status == "aberto").first()
+    # Check if there is already an open shift FOR THIS TENANT
+    turno_ativo = db.query(CaixaTurno).filter(
+        CaixaTurno.restaurante_id == current_restaurante_id.get(),
+        CaixaTurno.status == "aberto"
+    ).first()
     if turno_ativo:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -809,7 +812,10 @@ def listar_pagamentos_pendentes(
 ):
     """Lista todos os pagamentos em dinheiro pendentes de aprovação pelo caixa."""
     check_caixa_permission(current_user)
-    return db.query(Pagamento).filter(Pagamento.status == "pendente").all()
+    return db.query(Pagamento).filter(
+        Pagamento.restaurante_id == current_user.restaurante_id,
+        Pagamento.status == "pendente"
+    ).all()
 
 
 @router.post("/pagamentos/{pagamento_id}/aprovar", response_model=PagamentoResponse)
@@ -954,7 +960,9 @@ def atualizar_configuracoes(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("configuracoes:administrar"))
 ):
-    config = db.query(ConfiguracaoRestaurante).options(joinedload(ConfiguracaoRestaurante.restaurante)).first()
+    config = db.query(ConfiguracaoRestaurante).options(joinedload(ConfiguracaoRestaurante.restaurante)).filter(
+        ConfiguracaoRestaurante.restaurante_id == current_user.restaurante_id
+    ).first()
     if not config:
         config = ConfiguracaoRestaurante()
         db.add(config)

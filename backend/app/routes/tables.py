@@ -102,7 +102,11 @@ def delete_mesa(
             detail="Não é possível excluir uma mesa com comandas abertas."
         )
     # Dissocia comandas fechadas/antigas para evitar violações de chave estrangeira (FK constraints)
-    db.query(Comanda).filter(Comanda.mesa_id == mesa_id).update({Comanda.mesa_id: None}, synchronize_session=False)
+    # IMPORTANT: restaurante_id filter is mandatory here — bulk .update() bypasses ORM listeners
+    db.query(Comanda).filter(
+        Comanda.restaurante_id == mesa.restaurante_id,
+        Comanda.mesa_id == mesa_id
+    ).update({Comanda.mesa_id: None}, synchronize_session=False)
     db.delete(mesa)
     db.commit()
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
@@ -198,7 +202,9 @@ def imprimir_recibo_mesa(
         garcom_nome = first_comanda.criada_por.nome if first_comanda.criada_por else "Garçom"
         
         from ..models import ConfiguracaoRestaurante
-        config = db.query(ConfiguracaoRestaurante).first()
+        config = db.query(ConfiguracaoRestaurante).filter(
+            ConfiguracaoRestaurante.restaurante_id == first_comanda.restaurante_id
+        ).first()
         taxa_servico_ativa = config.taxa_servico_ativa if config else True
         taxa_servico_padrao = config.taxa_servico_padrao if config else 10.0
         

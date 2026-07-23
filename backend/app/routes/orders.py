@@ -42,6 +42,7 @@ def gerar_novo_numero_pedido(db: Session) -> int:
         start_of_next_month = datetime.datetime(now.year, now.month + 1, 1)
         
     max_pedido = db.query(Comanda.numero_pedido).filter(
+        Comanda.restaurante_id == current_restaurante_id.get(),
         Comanda.criado_em >= start_of_month,
         Comanda.criado_em < start_of_next_month
     ).order_by(Comanda.numero_pedido.desc()).limit(1).with_for_update().scalar()
@@ -166,13 +167,14 @@ def abrir_comanda(comanda_in: ComandaCreate, background_tasks: BackgroundTasks, 
                 detail=f"Mesa {comanda_in.mesa_id} não encontrada"
             )
             
-        # 2. Se a mesa já possuir uma comanda aberta, reutilizar o mesmo numero_pedido
+        # 2. Se a mesa já possuir uma comanda aberta, reutilizar/retornar a comanda existente
         comanda_aberta = db.query(Comanda).filter(
             Comanda.mesa_id == comanda_in.mesa_id,
             Comanda.fechada == False
         ).first()
         if comanda_aberta:
-            numero_pedido = comanda_aberta.numero_pedido
+            # Return existing comanda to prevent duplicates on double-click
+            return comanda_aberta
         else:
             numero_pedido = gerar_novo_numero_pedido(db)
     else:
@@ -923,7 +925,9 @@ def update_item_details(
         )
         
     # Verificar permissão do garçom
-    config = db.query(ConfiguracaoRestaurante).first()
+    config = db.query(ConfiguracaoRestaurante).filter(
+        ConfiguracaoRestaurante.restaurante_id == current_user.restaurante_id
+    ).first()
     if config and not config.perm_garcom_editar and current_garcom.cargo == "garcom":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -1059,7 +1063,9 @@ def reimprimir_lancamento_cozinha(
                     if mb:
                         motoboy_nome = mb.nome
                         
-                config = db.query(ConfiguracaoRestaurante).first()
+                config = db.query(ConfiguracaoRestaurante).filter(
+                    ConfiguracaoRestaurante.restaurante_id == comanda.restaurante_id
+                ).first()
                 unificar = config.unificar_vias_delivery if config else False
                 
                 if unificar:
@@ -1225,7 +1231,9 @@ def despachar_delivery(
     try:
         from ..printer_service import printer_service
         from ..models import ConfiguracaoRestaurante
-        config = db.query(ConfiguracaoRestaurante).first()
+        config = db.query(ConfiguracaoRestaurante).filter(
+            ConfiguracaoRestaurante.restaurante_id == comanda.restaurante_id
+        ).first()
         unificar = config.unificar_vias_delivery if config else False
         
         if unificar:

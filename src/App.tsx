@@ -289,6 +289,8 @@ export default function App() {
   const optimisticItemStatusRef = useRef<Record<string, { status: 'preparando' | 'pronto' | 'entregue'; ts: number }>>({});
   // Prevents duplicate API calls when clicking Pronto/Entregar rapidly
   const inflightItemIdsRef = useRef<Set<string>>(new Set());
+  // Prevents duplicate API calls for critical table operations (close, transfer, merge)
+  const inflightTableOpsRef = useRef<Set<string>>(new Set());
 
 
   const fetchTables = async () => {
@@ -464,6 +466,7 @@ export default function App() {
   }, [orders]);
 
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const isSubmittingRef = useRef<boolean>(false); // Synchronous guard against double-click race condition
 
   const [drafts, setDrafts] = useState<{ [mesaId: number]: DraftItem[] }>(() => {
     const saved = localStorage.getItem(LOCAL_STORAGE_DRAFTS_KEY);
@@ -1019,10 +1022,11 @@ export default function App() {
 
 
   const handleSubmitDraft = async (mesaId: number, orderType: 'Consumo no Local' | 'Retirada' | 'Entrega' = 'Consumo no Local') => {
-    if (isSubmitting) return;
+    if (isSubmittingRef.current) return; // Synchronous ref guard (faster than useState)
     const items = drafts[mesaId] || [];
     if (items.length === 0) return;
 
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
 
     // ─────────────────────────────────────────────────────────────────
@@ -1144,14 +1148,18 @@ export default function App() {
       showToast("Erro ao conectar ao servidor para enviar o pedido.", 'error');
       fetchOrdersFromAPI(); // Rollback
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
 
   // 8. Table Transfer (Transfers all active comandas of sourceTableId to targetTableId)
   const handleTransferTable = async (sourceTableId: number, targetTableId: number) => {
+    const opKey = `transfer-${sourceTableId}`;
+    if (inflightTableOpsRef.current.has(opKey)) return;
+    inflightTableOpsRef.current.add(opKey);
     const sourceComandas = orders.filter(o => o.mesaId === sourceTableId);
-    if (sourceComandas.length === 0) return;
+    if (sourceComandas.length === 0) { inflightTableOpsRef.current.delete(opKey); return; }
 
     // 0ms Optimistic UI update
     handleTransferTableOptimistic(sourceTableId, targetTableId);
@@ -1174,11 +1182,16 @@ export default function App() {
       console.error(err);
       showToast("Erro de conexão ao transferir mesas.", 'error');
       fetchOrdersFromAPI();
+    } finally {
+      inflightTableOpsRef.current.delete(opKey);
     }
   };
 
   // 8.5. Unify/Split (Merge and Unmerge) Tables
   const handleMergeTables = async (sourceMesaId: number, targetMesaId: number) => {
+    const opKey = `merge-${sourceMesaId}-${targetMesaId}`;
+    if (inflightTableOpsRef.current.has(opKey)) return;
+    inflightTableOpsRef.current.add(opKey);
     // 0ms Optimistic UI update: merge itens da mesa origem na mesa destino
     handleTransferTableOptimistic(sourceMesaId, targetMesaId);
     setSelectedTableId(null);
@@ -1199,6 +1212,8 @@ export default function App() {
       console.error(err);
       showToast("Erro de conexão ao mesclar mesas.", 'error');
       fetchOrdersFromAPI();
+    } finally {
+      inflightTableOpsRef.current.delete(opKey);
     }
   };
 
