@@ -1,4 +1,16 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey, event, JSON, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Integer,
+    JSON,
+    String,
+    UniqueConstraint,
+    event,
+)
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.hybrid import hybrid_property
 import datetime
@@ -81,10 +93,12 @@ class Usuario(Base):
 class Categoria(Base):
     __tablename__ = "categorias"
     __table_args__ = (
+        UniqueConstraint('restaurante_id', 'id', name='uq_categorias_restaurante_id_negocio'),
         UniqueConstraint('restaurante_id', 'nome', name='uq_categorias_restaurante_nome'),
     )
-    
-    id = Column(String, primary_key=True, index=True)  # ex: "cat-hamburgueres-bovinos"
+
+    pk = Column(Integer, primary_key=True, autoincrement=True)
+    id = Column(String, nullable=False, index=True)  # Chave de negócio, ex: "cat-hamburgueres-bovinos"
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False)
     nome = Column(String, nullable=False)
     destino_impressao = Column(String, default="COZINHA")  # "COZINHA" | "BAR" | "NENHUM"
@@ -96,11 +110,21 @@ class Categoria(Base):
 
 class Produto(Base):
     __tablename__ = "produtos"
-    
-    id = Column(String, primary_key=True, index=True)
+    __table_args__ = (
+        UniqueConstraint('restaurante_id', 'id', name='uq_produtos_restaurante_id_negocio'),
+        ForeignKeyConstraint(
+            ['restaurante_id', 'categoria_id'],
+            ['categorias.restaurante_id', 'categorias.id'],
+            name='fk_produtos_categoria_tenant',
+            ondelete='RESTRICT',
+        ),
+    )
+
+    pk = Column(Integer, primary_key=True, autoincrement=True)
+    id = Column(String, nullable=False, index=True)
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False)
     nome = Column(String, nullable=False)
-    categoria_id = Column(String, ForeignKey("categorias.id"), nullable=False)
+    categoria_id = Column(String, nullable=False)
     preco = Column(Float, nullable=False)
     descricao = Column(String, default="")
     imagem = Column(String, default="")
@@ -112,8 +136,12 @@ class Produto(Base):
 
 class Mesa(Base):
     __tablename__ = "mesas"
-    
-    id = Column(Integer, primary_key=True, index=True)  # Fixed ID: 1, 2, 3...
+    __table_args__ = (
+        UniqueConstraint('restaurante_id', 'id', name='uq_mesas_restaurante_numero'),
+    )
+
+    pk = Column(Integer, primary_key=True, autoincrement=True)
+    id = Column(Integer, nullable=False, index=True)  # Número visível: 1, 2, 3...
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False)
     capacidade = Column(Integer, nullable=False, default=4)
     nome = Column(String, nullable=True)  # Editable custom name (e.g. "Mesa VIP", "Varanda 1")
@@ -121,10 +149,18 @@ class Mesa(Base):
 
 class ObservacaoPredefinida(Base):
     __tablename__ = "observacoes_predefinidas"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ['restaurante_id', 'categoria_id'],
+            ['categorias.restaurante_id', 'categorias.id'],
+            name='fk_observacoes_categoria_tenant',
+            ondelete='CASCADE',
+        ),
+    )
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
-    categoria_id = Column(String, ForeignKey("categorias.id"), nullable=False)
+    categoria_id = Column(String, nullable=False)
     texto = Column(String, nullable=False)  # e.g., "Sem cebola", "Sem cheddar", "Pra viagem"
     
     # Relationships
@@ -133,10 +169,18 @@ class ObservacaoPredefinida(Base):
 
 class Comanda(Base):
     __tablename__ = "comandas"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ['restaurante_id', 'mesa_id'],
+            ['mesas.restaurante_id', 'mesas.id'],
+            name='fk_comandas_mesa_tenant',
+            ondelete='RESTRICT',
+        ),
+    )
     
     id = Column(String, primary_key=True, index=True)
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
-    mesa_id = Column(Integer, ForeignKey("mesas.id"), nullable=True, index=True)
+    mesa_id = Column(Integer, nullable=True, index=True)
     mesa_origem_id = Column(Integer, nullable=True)
     mesa_transferida_de = Column(Integer, nullable=True)
     garcom_id = Column(String, ForeignKey("usuarios.id"), nullable=False)
@@ -207,12 +251,20 @@ class Lancamento(Base):
 
 class Item(Base):
     __tablename__ = "itens"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ['restaurante_id', 'produto_id'],
+            ['produtos.restaurante_id', 'produtos.id'],
+            name='fk_itens_produto_tenant',
+            ondelete='RESTRICT',
+        ),
+    )
     
     id = Column(String, primary_key=True, index=True)
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
     comanda_id = Column(String, ForeignKey("comandas.id"), nullable=False, index=True)
     lancamento_id = Column(String, ForeignKey("lancamentos.id"), nullable=False, index=True)
-    produto_id = Column(String, ForeignKey("produtos.id"), nullable=False)
+    produto_id = Column(String, nullable=False)
     
     preco_unit = Column(Float, nullable=False)  # Snapshot of price at order time
     observacao = Column(String, default="")
@@ -441,9 +493,18 @@ class OpcaoModificador(Base):
 
 class ProdutoGrupoModificador(Base):
     __tablename__ = "produto_grupo_modificadores"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ['restaurante_id', 'produto_id'],
+            ['produtos.restaurante_id', 'produtos.id'],
+            name='fk_produto_grupo_produto_tenant',
+            ondelete='CASCADE',
+        ),
+    )
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    produto_id = Column(String, ForeignKey("produtos.id"), nullable=False)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
+    produto_id = Column(String, nullable=False)
     grupo_id = Column(String, ForeignKey("grupo_modificadores.id"), nullable=False)
 
 

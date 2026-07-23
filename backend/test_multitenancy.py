@@ -4,10 +4,11 @@ os.environ["DATABASE_URL"] = "sqlite:///./test_multitenancy.db"
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base, get_db, current_restaurante_id
-from app.models import Restaurante, Usuario, Categoria, Produto, Mesa
+from app.models import Restaurante, Usuario, Categoria, Produto, Mesa, Comanda
 from app.security import get_password_hash
 from app.main import app
 
@@ -32,23 +33,24 @@ def setup_database():
     try:
         # 2. Seed Restaurant 1 Data
         u1 = Usuario(id="u-1", restaurante_id=1, nome="Waiter One", usuario="waiter1", senha_hash=get_password_hash("123"), role="garcom")
-        cat1 = Categoria(id="cat-1", restaurante_id=1, nome="Bebidas R1")
-        m1 = Mesa(id=10, restaurante_id=1, capacidade=4)
+        cat1 = Categoria(id="cat-cardapio", restaurante_id=1, nome="Bebidas R1")
+        m1 = Mesa(id=1, restaurante_id=1, capacidade=4)
         db.add_all([u1, cat1, m1])
         db.commit()
         
-        prod1 = Produto(id="p-1", restaurante_id=1, nome="Coca R1", categoria_id="cat-1", preco=5.0)
+        prod1 = Produto(id="p-principal", restaurante_id=1, nome="Coca R1", categoria_id="cat-cardapio", preco=5.0)
         db.add(prod1)
         db.commit()
         
         # 3. Seed Restaurant 2 Data
         u2 = Usuario(id="u-2", restaurante_id=2, nome="Waiter Two", usuario="waiter2", senha_hash=get_password_hash("123"), role="garcom")
-        cat2 = Categoria(id="cat-2", restaurante_id=2, nome="Bebidas R2")
-        m2 = Mesa(id=20, restaurante_id=2, capacidade=4)
+        # Os mesmos IDs de negócio são válidos em outro tenant.
+        cat2 = Categoria(id="cat-cardapio", restaurante_id=2, nome="Bebidas R2")
+        m2 = Mesa(id=1, restaurante_id=2, capacidade=4)
         db.add_all([u2, cat2, m2])
         db.commit()
         
-        prod2 = Produto(id="p-2", restaurante_id=2, nome="Pepsi R2", categoria_id="cat-2", preco=4.5)
+        prod2 = Produto(id="p-principal", restaurante_id=2, nome="Pepsi R2", categoria_id="cat-cardapio", preco=4.5)
         db.add(prod2)
         db.commit()
     finally:
@@ -75,18 +77,18 @@ def test_logical_isolation_products():
     resp1 = client.get("/produtos", headers=headers1)
     assert resp1.status_code == 200
     products1 = resp1.json()
-    # Should only return Coca R1 (id "p-1")
+    # Mesmo ID de negócio, conteúdo isolado por restaurante.
     assert len(products1) == 1
-    assert products1[0]["id"] == "p-1"
+    assert products1[0]["id"] == "p-principal"
     assert products1[0]["nome"] == "Coca R1"
     
     # Query products as Restaurant 2
     resp2 = client.get("/produtos", headers=headers2)
     assert resp2.status_code == 200
     products2 = resp2.json()
-    # Should only return Pepsi R2 (id "p-2")
+    # O tenant 2 também pode usar o ID "p-principal".
     assert len(products2) == 1
-    assert products2[0]["id"] == "p-2"
+    assert products2[0]["id"] == "p-principal"
     assert products2[0]["nome"] == "Pepsi R2"
 
 def test_logical_isolation_tables():
@@ -100,11 +102,49 @@ def test_logical_isolation_tables():
     assert resp1.status_code == 200
     tables1 = resp1.json()
     assert len(tables1) == 1
-    assert tables1[0]["id"] == 10
+    assert tables1[0]["id"] == 1
     
     # Query tables as Restaurant 2
     resp2 = client.get("/mesas", headers=headers2)
     assert resp2.status_code == 200
     tables2 = resp2.json()
     assert len(tables2) == 1
-    assert tables2[0]["id"] == 20
+    assert tables2[0]["id"] == 1
+
+
+def test_composite_foreign_keys_reject_cross_tenant_links():
+    """FKs compostas impedem produto/mesa de apontar para outro restaurante."""
+    from app.database import SessionLocal
+
+    token_var = current_restaurante_id.set(None)
+    db = SessionLocal()
+    try:
+        db.add(Categoria(id="cat-exclusiva-r1", restaurante_id=1, nome="Exclusiva R1"))
+        db.add(Mesa(id=99, restaurante_id=1, capacidade=2))
+        db.commit()
+
+        db.add(Produto(
+            id="produto-invalido",
+            restaurante_id=2,
+            nome="Produto cruzado",
+            categoria_id="cat-exclusiva-r1",
+            preco=1.0,
+        ))
+        with pytest.raises(IntegrityError):
+            db.commit()
+        db.rollback()
+
+        db.add(Comanda(
+            id="comanda-mesa-cruzada",
+            restaurante_id=2,
+            mesa_id=99,
+            garcom_id="u-2",
+            numero_pedido=999,
+            tipo="Consumo no Local",
+        ))
+        with pytest.raises(IntegrityError):
+            db.commit()
+        db.rollback()
+    finally:
+        db.close()
+        current_restaurante_id.reset(token_var)
