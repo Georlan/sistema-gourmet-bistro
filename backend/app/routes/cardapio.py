@@ -172,7 +172,7 @@ def criar_pedido_online(
             detail=f"Falha ao processar pedido no servidor: {str(e)}"
         )
     finally:
-        current_restaurante_id.set(None)
+        current_restaurante_id.reset(token_context)
         
     # 7. Disparar notificação de novos pedidos via WebSocket para o Caixa do restaurante
     background_tasks.add_task(
@@ -224,7 +224,7 @@ def identificar_cliente(payload: CardapioIdentificarRequest, db: Session = Depen
                 "exists": False
             }
     finally:
-        current_restaurante_id.set(None)
+        current_restaurante_id.reset(token_context)
 
 
 import secrets
@@ -344,4 +344,4 @@ def verificar_otp(payload: CardapioVerificarOtpRequest, db: Session = Depends(ge
                 "is_new": True
             }
     finally:
-        current_restaurante_id.set(None)
+        current_restaurante_id.reset(token_context)
