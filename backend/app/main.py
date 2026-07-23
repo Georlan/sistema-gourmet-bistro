@@ -109,7 +109,19 @@ if os.getenv("ENVIRONMENT") != "test" and settings.SENTRY_DSN:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await run_migrations_on_startup()
+    run_migrations_override = os.getenv("RUN_MIGRATIONS_ON_STARTUP")
+    run_migrations_here = (
+        run_migrations_override.lower() == "true"
+        if run_migrations_override is not None
+        else settings.MIGRATION_DATABASE_URL == settings.DATABASE_URL
+    )
+    if run_migrations_here:
+        await run_migrations_on_startup()
+    else:
+        print(
+            "[ALEMBIC] Migração no startup ignorada; usando o pre-deploy.",
+            flush=True,
+        )
     from .database import validate_postgres_runtime_role
     validate_postgres_runtime_role()
     yield
