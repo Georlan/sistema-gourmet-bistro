@@ -110,7 +110,10 @@ if os.getenv("ENVIRONMENT") != "test" and settings.SENTRY_DSN:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     run_migrations_override = os.getenv("RUN_MIGRATIONS_ON_STARTUP")
-    run_migrations_here = (
+    running_on_railway = bool(
+        os.getenv("RAILWAY_PROJECT_ID") or os.getenv("RAILWAY_ENVIRONMENT_ID")
+    )
+    run_migrations_here = not running_on_railway and (
         run_migrations_override.lower() == "true"
         if run_migrations_override is not None
         else settings.MIGRATION_DATABASE_URL == settings.DATABASE_URL
