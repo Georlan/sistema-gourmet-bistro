@@ -42,14 +42,24 @@ def gerar_novo_numero_pedido(db: Session) -> int:
     ).order_by(Comanda.numero_pedido.desc()).limit(1).with_for_update().scalar()
     return (max_pedido or 0) + 1
 
-def print_in_background(printer_name: str, ticket_text: str, document_type: str = "producao", source_type: str = "pedido", source_id: str = "1"):
+def print_in_background(
+    printer_name: str,
+    ticket_text: str,
+    document_type: str = "producao",
+    source_type: str = "pedido",
+    source_id: str = "1",
+    restaurante_id: int | None = None,
+):
     try:
         import datetime
-        from ..database import SessionLocal, current_restaurante_id
+        from ..database import SessionLocal
         from ..models import PrintJob
-        db = SessionLocal()
+        if not isinstance(restaurante_id, int) or isinstance(restaurante_id, bool) or restaurante_id <= 0:
+            raise ValueError("Background de impressão exige restaurante_id explícito")
+        tenant_context = current_restaurante_id.set(restaurante_id)
+        db = None
         try:
-            rest_id = require_tenant_id()
+            db = SessionLocal(restaurante_id=restaurante_id)
             dest_clean = "COZINHA"
             p_upper = (printer_name or "").upper()
             if "FECHAMENTO" in p_upper or "RECIBO" in p_upper or "VALORES" in p_upper:
@@ -64,7 +74,7 @@ def print_in_background(printer_name: str, ticket_text: str, document_type: str 
             ikey = f"{doc_type_clean}:{source_type}:{source_id}:{printer_name}:{ts}"
             
             job = PrintJob(
-                restaurante_id=rest_id,
+                restaurante_id=restaurante_id,
                 document_type=doc_type_clean,
                 destination=dest_clean,
                 source_type=source_type.lower(),
@@ -77,7 +87,9 @@ def print_in_background(printer_name: str, ticket_text: str, document_type: str 
             db.commit()
             print(f"[PRINT JOB ENQUEUED] Job ID {job.id} enfileirado para o Kôma Print Agent!")
         finally:
-            db.close()
+            if db is not None:
+                db.close()
+            current_restaurante_id.reset(tenant_context)
     except Exception as e:
         print(f"[PRINT JOB ERROR] Falha ao enfileirar PrintJob: {e}")
 
@@ -503,7 +515,12 @@ def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_ta
                 items=items_payload,
                 is_reprint=False
             )
-            background_tasks.add_task(print_in_background, "cozinha", ticket_text)
+            background_tasks.add_task(
+                print_in_background,
+                "cozinha",
+                ticket_text,
+                restaurante_id=require_tenant_id(),
+            )
             
             # Mark items as printed
             print_time = datetime.datetime.now(datetime.timezone.utc)
@@ -954,7 +971,12 @@ def update_item_details(
                 lines.append(f"QTD ADICIONADA: +{added_count}")
             lines.append("="*32)
             ticket_text = "\n".join(lines) + "\n\n\n"
-            background_tasks.add_task(print_in_background, "cozinha", ticket_text)
+            background_tasks.add_task(
+                print_in_background,
+                "cozinha",
+                ticket_text,
+                restaurante_id=require_tenant_id(),
+            )
     except Exception as e:
         print(f"Error printing edited item ticket: {e}")
 
@@ -1028,12 +1050,27 @@ def reimprimir_lancamento_cozinha(
                 
                 if unificar:
                     unified_text = printer_service.generate_delivery_unified_ticket(comanda, motoboy_nome)
-                    background_tasks.add_task(print_in_background, "delivery_unico", unified_text)
+                    background_tasks.add_task(
+                        print_in_background,
+                        "delivery_unico",
+                        unified_text,
+                        restaurante_id=require_tenant_id(),
+                    )
                 else:
                     kitchen_text = printer_service.generate_delivery_kitchen_ticket(comanda)
                     motoboy_text = printer_service.generate_delivery_motoboy_ticket(comanda, motoboy_nome)
-                    background_tasks.add_task(print_in_background, "delivery_cozinha", kitchen_text)
-                    background_tasks.add_task(print_in_background, "delivery_motoboy", motoboy_text)
+                    background_tasks.add_task(
+                        print_in_background,
+                        "delivery_cozinha",
+                        kitchen_text,
+                        restaurante_id=require_tenant_id(),
+                    )
+                    background_tasks.add_task(
+                        print_in_background,
+                        "delivery_motoboy",
+                        motoboy_text,
+                        restaurante_id=require_tenant_id(),
+                    )
                     
                 return {"status": "success", "detail": "Reimpressão de Delivery enviada com sucesso"}
             except Exception as print_err:
@@ -1087,7 +1124,12 @@ def reimprimir_lancamento_cozinha(
             items=items_payload,
             is_reprint=True
         )
-        background_tasks.add_task(print_in_background, "cozinha_reimpressao", ticket_text)
+        background_tasks.add_task(
+            print_in_background,
+            "cozinha_reimpressao",
+            ticket_text,
+            restaurante_id=require_tenant_id(),
+        )
         
         # Mark items as printed and commit
         print_time = datetime.datetime.now(datetime.timezone.utc)
@@ -1174,12 +1216,27 @@ def despachar_delivery(
         
         if unificar:
             unified_text = printer_service.generate_delivery_unified_ticket(comanda, motoboy.nome)
-            background_tasks.add_task(print_in_background, "delivery_unico", unified_text)
+            background_tasks.add_task(
+                print_in_background,
+                "delivery_unico",
+                unified_text,
+                restaurante_id=require_tenant_id(),
+            )
         else:
             kitchen_text = printer_service.generate_delivery_kitchen_ticket(comanda)
             motoboy_text = printer_service.generate_delivery_motoboy_ticket(comanda, motoboy.nome)
-            background_tasks.add_task(print_in_background, "delivery_cozinha", kitchen_text)
-            background_tasks.add_task(print_in_background, "delivery_motoboy", motoboy_text)
+            background_tasks.add_task(
+                print_in_background,
+                "delivery_cozinha",
+                kitchen_text,
+                restaurante_id=require_tenant_id(),
+            )
+            background_tasks.add_task(
+                print_in_background,
+                "delivery_motoboy",
+                motoboy_text,
+                restaurante_id=require_tenant_id(),
+            )
     except Exception as print_err:
         print(f"Error printing delivery tickets: {print_err}")
         
@@ -1392,6 +1449,4 @@ def desmesclar_comanda(
     })
     
     return comanda
-
-
 
