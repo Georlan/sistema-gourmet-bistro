@@ -423,9 +423,12 @@ def processar_job(job: dict, printer_name: str, api: ApiClient) -> None:
                 raw_bytes = base64.b64decode(payload_text)
                 log.debug("Payload decodificado como base64 (%d bytes).", len(raw_bytes))
             except Exception:
-                # Trata como texto ESC/POS puro (caso mais comum do backend)
-                raw_bytes = payload_text.encode("utf-8", errors="replace")
-                log.debug("Payload tratado como texto puro (%d bytes).", len(raw_bytes))
+                # Trata como texto ESC/POS puro (caso mais comum do backend).
+                # O endpoint /jobs/inject armazena \x00 como "\\x00" para
+                # contornar restrição do PostgreSQL — revertemos aqui.
+                clean_text = payload_text.replace("\\x00", "\x00")
+                raw_bytes = clean_text.encode("latin-1", errors="replace")
+                log.debug("Payload tratado como texto ESC/POS (%d bytes).", len(raw_bytes))
         else:
             raw_bytes = b"\x1b@[SEM CONTEUDO]\n\x1dV\x00"
             log.warning("Job #%s sem payload_text — imprimindo ticket vazio.", job_id)

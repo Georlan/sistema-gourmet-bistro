@@ -157,13 +157,17 @@ def inject_print_job(
     ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d%H%M%S%f")
     ikey = req.idempotency_key or f"inject:{req.source_type}:{req.source_id}:{ts}"
 
+    # PostgreSQL TEXT columns reject null bytes (\x00). Encode them as the
+    # literal two-character sequence \x00 so the agent can decode them back.
+    safe_payload = req.payload_text.replace("\x00", "\\x00")
+
     job = PrintJob(
         restaurante_id=rest_id,
         document_type=req.document_type.lower(),
         destination=req.destination.upper(),
         source_type=req.source_type.lower(),
         source_id=str(req.source_id),
-        payload_text=req.payload_text,
+        payload_text=safe_payload,
         status="pending",
         idempotency_key=ikey,
     )
