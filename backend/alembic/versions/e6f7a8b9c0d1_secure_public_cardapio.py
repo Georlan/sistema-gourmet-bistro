@@ -45,19 +45,38 @@ def _secure_new_tenant_table(table: str) -> None:
 def upgrade() -> None:
     bind = op.get_bind()
 
-    with op.batch_alter_table("comandas") as batch_op:
-        batch_op.add_column(
+    if bind.dialect.name == "postgresql":
+        # Recriar comandas em batch tenta remover sua PK e quebra todas as FKs
+        # externas. No PostgreSQL, estas alterações são suportadas diretamente.
+        op.add_column(
+            "comandas",
             sa.Column("idempotency_key", sa.String(length=128), nullable=True)
         )
-        batch_op.create_index(
+        op.create_index(
             "ix_comandas_idempotency_key",
+            "comandas",
             ["idempotency_key"],
             unique=False,
         )
-        batch_op.create_unique_constraint(
+        op.create_unique_constraint(
             "uq_comandas_restaurante_idempotency",
+            "comandas",
             ["restaurante_id", "idempotency_key"],
         )
+    else:
+        with op.batch_alter_table("comandas") as batch_op:
+            batch_op.add_column(
+                sa.Column("idempotency_key", sa.String(length=128), nullable=True)
+            )
+            batch_op.create_index(
+                "ix_comandas_idempotency_key",
+                ["idempotency_key"],
+                unique=False,
+            )
+            batch_op.create_unique_constraint(
+                "uq_comandas_restaurante_idempotency",
+                ["restaurante_id", "idempotency_key"],
+            )
 
     op.create_table(
         "otp_challenges",
