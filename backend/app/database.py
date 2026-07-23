@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker, declarative_base, Session, with_loader_criteria
 from contextvars import ContextVar
 from fastapi import Request
@@ -33,8 +33,48 @@ def require_tenant_id() -> int:
 
 class TenantSession(Session):
     def __init__(self, *args, **kwargs):
+        restaurante_id = kwargs.pop("restaurante_id", current_restaurante_id.get())
         super().__init__(*args, **kwargs)
-        self.restaurante_id: int | None = None
+        self.restaurante_id: int | None = restaurante_id
+
+
+def _valid_tenant_id(restaurante_id: object) -> bool:
+    return (
+        isinstance(restaurante_id, int)
+        and not isinstance(restaurante_id, bool)
+        and restaurante_id > 0
+    )
+
+
+def bind_session_to_tenant(db: TenantSession, restaurante_id: int) -> None:
+    """Vincula uma sessão a um tenant antes da próxima transação.
+
+    Uma transação já iniciada pode ter recebido o sentinela RLS ``0``. Nesse
+    caso ela é descartada antes de trocar o tenant, impedindo que a mesma
+    transação mude de identidade no meio do caminho.
+    """
+    if not _valid_tenant_id(restaurante_id):
+        raise ValueError("restaurante_id deve ser um inteiro positivo")
+    if db.in_transaction():
+        db.rollback()
+    db.restaurante_id = restaurante_id
+
+
+@event.listens_for(TenantSession, "after_begin")
+def _set_postgres_tenant_for_transaction(session, transaction, connection):
+    """Aplica o tenant em toda transação, inclusive sessões de background."""
+    if connection.dialect.name != "postgresql":
+        return
+
+    restaurante_id = session.restaurante_id
+    if not _valid_tenant_id(restaurante_id):
+        restaurante_id = current_restaurante_id.get()
+    target_id = get_tenant_id_str(restaurante_id)
+    connection.execute(
+        text("SELECT set_config('app.current_restaurante_id', :id, true)"),
+        {"id": target_id},
+    )
+    session.restaurante_id = restaurante_id if _valid_tenant_id(restaurante_id) else None
 
 @event.listens_for(Session, "do_orm_execute")
 def _add_tenant_id_filtering_criteria(execute_state):
@@ -88,7 +128,6 @@ def set_default_sqlite_pragma(dbapi_connection, connection_record):
 engines = {"default": engine}
 sessionmakers = {"default": SessionLocal}
 
-from sqlalchemy import text
 @event.listens_for(Base.metadata, "after_create")
 def insert_default_restaurant(target, connection, **kw):
     connection.execute(
@@ -115,26 +154,62 @@ def get_db(request: Request = None):
     except Exception:
         pass
 
-    db = SessionLocal()
-    db.restaurante_id = restaurante_id
-
-    # Injeta 'SET LOCAL' na sessão do PostgreSQL para o RLS (Row Level Security)
-    # Quando o tenant estiver ausente, zero ou inválido, usa o sentinela textual "0" para que o RLS bloqueie o acesso sem erro de sintaxe SQL
-    target_id_str = get_tenant_id_str(restaurante_id)
-
-    if settings.DATABASE_URL.startswith("sqlite"):
-        # SQLite em ambiente de testes unitários não suporta o comando PostgreSQL SET LOCAL e é ignorado com segurança
-        pass
-    else:
-        try:
-            db.execute(text("SET LOCAL app.current_restaurante_id = :id"), {"id": target_id_str})
-        except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Falha ao configurar SET LOCAL app.current_restaurante_id no PostgreSQL: {e}")
-            raise
+    # O listener ``after_begin`` aplica SET LOCAL em toda transação. Isso evita
+    # que sessões criadas fora do dependency HTTP (jobs/background) pulem o RLS.
+    db = SessionLocal(restaurante_id=restaurante_id)
 
     try:
         yield db
     finally:
         db.close()
+
+
+def validate_postgres_runtime_role() -> None:
+    """Falha cedo quando DATABASE_URL usa uma identidade capaz de ignorar RLS."""
+    if engine.dialect.name != "postgresql":
+        return
+
+    with engine.connect() as connection:
+        role = connection.execute(text("""
+            SELECT
+                current_user AS role_name,
+                rol.rolsuper AS is_superuser,
+                rol.rolbypassrls AS bypass_rls,
+                pg_has_role(current_user, 'koma_app', 'member') AS is_koma_app,
+                EXISTS (
+                    SELECT 1
+                    FROM pg_class cls
+                    JOIN pg_namespace ns ON ns.oid = cls.relnamespace
+                    WHERE ns.nspname = 'public'
+                      AND cls.relkind = 'r'
+                      AND pg_get_userbyid(cls.relowner) = current_user
+                      AND (
+                          cls.relname = 'restaurantes'
+                          OR EXISTS (
+                              SELECT 1
+                              FROM information_schema.columns col
+                              WHERE col.table_schema = 'public'
+                                AND col.table_name = cls.relname
+                                AND col.column_name = 'restaurante_id'
+                          )
+                      )
+                ) AS owns_tenant_table
+            FROM pg_roles rol
+            WHERE rol.rolname = current_user
+        """)).mappings().one()
+
+    failures = []
+    if role["is_superuser"]:
+        failures.append("é superuser")
+    if role["bypass_rls"]:
+        failures.append("possui BYPASSRLS")
+    if role["owns_tenant_table"]:
+        failures.append("é proprietário de tabela tenant")
+    if not role["is_koma_app"]:
+        failures.append("não é membro da role koma_app")
+    if failures:
+        raise RuntimeError(
+            "DATABASE_URL insegura para o runtime PostgreSQL: "
+            f"role {role['role_name']!r} " + ", ".join(failures) + ". "
+            "Use uma role LOGIN dedicada, sem SUPERUSER/BYPASSRLS e membro de koma_app."
+        )
