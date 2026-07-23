@@ -282,8 +282,6 @@ async def criar_venda_direta(
         )
         db.add(nova_comanda)
 
-        if venda_in.mesa_id is not None:
-            mesa.comanda_atual_id = nova_comanda.id
 
         novo_lancamento = Lancamento(
             id=lancamento_id,

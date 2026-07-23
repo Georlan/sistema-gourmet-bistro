@@ -158,7 +158,7 @@ class Mesa(Base):
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False)
     capacidade = Column(Integer, nullable=False, default=4)
     nome = Column(String, nullable=True)  # Editable custom name (e.g. "Mesa VIP", "Varanda 1")
-    comanda_atual_id = Column(String, nullable=True)
+    # NOTA: ocupação é derivada via Comanda.mesa_id (WHERE fechada=False), não armazenada aqui.
 
 
 
