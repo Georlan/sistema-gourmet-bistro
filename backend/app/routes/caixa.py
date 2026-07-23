@@ -952,7 +952,7 @@ def obter_configuracoes(
             db.refresh(config)
         return config
     finally:
-        current_restaurante_id.set(None)
+        current_restaurante_id.reset(token_var)
 
 
 @router.put("/configuracoes", response_model=ConfiguracaoRestauranteResponse)
