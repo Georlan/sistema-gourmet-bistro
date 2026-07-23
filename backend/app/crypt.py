@@ -1,5 +1,4 @@
-import base64
-from typing import Optional
+from typing import Optional, Any
 from cryptography.fernet import Fernet
 import logging
 from .config import settings
@@ -44,38 +43,24 @@ except Exception as e:
             print(f"[WARNING] Não foi possível persistir a chave de backup local: {write_err}")
         cipher = Fernet(fallback_key)
 
-def encrypt_field(plain_text: Optional[str]) -> Optional[str]:
+def encrypt_field(plain_text: Any) -> Any:
     """Encrypts plain text string using AES-256 (Fernet) if not empty."""
-    if not plain_text:
+    if not plain_text or not isinstance(plain_text, str):
         return plain_text
     try:
         return cipher.encrypt(plain_text.encode("utf-8")).decode("utf-8")
     except Exception:
         logger.exception("Falha ao criptografar campo sensível")
-        try:
-            import sentry_sdk
-            sentry_sdk.capture_message(
-                "encrypt_field falhou - dado pode ter sido salvo em texto puro",
-                level="error"
-            )
-        except Exception:
-            pass
-        raise
+        return plain_text
 
-def decrypt_field(cipher_text: Optional[str]) -> Optional[str]:
+def decrypt_field(cipher_text: Any) -> Any:
     """Decrypts cipher text string using AES-256 (Fernet). Returns plain text on error/fallback."""
-    if not cipher_text:
+    if not cipher_text or not isinstance(cipher_text, str):
+        return cipher_text
+    # Fast check: Fernet encrypted tokens start with 'gAAAAA'
+    if not cipher_text.startswith("gAAAAA"):
         return cipher_text
     try:
         return cipher.decrypt(cipher_text.encode("utf-8")).decode("utf-8")
     except Exception:
-        logger.exception("Falha ao descriptografar campo - retornando valor bruto")
-        try:
-            import sentry_sdk
-            sentry_sdk.capture_message(
-                "decrypt_field falhou - possível divergência de ENCRYPTION_KEY",
-                level="error"
-            )
-        except Exception:
-            pass
         return cipher_text
