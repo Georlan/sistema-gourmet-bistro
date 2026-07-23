@@ -54,6 +54,19 @@ def upgrade() -> None:
         "notas_entrada", "pagamentos", "produtos", "usuarios",
     ]
     for table in tenant_tables:
+        columns = {column["name"] for column in sa.inspect(bind).get_columns(table)}
+        if "restaurante_id" not in columns:
+            op.add_column(
+                table,
+                sa.Column("restaurante_id", sa.Integer(), nullable=True),
+            )
+            op.create_foreign_key(
+                f"fk_{table}_restaurante_id",
+                table,
+                "restaurantes",
+                ["restaurante_id"],
+                ["id"],
+            )
         op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
         op.execute(f"""
             CREATE POLICY tenant_isolation ON {table}
@@ -78,4 +91,3 @@ def downgrade() -> None:
 
     op.execute("REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM koma_app")
     op.execute("DROP ROLE IF EXISTS koma_app")
-

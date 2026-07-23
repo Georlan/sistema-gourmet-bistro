@@ -129,7 +129,13 @@ def seed_database():
             {"id": 3, "nome": "Marcos Junior", "telefone": "(81) 98666-5566"}
         ]
         for m in motoboys_data:
-            novo_motoboy = Motoboy(id=m["id"], nome=m["nome"], telefone=m["telefone"], ativo=True)
+            novo_motoboy = Motoboy(
+                id=m["id"],
+                restaurante_id=1,
+                nome=m["nome"],
+                telefone=m["telefone"],
+                ativo=True,
+            )
             db.add(novo_motoboy)
         print("Motoboys semeados com sucesso!")
 
@@ -148,6 +154,7 @@ def seed_database():
 
         # 8. Configurações de IA padrão
         config_ia = ConfiguracaoIA(
+            restaurante_id=1,
             permitir_descontos=False,
             desconto_maximo=10.0,
             permitir_upsell=True,
@@ -190,6 +197,7 @@ def seed_database():
         # Create launch and items
         lancamento = Lancamento(
             id=f"l-{uuid.uuid4().hex[:8]}",
+            restaurante_id=1,
             comanda_id=comanda_del.id,
             garcom_id="c-01",
             timestamp=datetime.datetime.now(datetime.timezone.utc)
@@ -236,4 +244,3 @@ def seed_database():
 
 if __name__ == "__main__":
     seed_database()
-

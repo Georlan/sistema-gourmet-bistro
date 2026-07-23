@@ -42,6 +42,19 @@ def upgrade() -> None:
         "produto_grupo_modificadores", "rascunhos_pedidos"
     ]
     for table in secondary_tables:
+        columns = {column["name"] for column in sa.inspect(bind).get_columns(table)}
+        if "restaurante_id" not in columns:
+            op.add_column(
+                table,
+                sa.Column("restaurante_id", sa.Integer(), nullable=True),
+            )
+            op.create_foreign_key(
+                f"fk_{table}_restaurante_id",
+                table,
+                "restaurantes",
+                ["restaurante_id"],
+                ["id"],
+            )
         op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
         op.execute(f"DROP POLICY IF EXISTS tenant_isolation ON {table}")
         op.execute(f"""

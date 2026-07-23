@@ -278,6 +278,7 @@ def criar_venda_direta(
 
         novo_lancamento = Lancamento(
             id=lancamento_id,
+            restaurante_id=rid,
             comanda_id=comanda_id,
             garcom_id=garcom_id,
             timestamp=datetime.datetime.now(datetime.timezone.utc)
@@ -425,6 +426,7 @@ def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_ta
     # 4. Criar o lançamento
     novo_lancamento = Lancamento(
         id=f"l-{uuid.uuid4().hex[:8]}",
+        restaurante_id=require_tenant_id(),
         comanda_id=comanda_id,
         garcom_id=lancamento_in.garcom_id,
         timestamp=datetime.datetime.now(datetime.timezone.utc)
@@ -1266,6 +1268,7 @@ def cadastrar_motoboy(
     max_id = db.query(func.max(Motoboy.id)).scalar() or 0
     novo_motoboy = Motoboy(
         id=max_id + 1,
+        restaurante_id=require_tenant_id(),
         nome=motoboy_in.nome,
         telefone=motoboy_in.telefone,
         ativo=motoboy_in.ativo if motoboy_in.ativo is not None else True
@@ -1449,4 +1452,3 @@ def desmesclar_comanda(
     })
     
     return comanda
-

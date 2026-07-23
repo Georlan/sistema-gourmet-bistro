@@ -13,6 +13,65 @@ from app.security import create_access_token
 from app.websocket_manager import ConnectionManager
 from app.main import app
 
+
+TENANT_SCOPED_MODEL_TABLES = {
+    "activity_logs",
+    "caixa_movimentacoes",
+    "caixa_turnos",
+    "categorias",
+    "clientes",
+    "comandas",
+    "config_fidelizacao",
+    "configuracoes_ia",
+    "configuracoes_restaurante",
+    "distribuidores",
+    "entradas_estoque",
+    "grupo_modificadores",
+    "historico_fidelidade",
+    "insumos",
+    "item_modificadores",
+    "itens",
+    "itens_contagem_estoque",
+    "itens_entrada_estoque",
+    "itens_nota_entrada",
+    "lancamentos",
+    "mensagens_whatsapp",
+    "mesas",
+    "motoboys",
+    "movimentacoes_estoque",
+    "notas_entrada",
+    "observacoes_predefinidas",
+    "opcao_modificadores",
+    "otp_challenges",
+    "pagamentos",
+    "print_agent_tokens",
+    "print_jobs",
+    "produto_grupo_modificadores",
+    "produtos",
+    "public_rate_limits",
+    "rascunhos_pedidos",
+    "sessoes_contagem_estoque",
+    "usuarios",
+}
+
+
+def test_all_tenant_models_declare_a_required_context_default():
+    """Impede que uma tabela protegida por RLS volte a ser omitida pelo ORM."""
+    from app import models  # noqa: F401
+    from app.database import Base
+
+    mapped_tables = {
+        table.name: table
+        for table in Base.metadata.tables.values()
+        if "restaurante_id" in table.c
+    }
+
+    assert set(mapped_tables) == TENANT_SCOPED_MODEL_TABLES
+    for table_name, table in mapped_tables.items():
+        tenant_column = table.c.restaurante_id
+        assert tenant_column.nullable is False, table_name
+        assert tenant_column.default is not None, table_name
+
 def test_current_restaurante_id_default_is_none_outside_request():
     """Prova que current_restaurante_id.get() retorna None por padrão fora de uma requisição."""
     current_restaurante_id.set(None)

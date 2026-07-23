@@ -51,7 +51,7 @@ class Usuario(Base):
     telefone = Column(String(50), unique=True, index=True, nullable=True)
     email = Column(String(100), unique=True, index=True, nullable=True)
     cargo = Column(String(20), nullable=False, default="garcom")  # 'caixa' | 'garcom' | 'gerente' | 'motoboy' | 'admin'
-    restaurante_id = Column(Integer, ForeignKey("restaurantes.id", ondelete="CASCADE"), default=lambda: current_restaurante_id.get(), nullable=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id", ondelete="CASCADE"), default=lambda: current_restaurante_id.get(), nullable=False)
     senha_hash = Column(String(255), nullable=True)
     token_convite = Column(String, nullable=True)
     token_expira_em = Column(DateTime(timezone=True), nullable=True)
@@ -245,6 +245,7 @@ class Lancamento(Base):
     __tablename__ = "lancamentos"
     
     id = Column(String, primary_key=True, index=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
     comanda_id = Column(String, ForeignKey("comandas.id"), nullable=False)
     garcom_id = Column(String, ForeignKey("usuarios.id"), nullable=False)
     timestamp = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
@@ -399,6 +400,7 @@ class ConfiguracaoIA(Base):
     __tablename__ = "configuracoes_ia"
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
     permitir_descontos = Column(Boolean, default=False)
     desconto_maximo = Column(Float, default=10.0)
     permitir_upsell = Column(Boolean, default=True)
@@ -410,6 +412,7 @@ class MensagemWhatsApp(Base):
     __tablename__ = "mensagens_whatsapp"
     
     id = Column(String, primary_key=True, index=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
     _cliente_telefone = Column("cliente_telefone", String, nullable=False)
     remetente = Column(String, nullable=False)  # "cliente" | "ia" | "humano"
     _conteudo = Column("conteudo", String, nullable=False)
@@ -446,6 +449,7 @@ class RascunhoPedido(Base):
     __tablename__ = "rascunhos_pedidos"
     
     id = Column(String, primary_key=True, index=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
     _cliente_telefone = Column("cliente_telefone", String, nullable=False)
     _conteudo_json = Column("conteudo_json", String, nullable=False)
     _ia_sugestao_resposta = Column("ia_sugestao_resposta", String, nullable=True)
@@ -481,6 +485,7 @@ class GrupoModificador(Base):
     __tablename__ = "grupo_modificadores"
     
     id = Column(String, primary_key=True, index=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
     nome = Column(String, nullable=False)
     min_selecoes = Column(Integer, default=0)
     max_selecoes = Column(Integer, default=1)
@@ -491,6 +496,7 @@ class OpcaoModificador(Base):
     __tablename__ = "opcao_modificadores"
     
     id = Column(String, primary_key=True, index=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
     grupo_id = Column(String, ForeignKey("grupo_modificadores.id"), nullable=False)
     nome = Column(String, nullable=False)
     preco_adicional = Column(Float, default=0.0)
@@ -518,6 +524,7 @@ class ItemModificador(Base):
     __tablename__ = "item_modificadores"
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
     item_id = Column(String, ForeignKey("itens.id"), nullable=False)
     opcao_modificador_id = Column(String, ForeignKey("opcao_modificadores.id"), nullable=False)
     preco_aplicado = Column(Float, nullable=False)
@@ -621,6 +628,7 @@ class Motoboy(Base):
     __tablename__ = "motoboys"
     
     id = Column(Integer, primary_key=True, index=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
     nome = Column(String, nullable=False)
     telefone = Column(String, nullable=False)
     ativo = Column(Boolean, default=True)
