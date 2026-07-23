@@ -563,6 +563,12 @@ class ConfigFidelizacao(Base):
     __tablename__ = "config_fidelizacao"
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    restaurante_id = Column(
+        Integer,
+        ForeignKey("restaurantes.id"),
+        default=lambda: current_restaurante_id.get(),
+        nullable=False,
+    )
     ativo = Column(Boolean, default=False)
     tipo_recompensa = Column(String, default="PONTOS")  # PONTOS | CASHBACK
     taxa_conversao = Column(Float, default=1.0)  # R$ 1 = X points or X% cashback
@@ -573,6 +579,12 @@ class HistoricoFidelidade(Base):
     __tablename__ = "historico_fidelidade"
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    restaurante_id = Column(
+        Integer,
+        ForeignKey("restaurantes.id"),
+        default=lambda: current_restaurante_id.get(),
+        nullable=False,
+    )
     _cliente_telefone = Column("cliente_telefone", String, nullable=False)
     tipo_movimentacao = Column(String, nullable=False)  # ACUMULO | RESGATE
     valor_delta = Column(Float, nullable=False)
