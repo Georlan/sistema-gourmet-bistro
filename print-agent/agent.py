@@ -98,8 +98,53 @@ def imprimir_raw(printer_name: str, raw_data: bytes) -> None:
     """
     if IS_WINDOWS:
         _imprimir_windows(printer_name, raw_data)
+    if IS_WINDOWS:
+        _imprimir_windows(printer_name, raw_data)
     else:
-        _imprimir_linux_simulacao(printer_name, raw_data)
+        _imprimir_linux(printer_name, raw_data)
+
+
+def _imprimir_linux(printer_name: str, raw_data: bytes) -> None:
+    """
+    Linux / macOS:
+    1. Se printer_name for uma porta física (/dev/usb/lp0, /dev/ttyUSB0, etc), grava direto nela.
+    2. Se houver spooler CUPS ('lp'), tenta enviar com `-o raw`.
+    3. Se nenhuma impressora física for encontrada ou for 'SIMULADOR', exibe a simulação no terminal.
+    """
+    import os, subprocess, shutil
+
+    # 1. Porta de dispositivo USB/Serial direta (/dev/usb/lp0, etc.)
+    if printer_name and printer_name.startswith("/dev/"):
+        if os.path.exists(printer_name):
+            try:
+                with open(printer_name, "wb") as f:
+                    f.write(raw_data)
+                    f.flush()
+                log.info("Linux › impresso com sucesso na porta USB física '%s'", printer_name)
+                return
+            except Exception as e:
+                log.error("Linux › falha ao gravar na porta USB '%s': %s", printer_name, e)
+                raise
+        else:
+            log.warning("Linux › dispositivo '%s' não encontrado no sistema.", printer_name)
+
+    # 2. CUPS spooler (`lp -d PRINTER -o raw`)
+    if printer_name and printer_name.upper() not in ("SIMULADOR", "SIMULADOR-LINUX", "DUMMY", "PADRÃO", ""):
+        if shutil.which("lp"):
+            try:
+                cmd = ["lp", "-d", printer_name, "-o", "raw"]
+                proc = subprocess.run(cmd, input=raw_data, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+                if proc.returncode == 0:
+                    log.info("Linux › impresso com sucesso via CUPS em '%s'", printer_name)
+                    return
+                else:
+                    err = proc.stderr.decode("utf-8", errors="replace").strip()
+                    log.warning("Linux › CUPS 'lp' retornou código %d: %s", proc.returncode, err)
+            except Exception as e:
+                log.warning("Linux › erro ao invocar 'lp': %s", e)
+
+    # 3. Modo de simulação visual (terminal)
+    _imprimir_linux_simulacao(printer_name, raw_data)
 
 
 def _imprimir_windows(printer_name: str, raw_data: bytes) -> None:
