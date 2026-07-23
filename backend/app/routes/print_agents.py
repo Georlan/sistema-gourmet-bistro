@@ -4,9 +4,10 @@ import datetime
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Header, status
 from pydantic import BaseModel
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from ..database import get_db, current_restaurante_id
+from ..database import bind_session_to_tenant, get_db, current_restaurante_id
 from ..models import PrintJob, PrintAgentToken, Usuario
 from ..security import get_current_user
 
@@ -41,26 +42,52 @@ def get_current_agent(
         )
 
     computed_hash = hash_token(raw_token.strip())
-    agent_record = db.query(PrintAgentToken).filter(
-        PrintAgentToken.token_hash == computed_hash,
-        PrintAgentToken.ativo == True
-    ).first()
+    if db.get_bind().dialect.name == "postgresql":
+        identity = db.execute(
+            text(
+                "SELECT id, restaurante_id "
+                "FROM koma_internal.auth_print_agent(:token_hash)"
+            ),
+            {"token_hash": computed_hash},
+        ).mappings().first()
+    else:
+        candidate = db.query(PrintAgentToken).filter(
+            PrintAgentToken.token_hash == computed_hash,
+            PrintAgentToken.ativo == True,
+        ).first()
+        identity = (
+            {"id": candidate.id, "restaurante_id": candidate.restaurante_id}
+            if candidate
+            else None
+        )
 
-    if not agent_record:
+    if not identity:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token de agente inválido ou revogado"
         )
 
-    # Define o contexto do tenant
-    current_restaurante_id.set(agent_record.restaurante_id)
-
-    # Atualiza o visto por último (heartbeat implícito)
+    restaurante_id = identity["restaurante_id"]
+    bind_session_to_tenant(db, restaurante_id)
+    current_restaurante_id.set(restaurante_id)
     try:
+        agent_record = db.query(PrintAgentToken).filter(
+            PrintAgentToken.id == identity["id"],
+            PrintAgentToken.ativo == True,
+        ).first()
+        if not agent_record:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token de agente inválido ou revogado"
+            )
+
+        # Atualiza o visto por último (heartbeat implícito)
         agent_record.last_seen_at = datetime.datetime.now(datetime.timezone.utc)
         db.commit()
         yield agent_record
     finally:
+        # Dependencies sync com ``yield`` podem entrar/sair em contextos AnyIO
+        # distintos; Token.reset() não é válido entre esses contextos.
         current_restaurante_id.set(None)
 
 # --- SCHEMAS ---
