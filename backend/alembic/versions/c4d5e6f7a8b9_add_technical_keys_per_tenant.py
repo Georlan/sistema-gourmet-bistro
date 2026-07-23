@@ -249,6 +249,7 @@ def _add_technical_primary_key(
 
 
 def _create_tenant_foreign_keys() -> None:
+    is_postgres = op.get_bind().dialect.name == "postgresql"
     definitions = (
         (
             "produtos", "fk_produtos_categoria_tenant", "categorias",
@@ -272,6 +273,18 @@ def _create_tenant_foreign_keys() -> None:
         ),
     )
     for table, name, referred, local_cols, remote_cols, ondelete in definitions:
+        if is_postgres:
+            # No PostgreSQL, recriar a tabela em batch apenas para adicionar
+            # uma FK tenta remover sua PK e quebra FKs externas dependentes.
+            op.create_foreign_key(
+                name,
+                table,
+                referred,
+                local_cols,
+                remote_cols,
+                ondelete=ondelete,
+            )
+            continue
         with op.batch_alter_table(
             table,
             recreate="always",
