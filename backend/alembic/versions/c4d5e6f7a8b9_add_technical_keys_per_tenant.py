@@ -78,10 +78,17 @@ def _reflected_fk_name(table: str, columns: tuple[str, ...], referred_table: str
 
 
 def _drop_legacy_foreign_keys() -> None:
+    is_postgres = op.get_bind().dialect.name == "postgresql"
     for table, columns, referred_table in LEGACY_FOREIGN_KEYS:
         if _find_fk(table, columns, referred_table) is None:
             continue
         name = _reflected_fk_name(table, columns, referred_table)
+        if is_postgres:
+            # No PostgreSQL a remoção direta precisa acontecer antes de trocar
+            # a PK referenciada. Recriar a tabela filha em batch deixa a FK
+            # externa visível durante a preparação da tabela pai.
+            op.drop_constraint(name, table, type_="foreignkey")
+            continue
         with op.batch_alter_table(
             table,
             recreate="always",
