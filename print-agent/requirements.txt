@@ -1,0 +1,4 @@
+requests==2.31.0
+python-escpos==3.0
+pywin32; platform_system=="Windows"
+pyserial; platform_system=="Windows"
