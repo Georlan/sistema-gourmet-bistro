@@ -176,6 +176,11 @@ class Comanda(Base):
             name='fk_comandas_mesa_tenant',
             ondelete='RESTRICT',
         ),
+        UniqueConstraint(
+            'restaurante_id',
+            'idempotency_key',
+            name='uq_comandas_restaurante_idempotency',
+        ),
     )
     
     id = Column(String, primary_key=True, index=True)
@@ -188,6 +193,7 @@ class Comanda(Base):
     tipo = Column(String, default="Consumo no Local")  # Consumo no Local | Retirada
     _identificador = Column("identificador", String, nullable=True)  # Client name encrypted
     numero_pedido = Column(Integer, nullable=False)  # Global sequential order number (shared when splitting)
+    idempotency_key = Column(String(128), nullable=True, index=True)
 
     @hybrid_property
     def identificador(self):
@@ -744,6 +750,60 @@ class ItemContagemEstoque(Base):
     # Relationships
     contagem = relationship("SessaoContagemEstoque", back_populates="itens")
     insumo = relationship("Insumo")
+
+
+class OtpChallenge(Base):
+    __tablename__ = "otp_challenges"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    restaurante_id = Column(
+        Integer,
+        ForeignKey("restaurantes.id", ondelete="CASCADE"),
+        default=lambda: current_restaurante_id.get(),
+        nullable=False,
+        index=True,
+    )
+    telefone_hash = Column(String(64), nullable=False)
+    otp_hash = Column(String(64), nullable=False)
+    expira_em = Column(DateTime(timezone=True), nullable=False)
+    tentativas = Column(Integer, nullable=False, default=0)
+    ultimo_envio_em = Column(DateTime(timezone=True), nullable=False)
+    janela_iniciada_em = Column(DateTime(timezone=True), nullable=False)
+    envios_na_janela = Column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "restaurante_id",
+            "telefone_hash",
+            name="uq_otp_challenges_restaurante_telefone",
+        ),
+    )
+
+
+class PublicRateLimit(Base):
+    __tablename__ = "public_rate_limits"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    restaurante_id = Column(
+        Integer,
+        ForeignKey("restaurantes.id", ondelete="CASCADE"),
+        default=lambda: current_restaurante_id.get(),
+        nullable=False,
+        index=True,
+    )
+    scope = Column(String(50), nullable=False)
+    key_hash = Column(String(64), nullable=False)
+    janela_iniciada_em = Column(DateTime(timezone=True), nullable=False)
+    requisicoes = Column(Integer, nullable=False, default=0)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "restaurante_id",
+            "scope",
+            "key_hash",
+            name="uq_public_rate_limits_tenant_scope_key",
+        ),
+    )
 
 
 class PrintJob(Base):
