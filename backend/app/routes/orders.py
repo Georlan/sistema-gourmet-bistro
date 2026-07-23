@@ -13,7 +13,12 @@ from ..schemas import (
     LancamentoResponse, LancamentoCreate, ItemResponse, ItemUpdate,
     MotoboyCreate, MotoboyResponse, VendaDiretaCreate
 )
-from ..security import get_current_garcom_optional, get_current_user, require_roles
+from ..security import (
+    ensure_permission,
+    get_current_garcom_optional,
+    get_current_user,
+    require_permission,
+)
 from ..websocket_manager import manager
 
 logger = logging.getLogger("koma.orders")
@@ -685,12 +690,7 @@ def fechar_comanda(
     
     # Verifica se há saldo devedor
     if force:
-        user_role = (current_garcom.role or current_garcom.cargo or "garcom").lower().strip()
-        if user_role not in ("admin", "superadmin", "gerente", "caixa"):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Apenas caixa, gerente ou administrador podem forçar o fechamento de uma comanda com saldo em aberto."
-            )
+        ensure_permission(current_garcom, "comandas:forcar_fechamento")
     else:
         if valor_pago < subtotal and valor_pago < total_com_taxa:
             raise HTTPException(
@@ -725,7 +725,7 @@ def reabrir_comanda(
     comanda_id: str,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_garcom: Usuario = Depends(require_roles("admin", "gerente", "caixa"))
+    current_garcom: Usuario = Depends(require_permission("comandas:reabrir"))
 ):
     """
     Reabre uma comanda fechada (requer autenticação do garçom).
@@ -991,7 +991,7 @@ def update_item_status(
     status: str,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_garcom: Usuario = Depends(get_current_user)
+    current_garcom: Usuario = Depends(require_permission("pedidos:alterar_status"))
 ):
     """
     Atualiza o status de um item (requer autenticação do garçom).
@@ -1167,7 +1167,7 @@ def atualizar_status_delivery(
     status_novo: str,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user)
+    current_user: Usuario = Depends(require_permission("pedidos:alterar_status"))
 ):
     """
     Atualiza o status de entrega do delivery.
@@ -1189,7 +1189,7 @@ def despachar_delivery(
     payload: dict,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user)
+    current_user: Usuario = Depends(require_permission("pedidos:alterar_status"))
 ):
     """
     Vincula um motoboy à comanda e altera o status para 'transito'.

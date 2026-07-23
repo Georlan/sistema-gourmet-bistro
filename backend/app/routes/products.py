@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional, Union, Dict, Any
 from ..database import get_db, current_restaurante_id, require_tenant_id
 from ..models import Produto, Categoria, ObservacaoPredefinida, Usuario
-from ..security import get_current_user, require_roles
+from ..security import get_current_user, require_permission
 from ..schemas import ProdutoResponse, ProdutoCreate, ProdutoUpdate, CategoriaResponse
 from ..websocket_manager import manager
 from pydantic import BaseModel, ConfigDict
@@ -130,7 +130,7 @@ def create_categoria(
     data: CategoriaCreate, 
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_roles("admin", "gerente"))
+    current_user: Usuario = Depends(require_permission("catalogo:administrar"))
 ):
     """Cria uma nova categoria (setup wizard interno)."""
     if db.query(Categoria).filter_by(id=data.id).first():
@@ -150,7 +150,7 @@ def update_categoria(
     data: CategoriaUpdate,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_roles("admin", "gerente"))
+    current_user: Usuario = Depends(require_permission("catalogo:administrar"))
 ):
     """Atualiza nome e/ou destino de impressão de uma categoria."""
     cat = db.query(Categoria).filter_by(id=categoria_id).first()
@@ -175,7 +175,7 @@ def delete_categoria(
     categoria_id: str, 
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_roles("admin", "gerente"))
+    current_user: Usuario = Depends(require_permission("catalogo:administrar"))
 ):
     """Remove uma categoria (só se não tiver produtos vinculados)."""
     cat = db.query(Categoria).filter_by(id=categoria_id).first()
@@ -201,7 +201,11 @@ def get_observacoes(categoria_id: Optional[str] = None, db: Session = Depends(ge
     return q.all()
 
 @router.post("/observacoes", response_model=ObservacaoResponse, status_code=status.HTTP_201_CREATED)
-def create_observacao(data: ObservacaoCreate, db: Session = Depends(get_db), current_user: Usuario = Depends(require_roles("admin", "gerente"))):
+def create_observacao(
+    data: ObservacaoCreate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("catalogo:administrar"))
+):
     """Adiciona uma nova observação predefinida a uma categoria."""
     if not db.query(Categoria).filter_by(id=data.categoria_id).first():
         raise HTTPException(status_code=404, detail="Categoria não encontrada.")
@@ -212,7 +216,11 @@ def create_observacao(data: ObservacaoCreate, db: Session = Depends(get_db), cur
     return obs
 
 @router.delete("/observacoes/{obs_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_observacao(obs_id: int, db: Session = Depends(get_db), current_user: Usuario = Depends(require_roles("admin", "gerente"))):
+def delete_observacao(
+    obs_id: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("catalogo:administrar"))
+):
     """Remove uma observação predefinida pelo ID."""
     obs = db.query(ObservacaoPredefinida).filter_by(id=obs_id).first()
     if not obs:
@@ -224,13 +232,17 @@ def delete_observacao(obs_id: int, db: Session = Depends(get_db), current_user: 
 
 # ─── PRINT QUEUE STATUS (Admin) ───────────────────────────────────────────────
 @router.get("/print-queue/status")
-def get_print_queue_status(current_user: Usuario = Depends(get_current_user)):
+def get_print_queue_status(
+    current_user: Usuario = Depends(require_permission("impressao:administrar"))
+):
     """Retorna status da fila de impressão (jobs pendentes e com falha)."""
     from ..printer_service import printer_service
     return printer_service.get_queue_status()
 
 @router.post("/print-queue/retry")
-def retry_print_queue(current_user: Usuario = Depends(get_current_user)):
+def retry_print_queue(
+    current_user: Usuario = Depends(require_permission("impressao:administrar"))
+):
     """Tenta reimprimir todos os jobs com falha. Chame quando a impressora voltar."""
     from ..printer_service import printer_service
     result = printer_service.retry_failed_jobs()
@@ -272,7 +284,7 @@ def create_produto(
     produto_data: ProdutoCreate, 
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_roles("admin", "gerente"))
+    current_user: Usuario = Depends(require_permission("catalogo:administrar"))
 ):
     """Cadastra um novo produto no cardápio."""
     # Check if category exists
@@ -306,7 +318,7 @@ def update_produto(
     update_data: ProdutoUpdate, 
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_roles("admin", "gerente"))
+    current_user: Usuario = Depends(require_permission("catalogo:administrar"))
 ):
     """Atualiza as informações de um produto, incluindo seu preço ou status de ativação."""
     db_produto = db.query(Produto).filter(Produto.id == produto_id).first()
@@ -342,7 +354,7 @@ def delete_produto(
     produto_id: str, 
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_roles("admin", "gerente"))
+    current_user: Usuario = Depends(require_permission("catalogo:administrar"))
 ):
     """Remove definitivamente um produto do cardápio."""
     db_produto = db.query(Produto).filter(Produto.id == produto_id).first()
@@ -376,7 +388,7 @@ def importar_cardapio(
     payload: Union[List[ProdutoImportItem], CardapioImportPayload],
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_roles("admin", "gerente"))
+    current_user: Usuario = Depends(require_permission("catalogo:administrar"))
 ):
     """
     Importa uma lista de produtos sobrescrevendo o cardápio atual.
@@ -483,4 +495,3 @@ def importar_cardapio(
     background_tasks.add_task(manager.broadcast, {"type": "catalog_updated", "message": "Cardápio importado"}, require_tenant_id())
     
     return imported_products
-

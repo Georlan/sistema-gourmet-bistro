@@ -1,5 +1,6 @@
 import jwt
 from datetime import datetime, timedelta, timezone
+from types import MappingProxyType
 from typing import Any, Union, Optional
 import bcrypt
 from fastapi import Depends, HTTPException, status
@@ -27,6 +28,26 @@ def get_password_hash(password: str) -> str:
     return hashed.decode("utf-8")
 
 RESERVED_CLAIMS = {"sub", "exp", "restaurante_id", "role"}
+
+# Matriz central de autorização do backoffice. As rotas devem depender de uma
+# permissão de negócio, em vez de repetir listas de cargos localmente.
+PERMISSION_ROLES = MappingProxyType({
+    "caixa:operar": frozenset({"admin", "gerente", "caixa"}),
+    "equipe:administrar": frozenset({"admin", "gerente", "caixa"}),
+    "estoque:consultar": frozenset({"admin", "gerente", "caixa"}),
+    "estoque:administrar": frozenset({"admin", "gerente", "caixa"}),
+    "relatorios:consultar": frozenset({"admin", "gerente", "caixa"}),
+    "relatorios:administrar": frozenset({"admin", "gerente"}),
+    "catalogo:administrar": frozenset({"admin", "gerente"}),
+    "configuracoes:administrar": frozenset({"admin", "gerente"}),
+    "fidelidade:operar": frozenset({"admin", "gerente", "caixa"}),
+    "fidelidade:administrar": frozenset({"admin", "gerente"}),
+    "privacidade:administrar": frozenset({"admin", "gerente"}),
+    "impressao:administrar": frozenset({"admin", "gerente", "caixa"}),
+    "comandas:forcar_fechamento": frozenset({"admin", "gerente", "caixa"}),
+    "comandas:reabrir": frozenset({"admin", "gerente", "caixa"}),
+    "pedidos:alterar_status": frozenset({"admin", "gerente", "caixa"}),
+})
 
 def create_access_token(
     subject: Union[str, Any],
@@ -129,6 +150,53 @@ def get_current_user(
     return user
 
 
+def ensure_permission(current_user: Optional[Usuario], permission: str) -> Usuario:
+    """Valida uma permissão da matriz central para uso dentro de uma rota."""
+    if permission not in PERMISSION_ROLES:
+        raise RuntimeError(f"Permissão desconhecida na matriz RBAC: {permission}")
+
+    if current_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciais inválidas ou ausentes.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    status_val = str(getattr(current_user, "status", "ativo") or "ativo").lower().strip()
+    if status_val in ("inativo", "blocked", "disabled"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Conta de usuário inativa ou bloqueada."
+        )
+
+    user_role = (current_user.role or current_user.cargo or "garcom").lower().strip()
+    if user_role in ("admin", "superadmin"):
+        return current_user
+
+    if user_role not in PERMISSION_ROLES[permission]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"Acesso negado: o cargo '{user_role}' não possui a permissão "
+                f"'{permission}'."
+            )
+        )
+    return current_user
+
+
+def require_permission(permission: str):
+    """Dependency factory baseada na matriz central de permissões."""
+    if permission not in PERMISSION_ROLES:
+        raise RuntimeError(f"Permissão desconhecida na matriz RBAC: {permission}")
+
+    def permission_checker(
+        current_user: Usuario = Depends(get_current_user)
+    ) -> Usuario:
+        return ensure_permission(current_user, permission)
+
+    return permission_checker
+
+
 def require_roles(*allowed_roles: str):
     """
     Dependency factory que verifica se o usuário autenticado é ativo e possui
@@ -151,5 +219,3 @@ def require_roles(*allowed_roles: str):
         return current_user
 
     return role_checker
-
-

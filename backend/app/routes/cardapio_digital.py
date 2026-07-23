@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..database import get_db, require_tenant_id
 from ..models import Restaurante, Usuario
-from ..routes.auth import get_current_user
+from ..security import require_permission
 from ..schemas import RestauranteConfigResponse
 
 logger = logging.getLogger("koma.cardapio_digital")
@@ -210,7 +210,7 @@ async def upload_asset_to_supabase(asset_type: str, file: UploadFile, db: Sessio
 async def upload_logo(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user)
+    current_user: Usuario = Depends(require_permission("catalogo:administrar"))
 ):
     return await upload_asset_to_supabase("logo", file, db, current_user)
 
@@ -219,7 +219,7 @@ async def upload_logo(
 async def upload_banner(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user)
+    current_user: Usuario = Depends(require_permission("catalogo:administrar"))
 ):
     return await upload_asset_to_supabase("banner", file, db, current_user)
 
@@ -227,7 +227,7 @@ async def upload_banner(
 @router.delete("/assets/logo", response_model=RestauranteConfigResponse)
 async def delete_logo(
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user)
+    current_user: Usuario = Depends(require_permission("catalogo:administrar"))
 ):
     rest_id = require_tenant_id()
     if not rest_id or rest_id <= 0:
@@ -265,7 +265,7 @@ async def delete_logo(
 @router.delete("/assets/banner", response_model=RestauranteConfigResponse)
 async def delete_banner(
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user)
+    current_user: Usuario = Depends(require_permission("catalogo:administrar"))
 ):
     rest_id = require_tenant_id()
     if not rest_id or rest_id <= 0:

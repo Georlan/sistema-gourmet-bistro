@@ -8,16 +8,14 @@ import logging
 from ..database import bind_session_to_tenant, get_db, current_restaurante_id
 from ..models import Usuario
 from ..schemas import LoginRequest, LoginResponse, UsuarioCreate, UsuarioResponse, AtivarContaRequest
-from ..security import verify_password, create_access_token, get_password_hash, get_current_user
+from ..security import (
+    create_access_token,
+    get_password_hash,
+    require_permission,
+    verify_password,
+)
 
 logger = logging.getLogger("koma.auth")
-
-def require_admin(user: Usuario):
-    if user.role not in ["admin", "caixa", "gerente"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Acesso restrito a administradores, caixas e gerentes."
-        )
 
 router = APIRouter(
     prefix="/auth",
@@ -200,15 +198,20 @@ def ativar_conta(payload: AtivarContaRequest, db: Session = Depends(get_db)):
     }
 
 @router.get("/usuarios", response_model=List[UsuarioResponse])
-def get_usuarios(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+def get_usuarios(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("equipe:administrar"))
+):
     """Retorna todos os usuários cadastrados (garçons, caixas, admins)."""
-    require_admin(current_user)
     return db.query(Usuario).all()
 
 @router.post("/usuarios", response_model=UsuarioResponse, status_code=status.HTTP_201_CREATED)
-def create_usuario(user_in: UsuarioCreate, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+def create_usuario(
+    user_in: UsuarioCreate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("equipe:administrar"))
+):
     """Cadastra um novo usuário no sistema."""
-    require_admin(current_user)
     # Check if username is taken
     existing = db.query(Usuario).filter(Usuario.usuario == user_in.usuario).first()
     if existing:
@@ -230,9 +233,12 @@ def create_usuario(user_in: UsuarioCreate, db: Session = Depends(get_db), curren
     return novo_usuario
 
 @router.delete("/usuarios/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_usuario(user_id: str, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+def delete_usuario(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("equipe:administrar"))
+):
     """Deleta um usuário do sistema."""
-    require_admin(current_user)
     usuario = db.query(Usuario).filter(Usuario.id == user_id).first()
     if not usuario:
         raise HTTPException(
@@ -255,11 +261,14 @@ class GdprOptOutRequest(BaseModel):
     anonimizar: bool = True
 
 @router.post("/gdpr/opt-out", status_code=status.HTTP_200_OK)
-def gdpr_opt_out(req: GdprOptOutRequest, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+def gdpr_opt_out(
+    req: GdprOptOutRequest,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("privacidade:administrar"))
+):
     """
     LGPD Compliance: Erases or anonymizes client's personal data.
     """
-    require_admin(current_user)
     target_phone = req.telefone.strip()
     
     # 1. Locate all matching messages (check decrypted values)
@@ -327,7 +336,8 @@ def gdpr_opt_out(req: GdprOptOutRequest, db: Session = Depends(get_db), current_
 @router.post("/usuarios/{user_id}/reenviar-convite")
 def reenviar_convite_usuario(
     user_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("equipe:administrar"))
 ):
     """Reenvia o link de convite por WhatsApp para o usuário pendente de ativação."""
     import os

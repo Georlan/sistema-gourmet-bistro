@@ -41,6 +41,7 @@ def setup_database():
         # Create test users
         db.add(Usuario(id="g-1", restaurante_id=1, nome="Mateus Garcom", usuario="mateus", senha_hash=get_password_hash("123"), role="garcom"))
         db.add(Usuario(id="c-1", restaurante_id=1, nome="Caixa Geral", usuario="caixa", senha_hash=get_password_hash("123"), role="caixa"))
+        db.add(Usuario(id="m-1", restaurante_id=1, nome="Gerente Geral", usuario="gerente", senha_hash=get_password_hash("123"), role="gerente"))
         
         # Create category, product, table
         cat = Categoria(id="cat-1", restaurante_id=1, nome="Bebidas")
@@ -67,7 +68,7 @@ def get_auth_headers(client, username, password):
 
 def test_peak_hours_pure_sql():
     client = TestClient(app)
-    headers = get_auth_headers(client, "mateus", "123")
+    headers = get_auth_headers(client, "caixa", "123")
     db = TestingSessionLocal()
     
     # Create closed comanda
@@ -108,7 +109,7 @@ def test_stock_purchase_suggestions():
 
 def test_unified_fidelity_points_and_cashback():
     client = TestClient(app)
-    headers = get_auth_headers(client, "mateus", "123")
+    headers = get_auth_headers(client, "gerente", "123")
     
     # 1. Test config
     resp = client.get("/fidelidade/config", headers=headers)
@@ -166,7 +167,7 @@ def test_unified_fidelity_points_and_cashback():
 
 def test_waiter_commission_report():
     client = TestClient(app)
-    headers = get_auth_headers(client, "mateus", "123")
+    headers = get_auth_headers(client, "caixa", "123")
     db = TestingSessionLocal()
     
     # Add a closed comanda with an item
@@ -175,11 +176,19 @@ def test_waiter_commission_report():
     db.commit()
     
     # Add lancamento with id "none" to satisfy foreign key constraint on Item
-    l = Lancamento(id="none", comanda_id="com-w1", garcom_id="g-1")
+    l = Lancamento(id="none", restaurante_id=1, comanda_id="com-w1", garcom_id="g-1")
     db.add(l)
     db.commit()
     
-    item = Item(id="itm-1", comanda_id="com-w1", lancamento_id="none", produto_id="p-1", preco_unit=20.0, status="entregue")
+    item = Item(
+        id="itm-1",
+        restaurante_id=1,
+        comanda_id="com-w1",
+        lancamento_id="none",
+        produto_id="p-1",
+        preco_unit=20.0,
+        status="entregue",
+    )
     db.add(item)
     db.commit()
     
@@ -308,5 +317,4 @@ def test_manual_insumos_and_distribuidores():
     # 7. Excluir distribuidor (DELETE)
     resp = client.delete("/estoque/distribuidores/ambev-test", headers=headers)
     assert resp.status_code == 204
-
 

@@ -19,8 +19,12 @@ from ..schemas import (
     UsuarioResponse, UsuarioCreate, SangriaCreate, SuprimentoCreate, CaixaTurnoResumoResponse,
     FechamentoCaixaRequest, FechamentoCaixaResponse
 )
-from ..security import get_current_garcom_optional, get_current_user
-from .auth import require_admin
+from ..security import (
+    ensure_permission,
+    get_current_garcom_optional,
+    get_current_user,
+    require_permission,
+)
 from .websocket import manager
 
 logger = logging.getLogger("koma.caixa")
@@ -30,17 +34,11 @@ router = APIRouter(
     tags=["Caixa / PDV"]
 )
 
-def check_caixa_permission(user: Usuario):
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token obrigatório"
-        )
-    if user.role not in ["caixa", "admin"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Acesso restrito a operadores de caixa ou administradores"
-        )
+def check_caixa_permission(
+    user: Usuario,
+    permission: str = "caixa:operar"
+):
+    return ensure_permission(user, permission)
 
 # ----------------- FUNCIONÁRIOS / EQUIPE ENDPOINTS -----------------
 
@@ -50,7 +48,7 @@ def obter_funcionarios(
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
     """Retorna a lista de usuários pertencentes ao restaurante_id do contexto ativo."""
-    check_caixa_permission(current_user)
+    check_caixa_permission(current_user, "equipe:administrar")
     rest_id = require_tenant_id()
     return db.query(Usuario).filter(Usuario.restaurante_id == rest_id).all()
 
@@ -62,7 +60,7 @@ def cadastrar_funcionario(
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
     """Cadastra um novo funcionário por convite de telefone."""
-    check_caixa_permission(current_user)
+    check_caixa_permission(current_user, "equipe:administrar")
     
     tel_raw = user_in.telefone or user_in.usuario or ""
     tel_clean = re.sub(r"\D", "", tel_raw)
@@ -145,7 +143,7 @@ def cadastrar_funcionario(
 def abrir_turno(
     turno_in: CaixaTurnoCreate,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_garcom_optional)
+    current_user: Usuario = Depends(get_current_user)
 ):
     """Abre um novo turno de caixa com um saldo de troco inicial."""
     check_caixa_permission(current_user)
@@ -610,15 +608,9 @@ def registrar_pagamento_comanda(
     pag_in: PagamentoRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_garcom_optional)
+    current_user: Usuario = Depends(get_current_user)
 ):
     """Registra o recebimento financeiro parcial ou total de uma comanda."""
-    if not current_user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token obrigatório"
-        )
-        
     # Idempotency Check
     if pag_in.idempotency_key:
         existing = db.query(Pagamento).filter(Pagamento.idempotency_key == pag_in.idempotency_key).first()
@@ -960,10 +952,9 @@ def atualizar_configuracoes(
     config_in: ConfiguracaoRestauranteUpdate,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user)
+    current_user: Usuario = Depends(require_permission("configuracoes:administrar"))
 ):
     config = db.query(ConfiguracaoRestaurante).options(joinedload(ConfiguracaoRestaurante.restaurante)).first()
-    require_admin(current_user)
     if not config:
         config = ConfiguracaoRestaurante()
         db.add(config)
@@ -1066,10 +1057,9 @@ def atualizar_configuracao_restaurante(
     config_in: RestauranteConfigUpdate,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_garcom_optional)
+    current_user: Usuario = Depends(require_permission("configuracoes:administrar"))
 ):
     """Atualiza as configurações whitelabel de personalização do restaurante ativo."""
-    check_caixa_permission(current_user)
     rest_id = require_tenant_id()
     
     restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
@@ -1154,7 +1144,7 @@ def atualizar_config_cardapio(
     config_in: RestauranteConfigUpdate,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_garcom_optional)
+    current_user: Usuario = Depends(require_permission("configuracoes:administrar"))
 ):
     """Atualiza as configurações whitelabel de personalização do restaurante ativo via config-cardapio."""
     return atualizar_configuracao_restaurante(config_in, background_tasks, db, current_user)
@@ -1169,10 +1159,9 @@ class UpdatePlanoRequest(BaseModel):
 def atualizar_plano_restaurante(
     payload: UpdatePlanoRequest,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_garcom_optional)
+    current_user: Usuario = Depends(require_permission("configuracoes:administrar"))
 ):
     """Atualiza o plano do restaurante ativo."""
-    check_caixa_permission(current_user)
     plano_val = payload.plano.lower()
     if plano_val not in ['pocket', 'bistro', 'delivery', 'premium']:
         raise HTTPException(

@@ -52,6 +52,12 @@ def setup_database():
             usuario="garcom", senha_hash=get_password_hash("123"),
             role="garcom", cargo="garcom", status="ativo"
         ))
+        # Gerente ativo
+        db.add(Usuario(
+            id="u-gerente", restaurante_id=1, nome="Gerente Auth",
+            usuario="gerente", senha_hash=get_password_hash("123"),
+            role="gerente", cargo="gerente", status="ativo"
+        ))
         # Usuário inativo
         db.add(Usuario(
             id="u-inativo", restaurante_id=1, nome="Inativo Auth",
@@ -95,6 +101,51 @@ def test_admin_allowed_relatorios():
 
     resp = client.get("/relatorios/visao-geral", headers=headers)
     assert resp.status_code == 200
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "payload"),
+    [
+        ("put", "/comandas/itens/inexistente/status?status=pronto", None),
+        ("delete", "/estoque/distribuidores/inexistente", None),
+        (
+            "post",
+            "/produtos/categorias",
+            {"id": "cat-negada", "nome": "Categoria negada", "destino_impressao": "COZINHA"},
+        ),
+        ("get", "/comandas/estatisticas/geral", None),
+        ("post", "/auth/usuarios/u-gerente/reenviar-convite", None),
+    ],
+)
+def test_garcom_blocked_from_sensitive_backoffice_routes(method, path, payload):
+    """Garçom não pode administrar status, estoque, catálogo, BI ou equipe."""
+    client = TestClient(app)
+    headers = get_auth_headers(client, "garcom", "123")
+
+    response = client.request(method, path, headers=headers, json=payload)
+
+    assert response.status_code == 403, response.text
+    assert "Acesso negado" in response.json()["detail"]
+
+
+def test_gerente_allowed_by_central_permission_matrix():
+    """Gerente acessa BI e administra catálogo pela mesma matriz central."""
+    client = TestClient(app)
+    headers = get_auth_headers(client, "gerente", "123")
+
+    report_response = client.get("/relatorios/visao-geral", headers=headers)
+    assert report_response.status_code == 200
+
+    catalog_response = client.post(
+        "/produtos/categorias",
+        json={
+            "id": "cat-gerente",
+            "nome": "Categoria do gerente",
+            "destino_impressao": "COZINHA",
+        },
+        headers=headers,
+    )
+    assert catalog_response.status_code == 201, catalog_response.text
 
 
 def test_inactive_user_blocked():

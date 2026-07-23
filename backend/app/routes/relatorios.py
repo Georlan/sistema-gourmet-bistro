@@ -10,7 +10,7 @@ from ..models import (
     Usuario, Comanda, Item as ComandaItem, Produto, Categoria,
     ConfiguracaoRestaurante, Pagamento, Restaurante
 )
-from ..security import get_current_user, require_roles
+from ..security import require_permission
 
 router = APIRouter(prefix="/relatorios", tags=["relatorios"])
 
@@ -37,7 +37,7 @@ def get_relatorio_visao_geral(
     data_inicio: Optional[str] = Query(None),
     data_fim: Optional[str] = Query(None),
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_roles("admin", "gerente", "caixa"))
+    current_user: Usuario = Depends(require_permission("relatorios:consultar"))
 ):
     rest_id = require_tenant_id()
 
@@ -180,7 +180,7 @@ def get_relatorio_visao_geral(
 def set_meta_mensal(
     payload: Dict[str, float],
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_roles("admin", "gerente"))
+    current_user: Usuario = Depends(require_permission("relatorios:administrar"))
 ):
     rest_id = require_tenant_id()
     meta_val = float(payload.get("meta_mensal", 0.0))
@@ -206,7 +206,7 @@ def get_vendas_detalhes(
     data_inicio: Optional[str] = Query(None),
     data_fim: Optional[str] = Query(None),
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_roles("admin", "gerente", "caixa"))
+    current_user: Usuario = Depends(require_permission("relatorios:consultar"))
 ):
     rest_id = require_tenant_id()
     dt_fim = parse_date(data_fim) or datetime.datetime.now()
@@ -259,7 +259,7 @@ def get_relatorio_produtos(
     busca: Optional[str] = Query(None),
     categoria_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_roles("admin", "gerente", "caixa"))
+    current_user: Usuario = Depends(require_permission("relatorios:consultar"))
 ):
     rest_id = require_tenant_id()
     dt_fim = parse_date(data_fim) or datetime.datetime.now()
@@ -336,7 +336,7 @@ def get_equipe_desempenho(
     data_fim: Optional[str] = Query(None),
     cargo: Optional[str] = Query(None, description="Filter by role slug (garcom, caixa, atendente, gerente...). Empty = commercial roles only."),
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_roles("admin", "gerente", "caixa"))
+    current_user: Usuario = Depends(require_permission("relatorios:consultar"))
 ):
     rest_id = require_tenant_id()
     dt_fim = parse_date(data_fim) or datetime.datetime.now()
@@ -429,7 +429,7 @@ CARGO_PERMISSIONS: Dict[str, Dict[str, Any]] = {
 @router.get("/cargos-permissoes")
 def get_cargos_permissoes(
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_roles("admin", "gerente", "caixa"))
+    current_user: Usuario = Depends(require_permission("relatorios:consultar"))
 ):
     """Returns cargo permission matrix with real employee counts per role for this tenant."""
     rest_id = require_tenant_id()

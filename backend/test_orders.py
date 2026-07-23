@@ -35,9 +35,20 @@ def setup_db():
                 restaurante_id=1,
                 nome="Georlan",
                 usuario="georlan",
-                senha_hash=get_password_hash("123")
+                senha_hash=get_password_hash("123"),
+                cargo="garcom",
+                status="ativo",
             )
-            db.add(garcom)
+            caixa = Garcom(
+                id="c-1",
+                restaurante_id=1,
+                nome="Caixa",
+                usuario="caixa",
+                senha_hash=get_password_hash("123"),
+                cargo="caixa",
+                status="ativo",
+            )
+            db.add_all([garcom, caixa])
             
             # Create mesas
             m1 = Mesa(id=1, restaurante_id=1, capacidade=4, nome="Mesa 1")
@@ -134,7 +145,7 @@ def test_flow(setup_db):
     resp = client.put(f"/comandas/{comanda1['id']}/reabrir")
     assert resp.status_code == 401
 
-    # 10. Testar Fechamento e Reabertura com token - Deve ser permitido (200)
+    # 10. Fechamento é operacional, mas reabertura exige caixa/gerente/admin.
     db = SessionLocal()
     db_comanda = db.query(Comanda).filter(Comanda.id == comanda1['id']).first()
     db_comanda.valor_pago = 10.0
@@ -146,6 +157,14 @@ def test_flow(setup_db):
     assert resp.json()["fechada"] is True
 
     resp = client.put(f"/comandas/{comanda1['id']}/reabrir", headers=headers)
+    assert resp.status_code == 403
+    assert resp.json()["detail"].startswith("Acesso negado")
+
+    caixa_login = client.post("/auth/login", json={"username": "caixa", "password": "123"})
+    assert caixa_login.status_code == 200
+    caixa_headers = {"Authorization": f"Bearer {caixa_login.json()['access_token']}"}
+
+    resp = client.put(f"/comandas/{comanda1['id']}/reabrir", headers=caixa_headers)
     assert resp.status_code == 200
     assert resp.json()["fechada"] is False
 
@@ -225,4 +244,3 @@ def test_transferir_e_mesclar_limites(setup_db):
     assert comanda_trans["mesa_id"] == 5
     assert comanda_trans["mesa_origem_id"] is None
     assert comanda_trans["mesa_transferida_de"] == 4
-

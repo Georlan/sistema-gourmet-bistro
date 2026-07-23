@@ -19,7 +19,7 @@ from ..schemas import (
     MovimentacaoEstoqueCreate, MovimentacaoEstoqueResponse,
     SessaoContagemEstoqueCreate, SessaoContagemEstoqueResponse
 )
-from ..security import get_current_garcom_optional
+from ..security import ensure_permission, get_current_garcom_optional
 
 router = APIRouter(
     prefix="/estoque",
@@ -27,16 +27,7 @@ router = APIRouter(
 )
 
 def check_caixa_permission(user: Usuario):
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Autenticação necessária"
-        )
-    if user.role not in ["caixa", "admin"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Acesso restrito ao operador de caixa ou administrador"
-        )
+    return ensure_permission(user, "estoque:administrar")
 
 def slugify(value: str) -> str:
     value = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode('ascii')
@@ -721,6 +712,7 @@ def delete_distribuidor(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
+    check_caixa_permission(current_user)
     rest_id = require_tenant_id()
     dist = db.query(Distribuidor).filter(
         Distribuidor.id == dist_id,
@@ -961,4 +953,3 @@ def confirmar_sessao_contagem(
     return db.query(SessaoContagemEstoque).options(
         joinedload(SessaoContagemEstoque.itens).joinedload(ItemContagemEstoque.insumo)
     ).filter_by(id=sessao.id).first()
-

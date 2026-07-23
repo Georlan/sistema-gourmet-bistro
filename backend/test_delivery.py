@@ -34,7 +34,7 @@ def setup_db():
                 nome="Delivery Agent",
                 usuario="delagent",
                 senha_hash=get_password_hash("123"),
-                role="garcom"
+                role="caixa"
             )
             db.add(user)
             db.commit()

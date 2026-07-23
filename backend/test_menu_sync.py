@@ -215,7 +215,12 @@ def test_importacao_preserva_fk_historica():
     db.add(comanda)
     db.commit()
     
-    lancamento = Lancamento(id="lan-teste", comanda_id="comanda-teste", garcom_id="u-admin")
+    lancamento = Lancamento(
+        id="lan-teste",
+        restaurante_id=1,
+        comanda_id="comanda-teste",
+        garcom_id="u-admin",
+    )
     db.add(lancamento)
     db.commit()
     
