@@ -110,6 +110,8 @@ if os.getenv("ENVIRONMENT") != "test" and settings.SENTRY_DSN:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await run_migrations_on_startup()
+    from .database import validate_postgres_runtime_role
+    validate_postgres_runtime_role()
     yield
 
 app = FastAPI(
@@ -130,6 +132,7 @@ async def run_migrations_on_startup():
        Detectado verificando se a coluna 'mesa_origem_id' existe fisicamente na tabela
        'comandas'. Se não existir, a migration de emergência nunca rodou.
     """
+    migration_engine = None
     try:
         import os
         import sqlalchemy as sa
@@ -140,11 +143,12 @@ async def run_migrations_on_startup():
         backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         alembic_cfg_path = os.path.join(backend_dir, "alembic.ini")
         alembic_cfg = Config(alembic_cfg_path)
-        alembic_cfg.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+        alembic_cfg.set_main_option("sqlalchemy.url", settings.MIGRATION_DATABASE_URL)
 
         print("[ALEMBIC] Verificando estado do banco de dados...")
 
-        with engine.connect() as conn:
+        migration_engine = sa.create_engine(settings.MIGRATION_DATABASE_URL)
+        with migration_engine.connect() as conn:
             insp = sa_inspect(conn)
             has_alembic_version = insp.has_table("alembic_version")
 
@@ -172,7 +176,7 @@ async def run_migrations_on_startup():
             print("[ALEMBIC] ⚠️  Estado inconsistente detectado!")
             print("[ALEMBIC]    Colunas críticas ausentes mas alembic_version já existe.")
             print("[ALEMBIC]    Resetando stamp para dcbca6699d38 e re-aplicando migration...")
-            with engine.connect() as conn:
+            with migration_engine.connect() as conn:
                 conn.execute(sa.text(
                     "UPDATE alembic_version SET version_num = 'dcbca6699d38'"
                 ))
@@ -183,7 +187,7 @@ async def run_migrations_on_startup():
         print("[ALEMBIC] ✅ Migrações concluídas com sucesso.")
 
         # Executar DDL de emergência caso a coluna mesa_transferida_de não exista na tabela comandas
-        with engine.connect() as conn:
+        with migration_engine.connect() as conn:
             insp = sa_inspect(conn)
             if insp.has_table("comandas"):
                 columns = {c["name"] for c in insp.get_columns("comandas")}
@@ -191,13 +195,15 @@ async def run_migrations_on_startup():
                     print("[DATABASE] Adicionando coluna 'mesa_transferida_de' na tabela comandas...")
                     conn.execute(sa.text("ALTER TABLE comandas ADD COLUMN mesa_transferida_de INTEGER;"))
                     conn.commit()
-
     except Exception as e:
         print(f"[ALEMBIC] ❌ Erro ao rodar migrações automáticas: {e}")
         import traceback
         traceback.print_exc()
         if os.getenv("ENVIRONMENT") != "test":
             raise RuntimeError(f"Falha crítica na migração de inicialização do banco: {e}") from e
+    finally:
+        if migration_engine is not None:
+            migration_engine.dispose()
 
 ALLOWED_ORIGINS = [
     "https://sistema-gourmet-bistro.pages.dev",
@@ -333,7 +339,7 @@ async def add_sentry_context_and_tenant(request: Request, call_next):
     sentry_sdk.set_tag("restaurante_id", str(restaurante_id) if restaurante_id is not None else "")
 
     # Define a variável de contexto do tenant de forma segura para esta requisição
-    current_restaurante_id.set(restaurante_id)
+    tenant_context = current_restaurante_id.set(restaurante_id)
     try:
         response = await call_next(request)
         if origin and origin != "*":
@@ -344,7 +350,7 @@ async def add_sentry_context_and_tenant(request: Request, call_next):
         return response
     finally:
         # Garante a limpeza do contexto após o término da requisição
-        current_restaurante_id.set(None)
+        current_restaurante_id.reset(tenant_context)
 
 # Register routers
 app.include_router(auth.router)
