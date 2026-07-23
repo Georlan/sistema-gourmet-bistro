@@ -8,6 +8,9 @@ class Settings:
     # Database
     SQLITE_DB_FILE: str = "bistro.db"
     DATABASE_URL: str = os.getenv("DATABASE_URL", f"sqlite:///./{SQLITE_DB_FILE}")
+    # DDL/migrações usam uma credencial administrativa separada. O runtime
+    # deve usar uma role não proprietária e sem BYPASSRLS em DATABASE_URL.
+    MIGRATION_DATABASE_URL: str = os.getenv("MIGRATION_DATABASE_URL", DATABASE_URL)
     
     # Sentry DSN (Vazio por padrão em conformidade com P0.1 - lido exclusivamente de variável de ambiente)
     SENTRY_DSN: str = os.getenv("SENTRY_DSN", "")
