@@ -110,7 +110,54 @@ class CompleteJobRequest(BaseModel):
 class FailJobRequest(BaseModel):
     error: str
 
+class InjectJobRequest(BaseModel):
+    """Injeção manual de PrintJob — disponível apenas para admin/gerente (JWT)."""
+    document_type: str = "producao"
+    destination: str = "COZINHA"
+    source_type: str = "pedido"
+    source_id: str = "manual"
+    payload_text: str
+    idempotency_key: Optional[str] = None
+
 # --- ENDPOINTS ---
+
+@router.post("/jobs/inject", summary="Injetar PrintJob manualmente (admin)")
+def inject_print_job(
+    req: InjectJobRequest,
+    current_user: Usuario = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Enfileira um PrintJob manualmente para testes ou reimpressões administrativas.
+    Requer autenticação de usuário (JWT). Apenas admin/gerente.
+    """
+    from ..database import current_restaurante_id, require_tenant_id
+    rest_id = require_tenant_id()
+
+    import secrets as _secrets
+    ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d%H%M%S%f")
+    ikey = req.idempotency_key or f"inject:{req.source_type}:{req.source_id}:{ts}"
+
+    job = PrintJob(
+        restaurante_id=rest_id,
+        document_type=req.document_type.lower(),
+        destination=req.destination.upper(),
+        source_type=req.source_type.lower(),
+        source_id=str(req.source_id),
+        payload_text=req.payload_text,
+        status="pending",
+        idempotency_key=ikey,
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    return {
+        "status": "enqueued",
+        "job_id": job.id,
+        "idempotency_key": ikey,
+        "restaurante_id": rest_id,
+    }
 
 @router.post("/register")
 def register_agent(

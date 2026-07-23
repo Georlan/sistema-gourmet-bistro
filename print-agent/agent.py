@@ -274,13 +274,16 @@ class ApiClient:
         """
         GET /api/print-agents/jobs/next
         Retorna o próximo job pendente ou None se não houver.
+        O job retornado ainda não foi 'claimed' — é necessário chamar claim_job() antes de imprimir.
         """
         try:
             resp = self.session.get(self._url("/api/print-agents/jobs/next"), timeout=8)
-            if resp.status_code == 204 or resp.status_code == 404:
+            if resp.status_code in (204, 404):
                 return None
             resp.raise_for_status()
             data = resp.json()
+            if data is None:
+                return None
             # Aceita tanto {"job": {...}} quanto o objeto direto
             return data.get("job", data) if isinstance(data, dict) else None
         except requests.exceptions.ConnectionError:
@@ -293,26 +296,61 @@ class ApiClient:
             log.error("Erro inesperado ao buscar job: %s", exc)
             return None
 
-    def confirm_job(self, job_id: str | int, success: bool, error_msg: str = "") -> bool:
+    def claim_job(self, job_id: str) -> dict | None:
         """
-        POST /api/print-agents/jobs/{job_id}/status
-        Informa ao backend se a impressão foi bem-sucedida ou falhou.
+        POST /api/print-agents/jobs/{job_id}/claim
+        Reserva atomicamente o job para este agente.
+        Retorna os dados do job (incluindo payload_text) ou None se já foi assumido.
         """
-        payload = {
-            "status": "printed" if success else "failed",
-            "error": error_msg,
-            "printed_at": datetime.now(timezone.utc).isoformat(),
-        }
         try:
             resp = self.session.post(
-                self._url(f"/api/print-agents/jobs/{job_id}/status"),
+                self._url(f"/api/print-agents/jobs/{job_id}/claim"),
+                json={},
+                timeout=8,
+            )
+            if resp.status_code == 409:
+                log.warning("Job %s já foi assumido por outro agente (409).", job_id)
+                return None
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as exc:
+            log.error("Erro ao fazer claim do job %s: %s", job_id, exc)
+            return None
+
+    def complete_job(self, job_id: str, printer_name: str = "") -> bool:
+        """
+        POST /api/print-agents/jobs/{job_id}/complete
+        Confirma impressão bem-sucedida.
+        """
+        payload = {"printer_name": printer_name or "SIMULADOR-LINUX"}
+        try:
+            resp = self.session.post(
+                self._url(f"/api/print-agents/jobs/{job_id}/complete"),
                 json=payload,
                 timeout=8,
             )
             resp.raise_for_status()
             return True
         except Exception as exc:
-            log.error("Falha ao confirmar job %s: %s", job_id, exc)
+            log.error("Falha ao confirmar impressão do job %s: %s", job_id, exc)
+            return False
+
+    def fail_job(self, job_id: str, error_msg: str = "") -> bool:
+        """
+        POST /api/print-agents/jobs/{job_id}/fail
+        Registra falha de impressão. O backend decide se reenfileira ou descarta.
+        """
+        payload = {"error": error_msg[:500] if error_msg else "Erro desconhecido"}
+        try:
+            resp = self.session.post(
+                self._url(f"/api/print-agents/jobs/{job_id}/fail"),
+                json=payload,
+                timeout=8,
+            )
+            resp.raise_for_status()
+            return True
+        except Exception as exc:
+            log.error("Falha ao registrar erro do job %s: %s", job_id, exc)
             return False
 
     def heartbeat(self, printer_name: str) -> bool:
@@ -346,49 +384,72 @@ class ApiClient:
 
 def processar_job(job: dict, printer_name: str, api: ApiClient) -> None:
     """
-    Processa um único job de impressão:
-      1. Extrai os bytes RAW do payload
-      2. Chama imprimir_raw()
-      3. Confirma o resultado via API
+    Processa um único job de impressão com o ciclo completo:
+      1. CLAIM  — reserva atomicamente o job para este agente
+      2. DECODE — extrai o payload ESC/POS (texto ou base64)
+      3. PRINT  — chama imprimir_raw()
+      4. COMPLETE/FAIL — confirma ou reporta falha ao backend
     """
     job_id = job.get("id") or job.get("job_id")
-    nome_impressora = job.get("printer_name") or printer_name
-    raw_b64 = job.get("raw_data") or job.get("ticket_text") or ""
-
     if not job_id:
         log.error("Job sem ID recebido — ignorando: %s", job)
         return
 
-    log.info("Job #%s recebido → impressora: '%s'", job_id, nome_impressora or "padrão")
+    doc_type = job.get("document_type", "pedido")
+    destination = job.get("destination", "COZINHA")
+    log.info(
+        "Job #%s detectado [%s → %s] — fazendo claim...",
+        job_id, doc_type, destination
+    )
 
-    # Decodifica os dados de impressão
-    try:
-        if isinstance(raw_b64, bytes):
-            raw_bytes = raw_b64
-        elif isinstance(raw_b64, str):
-            # Tenta base64 primeiro; se falhar, interpreta como texto ESC/POS
-            try:
-                import base64
-                raw_bytes = base64.b64decode(raw_b64)
-            except Exception:
-                raw_bytes = raw_b64.encode("utf-8", errors="replace")
-        else:
-            raise ValueError(f"Formato de dados inválido: {type(raw_b64)}")
-    except Exception as exc:
-        msg = f"Erro ao decodificar dados do job: {exc}"
-        log.error(msg)
-        api.confirm_job(job_id, success=False, error_msg=msg)
+    # ── 1. CLAIM ATÔMICO ──────────────────────────────────────────────────
+    claimed = api.claim_job(str(job_id))
+    if not claimed:
+        log.warning("Não foi possível fazer claim do job #%s — pulando.", job_id)
         return
 
-    # Tenta imprimir
+    nome_impressora = printer_name or claimed.get("destination", "COZINHA")
+    payload_text = claimed.get("payload_text") or job.get("payload_text") or ""
+
+    log.info("Job #%s reservado com sucesso ✓ — iniciando impressão...", job_id)
+
+    # ── 2. DECODIFICA PAYLOAD ─────────────────────────────────────────────
+    try:
+        if isinstance(payload_text, bytes):
+            raw_bytes = payload_text
+        elif isinstance(payload_text, str) and payload_text:
+            try:
+                import base64
+                raw_bytes = base64.b64decode(payload_text)
+                log.debug("Payload decodificado como base64 (%d bytes).", len(raw_bytes))
+            except Exception:
+                # Trata como texto ESC/POS puro (caso mais comum do backend)
+                raw_bytes = payload_text.encode("utf-8", errors="replace")
+                log.debug("Payload tratado como texto puro (%d bytes).", len(raw_bytes))
+        else:
+            raw_bytes = b"\x1b@[SEM CONTEUDO]\n\x1dV\x00"
+            log.warning("Job #%s sem payload_text — imprimindo ticket vazio.", job_id)
+    except Exception as exc:
+        msg = f"Erro ao decodificar payload do job #{job_id}: {exc}"
+        log.error(msg)
+        api.fail_job(str(job_id), error_msg=msg)
+        return
+
+    # ── 3. IMPRIME ────────────────────────────────────────────────────────
     try:
         imprimir_raw(nome_impressora, raw_bytes)
-        log.info("Job #%s impresso com sucesso ✓", job_id)
-        api.confirm_job(job_id, success=True)
+        log.info("Job #%s → IMPRESSO com sucesso ✓ (%d bytes enviados)", job_id, len(raw_bytes))
     except Exception as exc:
         msg = f"Falha ao imprimir job #{job_id}: {exc}"
         log.error(msg)
-        api.confirm_job(job_id, success=False, error_msg=str(exc))
+        api.fail_job(str(job_id), error_msg=str(exc))
+        return
+
+    # ── 4. CONFIRMA ───────────────────────────────────────────────────────
+    if api.complete_job(str(job_id), printer_name=nome_impressora):
+        log.info("Job #%s → status 'printed' confirmado no backend ✓", job_id)
+    else:
+        log.warning("Job #%s impresso localmente mas falhou ao confirmar no backend.", job_id)
 
 
 def main() -> None:
@@ -428,14 +489,16 @@ def main() -> None:
                 log.debug("Heartbeat enviado.")
             last_heartbeat = time.monotonic()
 
-        # Busca próximo job
-        job = api.next_job()
-        if job:
+        # Drena todos os jobs pendentes (não processa apenas um por ciclo)
+        while True:
+            job = api.next_job()
+            if not job:
+                log.debug("Nenhum job pendente.")
+                break
             processar_job(job, printer_name, api)
-        else:
-            log.debug("Nenhum job pendente.")
 
         time.sleep(args.poll_sec)
+
 
 
 if __name__ == "__main__":
