@@ -62,6 +62,13 @@ def _find_fk(table: str, columns: tuple[str, ...], referred_table: str):
     return None
 
 
+def _has_index(table: str, name: str) -> bool:
+    return any(
+        index.get("name") == name
+        for index in _inspector().get_indexes(table)
+    )
+
+
 def _reflected_fk_name(table: str, columns: tuple[str, ...], referred_table: str) -> str:
     fk = _find_fk(table, columns, referred_table)
     if fk and fk.get("name"):
@@ -169,24 +176,39 @@ def _backfill_child_tenants() -> None:
     ) as batch_op:
         batch_op.alter_column("restaurante_id", existing_type=sa.Integer(), nullable=False)
 
+    tenant_index = "ix_produto_grupo_modificadores_restaurante_id"
+    has_tenant_index = _has_index(
+        "produto_grupo_modificadores",
+        tenant_index,
+    )
+    has_tenant_fk = _find_fk(
+        "produto_grupo_modificadores",
+        ("restaurante_id",),
+        "restaurantes",
+    ) is not None
+
     with op.batch_alter_table(
         "produto_grupo_modificadores",
         recreate="always",
         naming_convention=NAMING_CONVENTION,
     ) as batch_op:
         batch_op.alter_column("restaurante_id", existing_type=sa.Integer(), nullable=False)
-        batch_op.create_index(
-            "ix_produto_grupo_modificadores_restaurante_id",
-            ["restaurante_id"],
-            unique=False,
-        )
-        batch_op.create_foreign_key(
-            "fk_produto_grupo_restaurante",
-            "restaurantes",
-            ["restaurante_id"],
-            ["id"],
-            ondelete="CASCADE",
-        )
+        # O batch já preserva índices e FKs refletidos. Recriá-los
+        # explicitamente gera DuplicateTable no PostgreSQL de produção.
+        if not has_tenant_index:
+            batch_op.create_index(
+                tenant_index,
+                ["restaurante_id"],
+                unique=False,
+            )
+        if not has_tenant_fk:
+            batch_op.create_foreign_key(
+                "fk_produto_grupo_restaurante",
+                "restaurantes",
+                ["restaurante_id"],
+                ["id"],
+                ondelete="CASCADE",
+            )
 
 
 def _add_technical_primary_key(
