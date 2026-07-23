@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { ChefHat, CheckCircle, Clock, Utensils, MessageSquare } from 'lucide-react';
+import { ChefHat, CheckCircle, Clock, Utensils, MessageSquare, Loader } from 'lucide-react';
 import { Order, OrderItem } from '../types';
 
 interface KitchenPanelProps {
@@ -20,6 +20,24 @@ export const KitchenPanel: React.FC<KitchenPanelProps> = ({
   currentTime,
   modoExclusivoSalao,
 }) => {
+  const [inflightIds, setInflightIds] = React.useState<Set<string>>(new Set());
+
+  const handleFinish = async (orderId: string, itemId: string) => {
+    if (inflightIds.has(itemId)) return;
+    setInflightIds(prev => new Set(prev).add(itemId));
+    try {
+      await onFinishPreparation(orderId, itemId);
+    } finally {
+      // Clear after a short delay to prevent rapid re-click
+      setTimeout(() => {
+        setInflightIds(prev => {
+          const next = new Set(prev);
+          next.delete(itemId);
+          return next;
+        });
+      }, 1500);
+    }
+  };
   // Extract all items currently in 'preparando' status across all active orders
   const activeKitchenItems = React.useMemo(() => {
     const list: {
@@ -147,11 +165,15 @@ export const KitchenPanel: React.FC<KitchenPanelProps> = ({
                 {/* Confirm Ready button */}
                 <button
                   id={`kitchen-finish-btn-${item.id}`}
-                  onClick={() => onFinishPreparation(orderId, item.id)}
-                  className="mt-5 w-full py-2.5 bg-[#4E6E58] hover:bg-[#5E836A] active:bg-[#3D5745] text-white font-semibold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer tracking-wider uppercase font-sans border border-[#5E836A]/20"
+                  onClick={() => handleFinish(orderId, item.id)}
+                  disabled={inflightIds.has(item.id)}
+                  className="mt-5 w-full py-2.5 bg-[#4E6E58] hover:bg-[#5E836A] active:bg-[#3D5745] text-white font-semibold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors tracking-wider uppercase font-sans border border-[#5E836A]/20 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  <CheckCircle size={14} />
-                  <span>Concluir Preparo</span>
+                  {inflightIds.has(item.id) ? (
+                    <><Loader size={14} className="animate-spin" /><span>Enviando...</span></>
+                  ) : (
+                    <><CheckCircle size={14} /><span>Concluir Preparo</span></>
+                  )}
                 </button>
               </div>
             );

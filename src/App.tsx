@@ -287,6 +287,8 @@ export default function App() {
   const fetchTablesAbortControllerRef = useRef<AbortController | null>(null);
   const fetchOrdersAbortControllerRef = useRef<AbortController | null>(null);
   const optimisticItemStatusRef = useRef<Record<string, { status: 'preparando' | 'pronto' | 'entregue'; ts: number }>>({});
+  // Prevents duplicate API calls when clicking Pronto/Entregar rapidly
+  const inflightItemIdsRef = useRef<Set<string>>(new Set());
 
 
   const fetchTables = async () => {
@@ -1351,6 +1353,8 @@ export default function App() {
 
   // 11. Delivery (Waiter serves a ready dish)
   const handleDeliverItem = async (orderId: string, itemId: string) => {
+    if (inflightItemIdsRef.current.has(itemId)) return; // Ignore rapid duplicate clicks
+    inflightItemIdsRef.current.add(itemId);
     handleOptimisticUpdateItemStatus(itemId, 'entregue');
     try {
       const res = await fetch(`${API_BASE_URL}/comandas/itens/${itemId}/status?status=entregue`, {
@@ -1360,12 +1364,13 @@ export default function App() {
       if (!res.ok) {
         showToast("Erro ao entregar item no backend.", 'error');
         fetchOrdersFromAPI();
-        return;
       }
     } catch (err) {
       console.error(err);
       showToast("Erro de conexão ao marcar item como entregue.", 'error');
       fetchOrdersFromAPI();
+    } finally {
+      inflightItemIdsRef.current.delete(itemId);
     }
   };
 
@@ -1402,6 +1407,8 @@ export default function App() {
 
   // 12. Kitchen - Chef completes cooking a plate
   const handleFinishPreparation = async (orderId: string, itemId: string) => {
+    if (inflightItemIdsRef.current.has(itemId)) return; // Ignore rapid duplicate clicks
+    inflightItemIdsRef.current.add(itemId);
     handleOptimisticUpdateItemStatus(itemId, 'pronto');
     try {
       const res = await fetch(`${API_BASE_URL}/comandas/itens/${itemId}/status?status=pronto`, {
@@ -1411,12 +1418,13 @@ export default function App() {
       if (!res.ok) {
         showToast("Erro ao finalizar preparação no backend.", 'error');
         fetchOrdersFromAPI();
-        return;
       }
     } catch (err) {
       console.error(err);
       showToast("Erro de conexão ao finalizar preparação.", 'error');
       fetchOrdersFromAPI();
+    } finally {
+      inflightItemIdsRef.current.delete(itemId);
     }
   };
 
