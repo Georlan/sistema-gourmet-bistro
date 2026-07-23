@@ -112,6 +112,7 @@ class FailJobRequest(BaseModel):
 
 class InjectJobRequest(BaseModel):
     """Injeção manual de PrintJob — disponível apenas para admin/gerente (JWT)."""
+    restaurante_id: Optional[int] = None  # override explícito; usa o do usuário se omitido
     document_type: str = "producao"
     destination: str = "COZINHA"
     source_type: str = "pedido"
@@ -130,11 +131,29 @@ def inject_print_job(
     """
     Enfileira um PrintJob manualmente para testes ou reimpressões administrativas.
     Requer autenticação de usuário (JWT). Apenas admin/gerente.
-    """
-    from ..database import current_restaurante_id, require_tenant_id
-    rest_id = require_tenant_id()
 
-    import secrets as _secrets
+    O restaurante_id é resolvido na seguinte ordem de prioridade:
+      1. req.restaurante_id (override explícito no body)
+      2. current_restaurante_id ContextVar (definido pelo middleware de autenticação)
+      3. current_user.restaurante_id (fallback para admins globais)
+    """
+    from ..database import current_restaurante_id as _ctx_rid
+
+    # Resolve tenant com fallback em cascata
+    rest_id = (
+        req.restaurante_id
+        or _ctx_rid.get()
+        or getattr(current_user, "restaurante_id", None)
+    )
+    if not rest_id or not isinstance(rest_id, int) or rest_id <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "restaurante_id não pôde ser determinado. "
+                "Passe-o explicitamente no body: {\"restaurante_id\": 1, ...}"
+            )
+        )
+
     ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d%H%M%S%f")
     ikey = req.idempotency_key or f"inject:{req.source_type}:{req.source_id}:{ts}"
 
