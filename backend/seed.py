@@ -79,6 +79,7 @@ def seed_database():
                     destino = "NENHUM"
                 nova_categoria = Categoria(id=cat_id, restaurante_id=1, nome=cat_name, destino_impressao=destino)
                 db.add(nova_categoria)
+        db.flush()
         print(f"{len(dump_data['categories'])} Categorias cadastradas com sucesso.")
 
         # 4. Cadastrar Observações Predefinidas por Categoria
@@ -100,7 +101,7 @@ def seed_database():
 
         for cat_id, obs_list in observacoes_por_categoria.items():
             for texto in obs_list:
-                nova_obs = ObservacaoPredefinida(categoria_id=cat_id, texto=texto)
+                nova_obs = ObservacaoPredefinida(restaurante_id=1, categoria_id=cat_id, texto=texto)
                 db.add(nova_obs)
         print("Observações predefinidas vinculadas com sucesso.")
 
@@ -197,7 +198,6 @@ def seed_database():
         # Create launch and items
         lancamento = Lancamento(
             id=f"l-{uuid.uuid4().hex[:8]}",
-            restaurante_id=1,
             comanda_id=comanda_del.id,
             garcom_id="c-01",
             timestamp=datetime.datetime.now(datetime.timezone.utc)

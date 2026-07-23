@@ -283,7 +283,6 @@ def criar_venda_direta(
 
         novo_lancamento = Lancamento(
             id=lancamento_id,
-            restaurante_id=rid,
             comanda_id=comanda_id,
             garcom_id=garcom_id,
             timestamp=datetime.datetime.now(datetime.timezone.utc)
@@ -315,40 +314,43 @@ def criar_venda_direta(
 
         # Enfileira impressões se houver itens para cozinha
         if itens_cozinha:
-            from ..domain.printing import PrintDocumentService
-            from ..domain.printing.models import OrderPrintData, PrintItem as DomainPrintItem
-            
-            p_items = [
-                DomainPrintItem(
-                    codigo=it.produto.codigo if hasattr(it.produto, "codigo") else "",
-                    nome=it.produto.nome,
-                    quantidade=1,
-                    preco_unit=it.preco_unit,
-                    observacao=it.observacao,
-                    cliente_nome=it.cliente_nome,
-                    destino_impressao=it.produto.destino_impressao or "COZINHA"
+            try:
+                from ..domain.printing import PrintDocumentService
+                from ..domain.printing.models import OrderPrintData, PrintItem as DomainPrintItem
+                
+                p_items = [
+                    DomainPrintItem(
+                        codigo=it.produto.codigo if hasattr(it.produto, "codigo") else "",
+                        nome=it.produto.nome,
+                        quantidade=1,
+                        preco_unit=it.preco_unit,
+                        observacao=it.observacao,
+                        cliente_nome=it.cliente_nome,
+                        destino_impressao=it.produto.destino_impressao or "COZINHA"
+                    )
+                    for it in itens_cozinha
+                ]
+                doc_data = OrderPrintData(
+                    numero_pedido=str(numero_pedido),
+                    mesa=str(venda_in.mesa_id) if venda_in.mesa_id else "BALCAO",
+                    tipo_pedido=venda_in.tipo,
+                    garcom_nome=garcom.nome if garcom else "CAIXA",
+                    horario=datetime.datetime.now().strftime("%H:%M"),
+                    itens=p_items,
+                    restaurante_nome="KÔMA"
                 )
-                for it in itens_cozinha
-            ]
-            doc_data = OrderPrintData(
-                numero_pedido=str(numero_pedido),
-                mesa=str(venda_in.mesa_id) if venda_in.mesa_id else "BALCAO",
-                tipo_pedido=venda_in.tipo,
-                garcom_nome=garcom.nome if garcom else "CAIXA",
-                horario=datetime.datetime.now().strftime("%H:%M"),
-                itens=p_items,
-                restaurante_nome="KÔMA"
-            )
-            docs = PrintDocumentService.generate_production(doc_data)
-            for dest_name, ticket_text in docs.items():
-                background_tasks.add_task(
-                    print_in_background,
-                    printer_name=dest_name,
-                    ticket_text=ticket_text,
-                    document_type="producao",
-                    source_type="pedido",
-                    source_id=comanda_id
-                )
+                docs = PrintDocumentService.generate_production(doc_data)
+                for dest_name, ticket_text in docs.items():
+                    background_tasks.add_task(
+                        print_in_background,
+                        printer_name=dest_name,
+                        ticket_text=ticket_text,
+                        document_type="producao",
+                        source_type="pedido",
+                        source_id=comanda_id
+                    )
+            except Exception as print_err:
+                logger.warning(f"Falha ao gerar impressões de venda direta: {print_err}")
 
         background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
         background_tasks.add_task(manager.broadcast, {"event": "new_delivery_order", "message": f"Novo pedido #{numero_pedido}"}, require_tenant_id())
