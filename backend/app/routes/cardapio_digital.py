@@ -2,16 +2,120 @@ import os
 import uuid
 import httpx
 import logging
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from sqlalchemy.orm import Session
 from ..config import settings
-from ..database import get_db, require_tenant_id
+from ..database import get_db, require_tenant_id, current_restaurante_id
 from ..models import Restaurante, Usuario
-from ..security import require_permission
-from ..schemas import RestauranteConfigResponse
+from ..security import require_permission, get_current_garcom_optional
+from ..schemas import RestauranteConfigResponse, RestauranteConfigUpdate
 
 logger = logging.getLogger("koma.cardapio_digital")
 router = APIRouter(prefix="/api/cardapio-digital", tags=["Cardapio Digital Assets"])
+
+@router.get("/config", response_model=RestauranteConfigResponse)
+@router.get("/", response_model=RestauranteConfigResponse)
+def obter_config_cardapio_digital(
+    restaurante_id: Optional[int] = None,
+    slug: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: Optional[Usuario] = Depends(get_current_garcom_optional)
+):
+    """
+    Retorna as configurações whitelabel de personalização do restaurante ativo.
+    Filtra por restaurante_id, slug, tenant do usuário logado ou fallback 1.
+    """
+    rest_id = restaurante_id or current_restaurante_id.get() or (current_user.tenant_id if current_user else None)
+    
+    restaurante = None
+    if slug:
+        restaurante = db.query(Restaurante).filter(Restaurante.slug == slug).first()
+    if not restaurante and rest_id:
+        restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
+    if not restaurante:
+        restaurante = db.query(Restaurante).filter(Restaurante.id == 1).first()
+        
+    if not restaurante:
+        rest_id = rest_id or 1
+        restaurante = Restaurante(
+            id=rest_id,
+            nome="Kôma Gourmet Bistrô",
+            plano="pocket",
+            status_override="Automático",
+            cor_primaria="#00b894",
+            cor_fundo="#090a0f"
+        )
+        db.add(restaurante)
+        db.commit()
+        db.refresh(restaurante)
+
+    return restaurante
+
+
+@router.put("/config", response_model=RestauranteConfigResponse)
+@router.post("/config", response_model=RestauranteConfigResponse)
+@router.put("/", response_model=RestauranteConfigResponse)
+@router.post("/", response_model=RestauranteConfigResponse)
+def atualizar_config_cardapio_digital(
+    config_in: RestauranteConfigUpdate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("configuracoes:administrar"))
+):
+    """
+    Atualiza e persiste as configurações whitelabel de personalização do restaurante.
+    Filtra pelo restaurante_id / tenant atual e salva com db.commit().
+    """
+    rest_id = require_tenant_id() or getattr(current_user, "tenant_id", None) or getattr(current_user, "restaurante_id", None) or 1
+    
+    restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
+    if not restaurante:
+        restaurante = Restaurante(
+            id=rest_id,
+            nome="Kôma Gourmet Bistrô",
+            plano="pocket",
+            status_override="Automático",
+            cor_primaria="#00b894",
+            cor_fundo="#090a0f"
+        )
+        db.add(restaurante)
+
+    if config_in.nome is not None:
+        restaurante.nome = config_in.nome
+    if config_in.slug is not None:
+        restaurante.slug = config_in.slug
+    if config_in.logo_url is not None:
+        restaurante.logo_url = config_in.logo_url
+    if config_in.banner_url is not None:
+        restaurante.banner_url = config_in.banner_url
+    if config_in.subtitulo is not None:
+        restaurante.subtitulo = config_in.subtitulo
+    if config_in.sobre_nos is not None:
+        restaurante.sobre_nos = config_in.sobre_nos
+    if config_in.endereco is not None:
+        restaurante.endereco = config_in.endereco
+    if config_in.google_maps_url is not None:
+        restaurante.google_maps_url = config_in.google_maps_url
+    if config_in.latitude is not None:
+        restaurante.latitude = config_in.latitude
+    if config_in.longitude is not None:
+        restaurante.longitude = config_in.longitude
+    if config_in.status_override is not None:
+        restaurante.status_override = config_in.status_override
+    if config_in.socials is not None:
+        restaurante.socials = config_in.socials
+    if config_in.horarios_funcionamento is not None:
+        restaurante.horarios_funcionamento = config_in.horarios_funcionamento
+    if config_in.formas_pagamento_aceitas is not None:
+        restaurante.formas_pagamento_aceitas = config_in.formas_pagamento_aceitas
+    if config_in.cor_primaria is not None:
+        restaurante.cor_primaria = config_in.cor_primaria
+    if config_in.cor_fundo is not None:
+        restaurante.cor_fundo = config_in.cor_fundo
+
+    db.commit()
+    db.refresh(restaurante)
+    return restaurante
 
 ALLOWED_MIME_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"]
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB

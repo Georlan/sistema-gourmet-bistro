@@ -1213,13 +1213,19 @@ export function CaixaPanel({
         })
       });
       if (res.ok) {
-        alert('Configurações do cardápio digital atualizadas com sucesso!');
+        if (typeof showToast === 'function') {
+          showToast('Configurações do cardápio digital atualizadas com sucesso!', 'success');
+        } else {
+          alert('Configurações do cardápio digital atualizadas com sucesso!');
+        }
       } else {
-        alert('Falha ao salvar as configurações.');
+        const errD = await res.json().catch(() => ({}));
+        const detail = errD.detail || errD.message || 'Falha ao salvar as configurações.';
+        alert(`Falha ao salvar as configurações: ${detail}`);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error saving cardapio whitelabel config', err);
-      alert('Erro de conexão ao salvar configurações.');
+      alert(`Erro de conexão ao salvar configurações: ${err.message || err}`);
     } finally {
       setIsSavingCardapioConfig(false);
     }

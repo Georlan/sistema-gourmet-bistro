@@ -148,3 +148,60 @@ def test_delete_banner_success(mock_delete, test_setup):
     assert response.status_code == 200
     data = response.json()
     assert data["banner_url"] is None
+
+
+def test_get_whitelabel_config_success(test_setup):
+    headers = {"Authorization": f"Bearer {test_setup['token']}"}
+    response = client.get("/api/cardapio-digital/config", headers=headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == 999
+    assert "cor_primaria" in data
+    assert "cor_fundo" in data
+
+
+def test_update_whitelabel_config_success(test_setup):
+    headers = {"Authorization": f"Bearer {test_setup['token']}"}
+    payload = {
+        "cor_primaria": "#123456",
+        "cor_fundo": "#654321",
+        "sobre_nos": "O melhor hambúrguer artesanal",
+        "endereco": "Av. Paulista, 1000",
+        "logo_url": "https://example.com/logo.png",
+        "banner_url": "https://example.com/banner.png"
+    }
+    response = client.put("/api/cardapio-digital/config", headers=headers, json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == 999
+    assert data["cor_primaria"] == "#123456"
+    assert data["cor_fundo"] == "#654321"
+    assert data["sobre_nos"] == "O melhor hambúrguer artesanal"
+    assert data["endereco"] == "Av. Paulista, 1000"
+    assert data["logo_url"] == "https://example.com/logo.png"
+    assert data["banner_url"] == "https://example.com/banner.png"
+
+
+def test_get_caixa_config_cardapio_success(test_setup):
+    headers = {"Authorization": f"Bearer {test_setup['token']}"}
+    response = client.get("/caixa/config-cardapio", headers=headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == 999
+
+
+def test_update_caixa_config_cardapio_success(test_setup):
+    headers = {"Authorization": f"Bearer {test_setup['token']}"}
+    payload = {
+        "cor_primaria": "#ff0000",
+        "cor_fundo": "#000000",
+        "sobre_nos": "Sobre o Kôma",
+        "endereco": "Rua 15 de Novembro, 100"
+    }
+    response = client.put("/caixa/config-cardapio", headers=headers, json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == 999
+    assert data["cor_primaria"] == "#ff0000"
+    assert data["sobre_nos"] == "Sobre o Kôma"
+

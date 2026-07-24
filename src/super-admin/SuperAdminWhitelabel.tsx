@@ -233,9 +233,13 @@ export default function SuperAdminWhitelabel({
     const tenantName = targetTenant ? targetTenant.name : "Restaurante";
 
     try {
-      const response = await fetch("/api/caixa/config-cardapio", {
+      const token = localStorage.getItem("token") || localStorage.getItem("whitelabel_menu_token") || localStorage.getItem("koma_token");
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const response = await fetch(`/api/caixa/config-cardapio/${selectedTenantId}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify(payload)
       });
 

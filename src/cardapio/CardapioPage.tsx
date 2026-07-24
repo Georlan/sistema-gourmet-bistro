@@ -237,9 +237,25 @@ export default function CardapioPage() {
         if (data) restaurant = data;
       }
 
+      // Try backend REST API fallback if Supabase returns nothing
+      if (!restaurant) {
+        try {
+          const isNum = /^\d+$/.test(identifier);
+          const apiEndpoint = isNum
+            ? `${API_BASE_URL}/api/cardapio-digital/config?restaurante_id=${identifier}`
+            : `${API_BASE_URL}/api/cardapio-digital/config?slug=${identifier}`;
+          const res = await fetch(apiEndpoint);
+          if (res.ok) {
+            restaurant = await res.json();
+          }
+        } catch (apiErr) {
+          console.warn("Falha ao buscar restaurante via API backend:", apiErr);
+        }
+      }
+
       // Fallback to static mock whitelabel configuration if DB has no such entry
       if (!restaurant) {
-        console.warn("Restaurante não encontrado no Supabase. Usando dados mockados como fallback de demonstração.");
+        console.warn("Restaurante não encontrado no banco/API. Usando dados de demonstração.");
         const fallbackBrand = whitelabelBrands.burger;
         setActiveBrand(fallbackBrand);
         setIsLoading(false);

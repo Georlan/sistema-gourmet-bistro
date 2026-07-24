@@ -1042,23 +1042,20 @@ from ..schemas import RestauranteConfigResponse, RestauranteConfigUpdate
 
 @router.get("/restaurante/config", response_model=RestauranteConfigResponse)
 @router.get("/config-cardapio", response_model=RestauranteConfigResponse)
+@router.get("/config-cardapio/{tenant_id}", response_model=RestauranteConfigResponse)
 def obter_configuracao_restaurante(
+    tenant_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_garcom_optional)
+    current_user: Optional[Usuario] = Depends(get_current_garcom_optional)
 ):
     """Obtém as configurações whitelabel de personalização do restaurante ativo."""
-    rest_id = require_tenant_id()
-    if not rest_id or rest_id <= 0:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Identificação do restaurante inválida no token de acesso."
-        )
+    rest_id = tenant_id or current_restaurante_id.get() or (current_user.tenant_id if current_user else None) or 1
     
     restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
     if not restaurante:
         restaurante = Restaurante(
             id=rest_id,
-            nome="Kôma Bistro",
+            nome="Kôma Gourmet Bistrô",
             plano="pocket",
             status_override="Automático",
             cor_primaria="#00b894",
@@ -1072,21 +1069,32 @@ def obter_configuracao_restaurante(
 
 
 @router.put("/restaurante/config", response_model=RestauranteConfigResponse)
+@router.post("/restaurante/config", response_model=RestauranteConfigResponse)
+@router.put("/config-cardapio", response_model=RestauranteConfigResponse)
+@router.post("/config-cardapio", response_model=RestauranteConfigResponse)
+@router.put("/config-cardapio/{tenant_id}", response_model=RestauranteConfigResponse)
+@router.post("/config-cardapio/{tenant_id}", response_model=RestauranteConfigResponse)
 def atualizar_configuracao_restaurante(
     config_in: RestauranteConfigUpdate,
     background_tasks: BackgroundTasks,
+    tenant_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("configuracoes:administrar"))
 ):
-    """Atualiza as configurações whitelabel de personalização do restaurante ativo."""
-    rest_id = require_tenant_id()
+    """Atualiza e persiste as configurações whitelabel de personalização do restaurante ativo."""
+    rest_id = tenant_id or require_tenant_id() or getattr(current_user, "tenant_id", None) or getattr(current_user, "restaurante_id", None) or 1
     
     restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
     if not restaurante:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Restaurante não encontrado"
+        restaurante = Restaurante(
+            id=rest_id,
+            nome="Kôma Gourmet Bistrô",
+            plano="pocket",
+            status_override="Automático",
+            cor_primaria="#00b894",
+            cor_fundo="#090a0f"
         )
+        db.add(restaurante)
         
     if config_in.nome is not None:
         restaurante.nome = config_in.nome
@@ -1159,6 +1167,7 @@ def atualizar_configuracao_restaurante(
 
 
 @router.put("/config-cardapio", response_model=RestauranteConfigResponse)
+@router.post("/config-cardapio", response_model=RestauranteConfigResponse)
 def atualizar_config_cardapio(
     config_in: RestauranteConfigUpdate,
     background_tasks: BackgroundTasks,
@@ -1166,7 +1175,7 @@ def atualizar_config_cardapio(
     current_user: Usuario = Depends(require_permission("configuracoes:administrar"))
 ):
     """Atualiza as configurações whitelabel de personalização do restaurante ativo via config-cardapio."""
-    return atualizar_configuracao_restaurante(config_in, background_tasks, db, current_user)
+    return atualizar_configuracao_restaurante(config_in, background_tasks, None, db, current_user)
 
 
 from pydantic import BaseModel
