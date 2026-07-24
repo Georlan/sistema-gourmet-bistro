@@ -132,7 +132,7 @@ def obter_produtos_cardapio_digital(
             "nome": p.nome,
             "descricao": p.descricao or "",
             "preco": float(p.preco) if p.preco is not None else 0.0,
-            "imagem_url": p.imagem_url or "",
+            "imagem_url": getattr(p, "imagem_url", None) or getattr(p, "imagem", "") or "",
             "categoria_id": p.categoria_id,
             "ativo": p.ativo,
             "destaque": getattr(p, "destaque", False),
