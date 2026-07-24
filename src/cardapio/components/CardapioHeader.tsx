@@ -84,9 +84,13 @@ export default function CardapioHeader({
       try {
         const { data, error } = await supabase
           .from("restaurantes")
-          .select("id, slug, nome, logo_url, slogan");
+          .select("id, slug, nome, logo_url, subtitulo");
         if (data && data.length > 0) {
-          setRestaurantsList(data);
+          const mapped = data.map((r: any) => ({
+            ...r,
+            slogan: r.subtitulo || r.slogan || ""
+          }));
+          setRestaurantsList(mapped);
         } else {
           const staticList = Object.values(whitelabelBrands).map(b => ({
             id: b.id,
