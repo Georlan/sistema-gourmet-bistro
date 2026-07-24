@@ -319,9 +319,23 @@ def claim_job(
 
         if not existing:
             raise HTTPException(status_code=404, detail="Job de impressão não encontrado")
+        
+        # Se o job já foi reservado por ESTE MESMO AGENTE, aceita o claim como sucesso (200 OK)
+        if existing.agent_id == agent.agent_id:
+            return {
+                "id": existing.id,
+                "restaurante_id": existing.restaurante_id,
+                "document_type": existing.document_type,
+                "destination": existing.destination,
+                "source_type": existing.source_type,
+                "source_id": existing.source_id,
+                "payload_text": existing.payload_text,
+                "idempotency_key": existing.idempotency_key
+            }
+
         raise HTTPException(
             status_code=409,
-            detail=f"Job já foi assumido por outro agente ou não está pendente (status: '{existing.status}')"
+            detail=f"Job já foi assumido por outro agente ('{existing.agent_id}') ou não está pendente (status: '{existing.status}')"
         )
 
     job = db.query(PrintJob).filter(PrintJob.id == job_id).first()
