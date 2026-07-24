@@ -1,7 +1,0 @@
-=== DUMMY PRINT JOB [PRODUCAO] ===
-Printer: IMPRESSORA_COZINHA
-Timestamp: 2026-07-23T17:42:08.902885
-----------------------------------------
-TESTE
-
-----------------------------------------
