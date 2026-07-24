@@ -46,17 +46,14 @@ def obter_config_cardapio_digital(
         
     if not restaurante:
         rest_id = rest_id or 1
-        restaurante = Restaurante(
+        return RestauranteConfigResponse(
             id=rest_id,
             nome="Kôma Gourmet Bistrô",
-            plano="pocket",
+            subtitulo="Sincronizado com o Sistema Kôma PDV",
             status_override="Automático",
             cor_primaria="#00b894",
             cor_fundo="#090a0f"
         )
-        db.add(restaurante)
-        db.commit()
-        db.refresh(restaurante)
 
     return restaurante
 

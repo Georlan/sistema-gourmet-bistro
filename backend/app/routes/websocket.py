@@ -7,6 +7,32 @@ router = APIRouter(
     tags=["WebSocket"]
 )
 
+@router.websocket("/ws/cliente")
+async def websocket_cliente_endpoint(
+    websocket: WebSocket,
+    restaurante_id: str = "1"
+):
+    """
+    WebSocket endpoint público para clientes do Cardápio Digital.
+    Aceita restaurante_id como int ou slug string (ex: '1', 'burger').
+    """
+    restaurante_id_val = 1
+    if restaurante_id:
+        try:
+            restaurante_id_val = int(restaurante_id)
+        except ValueError:
+            restaurante_id_val = 1
+
+    await manager.connect(websocket, restaurante_id_val)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket, restaurante_id_val)
+    except Exception:
+        manager.disconnect(websocket, restaurante_id_val)
+
+
 @router.websocket("/ws/{garcom_id}")
 async def websocket_endpoint(
     websocket: WebSocket,
@@ -68,29 +94,4 @@ async def websocket_endpoint(
     except Exception:
         manager.disconnect(websocket, restaurante_id_val)
 
-
-@router.websocket("/ws/cliente")
-async def websocket_cliente_endpoint(
-    websocket: WebSocket,
-    restaurante_id: str = "1"
-):
-    """
-    WebSocket endpoint público para clientes do Cardápio Digital.
-    Aceita restaurante_id como int ou slug string (ex: '1', 'burger').
-    """
-    restaurante_id_val = 1
-    if restaurante_id:
-        try:
-            restaurante_id_val = int(restaurante_id)
-        except ValueError:
-            restaurante_id_val = 1
-
-    await manager.connect(websocket, restaurante_id_val)
-    try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        manager.disconnect(websocket, restaurante_id_val)
-    except Exception:
-        manager.disconnect(websocket, restaurante_id_val)
 
