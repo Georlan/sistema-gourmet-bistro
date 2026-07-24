@@ -3,12 +3,27 @@ from fastapi import WebSocket
 
 logger = logging.getLogger(__name__)
 
+# Events that public clients (/ws/cliente) are permitted to receive
+PUBLIC_CLIENT_EVENTS = {
+    "config_updated",
+    "catalog_updated",
+    "store_status_changed",
+    "order_status_updated",
+    "order_updated",
+}
+
 class ConnectionManager:
     def __init__(self) -> None:
-        # Keeps track of all active WebSocket connections grouped by restaurante_id (Logical Tenant)
-        self.active_connections: dict[int, list[WebSocket]] = {}
+        # Keeps track of active WebSocket connections grouped by restaurante_id and client_type
+        # Structure: { restaurante_id: { "internal": [WebSocket...], "client": [WebSocket...] } }
+        self.active_connections: dict[int, dict[str, list[WebSocket]]] = {}
 
-    async def connect(self, websocket: WebSocket, restaurante_id: int) -> None:
+    async def connect(
+        self,
+        websocket: WebSocket,
+        restaurante_id: int,
+        client_type: str = "internal"
+    ) -> None:
         if not isinstance(restaurante_id, int) or isinstance(restaurante_id, bool) or restaurante_id <= 0:
             logger.warning("Conexão WebSocket rejeitada: restaurante_id ausente ou inválido.")
             try:
@@ -16,29 +31,51 @@ class ConnectionManager:
             except Exception:
                 pass
             return
+
         await websocket.accept()
+
         if restaurante_id not in self.active_connections:
-            self.active_connections[restaurante_id] = []
-        self.active_connections[restaurante_id].append(websocket)
+            self.active_connections[restaurante_id] = {"internal": [], "client": []}
+
+        if client_type not in self.active_connections[restaurante_id]:
+            self.active_connections[restaurante_id][client_type] = []
+
+        self.active_connections[restaurante_id][client_type].append(websocket)
+        logger.info(f"WebSocket conectado: restaurante_id={restaurante_id}, client_type={client_type}")
 
     def disconnect(self, websocket: WebSocket, restaurante_id: int | None = None) -> None:
         if restaurante_id is not None and isinstance(restaurante_id, int) and not isinstance(restaurante_id, bool) and restaurante_id > 0:
             if restaurante_id in self.active_connections:
-                if websocket in self.active_connections[restaurante_id]:
-                    self.active_connections[restaurante_id].remove(websocket)
-                if not self.active_connections[restaurante_id]:
+                for ctype, connections in list(self.active_connections[restaurante_id].items()):
+                    if websocket in connections:
+                        connections.remove(websocket)
+                if not any(self.active_connections[restaurante_id].values()):
                     del self.active_connections[restaurante_id]
         else:
-            for rid, connections in list(self.active_connections.items()):
-                if websocket in connections:
-                    connections.remove(websocket)
-                    if not connections:
-                        del self.active_connections[rid]
+            for rid, ctype_dict in list(self.active_connections.items()):
+                for ctype, connections in list(ctype_dict.items()):
+                    if websocket in connections:
+                        connections.remove(websocket)
+                if not any(ctype_dict.values()):
+                    del self.active_connections[rid]
 
-    async def broadcast(self, message: dict, restaurante_id: int | None = None, tenant_id: int | None = None) -> None:
+    async def broadcast(
+        self,
+        message: dict,
+        restaurante_id: int | None = None,
+        tenant_id: int | None = None,
+        target_audience: str | None = None
+    ) -> None:
+        """
+        Envia mensagem JSON para conexões ativas do restaurante.
+        target_audience:
+          - "internal": apenas app de garçom, caixa, KDS (padrão para operações internas).
+          - "client": apenas clientes do cardápio público.
+          - "all": todas as conexões (internas e públicas).
+          - None: determina automaticamente (eventos em PUBLIC_CLIENT_EVENTS -> "all", outros -> "internal").
+        """
         if restaurante_id is None:
             restaurante_id = tenant_id
-        # Dynamically resolve restaurante_id from current context if not provided
 
         if restaurante_id is None:
             try:
@@ -51,17 +88,35 @@ class ConnectionManager:
             logger.warning("Broadcast ignorado: restaurante_id ausente ou inválido.")
             return
 
-        # Sends a JSON message only to active connections in the same restaurante_id
-        if restaurante_id in self.active_connections:
-            # Create a copy to prevent mutation errors during broadcast loop
-            connections = list(self.active_connections[restaurante_id])
-            for connection in connections:
-                try:
-                    await connection.send_json(message)
-                except Exception:
-                    # Remove o socket morto imediatamente para evitar vazamento de memória
-                    self.disconnect(connection, restaurante_id)
+        if restaurante_id not in self.active_connections:
+            return
+
+        # Auto-resolve target_audience if not specified
+        if target_audience is None:
+            event_name = message.get("event") or message.get("type") or ""
+            if event_name in PUBLIC_CLIENT_EVENTS:
+                target_audience = "all"
+            else:
+                target_audience = "internal"
+
+        ctype_dict = self.active_connections[restaurante_id]
+        sockets_to_send: list[WebSocket] = []
+
+        if target_audience == "internal":
+            sockets_to_send = list(ctype_dict.get("internal", []))
+        elif target_audience == "client":
+            sockets_to_send = list(ctype_dict.get("client", []))
+        elif target_audience == "all":
+            for sockets in ctype_dict.values():
+                sockets_to_send.extend(sockets)
+        else:
+            sockets_to_send = list(ctype_dict.get("internal", []))
+
+        for connection in sockets_to_send:
+            try:
+                await connection.send_json(message)
+            except Exception:
+                self.disconnect(connection, restaurante_id)
 
 # Singleton instance of the connection manager
 manager = ConnectionManager()
-

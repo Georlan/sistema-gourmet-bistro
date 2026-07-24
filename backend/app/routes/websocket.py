@@ -15,6 +15,7 @@ async def websocket_cliente_endpoint(
     """
     WebSocket endpoint público para clientes do Cardápio Digital.
     Aceita restaurante_id como int ou slug string (ex: '1', 'burger').
+    Registra conexão com client_type="client" para receber apenas eventos públicos.
     """
     restaurante_id_val = 1
     if restaurante_id:
@@ -23,7 +24,7 @@ async def websocket_cliente_endpoint(
         except ValueError:
             restaurante_id_val = 1
 
-    await manager.connect(websocket, restaurante_id_val)
+    await manager.connect(websocket, restaurante_id_val, client_type="client")
     try:
         while True:
             await websocket.receive_text()
@@ -62,20 +63,21 @@ async def websocket_endpoint(
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
-    await manager.connect(websocket, restaurante_id_val)
+    # Registra a conexão interna do app de garçom/caixa com client_type="internal"
+    await manager.connect(websocket, restaurante_id_val, client_type="internal")
 
-    # Broadcast connection event to clear any stale states of this waiter on other clients
+    # Broadcast connection event (apenas para audiência interna)
     await manager.broadcast({
         "event": "waiter_connected",
         "garcom_id": garcom_id
-    }, restaurante_id_val)
+    }, restaurante_id_val, target_audience="internal")
 
     try:
         while True:
             # Receive json data from connected waiter client
             data = await websocket.receive_json()
 
-            # If it's a draft update, broadcast it to other clients in the same restaurant
+            # If it's a draft update, broadcast it to other internal clients in the same restaurant
             if data.get("action") == "draft_status":
                 await manager.broadcast({
                     "event": "draft_status",
@@ -83,15 +85,13 @@ async def websocket_endpoint(
                     "garcom_id": garcom_id,
                     "garcom_nome": data.get("garcom_nome"),
                     "ativo": data.get("ativo")
-                }, restaurante_id_val)
+                }, restaurante_id_val, target_audience="internal")
     except WebSocketDisconnect:
         manager.disconnect(websocket, restaurante_id_val)
-        # Broadcast disconnect event so other clients can clear draft warnings for this waiter
+        # Broadcast disconnect event to internal clients only
         await manager.broadcast({
             "event": "waiter_disconnected",
             "garcom_id": garcom_id
-        }, restaurante_id_val)
+        }, restaurante_id_val, target_audience="internal")
     except Exception:
         manager.disconnect(websocket, restaurante_id_val)
-
-
