@@ -13,7 +13,7 @@ import CardapioProductCard from "./components/CardapioProductCard";
 import CardapioProductModal from "./components/CardapioProductModal";
 import CardapioCartDrawer, { CartItem } from "./components/CardapioCartDrawer";
 import CardapioAuthModal from "./components/CardapioAuthModal";
-import { WS_BASE_URL } from "../config/api";
+import { API_BASE_URL, WS_BASE_URL } from "../config/api";
 import CardapioOrderHistoryModal from "./components/CardapioOrderHistoryModal";
 import CardapioUserProfileModal from "./components/CardapioUserProfileModal";
 import CardapioDigital from "./components/CardapioDigital";
@@ -182,78 +182,58 @@ export default function CardapioPage() {
     setErrorMsg("");
     const identifier = getRestaurantIdentifier();
 
-    // Fallback instantly if no real Supabase key is configured to avoid pending promise loops
-    const supabaseKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || "sb_publishable_VOLK7mO9OqOhIfm0MeJ0eg_oQ626X4T";
-    const hasRealKey = supabaseKey && supabaseKey !== "dummy-anon-key-to-prevent-bootstrap-error";
-
-    if (!hasRealKey) {
-      console.warn("Chave Supabase não configurada. Carregando dados Whitelabel de demonstração instantaneamente.");
-      const fallbackBrand = whitelabelBrands.burger;
-      setActiveBrand(fallbackBrand);
-      setIsLoading(false);
-      return;
-    }
-
     try {
       let restaurant = null;
       
-      // Try as numeric ID first if applicable
-      if (/^\d+$/.test(identifier)) {
-        const { data } = await supabase
-          .from("restaurantes")
-          .select("*")
-          .eq("id", Number(identifier))
-          .maybeSingle();
-        if (data) restaurant = data;
+      // 1. Try Backend REST API first to get real dynamic whitelabel settings saved in /view-caixa
+      try {
+        const isNum = /^\d+$/.test(identifier);
+        const apiEndpoint = isNum
+          ? `${API_BASE_URL}/api/cardapio-digital/config?restaurante_id=${identifier}`
+          : `${API_BASE_URL}/api/cardapio-digital/config?slug=${identifier}`;
+        const res = await fetch(apiEndpoint);
+        if (res.ok) {
+          restaurant = await res.json();
+        }
+      } catch (apiErr) {
+        console.warn("Falha ao buscar restaurante via API backend, tentando Supabase:", apiErr);
       }
 
-      // Try as slug next
-      if (!restaurant) {
-        const { data } = await supabase
-          .from("restaurantes")
-          .select("*")
-          .eq("slug", identifier)
-          .maybeSingle();
-        if (data) restaurant = data;
-      }
-
-      // If still not found, try loading restaurant ID = 1 (main store) as default real database fallback
-      if (!restaurant) {
-        const { data } = await supabase
-          .from("restaurantes")
-          .select("*")
-          .eq("id", 1)
-          .maybeSingle();
-        if (data) restaurant = data;
-      }
-
-      // If still not found and not burger, try loading burger as default
-      if (!restaurant && identifier !== "burger") {
-        const { data } = await supabase
-          .from("restaurantes")
-          .select("*")
-          .eq("slug", "burger")
-          .maybeSingle();
-        if (data) restaurant = data;
-      }
-
-      // Try backend REST API fallback if Supabase returns nothing
+      // 2. Try Supabase as secondary source if backend REST API was unreachable
       if (!restaurant) {
         try {
-          const isNum = /^\d+$/.test(identifier);
-          const apiEndpoint = isNum
-            ? `${API_BASE_URL}/api/cardapio-digital/config?restaurante_id=${identifier}`
-            : `${API_BASE_URL}/api/cardapio-digital/config?slug=${identifier}`;
-          const res = await fetch(apiEndpoint);
-          if (res.ok) {
-            restaurant = await res.json();
+          if (/^\d+$/.test(identifier)) {
+            const { data } = await supabase
+              .from("restaurantes")
+              .select("*")
+              .eq("id", Number(identifier))
+              .maybeSingle();
+            if (data) restaurant = data;
           }
-        } catch (apiErr) {
-          console.warn("Falha ao buscar restaurante via API backend:", apiErr);
+
+          if (!restaurant) {
+            const { data } = await supabase
+              .from("restaurantes")
+              .select("*")
+              .eq("slug", identifier)
+              .maybeSingle();
+            if (data) restaurant = data;
+          }
+
+          if (!restaurant) {
+            const { data } = await supabase
+              .from("restaurantes")
+              .select("*")
+              .eq("id", 1)
+              .maybeSingle();
+            if (data) restaurant = data;
+          }
+        } catch (sukaErr) {
+          console.warn("Falha na consulta Supabase ao restaurante:", sukaErr);
         }
       }
 
-      // Fallback to static mock whitelabel configuration if DB has no such entry
+      // Fallback to static mock whitelabel configuration if DB and API have no such entry
       if (!restaurant) {
         console.warn("Restaurante não encontrado no banco/API. Usando dados de demonstração.");
         const fallbackBrand = whitelabelBrands.burger;
@@ -439,8 +419,8 @@ export default function CardapioPage() {
           card: cardColor,
           accent: primaryColor
         },
-        categories: categoryNames.length > 0 ? categoryNames : ["Geral"],
-        products: mappedProducts,
+        categories: categoryNames.length > 0 ? categoryNames : (whitelabelBrands.burger?.categories || ["Destaques", "Hambúrgueres", "Acompanhamentos", "Bebidas", "Sobremesas"]),
+        products: mappedProducts.length > 0 ? mappedProducts : (whitelabelBrands.burger?.products || []),
         socials: mappedSocials,
         about: restaurant.sobre_nos || restaurant.about || restaurant.descricao || "",
         paymentMethods: mappedPayments,
