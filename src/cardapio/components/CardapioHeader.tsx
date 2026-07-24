@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { BrandConfig, getProductImageUrl } from "../CardapioTypes";
+import { BrandConfig, getProductImageUrl, getRestaurantAssetUrl } from "../CardapioTypes";
 import { whitelabelBrands } from "../CardapioConfig";
 import { supabase } from "../SupabaseClient";
 import { Search, User, MapPin, Phone, RefreshCw, ShoppingBag, Instagram, Facebook, Globe, Share2 } from "lucide-react";
@@ -84,10 +84,11 @@ export default function CardapioHeader({
       try {
         const { data, error } = await supabase
           .from("restaurantes")
-          .select("id, slug, nome, logo_url, subtitulo");
+          .select("id, slug, nome, logo_url, cardapio_logo_path, subtitulo");
         if (data && data.length > 0) {
           const mapped = data.map((r: any) => ({
             ...r,
+            logo_url: getRestaurantAssetUrl(r.logo_url || r.cardapio_logo_path, true),
             slogan: r.subtitulo || r.slogan || ""
           }));
           setRestaurantsList(mapped);

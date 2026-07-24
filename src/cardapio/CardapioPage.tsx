@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef } from "react";
-import { Product, BrandConfig, ProductOption, getProductImageUrl, SocialNetwork, OperatingHours, PaymentMethodGroup } from "./CardapioTypes";
+import { Product, BrandConfig, ProductOption, getProductImageUrl, getRestaurantAssetUrl, SocialNetwork, OperatingHours, PaymentMethodGroup } from "./CardapioTypes";
 import { whitelabelBrands } from "./CardapioConfig";
 import { supabase } from "./SupabaseClient";
 import CardapioHeader from "./components/CardapioHeader";
@@ -183,53 +183,62 @@ export default function CardapioPage() {
     const identifier = getRestaurantIdentifier();
 
     try {
-      let restaurant = null;
+      let restaurant: any = null;
       
-      // 1. Try Backend REST API first to get real dynamic whitelabel settings saved in /view-caixa
+      // 1. Try Supabase first (select("*") to fetch all dynamic columns from table restaurantes)
       try {
-        const isNum = /^\d+$/.test(identifier);
-        const apiEndpoint = isNum
-          ? `${API_BASE_URL}/api/cardapio-digital/config?restaurante_id=${identifier}`
-          : `${API_BASE_URL}/api/cardapio-digital/config?slug=${identifier}`;
-        const res = await fetch(apiEndpoint);
-        if (res.ok) {
-          restaurant = await res.json();
+        if (/^\d+$/.test(identifier)) {
+          const { data } = await supabase
+            .from("restaurantes")
+            .select("*")
+            .eq("id", Number(identifier))
+            .maybeSingle();
+          if (data) restaurant = data;
         }
-      } catch (apiErr) {
-        console.warn("Falha ao buscar restaurante via API backend, tentando Supabase:", apiErr);
+
+        if (!restaurant && identifier) {
+          const { data } = await supabase
+            .from("restaurantes")
+            .select("*")
+            .eq("slug", identifier)
+            .maybeSingle();
+          if (data) restaurant = data;
+        }
+
+        if (!restaurant) {
+          const { data } = await supabase
+            .from("restaurantes")
+            .select("*")
+            .eq("id", 1)
+            .maybeSingle();
+          if (data) restaurant = data;
+        }
+
+        if (!restaurant) {
+          const { data } = await supabase
+            .from("restaurantes")
+            .select("*")
+            .limit(1)
+            .maybeSingle();
+          if (data) restaurant = data;
+        }
+      } catch (sukaErr) {
+        console.warn("Falha na consulta Supabase ao restaurante:", sukaErr);
       }
 
-      // 2. Try Supabase as secondary source if backend REST API was unreachable
+      // 2. Secondary fallback to Backend REST API if Supabase query returned nothing
       if (!restaurant) {
         try {
-          if (/^\d+$/.test(identifier)) {
-            const { data } = await supabase
-              .from("restaurantes")
-              .select("*")
-              .eq("id", Number(identifier))
-              .maybeSingle();
-            if (data) restaurant = data;
+          const isNum = /^\d+$/.test(identifier);
+          const apiEndpoint = isNum
+            ? `${API_BASE_URL}/api/cardapio-digital/config?restaurante_id=${identifier}`
+            : `${API_BASE_URL}/api/cardapio-digital/config?slug=${identifier}`;
+          const res = await fetch(apiEndpoint);
+          if (res.ok) {
+            restaurant = await res.json();
           }
-
-          if (!restaurant) {
-            const { data } = await supabase
-              .from("restaurantes")
-              .select("*")
-              .eq("slug", identifier)
-              .maybeSingle();
-            if (data) restaurant = data;
-          }
-
-          if (!restaurant) {
-            const { data } = await supabase
-              .from("restaurantes")
-              .select("*")
-              .eq("id", 1)
-              .maybeSingle();
-            if (data) restaurant = data;
-          }
-        } catch (sukaErr) {
-          console.warn("Falha na consulta Supabase ao restaurante:", sukaErr);
+        } catch (apiErr) {
+          console.warn("Falha ao buscar restaurante via API backend:", apiErr);
         }
       }
 
@@ -429,12 +438,21 @@ export default function CardapioPage() {
         ];
       }
 
+      const logoUrl = getRestaurantAssetUrl(
+        restaurant.logo_url || restaurant.cardapio_logo_path || restaurant.logo || "",
+        true
+      );
+      const bannerUrl = getRestaurantAssetUrl(
+        restaurant.banner_url || restaurant.cardapio_banner_path || restaurant.banner_image || "",
+        false
+      );
+
       const newBrand: BrandConfig = {
         id: String(restaurant.id),
-        name: restaurant.nome || restaurant.name || "Restaurante",
-        slogan: restaurant.subtitulo || restaurant.slogan || "Sincronizado com o Sistema Kôma PDV",
-        logo: getProductImageUrl(restaurant.logo_url || restaurant.logo || ""),
-        bannerImage: getProductImageUrl(restaurant.banner_url || restaurant.banner_image || ""),
+        name: restaurant.nome || restaurant.name || "Bagueteria e Pastelaria Pôr do sol",
+        slogan: restaurant.subtitulo || restaurant.slogan || "Não deixe para comer amanhã o que você pode comer hoje!",
+        logo: logoUrl,
+        bannerImage: bannerUrl,
         phone: whatsappNumber || restaurant.telefone || restaurant.phone || "",
         address: restaurant.endereco || restaurant.address || "",
         colors: {
@@ -451,7 +469,7 @@ export default function CardapioPage() {
         about: restaurant.sobre_nos || restaurant.about || restaurant.descricao || "",
         paymentMethods: mappedPayments,
         operatingHours: mappedHours,
-        googleMapsUrl: restaurant.google_maps_url || `https://maps.google.com/?q=${encodeURIComponent(restaurant.endereco || "")}`
+        googleMapsUrl: restaurant.google_maps_url || (restaurant.endereco ? `https://maps.google.com/?q=${encodeURIComponent(restaurant.endereco)}` : "")
       };
 
       setActiveBrand(newBrand);

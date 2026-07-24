@@ -88,3 +88,24 @@ export function getProductImageUrl(imagePath: string): string {
   return `${supabaseUrl}/storage/v1/object/public/produtos/${imagePath}`;
 }
 
+/**
+ * Resolves a restaurant photo path or URL (logo/banner) to its public URL.
+ */
+export function getRestaurantAssetUrl(urlOrPath: string | null | undefined, isLogo: boolean): string {
+  if (!urlOrPath) {
+    return isLogo
+      ? "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&q=80&w=200&h=200"
+      : "https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&q=80&w=1200&h=400";
+  }
+  if (
+    urlOrPath.startsWith("http://") ||
+    urlOrPath.startsWith("https://") ||
+    urlOrPath.startsWith("data:")
+  ) {
+    return urlOrPath;
+  }
+  const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL || "https://iiowhekvahxiepwcdidm.supabase.co";
+  const cleanPath = urlOrPath.replace(/^\/+/, '');
+  return `${supabaseUrl}/storage/v1/object/public/cardapio-assets/${cleanPath}`;
+}
+
