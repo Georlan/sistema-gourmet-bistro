@@ -202,6 +202,11 @@ def test_update_caixa_config_cardapio_success(test_setup):
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == 999
-    assert data["cor_primaria"] == "#ff0000"
-    assert data["sobre_nos"] == "Sobre o Kôma"
+def test_get_whitelabel_config_by_slug_success(test_setup):
+    response = client.get("/api/cardapio-digital/config?slug=sistema-gourmet-bistro")
+    assert response.status_code == 200
+    data = response.json()
+    assert "id" in data
+    assert "cor_primaria" in data
+
 

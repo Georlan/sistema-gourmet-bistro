@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Union
 import uuid
 import datetime
 import logging
@@ -1044,15 +1044,32 @@ from ..schemas import RestauranteConfigResponse, RestauranteConfigUpdate
 @router.get("/config-cardapio", response_model=RestauranteConfigResponse)
 @router.get("/config-cardapio/{tenant_id}", response_model=RestauranteConfigResponse)
 def obter_configuracao_restaurante(
-    tenant_id: Optional[int] = None,
+    tenant_id: Optional[Union[int, str]] = None,
     db: Session = Depends(get_db),
     current_user: Optional[Usuario] = Depends(get_current_garcom_optional)
 ):
     """Obtém as configurações whitelabel de personalização do restaurante ativo."""
-    rest_id = tenant_id or current_restaurante_id.get() or (current_user.tenant_id if current_user else None) or 1
+    rest_id = None
+    slug = None
+    if tenant_id:
+        if str(tenant_id).isdigit():
+            rest_id = int(tenant_id)
+        else:
+            slug = str(tenant_id)
+
+    if not rest_id and not slug:
+        rest_id = current_restaurante_id.get() or (current_user.tenant_id if current_user else None) or 1
     
-    restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
+    restaurante = None
+    if slug:
+        restaurante = db.query(Restaurante).filter(Restaurante.slug == slug).first()
+    if not restaurante and rest_id:
+        restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
     if not restaurante:
+        restaurante = db.query(Restaurante).filter(Restaurante.id == 1).first()
+
+    if not restaurante:
+        rest_id = rest_id or 1
         restaurante = Restaurante(
             id=rest_id,
             nome="Kôma Gourmet Bistrô",

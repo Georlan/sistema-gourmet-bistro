@@ -651,8 +651,8 @@ class RestauranteConfigResponse(BaseModel):
     sobre_nos: Optional[str] = None
     endereco: Optional[str] = None
     google_maps_url: Optional[str] = None
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
+    latitude: Optional[Union[float, str]] = None
+    longitude: Optional[Union[float, str]] = None
     status_override: Optional[str] = "Automático"
     socials: Optional[Any] = None
     horarios_funcionamento: Optional[Any] = None

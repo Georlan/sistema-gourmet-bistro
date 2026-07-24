@@ -17,16 +17,24 @@ router = APIRouter(prefix="/api/cardapio-digital", tags=["Cardapio Digital Asset
 @router.get("/config", response_model=RestauranteConfigResponse)
 @router.get("/", response_model=RestauranteConfigResponse)
 def obter_config_cardapio_digital(
-    restaurante_id: Optional[int] = None,
+    restaurante_id: Optional[str] = None,
     slug: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: Optional[Usuario] = Depends(get_current_garcom_optional)
 ):
     """
     Retorna as configurações whitelabel de personalização do restaurante ativo.
-    Filtra por restaurante_id, slug, tenant do usuário logado ou fallback 1.
+    Filtra por restaurante_id (int ou string), slug, tenant do usuário logado ou fallback 1.
     """
-    rest_id = restaurante_id or current_restaurante_id.get() or (current_user.tenant_id if current_user else None)
+    rest_id = None
+    if restaurante_id:
+        if str(restaurante_id).isdigit():
+            rest_id = int(restaurante_id)
+        elif not slug:
+            slug = str(restaurante_id)
+            
+    if not rest_id and not slug:
+        rest_id = current_restaurante_id.get() or (current_user.tenant_id if current_user else None)
     
     restaurante = None
     if slug:
