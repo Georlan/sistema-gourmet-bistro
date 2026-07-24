@@ -68,20 +68,20 @@ def obter_categorias_cardapio_digital(
     slug: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    """Retorna as categorias ativas do restaurante para o cardápio digital (acesso público)."""
+    """Retorna as categorias ativas do restaurante especificado para o cardápio digital (isolamento multi-tenant)."""
     rest_id = 1
-    if restaurante_id and str(restaurante_id).isdigit():
-        rest_id = int(restaurante_id)
-    elif slug:
+    if restaurante_id:
+        if str(restaurante_id).isdigit():
+            rest_id = int(restaurante_id)
+        elif not slug:
+            slug = str(restaurante_id)
+
+    if slug:
         rest = db.query(Restaurante).filter(Restaurante.slug == slug).first()
         if rest:
             rest_id = rest.id
 
-    categorias = db.query(Categoria).filter(
-        (Categoria.restaurante_id == rest_id) | (Categoria.restaurante_id == None)
-    ).all()
-    if not categorias:
-        categorias = db.query(Categoria).all()
+    categorias = db.query(Categoria).filter(Categoria.restaurante_id == rest_id).all()
 
     order_list = [
         "Hambúrgueres Bovinos", "Hambúrgueres de Frango", "Hambúrgueres Suínos",
@@ -108,21 +108,23 @@ def obter_produtos_cardapio_digital(
     slug: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    """Retorna os produtos ativos do restaurante para o cardápio digital (acesso público)."""
+    """Retorna os produtos ativos do restaurante especificado para o cardápio digital (isolamento multi-tenant)."""
     rest_id = 1
-    if restaurante_id and str(restaurante_id).isdigit():
-        rest_id = int(restaurante_id)
-    elif slug:
+    if restaurante_id:
+        if str(restaurante_id).isdigit():
+            rest_id = int(restaurante_id)
+        elif not slug:
+            slug = str(restaurante_id)
+
+    if slug:
         rest = db.query(Restaurante).filter(Restaurante.slug == slug).first()
         if rest:
             rest_id = rest.id
 
     produtos = db.query(Produto).filter(
-        (Produto.restaurante_id == rest_id) | (Produto.restaurante_id == None),
+        Produto.restaurante_id == rest_id,
         Produto.ativo == True
     ).all()
-    if not produtos:
-        produtos = db.query(Produto).filter(Produto.ativo == True).all()
 
     return [
         {
