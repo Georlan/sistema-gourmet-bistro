@@ -43,6 +43,8 @@ def obter_config_cardapio_digital(
         restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
     if not restaurante:
         restaurante = db.query(Restaurante).filter(Restaurante.id == 1).first()
+    if not restaurante:
+        restaurante = db.query(Restaurante).first()
         
     if not restaurante:
         rest_id = rest_id or 1
@@ -56,6 +58,85 @@ def obter_config_cardapio_digital(
         )
 
     return restaurante
+
+
+from ..models import Categoria, Produto
+
+@router.get("/categorias")
+def obter_categorias_cardapio_digital(
+    restaurante_id: Optional[str] = None,
+    slug: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Retorna as categorias ativas do restaurante para o cardápio digital (acesso público)."""
+    rest_id = 1
+    if restaurante_id and str(restaurante_id).isdigit():
+        rest_id = int(restaurante_id)
+    elif slug:
+        rest = db.query(Restaurante).filter(Restaurante.slug == slug).first()
+        if rest:
+            rest_id = rest.id
+
+    categorias = db.query(Categoria).filter(
+        (Categoria.restaurante_id == rest_id) | (Categoria.restaurante_id == None)
+    ).all()
+    if not categorias:
+        categorias = db.query(Categoria).all()
+
+    order_list = [
+        "Hambúrgueres Bovinos", "Hambúrgueres de Frango", "Hambúrgueres Suínos",
+        "Baguetes", "Pastéis Tradicionais", "Pastelões Especiais", "Pastéis Doces",
+        "Petiscos", "Combos Promocionais", "Sucos", "Refrigerantes e Águas",
+        "Cervejas", "Bebidas Quentes"
+    ]
+    sorted_cats = sorted(
+        categorias,
+        key=lambda c: order_list.index(c.nome) if c.nome in order_list else len(order_list)
+    )
+    return [
+        {
+            "id": c.id,
+            "nome": c.nome,
+            "destino_impressao": getattr(c, "destino_impressao", "COZINHA")
+        } for c in sorted_cats
+    ]
+
+
+@router.get("/produtos")
+def obter_produtos_cardapio_digital(
+    restaurante_id: Optional[str] = None,
+    slug: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Retorna os produtos ativos do restaurante para o cardápio digital (acesso público)."""
+    rest_id = 1
+    if restaurante_id and str(restaurante_id).isdigit():
+        rest_id = int(restaurante_id)
+    elif slug:
+        rest = db.query(Restaurante).filter(Restaurante.slug == slug).first()
+        if rest:
+            rest_id = rest.id
+
+    produtos = db.query(Produto).filter(
+        (Produto.restaurante_id == rest_id) | (Produto.restaurante_id == None),
+        Produto.ativo == True
+    ).all()
+    if not produtos:
+        produtos = db.query(Produto).filter(Produto.ativo == True).all()
+
+    return [
+        {
+            "id": p.id,
+            "nome": p.nome,
+            "descricao": p.descricao or "",
+            "preco": float(p.preco) if p.preco is not None else 0.0,
+            "imagem_url": p.imagem_url or "",
+            "categoria_id": p.categoria_id,
+            "ativo": p.ativo,
+            "destaque": getattr(p, "destaque", False),
+            "opcoes": getattr(p, "opcoes", None)
+        } for p in produtos
+    ]
 
 
 @router.put("/config", response_model=RestauranteConfigResponse)

@@ -242,14 +242,27 @@ export default function CardapioPage() {
         return;
       }
 
-      // Load categories
-      const { data: categoriesData, error: categoriesError } = await supabase
-        .from("categorias")
-        .select("*")
-        .eq("restaurante_id", restaurant.id);
+      // Load categories with REST API fallback if Supabase returns permission error or empty
+      let categoriesData = null;
+      try {
+        const { data, error } = await supabase
+          .from("categorias")
+          .select("*")
+          .eq("restaurante_id", restaurant.id);
+        if (!error && data && data.length > 0) {
+          categoriesData = data;
+        }
+      } catch (e) {}
 
-      if (categoriesError) {
-        console.error("Erro ao buscar categorias:", categoriesError);
+      if (!categoriesData || categoriesData.length === 0) {
+        try {
+          const resCats = await fetch(`${API_BASE_URL}/api/cardapio-digital/categorias?restaurante_id=${restaurant.id}`);
+          if (resCats.ok) {
+            categoriesData = await resCats.json();
+          }
+        } catch (e) {
+          console.warn("Falha ao buscar categorias via API:", e);
+        }
       }
 
       // Sort categories by position/ordem/order
@@ -259,14 +272,27 @@ export default function CardapioPage() {
         return orderA - orderB;
       });
 
-      // Load active products
-      const { data: productsData, error: productsError } = await supabase
-        .from("produtos")
-        .select("*")
-        .eq("restaurante_id", restaurant.id);
+      // Load active products with REST API fallback if Supabase returns permission error or empty
+      let productsData = null;
+      try {
+        const { data, error } = await supabase
+          .from("produtos")
+          .select("*")
+          .eq("restaurante_id", restaurant.id);
+        if (!error && data && data.length > 0) {
+          productsData = data;
+        }
+      } catch (e) {}
 
-      if (productsError) {
-        console.error("Erro ao buscar produtos:", productsError);
+      if (!productsData || productsData.length === 0) {
+        try {
+          const resProds = await fetch(`${API_BASE_URL}/api/cardapio-digital/produtos?restaurante_id=${restaurant.id}`);
+          if (resProds.ok) {
+            productsData = await resProds.json();
+          }
+        } catch (e) {
+          console.warn("Falha ao buscar produtos via API:", e);
+        }
       }
 
       // Filter active products
