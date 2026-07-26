@@ -51,7 +51,7 @@ def encrypt_field(plain_text: Any) -> Any:
         return cipher.encrypt(plain_text.encode("utf-8")).decode("utf-8")
     except Exception:
         logger.exception("Falha ao criptografar campo sensível")
-        return plain_text
+        raise
 
 def decrypt_field(cipher_text: Any) -> Any:
     """Decrypts cipher text string using AES-256 (Fernet). Returns plain text on error/fallback."""
