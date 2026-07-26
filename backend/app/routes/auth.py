@@ -96,7 +96,12 @@ def login(login_data: LoginRequest, db: Session = Depends(get_db)):
         "id": usuario.id,
         "nome": usuario.nome,
         "usuario": usuario.usuario,
-        "role": usuario.role
+        "email": usuario.email,
+        "telefone": usuario.telefone,
+        "role": usuario.role,
+        "cargo": getattr(usuario, "cargo", None) or usuario.role,
+        "restaurante_id": usuario.restaurante_id,
+        "status": usuario.status
     }
     
     return {
