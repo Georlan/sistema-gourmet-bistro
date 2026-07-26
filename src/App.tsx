@@ -134,7 +134,13 @@ export default function App() {
 
   const fetchConfig = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/caixa/configuracoes`);
+      const tokenKey = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
+      const token = localStorage.getItem(tokenKey);
+      if (!token) return;
+
+      const res = await fetch(`${API_BASE_URL}/caixa/configuracoes`, {
+        headers: getAuthHeaders()
+      });
       if (res.ok) {
         const data = await res.json();
         setRestauranteConfig(data);
