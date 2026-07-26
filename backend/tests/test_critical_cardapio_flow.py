@@ -2,7 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 from app.main import app
 from app.database import engine, Base, SessionLocal, current_restaurante_id
-from app.models import Restaurante, Categoria, Produto, Usuario, Mesa
+from app.models import Restaurante, Categoria, Produto, Usuario, Mesa, PrintJob
 from app.security import create_access_token
 
 client = TestClient(app)
@@ -136,3 +136,14 @@ def test_cardapio_digital_venda_direta_order():
     assert response.status_code in (200, 201)
     data = response.json()
     assert "id" in data or "numero_pedido" in data
+
+    db = SessionLocal()
+    try:
+        print_job = db.query(PrintJob).filter(
+            PrintJob.restaurante_id == 100,
+            PrintJob.source_type == "pedido",
+            PrintJob.source_id == data["id"],
+        ).one()
+        assert print_job.status == "pending"
+    finally:
+        db.close()
