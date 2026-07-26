@@ -5,7 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 from app.database import SessionLocal, Base, engine, current_restaurante_id
 from app.main import app
-from app.models import Comanda, MensagemWhatsApp, RascunhoPedido, ActivityLog, Usuario
+from app.models import Comanda, MensagemWhatsApp, RascunhoPedido, ActivityLog, Usuario, Cliente
 from app.crypt import encrypt_field, decrypt_field
 from app.security import get_password_hash, create_access_token
 
@@ -216,7 +216,15 @@ def test_post_loyalty_client_encryption_failure(setup_db):
         # 4. Confirmar que a resposta é 500 com a mensagem tratada
         assert response.status_code == 500
         assert response.json()["detail"] == "Erro ao processar dado sensível, contate o suporte."
-        
+
+        db = SessionLocal()
+        try:
+            assert db.query(Cliente).filter(
+                Cliente.telefone == "81888887777"
+            ).count() == 0
+        finally:
+            db.close()
+
     finally:
         # Restaurar cipher original
         crypt.cipher = original_cipher
