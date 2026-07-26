@@ -332,12 +332,20 @@ class FechamentoCaixaResponse(BaseModel):
     diferenca_total: float
 
 class PagamentoRequest(BaseModel):
-    valor: float
+    valor: float = Field(gt=0)
     metodo: str  # "dinheiro" | "pix" | "cartao"
     item_ids: Optional[List[str]] = None  # Specific item IDs to settle if paying by item
     idempotency_key: Optional[str] = None
     cpf_cliente: Optional[str] = None
     nome_cliente: Optional[str] = None
+
+class PagamentoMesaRequest(PagamentoRequest):
+    """Baixa monetária atômica de todas as comandas abertas de uma mesa."""
+
+    valor: float = Field(gt=0)
+    idempotency_key: str = Field(min_length=8, max_length=128)
+    incluir_taxa_servico: bool = True
+    item_ids: None = None
 
 class PagamentoResponse(BaseModel):
     id: str
@@ -709,5 +717,3 @@ class CardapioVerificarOtpRequest(BaseModel):
     restaurante_id: int
     telefone: str
     otp: str
-
-

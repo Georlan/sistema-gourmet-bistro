@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from typing import List, Optional, Union
+from decimal import Decimal, ROUND_HALF_UP
 import uuid
 import datetime
 import logging
@@ -12,10 +13,14 @@ import httpx
 
 from ..config import settings
 from ..database import get_db, current_restaurante_id, require_tenant_id
-from ..models import Usuario, Comanda, Item, CaixaTurno, CaixaMovimentacao, Pagamento
+from ..models import (
+    Usuario, Comanda, Item, CaixaTurno, CaixaMovimentacao, Pagamento,
+    ConfiguracaoRestaurante,
+)
 from ..schemas import (
     CaixaTurnoCreate, CaixaTurnoResponse, CaixaTurnoFechar, CaixaTurnoDetalhe,
-    CaixaMovimentacaoCreate, CaixaMovimentacaoResponse, PagamentoRequest, PagamentoResponse,
+    CaixaMovimentacaoCreate, CaixaMovimentacaoResponse, PagamentoRequest,
+    PagamentoMesaRequest, PagamentoResponse,
     UsuarioResponse, UsuarioCreate, SangriaCreate, SuprimentoCreate, CaixaTurnoResumoResponse,
     FechamentoCaixaRequest, FechamentoCaixaResponse
 )
@@ -605,6 +610,338 @@ def fechar_turno_caixa(
 
 # ----------------- COMPATIBLE/INTEGRATED PAYMENTS ENDPOINT -----------------
 
+_CENTAVO = Decimal("0.01")
+_METODOS_PAGAMENTO = {
+    "dinheiro",
+    "pix",
+    "cartao",
+    "cartao_debito",
+    "cartao_credito",
+}
+
+
+def _valor_monetario(valor: object) -> Decimal:
+    return Decimal(str(valor or 0)).quantize(_CENTAVO, rounding=ROUND_HALF_UP)
+
+
+def _subtotal_ativo(comanda: Comanda) -> Decimal:
+    return _valor_monetario(sum(
+        Decimal(str(item.preco_unit or 0))
+        for item in comanda.itens
+        if item.status != "cancelado"
+    ))
+
+
+def _debitos_da_mesa(
+    comandas: List[Comanda],
+    incluir_taxa_servico: bool,
+    config: Optional[ConfiguracaoRestaurante],
+):
+    """Calcula o saldo de cada comanda sem usar o estado ``Item.pago``."""
+    subtotais = [_subtotal_ativo(comanda) for comanda in comandas]
+    subtotal_mesa = sum(subtotais, Decimal("0.00"))
+
+    taxa_percentual = Decimal("0.00")
+    if incluir_taxa_servico and (config.taxa_servico_ativa if config else True):
+        taxa_configurada = (
+            config.taxa_servico_padrao
+            if config and config.taxa_servico_padrao is not None
+            else 10.0
+        )
+        taxa_percentual = Decimal(str(taxa_configurada))
+
+    total_mesa = _valor_monetario(
+        subtotal_mesa * (Decimal("1.00") + taxa_percentual / Decimal("100"))
+    )
+
+    # Arredonda por comanda, ajustando a última para que a soma seja exatamente
+    # igual ao total monetário da mesa.
+    totais_comanda: List[Decimal] = []
+    acumulado = Decimal("0.00")
+    for index, subtotal in enumerate(subtotais):
+        if index == len(subtotais) - 1:
+            total_comanda = total_mesa - acumulado
+        else:
+            total_comanda = _valor_monetario(
+                subtotal * (Decimal("1.00") + taxa_percentual / Decimal("100"))
+            )
+            acumulado += total_comanda
+        totais_comanda.append(max(Decimal("0.00"), total_comanda))
+
+    debitos = []
+    for comanda, total_comanda in zip(comandas, totais_comanda):
+        valor_pago = _valor_monetario(comanda.valor_pago)
+        saldo = max(Decimal("0.00"), total_comanda - valor_pago)
+        debitos.append({
+            "comanda": comanda,
+            "total": total_comanda,
+            "pago": valor_pago,
+            "saldo": saldo,
+        })
+    return debitos
+
+
+def _registrar_fidelidade_quitacao(
+    db: Session,
+    comanda: Comanda,
+    cliente_cpf: Optional[str],
+) -> None:
+    """Registra fidelidade uma única vez quando uma comanda é quitada."""
+    if not cliente_cpf:
+        return
+
+    from ..models import ConfigFidelizacao, HistoricoFidelidade
+
+    ja_registrado = db.query(HistoricoFidelidade).filter(
+        HistoricoFidelidade.restaurante_id == comanda.restaurante_id,
+        HistoricoFidelidade.comanda_id == comanda.id,
+        HistoricoFidelidade.tipo_movimentacao == "ACUMULO",
+    ).first()
+    if ja_registrado:
+        return
+
+    fidel_config = db.query(ConfigFidelizacao).filter(
+        ConfigFidelizacao.restaurante_id == comanda.restaurante_id
+    ).first()
+    if not fidel_config or not fidel_config.ativo:
+        return
+
+    total_pago = float(comanda.valor_pago or 0)
+    if fidel_config.tipo_recompensa == "PONTOS":
+        delta_val = round(total_pago * fidel_config.taxa_conversao, 2)
+    else:
+        delta_val = round(
+            total_pago * (fidel_config.taxa_conversao / 100.0),
+            2,
+        )
+
+    try:
+        db.add(HistoricoFidelidade(
+            restaurante_id=comanda.restaurante_id,
+            cliente_telefone=cliente_cpf,
+            tipo_movimentacao="ACUMULO",
+            valor_delta=delta_val,
+            comanda_id=comanda.id,
+        ))
+    except Exception:
+        logger.exception("Falha ao processar dado sensível criptografado")
+        raise HTTPException(
+            status_code=500,
+            detail="Erro ao processar dado sensível, contate o suporte.",
+        )
+
+
+@router.post(
+    "/mesas/{mesa_id}/pagar",
+    response_model=PagamentoResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def registrar_pagamento_mesa(
+    mesa_id: int,
+    pag_in: PagamentoMesaRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """
+    Abate um valor do saldo global da mesa em uma única transação.
+
+    O pagamento pode ser parcial e é distribuído entre as comandas abertas.
+    Itens individuais não controlam o fechamento: a mesa só é liberada quando
+    todo o saldo monetário chega a zero.
+    """
+    check_caixa_permission(current_user)
+    rest_id = require_tenant_id()
+
+    existing = db.query(Pagamento).filter(
+        Pagamento.restaurante_id == rest_id,
+        Pagamento.idempotency_key == pag_in.idempotency_key,
+    ).first()
+    if existing:
+        return existing
+
+    if pag_in.metodo not in _METODOS_PAGAMENTO:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Método de pagamento inválido. Use 'dinheiro', 'pix', "
+                "'cartao_debito' ou 'cartao_credito'."
+            ),
+        )
+
+    turno = db.query(CaixaTurno).filter(
+        CaixaTurno.restaurante_id == rest_id,
+        CaixaTurno.status == "aberto",
+    ).first()
+    if not turno:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="O caixa precisa estar aberto para processar pagamentos de mesas.",
+        )
+
+    comandas = db.query(Comanda).filter(
+        Comanda.restaurante_id == rest_id,
+        Comanda.mesa_id == mesa_id,
+        Comanda.fechada == False,
+    ).order_by(
+        Comanda.criado_em.asc(),
+        Comanda.id.asc(),
+    ).with_for_update().all()
+    if not comandas:
+        # Uma repetição concorrente pode chegar depois que a primeira chamada
+        # já fechou a mesa. A chave idempotente continua sendo a fonte de verdade.
+        existing = db.query(Pagamento).filter(
+            Pagamento.restaurante_id == rest_id,
+            Pagamento.idempotency_key == pag_in.idempotency_key,
+        ).first()
+        if existing:
+            return existing
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Nenhuma comanda aberta foi encontrada para esta mesa.",
+        )
+
+    config = db.query(ConfiguracaoRestaurante).filter(
+        ConfiguracaoRestaurante.restaurante_id == rest_id
+    ).first()
+    debitos = _debitos_da_mesa(
+        comandas,
+        pag_in.incluir_taxa_servico,
+        config,
+    )
+    saldo_mesa = sum(
+        (debito["saldo"] for debito in debitos),
+        Decimal("0.00"),
+    )
+    if saldo_mesa <= Decimal("0.00"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A mesa já está integralmente liquidada.",
+        )
+
+    valor_solicitado = _valor_monetario(pag_in.valor)
+    valor_aplicado = min(valor_solicitado, saldo_mesa)
+    restante_a_distribuir = valor_aplicado
+    agora = datetime.datetime.now(datetime.timezone.utc)
+    comandas_quitadas: List[Comanda] = []
+
+    for debito in debitos:
+        if restante_a_distribuir <= Decimal("0.00"):
+            break
+        if debito["saldo"] <= Decimal("0.00"):
+            continue
+
+        valor_na_comanda = min(restante_a_distribuir, debito["saldo"])
+        novo_total_pago = min(
+            debito["total"],
+            debito["pago"] + valor_na_comanda,
+        )
+        comanda = debito["comanda"]
+        comanda.valor_pago = float(_valor_monetario(novo_total_pago))
+        restante_a_distribuir -= valor_na_comanda
+
+        if novo_total_pago >= debito["total"]:
+            for item in comanda.itens:
+                if item.status != "cancelado":
+                    item.pago = True
+            comanda.fechada = True
+            comanda.fechado_em = agora
+            comanda.status_comanda = None
+            comandas_quitadas.append(comanda)
+
+    comanda_referencia = next(
+        debito["comanda"]
+        for debito in debitos
+        if debito["saldo"] > Decimal("0.00")
+    )
+    novo_pagamento = Pagamento(
+        id=f"p-{uuid.uuid4().hex[:8]}",
+        restaurante_id=rest_id,
+        comanda_id=comanda_referencia.id,
+        turno_id=turno.id,
+        valor=float(valor_aplicado),
+        metodo=pag_in.metodo,
+        status="aprovado",
+        idempotency_key=pag_in.idempotency_key,
+        cpf_cliente=pag_in.cpf_cliente,
+        nome_cliente=pag_in.nome_cliente,
+        criado_em=agora,
+    )
+    db.add(novo_pagamento)
+
+    cliente_cpf = (pag_in.cpf_cliente or "").strip() or None
+    if not cliente_cpf:
+        pagamento_anterior = db.query(Pagamento).join(
+            Comanda,
+            Pagamento.comanda_id == Comanda.id,
+        ).filter(
+            Pagamento.restaurante_id == rest_id,
+            Comanda.restaurante_id == rest_id,
+            Comanda.mesa_id == mesa_id,
+            Pagamento.cpf_cliente.isnot(None),
+        ).order_by(Pagamento.criado_em.desc()).first()
+        if pagamento_anterior and pagamento_anterior.cpf_cliente:
+            cliente_cpf = pagamento_anterior.cpf_cliente.strip()
+
+    for comanda in comandas_quitadas:
+        _registrar_fidelidade_quitacao(db, comanda, cliente_cpf)
+
+    try:
+        db.flush()
+        mesa_liberada = db.query(Comanda).filter(
+            Comanda.restaurante_id == rest_id,
+            Comanda.mesa_id == mesa_id,
+            Comanda.fechada == False,
+        ).first() is None
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        existing = db.query(Pagamento).filter(
+            Pagamento.restaurante_id == rest_id,
+            Pagamento.idempotency_key == pag_in.idempotency_key,
+        ).first()
+        if existing:
+            return existing
+        logger.exception("Falha de integridade ao processar pagamento da mesa")
+        raise HTTPException(
+            status_code=500,
+            detail="Erro interno ao processar pagamento.",
+        )
+
+    db.refresh(novo_pagamento)
+
+    background_tasks.add_task(
+        manager.broadcast,
+        {
+            "event": "tables_updated",
+            "detail": {
+                "type": "pagamento_mesa_registrado",
+                "mesa_id": mesa_id,
+                "metodo": pag_in.metodo,
+                "valor": float(valor_aplicado),
+                "status": "aprovado",
+                "operador_id": current_user.id,
+                "operador_nome": current_user.nome,
+            },
+        },
+        rest_id,
+    )
+    if mesa_liberada:
+        background_tasks.add_task(
+            manager.broadcast,
+            {
+                "event": "MESA_ATUALIZADA",
+                "data": {
+                    "mesa_id": mesa_id,
+                    "status": "livre",
+                    "comanda_id": None,
+                },
+            },
+            rest_id,
+        )
+    return novo_pagamento
+
+
 @router.post("/comandas/{comanda_id}/pagar", response_model=PagamentoResponse, status_code=status.HTTP_201_CREATED)
 def registrar_pagamento_comanda(
     comanda_id: str,
@@ -614,10 +951,11 @@ def registrar_pagamento_comanda(
     current_user: Usuario = Depends(get_current_user)
 ):
     """Registra o recebimento financeiro parcial ou total de uma comanda."""
+    rest_id = require_tenant_id()
     # Idempotency Check
     if pag_in.idempotency_key:
         existing = db.query(Pagamento).filter(
-            Pagamento.restaurante_id == require_tenant_id(),
+            Pagamento.restaurante_id == rest_id,
             Pagamento.idempotency_key == pag_in.idempotency_key
         ).first()
         if existing:
@@ -625,7 +963,7 @@ def registrar_pagamento_comanda(
 
     # 1. Check if there is an active shift FOR THIS TENANT
     turno = db.query(CaixaTurno).filter(
-        CaixaTurno.restaurante_id == require_tenant_id(),
+        CaixaTurno.restaurante_id == rest_id,
         CaixaTurno.status == "aberto"
     ).first()
     if not turno:
@@ -635,7 +973,10 @@ def registrar_pagamento_comanda(
         )
         
     # 2. Check if comanda exists
-    comanda = db.query(Comanda).filter(Comanda.id == comanda_id).first()
+    comanda = db.query(Comanda).filter(
+        Comanda.restaurante_id == rest_id,
+        Comanda.id == comanda_id,
+    ).first()
     if not comanda:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -649,7 +990,7 @@ def registrar_pagamento_comanda(
         )
         
     # Validate payment method
-    if pag_in.metodo not in ["dinheiro", "pix", "cartao", "cartao_debito", "cartao_credito"]:
+    if pag_in.metodo not in _METODOS_PAGAMENTO:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Método de pagamento inválido. Use 'dinheiro', 'pix', 'cartao_debito' ou 'cartao_credito'."
@@ -664,6 +1005,7 @@ def registrar_pagamento_comanda(
         if pag_in.item_ids:
             # Pay by item selection
             itens_selecionados = db.query(Item).filter(
+                Item.restaurante_id == rest_id,
                 Item.comanda_id == comanda_id,
                 Item.id.in_(pag_in.item_ids),
                 Item.status != 'cancelado',
@@ -685,7 +1027,7 @@ def registrar_pagamento_comanda(
     # Create the Pagamento transaction
     novo_pagamento = Pagamento(
         id=f"p-{uuid.uuid4().hex[:8]}",
-        restaurante_id=current_restaurante_id.get(),
+        restaurante_id=rest_id,
         comanda_id=comanda_id,
         turno_id=turno.id,
         valor=pag_in.valor,
@@ -700,14 +1042,15 @@ def registrar_pagamento_comanda(
     
     if not is_pending:
         # Increment the comanda's general paid value
-        comanda.valor_pago += pag_in.valor
+        comanda.valor_pago = float(_valor_monetario(
+            _valor_monetario(comanda.valor_pago) + _valor_monetario(pag_in.valor)
+        ))
         
-        # 4. Check if comanda is fully settled
-        total_de_itens_pendentes = len([i for i in comanda.itens if i.status != 'cancelado' and not i.pago])
-        subtotal_total = sum(i.preco_unit for i in comanda.itens if i.status != 'cancelado')
-        total_com_taxa = round(subtotal_total * 1.10, 2)
+        # 4. A quitação é monetária; marcar itens individualmente nunca fecha
+        # uma comanda se o valor total ainda não foi recebido.
+        subtotal_total = float(_subtotal_ativo(comanda))
         
-        if total_de_itens_pendentes == 0 or comanda.valor_pago >= subtotal_total or comanda.valor_pago >= total_com_taxa:
+        if comanda.valor_pago >= subtotal_total:
             # Mark all active items as paid just in case
             for i in comanda.itens:
                 if i.status != 'cancelado':
@@ -717,6 +1060,7 @@ def registrar_pagamento_comanda(
             comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
             if comanda.mesa_id:
                 other_open = db.query(Comanda).filter(
+                    Comanda.restaurante_id == rest_id,
                     Comanda.mesa_id == comanda.mesa_id,
                     Comanda.fechada == False,
                     Comanda.id != comanda.id
@@ -729,10 +1073,9 @@ def registrar_pagamento_comanda(
                             "status": "livre",
                             "comanda_id": None
                         }
-                    })
+                    }, rest_id)
             
             # Process loyalty points/cashback if client CPF/phone is present
-            from ..models import ConfigFidelizacao, HistoricoFidelidade
             client_cpf = None
             if pag_in.cpf_cliente:
                 client_cpf = pag_in.cpf_cliente.strip()
@@ -743,34 +1086,7 @@ def registrar_pagamento_comanda(
                         client_cpf = p_pag.cpf_cliente.strip()
                         break
             
-            if client_cpf:
-                fidel_config = db.query(ConfigFidelizacao).filter(
-                    ConfigFidelizacao.restaurante_id == comanda.restaurante_id
-                ).first()
-                if fidel_config and fidel_config.ativo:
-                    total_pago = comanda.valor_pago
-                    if fidel_config.tipo_recompensa == "PONTOS":
-                        delta_val = round(total_pago * fidel_config.taxa_conversao, 2)
-                    else: # CASHBACK
-                        delta_val = round(total_pago * (fidel_config.taxa_conversao / 100.0), 2)
-                    
-                    # Create loyalty log
-                    try:
-                        mov_fidel = HistoricoFidelidade(
-                            cliente_telefone=client_cpf,
-                            tipo_movimentacao="ACUMULO",
-                            valor_delta=delta_val
-                        )
-                        db.add(mov_fidel)
-                    except HTTPException:
-                        raise
-                    except Exception:
-                        db.rollback()
-                        logger.exception("Falha ao processar dado sensível criptografado")
-                        raise HTTPException(
-                            status_code=500,
-                            detail="Erro ao processar dado sensível, contate o suporte."
-                        )
+            _registrar_fidelidade_quitacao(db, comanda, client_cpf)
                     
     try:
         db.commit()
@@ -780,7 +1096,7 @@ def registrar_pagamento_comanda(
         db.rollback()
         if pag_in.idempotency_key:
             existing = db.query(Pagamento).filter(
-                Pagamento.restaurante_id == require_tenant_id(),
+                Pagamento.restaurante_id == rest_id,
                 Pagamento.idempotency_key == pag_in.idempotency_key
             ).first()
             if existing:
@@ -801,18 +1117,22 @@ def registrar_pagamento_comanda(
     db.refresh(comanda)
     
     # Trigger WebSocket sync update
-    background_tasks.add_task(manager.broadcast, {
-        "event": "tables_updated",
-        "detail": {
-            "type": "pagamento_registrado",
-            "comanda_id": comanda_id,
-            "metodo": pag_in.metodo,
-            "valor": pag_in.valor,
-            "status": pag_status,
-            "garcom_nome": current_user.nome,
-            "mesa_id": comanda.mesa_id
-        }
-    })
+    background_tasks.add_task(
+        manager.broadcast,
+        {
+            "event": "tables_updated",
+            "detail": {
+                "type": "pagamento_registrado",
+                "comanda_id": comanda_id,
+                "metodo": pag_in.metodo,
+                "valor": pag_in.valor,
+                "status": pag_status,
+                "garcom_nome": current_user.nome,
+                "mesa_id": comanda.mesa_id
+            }
+        },
+        rest_id,
+    )
     return novo_pagamento
 
 
@@ -838,7 +1158,11 @@ def aprovar_pagamento(
 ):
     """Aprova um pagamento pendente em dinheiro, debitando os valores e liquidando a comanda."""
     check_caixa_permission(current_user)
-    pagamento = db.query(Pagamento).filter(Pagamento.id == pagamento_id).first()
+    rest_id = require_tenant_id()
+    pagamento = db.query(Pagamento).filter(
+        Pagamento.restaurante_id == rest_id,
+        Pagamento.id == pagamento_id,
+    ).first()
     if not pagamento:
         raise HTTPException(status_code=404, detail="Pagamento não encontrado")
     if pagamento.status != "pendente":
@@ -846,14 +1170,14 @@ def aprovar_pagamento(
         
     pagamento.status = "aprovado"
     comanda = pagamento.comanda
-    comanda.valor_pago += pagamento.valor
+    comanda.valor_pago = float(_valor_monetario(
+        _valor_monetario(comanda.valor_pago) + _valor_monetario(pagamento.valor)
+    ))
     
-    # Check if comanda is fully settled
-    total_de_itens_pendentes = len([i for i in comanda.itens if i.status != 'cancelado' and not i.pago])
-    subtotal_total = sum(i.preco_unit for i in comanda.itens if i.status != 'cancelado')
-    total_com_taxa = round(subtotal_total * 1.10, 2)
+    # Aprovar dinheiro também respeita o saldo monetário, sem depender de itens.
+    subtotal_total = float(_subtotal_ativo(comanda))
     
-    if total_de_itens_pendentes == 0 or comanda.valor_pago >= subtotal_total or comanda.valor_pago >= total_com_taxa:
+    if comanda.valor_pago >= subtotal_total:
         for i in comanda.itens:
             if i.status != 'cancelado':
                 i.pago = True
@@ -861,6 +1185,7 @@ def aprovar_pagamento(
         comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
         if comanda.mesa_id:
             other_open = db.query(Comanda).filter(
+                Comanda.restaurante_id == rest_id,
                 Comanda.mesa_id == comanda.mesa_id,
                 Comanda.fechada == False,
                 Comanda.id != comanda.id
@@ -873,13 +1198,13 @@ def aprovar_pagamento(
                         "status": "livre",
                         "comanda_id": None
                     }
-                })
+                }, rest_id)
         
     db.commit()
     db.refresh(pagamento)
     db.refresh(comanda)
     
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, rest_id)
     return pagamento
 
 
