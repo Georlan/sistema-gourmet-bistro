@@ -10,19 +10,26 @@ router = APIRouter(
 @router.websocket("/ws/cliente")
 async def websocket_cliente_endpoint(
     websocket: WebSocket,
-    restaurante_id: str = "1"
+    restaurante_id: str = None
 ):
     """
     WebSocket endpoint público para clientes do Cardápio Digital.
-    Aceita restaurante_id como int ou slug string (ex: '1', 'burger').
+    Aceita restaurante_id como int ou slug string. Exige restaurante_id válido.
     Registra conexão com client_type="client" para receber apenas eventos públicos.
     """
-    restaurante_id_val = 1
-    if restaurante_id:
-        try:
-            restaurante_id_val = int(restaurante_id)
-        except ValueError:
-            restaurante_id_val = 1
+    if not restaurante_id:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    restaurante_id_val = None
+    try:
+        restaurante_id_val = int(restaurante_id)
+    except ValueError:
+        pass
+
+    if not restaurante_id_val or restaurante_id_val <= 0:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
 
     await manager.connect(websocket, restaurante_id_val, client_type="client")
     try:

@@ -180,8 +180,14 @@ export default function CardapioDigital({
       };
     });
 
+    const targetRestauranteId = Number(activeBrand?.id);
+    if (!targetRestauranteId) {
+      alert("Erro: ID do restaurante não localizado na sessão atual.");
+      return;
+    }
+
     const orderPayload = {
-      restaurante_id: Number(activeBrand.id) || 1,
+      restaurante_id: targetRestauranteId,
       itens: cleanedItems,
       cliente_nome: customerName,
       cliente_telefone: customerPhone,

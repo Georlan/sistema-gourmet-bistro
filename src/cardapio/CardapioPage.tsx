@@ -25,10 +25,10 @@ import { smartSearchMatch } from "../domain";
 const getCategoryId = (name: string) =>
   'sec-' + name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-');
 
-function getRestaurantIdentifier(): string {
+function getRestaurantIdentifier(): string | null {
   // 1. Check query parameters first (high priority for testing)
   const params = new URLSearchParams(window.location.search);
-  const restaurantId = params.get("restaurant_id");
+  const restaurantId = params.get("restaurant_id") || params.get("restaurante_id");
   const slug = params.get("slug");
   
   if (restaurantId) return restaurantId;
@@ -42,8 +42,7 @@ function getRestaurantIdentifier(): string {
     return parts[0];
   }
 
-  // Fallback to default (restaurante_id = 1)
-  return "1";
+  return null;
 }
 
 export default function CardapioPage() {
@@ -182,6 +181,12 @@ export default function CardapioPage() {
     setErrorMsg("");
     const identifier = getRestaurantIdentifier();
 
+    if (!identifier) {
+      setErrorMsg("Restaurante não identificado. Informe o identificador no link de acesso (ex: ?restaurant_id=1 ou ?slug=koma-bistro).");
+      setIsLoading(false);
+      return;
+    }
+
     try {
       let restaurant: any = null;
       
@@ -201,24 +206,6 @@ export default function CardapioPage() {
             .from("restaurantes")
             .select("*")
             .eq("slug", identifier)
-            .maybeSingle();
-          if (data) restaurant = data;
-        }
-
-        if (!restaurant) {
-          const { data } = await supabase
-            .from("restaurantes")
-            .select("*")
-            .eq("id", 1)
-            .maybeSingle();
-          if (data) restaurant = data;
-        }
-
-        if (!restaurant) {
-          const { data } = await supabase
-            .from("restaurantes")
-            .select("*")
-            .limit(1)
             .maybeSingle();
           if (data) restaurant = data;
         }
@@ -939,12 +926,12 @@ export default function CardapioPage() {
               {errorMsg || "Não foi possível carregar os dados deste estabelecimento no momento."}
             </p>
           </div>
-          <a
-            href="?restaurant_id=1"
-            className="px-5 py-2.5 bg-emerald-500 text-slate-950 font-black text-[10px] uppercase tracking-wider rounded-xl hover:opacity-90 active:scale-95 transition"
+          <button
+            onClick={() => loadRestaurantData()}
+            className="px-5 py-2.5 bg-emerald-500 text-slate-950 font-black text-[10px] uppercase tracking-wider rounded-xl hover:opacity-90 active:scale-95 transition cursor-pointer"
           >
-            Acessar Restaurante de Teste
-          </a>
+            Tentar Novamente
+          </button>
         </div>
       </div>
     );
@@ -1441,11 +1428,11 @@ export default function CardapioPage() {
       )}
 
       {/* User Login/Register Modal */}
-      {isAuthOpen && (
+      {isAuthOpen && activeBrand?.id && (
         <CardapioAuthModal
           onClose={() => setIsAuthOpen(false)}
           onLoginSuccess={handleLoginSuccess}
-          restauranteId={activeBrand?.id ? Number(activeBrand.id) : 1}
+          restauranteId={Number(activeBrand.id)}
         />
       )}
 

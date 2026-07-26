@@ -923,9 +923,10 @@ def obter_configuracoes(
         if restaurante_id is not None:
             rest_id = restaurante_id
         else:
-            # Sem contexto e sem query param: usa 1 apenas como fallback
-            # de desenvolvimento (sistema single-tenant atual).
-            rest_id = 1
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Restaurante não identificado na sessão ou parâmetro da requisição."
+            )
 
     token_var = current_restaurante_id.set(rest_id)
     try:
@@ -1058,25 +1059,18 @@ def obter_configuracao_restaurante(
             slug = str(tenant_id)
 
     if not rest_id and not slug:
-        rest_id = current_restaurante_id.get() or (current_user.tenant_id if current_user else None) or 1
+        rest_id = current_restaurante_id.get() or (current_user.tenant_id if current_user else None) or (current_user.restaurante_id if current_user else None)
     
     restaurante = None
     if slug:
         restaurante = db.query(Restaurante).filter(Restaurante.slug == slug).first()
     if not restaurante and rest_id:
         restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
-    if not restaurante:
-        restaurante = db.query(Restaurante).filter(Restaurante.id == 1).first()
 
     if not restaurante:
-        rest_id = rest_id or 1
-        return RestauranteConfigResponse(
-            id=rest_id,
-            nome="Kôma Gourmet Bistrô",
-            subtitulo="Sincronizado com o Sistema Kôma PDV",
-            status_override="Automático",
-            cor_primaria="#00b894",
-            cor_fundo="#090a0f"
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Restaurante não encontrado."
         )
         
     return restaurante
@@ -1096,19 +1090,19 @@ def atualizar_configuracao_restaurante(
     current_user: Usuario = Depends(require_permission("configuracoes:administrar"))
 ):
     """Atualiza e persiste as configurações whitelabel de personalização do restaurante ativo."""
-    rest_id = tenant_id or require_tenant_id() or getattr(current_user, "tenant_id", None) or getattr(current_user, "restaurante_id", None) or 1
+    rest_id = tenant_id or getattr(current_user, "restaurante_id", None) or getattr(current_user, "tenant_id", None) or current_restaurante_id.get()
+    if not rest_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Restaurante não identificado na sessão do usuário."
+        )
     
     restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
     if not restaurante:
-        restaurante = Restaurante(
-            id=rest_id,
-            nome="Kôma Gourmet Bistrô",
-            plano="pocket",
-            status_override="Automático",
-            cor_primaria="#00b894",
-            cor_fundo="#090a0f"
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Restaurante não encontrado para atualização."
         )
-        db.add(restaurante)
         
     if config_in.nome is not None:
         restaurante.nome = config_in.nome

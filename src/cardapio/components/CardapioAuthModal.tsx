@@ -10,10 +10,10 @@ import { API_BASE_URL } from "../../config/api";
 interface CardapioAuthModalProps {
   onClose: () => void;
   onLoginSuccess: (userProfile: any) => void;
-  restauranteId?: number;
+  restauranteId: number;
 }
 
-export default function CardapioAuthModal({ onClose, onLoginSuccess, restauranteId = 1 }: CardapioAuthModalProps) {
+export default function CardapioAuthModal({ onClose, onLoginSuccess, restauranteId }: CardapioAuthModalProps) {
   const [step, setStep] = useState<"input" | "otp">("input");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");

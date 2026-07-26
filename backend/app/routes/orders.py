@@ -53,7 +53,7 @@ def print_in_background(
     ticket_text: str,
     document_type: str = "producao",
     source_type: str = "pedido",
-    source_id: str = "1",
+    source_id: str = "",
     restaurante_id: int | None = None,
 ):
     try:

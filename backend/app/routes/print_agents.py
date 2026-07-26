@@ -150,7 +150,7 @@ def inject_print_job(
             status_code=400,
             detail=(
                 "restaurante_id não pôde ser determinado. "
-                "Passe-o explicitamente no body: {\"restaurante_id\": 1, ...}"
+                "Passe-o explicitamente no body: {\"restaurante_id\": <ID_RESTAURANTE>, ...}"
             )
         )
 
