@@ -313,11 +313,15 @@ def _replace_tenant_policy(bind, table: str, optimized: bool = True) -> None:
 
     if optimized:
         tenant_expression = """
-            (
-                SELECT NULLIF(
-                    current_setting('app.current_restaurante_id', true), ''
-                )::integer
-            )
+            NULLIF(
+                (
+                    SELECT current_setting(
+                        'app.current_restaurante_id',
+                        true
+                    )
+                ),
+                ''
+            )::integer
         """
     else:
         tenant_expression = """
@@ -381,7 +385,8 @@ def _secure_default_privileges() -> None:
     # exposes them. Existing intentional public-menu grants are not changed.
     op.execute("""
         ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
-        REVOKE SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
+        REVOKE SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER,
+        MAINTAIN
         ON TABLES FROM anon, authenticated
     """)
     op.execute("""
