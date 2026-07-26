@@ -273,6 +273,134 @@ def test_pagamento_parcial_abate_saldo_e_exato_libera_mesa():
         db.close()
 
 
+def test_pagamento_mesa_por_itens_e_pagamento_livre_coexistem():
+    """
+    A seleção dá baixa visual nos itens escolhidos, enquanto pagamentos sem
+    seleção continuam abatendo somente o saldo monetário global da mesa.
+    """
+    headers = get_pdv_auth_headers()
+    assert client.post(
+        "/caixa/turno/abrir",
+        json={"saldo_inicial": 100.0},
+        headers=headers,
+    ).status_code == 201
+    criar_comanda_mesa(
+        comanda_id="cmd-mesa-itens",
+        item_id="item-mesa-selecionado",
+        valor=15.0,
+        numero_pedido=4251,
+    )
+
+    db = SessionLocal()
+    try:
+        db.add(Item(
+            id="item-mesa-livre",
+            restaurante_id=777,
+            comanda_id="cmd-mesa-itens",
+            lancamento_id="lan-cmd-mesa-itens",
+            produto_id="prod-pdv-777",
+            preco_unit=27.0,
+            status="pronto",
+            pago=False,
+        ))
+        db.commit()
+    finally:
+        db.close()
+
+    # Uma seleção não pode receber valor inferior e fingir que o item foi pago.
+    incompleto = client.post(
+        "/caixa/mesas/7/pagar",
+        json={
+            "valor": 10.0,
+            "metodo": "pix",
+            "incluir_taxa_servico": True,
+            "item_ids": ["item-mesa-selecionado"],
+            "idempotency_key": "mesa-item-valor-incompleto",
+        },
+        headers=headers,
+    )
+    assert incompleto.status_code == 400
+
+    por_item = client.post(
+        "/caixa/mesas/7/pagar",
+        json={
+            "valor": 16.5,
+            "metodo": "pix",
+            "incluir_taxa_servico": True,
+            "item_ids": ["item-mesa-selecionado"],
+            "idempotency_key": "mesa-item-selecionado",
+        },
+        headers=headers,
+    )
+    assert por_item.status_code == 201
+    assert por_item.json()["valor"] == 16.5
+
+    db = SessionLocal()
+    try:
+        comanda = db.query(Comanda).filter(
+            Comanda.id == "cmd-mesa-itens"
+        ).one()
+        selecionado = db.query(Item).filter(
+            Item.id == "item-mesa-selecionado"
+        ).one()
+        livre = db.query(Item).filter(Item.id == "item-mesa-livre").one()
+        assert comanda.valor_pago == 16.5
+        assert comanda.fechada is False
+        assert selecionado.pago is True
+        assert livre.pago is False
+    finally:
+        db.close()
+
+    # Sem item_ids, a baixa continua sendo livre e não altera o item restante.
+    livre_parcial = client.post(
+        "/caixa/mesas/7/pagar",
+        json={
+            "valor": 5.0,
+            "metodo": "cartao_debito",
+            "incluir_taxa_servico": True,
+            "idempotency_key": "mesa-pagamento-livre-parcial",
+        },
+        headers=headers,
+    )
+    assert livre_parcial.status_code == 201
+
+    db = SessionLocal()
+    try:
+        comanda = db.query(Comanda).filter(
+            Comanda.id == "cmd-mesa-itens"
+        ).one()
+        livre = db.query(Item).filter(Item.id == "item-mesa-livre").one()
+        assert comanda.valor_pago == 21.5
+        assert comanda.fechada is False
+        assert livre.pago is False
+    finally:
+        db.close()
+
+    restante = client.post(
+        "/caixa/mesas/7/pagar",
+        json={
+            "valor": 24.7,
+            "metodo": "dinheiro",
+            "incluir_taxa_servico": True,
+            "idempotency_key": "mesa-pagamento-livre-restante",
+        },
+        headers=headers,
+    )
+    assert restante.status_code == 201
+
+    db = SessionLocal()
+    try:
+        comanda = db.query(Comanda).filter(
+            Comanda.id == "cmd-mesa-itens"
+        ).one()
+        livre = db.query(Item).filter(Item.id == "item-mesa-livre").one()
+        assert comanda.valor_pago == 46.2
+        assert comanda.fechada is True
+        assert livre.pago is True
+    finally:
+        db.close()
+
+
 def test_pagamento_da_mesa_distribui_entre_multiplas_comandas():
     """Uma única baixa deve ser atômica mesmo com comandas agrupadas."""
     headers = get_pdv_auth_headers()

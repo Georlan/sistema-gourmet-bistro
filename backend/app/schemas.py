@@ -345,7 +345,7 @@ class PagamentoMesaRequest(PagamentoRequest):
     valor: float = Field(gt=0)
     idempotency_key: str = Field(min_length=8, max_length=128)
     incluir_taxa_servico: bool = True
-    item_ids: None = None
+    item_ids: Optional[List[str]] = None
 
 class PagamentoResponse(BaseModel):
     id: str

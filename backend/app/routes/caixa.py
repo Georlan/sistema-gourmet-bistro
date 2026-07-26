@@ -632,6 +632,23 @@ def _subtotal_ativo(comanda: Comanda) -> Decimal:
     ))
 
 
+def _percentual_taxa_servico(
+    incluir_taxa_servico: bool,
+    config: Optional[ConfiguracaoRestaurante],
+) -> Decimal:
+    if not incluir_taxa_servico or not (
+        config.taxa_servico_ativa if config else True
+    ):
+        return Decimal("0.00")
+
+    taxa_configurada = (
+        config.taxa_servico_padrao
+        if config and config.taxa_servico_padrao is not None
+        else 10.0
+    )
+    return Decimal(str(taxa_configurada))
+
+
 def _debitos_da_mesa(
     comandas: List[Comanda],
     incluir_taxa_servico: bool,
@@ -641,14 +658,10 @@ def _debitos_da_mesa(
     subtotais = [_subtotal_ativo(comanda) for comanda in comandas]
     subtotal_mesa = sum(subtotais, Decimal("0.00"))
 
-    taxa_percentual = Decimal("0.00")
-    if incluir_taxa_servico and (config.taxa_servico_ativa if config else True):
-        taxa_configurada = (
-            config.taxa_servico_padrao
-            if config and config.taxa_servico_padrao is not None
-            else 10.0
-        )
-        taxa_percentual = Decimal(str(taxa_configurada))
+    taxa_percentual = _percentual_taxa_servico(
+        incluir_taxa_servico,
+        config,
+    )
 
     total_mesa = _valor_monetario(
         subtotal_mesa * (Decimal("1.00") + taxa_percentual / Decimal("100"))
@@ -747,8 +760,9 @@ def registrar_pagamento_mesa(
     Abate um valor do saldo global da mesa em uma única transação.
 
     O pagamento pode ser parcial e é distribuído entre as comandas abertas.
-    Itens individuais não controlam o fechamento: a mesa só é liberada quando
-    todo o saldo monetário chega a zero.
+    Opcionalmente, item_ids registra quais itens foram quitados, sem fazer o
+    fechamento depender deles: a mesa só é liberada quando todo o saldo
+    monetário chega a zero.
     """
     check_caixa_permission(current_user)
     rest_id = require_tenant_id()
@@ -804,6 +818,30 @@ def registrar_pagamento_mesa(
     config = db.query(ConfiguracaoRestaurante).filter(
         ConfiguracaoRestaurante.restaurante_id == rest_id
     ).first()
+
+    itens_selecionados: List[Item] = []
+    if pag_in.item_ids:
+        ids_solicitados = list(dict.fromkeys(pag_in.item_ids))
+        itens_disponiveis = {
+            item.id: item
+            for comanda in comandas
+            for item in comanda.itens
+            if item.status != "cancelado" and not item.pago
+        }
+        itens_selecionados = [
+            itens_disponiveis[item_id]
+            for item_id in ids_solicitados
+            if item_id in itens_disponiveis
+        ]
+        if len(itens_selecionados) != len(ids_solicitados):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Um ou mais itens selecionados não pertencem à mesa, "
+                    "foram cancelados ou já estão pagos."
+                ),
+            )
+
     debitos = _debitos_da_mesa(
         comandas,
         pag_in.incluir_taxa_servico,
@@ -820,6 +858,30 @@ def registrar_pagamento_mesa(
         )
 
     valor_solicitado = _valor_monetario(pag_in.valor)
+    if itens_selecionados:
+        subtotal_selecionado = _valor_monetario(sum(
+            Decimal(str(item.preco_unit or 0))
+            for item in itens_selecionados
+        ))
+        taxa_percentual = _percentual_taxa_servico(
+            pag_in.incluir_taxa_servico,
+            config,
+        )
+        total_selecionado = _valor_monetario(
+            subtotal_selecionado
+            * (Decimal("1.00") + taxa_percentual / Decimal("100"))
+        )
+        valor_necessario = min(total_selecionado, saldo_mesa)
+        if valor_solicitado < valor_necessario:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Para dar baixa nos itens selecionados, receba o valor "
+                    "total da seleção ou limpe a seleção para lançar um "
+                    "pagamento livre."
+                ),
+            )
+
     valor_aplicado = min(valor_solicitado, saldo_mesa)
     restante_a_distribuir = valor_aplicado
     agora = datetime.datetime.now(datetime.timezone.utc)
@@ -848,6 +910,10 @@ def registrar_pagamento_mesa(
             comanda.fechado_em = agora
             comanda.status_comanda = None
             comandas_quitadas.append(comanda)
+
+    if itens_selecionados:
+        for item in itens_selecionados:
+            item.pago = True
 
     comanda_referencia = next(
         debito["comanda"]
