@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from app.database import Base, get_db, current_restaurante_id
 from app.models import Restaurante, Usuario, PrintAgentToken, PrintJob
 from app.routes.print_agents import hash_token
+from app.security import create_access_token
 from app.main import app
 
 DB_FILE = "./test_print_agents.db"
@@ -39,7 +40,25 @@ def setup_database():
         db = TestingSessionLocal()
 
         db.merge(Restaurante(id=1, nome="Print Test Bistro", plano="bistro"))
+        db.merge(Restaurante(id=2, nome="Print Test Bistro 2", plano="bistro"))
         db.flush()
+
+        db.add(Usuario(
+            id="2",
+            restaurante_id=2,
+            nome="Admin Restaurante 2",
+            email="admin2@teste.local",
+            cargo="admin",
+            status="ativo",
+        ))
+        db.add(Usuario(
+            id="garcom-2",
+            restaurante_id=2,
+            nome="Garçom Restaurante 2",
+            email="garcom2@teste.local",
+            cargo="garcom",
+            status="ativo",
+        ))
 
         # Agente 1 e Agente 2
         t1 = hash_token("token_agent_1")
@@ -59,6 +78,17 @@ def setup_database():
             status="pending",
             idempotency_key="idemp:1001"
         ))
+        db.add(PrintJob(
+            id="job-2001",
+            restaurante_id=2,
+            document_type="ticket_cozinha",
+            destination="COZINHA",
+            source_type="comanda",
+            source_id="cmd-2",
+            payload_text="1x Pedido tenant 2",
+            status="pending",
+            idempotency_key="idemp:2001"
+        ))
 
         db.commit()
         db.close()
@@ -71,6 +101,15 @@ def setup_database():
             os.remove(DB_FILE)
         except Exception:
             pass
+
+
+def jwt_headers(user_id: str, restaurante_id: int, role: str) -> dict[str, str]:
+    token = create_access_token(
+        subject=user_id,
+        restaurante_id=restaurante_id,
+        role=role,
+    )
+    return {"Authorization": f"Bearer {token}"}
 
 
 def test_atomic_claim_job_success():
@@ -127,3 +166,104 @@ def test_stuck_job_recovery():
     # O job travado deve ter sido liberado para 'pending' e retornado
     next_job = resp.json()
     assert next_job is not None
+
+
+@pytest.mark.parametrize(
+    ("path", "payload"),
+    [
+        (
+            "/api/print-agents/jobs/inject",
+            {"payload_text": "teste sem permissão"},
+        ),
+        (
+            "/api/print-agents/register",
+            {"agent_id": "agent-sem-permissao"},
+        ),
+        (
+            "/api/print-agents/jobs/job-2001/reprint",
+            None,
+        ),
+    ],
+)
+def test_admin_print_routes_reject_garcom(path, payload):
+    client = TestClient(app)
+    headers = jwt_headers("garcom-2", 2, "garcom")
+
+    response = client.post(path, headers=headers, json=payload)
+
+    assert response.status_code == 403
+
+
+def test_inject_uses_tenant_from_authenticated_user_id_2():
+    client = TestClient(app)
+    headers = jwt_headers("2", 2, "admin")
+
+    response = client.post(
+        "/api/print-agents/jobs/inject",
+        headers=headers,
+        json={"payload_text": "pedido do restaurante 2"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["restaurante_id"] == 2
+
+    tenant_token = current_restaurante_id.set(2)
+    db = TestingSessionLocal()
+    try:
+        job = db.query(PrintJob).filter(PrintJob.id == response.json()["job_id"]).one()
+        assert job.restaurante_id == 2
+    finally:
+        db.close()
+        current_restaurante_id.reset(tenant_token)
+
+
+def test_inject_rejects_cross_tenant_override_for_user_id_2():
+    client = TestClient(app)
+    headers = jwt_headers("2", 2, "admin")
+
+    response = client.post(
+        "/api/print-agents/jobs/inject",
+        headers=headers,
+        json={
+            "restaurante_id": 1,
+            "payload_text": "tentativa de cruzar tenant",
+        },
+    )
+
+    assert response.status_code == 403
+
+
+def test_register_and_reprint_stay_in_authenticated_tenant_2():
+    client = TestClient(app)
+    headers = jwt_headers("2", 2, "admin")
+
+    register_response = client.post(
+        "/api/print-agents/register",
+        headers=headers,
+        json={"agent_id": "agent-restaurante-2"},
+    )
+    assert register_response.status_code == 200
+    assert register_response.json()["restaurante_id"] == 2
+
+    cross_tenant_response = client.post(
+        "/api/print-agents/jobs/job-1001/reprint",
+        headers=headers,
+    )
+    assert cross_tenant_response.status_code == 404
+
+    reprint_response = client.post(
+        "/api/print-agents/jobs/job-2001/reprint",
+        headers=headers,
+    )
+    assert reprint_response.status_code == 200
+
+    tenant_token = current_restaurante_id.set(2)
+    db = TestingSessionLocal()
+    try:
+        reprint = db.query(PrintJob).filter(
+            PrintJob.id == reprint_response.json()["new_job_id"]
+        ).one()
+        assert reprint.restaurante_id == 2
+    finally:
+        db.close()
+        current_restaurante_id.reset(tenant_token)
