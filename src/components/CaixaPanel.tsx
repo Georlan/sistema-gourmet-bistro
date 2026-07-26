@@ -1053,7 +1053,10 @@ export function CaixaPanel({
     }
   };
 
-  const [dynamicMenu, setDynamicMenu] = useState<Product[]>(PRODUCTS);
+  const [dynamicMenu, setDynamicMenu] = useState<Product[]>(() => {
+    if (liveProdutos && liveProdutos.length > 0) return liveProdutos;
+    return [];
+  });
   // Real products loaded from backend
   const [apiProdutos, setApiProdutos] = useState<Product[]>([]);
   // Search state for Disponibilidade tab
@@ -1457,6 +1460,7 @@ export function CaixaPanel({
             )
           : data;
         setApiProdutos(sorted);
+        setDynamicMenu(sorted);
       }
     } catch (e) {
       console.error('Error fetching produtos', e);
@@ -1659,13 +1663,14 @@ export function CaixaPanel({
 
   // Sincronização em tempo real do cardápio via WebSocket / Props
   useEffect(() => {
-    if (liveProdutos && liveProdutos.length > 0) {
+    if (liveProdutos) {
       setApiProdutos(liveProdutos);
+      setDynamicMenu(liveProdutos);
     }
   }, [liveProdutos]);
 
   useEffect(() => {
-    if (liveCategorias && liveCategorias.length > 0) {
+    if (liveCategorias) {
       setApiCategorias(liveCategorias);
     }
   }, [liveCategorias]);
@@ -2335,8 +2340,12 @@ export function CaixaPanel({
 
   // FILTERED menu list for PDV
   const filteredProducts = dynamicMenu.filter(p => {
-    const catName = obterNomeCategoria(p.categoria);
-    const matchesCategory = pdvSelectedCategory === 'todos' || catName === pdvSelectedCategory || p.categoria === pdvSelectedCategory;
+    const catObj = apiCategorias.find(c => c.id === (p as any).categoria_id || c.id === p.categoria || c.nome === p.categoria);
+    const catName = catObj ? catObj.nome : (typeof p.categoria === 'string' ? p.categoria : '');
+    const matchesCategory = pdvSelectedCategory === 'todos' 
+      || catName === pdvSelectedCategory 
+      || (p as any).categoria_id === pdvSelectedCategory 
+      || p.categoria === pdvSelectedCategory;
     const matchesSearch = !pdvSearch || smartSearchMatch(`${p.nome} ${p.descricao || ''}`, pdvSearch);
     return matchesSearch && matchesCategory;
   });
@@ -3422,17 +3431,17 @@ export function CaixaPanel({
                     >
                       Todos
                     </button>
-                    {CATEGORIES.map(cat => (
+                    {apiCategorias.map(catObj => (
                       <button
-                        key={cat}
+                        key={catObj.id || catObj.nome}
                         type="button"
-                        onClick={() => setPdvSelectedCategory(cat)}
-                        className={`px-3 py-1.5 text-[10px] font-bold rounded-lg cursor-pointer whitespace-nowrap transition-all border ${pdvSelectedCategory === cat
+                        onClick={() => setPdvSelectedCategory(catObj.nome)}
+                        className={`px-3 py-1.5 text-[10px] font-bold rounded-lg cursor-pointer whitespace-nowrap transition-all border ${pdvSelectedCategory === catObj.nome
                           ? 'bg-emerald-600 text-white border-transparent'
                           : 'bg-[#121214] border-[#27272A] text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
                           }`}
                       >
-                        {cat}
+                        {catObj.nome}
                       </button>
                     ))}
                   </div>
@@ -5537,23 +5546,19 @@ export function CaixaPanel({
                 </div>
 
                 {/* Atalhos Rápidos em Massa */}
-                <div className="space-y-2 bg-[#121214]/40 p-3 rounded-xl border border-[#27272A]/50 text-left">
-                  <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Atalhos de Pausa em Lote:</span>
-                  <div className="flex flex-wrap gap-2 text-[8px] font-bold">
-                    <div className="flex gap-1.5 border-r border-[#27272A]/80 pr-2">
-                      <button type="button" onClick={() => handleBatchAvailability('pastel', false)} className="px-2 py-1 bg-red-950/30 hover:bg-red-900/40 text-red-400 hover:text-white rounded border border-red-900/50 cursor-pointer">Esgotar Pastéis</button>
-                      <button type="button" onClick={() => handleBatchAvailability('pastel', true)} className="px-2 py-1 bg-emerald-950/30 hover:bg-emerald-900/40 text-emerald-400 hover:text-white rounded border border-emerald-900/50 cursor-pointer">Liberar Pastéis</button>
-                    </div>
-                    <div className="flex gap-1.5 border-r border-[#27272A]/80 pr-2">
-                      <button type="button" onClick={() => handleBatchAvailability('baguete', false)} className="px-2 py-1 bg-red-950/30 hover:bg-red-900/40 text-red-400 hover:text-white rounded border border-red-900/50 cursor-pointer">Esgotar Baguetes</button>
-                      <button type="button" onClick={() => handleBatchAvailability('baguete', true)} className="px-2 py-1 bg-emerald-950/30 hover:bg-emerald-900/40 text-emerald-400 hover:text-white rounded border border-emerald-900/50 cursor-pointer">Liberar Baguetes</button>
-                    </div>
-                    <div className="flex gap-1.5">
-                      <button type="button" onClick={() => handleBatchAvailability('hambúrguer', false)} className="px-2 py-1 bg-red-950/30 hover:bg-red-900/40 text-red-400 hover:text-white rounded border border-red-900/50 cursor-pointer">Esgotar Burgers</button>
-                      <button type="button" onClick={() => handleBatchAvailability('hambúrguer', true)} className="px-2 py-1 bg-emerald-950/30 hover:bg-emerald-900/40 text-emerald-400 hover:text-white rounded border border-emerald-900/50 cursor-pointer">Liberar Burgers</button>
+                {apiCategorias.length > 0 && (
+                  <div className="space-y-2 bg-[#121214]/40 p-3 rounded-xl border border-[#27272A]/50 text-left">
+                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Atalhos de Pausa em Lote:</span>
+                    <div className="flex flex-wrap gap-2 text-[8px] font-bold">
+                      {apiCategorias.map(catObj => (
+                        <div key={catObj.id} className="flex gap-1.5 border-r border-[#27272A]/80 pr-2 last:border-r-0">
+                          <button type="button" onClick={() => handleBatchAvailability(catObj.id, false)} className="px-2 py-1 bg-red-950/30 hover:bg-red-900/40 text-red-400 hover:text-white rounded border border-red-900/50 cursor-pointer">Esgotar {catObj.nome}</button>
+                          <button type="button" onClick={() => handleBatchAvailability(catObj.id, true)} className="px-2 py-1 bg-emerald-950/30 hover:bg-emerald-900/40 text-emerald-400 hover:text-white rounded border border-emerald-900/50 cursor-pointer">Liberar {catObj.nome}</button>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                </div>
+                )}
 
                 {/* Dynamic Category Grouping */}
                 {apiCategorias.map((catObj) => {
