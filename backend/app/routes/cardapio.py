@@ -57,9 +57,27 @@ def criar_pedido_online(
 ):
     """
     Recebe um novo pedido do cardápio digital do cliente final.
-    Cria a comanda do tipo 'delivery' e seus respectivos itens de rascunho,
-    notificando o caixa em tempo real.
+    Cria uma comanda de Delivery ou Retirada e seus respectivos itens,
+    notificando o caixa em tempo real para aceite.
     """
+    modalidade = payload.tipo_pedido.strip().lower()
+    if modalidade not in {"delivery", "retirada"}:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="tipo_pedido deve ser 'delivery' ou 'retirada'."
+        )
+
+    endereco_entrega = payload.endereco_entrega.strip()
+    if modalidade == "delivery" and not endereco_entrega:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="O endereço de entrega é obrigatório para pedidos de delivery."
+        )
+
+    tipo_comanda = "Retirada" if modalidade == "retirada" else "Delivery"
+    endereco_comanda = None if modalidade == "retirada" else endereco_entrega
+    taxa_entrega = 0.0 if modalidade == "retirada" else payload.taxa_entrega
+
     # 1. Verificar se o restaurante existe
     # (Usaremos o restaurante_id do payload ou do contexto ativo para definir o tenant correto)
     rest_id = payload.restaurante_id or current_restaurante_id.get()
@@ -90,14 +108,15 @@ def criar_pedido_online(
         
         if cliente:
             cliente.nome = payload.cliente_nome
-            cliente.endereco = payload.endereco_entrega
+            if endereco_comanda:
+                cliente.endereco = endereco_comanda
         else:
             cliente = Cliente(
                 id=str(uuid.uuid4()),
                 restaurante_id=rest_id,
                 telefone=telefone_clean,
                 nome=payload.cliente_nome,
-                endereco=payload.endereco_entrega,
+                endereco=endereco_comanda,
                 saldo_pontos=0,
                 saldo_cashback=0.0
             )
@@ -111,15 +130,15 @@ def criar_pedido_online(
             restaurante_id=rest_id,
             mesa_id=None,
             garcom_id=garcom_id,
-            tipo="Delivery",
+            tipo=tipo_comanda,
             identificador=payload.cliente_nome,
             numero_pedido=numero_pedido,
             fechada=False,
             criado_em=datetime.datetime.now(datetime.timezone.utc),
             delivery_status=auto_delivery_status,
             delivery_telefone=telefone_clean,
-            delivery_endereco=payload.endereco_entrega,
-            delivery_taxa=payload.taxa_entrega,
+            delivery_endereco=endereco_comanda,
+            delivery_taxa=taxa_entrega,
             status_comanda=status_inicial
         )
         db.add(nova_comanda)
@@ -139,7 +158,8 @@ def criar_pedido_online(
         # 6. Criar os Itens do Pedido
         for item_in in payload.itens:
             produto = db.query(Produto).filter(
-                Produto.id == item_in.produto_id, 
+                Produto.id == item_in.produto_id,
+                Produto.ativo == True,
                 Produto.restaurante_id == rest_id
             ).first()
             
@@ -149,22 +169,26 @@ def criar_pedido_online(
                     detail=f"Produto '{item_in.produto_id}' não encontrado ou inativo para este estabelecimento."
                 )
                 
-            novo_item = Item(
-                id=f"i-{uuid.uuid4().hex[:8]}",
-                restaurante_id=rest_id,
-                comanda_id=comanda_id,
-                lancamento_id=lancamento_id,
-                produto_id=item_in.produto_id,
-                preco_unit=produto.preco,
-                observacao=item_in.observacao or "",
-                cliente_nome=item_in.cliente_nome or payload.cliente_nome,
-                status="preparando",
-                pago=False
-            )
-            db.add(novo_item)
+            for _ in range(item_in.quantidade):
+                novo_item = Item(
+                    id=f"i-{uuid.uuid4().hex[:8]}",
+                    restaurante_id=rest_id,
+                    comanda_id=comanda_id,
+                    lancamento_id=lancamento_id,
+                    produto_id=item_in.produto_id,
+                    preco_unit=produto.preco,
+                    observacao=item_in.observacao or "",
+                    cliente_nome=item_in.cliente_nome or payload.cliente_nome,
+                    status="preparando",
+                    pago=False
+                )
+                db.add(novo_item)
             
         db.commit()
         
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(

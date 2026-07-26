@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import List, Optional, Union, Any
 from datetime import datetime
 import uuid
@@ -684,7 +684,7 @@ class RestauranteConfigUpdate(BaseModel):
 # ----------------- PEDIDOS CARDAPIO DIGITAL -----------------
 class CardapioItemPedido(BaseModel):
     produto_id: str
-    quantidade: int
+    quantidade: int = Field(gt=0)
     observacao: Optional[str] = ""
     cliente_nome: Optional[str] = "Cliente Online"
 
@@ -709,7 +709,5 @@ class CardapioVerificarOtpRequest(BaseModel):
     restaurante_id: int
     telefone: str
     otp: str
-
-
 
 

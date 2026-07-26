@@ -59,13 +59,21 @@ def print_in_background(
     try:
         import datetime
         from ..database import SessionLocal
-        from ..models import PrintJob
+        from ..models import PrintJob, Restaurante
         if not isinstance(restaurante_id, int) or isinstance(restaurante_id, bool) or restaurante_id <= 0:
             raise ValueError("Background de impressão exige restaurante_id explícito")
         tenant_context = current_restaurante_id.set(restaurante_id)
         db = None
         try:
             db = SessionLocal(restaurante_id=restaurante_id)
+            restaurante = db.query(Restaurante).filter(Restaurante.id == restaurante_id).first()
+            if restaurante and (restaurante.plano or "pocket").strip().lower() == "pocket":
+                logger.info(
+                    "Impressão ignorada para restaurante %s: recurso não incluído no Kôma Pocket.",
+                    restaurante_id,
+                )
+                return
+
             dest_clean = "COZINHA"
             p_upper = (printer_name or "").upper()
             if "FECHAMENTO" in p_upper or "RECIBO" in p_upper or "VALORES" in p_upper:
@@ -1191,11 +1199,33 @@ def atualizar_status_delivery(
     """
     Atualiza o status de entrega do delivery.
     """
+    status_normalizado = status_novo.strip().lower()
+    status_validos = {"pendente", "producao", "pronto", "transito", "finalizado", "recusado"}
+    if status_normalizado not in status_validos:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Status inválido. Use um de: {', '.join(sorted(status_validos))}"
+        )
+
     comanda = db.query(Comanda).filter(Comanda.id == comanda_id).first()
     if not comanda:
         raise HTTPException(status_code=404, detail="Comanda não encontrada")
-    
-    comanda.delivery_status = status_novo
+
+    if comanda.tipo not in {"Delivery", "Entrega", "Retirada"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A comanda informada não é um pedido online de delivery ou retirada."
+        )
+
+    comanda.delivery_status = status_normalizado
+    if status_normalizado == "recusado":
+        for item in comanda.itens:
+            if item.status != "cancelado":
+                item.status = "cancelado"
+                item.cancelado_por = current_user.id
+        comanda.fechada = True
+        comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
+
     db.commit()
     db.refresh(comanda)
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())

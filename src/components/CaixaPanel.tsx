@@ -29,6 +29,13 @@ import { EquipeCargosTab } from './equipe/EquipeCargosTab';
 import { PRODUCTS, CATEGORIES } from '../data';
 import { getProductPresets, obterNomeCategoria, smartSearchMatch } from '../domain';
 import { API } from '../config/caixaService';
+import {
+  ONLINE_MENU_ADDON,
+  SUBSCRIPTION_PLANS,
+  SubscriptionPlanId,
+  getSubscriptionPlan,
+  normalizeSubscriptionPlan
+} from '../config/subscriptionPlans';
 import { ComandaActionsModal } from './ComandaActionsModal';
 import clsx from 'clsx';
 
@@ -88,9 +95,12 @@ interface SimulatedDeliveryOrder {
   itens: string;
   total: number;
   canal: 'ifood' | 'site' | 'whats';
+  modalidade: 'delivery' | 'retirada';
+  pago: boolean;
   status: 'pendente' | 'analise' | 'producao' | 'pronto' | 'transito';
   endereco?: string;
   criadoEm: string;
+  numeroPedido?: number;
 }
 
 interface SystemUser {
@@ -151,11 +161,10 @@ export function CaixaPanel({
   onOptimisticAddOrder,
   onRemovePendingPaymentOptimistic
 }: CaixaPanelProps) {
-  const plano = restauranteConfig?.plano?.toLowerCase() || 'bistro';
-  const isBistro = true; // Forçado como padrão do bistrô para testes
-  const isPocket = plano === 'pocket' && !isBistro;
-  const isDelivery = plano === 'delivery' && !isBistro;
-  const isPremium = plano === 'premium' && !isBistro;
+  const currentPlanId = normalizeSubscriptionPlan(restauranteConfig?.plano);
+  const currentPlan = getSubscriptionPlan(currentPlanId);
+  const hasPrinting = currentPlanId !== 'pocket';
+  const hasOnlineMenu = currentPlanId === 'premium' || restauranteConfig?.cardapio_online_addon === true;
 
 
   // Turno & Sync state
@@ -171,8 +180,6 @@ export function CaixaPanel({
     setToastData({ msg, type });
     setTimeout(() => setToastData(null), 3000);
   };
-  const handleRecusarPedido = async (id: any) => {};
-  const handleFinalizarPedido = async (id: any) => {};
   const [pdDeliveryAddress, setPdDeliveryAddress] = useState('');
   const handleSaveFidelityConfig = (e: any) => { e.preventDefault(); };
   const onRefreshCategorias = async () => {};
@@ -262,12 +269,14 @@ export function CaixaPanel({
   // ⚡ FILTRAGEM DINÂMICA DAS COMANDAS DE MESA PARA O KANBAN
   // ============================================================================
 
-  // Col 1 — Preparo: itens 'preparando' apenas de mesas/consumo local (delivery/retirada/balcão ignorados aqui)
+  // Col 1 — somente pedidos vinculados a uma mesa física, lançados pelo garçom ou caixa.
   const tableOrdersInProduction = (() => {
     const list: any[] = [];
     orders.forEach(comanda => {
-      const isDelivery = (comanda.tipo as string) === 'Delivery' || comanda.tipo === 'Entrega';
-      if (isDelivery) return;
+      const normalizedType = String(comanda.tipo || '').toLowerCase();
+      const isTableOrder = Number(comanda.mesaId) > 0
+        && !['delivery', 'entrega', 'retirada'].includes(normalizedType);
+      if (!isTableOrder) return;
       if ((comanda as any).statusComanda === 'aguardando_pagamento') return;
       const itemsByLancamento: Record<string, OrderItem[]> = {};
       comanda.itens.forEach(item => {
@@ -302,8 +311,10 @@ export function CaixaPanel({
     const groupedByMesa: Record<number, Array<{ comanda: any; itens: any[]; contaPedida: boolean }>> = {};
 
     orders.forEach(comanda => {
-      const isDelivery = (comanda.tipo as string) === 'Delivery' || comanda.tipo === 'Entrega';
-      if (isDelivery) return;
+      const normalizedType = String(comanda.tipo || '').toLowerCase();
+      const isTableOrder = Number(comanda.mesaId) > 0
+        && !['delivery', 'entrega', 'retirada'].includes(normalizedType);
+      if (!isTableOrder) return;
 
       const unpaid = comanda.itens.filter(i => (i.status as string) !== 'cancelado' && !i.pago);
       const readyItems = comanda.itens.filter(item => item.status === 'pronto' && !item.pago);
@@ -849,7 +860,8 @@ export function CaixaPanel({
 
   const mapComandaToSimulatedDelivery = (c: any): SimulatedDeliveryOrder => {
     const itemCounts: { [name: string]: number } = {};
-    c.itens.forEach((it: any) => {
+    const activeItems = c.itens.filter((it: any) => it.status !== 'cancelado');
+    activeItems.forEach((it: any) => {
       if (it.status !== 'cancelado') {
         const name = it.produto?.nome || it.nome || 'Item';
         itemCounts[name] = (itemCounts[name] || 0) + 1;
@@ -859,8 +871,7 @@ export function CaixaPanel({
       .map(([name, qty]) => `${qty}x ${name}`)
       .join(' + ') || 'Nenhum item';
 
-    const subtotal = c.itens
-      .filter((it: any) => it.status !== 'cancelado')
+    const subtotal = activeItems
       .reduce((sum: number, it: any) => sum + (it.preco_unit || it.preco || 0), 0);
     const total = subtotal + (c.delivery_taxa || 0);
 
@@ -877,6 +888,12 @@ export function CaixaPanel({
       canal = 'whats';
     }
 
+    const rawAddress = String(c.delivery_endereco || '').trim();
+    const rawType = String(c.tipo || '').toLowerCase();
+    const modalidade = rawType === 'retirada' || /retirada\s+no\s+balc[aã]o/i.test(rawAddress)
+      ? 'retirada'
+      : 'delivery';
+
     return {
       id: c.id,
       cliente: c.identificador || 'Cliente Sem Nome',
@@ -884,9 +901,12 @@ export function CaixaPanel({
       itens: itensStr,
       total: total,
       canal: canal,
+      modalidade,
+      pago: activeItems.length > 0 && activeItems.every((it: any) => Boolean(it.pago)),
       status: c.delivery_status || 'pendente',
-      endereco: c.delivery_endereco || '',
-      criadoEm: criadoEm
+      endereco: modalidade === 'delivery' ? rawAddress : '',
+      criadoEm: criadoEm,
+      numeroPedido: c.numero_pedido
     };
   };
 
@@ -1032,6 +1052,14 @@ export function CaixaPanel({
     }
   };
 
+  const handleRecusarPedido = async (orderId: string) => {
+    await handleUpdateDeliveryStatus(orderId, 'recusado');
+  };
+
+  const handleFinalizarPedido = async (orderId: string) => {
+    await handleFecharDelivery(orderId);
+  };
+
   const handleAddMotoboy = async (e: React.FormEvent, newMotoboyNome: string, newMotoboyTelefone: string) => {
     e.preventDefault();
     if (!newMotoboyNome.trim() || !newMotoboyTelefone.trim()) return;
@@ -1065,7 +1093,11 @@ export function CaixaPanel({
   // Online payments & billing plans mock states
   const [payPixActive, setPayPixActive] = useState(true);
   const [payCardActive, setPayCardActive] = useState(true);
-  const [selectedPlan, setSelectedPlan] = useState<'gold'>('gold');
+  const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlanId>(currentPlanId);
+
+  useEffect(() => {
+    setSelectedPlan(currentPlanId);
+  }, [currentPlanId]);
 
   const [supportChats, setSupportChats] = useState<{ id: number; cliente: string; ultimaMsg: string; status: string; canal: string; }[]>([]);
 
@@ -2477,6 +2509,10 @@ export function CaixaPanel({
                 </span>
                 {group.items.map((tab) => {
                   const Icon = tab.icon;
+                  const isLocked = (
+                    (tab.id === 'impressao_salao' && !hasPrinting)
+                    || (tab.id === 'cardapio_digital' && !hasOnlineMenu)
+                  );
                   const isActive = (
                     tab.id === 'cardapio_digital' ? (activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital')
                     : tab.id === 'permissoes_cargos' ? (activeTab === 'permissoes_cargos' || (activeTab === 'configuracoes' && activeSubTab === 'equipe'))
@@ -2490,6 +2526,19 @@ export function CaixaPanel({
                     <button
                       key={tab.id}
                       onClick={() => {
+                        if (isLocked) {
+                          setActiveTab('assinatura_pix');
+                          setActiveSubTab('planos');
+                          showToast(
+                            tab.id === 'impressao_salao'
+                              ? 'A impressão está disponível a partir do Kôma Pro.'
+                              : currentPlanId === 'pro'
+                                ? `Ative o ${ONLINE_MENU_ADDON.name} ou migre para o Kôma Premium.`
+                                : 'O cardápio online está disponível no Kôma Pro como adicional e incluído no Premium.',
+                            'info'
+                          );
+                          return;
+                        }
                         if (tab.id === 'cardapio_digital') {
                           setActiveTab('cardapio_digital');
                           setActiveSubTab('cardapio_digital');
@@ -2518,7 +2567,9 @@ export function CaixaPanel({
                           handleTabChange(tab.id as any);
                         }
                       }}
-                      className={`w-full px-3.5 py-1.5 rounded-xl text-left font-semibold transition-all flex items-center justify-between cursor-pointer group ${isActive
+                      className={`w-full px-3.5 py-1.5 rounded-xl text-left font-semibold transition-all flex items-center justify-between cursor-pointer group ${isLocked
+                        ? 'text-gray-600 hover:text-gray-400 hover:bg-[#1C1C1F]/30 border border-transparent'
+                        : isActive
                         ? 'bg-[#10b981]/15 text-[#10b981] border border-[#10b981]/10 font-bold shadow-inner'
                         : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]/50 border border-transparent'
                         }`}
@@ -2532,6 +2583,7 @@ export function CaixaPanel({
                           {tableOrdersInProduction.length + simulatedOrders.filter(o => ['pendente', 'analise', 'producao', 'pronto', 'transito'].includes(o.status)).length + tableOrdersReady.length}
                         </span>
                       )}
+                      {isLocked && <Lock size={10} className="text-amber-500/70" />}
                     </button>
                   );
                 })}
@@ -2900,8 +2952,7 @@ export function CaixaPanel({
               )}
 
               {/* Controls bar */}
-              {!modoExclusivoSalao && !isBistro && (
-                <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-3', 'rounded-2xl', 'flex', 'flex-col', 'sm:flex-row', 'justify-between', 'items-start', 'sm:items-center', 'gap-3')}>
+              <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-3', 'rounded-2xl', 'flex', 'flex-col', 'sm:flex-row', 'justify-between', 'items-start', 'sm:items-center', 'gap-3')}>
                   <div className={clsx('flex', 'items-center', 'gap-4')}>
                     <label className={clsx('flex', 'items-center', 'gap-2', 'cursor-pointer', 'font-semibold', 'text-gray-300')}>
                       <input
@@ -2932,8 +2983,7 @@ export function CaixaPanel({
                       )}
                     </button>
                   </div>
-                </div>
-              )}
+              </div>
 
               {/* ── FLOATING DRAWER: Pedidos Pendentes ─────────────────────────────── */}
               {isDrawerOpen && (
@@ -2975,13 +3025,26 @@ export function CaixaPanel({
                           <div key={order.id} className="bg-[#1C1C1F] border border-amber-500/20 hover:border-amber-500/40 p-4 rounded-xl space-y-3 transition-all">
                             <div className="flex justify-between items-start">
                               <div>
-                                <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-amber-500/10 text-amber-400 rounded font-mono block w-fit mb-1">{order.canal}</span>
+                                <div className="flex flex-wrap gap-1 mb-1">
+                                  <span className={clsx(
+                                    'px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold rounded border font-mono',
+                                    order.modalidade === 'delivery'
+                                      ? 'bg-orange-500/15 text-orange-300 border-orange-500/25'
+                                      : 'bg-violet-500/15 text-violet-300 border-violet-500/25'
+                                  )}>
+                                    {order.modalidade === 'delivery' ? 'Delivery' : 'Retirada'}
+                                  </span>
+                                  <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-slate-500/10 text-slate-300 border border-slate-500/20 rounded font-mono">
+                                    {order.canal}
+                                  </span>
+                                </div>
                                 <strong className="text-white text-sm block">{order.cliente}</strong>
                                 <span className="text-[10px] text-gray-400 block">{order.telefone}</span>
                               </div>
                               <div className="text-right">
                                 <span className="font-bold text-amber-400 font-mono text-sm block">R$ {order.total.toFixed(2)}</span>
                                 <span className="text-[9px] text-gray-500">{order.criadoEm}</span>
+                                {order.numeroPedido && <span className="text-[8px] text-gray-600 font-mono block">#{order.numeroPedido}</span>}
                               </div>
                             </div>
 
@@ -3027,14 +3090,17 @@ export function CaixaPanel({
                 </div>
               )}
 
-              {/* Kanban columns (2 colunas no bistrô: Preparo + Fechar Conta) */}
-              <div className={clsx('flex-1', 'grid', 'grid-cols-1', isBistro || modoExclusivoSalao ? 'md:grid-cols-2' : 'md:grid-cols-3', 'gap-4')}>
+              {/* Kanban operacional universal: mesas, pedidos online e finalização. */}
+              <div className={clsx('flex-1', 'grid', 'grid-cols-1', 'md:grid-cols-3', 'gap-4')}>
 
 
                 {/* COLUMN 1: Em produção */}
                 <div className={clsx('bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden')}>
                   <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
-                    <span className={clsx('font-bold', 'text-gray-300', 'font-serif')}>Cozinha (Mesa)</span>
+                    <div>
+                      <span className={clsx('font-bold', 'text-white', 'font-serif', 'block')}>Mesas em atendimento</span>
+                      <span className="text-[8px] text-emerald-400/80 block mt-0.5">Lançados pelo garçom ou caixa</span>
+                    </div>
                     <span className={clsx('bg-[#10b981]/10', 'text-[#10b981]', 'font-bold', 'px-2', 'py-0.5', 'rounded-full', 'font-mono', 'text-[9px]')}>
                       {tableOrdersInProduction.length}
                     </span>
@@ -3061,7 +3127,7 @@ export function CaixaPanel({
                             <div 
                               key={`table-prod-${order.id}`} 
                               onClick={() => setSelectedKanbanOrder(order)}
-                              className={clsx('bg-[#121214]', 'border', 'border-[#27272A]/60', 'hover:border-[#10b981]/30', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all', 'text-left', 'cursor-pointer')}
+                              className={clsx('bg-linear-to-br', 'from-emerald-950/35', 'to-[#121214]', 'border', 'border-emerald-500/25', 'border-l-4', 'border-l-emerald-500', 'hover:border-emerald-400/50', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all', 'text-left', 'cursor-pointer', 'shadow-sm')}
                             >
                               <div className={clsx('flex', 'justify-between', 'items-start')}>
                                 <div>
@@ -3124,7 +3190,7 @@ export function CaixaPanel({
                                 className={clsx('w-full', 'py-1.5', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1')}
                               >
                                 <Check size={11} />
-                                <span>Pronto</span>
+                                <span>Pronto → pagamento</span>
                               </button>
                             </div>
                           );
@@ -3134,45 +3200,51 @@ export function CaixaPanel({
                   </div>
                 </div>
 
-                {/* COLUMN 2: Delivery & Retirada (Preparo) — oculto no modo bistrô */}
-                {!isBistro && <div className={clsx('bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden')}>
+                {/* COLUMN 2: pedidos online aceitos, delivery ou retirada. */}
+                <div className={clsx('bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden')}>
                   <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
-                    <span className={clsx('font-bold', 'text-gray-300', 'font-serif')}>Delivery & Retirada (Preparo)</span>
+                    <div>
+                      <span className={clsx('font-bold', 'text-white', 'font-serif', 'block')}>Online e retirada</span>
+                      <span className="text-[8px] text-orange-400/80 block mt-0.5">Pedidos aceitos no sino</span>
+                    </div>
                     <span className={clsx('bg-orange-500/10', 'text-orange-400', 'font-bold', 'px-2', 'py-0.5', 'rounded-full', 'font-mono', 'text-[9px]')}>
-                      {modoExclusivoSalao ? 0 : simulatedOrders.filter(o => o.status === 'producao').length}
+                      {simulatedOrders.filter(o => o.status === 'producao').length}
                     </span>
                   </div>
 
                   <div className={clsx('p-3', 'flex-1', 'overflow-y-auto', 'space-y-3')}>
-                    {(modoExclusivoSalao ? 0 : simulatedOrders.filter(o => o.status === 'producao').length) === 0 ? (
+                    {simulatedOrders.filter(o => o.status === 'producao').length === 0 ? (
                       <div className={clsx('py-20', 'text-center', 'text-gray-500', 'italic', 'text-[10px]')}>Nenhum pedido online em preparo</div>
                     ) : (
                       <>
-                        {!modoExclusivoSalao && simulatedOrders.filter(o => o.status === 'producao').map((order) => {
-                          const hasAddress = !!order.endereco;
-                          let badgeText = 'RETIRADA - PREPARANDO';
-                          let badgeColor = 'bg-amber-500/10 text-amber-400';
-                          
-                          if (hasAddress) {
-                            badgeText = 'DELIVERY - PREPARANDO';
-                            badgeColor = 'bg-orange-500/10 text-orange-400';
-                          } else if ((order as any).mesaId && (order as any).mesaId > 0) {
-                            badgeText = `MESA ${(order as any).mesaId} - PREPARANDO`;
-                            badgeColor = 'bg-emerald-500/10 text-emerald-400';
-                          }
-
-                          const buttonText = hasAddress ? 'SAIU PARA ENTREGA' : 'PEDIDO PRONTO';
-                          const buttonColor = hasAddress ? 'bg-orange-600 hover:bg-orange-700 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white';
+                        {simulatedOrders.filter(o => o.status === 'producao').map((order) => {
+                          const isDeliveryOrder = order.modalidade === 'delivery';
+                          const badgeText = isDeliveryOrder ? 'DELIVERY — PREPARANDO' : 'RETIRADA — PREPARANDO';
+                          const badgeColor = isDeliveryOrder
+                            ? 'bg-orange-500/15 text-orange-300 border-orange-500/25'
+                            : 'bg-violet-500/15 text-violet-300 border-violet-500/25';
+                          const buttonText = isDeliveryOrder ? 'Saiu para entrega' : 'Pronto para retirada';
+                          const buttonColor = isDeliveryOrder
+                            ? 'bg-orange-600 hover:bg-orange-700 text-white'
+                            : 'bg-violet-600 hover:bg-violet-700 text-white';
+                          const cardTone = isDeliveryOrder
+                            ? 'from-orange-950/35 border-orange-500/25 border-l-orange-500 hover:border-orange-400/50'
+                            : 'from-violet-950/35 border-violet-500/25 border-l-violet-500 hover:border-violet-400/50';
 
                           return (
                             <div 
                               key={order.id} 
                               onClick={() => openSimulatedOrderDetails(order)}
-                              className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'hover:border-[#10b981]/30', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all', 'cursor-pointer')}
+                              className={clsx('bg-linear-to-br', 'to-[#121214]', 'border', 'border-l-4', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all', 'cursor-pointer', 'shadow-sm', cardTone)}
                             >
                               <div className={clsx('flex', 'justify-between', 'items-start')}>
                                 <div>
-                                  <span className={clsx('px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold rounded font-mono block w-fit mb-1', badgeColor)}>{badgeText}</span>
+                                  <div className="flex flex-wrap gap-1 mb-1">
+                                    <span className={clsx('px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold rounded border font-mono block w-fit', badgeColor)}>{badgeText}</span>
+                                    <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold rounded border border-slate-500/20 bg-slate-500/10 text-slate-300 font-mono">
+                                      {order.canal}
+                                    </span>
+                                  </div>
                                   <strong className={clsx('text-white', 'text-xs', 'block')}>{order.cliente}</strong>
                                   <span className={clsx('text-[9px]', 'text-gray-400', 'block')}>{order.telefone}</span>
                                 </div>
@@ -3183,7 +3255,7 @@ export function CaixaPanel({
                                 {order.itens}
                               </p>
 
-                              {order.endereco && (
+                              {isDeliveryOrder && order.endereco && (
                                 <span className={clsx('text-[9px]', 'text-gray-400', 'flex', 'items-start', 'gap-1', 'block')}>
                                   <MapPin size={10} className={clsx('shrink-0', 'text-rose-500', 'mt-0.5')} />
                                   <span className="leading-relaxed">{order.endereco}</span>
@@ -3206,20 +3278,23 @@ export function CaixaPanel({
                       </>
                     )}
                   </div>
-                </div>}
+                </div>
 
-                {/* COLUMN 3: Fechar Conta (Mesas + Delivery/Retirada em trânsito) */}
+                {/* COLUMN 3: pagamento e finalização de todas as modalidades. */}
                 <div className={clsx('bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden')}>
                   <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
-                    <span className={clsx('font-bold', 'text-gray-300', 'font-serif')}>Fechar Conta</span>
+                    <div>
+                      <span className={clsx('font-bold', 'text-white', 'font-serif', 'block')}>Pagamento e finalização</span>
+                      <span className="text-[8px] text-blue-400/80 block mt-0.5">Prontos para receber ou concluir</span>
+                    </div>
                     <span className={clsx('bg-blue-500/10', 'text-blue-400', 'font-bold', 'px-2', 'py-0.5', 'rounded-full', 'font-mono', 'text-[9px]')}>
-                      {tableOrdersReady.length + ((modoExclusivoSalao || isBistro) ? 0 : simulatedOrders.filter(o => o.status === 'transito').length)}
+                      {tableOrdersReady.length + simulatedOrders.filter(o => o.status === 'transito').length}
                     </span>
                   </div>
 
                   <div className={clsx('p-3', 'flex-1', 'overflow-y-auto', 'space-y-3')}>
-                    {tableOrdersReady.length === 0 && (modoExclusivoSalao || isBistro || simulatedOrders.filter(o => o.status === 'transito').length === 0) ? (
-                      <div className={clsx('py-20', 'text-center', 'text-gray-500', 'italic', 'text-[10px]')}>Nenhuma conta ou entrega pendente</div>
+                    {tableOrdersReady.length === 0 && simulatedOrders.filter(o => o.status === 'transito').length === 0 ? (
+                      <div className={clsx('py-20', 'text-center', 'text-gray-500', 'italic', 'text-[10px]')}>Nenhum pedido aguardando finalização</div>
                     ) : (
                       <>
                         {/* 1. Mesas/Consumo Local aguardando pagamento */}
@@ -3237,7 +3312,26 @@ export function CaixaPanel({
                             ? (contaPedida ? `Mesa ${order.mesaId} — Conta Pedida` : `Mesa ${order.mesaId} — Pronto p/ Receber`)
                             : (contaPedida ? 'Balcão — Conta Pedida' : 'Balcão — Pronto');
                           return (
-                            <div key={`close-${order.id}`} onClick={() => setSelectedKanbanOrder(order)} className={clsx('bg-[#121214]', 'border', contaPedida ? 'border-blue-500/40 hover:border-blue-500/60' : 'border-emerald-500/30 hover:border-emerald-500/50', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all', 'text-left', 'cursor-pointer')}>
+                            <div
+                              key={`close-${order.id}`}
+                              onClick={() => setSelectedKanbanOrder(order)}
+                              className={clsx(
+                                'bg-linear-to-br',
+                                'to-[#121214]',
+                                'border',
+                                'border-l-4',
+                                'p-3',
+                                'rounded-xl',
+                                'space-y-2.5',
+                                'transition-all',
+                                'text-left',
+                                'cursor-pointer',
+                                'shadow-sm',
+                                contaPedida
+                                  ? 'from-blue-950/40 border-blue-500/35 border-l-blue-500 hover:border-blue-400/60'
+                                  : 'from-emerald-950/35 border-emerald-500/30 border-l-emerald-500 hover:border-emerald-400/55'
+                              )}
+                            >
                               <div className="flex justify-between items-start">
                                 <div>
                                   <div className="flex gap-1.5 flex-wrap mb-1">
@@ -3313,37 +3407,49 @@ export function CaixaPanel({
                                 }}
                                 className={clsx('w-full', 'py-1.5', contaPedida ? 'bg-blue-600 hover:bg-blue-700' : 'bg-emerald-600 hover:bg-emerald-700', 'text-white', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1')}
                               >
-                                <Check size={11} /><span>Fechar Conta</span>
+                                <Check size={11} /><span>Abrir pagamento da mesa</span>
                               </button>
                             </div>
                           );
                         })}
 
                         {/* 2. Delivery/Retirada em trânsito (aguardando retorno/pagamento) */}
-                        {!modoExclusivoSalao && !isBistro && simulatedOrders.filter(o => o.status === 'transito').map((order) => {
-                          const hasAddress = !!order.endereco;
-                          const badgeText = hasAddress ? 'DELIVERY - EM ROTA' : 'RETIRADA - NÃO PAGO';
-                          const badgeColor = 'bg-blue-500/10 text-blue-300';
+                        {simulatedOrders.filter(o => o.status === 'transito').map((order) => {
+                          const isDeliveryOrder = order.modalidade === 'delivery';
+                          const badgeText = isDeliveryOrder
+                            ? `DELIVERY — ${order.pago ? 'PAGO / EM ROTA' : 'EM ROTA'}`
+                            : `RETIRADA — ${order.pago ? 'PAGO' : 'AGUARDANDO PAGAMENTO'}`;
+                          const badgeColor = isDeliveryOrder
+                            ? 'bg-orange-500/15 text-orange-300 border-orange-500/25'
+                            : 'bg-violet-500/15 text-violet-300 border-violet-500/25';
+                          const cardTone = isDeliveryOrder
+                            ? 'from-orange-950/35 border-orange-500/25 border-l-orange-500 hover:border-orange-400/50'
+                            : 'from-violet-950/35 border-violet-500/25 border-l-violet-500 hover:border-violet-400/50';
                           return (
                             <div 
                               key={`transito-${order.id}`} 
                               onClick={() => openSimulatedOrderDetails(order)}
-                              className={clsx('bg-[#121214]', 'border', 'border-blue-500/20', 'hover:border-blue-500/40', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all', 'cursor-pointer')}
+                              className={clsx('bg-linear-to-br', 'to-[#121214]', 'border', 'border-l-4', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all', 'cursor-pointer', 'shadow-sm', cardTone)}
                             >
                               <div className={clsx('flex', 'justify-between', 'items-start')}>
                                 <div>
-                                  <span className={clsx('px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold rounded font-mono block w-fit mb-1', badgeColor)}>{badgeText}</span>
+                                  <div className="flex flex-wrap gap-1 mb-1">
+                                    <span className={clsx('px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold rounded border font-mono block w-fit', badgeColor)}>{badgeText}</span>
+                                    <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold rounded border border-slate-500/20 bg-slate-500/10 text-slate-300 font-mono">
+                                      {order.canal}
+                                    </span>
+                                  </div>
                                   <strong className={clsx('text-white', 'text-xs', 'block')}>{order.cliente}</strong>
                                   <span className={clsx('text-[9px]', 'text-gray-400', 'block')}>{order.telefone}</span>
                                 </div>
-                                <span className={clsx('font-bold', 'text-blue-300', 'font-mono', 'text-[11px]', 'shrink-0')}>R$ {order.total.toFixed(2)}</span>
+                                <span className={clsx('font-bold', isDeliveryOrder ? 'text-orange-300' : 'text-violet-300', 'font-mono', 'text-[11px]', 'shrink-0')}>R$ {order.total.toFixed(2)}</span>
                               </div>
 
                               <p className={clsx('text-[10px]', 'text-gray-300', 'bg-[#09090B]', 'p-1.5', 'rounded', 'border', 'border-[#27272A]/30', 'leading-relaxed', 'font-mono')}>
                                 {order.itens}
                               </p>
 
-                              {order.endereco && (
+                              {isDeliveryOrder && order.endereco && (
                                 <span className={clsx('text-[9px]', 'text-gray-400', 'flex', 'items-start', 'gap-1', 'block')}>
                                   <MapPin size={10} className={clsx('shrink-0', 'text-rose-500', 'mt-0.5')} />
                                   <span className="leading-relaxed">{order.endereco}</span>
@@ -3354,6 +3460,10 @@ export function CaixaPanel({
                                 onClick={async (e) => {
                                   e.stopPropagation();
                                   if (isLoading) return;
+                                  if (order.pago) {
+                                    await handleFecharDelivery(order.id);
+                                    return;
+                                  }
                                   const fullOrder = orders.find(o => o.id === order.id);
                                   if (fullOrder) {
                                     setSelectedOrder({
@@ -3377,7 +3487,7 @@ export function CaixaPanel({
                                 }}
                                 className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[9px] transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1"
                               >
-                                <Check size={11} /><span>Receber / Finalizar</span>
+                                <Check size={11} /><span>{order.pago ? 'Finalizar pedido' : 'Receber e finalizar'}</span>
                               </button>
                             </div>
                           );
@@ -3585,7 +3695,7 @@ export function CaixaPanel({
                 </div>
 
                 <form onSubmit={handlePdvSubmitOrder} className={clsx('bg-[#18181B]', 'p-3', 'border-t', 'border-[#27272A]', 'space-y-3', 'shrink-0')}>
-                  {!modoExclusivoSalao && !isBistro && (
+                  {!modoExclusivoSalao && (
                     <div className="space-y-1">
                       <div className={clsx('flex', 'gap-1', 'p-0.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'shrink-0')}>
                         <button
@@ -4305,7 +4415,27 @@ export function CaixaPanel({
 
 
           {/* VIEW 7: CONFIGURAÇÕES SALÃO (App Garçom & Impressoras) */}
-          {(activeTab === 'impressao_salao' || activeSubTab === 'impressoras') && (
+          {(activeTab === 'impressao_salao' || activeSubTab === 'impressoras') && !hasPrinting && (
+            <div className="bg-[#121214] border border-amber-500/20 rounded-3xl p-8 text-center max-w-xl mx-auto space-y-3">
+              <Lock size={24} className="text-amber-400 mx-auto" />
+              <h3 className="text-white font-bold">Impressão não incluída no Kôma Pocket</h3>
+              <p className="text-[10px] text-gray-400">
+                O restante da operação continua disponível. Migre para o Kôma Pro ou Premium para liberar impressão de cozinha, pré-conta e fechamento.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('assinatura_pix');
+                  setActiveSubTab('planos');
+                }}
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold uppercase cursor-pointer"
+              >
+                Comparar planos
+              </button>
+            </div>
+          )}
+
+          {(activeTab === 'impressao_salao' || activeSubTab === 'impressoras') && hasPrinting && (
             <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5')}>
 
               {/* Service Tax config block moved to Salão e Impressão */}
@@ -4509,7 +4639,7 @@ export function CaixaPanel({
                     </div>
 
                     <div className={clsx('flex', 'justify-between', 'items-center', 'pt-2', 'border-t', 'border-[#27272A]/40')}>
-                      <span className={clsx('text-[10px]', 'text-gray-300', 'font-semibold')}>Modo Exclusivo de Salão (Kôma Lite)</span>
+                      <span className={clsx('text-[10px]', 'text-gray-300', 'font-semibold')}>Restringir lançamentos manuais ao salão</span>
                       <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer')}>
                         <input
                           type="checkbox"
@@ -4862,33 +4992,87 @@ export function CaixaPanel({
 
               {/* SaaS Plans (Right Column) */}
               <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4')}>
-                <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Assinatura e Planos Kôma</span>
+                <div className={clsx('pb-2', 'border-b', 'border-[#27272A]', 'space-y-1')}>
+                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block')}>Assinatura e Planos Kôma</span>
+                  <span className="text-[9px] text-gray-500 block">
+                    Plano atual: <strong className="text-emerald-400">{currentPlan.name}</strong>
+                  </span>
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    <span className={clsx(
+                      'px-2 py-0.5 rounded-full border text-[8px] font-bold',
+                      hasPrinting
+                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+                        : 'bg-zinc-500/10 border-zinc-500/20 text-zinc-400'
+                    )}>
+                      {hasPrinting ? 'Impressão incluída' : 'Sem impressão'}
+                    </span>
+                    <span className={clsx(
+                      'px-2 py-0.5 rounded-full border text-[8px] font-bold',
+                      hasOnlineMenu
+                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+                        : 'bg-amber-500/10 border-amber-500/20 text-amber-300'
+                    )}>
+                      {hasOnlineMenu ? 'Cardápio online ativo' : 'Cardápio online opcional'}
+                    </span>
+                  </div>
+                </div>
 
                 <div className="space-y-3">
-                  {[
-                    { id: 'bronze', name: 'Plano Bronze', price: 'R$ 99/mês', features: ['Cardápio Digital QR Code', 'Gestão de Mesas', 'Suporte por e-mail'] },
-                    { id: 'gold', name: 'Plano Ouro (Recomendado)', price: 'R$ 199/mês', features: ['Cardápio Digital + iFood', 'Robô de Atendimento IA', 'Suporte 24h WhatsApp'] },
-                    { id: 'platinum', name: 'Plano Platinum', price: 'R$ 349/mês', features: ['Multi-lojas Integrado', 'Gestão de Estoque Avançado', 'Gerente de Contas Dedicado'] }
-                  ].map((plan) => (
+                  {SUBSCRIPTION_PLANS.map((plan) => (
                     <div
                       key={plan.id}
-                      onClick={() => setSelectedPlan(plan.id as any)}
+                      onClick={() => setSelectedPlan(plan.id)}
                       className={`p-3.5 rounded-2xl border transition-all cursor-pointer text-left ${selectedPlan === plan.id
                         ? 'bg-emerald-600/15 border-[#10b981] shadow'
                         : 'bg-[#1C1C1F] border-[#27272A] hover:border-[#10b981]/30'
                         }`}
                     >
-                      <div className={clsx('flex', 'justify-between', 'items-center', 'mb-1')}>
-                        <strong className={clsx('text-white', 'block', 'text-xs')}>{plan.name}</strong>
-                        <span className={clsx('font-bold', 'text-[#10b981]', 'font-mono', 'text-[11px]')}>{plan.price}</span>
+                      <div className={clsx('flex', 'justify-between', 'items-start', 'gap-2', 'mb-1')}>
+                        <div>
+                          <strong className={clsx('text-white', 'block', 'text-xs')}>
+                            {plan.name}
+                            {plan.recommended && <span className="text-[8px] text-emerald-400 ml-1">(Recomendado)</span>}
+                          </strong>
+                          <span className="text-[8px] text-gray-500 block mt-0.5">{plan.tagline}</span>
+                        </div>
+                        <span className={clsx('font-bold', 'text-[#10b981]', 'font-mono', 'text-[11px]', 'whitespace-nowrap')}>
+                          R$ {plan.price}/mês
+                        </span>
                       </div>
                       <ul className={clsx('space-y-0.5', 'text-[9px]', 'text-gray-400', 'pl-3', 'list-disc')}>
                         {plan.features.map((f, i) => (
                           <li key={i}>{f}</li>
                         ))}
                       </ul>
+                      {plan.limitations.length > 0 && (
+                        <ul className={clsx('space-y-0.5', 'text-[8px]', 'text-amber-300/80', 'pl-3', 'list-disc', 'mt-1.5')}>
+                          {plan.limitations.map((limitation) => (
+                            <li key={limitation}>{limitation}</li>
+                          ))}
+                        </ul>
+                      )}
+                      {currentPlanId === plan.id && (
+                        <span className="inline-block mt-2 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-[8px] font-bold uppercase">
+                          Seu plano
+                        </span>
+                      )}
                     </div>
                   ))}
+                </div>
+
+                <div className="p-3 rounded-2xl bg-amber-500/5 border border-amber-500/20 text-left">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <strong className="text-amber-200 text-[10px] block">{ONLINE_MENU_ADDON.name}</strong>
+                      <span className="text-[8px] text-gray-400 block mt-0.5 leading-relaxed">{ONLINE_MENU_ADDON.description}</span>
+                    </div>
+                    <span className="text-amber-300 text-[10px] font-bold font-mono whitespace-nowrap">
+                      + R$ {ONLINE_MENU_ADDON.price}/mês
+                    </span>
+                  </div>
+                  <p className="text-[8px] text-gray-500 mt-2">
+                    Opcional no Kôma Pro e já incluído no Kôma Premium.
+                  </p>
                 </div>
               </div>
 
@@ -6340,6 +6524,8 @@ export function CaixaPanel({
                           itens: draft.map(d => `${d.quantity}x ${d.product.nome}`).join(" + "),
                           total: draft.reduce((acc, c) => acc + (c.product.preco * c.quantity), 0),
                           canal: 'whats',
+                          modalidade: 'delivery',
+                          pago: false,
                           status: 'analise',
                           endereco: "Av. Conselheiro Aguiar, 2300, Apto 502 - Boa Viagem",
                           criadoEm: "10:33"
@@ -6542,7 +6728,27 @@ export function CaixaPanel({
           )}
 
           {/* CONFIGURAÇÃO CARDÁPIO DIGITAL WHITELABEL */}
-          {(activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital') && (
+          {(activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital') && !hasOnlineMenu && (
+            <div className="bg-[#121214] border border-amber-500/20 rounded-3xl p-8 text-center max-w-xl mx-auto space-y-3">
+              <Lock size={24} className="text-amber-400 mx-auto" />
+              <h3 className="text-white font-bold">Cardápio online não incluído neste plano</h3>
+              <p className="text-[10px] text-gray-400">
+                No Kôma Pro, ele pode ser contratado por R$ {ONLINE_MENU_ADDON.price}/mês. No Kôma Premium, link, QR Code e gaveta de aceite já estão incluídos.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('assinatura_pix');
+                  setActiveSubTab('planos');
+                }}
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold uppercase cursor-pointer"
+              >
+                Ver opções
+              </button>
+            </div>
+          )}
+
+          {(activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital') && hasOnlineMenu && (
             <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-6', 'text-left', 'max-w-2xl', 'mx-auto', 'space-y-6', 'animate-fade-in')}>
               <div className={clsx('border-b', 'border-[#27272A]', 'pb-3')}>
                 <span className={clsx('font-serif', 'font-bold', 'text-base', 'text-white', 'block')}>Configurações do Cardápio Digital</span>

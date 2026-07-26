@@ -2,7 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 from app.main import app
 from app.database import engine, Base, SessionLocal, current_restaurante_id
-from app.models import Restaurante, Categoria, Produto, Usuario, Mesa, PrintJob
+from app.models import Restaurante, Categoria, Produto, Usuario, Mesa, PrintJob, Comanda
 from app.security import create_access_token
 
 client = TestClient(app)
@@ -19,6 +19,7 @@ def setup_cardapio_data():
             rest = Restaurante(
                 id=100,
                 nome="Bistro Teste Cardapio",
+                plano="pro",
                 slug="bistro-teste-cardapio",
                 subtitulo="O melhor sabor da cidade",
                 cor_primaria="#ff9900",
@@ -26,6 +27,9 @@ def setup_cardapio_data():
                 endereco="Rua Teste 100"
             )
             db.add(rest)
+            db.commit()
+        elif rest.plano != "pro":
+            rest.plano = "pro"
             db.commit()
 
         # Create Mesa 1 for restaurant 100
@@ -145,5 +149,131 @@ def test_cardapio_digital_venda_direta_order():
             PrintJob.source_id == data["id"],
         ).one()
         assert print_job.status == "pending"
+    finally:
+        db.close()
+
+
+@pytest.mark.parametrize(
+    ("tipo_pedido", "endereco", "tipo_esperado", "endereco_esperado", "taxa_esperada"),
+    [
+        ("delivery", "Rua das Flores, 123", "Delivery", "Rua das Flores, 123", 8.0),
+        ("retirada", "Retirada no Balcão", "Retirada", None, 0.0),
+    ],
+)
+def test_pedido_online_preserva_modalidade_no_kanban(
+    tipo_pedido,
+    endereco,
+    tipo_esperado,
+    endereco_esperado,
+    taxa_esperada,
+):
+    """Pedidos digitais chegam à gaveta com a modalidade correta."""
+    payload = {
+        "restaurante_id": 100,
+        "itens": [
+            {
+                "produto_id": "prod-cardapio-test",
+                "quantidade": 2,
+                "observacao": "Sem cebola",
+            }
+        ],
+        "cliente_nome": f"Cliente {tipo_pedido}",
+        "cliente_telefone": "81999990000" if tipo_pedido == "delivery" else "81999990001",
+        "endereco_entrega": endereco,
+        "taxa_entrega": 8.0,
+        "forma_pagamento": "Dinheiro",
+        "tipo_pedido": tipo_pedido,
+    }
+
+    response = client.post("/cardapio/pedidos", json=payload)
+    assert response.status_code == 201
+
+    db = SessionLocal()
+    try:
+        comanda = db.query(Comanda).filter(Comanda.id == response.json()["comanda_id"]).one()
+        assert comanda.tipo == tipo_esperado
+        assert comanda.delivery_status == "pendente"
+        assert comanda.delivery_endereco == endereco_esperado
+        assert comanda.delivery_taxa == taxa_esperada
+        assert len(comanda.itens) == 2
+    finally:
+        db.close()
+
+
+def test_caixa_pode_recusar_pedido_antes_da_producao():
+    payload = {
+        "restaurante_id": 100,
+        "itens": [
+            {
+                "produto_id": "prod-cardapio-test",
+                "quantidade": 1,
+                "observacao": "",
+            }
+        ],
+        "cliente_nome": "Cliente recusado",
+        "cliente_telefone": "81999990002",
+        "endereco_entrega": "",
+        "taxa_entrega": 0,
+        "forma_pagamento": "Dinheiro",
+        "tipo_pedido": "retirada",
+    }
+    created = client.post("/cardapio/pedidos", json=payload)
+    assert created.status_code == 201
+
+    token = create_access_token(subject="usr_cardapio_100", restaurante_id=100, role="admin")
+    response = client.put(
+        f"/comandas/{created.json()['comanda_id']}/delivery/status?status_novo=recusado",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+
+    db = SessionLocal()
+    try:
+        comanda = db.query(Comanda).filter(Comanda.id == created.json()["comanda_id"]).one()
+        assert comanda.delivery_status == "recusado"
+        assert comanda.fechada is True
+        assert all(item.status == "cancelado" for item in comanda.itens)
+    finally:
+        db.close()
+
+
+def test_koma_pocket_nao_enfileira_impressao_automatica():
+    db = SessionLocal()
+    try:
+        restaurante = db.query(Restaurante).filter(Restaurante.id == 100).one()
+        restaurante.plano = "pocket"
+        db.commit()
+    finally:
+        db.close()
+
+    token = create_access_token(subject="usr_cardapio_100", restaurante_id=100, role="admin")
+    response = client.post(
+        "/comandas/venda-direta",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "restaurante_id": 100,
+            "mesa_id": 1,
+            "garcom_id": "usr_cardapio_100",
+            "tipo": "Consumo no Local",
+            "itens": [
+                {
+                    "produto_id": "prod-cardapio-test",
+                    "quantidade": 1,
+                    "preco_unitario": 25.0,
+                    "observacao": "",
+                }
+            ],
+        },
+    )
+    assert response.status_code in (200, 201)
+
+    db = SessionLocal()
+    try:
+        print_job = db.query(PrintJob).filter(
+            PrintJob.restaurante_id == 100,
+            PrintJob.source_type == "pedido",
+            PrintJob.source_id == response.json()["id"],
+        ).first()
+        assert print_job is None
     finally:
         db.close()

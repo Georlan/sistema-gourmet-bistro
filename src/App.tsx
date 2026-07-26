@@ -159,24 +159,11 @@ export default function App() {
   }, [isWsConnected]);
 
   useEffect(() => {
-    if (restauranteConfig?.plano?.toLowerCase() === 'delivery' && portal === 'garcom') {
-      setPortal('caixa');
-      const searchParams = new URLSearchParams(window.location.search);
-      searchParams.set('view', 'caixa');
-      window.history.replaceState(null, '', `${window.location.pathname}?${searchParams.toString()}${window.location.hash}`);
-    }
-  }, [restauranteConfig, portal]);
-
-  useEffect(() => {
     const handleUrlChange = () => {
       const searchParams = new URLSearchParams(window.location.search);
       const viewParam = searchParams.get('view');
       const hash = window.location.hash;
       let newPortal: 'caixa' | 'garcom' = (viewParam === 'caixa' || viewParam === 'gerencia' || hash === '#caixa' || hash === '#gerencia') ? 'caixa' : 'garcom';
-
-      if (restauranteConfig?.plano?.toLowerCase() === 'delivery') {
-        newPortal = 'caixa';
-      }
 
       setPortal(newPortal);
 

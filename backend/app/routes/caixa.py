@@ -1027,8 +1027,14 @@ def atualizar_configuracoes(
     if config_in.perm_garcom_ociosas is not None:
         config.perm_garcom_ociosas = config_in.perm_garcom_ociosas
     if config_in.plano is not None:
+        plano_val = config_in.plano.strip().lower()
+        if plano_val not in {"pocket", "pro", "premium"}:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Plano inválido. Deve ser um de: pocket, pro, premium"
+            )
         if config.restaurante:
-            config.restaurante.plano = config_in.plano.lower()
+            config.restaurante.plano = plano_val
         
     db.commit()
     db.refresh(config)
@@ -1198,11 +1204,11 @@ def atualizar_plano_restaurante(
     current_user: Usuario = Depends(require_permission("configuracoes:administrar"))
 ):
     """Atualiza o plano do restaurante ativo."""
-    plano_val = payload.plano.lower()
-    if plano_val not in ['pocket', 'bistro', 'delivery', 'premium']:
+    plano_val = payload.plano.strip().lower()
+    if plano_val not in ['pocket', 'pro', 'premium']:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Plano inválido. Deve ser um de: pocket, bistro, delivery, premium"
+            detail="Plano inválido. Deve ser um de: pocket, pro, premium"
         )
     rest_id = require_tenant_id()
     restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
