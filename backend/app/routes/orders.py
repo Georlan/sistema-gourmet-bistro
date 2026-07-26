@@ -359,7 +359,8 @@ async def criar_venda_direta(
                         ticket_text=ticket_text,
                         document_type="producao",
                         source_type="pedido",
-                        source_id=comanda_id
+                        source_id=comanda_id,
+                        restaurante_id=rid,
                     )
             except Exception as print_err:
                 logger.warning(f"Falha ao gerar impressões de venda direta: {print_err}")
