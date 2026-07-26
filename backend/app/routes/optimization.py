@@ -685,36 +685,35 @@ def create_loyalty_client(
     if cliente_existente:
         raise HTTPException(status_code=400, detail="Cliente com este telefone já cadastrado.")
         
-    # Criar registro na tabela 'clientes'
-    new_c = Cliente(telefone=tel_limpo, nome=data.cliente.strip())
-    db.add(new_c)
-    db.commit()
-    db.refresh(new_c)
-    
-    # Lançar saldo inicial em HistoricoFidelidade se maior que zero
-    saldo_inicial = 0.0
-    if data.saldo_pontos and data.saldo_pontos > 0:
-        saldo_inicial = float(data.saldo_pontos)
-    elif data.saldo_cashback and data.saldo_cashback > 0:
-        saldo_inicial = float(data.saldo_cashback)
-        
-    if saldo_inicial > 0:
-        try:
+    try:
+        # Cliente e saldo inicial pertencem à mesma transação: se a
+        # criptografia do histórico falhar, nenhum dado parcial é persistido.
+        new_c = Cliente(telefone=tel_limpo, nome=data.cliente.strip())
+        db.add(new_c)
+
+        saldo_inicial = 0.0
+        if data.saldo_pontos and data.saldo_pontos > 0:
+            saldo_inicial = float(data.saldo_pontos)
+        elif data.saldo_cashback and data.saldo_cashback > 0:
+            saldo_inicial = float(data.saldo_cashback)
+
+        if saldo_inicial > 0:
             ajuste = HistoricoFidelidade(
                 cliente_telefone=tel_limpo,
                 tipo_movimentacao="ACUMULO",
                 valor_delta=saldo_inicial
             )
             db.add(ajuste)
-            db.commit()
-        except HTTPException:
-            raise
-        except Exception:
-            db.rollback()
-            logger.exception("Falha ao processar dado sensível criptografado")
-            raise HTTPException(
-                status_code=500,
-                detail="Erro ao processar dado sensível, contate o suporte."
-            )
-        
+
+        db.commit()
+    except HTTPException:
+        raise
+    except Exception:
+        db.rollback()
+        logger.exception("Falha ao processar dado sensível criptografado")
+        raise HTTPException(
+            status_code=500,
+            detail="Erro ao processar dado sensível, contate o suporte."
+        )
+
     return {"success": True, "detail": "Cliente criado com sucesso."}
