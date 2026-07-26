@@ -246,9 +246,54 @@ async def criar_venda_direta(
 ):
     """
     Cria uma comanda e insere todos os itens em uma ÚNICA transação atômica.
-    Elimina a necessidade de 2 chamadas HTTP separadas no PDV.
+    Elimina a necessidade de 2 chamadas HTTP separadas no PDV. Pedidos de
+    delivery e retirada criados pelo caixa já entram aceitos em produção.
     """
-    venda = venda_in
+    tipo_pedido = {
+        "consumo no local": "Consumo no Local",
+        "mesa": "Consumo no Local",
+        "delivery": "Entrega",
+        "entrega": "Entrega",
+        "retirada": "Retirada",
+        "viagem": "Retirada",
+    }.get(venda_in.tipo.strip().lower())
+    if tipo_pedido is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Tipo de pedido inválido. Use Mesa, Delivery ou Retirada.",
+        )
+    if tipo_pedido == "Consumo no Local" and venda_in.mesa_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Selecione uma mesa para pedidos de consumo no local.",
+        )
+    if tipo_pedido != "Consumo no Local" and venda_in.mesa_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Pedidos de delivery ou retirada não podem ser vinculados a uma mesa.",
+        )
+    if tipo_pedido == "Entrega":
+        if not (venda_in.identificador or "").strip():
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Informe o nome do cliente para o delivery.",
+            )
+        if not (venda_in.delivery_telefone or "").strip():
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Informe o telefone do cliente para o delivery.",
+            )
+        if not (venda_in.delivery_endereco or "").strip():
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Informe o endereço de entrega.",
+            )
+    if tipo_pedido == "Retirada" and not (venda_in.identificador or "").strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Informe o nome do cliente para a retirada.",
+        )
+
     garcom_id = venda_in.garcom_id or current_user.id
     garcom = db.query(Usuario).filter(Usuario.id == garcom_id).first()
     if not garcom:
@@ -264,11 +309,9 @@ async def criar_venda_direta(
     else:
         numero_pedido = gerar_novo_numero_pedido(db)
 
-    auto_delivery_status = venda_in.delivery_status
-    if venda_in.tipo in ("Entrega", "Delivery") and auto_delivery_status is None:
-        auto_delivery_status = "pendente"
-    elif venda_in.tipo == "Retirada" and auto_delivery_status is None:
-        auto_delivery_status = "producao"
+    auto_delivery_status = (
+        "producao" if tipo_pedido in {"Entrega", "Retirada"} else None
+    )
 
     comanda_id = f"c-{uuid.uuid4().hex[:8]}"
     lancamento_id = f"l-{uuid.uuid4().hex[:8]}"
@@ -280,7 +323,7 @@ async def criar_venda_direta(
             restaurante_id=rid,
             mesa_id=venda_in.mesa_id,
             garcom_id=garcom_id,
-            tipo=venda_in.tipo,
+            tipo=tipo_pedido,
             identificador=venda_in.identificador,
             numero_pedido=numero_pedido,
             fechada=False,
@@ -328,7 +371,7 @@ async def criar_venda_direta(
         if venda_in.mesa_id is not None:
             await manager.broadcast({
                 "type": "MESA_UPDATED",
-                "mesa_id": venda.mesa_id,
+                "mesa_id": venda_in.mesa_id,
                 "status": "OCUPADA"
             }, tenant_id=current_user.tenant_id)
 
@@ -353,7 +396,7 @@ async def criar_venda_direta(
                 doc_data = OrderPrintData(
                     numero_pedido=str(numero_pedido),
                     mesa=str(venda_in.mesa_id) if venda_in.mesa_id else "BALCAO",
-                    tipo_pedido=venda_in.tipo,
+                    tipo_pedido=tipo_pedido,
                     garcom_nome=garcom.nome if garcom else "CAIXA",
                     horario=datetime.datetime.now().strftime("%H:%M"),
                     itens=p_items,
@@ -374,7 +417,6 @@ async def criar_venda_direta(
                 logger.warning(f"Falha ao gerar impressões de venda direta: {print_err}")
 
         background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
-        background_tasks.add_task(manager.broadcast, {"event": "new_delivery_order", "message": f"Novo pedido #{numero_pedido}"}, require_tenant_id())
         comanda_completa = db.query(Comanda).options(
             joinedload(Comanda.itens).joinedload(Item.produto),
             joinedload(Comanda.criada_por)

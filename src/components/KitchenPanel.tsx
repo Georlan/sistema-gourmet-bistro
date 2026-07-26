@@ -11,14 +11,12 @@ interface KitchenPanelProps {
   orders: Order[];
   onFinishPreparation: (orderId: string, itemId: string) => void;
   currentTime: number;
-  modoExclusivoSalao?: boolean;
 }
 
 export const KitchenPanel: React.FC<KitchenPanelProps> = ({
   orders,
   onFinishPreparation,
   currentTime,
-  modoExclusivoSalao,
 }) => {
   const [inflightIds, setInflightIds] = React.useState<Set<string>>(new Set());
 
@@ -49,8 +47,8 @@ export const KitchenPanel: React.FC<KitchenPanelProps> = ({
     }[] = [];
 
     orders.forEach((order) => {
-      // If exclusive salon mode is active, ignore orders that do not belong to a table
-      if (modoExclusivoSalao && (order.mesaId === null || order.mesaId <= 0)) {
+      // Pedidos online só chegam à cozinha depois que o caixa os aceita.
+      if (order.deliveryStatus === 'pendente' || order.deliveryStatus === 'recusado') {
         return;
       }
       order.itens.forEach((item) => {

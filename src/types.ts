@@ -46,6 +46,7 @@ export interface Order {
   valorPago?: number;
   identificador?: string;
   statusComanda?: 'aguardando_pagamento' | null; // Adicionado para compatibilidade com o fluxo do caixa
+  deliveryStatus?: 'pendente' | 'producao' | 'pronto' | 'transito' | 'finalizado' | 'recusado' | null;
   mesaOrigemId?: number | null;
   mesaTransferidaDe?: number | null;
   isGrouped?: boolean;
@@ -324,4 +325,3 @@ export interface SessaoContagemEstoque {
   confirmada_em?: string | null;
   itens: ItemContagemEstoque[];
 }
-

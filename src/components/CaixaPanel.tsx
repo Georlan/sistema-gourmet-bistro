@@ -180,7 +180,6 @@ export function CaixaPanel({
     setToastData({ msg, type });
     setTimeout(() => setToastData(null), 3000);
   };
-  const [pdDeliveryAddress, setPdDeliveryAddress] = useState('');
   const handleSaveFidelityConfig = (e: any) => { e.preventDefault(); };
   const onRefreshCategorias = async () => {};
   const handleDespacharPedido = async (id: any, mId: any) => {};
@@ -639,7 +638,6 @@ export function CaixaPanel({
   const [taxaServicoAtiva, setTaxaServicoAtiva] = useState(true);
   const [serviceTaxRate, setServiceTaxRate] = useState(10); // Customizable service rate percentage
   const [unificarViasDelivery, setUnificarViasDelivery] = useState(false);
-  const [modoExclusivoSalao, setModoExclusivoSalao] = useState(true);
   const [splitPeople, setSplitPeople] = useState('1');
   const [paymentMetodo, setPaymentMetodo] = useState<'dinheiro' | 'pix' | 'cartao' | 'cartao_debito' | 'cartao_credito'>('pix');
   const [paymentValor, setPaymentValor] = useState('');
@@ -649,7 +647,6 @@ export function CaixaPanel({
     taxa_servico_ativa?: boolean;
     taxa_servico_padrao?: number;
     unificar_vias_delivery?: boolean;
-    modo_exclusivo_salao?: boolean;
     perm_garcom_delivery?: boolean;
     perm_garcom_editar?: boolean;
     perm_garcom_taxas?: boolean;
@@ -673,7 +670,6 @@ export function CaixaPanel({
     }
     if (updates.taxa_servico_padrao !== undefined) setServiceTaxRate(updates.taxa_servico_padrao);
     if (updates.unificar_vias_delivery !== undefined) setUnificarViasDelivery(updates.unificar_vias_delivery);
-    if (updates.modo_exclusivo_salao !== undefined) setModoExclusivoSalao(updates.modo_exclusivo_salao);
     if (updates.perm_garcom_delivery !== undefined) setPermDelivery(updates.perm_garcom_delivery);
     if (updates.perm_garcom_editar !== undefined) setPermEdit(updates.perm_garcom_editar);
     if (updates.perm_garcom_taxas !== undefined) setPermAddCharges(updates.perm_garcom_taxas);
@@ -721,17 +717,10 @@ export function CaixaPanel({
   const [pdvCustomerPhone, setPdvCustomerPhone] = useState('');
   const [pdvCustomerCPF, setPdvCustomerCPF] = useState('');
   const [paymentCPF, setPaymentCPF] = useState('');
-  const [pdvOrderType, setPdvOrderType] = useState<'balcao' | 'entrega' | 'mesa'>('balcao');
+  const [pdvOrderType, setPdvOrderType] = useState<'retirada' | 'entrega' | 'mesa'>('retirada');
   const [pdvDeliveryAddress, setPdvDeliveryAddress] = useState('');
   const [pdvDeliveryTaxa, setPdvDeliveryTaxa] = useState('0.00');
   const [pdvTargetMesaId, setPdvTargetMesaId] = useState<number>(0);
-
-  // Force pdvOrderType to mesa if salon mode is active
-  useEffect(() => {
-    if (modoExclusivoSalao) {
-      setPdvOrderType('mesa');
-    }
-  }, [modoExclusivoSalao]);
 
   // Generate idempotency key when checkout order changes
   useEffect(() => {
@@ -1188,7 +1177,6 @@ export function CaixaPanel({
         setTaxaServicoAtiva(data.taxa_servico_ativa);
         setServiceTaxRate(data.taxa_servico_padrao);
         setUnificarViasDelivery(data.unificar_vias_delivery);
-        setModoExclusivoSalao(data.modo_exclusivo_salao);
         setPermDelivery(data.perm_garcom_delivery);
         setPermEdit(data.perm_garcom_editar);
         setPermAddCharges(data.perm_garcom_taxas);
@@ -1725,7 +1713,7 @@ export function CaixaPanel({
         }
       } else if (e.key === 'F2') {
         e.preventDefault();
-        setPdvOrderType('balcao');
+        setPdvOrderType('retirada');
         setTimeout(() => {
           const nameInput = document.getElementById('pdv-customer-name-input');
           if (nameInput) nameInput.focus();
@@ -2199,11 +2187,9 @@ export function CaixaPanel({
       showToast("Seu carrinho de vendas está vazio.", 'info');
       return;
     }
-    if (modoExclusivoSalao) {
-      if (pdvOrderType !== 'mesa' || !pdvTargetMesaId || pdvTargetMesaId === 0) {
-        showToast("Durante o modo de testes de salão, todos os pedidos de venda devem ser vinculados a uma Mesa física ativa.", 'info');
-        return;
-      }
+    if (pdvOrderType === 'mesa' && (!pdvTargetMesaId || pdvTargetMesaId === 0)) {
+      showToast("Selecione a mesa de destino antes de lançar o pedido.", 'info');
+      return;
     }
     isPdvSubmittingRef.current = true;
     setIsLoading(true);
@@ -2244,11 +2230,11 @@ export function CaixaPanel({
         garcomId: 'c-01',
         garcomNome: activeWaiterNome || 'Caixa 1',
         timestamp: new Date(),
-        tipo: orderType === 'mesa' ? 'Consumo no Local' : 'Retirada',
+        tipo: orderType === 'mesa' ? 'Consumo no Local' : (orderType === 'entrega' ? 'Entrega' : 'Retirada'),
         valorPago: 0,
         identificador: customerName || null,
         statusComanda: null,
-        deliveryStatus: null,
+        deliveryStatus: orderType === 'mesa' ? null : 'producao',
         mesaOrigemId: null,
         mesaTransferidaDe: null,
         itens: tempItems
@@ -2280,8 +2266,8 @@ export function CaixaPanel({
           mesa_id: orderType === 'mesa' ? mesaId : null,
           tipo: orderType === 'mesa' ? 'Consumo no Local' : (orderType === 'entrega' ? 'Entrega' : 'Retirada'),
           identificador: customerName || undefined,
-          delivery_status: orderType === 'entrega' ? 'producao' : undefined,
-          delivery_telefone: orderType === 'entrega' ? customerPhone : undefined,
+          delivery_status: orderType === 'mesa' ? undefined : 'producao',
+          delivery_telefone: orderType === 'mesa' ? undefined : customerPhone,
           delivery_endereco: orderType === 'entrega' ? deliveryAddress : undefined,
           delivery_taxa: orderType === 'entrega' ? parseFloat(deliveryTaxa) || 0.0 : 0.0,
           itens: itemsList
@@ -2386,12 +2372,7 @@ export function CaixaPanel({
   const activeKitchenItems = orders.flatMap(order =>
     order.itens
       .filter(item => item.status === 'preparando' || item.status === 'pronto')
-      .filter(() => {
-        if (modoExclusivoSalao) {
-          return order.mesaId !== null && order.mesaId > 0;
-        }
-        return true;
-      })
+      .filter(() => order.deliveryStatus !== 'pendente' && order.deliveryStatus !== 'recusado')
       .map(item => ({
         ...item,
         orderId: order.id,
@@ -3695,37 +3676,35 @@ export function CaixaPanel({
                 </div>
 
                 <form onSubmit={handlePdvSubmitOrder} className={clsx('bg-[#18181B]', 'p-3', 'border-t', 'border-[#27272A]', 'space-y-3', 'shrink-0')}>
-                  {!modoExclusivoSalao && (
-                    <div className="space-y-1">
-                      <div className={clsx('flex', 'gap-1', 'p-0.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'shrink-0')}>
-                        <button
-                          type="button"
-                          onClick={() => setPdvOrderType('balcao')}
-                          className={`flex-1 py-1 text-[8.5px] font-bold rounded transition-all cursor-pointer ${pdvOrderType === 'balcao' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'
-                            }`}
-                        >
-                          Balcão
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPdvOrderType('entrega')}
-                          className={`flex-1 py-1 text-[8.5px] font-bold rounded transition-all cursor-pointer ${pdvOrderType === 'entrega' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'
-                            }`}
-                        >
-                          Delivery
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPdvOrderType('mesa')}
-                          className={`flex-1 py-1 text-[8.5px] font-bold rounded transition-all cursor-pointer ${pdvOrderType === 'mesa' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'
-                            }`}
-                        >
-                          Mesa
-                        </button>
-                      </div>
-                      <span className={clsx('text-[7.5px]', 'text-gray-500', 'font-mono', 'block', 'text-left')}>Atalhos de Tipo: [F2] Balcão • [F3] Mesa • [F8] Delivery</span>
+                  <div className="space-y-1">
+                    <div className={clsx('flex', 'gap-1', 'p-0.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'shrink-0')}>
+                      <button
+                        type="button"
+                        onClick={() => setPdvOrderType('retirada')}
+                        className={`flex-1 py-1 text-[8.5px] font-bold rounded transition-all cursor-pointer ${pdvOrderType === 'retirada' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'
+                          }`}
+                      >
+                        Retirada / Viagem
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPdvOrderType('entrega')}
+                        className={`flex-1 py-1 text-[8.5px] font-bold rounded transition-all cursor-pointer ${pdvOrderType === 'entrega' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'
+                          }`}
+                      >
+                        Delivery
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPdvOrderType('mesa')}
+                        className={`flex-1 py-1 text-[8.5px] font-bold rounded transition-all cursor-pointer ${pdvOrderType === 'mesa' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'
+                          }`}
+                      >
+                        Mesa
+                      </button>
                     </div>
-                  )}
+                    <span className={clsx('text-[7.5px]', 'text-gray-500', 'font-mono', 'block', 'text-left')}>Atalhos de Tipo: [F2] Retirada • [F3] Mesa • [F8] Delivery</span>
+                  </div>
 
                   {pdvOrderType === 'mesa' && (
                     <div className="space-y-1">
@@ -3753,7 +3732,7 @@ export function CaixaPanel({
                     </div>
                   )}
 
-                  {pdvOrderType === 'balcao' && (
+                  {pdvOrderType === 'retirada' && (
                     <div className={clsx('grid', 'grid-cols-2', 'gap-1.5')}>
                       <div className="space-y-1">
                         <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Nome Cliente:</label>
@@ -3800,6 +3779,7 @@ export function CaixaPanel({
                           <input
                             type="text"
                             placeholder="(81) 9..."
+                            required={pdvCart.length > 0}
                             value={pdvCustomerPhone}
                             onChange={(e) => setPdvCustomerPhone(e.target.value)}
                             className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'text-white', 'text-[10px]')}
@@ -3813,7 +3793,7 @@ export function CaixaPanel({
                           placeholder="Rua, Número, Bairro, Complemento"
                           required={pdvCart.length > 0}
                           value={pdvDeliveryAddress}
-                          onChange={(e) => setPdDeliveryAddress(e.target.value)}
+                          onChange={(e) => setPdvDeliveryAddress(e.target.value)}
                           className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'text-white', 'text-[10px]')}
                         />
                       </div>
@@ -3841,16 +3821,16 @@ export function CaixaPanel({
                     </span>
                   </div>
 
-                  {modoExclusivoSalao && (pdvOrderType !== 'mesa' || !pdvTargetMesaId || pdvTargetMesaId === 0) && (
+                  {pdvOrderType === 'mesa' && (!pdvTargetMesaId || pdvTargetMesaId === 0) && (
                     <div className={clsx('text-[9.5px]', 'text-amber-500', 'border', 'border-amber-500/20', 'bg-amber-500/5', 'px-2.5', 'py-1.5', 'rounded-lg', 'text-left', 'leading-relaxed')}>
-                      Durante o modo de testes de salão, todos os pedidos de venda devem ser vinculados a uma Mesa física ativa.
+                      Selecione a mesa de destino para lançar um pedido de salão.
                     </div>
                   )}
 
                   <button
                     id="pdv-submit-btn"
                     type="submit"
-                    disabled={modoExclusivoSalao && (pdvOrderType !== 'mesa' || !pdvTargetMesaId || pdvTargetMesaId === 0)}
+                    disabled={pdvOrderType === 'mesa' && (!pdvTargetMesaId || pdvTargetMesaId === 0)}
                     className={clsx('w-full', 'py-2', 'bg-emerald-600', 'hover:bg-emerald-700', 'disabled:bg-zinc-800', 'disabled:text-zinc-500', 'disabled:border-zinc-800', 'disabled:cursor-not-allowed', 'text-white', 'rounded-lg', 'font-bold', 'text-[9px]', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'flex', 'flex-col', 'items-center', 'justify-center', 'gap-0.5', 'shadow')}
                   >
                     <div className={clsx('flex', 'items-center', 'gap-1')}>
@@ -4638,21 +4618,6 @@ export function CaixaPanel({
                       </label>
                     </div>
 
-                    <div className={clsx('flex', 'justify-between', 'items-center', 'pt-2', 'border-t', 'border-[#27272A]/40')}>
-                      <span className={clsx('text-[10px]', 'text-gray-300', 'font-semibold')}>Restringir lançamentos manuais ao salão</span>
-                      <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer')}>
-                        <input
-                          type="checkbox"
-                          checked={modoExclusivoSalao}
-                          onChange={(e) => {
-                            setModoExclusivoSalao(e.target.checked);
-                            updateConfiguracoes({ modo_exclusivo_salao: e.target.checked });
-                          }}
-                          className={clsx('sr-only', 'peer')}
-                        />
-                        <div className={clsx('w-9', 'h-5', 'bg-[#27272A]', 'peer-focus:outline-none', 'rounded-full', 'peer', 'peer-checked:after:translate-x-full', 'peer-checked:after:border-white', "after:content-['']", 'after:absolute', 'after:top-[2px]', 'after:left-[2px]', 'after:bg-white', 'after:border-gray-300', 'after:border', 'after:rounded-full', 'after:h-4', 'after:w-4', 'after:transition-all', 'peer-checked:bg-emerald-600')}></div>
-                      </label>
-                    </div>
                   </div>
 
                   {/* Detected printers list / test search */}

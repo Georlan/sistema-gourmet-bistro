@@ -117,8 +117,8 @@ def test_cardapio_digital_produtos_listing():
         assert p["ativo"] is True
 
 
-def test_cardapio_digital_venda_direta_order():
-    """4. Cardápio Digital: Finalizar e criar pedido."""
+def test_caixa_venda_direta_mesa():
+    """4. Caixa: criar pedido manual de mesa."""
     token = create_access_token(subject="usr_cardapio_100", restaurante_id=100, role="admin")
     headers = {"Authorization": f"Bearer {token}"}
 
@@ -126,7 +126,7 @@ def test_cardapio_digital_venda_direta_order():
         "restaurante_id": 100,
         "mesa_id": 1,
         "garcom_id": "usr_cardapio_100",
-        "tipo": "Delivery",
+        "tipo": "Consumo no Local",
         "itens": [
             {
                 "produto_id": "prod-cardapio-test",
@@ -140,6 +140,9 @@ def test_cardapio_digital_venda_direta_order():
     assert response.status_code in (200, 201)
     data = response.json()
     assert "id" in data or "numero_pedido" in data
+    assert data["tipo"] == "Consumo no Local"
+    assert data["mesa_id"] == 1
+    assert data["delivery_status"] is None
 
     db = SessionLocal()
     try:
@@ -151,6 +154,68 @@ def test_cardapio_digital_venda_direta_order():
         assert print_job.status == "pending"
     finally:
         db.close()
+
+
+@pytest.mark.parametrize(
+    ("tipo", "identificador", "telefone", "endereco"),
+    [
+        ("Entrega", "Cliente Delivery", "81999990003", "Rua Manual, 123"),
+        ("Retirada", "Cliente Retirada", "81999990004", None),
+    ],
+)
+def test_caixa_venda_direta_nao_passa_pela_gaveta_online(
+    tipo,
+    identificador,
+    telefone,
+    endereco,
+):
+    """Delivery e retirada digitados pelo caixa já entram aceitos em produção."""
+    token = create_access_token(subject="usr_cardapio_100", restaurante_id=100, role="admin")
+    payload = {
+        "mesa_id": None,
+        "garcom_id": "usr_cardapio_100",
+        "tipo": tipo,
+        "identificador": identificador,
+        "delivery_telefone": telefone,
+        "delivery_endereco": endereco,
+        "delivery_taxa": 8.0 if tipo == "Entrega" else 0.0,
+        "itens": [
+            {
+                "produto_id": "prod-cardapio-test",
+                "observacao": "",
+                "cliente_nome": identificador,
+            }
+        ],
+    }
+
+    response = client.post(
+        "/comandas/venda-direta",
+        json=payload,
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["tipo"] == tipo
+    assert data["mesa_id"] is None
+    assert data["delivery_status"] == "producao"
+
+
+def test_caixa_delivery_manual_exige_dados_de_entrega():
+    token = create_access_token(subject="usr_cardapio_100", restaurante_id=100, role="admin")
+    response = client.post(
+        "/comandas/venda-direta",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "tipo": "Entrega",
+            "identificador": "Cliente sem endereço",
+            "delivery_telefone": "81999990005",
+            "itens": [{"produto_id": "prod-cardapio-test"}],
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Informe o endereço de entrega."
 
 
 @pytest.mark.parametrize(

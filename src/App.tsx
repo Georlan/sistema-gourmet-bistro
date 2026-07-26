@@ -1863,7 +1863,6 @@ export default function App() {
             orders={orders}
             onFinishPreparation={handleFinishPreparation}
             currentTime={currentTime}
-            modoExclusivoSalao={restauranteConfig?.modo_exclusivo_salao}
           />
         ) : activeRole === 'caixa' ? (
           <MemoizedCaixaPanel
