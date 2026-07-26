@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from ..database import bind_session_to_tenant, get_db, current_restaurante_id
 from ..models import PrintJob, PrintAgentToken, Usuario
-from ..security import get_current_user
+from ..security import require_permission
 
 router = APIRouter(prefix="/api/print-agents", tags=["Print Agents"])
 
@@ -112,7 +112,7 @@ class FailJobRequest(BaseModel):
 
 class InjectJobRequest(BaseModel):
     """Injeção manual de PrintJob — disponível apenas para admin/gerente (JWT)."""
-    restaurante_id: Optional[int] = None  # override explícito; usa o do usuário se omitido
+    restaurante_id: Optional[int] = None  # compatibilidade; deve coincidir com o tenant autenticado
     document_type: str = "producao"
     destination: str = "COZINHA"
     source_type: str = "pedido"
@@ -125,33 +125,33 @@ class InjectJobRequest(BaseModel):
 @router.post("/jobs/inject", summary="Injetar PrintJob manualmente (admin)")
 def inject_print_job(
     req: InjectJobRequest,
-    current_user: Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(require_permission("impressao:administrar")),
     db: Session = Depends(get_db)
 ):
     """
     Enfileira um PrintJob manualmente para testes ou reimpressões administrativas.
     Requer autenticação de usuário (JWT). Apenas admin/gerente.
 
-    O restaurante_id é resolvido na seguinte ordem de prioridade:
-      1. req.restaurante_id (override explícito no body)
-      2. current_restaurante_id ContextVar (definido pelo middleware de autenticação)
-      3. current_user.restaurante_id (fallback para admins globais)
+    O restaurante_id vem exclusivamente da sessão autenticada. O campo legado
+    no body é aceito apenas quando coincide com o tenant do usuário.
     """
     from ..database import current_restaurante_id as _ctx_rid
 
-    # Resolve tenant com fallback em cascata
     rest_id = (
-        req.restaurante_id
-        or _ctx_rid.get()
+        _ctx_rid.get()
         or getattr(current_user, "restaurante_id", None)
     )
     if not rest_id or not isinstance(rest_id, int) or rest_id <= 0:
         raise HTTPException(
             status_code=400,
             detail=(
-                "restaurante_id não pôde ser determinado. "
-                "Passe-o explicitamente no body: {\"restaurante_id\": <ID_RESTAURANTE>, ...}"
+                "restaurante_id não pôde ser determinado a partir da sessão autenticada."
             )
+        )
+    if req.restaurante_id is not None and req.restaurante_id != rest_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Não é permitido injetar impressão em outro restaurante."
         )
 
     ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d%H%M%S%f")
@@ -185,7 +185,7 @@ def inject_print_job(
 @router.post("/register")
 def register_agent(
     req: RegisterAgentRequest,
-    current_user: Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(require_permission("impressao:administrar")),
     db: Session = Depends(get_db)
 ):
     """
@@ -436,7 +436,7 @@ def fail_job(
 @router.post("/jobs/{job_id}/reprint")
 def request_reprint(
     job_id: str,
-    current_user: Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(require_permission("impressao:administrar")),
     db: Session = Depends(get_db)
 ):
     """
