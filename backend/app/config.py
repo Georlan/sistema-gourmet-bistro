@@ -11,6 +11,12 @@ class Settings:
     # DDL/migrações usam uma credencial administrativa separada. O runtime
     # deve usar uma role não proprietária e sem BYPASSRLS em DATABASE_URL.
     MIGRATION_DATABASE_URL: str = os.getenv("MIGRATION_DATABASE_URL", DATABASE_URL)
+    # Mantém uma instância da API em até 10 conexões simultâneas por padrão.
+    # Dimensione o total considerando todas as réplicas e o limite do provedor.
+    DB_POOL_SIZE: int = int(os.getenv("DB_POOL_SIZE", "5"))
+    DB_MAX_OVERFLOW: int = int(os.getenv("DB_MAX_OVERFLOW", "5"))
+    DB_POOL_TIMEOUT: int = int(os.getenv("DB_POOL_TIMEOUT", "15"))
+    DB_POOL_RECYCLE: int = int(os.getenv("DB_POOL_RECYCLE", "1800"))
     
     # Sentry DSN (Vazio por padrão em conformidade com P0.1 - lido exclusivamente de variável de ambiente)
     SENTRY_DSN: str = os.getenv("SENTRY_DSN", "")

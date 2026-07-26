@@ -1,10 +1,12 @@
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Column,
     DateTime,
     Float,
     ForeignKey,
     ForeignKeyConstraint,
+    Index,
     Integer,
     JSON,
     String,
@@ -45,6 +47,16 @@ class Restaurante(Base):
 
 class Usuario(Base):
     __tablename__ = "usuarios"
+    __table_args__ = (
+        CheckConstraint(
+            "cargo IN ('admin', 'superadmin', 'caixa', 'garcom', 'gerente', 'motoboy')",
+            name="ck_usuarios_cargo",
+        ),
+        CheckConstraint(
+            "status IS NULL OR status IN ('pendente_ativacao', 'ativo', 'inativo')",
+            name="ck_usuarios_status",
+        ),
+    )
     
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     nome = Column(String(100), nullable=False)
@@ -131,6 +143,15 @@ class Produto(Base):
             name='fk_produtos_categoria_tenant',
             ondelete='RESTRICT',
         ),
+        CheckConstraint(
+            "preco >= 0",
+            name="ck_produtos_preco_nonnegative_finite",
+        ),
+        Index(
+            "ix_produtos_tenant_categoria_fk",
+            "restaurante_id",
+            "categoria_id",
+        ).ddl_if(dialect="postgresql"),
     )
 
     pk = Column(Integer, primary_key=True, autoincrement=True)
@@ -171,6 +192,11 @@ class ObservacaoPredefinida(Base):
             name='fk_observacoes_categoria_tenant',
             ondelete='CASCADE',
         ),
+        Index(
+            "ix_observacoes_tenant_categoria_fk",
+            "restaurante_id",
+            "categoria_id",
+        ).ddl_if(dialect="postgresql"),
     )
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
@@ -196,6 +222,32 @@ class Comanda(Base):
             'idempotency_key',
             name='uq_comandas_restaurante_idempotency',
         ),
+        CheckConstraint(
+            "valor_pago >= 0 AND (delivery_taxa IS NULL OR delivery_taxa >= 0)",
+            name="ck_comandas_valores_nonnegative_finite",
+        ),
+        CheckConstraint(
+            "idempotency_key IS NULL OR trim(idempotency_key) <> ''",
+            name="ck_comandas_idempotency_nonblank",
+        ),
+        CheckConstraint(
+            "tipo IS NULL OR tipo IN ('Consumo no Local', 'Retirada', 'Entrega', 'Delivery')",
+            name="ck_comandas_tipo",
+        ),
+        CheckConstraint(
+            "delivery_status IS NULL OR delivery_status IN "
+            "('analise', 'pendente', 'producao', 'pronto', 'transito', 'finalizado', 'recusado')",
+            name="ck_comandas_delivery_status",
+        ),
+        CheckConstraint(
+            "status_comanda IS NULL OR status_comanda = 'aguardando_pagamento'",
+            name="ck_comandas_status_comanda",
+        ),
+        Index(
+            "ix_comandas_tenant_mesa_fk",
+            "restaurante_id",
+            "mesa_id",
+        ).ddl_if(dialect="postgresql"),
     )
     
     id = Column(String, primary_key=True, index=True)
@@ -224,7 +276,7 @@ class Comanda(Base):
     valor_pago = Column(Float, default=0.0, nullable=False)  # Sum of generic partial payments made
     
     # Delivery operational fields
-    delivery_status = Column(String, nullable=True)  # pendente | producao | pronto | transito | finalizado
+    delivery_status = Column(String, nullable=True)  # analise | pendente | producao | pronto | transito | finalizado
     delivery_taxa = Column(Float, default=0.0)
     _delivery_telefone = Column("delivery_telefone", String, nullable=True)
     _delivery_endereco = Column("delivery_endereco", String, nullable=True)
@@ -280,6 +332,19 @@ class Item(Base):
             name='fk_itens_produto_tenant',
             ondelete='RESTRICT',
         ),
+        CheckConstraint(
+            "preco_unit >= 0",
+            name="ck_itens_preco_unit_nonnegative_finite",
+        ),
+        CheckConstraint(
+            "status IS NULL OR status IN ('preparando', 'pronto', 'entregue', 'cancelado')",
+            name="ck_itens_status",
+        ),
+        Index(
+            "ix_itens_tenant_produto_fk",
+            "restaurante_id",
+            "produto_id",
+        ).ddl_if(dialect="postgresql"),
     )
     
     id = Column(String, primary_key=True, index=True)
@@ -313,6 +378,19 @@ class Item(Base):
 
 class CaixaTurno(Base):
     __tablename__ = "caixa_turnos"
+    __table_args__ = (
+        CheckConstraint(
+            "saldo_inicial >= 0 "
+            "AND (declarado_dinheiro IS NULL OR declarado_dinheiro >= 0) "
+            "AND (declarado_pix IS NULL OR declarado_pix >= 0) "
+            "AND (declarado_cartao IS NULL OR declarado_cartao >= 0)",
+            name="ck_caixa_turnos_valores_nonnegative_finite",
+        ),
+        CheckConstraint(
+            "status IS NULL OR status IN ('aberto', 'fechado')",
+            name="ck_caixa_turnos_status",
+        ),
+    )
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
@@ -334,6 +412,20 @@ class CaixaTurno(Base):
 
 class CaixaMovimentacao(Base):
     __tablename__ = "caixa_movimentacoes"
+    __table_args__ = (
+        CheckConstraint(
+            "valor > 0",
+            name="ck_caixa_movimentacoes_valor_positive_finite",
+        ),
+        CheckConstraint(
+            "tipo IN ('suprimento', 'sangria')",
+            name="ck_caixa_movimentacoes_tipo",
+        ),
+        Index(
+            "ix_caixa_movimentacoes_usuario_fk",
+            "usuario_id",
+        ).ddl_if(dialect="postgresql"),
+    )
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
@@ -353,6 +445,24 @@ class CaixaMovimentacao(Base):
 
 class Pagamento(Base):
     __tablename__ = "pagamentos"
+    __table_args__ = (
+        CheckConstraint(
+            "valor > 0",
+            name="ck_pagamentos_valor_positive_finite",
+        ),
+        CheckConstraint(
+            "metodo IN ('dinheiro', 'pix', 'cartao', 'cartao_debito', 'cartao_credito')",
+            name="ck_pagamentos_metodo",
+        ),
+        CheckConstraint(
+            "status IS NULL OR status IN ('pendente', 'aprovado', 'cancelado')",
+            name="ck_pagamentos_status",
+        ),
+        CheckConstraint(
+            "idempotency_key IS NULL OR trim(idempotency_key) <> ''",
+            name="ck_pagamentos_idempotency_nonblank",
+        ),
+    )
     
     id = Column(String, primary_key=True, index=True)
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False)
@@ -377,6 +487,12 @@ Garcom = Usuario
 
 class ConfiguracaoRestaurante(Base):
     __tablename__ = "configuracoes_restaurante"
+    __table_args__ = (
+        CheckConstraint(
+            "taxa_servico_padrao IS NULL OR taxa_servico_padrao BETWEEN 0 AND 100",
+            name="ck_config_restaurante_taxa_servico",
+        ),
+    )
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False)
@@ -413,6 +529,12 @@ class ConfiguracaoRestaurante(Base):
 
 class ConfiguracaoIA(Base):
     __tablename__ = "configuracoes_ia"
+    __table_args__ = (
+        CheckConstraint(
+            "desconto_maximo IS NULL OR desconto_maximo BETWEEN 0 AND 100",
+            name="ck_config_ia_desconto_maximo",
+        ),
+    )
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
@@ -527,6 +649,11 @@ class ProdutoGrupoModificador(Base):
             name='fk_produto_grupo_produto_tenant',
             ondelete='CASCADE',
         ),
+        Index(
+            "ix_produto_grupo_tenant_produto_fk",
+            "restaurante_id",
+            "produto_id",
+        ).ddl_if(dialect="postgresql"),
     )
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
@@ -636,6 +763,10 @@ class Cliente(Base):
     
     __table_args__ = (
         UniqueConstraint('restaurante_id', 'telefone', name='uq_restaurante_cliente_telefone'),
+        CheckConstraint(
+            "saldo_cashback >= 0",
+            name="ck_clientes_cashback_nonnegative_finite",
+        ),
     )
 
 
@@ -696,6 +827,16 @@ class ItemNotaEntrada(Base):
 
 class EntradaEstoque(Base):
     __tablename__ = "entradas_estoque"
+    __table_args__ = (
+        Index(
+            "ix_entradas_estoque_distribuidor_fk",
+            "distribuidor_id",
+        ).ddl_if(dialect="postgresql"),
+        Index(
+            "ix_entradas_estoque_usuario_fk",
+            "usuario_id",
+        ).ddl_if(dialect="postgresql"),
+    )
     
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
@@ -716,6 +857,16 @@ class EntradaEstoque(Base):
 
 class ItemEntradaEstoque(Base):
     __tablename__ = "itens_entrada_estoque"
+    __table_args__ = (
+        Index(
+            "ix_itens_entrada_entrada_fk",
+            "entrada_id",
+        ).ddl_if(dialect="postgresql"),
+        Index(
+            "ix_itens_entrada_insumo_fk",
+            "insumo_id",
+        ).ddl_if(dialect="postgresql"),
+    )
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
@@ -733,6 +884,12 @@ class ItemEntradaEstoque(Base):
 
 class MovimentacaoEstoque(Base):
     __tablename__ = "movimentacoes_estoque"
+    __table_args__ = (
+        Index(
+            "ix_movimentacoes_estoque_usuario_fk",
+            "usuario_id",
+        ).ddl_if(dialect="postgresql"),
+    )
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
@@ -756,6 +913,12 @@ class MovimentacaoEstoque(Base):
 
 class SessaoContagemEstoque(Base):
     __tablename__ = "sessoes_contagem_estoque"
+    __table_args__ = (
+        Index(
+            "ix_sessoes_contagem_usuario_fk",
+            "usuario_id",
+        ).ddl_if(dialect="postgresql"),
+    )
     
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
@@ -772,6 +935,16 @@ class SessaoContagemEstoque(Base):
 
 class ItemContagemEstoque(Base):
     __tablename__ = "itens_contagem_estoque"
+    __table_args__ = (
+        Index(
+            "ix_itens_contagem_contagem_fk",
+            "contagem_id",
+        ).ddl_if(dialect="postgresql"),
+        Index(
+            "ix_itens_contagem_insumo_fk",
+            "insumo_id",
+        ).ddl_if(dialect="postgresql"),
+    )
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
