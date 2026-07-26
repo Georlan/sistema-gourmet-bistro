@@ -103,9 +103,12 @@ class ObservacaoResponse(BaseModel):
 # ─── CATEGORIES ENDPOINTS ─────────────────────────────────────────────────────
 @router.get("/categorias", response_model=List[CategoriaResponse])
 def get_categorias(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
-    """Retorna todas as categorias de produtos cadastradas no cardápio."""
-    categorias = db.query(Categoria).all()
+    """Retorna todas as categorias de produtos cadastradas no cardápio do restaurante ativo."""
+    rest_id = require_tenant_id()
+    categorias = db.query(Categoria).filter(Categoria.restaurante_id == rest_id).all()
     order_list = [
+        "Pizzas Tradicionais",
+        "Pizzas Especiais",
         "Hambúrgueres Bovinos",
         "Hambúrgueres de Frango",
         "Hambúrgueres Suínos",
@@ -117,8 +120,10 @@ def get_categorias(db: Session = Depends(get_db), current_user: Usuario = Depend
         "Combos Promocionais",
         "Sucos",
         "Refrigerantes e Águas",
+        "Bebidas & Vinhos",
         "Cervejas",
-        "Bebidas Quentes"
+        "Bebidas Quentes",
+        "Sobremesas"
     ]
     return sorted(
         categorias,
@@ -260,18 +265,21 @@ def retry_print_queue(
 # ----------------- PRODUCTS ENDPOINTS -----------------
 @router.get("/", response_model=List[ProdutoResponse])
 def get_produtos(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
-    """Retorna todos os produtos cadastrados no cardápio, ordenados por ID dentro de cada categoria."""
+    """Retorna todos os produtos cadastrados no cardápio do restaurante ativo, ordenados por ID dentro de cada categoria."""
+    rest_id = require_tenant_id()
     return (
         db.query(Produto)
         .options(joinedload(Produto.categoria))
+        .filter(Produto.restaurante_id == rest_id)
         .order_by(Produto.id)
         .all()
     )
 
 @router.get("/{produto_id}", response_model=ProdutoResponse)
 def get_produto(produto_id: str, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
-    """Busca um produto específico no cardápio pelo ID."""
-    produto = db.query(Produto).filter(Produto.id == produto_id).first()
+    """Busca um produto específico no cardápio do restaurante ativo pelo ID."""
+    rest_id = require_tenant_id()
+    produto = db.query(Produto).filter(Produto.id == produto_id, Produto.restaurante_id == rest_id).first()
     if not produto:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
