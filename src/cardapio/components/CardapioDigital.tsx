@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { X, CheckCircle, ShoppingBag, Send, AlertCircle, Copy, Loader2, Check } from "lucide-react";
 import { BrandConfig } from "../CardapioTypes";
 import { CartItem } from "./CardapioCartDrawer";
