@@ -1,52 +1,252 @@
-import os
-import uuid
-import httpx
+from contextlib import contextmanager
 import logging
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+from urllib.parse import quote, unquote
+import uuid
+
+import httpx
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from ..config import settings
-from ..database import get_db, require_tenant_id, current_restaurante_id
+from ..database import (
+    bind_session_to_tenant,
+    current_restaurante_id,
+    get_db,
+    require_tenant_id,
+)
 from ..models import Restaurante, Usuario, Categoria, Produto
 from ..security import require_permission, get_current_garcom_optional
-from ..schemas import RestauranteConfigResponse, RestauranteConfigUpdate
+from ..schemas import (
+    CardapioPublicRestaurantResponse,
+    CardapioPublicResponse,
+    RestauranteConfigResponse,
+    RestauranteConfigUpdate,
+)
 
 logger = logging.getLogger("koma.cardapio_digital")
 router = APIRouter(prefix="/api/cardapio-digital", tags=["Cardapio Digital Assets"])
 
-def resolve_restaurant_id(restaurante_id: Optional[str], slug: Optional[str], db: Session, current_user: Optional[Usuario] = None) -> int:
+MAX_ASSET_SIZE = 5 * 1024 * 1024
+ALLOWED_ASSET_TYPES = {
+    "image/png": ("png", b"\x89PNG\r\n\x1a\n"),
+    "image/jpeg": ("jpg", b"\xff\xd8\xff"),
+    "image/webp": ("webp", b"RIFF"),
+}
+
+
+def _validate_asset_content(content_type: str, content: bytes) -> str:
+    normalized_type = (content_type or "").split(";", 1)[0].strip().lower()
+    asset_type = ALLOWED_ASSET_TYPES.get(normalized_type)
+    if asset_type is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Formato de arquivo inválido. Use PNG, JPEG ou WebP.",
+        )
+
+    extension, signature = asset_type
+    has_valid_signature = content.startswith(signature)
+    if normalized_type == "image/webp":
+        has_valid_signature = (
+            len(content) >= 12
+            and content.startswith(b"RIFF")
+            and content[8:12] == b"WEBP"
+        )
+    if not has_valid_signature:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="O conteúdo do arquivo não corresponde ao formato informado.",
+        )
+    return extension
+
+
+def _storage_object_path(
+    asset_url: Optional[str],
+    restaurante_id: int,
+    asset_type: str,
+) -> Optional[str]:
+    if not asset_url:
+        return None
+    marker = "/storage/v1/object/public/cardapio-assets/"
+    if marker in asset_url:
+        clean_path = asset_url.split(marker, 1)[1].split("?", 1)[0]
+    else:
+        clean_path = asset_url.lstrip("/")
+    if clean_path.startswith("cardapio-assets/"):
+        clean_path = clean_path.removeprefix("cardapio-assets/")
+
+    clean_path = unquote(clean_path)
+    expected_prefix = f"{restaurante_id}/{asset_type}/"
+    if not clean_path.startswith(expected_prefix):
+        return None
+    if any(part in {"", ".", ".."} for part in clean_path.split("/")):
+        return None
+    return clean_path
+
+
+def _supabase_storage_headers(content_type: Optional[str] = None) -> dict:
+    service_key = settings.SUPABASE_SERVICE_ROLE_KEY
+    if not service_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Armazenamento de imagens não configurado.",
+        )
+    headers = {
+        "Authorization": f"Bearer {service_key}",
+        "apikey": service_key,
+    }
+    if content_type:
+        headers["Content-Type"] = content_type
+        headers["x-upsert"] = "false"
+    return headers
+
+
+def resolve_restaurant_id(
+    restaurante_id: Optional[str],
+    slug: Optional[str],
+    db: Session,
+    current_user: Optional[Usuario] = None,
+) -> int:
     """
-    Resolve dinamicamente o restaurante_id a partir do ID, slug ou sessão autenticada.
-    Lança HTTP 400 se o identificador não for fornecido ou HTTP 404 se não for localizado.
+    Resolve um identificador público sem consultar tabelas tenant via ORM.
+
+    No PostgreSQL, a função SECURITY DEFINER é a única operação autorizada antes
+    de a sessão receber o tenant. Depois da resolução, a transação sentinela é
+    descartada e toda consulta seguinte recebe ``app.current_restaurante_id``.
     """
-    rest_id = None
-    if restaurante_id:
-        if str(restaurante_id).isdigit():
-            rest_id = int(restaurante_id)
-        elif not slug:
-            slug = str(restaurante_id)
+    restaurant_identifier = (
+        str(restaurante_id).strip() if restaurante_id is not None else ""
+    )
+    slug_identifier = str(slug).strip() if slug is not None else ""
+    identifier = restaurant_identifier or slug_identifier
 
-    if slug:
-        rest = db.query(Restaurante).filter(Restaurante.slug == slug).first()
-        if rest:
-            return rest.id
+    if identifier:
+        if len(identifier) > 128:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Identificador de restaurante inválido.",
+            )
 
-    if rest_id:
-        rest = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
-        if rest:
-            return rest.id
+        if db.get_bind().dialect.name == "postgresql":
+            resolved_id = db.execute(
+                text(
+                    "SELECT id "
+                    "FROM koma_internal.resolve_public_restaurant(:identifier)"
+                ),
+                {"identifier": identifier},
+            ).scalar_one_or_none()
+        else:
+            # Compatibilidade com SQLite nos testes locais. SQL textual evita
+            # que um contexto anterior altere a resolução do identificador.
+            resolved_id = db.execute(
+                text(
+                    """
+                    SELECT id
+                    FROM restaurantes
+                    WHERE CAST(id AS TEXT) = :identifier
+                       OR lower(COALESCE(slug, '')) = lower(:identifier)
+                    ORDER BY CASE
+                        WHEN CAST(id AS TEXT) = :identifier THEN 0
+                        ELSE 1
+                    END
+                    LIMIT 1
+                    """
+                ),
+                {"identifier": identifier},
+            ).scalar_one_or_none()
 
-    ctx_id = current_restaurante_id.get() or (current_user.tenant_id if current_user else None) or (current_user.restaurante_id if current_user else None)
-    if ctx_id:
-        return ctx_id
+        if resolved_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Restaurante não encontrado.",
+            )
 
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail="Identificador de restaurante é obrigatório."
+        rest_id = int(resolved_id)
+    else:
+        rest_id = current_restaurante_id.get()
+        if rest_id is None and current_user is not None:
+            rest_id = (
+                getattr(current_user, "tenant_id", None)
+                or getattr(current_user, "restaurante_id", None)
+            )
+
+        if not isinstance(rest_id, int) or isinstance(rest_id, bool) or rest_id <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Identificador de restaurante é obrigatório.",
+            )
+
+    bind_session_to_tenant(db, rest_id)
+    return rest_id
+
+
+@contextmanager
+def public_tenant_scope(
+    restaurante_id: Optional[str],
+    slug: Optional[str],
+    db: Session,
+    current_user: Optional[Usuario] = None,
+):
+    """Mantém ORM e RLS vinculados ao mesmo tenant durante a operação pública."""
+    rest_id = resolve_restaurant_id(restaurante_id, slug, db, current_user)
+    token = current_restaurante_id.set(rest_id)
+    try:
+        yield rest_id
+    finally:
+        current_restaurante_id.reset(token)
+
+
+def _ordered_categories(categories: list[Categoria]) -> list[Categoria]:
+    order_list = [
+        "Hambúrgueres Bovinos", "Hambúrgueres de Frango", "Hambúrgueres Suínos",
+        "Baguetes", "Pastéis Tradicionais", "Pastelões Especiais", "Pastéis Doces",
+        "Petiscos", "Combos Promocionais", "Sucos", "Refrigerantes e Águas",
+        "Cervejas", "Bebidas Quentes",
+    ]
+    order_index = {name: index for index, name in enumerate(order_list)}
+    return sorted(
+        categories,
+        key=lambda category: order_index.get(category.nome, len(order_list)),
     )
 
-@router.get("/config", response_model=RestauranteConfigResponse)
-@router.get("/", response_model=RestauranteConfigResponse)
+
+def _public_restaurant_payload(restaurante: Restaurante) -> dict:
+    return {
+        "id": restaurante.id,
+        "nome": restaurante.nome,
+        "slug": restaurante.slug,
+        "logo_url": restaurante.logo_url or restaurante.cardapio_logo_path,
+        "banner_url": restaurante.banner_url or restaurante.cardapio_banner_path,
+        "subtitulo": restaurante.subtitulo,
+        "sobre_nos": restaurante.sobre_nos,
+        "endereco": restaurante.endereco,
+        "google_maps_url": restaurante.google_maps_url,
+        "status_override": restaurante.status_override,
+        "socials": restaurante.socials,
+        "horarios_funcionamento": restaurante.horarios_funcionamento,
+        "formas_pagamento_aceitas": restaurante.formas_pagamento_aceitas,
+        "cor_primaria": restaurante.cor_primaria,
+        "cor_fundo": restaurante.cor_fundo,
+    }
+
+
+def _public_category_payload(category: Categoria) -> dict:
+    return {"id": category.id, "nome": category.nome}
+
+
+def _public_product_payload(product: Produto) -> dict:
+    return {
+        "id": product.id,
+        "nome": product.nome,
+        "descricao": product.descricao or "",
+        "preco": float(product.preco) if product.preco is not None else 0.0,
+        "imagem_url": product.imagem or "",
+        "categoria_id": product.categoria_id,
+    }
+
+
+@router.get("/config", response_model=CardapioPublicRestaurantResponse)
+@router.get("/", response_model=CardapioPublicRestaurantResponse)
 def obter_config_cardapio_digital(
     restaurante_id: Optional[str] = None,
     slug: Optional[str] = None,
@@ -57,15 +257,18 @@ def obter_config_cardapio_digital(
     Retorna as configurações whitelabel de personalização do restaurante ativo.
     Filtra dinamicamente por restaurante_id (int ou string) ou slug.
     """
-    rest_id = resolve_restaurant_id(restaurante_id, slug, db, current_user)
-    restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
-    if not restaurante:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Restaurante não encontrado."
-        )
-
-    return restaurante
+    with public_tenant_scope(
+        restaurante_id, slug, db, current_user
+    ) as rest_id:
+        restaurante = db.query(Restaurante).filter(
+            Restaurante.id == rest_id
+        ).first()
+        if not restaurante:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Restaurante não encontrado.",
+            )
+        return _public_restaurant_payload(restaurante)
 
 
 @router.get("/categorias")
@@ -75,26 +278,14 @@ def obter_categorias_cardapio_digital(
     db: Session = Depends(get_db)
 ):
     """Retorna as categorias ativas do restaurante especificado para o cardápio digital (isolamento multi-tenant)."""
-    rest_id = resolve_restaurant_id(restaurante_id, slug, db)
-    categorias = db.query(Categoria).filter(Categoria.restaurante_id == rest_id).all()
-
-    order_list = [
-        "Hambúrgueres Bovinos", "Hambúrgueres de Frango", "Hambúrgueres Suínos",
-        "Baguetes", "Pastéis Tradicionais", "Pastelões Especiais", "Pastéis Doces",
-        "Petiscos", "Combos Promocionais", "Sucos", "Refrigerantes e Águas",
-        "Cervejas", "Bebidas Quentes"
-    ]
-    sorted_cats = sorted(
-        categorias,
-        key=lambda c: order_list.index(c.nome) if c.nome in order_list else len(order_list)
-    )
-    return [
-        {
-            "id": c.id,
-            "nome": c.nome,
-            "destino_impressao": getattr(c, "destino_impressao", "COZINHA")
-        } for c in sorted_cats
-    ]
+    with public_tenant_scope(restaurante_id, slug, db) as rest_id:
+        categorias = db.query(Categoria).filter(
+            Categoria.restaurante_id == rest_id
+        ).all()
+        return [
+            _public_category_payload(category)
+            for category in _ordered_categories(categorias)
+        ]
 
 
 @router.get("/produtos")
@@ -104,25 +295,244 @@ def obter_produtos_cardapio_digital(
     db: Session = Depends(get_db)
 ):
     """Retorna os produtos ativos do restaurante especificado para o cardápio digital (isolamento multi-tenant)."""
-    rest_id = resolve_restaurant_id(restaurante_id, slug, db)
-    produtos = db.query(Produto).filter(
-        Produto.restaurante_id == rest_id,
-        Produto.ativo == True
-    ).all()
+    with public_tenant_scope(restaurante_id, slug, db) as rest_id:
+        produtos = db.query(Produto).filter(
+            Produto.restaurante_id == rest_id,
+            Produto.ativo.is_(True),
+        ).all()
+        return [
+            {**_public_product_payload(product), "ativo": True}
+            for product in produtos
+        ]
 
-    return [
-        {
-            "id": p.id,
-            "nome": p.nome,
-            "descricao": p.descricao or "",
-            "preco": float(p.preco) if p.preco is not None else 0.0,
-            "imagem_url": getattr(p, "imagem_url", None) or getattr(p, "imagem", "") or "",
-            "categoria_id": p.categoria_id,
-            "ativo": p.ativo,
-            "destaque": getattr(p, "destaque", False),
-            "opcoes": getattr(p, "opcoes", None)
-        } for p in produtos
-    ]
+
+@router.get("/public", response_model=CardapioPublicResponse)
+def obter_cardapio_publico(
+    restaurante_id: Optional[str] = None,
+    slug: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: Optional[Usuario] = Depends(get_current_garcom_optional),
+):
+    """Retorna apenas os dados necessários ao cardápio público em um tenant."""
+    with public_tenant_scope(
+        restaurante_id, slug, db, current_user
+    ) as rest_id:
+        restaurante = db.query(Restaurante).filter(
+            Restaurante.id == rest_id
+        ).first()
+        if not restaurante:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Restaurante não encontrado.",
+            )
+
+        categorias = db.query(Categoria).filter(
+            Categoria.restaurante_id == rest_id
+        ).all()
+        produtos = db.query(Produto).filter(
+            Produto.restaurante_id == rest_id,
+            Produto.ativo.is_(True),
+        ).all()
+
+        return {
+            "restaurante": _public_restaurant_payload(restaurante),
+            "categorias": [
+                _public_category_payload(category)
+                for category in _ordered_categories(categorias)
+            ],
+            "produtos": [
+                _public_product_payload(product) for product in produtos
+            ],
+        }
+
+
+@router.post(
+    "/assets/{asset_type}",
+    response_model=RestauranteConfigResponse,
+)
+async def upload_cardapio_asset(
+    asset_type: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(
+        require_permission("configuracoes:administrar")
+    ),
+):
+    """Envia logo/banner validado ao bucket e salva somente no tenant autenticado."""
+    del current_user
+    if asset_type not in {"logo", "banner"}:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tipo de imagem não encontrado.",
+        )
+
+    content_type = file.content_type or ""
+    try:
+        content = await file.read(MAX_ASSET_SIZE + 1)
+    finally:
+        await file.close()
+    if len(content) > MAX_ASSET_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="O arquivo excede o limite máximo de 5 MB.",
+        )
+    extension = _validate_asset_content(content_type, content)
+
+    rest_id = require_tenant_id()
+    restaurante = db.query(Restaurante).filter(
+        Restaurante.id == rest_id
+    ).first()
+    if not restaurante:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Restaurante não encontrado.",
+        )
+
+    object_path = f"{rest_id}/{asset_type}/{uuid.uuid4().hex}.{extension}"
+    storage_url = settings.SUPABASE_URL.rstrip("/")
+    upload_url = (
+        f"{storage_url}/storage/v1/object/cardapio-assets/"
+        f"{quote(object_path, safe='/')}"
+    )
+    try:
+        async with httpx.AsyncClient(timeout=20.0, trust_env=False) as client:
+            response = await client.post(
+                upload_url,
+                headers=_supabase_storage_headers(content_type),
+                content=content,
+            )
+    except httpx.HTTPError as exc:
+        logger.warning(
+            "Falha de rede ao enviar %s do restaurante %s: %s",
+            asset_type,
+            rest_id,
+            type(exc).__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Não foi possível armazenar a imagem.",
+        ) from exc
+
+    if response.status_code not in {status.HTTP_200_OK, status.HTTP_201_CREATED}:
+        logger.warning(
+            "Storage rejeitou upload de %s do restaurante %s com HTTP %s.",
+            asset_type,
+            rest_id,
+            response.status_code,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Não foi possível armazenar a imagem.",
+        )
+
+    public_url = (
+        f"{storage_url}/storage/v1/object/public/cardapio-assets/"
+        f"{quote(object_path, safe='/')}"
+    )
+    if asset_type == "logo":
+        restaurante.logo_url = public_url
+        restaurante.cardapio_logo_path = object_path
+    else:
+        restaurante.banner_url = public_url
+        restaurante.cardapio_banner_path = object_path
+
+    db.commit()
+    db.refresh(restaurante)
+    return restaurante
+
+
+@router.delete(
+    "/assets/{asset_type}",
+    response_model=RestauranteConfigResponse,
+)
+async def delete_cardapio_asset(
+    asset_type: str,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(
+        require_permission("configuracoes:administrar")
+    ),
+):
+    """Remove logo/banner apenas do tenant autenticado."""
+    del current_user
+    if asset_type not in {"logo", "banner"}:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tipo de imagem não encontrado.",
+        )
+
+    rest_id = require_tenant_id()
+    restaurante = db.query(Restaurante).filter(
+        Restaurante.id == rest_id
+    ).first()
+    if not restaurante:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Restaurante não encontrado.",
+        )
+
+    current_url = (
+        (restaurante.logo_url or restaurante.cardapio_logo_path)
+        if asset_type == "logo"
+        else (restaurante.banner_url or restaurante.cardapio_banner_path)
+    )
+    object_path = _storage_object_path(
+        current_url,
+        rest_id,
+        asset_type,
+    )
+    if object_path:
+        delete_url = (
+            f"{settings.SUPABASE_URL.rstrip('/')}"
+            "/storage/v1/object/cardapio-assets"
+        )
+        try:
+            async with httpx.AsyncClient(
+                timeout=20.0,
+                trust_env=False,
+            ) as client:
+                response = await client.request(
+                    "DELETE",
+                    delete_url,
+                    headers=_supabase_storage_headers(),
+                    json={"prefixes": [object_path]},
+                )
+        except httpx.HTTPError as exc:
+            logger.warning(
+                "Falha de rede ao remover %s do restaurante %s: %s",
+                asset_type,
+                rest_id,
+                type(exc).__name__,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Não foi possível remover a imagem.",
+            ) from exc
+
+        if response.status_code not in {
+            status.HTTP_200_OK,
+            status.HTTP_204_NO_CONTENT,
+            status.HTTP_404_NOT_FOUND,
+        }:
+            logger.warning(
+                "Storage rejeitou remoção de %s do restaurante %s com HTTP %s.",
+                asset_type,
+                rest_id,
+                response.status_code,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Não foi possível remover a imagem.",
+            )
+
+    if asset_type == "logo":
+        restaurante.logo_url = None
+        restaurante.cardapio_logo_path = None
+    else:
+        restaurante.banner_url = None
+        restaurante.cardapio_banner_path = None
+    db.commit()
+    db.refresh(restaurante)
+    return restaurante
 
 
 @router.put("/config", response_model=RestauranteConfigResponse)

@@ -319,6 +319,77 @@ def test_pedido_online_rejeita_cobranca_nao_integrada(forma_pagamento):
         db.close()
 
 
+def test_pedido_online_rejeita_restaurante_inexistente_sem_erro_500():
+    response = client.post(
+        "/cardapio/pedidos",
+        json={
+            "restaurante_id": 999999,
+            "itens": [
+                {
+                    "produto_id": "produto-inexistente",
+                    "quantidade": 1,
+                    "observacao": "",
+                }
+            ],
+            "cliente_nome": "Cliente inexistente",
+            "cliente_telefone": "81999990007",
+            "endereco_entrega": "",
+            "taxa_entrega": 0,
+            "forma_pagamento": "na_entrega",
+            "tipo_pedido": "retirada",
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Restaurante não encontrado."
+
+
+def test_pedido_online_nao_inventa_usuario_para_tenant_sem_equipe():
+    restaurant_id = 909001
+    db = SessionLocal()
+    token = current_restaurante_id.set(restaurant_id)
+    try:
+        restaurant = db.query(Restaurante).filter(
+            Restaurante.id == restaurant_id
+        ).first()
+        if not restaurant:
+            db.add(Restaurante(
+                id=restaurant_id,
+                nome="Restaurante sem equipe",
+                plano="pocket",
+                slug="restaurante-sem-equipe",
+            ))
+            db.commit()
+    finally:
+        db.close()
+        current_restaurante_id.reset(token)
+
+    response = client.post(
+        "/cardapio/pedidos",
+        json={
+            "restaurante_id": restaurant_id,
+            "itens": [
+                {
+                    "produto_id": "produto-inexistente",
+                    "quantidade": 1,
+                    "observacao": "",
+                }
+            ],
+            "cliente_nome": "Cliente sem equipe",
+            "cliente_telefone": "81999990008",
+            "endereco_entrega": "",
+            "taxa_entrega": 0,
+            "forma_pagamento": "na_entrega",
+            "tipo_pedido": "retirada",
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == (
+        "Restaurante ainda não está pronto para receber pedidos online."
+    )
+
+
 @pytest.mark.parametrize(
     "path",
     [

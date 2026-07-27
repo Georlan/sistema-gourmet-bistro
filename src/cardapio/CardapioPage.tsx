@@ -3,10 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useCallback, useState, useEffect, useRef } from "react";
 import { Product, BrandConfig, ProductOption, getProductImageUrl, getRestaurantAssetUrl, SocialNetwork, OperatingHours, PaymentMethodGroup } from "./CardapioTypes";
-import { whitelabelBrands } from "./CardapioConfig";
-import { supabase } from "./SupabaseClient";
 import CardapioHeader from "./components/CardapioHeader";
 import CardapioCategoryNav from "./components/CardapioCategoryNav";
 import CardapioProductCard from "./components/CardapioProductCard";
@@ -23,6 +21,21 @@ import { smartSearchMatch } from "../domain";
 
 const getCategoryId = (name: string) =>
   'sec-' + name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-');
+
+interface PublicMenuPayload {
+  restaurante: Record<string, any>;
+  categorias: Array<Record<string, any>>;
+  produtos: Array<Record<string, any>>;
+}
+
+function parseStructuredValue(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
 
 function getRestaurantIdentifier(): string | null {
   // 1. Check query parameters first (high priority for testing)
@@ -172,8 +185,9 @@ export default function CardapioPage() {
     }
   }, [cep, logradouro, numero, bairro, cidade, estado, deliveryMethod]);
 
-  // Dynamic restaurant loading from Supabase
-  const loadRestaurantData = async () => {
+  // O navegador público usa apenas a API tenant-aware. As tabelas
+  // multi-tenant não são consultadas diretamente pelo cliente.
+  const loadRestaurantData = useCallback(async () => {
     setIsLoading(true);
     setErrorMsg("");
     const identifier = getRestaurantIdentifier();
@@ -185,143 +199,52 @@ export default function CardapioPage() {
     }
 
     try {
-      let restaurant: any = null;
-      
-      // 1. Try Supabase first (select("*") to fetch all dynamic columns from table restaurantes)
-      try {
-        if (/^\d+$/.test(identifier)) {
-          const { data } = await supabase
-            .from("restaurantes")
-            .select("*")
-            .eq("id", Number(identifier))
-            .maybeSingle();
-          if (data) restaurant = data;
-        }
-
-        if (!restaurant && identifier) {
-          const { data } = await supabase
-            .from("restaurantes")
-            .select("*")
-            .eq("slug", identifier)
-            .maybeSingle();
-          if (data) restaurant = data;
-        }
-      } catch (sukaErr) {
-        console.warn("Falha na consulta Supabase ao restaurante:", sukaErr);
+      const query = new URLSearchParams(
+        /^\d+$/.test(identifier)
+          ? { restaurante_id: identifier }
+          : { slug: identifier }
+      );
+      const response = await fetch(
+        `${API_BASE_URL}/api/cardapio-digital/public?${query.toString()}`,
+        { cache: "no-store" }
+      );
+      if (response.status === 404) {
+        throw new Error("CARDAPIO_NOT_FOUND");
+      }
+      if (!response.ok) {
+        throw new Error(`CARDAPIO_HTTP_${response.status}`);
       }
 
-      // 2. Secondary fallback to Backend REST API if Supabase query returned nothing
-      if (!restaurant) {
-        try {
-          const isNum = /^\d+$/.test(identifier);
-          const apiEndpoint = isNum
-            ? `${API_BASE_URL}/api/cardapio-digital/config?restaurante_id=${identifier}`
-            : `${API_BASE_URL}/api/cardapio-digital/config?slug=${identifier}`;
-          const res = await fetch(apiEndpoint);
-          if (res.ok) {
-            restaurant = await res.json();
-          }
-        } catch (apiErr) {
-          console.warn("Falha ao buscar restaurante via API backend:", apiErr);
-        }
+      const payload = await response.json() as PublicMenuPayload;
+      if (
+        !payload?.restaurante
+        || !Array.isArray(payload.categorias)
+        || !Array.isArray(payload.produtos)
+      ) {
+        throw new Error("CARDAPIO_INVALID_RESPONSE");
       }
 
-      // Fallback to static mock whitelabel configuration if DB and API have no such entry
-      if (!restaurant) {
-        console.warn("Restaurante não encontrado no banco/API. Usando dados de demonstração.");
-        const fallbackBrand = whitelabelBrands.burger;
-        setActiveBrand(fallbackBrand);
-        setIsLoading(false);
-        return;
-      }
-
-      // Load categories with REST API fallback if Supabase returns permission error or empty
-      let categoriesData = null;
-      try {
-        const { data, error } = await supabase
-          .from("categorias")
-          .select("*")
-          .eq("restaurante_id", restaurant.id);
-        if (!error && data && data.length > 0) {
-          categoriesData = data;
-        }
-      } catch (e) {}
-
-      if (!categoriesData || categoriesData.length === 0) {
-        try {
-          const resCats = await fetch(`${API_BASE_URL}/api/cardapio-digital/categorias?restaurante_id=${restaurant.id}`);
-          if (resCats.ok) {
-            categoriesData = await resCats.json();
-          }
-        } catch (e) {
-          console.warn("Falha ao buscar categorias via API:", e);
-        }
-      }
-
-      // Sort categories by position/ordem/order
-      const sortedCategories = [...(categoriesData || [])].sort((a, b) => {
-        const orderA = a.ordem !== undefined ? a.ordem : (a.order !== undefined ? a.order : (a.posicao !== undefined ? a.posicao : 0));
-        const orderB = b.ordem !== undefined ? b.ordem : (b.order !== undefined ? b.order : (b.posicao !== undefined ? b.posicao : 0));
-        return orderA - orderB;
-      });
-
-      // Load active products with REST API fallback if Supabase returns permission error or empty
-      let productsData = null;
-      try {
-        const { data, error } = await supabase
-          .from("produtos")
-          .select("*")
-          .eq("restaurante_id", restaurant.id);
-        if (!error && data && data.length > 0) {
-          productsData = data;
-        }
-      } catch (e) {}
-
-      if (!productsData || productsData.length === 0) {
-        try {
-          const resProds = await fetch(`${API_BASE_URL}/api/cardapio-digital/produtos?restaurante_id=${restaurant.id}`);
-          if (resProds.ok) {
-            productsData = await resProds.json();
-          }
-        } catch (e) {
-          console.warn("Falha ao buscar produtos via API:", e);
-        }
-      }
-
-      // Filter active products
-      const activeProducts = (productsData || []).filter((p) => {
-        const isAtivo = p.ativo !== undefined ? p.ativo : (p.is_active !== undefined ? p.is_active : (p.active !== undefined ? p.active : true));
-        return isAtivo;
-      });
+      const restaurant = payload.restaurante;
+      const categoriesData = payload.categorias;
+      const productsData = payload.produtos;
 
       // Category Map
       const categoryMap: Record<string, string> = {};
-      sortedCategories.forEach((c) => {
-        categoryMap[String(c.id)] = c.nome || c.name || "";
+      categoriesData.forEach((category) => {
+        categoryMap[String(category.id)] = String(category.nome || "");
       });
 
       // Map products
-      const mappedProducts: Product[] = activeProducts.map((p) => {
-        const catName = categoryMap[String(p.categoria_id)] || "Destaques";
-        
-        let modifiersList = [];
-        if (p.modifiers) {
-          if (typeof p.modifiers === "string") {
-            try { modifiersList = JSON.parse(p.modifiers); } catch(e) {}
-          } else if (Array.isArray(p.modifiers)) {
-            modifiersList = p.modifiers;
-          }
-        }
-
+      const mappedProducts: Product[] = productsData.map((product) => {
         return {
-          id: String(p.id),
-          name: p.nome || p.name || "",
-          description: p.descricao || p.description || "",
-          price: Number(p.preco || p.price || 0),
-          image: getProductImageUrl(p.imagem_url || p.image || p.image_url || ""),
-          category: catName,
-          modifiers: modifiersList,
-          isAvailable: p.disponivel !== undefined ? p.disponivel : (p.is_available !== undefined ? p.is_available : true)
+          id: String(product.id),
+          name: String(product.nome || ""),
+          description: String(product.descricao || ""),
+          price: Number(product.preco || 0),
+          image: getProductImageUrl(String(product.imagem_url || "")),
+          category: categoryMap[String(product.categoria_id)] || "Destaques",
+          modifiers: [],
+          isAvailable: true,
         };
       });
 
@@ -332,49 +255,59 @@ export default function CardapioPage() {
       const cardColor = isDarkBg ? "#121420" : "#ffffff";
       const textColor = isDarkBg ? "#ffffff" : "#1e293b";
 
-      const categoryNames = sortedCategories.map((c) => c.nome || c.name || "").filter(Boolean);
+      const categoryNames = categoriesData
+        .map((category) => String(category.nome || ""))
+        .filter(Boolean);
 
       // Map social networks dynamically from JSON object or Array
       let mappedSocials: SocialNetwork[] = [];
       let whatsappNumber = "";
-      if (restaurant.socials) {
-        const s = typeof restaurant.socials === "string" ? JSON.parse(restaurant.socials) : restaurant.socials;
-        if (typeof s === "object" && !Array.isArray(s)) {
-          if (s.whatsapp) {
-            whatsappNumber = String(s.whatsapp).replace(/\D/g, "");
-          }
-          Object.entries(s).forEach(([platform, value]) => {
-            if (value) {
-              let url = String(value);
-              if (platform === "instagram" && !url.startsWith("http")) {
-                url = `https://instagram.com/${url.replace("@", "")}`;
-              } else if (platform === "whatsapp") {
-                url = `https://wa.me/${url.replace(/\D/g, "")}`;
-              }
-              mappedSocials.push({
-                platform: platform === "instagram" ? "Instagram" : platform === "whatsapp" ? "WhatsApp" : platform,
-                url,
-                active: true
-              });
+      const socials = parseStructuredValue(restaurant.socials);
+      if (socials && typeof socials === "object" && !Array.isArray(socials)) {
+        const socialRecord = socials as Record<string, unknown>;
+        if (socialRecord.whatsapp) {
+          whatsappNumber = String(socialRecord.whatsapp).replace(/\D/g, "");
+        }
+        Object.entries(socialRecord).forEach(([platform, value]) => {
+          if (value) {
+            let url = String(value);
+            if (platform === "instagram" && !url.startsWith("http")) {
+              url = `https://instagram.com/${url.replace("@", "")}`;
+            } else if (platform === "whatsapp") {
+              url = `https://wa.me/${url.replace(/\D/g, "")}`;
             }
-          });
-        } else if (Array.isArray(s)) {
-          mappedSocials = s;
-          const wa = s.find((item: any) => item.platform?.toLowerCase() === "whatsapp");
-          if (wa) {
-            whatsappNumber = wa.url.replace(/\D/g, "");
+            mappedSocials.push({
+              platform: platform === "instagram" ? "Instagram" : platform === "whatsapp" ? "WhatsApp" : platform,
+              url,
+              active: true
+            });
           }
+        });
+      } else if (Array.isArray(socials)) {
+        mappedSocials = socials
+          .filter((item) => item && typeof item === "object")
+          .map((item: Record<string, unknown>) => ({
+            platform: String(item.platform || ""),
+            url: String(item.url || ""),
+            active: item.active !== false,
+          }))
+          .filter((item) => item.platform && item.url);
+        const whatsapp = mappedSocials.find(
+          (item) => item.platform.toLowerCase() === "whatsapp"
+        );
+        if (whatsapp) {
+          whatsappNumber = whatsapp.url.replace(/\D/g, "");
         }
       }
 
       // Map operating hours dynamically from JSON object or Array
       let mappedHours: OperatingHours[] = [];
-      if (restaurant.horarios_funcionamento) {
-        const h = typeof restaurant.horarios_funcionamento === "string" 
-          ? JSON.parse(restaurant.horarios_funcionamento) 
-          : restaurant.horarios_funcionamento;
-        if (typeof h === "object" && !Array.isArray(h)) {
-          mappedHours = Object.entries(h).map(([key, value]) => {
+      const operatingHours = parseStructuredValue(
+        restaurant.horarios_funcionamento
+      );
+      if (operatingHours && typeof operatingHours === "object") {
+        if (!Array.isArray(operatingHours)) {
+          mappedHours = Object.entries(operatingHours).map(([key, value]) => {
             let days = key;
             if (key === "segunda_a_sexta") days = "Segunda a Sexta";
             else if (key === "segunda_a_quinta") days = "Segunda a Quinta";
@@ -385,60 +318,71 @@ export default function CardapioPage() {
             
             return { days, hours: String(value) };
           });
-        } else if (Array.isArray(h)) {
-          mappedHours = h;
+        } else {
+          mappedHours = operatingHours
+            .filter((item) => item && typeof item === "object")
+            .map((item: Record<string, unknown>) => ({
+              days: String(item.days || ""),
+              hours: String(item.hours || ""),
+            }))
+            .filter((item) => item.days && item.hours);
         }
-      }
-      if (mappedHours.length === 0) {
-        mappedHours = [{ days: "Segunda a Domingo", hours: "18:00 às 23:00" }];
       }
 
       // Map accepted payment methods dynamically from JSON array
       let mappedPayments: PaymentMethodGroup[] = [];
-      if (restaurant.formas_pagamento_aceitas) {
-        const p = typeof restaurant.formas_pagamento_aceitas === "string"
-          ? JSON.parse(restaurant.formas_pagamento_aceitas)
-          : restaurant.formas_pagamento_aceitas;
-        if (Array.isArray(p)) {
-          if (p.includes("credito") || p.includes("Cartão de Crédito")) {
-            mappedPayments.push({ type: "Cartão de Crédito", accepted: ["Visa", "Mastercard", "Elo"] });
-          }
-          if (p.includes("debito") || p.includes("Cartão de Débito")) {
-            mappedPayments.push({ type: "Cartão de Débito", accepted: ["Visa Electron", "Maestro"] });
-          }
-          if (p.includes("pix") || p.includes("Pix")) {
-            mappedPayments.push({ type: "Pix", accepted: ["Pix Instantâneo (QR Code ou Chave Copia e Cola)"] });
-          }
-          if (p.includes("dinheiro") || p.includes("Dinheiro")) {
-            mappedPayments.push({ type: "Dinheiro", accepted: ["Cédulas e Moedas na entrega"] });
-          }
+      const acceptedPayments = parseStructuredValue(
+        restaurant.formas_pagamento_aceitas
+      );
+      if (Array.isArray(acceptedPayments)) {
+        const paymentNames = acceptedPayments
+          .filter((item) => typeof item === "string")
+          .map((item) => item.toLocaleLowerCase("pt-BR"));
+        const configuredGroups = acceptedPayments
+          .filter((item) => item && typeof item === "object")
+          .map((item: Record<string, unknown>) => ({
+            type: String(item.type || ""),
+            accepted: Array.isArray(item.accepted)
+              ? item.accepted.map(String)
+              : [],
+          }))
+          .filter((item) => item.type);
+        mappedPayments.push(...configuredGroups);
+
+        if (paymentNames.some((name) => name.includes("crédito") || name === "credito")) {
+          mappedPayments.push({ type: "Cartão de Crédito", accepted: ["Visa", "Mastercard", "Elo"] });
         }
-      }
-      if (mappedPayments.length === 0) {
-        mappedPayments = [
-          { type: "Cartão de Crédito", accepted: ["Visa", "Mastercard", "Elo"] },
-          { type: "Cartão de Débito", accepted: ["Visa Electron", "Maestro"] },
-          { type: "Pix", accepted: ["Pix com QR Code ou Copia e Cola"] }
-        ];
+        if (paymentNames.some((name) => name.includes("débito") || name === "debito")) {
+          mappedPayments.push({ type: "Cartão de Débito", accepted: ["Visa Electron", "Maestro"] });
+        }
+        if (paymentNames.includes("pix")) {
+          mappedPayments.push({ type: "Pix", accepted: ["Pagamento na entrega"] });
+        }
+        if (paymentNames.includes("dinheiro")) {
+          mappedPayments.push({ type: "Dinheiro", accepted: ["Cédulas e Moedas na entrega"] });
+        }
       }
 
       const logoUrl = getRestaurantAssetUrl(
-        restaurant.logo_url || restaurant.cardapio_logo_path || restaurant.logo || "",
+        restaurant.logo_url || "",
         true
       );
       const bannerUrl = getRestaurantAssetUrl(
-        restaurant.banner_url || restaurant.cardapio_banner_path || restaurant.banner_image || "",
+        restaurant.banner_url || "",
         false
       );
+      const statusOverride = String(
+        restaurant.status_override || "Automático"
+      ).toLocaleLowerCase("pt-BR");
 
       const newBrand: BrandConfig = {
         id: String(restaurant.id),
-        name: restaurant.nome || restaurant.name || "Bagueteria e Pastelaria Pôr do sol",
-        slogan: restaurant.subtitulo || restaurant.slogan || "Não deixe para comer amanhã o que você pode comer hoje!",
+        name: String(restaurant.nome || "Restaurante"),
+        slogan: String(restaurant.subtitulo || ""),
         logo: logoUrl,
         bannerImage: bannerUrl,
-        phone: whatsappNumber || restaurant.telefone || restaurant.phone || "",
-        address: restaurant.endereco || restaurant.address || "",
+        phone: whatsappNumber,
+        address: String(restaurant.endereco || ""),
         colors: {
           primary: primaryColor,
           background: backgroundColor,
@@ -447,66 +391,37 @@ export default function CardapioPage() {
           card: cardColor,
           accent: primaryColor
         },
-        categories: categoryNames.length > 0 ? categoryNames : (whitelabelBrands.burger?.categories || ["Destaques", "Hambúrgueres", "Acompanhamentos", "Bebidas", "Sobremesas"]),
-        products: mappedProducts.length > 0 ? mappedProducts : (whitelabelBrands.burger?.products || []),
+        categories: categoryNames,
+        products: mappedProducts,
         socials: mappedSocials,
-        about: restaurant.sobre_nos || restaurant.about || restaurant.descricao || "",
+        about: String(restaurant.sobre_nos || ""),
         paymentMethods: mappedPayments,
         operatingHours: mappedHours,
-        googleMapsUrl: restaurant.google_maps_url || (restaurant.endereco ? `https://maps.google.com/?q=${encodeURIComponent(restaurant.endereco)}` : "")
+        googleMapsUrl: String(restaurant.google_maps_url || ""),
+        storeStatus: statusOverride.includes("fech")
+          ? "closed"
+          : statusOverride.includes("abert")
+            ? "open"
+            : "automatic",
       };
 
       setActiveBrand(newBrand);
-    } catch (err: any) {
-      console.error("Erro catastrófico ao carregar dados do Supabase:", err);
-      setErrorMsg("Não foi possível carregar as informações do cardápio digital a partir do Supabase.");
+    } catch (err) {
+      console.error("Falha ao carregar cardápio público:", err);
+      setActiveBrand(null);
+      setErrorMsg(
+        err instanceof Error && err.message === "CARDAPIO_NOT_FOUND"
+          ? "Cardápio não encontrado ou ainda não publicado."
+          : "O cardápio está temporariamente indisponível. Tente novamente."
+      );
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadRestaurantData();
-  }, []);
-
-  // Escuta do Supabase Realtime para recarga em tempo real
-  useEffect(() => {
-    const supabaseKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || "sb_publishable_VOLK7mO9OqOhIfm0MeJ0eg_oQ626X4T";
-    const hasRealKey = supabaseKey && supabaseKey !== "dummy-anon-key-to-prevent-bootstrap-error";
-    if (!hasRealKey) return;
-
-    const channel = supabase
-      .channel('cardapio-realtime-changes')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'produtos' },
-        () => {
-          console.log("Realtime: Catálogo de produtos alterado, recarregando...");
-          loadRestaurantData();
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'categorias' },
-        () => {
-          console.log("Realtime: Categorias alteradas, recarregando...");
-          loadRestaurantData();
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'restaurantes' },
-        () => {
-          console.log("Realtime: Dados do restaurante alterados, recarregando...");
-          loadRestaurantData();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
+  }, [loadRestaurantData]);
 
   // Load the local contact profile on mount
   useEffect(() => {
@@ -557,26 +472,13 @@ export default function CardapioPage() {
           const data = JSON.parse(event.data);
           console.log("📥 Messagem WebSocket recebida no Cardápio:", data);
           
-          if (data.event === "CONFIG_UPDATE" && data.data) {
-            console.log("🎨 Sincronizando visual via WebSocket reativo:", data.data);
-            
-            setActiveBrand(prev => {
-              if (!prev) return null;
-              return {
-                ...prev,
-                name: data.data.nome || prev.name,
-                logo: data.data.logo_url || prev.logo,
-                bannerImage: data.data.banner_url || prev.bannerImage,
-                slogan: data.data.subtitulo || prev.slogan,
-                about: data.data.sobre_nos || prev.about,
-                address: data.data.endereco || prev.address,
-                colors: {
-                  ...prev.colors,
-                  primary: data.data.cor_primaria || prev.colors.primary,
-                  background: data.data.cor_fundo || prev.colors.background
-                }
-              };
-            });
+          const eventName = data.event || data.type;
+          if (
+            eventName === "catalog_updated"
+            || eventName === "config_updated"
+            || eventName === "store_status_changed"
+          ) {
+            loadRestaurantData();
           }
         } catch (err) {
           console.error("Erro ao processar mensagem do WebSocket:", err);
@@ -599,11 +501,7 @@ export default function CardapioPage() {
       if (ws) ws.close();
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
     };
-  }, [activeBrand?.id]);
-
-  const handleBrandChange = (brandId: string) => {
-    window.location.search = `?restaurant_id=${brandId}`;
-  };
+  }, [activeBrand?.id, loadRestaurantData]);
 
   const handleLoginSuccess = (profile: any) => {
     setUser(profile);
@@ -828,7 +726,7 @@ export default function CardapioPage() {
             Carregando Cardápio Digital
           </h2>
           <p className="text-xs text-slate-500 leading-relaxed">
-            Sincronizando com o banco de dados do Supabase para moldar os produtos e identidade do restaurante...
+            Carregando os produtos e a identidade do restaurante...
           </p>
         </div>
       </div>
@@ -872,7 +770,6 @@ export default function CardapioPage() {
       {/* 1. TOP HEADER NAVIGATION BAR */}
       <CardapioHeader
         activeBrand={activeBrand}
-        onBrandChange={handleBrandChange}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
         user={user}
@@ -917,8 +814,22 @@ export default function CardapioPage() {
                 </div>
               </div>
               <div className="text-[11px] font-semibold bg-white/10 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/15 self-start sm:self-auto flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                <span>Estabelecimento Aberto</span>
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    activeBrand.storeStatus === "open"
+                      ? "bg-emerald-400 animate-pulse"
+                      : activeBrand.storeStatus === "closed"
+                        ? "bg-red-400"
+                        : "bg-amber-300"
+                  }`}
+                />
+                <span>
+                  {activeBrand.storeStatus === "open"
+                    ? "Estabelecimento Aberto"
+                    : activeBrand.storeStatus === "closed"
+                      ? "Estabelecimento Fechado"
+                      : "Consulte os horários"}
+                </span>
               </div>
             </div>
           </div>
@@ -956,7 +867,11 @@ export default function CardapioPage() {
           <div className="flex flex-col gap-10" id="catalog-feed">
             {visibleCategories.length === 0 ? (
               <div className="p-12 text-center bg-card-app rounded-2xl border border-slate-500/10 shadow-xs animate-fade-in">
-                <p className="text-text-app/50 text-xs font-medium">Nenhum item encontrado para a sua busca.</p>
+                <p className="text-text-app/50 text-xs font-medium">
+                  {activeBrand.products.length === 0
+                    ? "Este restaurante ainda não publicou itens no cardápio."
+                    : "Nenhum item encontrado para a sua busca."}
+                </p>
               </div>
             ) : (
               visibleCategories.map((cat) => {

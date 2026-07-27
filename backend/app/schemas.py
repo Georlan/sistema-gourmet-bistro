@@ -703,6 +703,44 @@ class RestauranteConfigUpdate(BaseModel):
 
 
 # ----------------- PEDIDOS CARDAPIO DIGITAL -----------------
+class CardapioPublicRestaurantResponse(BaseModel):
+    id: int
+    nome: str
+    slug: Optional[str] = None
+    logo_url: Optional[str] = None
+    banner_url: Optional[str] = None
+    subtitulo: Optional[str] = None
+    sobre_nos: Optional[str] = None
+    endereco: Optional[str] = None
+    google_maps_url: Optional[str] = None
+    status_override: Optional[str] = "Automático"
+    socials: Optional[Any] = None
+    horarios_funcionamento: Optional[Any] = None
+    formas_pagamento_aceitas: Optional[Any] = None
+    cor_primaria: Optional[str] = "#00b894"
+    cor_fundo: Optional[str] = "#090a0f"
+
+
+class CardapioPublicCategoryResponse(BaseModel):
+    id: str
+    nome: str
+
+
+class CardapioPublicProductResponse(BaseModel):
+    id: str
+    nome: str
+    descricao: str = ""
+    preco: float
+    imagem_url: str = ""
+    categoria_id: str
+
+
+class CardapioPublicResponse(BaseModel):
+    restaurante: CardapioPublicRestaurantResponse
+    categorias: List[CardapioPublicCategoryResponse]
+    produtos: List[CardapioPublicProductResponse]
+
+
 class CardapioItemPedido(BaseModel):
     produto_id: str = Field(min_length=1, max_length=128)
     quantidade: int = Field(gt=0, le=100)

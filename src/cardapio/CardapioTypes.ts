@@ -67,6 +67,7 @@ export interface BrandConfig {
   paymentMethods?: PaymentMethodGroup[];
   operatingHours?: OperatingHours[];
   googleMapsUrl?: string;
+  storeStatus?: "open" | "closed" | "automatic";
 }
 
 /**
@@ -108,4 +109,3 @@ export function getRestaurantAssetUrl(urlOrPath: string | null | undefined, isLo
   const cleanPath = urlOrPath.replace(/^\/+/, '');
   return `${supabaseUrl}/storage/v1/object/public/cardapio-assets/${cleanPath}`;
 }
-

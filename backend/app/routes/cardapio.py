@@ -1,13 +1,16 @@
 import uuid
 import datetime
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from ..database import get_db, current_restaurante_id
 from ..models import Comanda, Lancamento, Item, Produto, Usuario, Cliente
 from ..schemas import CardapioPedidoCreate
 from ..websocket_manager import manager
+from .cardapio_digital import resolve_restaurant_id
 from .orders import gerar_novo_numero_pedido
 
+logger = logging.getLogger("koma.cardapio")
 router = APIRouter(
     prefix="/cardapio",
     tags=["Cardápio Digital Client"]
@@ -47,26 +50,36 @@ def criar_pedido_online(
     endereco_comanda = None if modalidade == "retirada" else endereco_entrega
     taxa_entrega = 0.0 if modalidade == "retirada" else payload.taxa_entrega
 
-    # 1. Verificar se o restaurante existe
-    # (Usaremos o restaurante_id do payload ou do contexto ativo para definir o tenant correto)
-    rest_id = payload.restaurante_id or current_restaurante_id.get()
-    
-    # 2. Obter um garçom padrão (usuário ativo) do restaurante para satisfazer a constraint FK
-    garcom = db.query(Usuario).filter(Usuario.restaurante_id == rest_id).first()
-    garcom_id = garcom.id if garcom else "admin"
-    
-    # 3. Definir status operacional do delivery.
+    # Resolve o tenant por uma função controlada e vincula a sessão antes de
+    # consultar qualquer tabela multi-tenant.
+    rest_id = resolve_restaurant_id(str(payload.restaurante_id), None, db)
+    token_context = current_restaurante_id.set(rest_id)
+
+    # Definir status operacional do delivery.
     # status_comanda pertence ao fluxo de solicitação da conta no salão
     # (null | aguardando_pagamento) e não deve representar pagamento online.
     auto_delivery_status = "pendente"  # Fica na gaveta de aceite do caixa
-    
-    # Temporariamente setar o restaurante_id no contextvar para a geração do numero_pedido
-    token_context = current_restaurante_id.set(rest_id)
-    
+
     # Normalizar telefone do cliente
     telefone_clean = limpar_telefone(payload.cliente_telefone)
 
     try:
+        # Usuário ativo obrigatório para satisfazer a FK sem criar uma
+        # identidade fictícia que poderia corromper a autoria do pedido.
+        garcom = db.query(Usuario).filter(
+            Usuario.restaurante_id == rest_id,
+            Usuario.status == "ativo",
+        ).first()
+        if not garcom:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Restaurante ainda não está pronto para receber "
+                    "pedidos online."
+                ),
+            )
+        garcom_id = garcom.id
+
         numero_pedido = gerar_novo_numero_pedido(db)
         
         # Upsert do Cliente (CRM Multicanal)
@@ -92,7 +105,7 @@ def criar_pedido_online(
             db.add(cliente)
         db.flush()
         
-        # 4. Criar a Comanda (comanda pai)
+        # Criar a Comanda (comanda pai)
         comanda_id = f"c-{uuid.uuid4().hex[:8]}"
         nova_comanda = Comanda(
             id=comanda_id,
@@ -113,7 +126,7 @@ def criar_pedido_online(
         db.add(nova_comanda)
         db.flush()
         
-        # 5. Criar o lote de Lançamento
+        # Criar o lote de Lançamento
         lancamento_id = f"l-{uuid.uuid4().hex[:8]}"
         novo_lancamento = Lancamento(
             id=lancamento_id,
@@ -124,7 +137,7 @@ def criar_pedido_online(
         db.add(novo_lancamento)
         db.flush()
         
-        # 6. Criar os Itens do Pedido
+        # Criar os Itens do Pedido
         for item_in in payload.itens:
             produto = db.query(Produto).filter(
                 Produto.id == item_in.produto_id,
@@ -158,11 +171,15 @@ def criar_pedido_online(
     except HTTPException:
         db.rollback()
         raise
-    except Exception as e:
+    except Exception:
         db.rollback()
+        logger.exception(
+            "Falha inesperada ao processar pedido público do restaurante %s.",
+            rest_id,
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Falha ao processar pedido no servidor: {str(e)}"
+            detail="Não foi possível processar o pedido. Tente novamente.",
         )
     finally:
         current_restaurante_id.reset(token_context)
