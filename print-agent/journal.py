@@ -1,0 +1,100 @@
+"""
+Diário de Bordo Local SQLite para Idempotência e Resiliência Off-line/On-line.
+Garante que o papel nunca seja impresso duas vezes caso ocorra queda de conexão
+entre a saída física do cupom e a confirmação via HTTP para a nuvem.
+"""
+
+import os
+import sqlite3
+import datetime
+from typing import Optional, Dict, Any, List
+
+
+class PrintJournal:
+    def __init__(self, db_path: str = "journal.db"):
+        self.db_path = db_path
+        self._init_db()
+
+    def _get_connection(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    def _init_db(self):
+        os.makedirs(os.path.dirname(os.path.abspath(self.db_path)), exist_ok=True)
+        with self._get_connection() as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS journal_jobs (
+                    job_id TEXT PRIMARY KEY,
+                    idempotency_key TEXT,
+                    status TEXT NOT NULL, -- 'printed', 'failed'
+                    printer_name TEXT,
+                    error_msg TEXT,
+                    printed_at TIMESTAMP,
+                    confirmed_backend INTEGER DEFAULT 0 -- 1 se complete_job foi aceito pelo backend
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_journal_ikey ON journal_jobs(idempotency_key)")
+            conn.commit()
+
+    def is_printed(self, job_id: str, idempotency_key: Optional[str] = None) -> bool:
+        """Verifica se o job já foi impresso fisicamente nesta máquina."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            if idempotency_key:
+                cursor.execute(
+                    "SELECT 1 FROM journal_jobs WHERE (job_id = ? OR idempotency_key = ?) AND status = 'printed'",
+                    (job_id, idempotency_key)
+                )
+            else:
+                cursor.execute(
+                    "SELECT 1 FROM journal_jobs WHERE job_id = ? AND status = 'printed'",
+                    (job_id,)
+                )
+            return cursor.fetchone() is not None
+
+    def is_confirmed(self, job_id: str) -> bool:
+        """Verifica se a impressão já foi confirmada no backend."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT confirmed_backend FROM journal_jobs WHERE job_id = ? AND status = 'printed'",
+                (job_id,)
+            )
+            row = cursor.fetchone()
+            return row is not None and row["confirmed_backend"] == 1
+
+    def record_print_success(self, job_id: str, idempotency_key: str, printer_name: str, confirmed: bool = False):
+        """Registra a conclusão física da impressão no banco local."""
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        with self._get_connection() as conn:
+            conn.execute("""
+                INSERT INTO journal_jobs (job_id, idempotency_key, status, printer_name, printed_at, confirmed_backend)
+                VALUES (?, ?, 'printed', ?, ?, ?)
+                ON CONFLICT(job_id) DO UPDATE SET
+                    status = 'printed',
+                    printer_name = EXCLUDED.printer_name,
+                    printed_at = EXCLUDED.printed_at,
+                    confirmed_backend = EXCLUDED.confirmed_backend
+            """, (job_id, idempotency_key, printer_name, now, 1 if confirmed else 0))
+            conn.commit()
+
+    def mark_backend_confirmed(self, job_id: str):
+        """Marca no journal local que o backend recebeu a confirmação."""
+        with self._get_connection() as conn:
+            conn.execute(
+                "UPDATE journal_jobs SET confirmed_backend = 1 WHERE job_id = ?",
+                (job_id,)
+            )
+            conn.commit()
+
+    def get_unconfirmed_printed_jobs(self) -> List[Dict[str, Any]]:
+        """Retorna trabalhos que já saíram no papel mas aguardam reconexão HTTP para confirmação."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT job_id, idempotency_key, printer_name
+                FROM journal_jobs
+                WHERE status = 'printed' AND confirmed_backend = 0
+            """)
+            return [dict(row) for row in cursor.fetchall()]
