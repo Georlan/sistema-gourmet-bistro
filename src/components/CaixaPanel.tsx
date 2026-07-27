@@ -1186,13 +1186,16 @@ export function CaixaPanel({
     }
   };
 
-  // Fetch registered users (waiters CRUD)
+  // Fetch registered users (waiters CRUD - admin/gerente only)
   const fetchSystemUsers = async () => {
+    const userRole = localStorage.getItem("koma_caixa_role") || localStorage.getItem("koma_user_role") || "";
+    if (userRole !== "admin" && userRole !== "gerente") {
+      return;
+    }
     try {
       const data = await API.getFuncionarios();
       setSystemUsers(data);
     } catch (err) {
-      console.error('Error fetching users list via API.getFuncionarios, trying fallback', err);
       try {
         const res = await fetch(`${apiBaseUrl}/auth/usuarios`, { headers: authHeaders });
         if (res.ok) {
@@ -1200,7 +1203,7 @@ export function CaixaPanel({
           setSystemUsers(data);
         }
       } catch (fallbackErr) {
-        console.error('Fallback error fetching users list', fallbackErr);
+        // Gracefully catch any network errors
       }
     }
   };
