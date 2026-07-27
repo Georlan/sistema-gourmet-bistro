@@ -16,7 +16,6 @@ class KomaApiClient:
         self.headers = {
             "Content-Type": "application/json",
             "X-Agent-Token": agent_token,
-            "Authorization": f"Bearer {agent_token}",
         }
 
     def register(self, agent_id: str, jwt_token: str) -> Optional[str]:
@@ -34,7 +33,6 @@ class KomaApiClient:
                 if token:
                     self.agent_token = token
                     self.headers["X-Agent-Token"] = token
-                    self.headers["Authorization"] = f"Bearer {token}"
                     log.info(f"Agente '{agent_id}' registrado com sucesso na API!")
                     return token
             log.error(f"Falha ao registrar agente (HTTP {resp.status_code}): {resp.text}")
