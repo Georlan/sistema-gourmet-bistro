@@ -219,15 +219,23 @@ def test_caixa_delivery_manual_exige_dados_de_entrega():
 
 
 @pytest.mark.parametrize(
-    ("tipo_pedido", "endereco", "tipo_esperado", "endereco_esperado", "taxa_esperada"),
+    (
+        "tipo_pedido",
+        "endereco",
+        "forma_pagamento",
+        "tipo_esperado",
+        "endereco_esperado",
+        "taxa_esperada",
+    ),
     [
-        ("delivery", "Rua das Flores, 123", "Delivery", "Rua das Flores, 123", 8.0),
-        ("retirada", "Retirada no Balcão", "Retirada", None, 0.0),
+        ("delivery", "Rua das Flores, 123", "Pix", "Delivery", "Rua das Flores, 123", 8.0),
+        ("retirada", "Retirada no Balcão", "Dinheiro", "Retirada", None, 0.0),
     ],
 )
 def test_pedido_online_preserva_modalidade_no_kanban(
     tipo_pedido,
     endereco,
+    forma_pagamento,
     tipo_esperado,
     endereco_esperado,
     taxa_esperada,
@@ -246,7 +254,7 @@ def test_pedido_online_preserva_modalidade_no_kanban(
         "cliente_telefone": "81999990000" if tipo_pedido == "delivery" else "81999990001",
         "endereco_entrega": endereco,
         "taxa_entrega": 8.0,
-        "forma_pagamento": "Dinheiro",
+        "forma_pagamento": forma_pagamento,
         "tipo_pedido": tipo_pedido,
     }
 
@@ -260,6 +268,7 @@ def test_pedido_online_preserva_modalidade_no_kanban(
         assert comanda.delivery_status == "pendente"
         assert comanda.delivery_endereco == endereco_esperado
         assert comanda.delivery_taxa == taxa_esperada
+        assert comanda.status_comanda is None
         assert len(comanda.itens) == 2
     finally:
         db.close()

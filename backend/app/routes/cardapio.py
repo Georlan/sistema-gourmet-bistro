@@ -86,9 +86,9 @@ def criar_pedido_online(
     garcom = db.query(Usuario).filter(Usuario.restaurante_id == rest_id).first()
     garcom_id = garcom.id if garcom else "admin"
     
-    # 3. Definir status de delivery inicial
-    # Se Pix, aguarda pagamento (pendente_pagamento). Se Dinheiro/Cartão na entrega, já entra como recebido (RECEBIDO)
-    status_inicial = "PENDENTE_PAGAMENTO" if payload.forma_pagamento == "Pix" else "RECEBIDO"
+    # 3. Definir status operacional do delivery.
+    # status_comanda pertence ao fluxo de solicitação da conta no salão
+    # (null | aguardando_pagamento) e não deve representar pagamento online.
     auto_delivery_status = "pendente"  # Fica na gaveta de aceite do caixa
     
     # Temporariamente setar o restaurante_id no contextvar para a geração do numero_pedido
@@ -139,7 +139,7 @@ def criar_pedido_online(
             delivery_telefone=telefone_clean,
             delivery_endereco=endereco_comanda,
             delivery_taxa=taxa_entrega,
-            status_comanda=status_inicial
+            status_comanda=None
         )
         db.add(nova_comanda)
         db.flush()
