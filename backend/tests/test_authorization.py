@@ -1,6 +1,8 @@
 """
 Tests for role-based authorization and user status enforcement.
 """
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -18,6 +20,15 @@ engine = create_engine(
     connect_args={"check_same_thread": False, "timeout": 30}
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def cleanup_database_file():
+    """Remove artefatos SQLite somente depois que todos os testes terminarem."""
+    yield
+    engine.dispose()
+    for suffix in ("", "-wal", "-shm", "-journal"):
+        Path(f"{DB_FILE}{suffix}").unlink(missing_ok=True)
 
 
 def override_get_db():
@@ -109,12 +120,8 @@ def setup_database():
         yield
     finally:
         current_restaurante_id.reset(token_var)
-        import os
-        try:
-            engine.dispose()
-            os.remove(DB_FILE)
-        except Exception:
-            pass
+        app.dependency_overrides.pop(get_db, None)
+        engine.dispose()
 
 
 def get_auth_headers(client, username, password):
