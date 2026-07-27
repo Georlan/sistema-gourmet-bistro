@@ -29,8 +29,16 @@ def test_setup():
         # Create test restaurant 999
         rest = db.query(Restaurante).filter(Restaurante.id == 999).first()
         if not rest:
-            rest = Restaurante(id=999, nome="Restaurante Teste 999", plano="bistro")
+            rest = Restaurante(
+                id=999,
+                nome="Restaurante Teste 999",
+                plano="bistro",
+                slug="sistema-gourmet-bistro",
+            )
             db.add(rest)
+            db.commit()
+        elif rest.slug != "sistema-gourmet-bistro":
+            rest.slug = "sistema-gourmet-bistro"
             db.commit()
 
         # Create test user for tenant 999
@@ -84,6 +92,18 @@ def test_upload_asset_exceeds_max_size(test_setup):
     )
     assert response.status_code == 400
     assert "excede o limite máximo" in response.json()["detail"]
+
+
+def test_upload_asset_rejects_spoofed_mime(test_setup):
+    headers = {"Authorization": f"Bearer {test_setup['token']}"}
+    response = client.post(
+        "/api/cardapio-digital/assets/logo",
+        headers=headers,
+        files={"file": ("fake.png", b"<script>alert(1)</script>", "image/png")},
+    )
+
+    assert response.status_code == 400
+    assert "não corresponde ao formato" in response.json()["detail"]
 
 
 @patch("httpx.AsyncClient.post")
@@ -150,6 +170,36 @@ def test_delete_banner_success(mock_delete, test_setup):
     assert data["banner_url"] is None
 
 
+@patch("httpx.AsyncClient.request")
+def test_delete_asset_never_removes_object_from_another_tenant(
+    mock_delete,
+    test_setup,
+):
+    db = SessionLocal()
+    try:
+        restaurant = db.query(Restaurante).filter(
+            Restaurante.id == test_setup["rest_id"]
+        ).one()
+        restaurant.logo_url = (
+            "https://example.supabase.co/storage/v1/object/public/"
+            "cardapio-assets/123/logo/foreign.png"
+        )
+        restaurant.cardapio_logo_path = None
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.delete(
+        "/api/cardapio-digital/assets/logo",
+        headers={"Authorization": f"Bearer {test_setup['token']}"},
+    )
+
+    assert response.status_code == 200
+    mock_delete.assert_not_awaited()
+    assert response.json()["logo_url"] is None
+    assert response.json()["cardapio_logo_path"] is None
+
+
 def test_get_whitelabel_config_success(test_setup):
     headers = {"Authorization": f"Bearer {test_setup['token']}"}
     response = client.get("/api/cardapio-digital/config", headers=headers)
@@ -206,7 +256,5 @@ def test_get_whitelabel_config_by_slug_success(test_setup):
     response = client.get("/api/cardapio-digital/config?slug=sistema-gourmet-bistro")
     assert response.status_code == 200
     data = response.json()
-    assert "id" in data
+    assert data["id"] == 999
     assert "cor_primaria" in data
-
-

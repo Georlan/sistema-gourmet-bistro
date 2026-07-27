@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import or_, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from typing import List
 import uuid
@@ -7,7 +8,7 @@ import logging
 
 from ..database import bind_session_to_tenant, get_db, current_restaurante_id
 from ..models import Usuario
-from ..schemas import LoginRequest, LoginResponse, UsuarioCreate, UsuarioResponse, AtivarContaRequest
+from ..schemas import LoginRequest, LoginResponse, UsuarioResponse, AtivarContaRequest
 from ..security import (
     create_access_token,
     get_password_hash,
@@ -88,6 +89,13 @@ def login(login_data: LoginRequest, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Usuário ou senha incorretos"
+        )
+
+    status_val = str(usuario.status or "pendente_ativacao").lower().strip()
+    if status_val != "ativo":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Conta de usuário pendente, inativa ou bloqueada.",
         )
 
     access_token = create_access_token(subject=usuario.id, restaurante_id=usuario.restaurante_id)
@@ -208,34 +216,9 @@ def get_usuarios(
     current_user: Usuario = Depends(require_permission("equipe:administrar"))
 ):
     """Retorna todos os usuários cadastrados (garçons, caixas, admins)."""
-    return db.query(Usuario).all()
-
-@router.post("/usuarios", response_model=UsuarioResponse, status_code=status.HTTP_201_CREATED)
-def create_usuario(
-    user_in: UsuarioCreate,
-    db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_permission("equipe:administrar"))
-):
-    """Cadastra um novo usuário no sistema."""
-    # Check if username is taken
-    existing = db.query(Usuario).filter(Usuario.usuario == user_in.usuario).first()
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Nome de usuário já cadastrado."
-        )
-    
-    novo_usuario = Usuario(
-        id=str(uuid.uuid4())[:8],
-        nome=user_in.nome,
-        usuario=user_in.usuario,
-        senha_hash=get_password_hash(user_in.senha),
-        role=user_in.role
-    )
-    db.add(novo_usuario)
-    db.commit()
-    db.refresh(novo_usuario)
-    return novo_usuario
+    return db.query(Usuario).filter(
+        Usuario.restaurante_id == current_user.restaurante_id
+    ).all()
 
 @router.delete("/usuarios/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_usuario(
@@ -244,14 +227,51 @@ def delete_usuario(
     current_user: Usuario = Depends(require_permission("equipe:administrar"))
 ):
     """Deleta um usuário do sistema."""
-    usuario = db.query(Usuario).filter(Usuario.id == user_id).first()
+    if user_id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Não é possível excluir o próprio usuário autenticado.",
+        )
+
+    usuario = db.query(Usuario).filter(
+        Usuario.id == user_id,
+        Usuario.restaurante_id == current_user.restaurante_id,
+    ).first()
     if not usuario:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Usuário não encontrado."
         )
-    db.delete(usuario)
-    db.commit()
+
+    target_role = (usuario.role or usuario.cargo or "").lower().strip()
+    if target_role in {"admin", "superadmin"}:
+        admin_rows = db.query(Usuario.id, Usuario.status).filter(
+            Usuario.restaurante_id == current_user.restaurante_id,
+            Usuario.cargo.in_(("admin", "superadmin")),
+        ).with_for_update().all()
+        has_remaining_active_admin = any(
+            admin_id != usuario.id
+            and str(admin_status or "").lower().strip() == "ativo"
+            for admin_id, admin_status in admin_rows
+        )
+        if not has_remaining_active_admin:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="O restaurante deve manter pelo menos um administrador.",
+            )
+
+    try:
+        db.delete(usuario)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "O usuário possui histórico operacional e não pode ser excluído. "
+                "Desative a conta."
+            ),
+        )
     return
 
 
@@ -351,7 +371,10 @@ def reenviar_convite_usuario(
     import httpx
     from ..config import settings
 
-    usuario = db.query(Usuario).filter(Usuario.id == user_id).first()
+    usuario = db.query(Usuario).filter(
+        Usuario.id == user_id,
+        Usuario.restaurante_id == current_user.restaurante_id,
+    ).first()
     if not usuario:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -395,11 +418,23 @@ def reenviar_convite_usuario(
                 res = client.post(url_disparo, headers=headers, json=payload)
                 if res.status_code in [200, 201]:
                     evolution_sent = True
-                    logger.info(f"[EVOLUTION API] Convite reenviado para {tel_clean}: {res.status_code}")
+                    logger.info(
+                        "[EVOLUTION API] Convite reenviado para usuario_id=%s: %s",
+                        usuario.id,
+                        res.status_code,
+                    )
                 else:
-                    logger.warning(f"[EVOLUTION API] Falha HTTP {res.status_code} ao reenviar convite: {res.text}")
+                    logger.warning(
+                        "[EVOLUTION API] Falha HTTP %s ao reenviar convite para usuario_id=%s",
+                        res.status_code,
+                        usuario.id,
+                    )
         except Exception as err:
-            logger.warning(f"[EVOLUTION API] Exceção de rede ao reenviar convite: {err}")
+            logger.warning(
+                "[EVOLUTION API] Exceção ao reenviar convite para usuario_id=%s: %s",
+                usuario.id,
+                type(err).__name__,
+            )
 
     return {
         "message": f"Convite gerado com sucesso para {usuario.nome}.",

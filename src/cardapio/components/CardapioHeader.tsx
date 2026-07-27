@@ -3,20 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from "react";
-import { BrandConfig, getProductImageUrl, getRestaurantAssetUrl } from "../CardapioTypes";
-import { whitelabelBrands } from "../CardapioConfig";
-import { supabase } from "../SupabaseClient";
-import { Search, User, MapPin, Phone, RefreshCw, ShoppingBag, Instagram, Facebook, Globe, Share2 } from "lucide-react";
+import React, { useState } from "react";
+import { BrandConfig } from "../CardapioTypes";
+import { Search, User, MapPin, Phone, ShoppingBag, Instagram, Facebook, Globe, Share2 } from "lucide-react";
 
 interface CardapioHeaderProps {
   activeBrand: BrandConfig;
-  onBrandChange: (brandId: string) => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   user: any;
   onAuthClick: () => void;
-  onViewOrdersClick: () => void;
   onLogoClick: () => void; // Click to open the StoreInfoDrawer
   onCartToggle: () => void;
   cartCount: number;
@@ -41,18 +37,14 @@ const getSocialIcon = (platform: string) => {
 
 export default function CardapioHeader({
   activeBrand,
-  onBrandChange,
   searchQuery,
   setSearchQuery,
   user,
   onAuthClick,
-  onViewOrdersClick,
   onLogoClick,
   onCartToggle,
   cartCount
 }: CardapioHeaderProps) {
-  const [showBrandSelector, setShowBrandSelector] = useState(false);
-  const [restaurantsList, setRestaurantsList] = useState<any[]>([]);
   const [showToast, setShowToast] = useState(false);
 
   const handleShare = async () => {
@@ -79,44 +71,6 @@ export default function CardapioHeader({
     }
   };
 
-  useEffect(() => {
-    async function loadRestaurants() {
-      try {
-        const { data, error } = await supabase
-          .from("restaurantes")
-          .select("id, slug, nome, logo_url, cardapio_logo_path, subtitulo");
-        if (data && data.length > 0) {
-          const mapped = data.map((r: any) => ({
-            ...r,
-            logo_url: getRestaurantAssetUrl(r.logo_url || r.cardapio_logo_path, true),
-            slogan: r.subtitulo || r.slogan || ""
-          }));
-          setRestaurantsList(mapped);
-        } else {
-          const staticList = Object.values(whitelabelBrands).map(b => ({
-            id: b.id,
-            slug: b.id,
-            nome: b.name,
-            logo_url: b.logo,
-            slogan: b.slogan
-          }));
-          setRestaurantsList(staticList);
-        }
-      } catch (err) {
-        console.error("Erro ao buscar restaurantes no cabeçalho:", err);
-        const staticList = Object.values(whitelabelBrands).map(b => ({
-          id: b.id,
-          slug: b.id,
-          nome: b.name,
-          logo_url: b.logo,
-          slogan: b.slogan
-        }));
-        setRestaurantsList(staticList);
-      }
-    }
-    loadRestaurants();
-  }, []);
-
   return (
     <>
       <header className="w-full border-b border-slate-500/10 bg-card-app relative z-40 shadow-xs animate-fade-in" id="app-header">
@@ -138,18 +92,6 @@ export default function CardapioHeader({
                 <span className="font-display font-extrabold text-base sm:text-lg tracking-tight text-text-app block leading-tight group-hover:text-primary transition-colors">
                   {activeBrand.name}
                 </span>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation(); // Stop from opening drawer
-                    setShowBrandSelector(!showBrandSelector);
-                  }}
-                  className="flex items-center gap-1 rounded-full bg-slate-500/15 hover:bg-slate-500/25 px-2 py-0.5 text-[10px] font-bold text-text-app/80 transition cursor-pointer"
-                  id="btn-brand-selector-mini"
-                  title="Alterar Estabelecimento Demo"
-                >
-                  <RefreshCw className="h-2.5 w-2.5" />
-                  <span>Mudar Loja</span>
-                </button>
               </div>
               <span className="text-xs text-text-app/50 font-medium block truncate mt-0.5">
                 {activeBrand.slogan}
@@ -222,18 +164,6 @@ export default function CardapioHeader({
               )}
             </button>
 
-            {/* User past order history status link */}
-            {user && (
-              <button
-                onClick={onViewOrdersClick}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl hover:bg-slate-500/10 text-text-app/80 text-xs font-bold transition cursor-pointer"
-                id="btn-view-orders"
-              >
-                <ShoppingBag className="h-4 w-4 text-text-app/50" />
-                <span className="hidden sm:inline">Meus Pedidos</span>
-              </button>
-            )}
-
             {/* User Account Login/Logout Button */}
             {user ? (
               <button
@@ -258,35 +188,6 @@ export default function CardapioHeader({
           </div>
 
         </div>
-
-        {/* Brand Dropdown Selector Drawer */}
-        {showBrandSelector && (
-          <div className="absolute left-4 sm:left-auto right-4 sm:right-auto z-50 mt-2 w-72 rounded-2xl bg-card-app p-3 shadow-xl border border-slate-500/10 text-text-app animate-slide-up" id="brand-dropdown">
-            <p className="mb-2 text-[10px] font-bold tracking-wider text-text-app/40 uppercase px-2">Selecione o Estabelecimento:</p>
-            <div className="flex flex-col gap-1">
-              {restaurantsList.map((brand) => (
-                <button
-                  key={brand.id}
-                  onClick={() => {
-                    onBrandChange(brand.slug || brand.id);
-                    setShowBrandSelector(false);
-                  }}
-                  className={`flex items-center gap-3 w-full rounded-xl p-2.5 text-left transition border ${
-                    String(activeBrand.id) === String(brand.id) || activeBrand.id === brand.slug
-                      ? "bg-primary/5 border-primary text-primary font-bold"
-                      : "hover:bg-slate-500/10 border-transparent text-text-app/80"
-                  }`}
-                >
-                  <img src={getProductImageUrl(brand.logo_url)} alt={brand.nome || brand.name} className="h-9 w-9 rounded-lg object-cover shadow-xs shrink-0" />
-                  <div className="min-w-0">
-                    <h4 className="text-xs font-bold truncate leading-tight">{brand.nome || brand.name}</h4>
-                    <p className="text-[10px] text-text-app/40 truncate max-w-[180px] mt-0.5">{brand.slogan}</p>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* Search Bar & Address details row (Visible on mobile/tablet) */}
         <div className="mt-4 flex flex-col md:flex-row md:items-center gap-3" id="search-address-row">

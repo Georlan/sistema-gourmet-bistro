@@ -39,9 +39,9 @@ def setup_database():
             db.commit()
         
         # Create test users
-        db.add(Usuario(id="g-1", restaurante_id=1, nome="Mateus Garcom", usuario="mateus", senha_hash=get_password_hash("123"), role="garcom"))
-        db.add(Usuario(id="c-1", restaurante_id=1, nome="Caixa Geral", usuario="caixa", senha_hash=get_password_hash("123"), role="caixa"))
-        db.add(Usuario(id="m-1", restaurante_id=1, nome="Gerente Geral", usuario="gerente", senha_hash=get_password_hash("123"), role="gerente"))
+        db.add(Usuario(id="g-1", restaurante_id=1, nome="Mateus Garcom", usuario="mateus", senha_hash=get_password_hash("123"), role="garcom", status="ativo"))
+        db.add(Usuario(id="c-1", restaurante_id=1, nome="Caixa Geral", usuario="caixa", senha_hash=get_password_hash("123"), role="caixa", status="ativo"))
+        db.add(Usuario(id="m-1", restaurante_id=1, nome="Gerente Geral", usuario="gerente", senha_hash=get_password_hash("123"), role="gerente", status="ativo"))
         
         # Create category, product, table
         cat = Categoria(id="cat-1", restaurante_id=1, nome="Bebidas")
@@ -317,4 +317,3 @@ def test_manual_insumos_and_distribuidores():
     # 7. Excluir distribuidor (DELETE)
     resp = client.delete("/estoque/distribuidores/ambev-test", headers=headers)
     assert resp.status_code == 204
-

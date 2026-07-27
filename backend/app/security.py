@@ -33,7 +33,7 @@ RESERVED_CLAIMS = {"sub", "exp", "restaurante_id", "role"}
 # permissão de negócio, em vez de repetir listas de cargos localmente.
 PERMISSION_ROLES = MappingProxyType({
     "caixa:operar": frozenset({"admin", "gerente", "caixa"}),
-    "equipe:administrar": frozenset({"admin", "gerente", "caixa"}),
+    "equipe:administrar": frozenset({"admin"}),
     "estoque:consultar": frozenset({"admin", "gerente", "caixa"}),
     "estoque:administrar": frozenset({"admin", "gerente", "caixa"}),
     "relatorios:consultar": frozenset({"admin", "gerente", "caixa"}),
@@ -141,11 +141,13 @@ def get_current_user(
     if user is None:
         raise credentials_exception
         
-    status_val = str(getattr(user, "status", "ativo") or "ativo").lower().strip()
-    if status_val in ("inativo", "blocked", "disabled"):
+    status_val = str(
+        getattr(user, "status", "pendente_ativacao") or "pendente_ativacao"
+    ).lower().strip()
+    if status_val != "ativo":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Conta de usuário inativa ou bloqueada."
+            detail="Conta de usuário pendente, inativa ou bloqueada."
         )
     return user
 
@@ -162,11 +164,13 @@ def ensure_permission(current_user: Optional[Usuario], permission: str) -> Usuar
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    status_val = str(getattr(current_user, "status", "ativo") or "ativo").lower().strip()
-    if status_val in ("inativo", "blocked", "disabled"):
+    status_val = str(
+        getattr(current_user, "status", "pendente_ativacao") or "pendente_ativacao"
+    ).lower().strip()
+    if status_val != "ativo":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Conta de usuário inativa ou bloqueada."
+            detail="Conta de usuário pendente, inativa ou bloqueada."
         )
 
     user_role = (current_user.role or current_user.cargo or "garcom").lower().strip()

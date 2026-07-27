@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from typing import List, Optional, Union, Any
+from typing import Any, List, Literal, Optional, Union
 from datetime import datetime
 import uuid
 
@@ -31,14 +31,19 @@ class UsuarioResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class UsuarioCreate(BaseModel):
-    nome: str
-    telefone: Optional[str] = None
-    email: Optional[str] = None
-    cargo: Optional[str] = "garcom"
-    restaurante_id: Optional[int] = None
-    usuario: Optional[str] = None
-    senha: Optional[str] = None
-    role: Optional[str] = "garcom"
+    nome: str = Field(min_length=1, max_length=100)
+    telefone: str = Field(min_length=10, max_length=20)
+    cargo: Literal["gerente", "caixa", "garcom", "motoboy"] = "garcom"
+
+    @field_validator("nome")
+    @classmethod
+    def validate_nome(cls, value: str) -> str:
+        nome = value.strip()
+        if not nome:
+            raise ValueError("Nome é obrigatório.")
+        return nome
+
+    model_config = ConfigDict(extra="forbid")
 
 class LoginResponse(BaseModel):
     access_token: str
@@ -47,9 +52,16 @@ class LoginResponse(BaseModel):
     usuario: UsuarioResponse
 
 class AtivarContaRequest(BaseModel):
-    token_convite: str
-    email: str
-    senha: str
+    token_convite: str = Field(min_length=1, max_length=128)
+    email: str = Field(min_length=3, max_length=100)
+    senha: str = Field(min_length=8, max_length=72)
+
+    @field_validator("senha")
+    @classmethod
+    def validate_bcrypt_password_size(cls, value: str) -> str:
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("A senha deve possuir no máximo 72 bytes.")
+        return value
 
 
 # ----------------- CATEGORY & OBSERVATION -----------------
@@ -404,7 +416,6 @@ class ConfiguracaoRestauranteResponse(BaseModel):
 
 class ConfiguracaoRestauranteUpdate(BaseModel):
     nicho: Optional[str] = None
-    plano: Optional[str] = None
     mapa_mesas_ativo: Optional[bool] = None
     delivery_ativo: Optional[bool] = None
     taxa_servico_ativa: Optional[bool] = None
@@ -427,6 +438,8 @@ class ConfiguracaoRestauranteUpdate(BaseModel):
     perm_garcom_transferir_item: Optional[bool] = None
     perm_garcom_chamar: Optional[bool] = None
     perm_garcom_ociosas: Optional[bool] = None
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class ConfiguracaoIAResponse(BaseModel):
@@ -690,30 +703,81 @@ class RestauranteConfigUpdate(BaseModel):
 
 
 # ----------------- PEDIDOS CARDAPIO DIGITAL -----------------
+class CardapioPublicRestaurantResponse(BaseModel):
+    id: int
+    nome: str
+    slug: Optional[str] = None
+    logo_url: Optional[str] = None
+    banner_url: Optional[str] = None
+    subtitulo: Optional[str] = None
+    sobre_nos: Optional[str] = None
+    endereco: Optional[str] = None
+    google_maps_url: Optional[str] = None
+    status_override: Optional[str] = "Automático"
+    socials: Optional[Any] = None
+    horarios_funcionamento: Optional[Any] = None
+    formas_pagamento_aceitas: Optional[Any] = None
+    cor_primaria: Optional[str] = "#00b894"
+    cor_fundo: Optional[str] = "#090a0f"
+
+
+class CardapioPublicCategoryResponse(BaseModel):
+    id: str
+    nome: str
+
+
+class CardapioPublicProductResponse(BaseModel):
+    id: str
+    nome: str
+    descricao: str = ""
+    preco: float
+    imagem_url: str = ""
+    categoria_id: str
+
+
+class CardapioPublicResponse(BaseModel):
+    restaurante: CardapioPublicRestaurantResponse
+    categorias: List[CardapioPublicCategoryResponse]
+    produtos: List[CardapioPublicProductResponse]
+
+
 class CardapioItemPedido(BaseModel):
-    produto_id: str
-    quantidade: int = Field(gt=0)
-    observacao: Optional[str] = ""
-    cliente_nome: Optional[str] = "Cliente Online"
+    produto_id: str = Field(min_length=1, max_length=128)
+    quantidade: int = Field(gt=0, le=100)
+    observacao: str = Field(default="", max_length=500)
+    cliente_nome: Optional[str] = Field(default=None, max_length=100)
+
+    model_config = ConfigDict(extra="forbid")
 
 class CardapioPedidoCreate(BaseModel):
-    restaurante_id: int
-    itens: List[CardapioItemPedido]
-    cliente_nome: str
-    cliente_telefone: str
-    endereco_entrega: str
-    taxa_entrega: float = 0.0
-    forma_pagamento: str  # Pix | Cartão na Entrega | Dinheiro
-    tipo_pedido: str = "delivery"  # delivery | retirada
+    restaurante_id: int = Field(gt=0)
+    itens: List[CardapioItemPedido] = Field(min_length=1, max_length=100)
+    cliente_nome: str = Field(min_length=2, max_length=100)
+    cliente_telefone: str = Field(min_length=10, max_length=20)
+    endereco_entrega: str = Field(default="", max_length=300)
+    taxa_entrega: float = Field(default=0.0, ge=0, le=10_000)
+    forma_pagamento: Literal["na_entrega"] = "na_entrega"
+    tipo_pedido: Literal["delivery", "retirada"] = "delivery"
 
+    @field_validator("cliente_nome")
+    @classmethod
+    def validate_customer_name(cls, value: str) -> str:
+        name = value.strip()
+        if len(name) < 2:
+            raise ValueError("Nome do cliente inválido.")
+        return name
 
-# ----------------- JORNADA SEM SENHA & OTP CARDAPIO -----------------
-class CardapioIdentificarRequest(BaseModel):
-    restaurante_id: int
-    telefone: str
+    @field_validator("cliente_telefone")
+    @classmethod
+    def validate_customer_phone(cls, value: str) -> str:
+        phone = "".join(character for character in value if character.isdigit())
+        if len(phone) < 10 or len(phone) > 11:
+            raise ValueError("Telefone do cliente deve conter DDD e 10 ou 11 dígitos.")
+        return phone
 
+    @field_validator("endereco_entrega")
+    @classmethod
+    def normalize_delivery_address(cls, value: str) -> str:
+        return value.strip()
 
-class CardapioVerificarOtpRequest(BaseModel):
-    restaurante_id: int
-    telefone: str
-    otp: str
+    model_config = ConfigDict(extra="forbid")

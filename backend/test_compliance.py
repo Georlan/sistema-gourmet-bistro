@@ -27,7 +27,8 @@ def setup_db():
                 nome="Admin",
                 usuario="admin",
                 senha_hash=get_password_hash("123"),
-                role="admin"
+                role="admin",
+                status="ativo",
             )
             db.add(admin)
             
@@ -38,7 +39,8 @@ def setup_db():
                 nome="Garcom",
                 usuario="garcom_test",
                 senha_hash=get_password_hash("123"),
-                role="garcom"
+                role="garcom",
+                status="ativo",
             )
             db.add(garcom)
             

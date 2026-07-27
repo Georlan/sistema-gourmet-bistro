@@ -31,6 +31,7 @@ def caixa_test_setup():
                 email="caixa888@koma.com",
                 senha_hash="$2b$12$dummyhashforcaixatestsuite",
                 role="caixa",
+                status="ativo",
                 restaurante_id=888
             )
             db.add(user)

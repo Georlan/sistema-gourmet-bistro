@@ -34,7 +34,8 @@ def setup_database():
         nome="Operador Alfa",
         usuario="alfa_op",
         senha_hash=get_password_hash("senha123"),
-        role="caixa"
+        role="caixa",
+        status="ativo",
     )
     user_beta = Usuario(
         id="usr-beta",
@@ -42,7 +43,8 @@ def setup_database():
         nome="Operador Beta",
         usuario="beta_op",
         senha_hash=get_password_hash("senha123"),
-        role="caixa"
+        role="caixa",
+        status="ativo",
     )
     db.add_all([user_alfa, user_beta])
     db.commit()

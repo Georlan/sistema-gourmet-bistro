@@ -50,10 +50,9 @@ def check_caixa_permission(
 @router.get("/funcionarios", response_model=List[UsuarioResponse])
 def obter_funcionarios(
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_garcom_optional)
+    current_user: Usuario = Depends(require_permission("equipe:administrar"))
 ):
     """Retorna a lista de usuários pertencentes ao restaurante_id do contexto ativo."""
-    check_caixa_permission(current_user, "equipe:administrar")
     rest_id = require_tenant_id()
     return db.query(Usuario).filter(Usuario.restaurante_id == rest_id).all()
 
@@ -62,37 +61,35 @@ def obter_funcionarios(
 def cadastrar_funcionario(
     user_in: UsuarioCreate,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_garcom_optional)
+    current_user: Usuario = Depends(require_permission("equipe:administrar"))
 ):
     """Cadastra um novo funcionário por convite de telefone."""
-    check_caixa_permission(current_user, "equipe:administrar")
-    
-    tel_raw = user_in.telefone or user_in.usuario or ""
-    tel_clean = re.sub(r"\D", "", tel_raw)
-    if not tel_clean:
+    tel_clean = re.sub(r"\D", "", user_in.telefone)
+    if not 10 <= len(tel_clean) <= 15:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Telefone é obrigatório para cadastrar um funcionário."
+            detail="Informe um telefone válido com 10 a 15 dígitos."
         )
 
-    # Verificar se o telefone já está cadastrado no sistema
-    existente = db.query(Usuario).filter(Usuario.telefone == tel_clean).first()
+    rest_id = require_tenant_id()
+    existente = db.query(Usuario).filter(
+        Usuario.restaurante_id == rest_id,
+        Usuario.telefone == tel_clean,
+    ).first()
     if existente:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_409_CONFLICT,
             detail="Este telefone já está cadastrado no sistema"
         )
         
-    rest_id = require_tenant_id()
     token_convite = str(uuid.uuid4())
     token_expira_em = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)
-    cargo_val = user_in.cargo or user_in.role or "garcom"
 
     novo_usuario = Usuario(
         id=str(uuid.uuid4())[:8],
         nome=user_in.nome,
         telefone=tel_clean,
-        cargo=cargo_val,
+        cargo=user_in.cargo,
         restaurante_id=rest_id,
         senha_hash=None,
         token_convite=token_convite,
@@ -102,7 +99,14 @@ def cadastrar_funcionario(
     )
     
     db.add(novo_usuario)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Telefone indisponível para cadastro.",
+        )
     db.refresh(novo_usuario)
     
     # Tenta enviar convite real via Evolution API
@@ -130,14 +134,29 @@ def cadastrar_funcionario(
                 res = client.post(url_disparo, headers=headers, json=payload)
                 if res.status_code in [200, 201]:
                     evolution_sent = True
-                    logger.info(f"[EVOLUTION API] Convite enviado via WhatsApp para {tel_clean}: {res.status_code}")
+                    logger.info(
+                        "[EVOLUTION API] Convite enviado para usuario_id=%s: %s",
+                        novo_usuario.id,
+                        res.status_code,
+                    )
                 else:
-                    logger.warning(f"[EVOLUTION API] Falha HTTP {res.status_code} ao enviar convite: {res.text}")
+                    logger.warning(
+                        "[EVOLUTION API] Falha HTTP %s ao enviar convite para usuario_id=%s",
+                        res.status_code,
+                        novo_usuario.id,
+                    )
         except Exception as err:
-            logger.warning(f"[EVOLUTION API] Exceção de rede ao enviar convite via WhatsApp: {err}")
+            logger.warning(
+                "[EVOLUTION API] Exceção ao enviar convite para usuario_id=%s: %s",
+                novo_usuario.id,
+                type(err).__name__,
+            )
 
     if not evolution_sent:
-        logger.info(f"[WHATSAPP SIMULADO] Enviar convite para {tel_clean}: {convite_link}")
+        logger.info(
+            "[WHATSAPP SIMULADO] Convite disponível para usuario_id=%s",
+            novo_usuario.id,
+        )
 
     return novo_usuario
 
@@ -1303,57 +1322,22 @@ from sqlalchemy.orm import joinedload
 
 @router.get("/configuracoes", response_model=ConfiguracaoRestauranteResponse)
 def obter_configuracoes(
-    restaurante_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_garcom_optional)
+    current_user: Usuario = Depends(get_current_user)
 ):
-    # Rota pública de leitura: carregada pelo frontend antes do login.
-    # Prioridade: (1) contexto autenticado, (2) query param, (3) 401.
-    rest_id = current_restaurante_id.get()
-    if rest_id is None:
-        if restaurante_id is not None:
-            rest_id = restaurante_id
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Restaurante não identificado na sessão ou parâmetro da requisição."
-            )
-
-    token_var = current_restaurante_id.set(rest_id)
-    try:
-        config = db.query(ConfiguracaoRestaurante).options(joinedload(ConfiguracaoRestaurante.restaurante)).filter(ConfiguracaoRestaurante.restaurante_id == rest_id).first()
-        if not config:
-            config = ConfiguracaoRestaurante(
-                restaurante_id=rest_id,
-                nicho="hamburgueria",
-                mapa_mesas_ativo=True,
-                delivery_ativo=True,
-                taxa_servico_ativa=True,
-                taxa_servico_padrao=10.0,
-                unificar_vias_delivery=False,
-                modo_exclusivo_salao=True,
-                perm_garcom_delivery=True,
-                perm_garcom_editar=True,
-                perm_garcom_taxas=False,
-                perm_garcom_cancelar=False,
-                perm_garcom_status=True,
-                perm_garcom_abrir_vazia=False,
-                perm_garcom_print=True,
-                perm_garcom_fechar=False,
-                perm_garcom_desconto=False,
-                perm_garcom_acrescimo=False,
-                perm_garcom_pessoas=True,
-                perm_garcom_transferir_mesa=True,
-                perm_garcom_transferir_item=True,
-                perm_garcom_chamar=True,
-                perm_garcom_ociosas=True
-            )
-            db.add(config)
-            db.commit()
-            db.refresh(config)
-        return config
-    finally:
-        current_restaurante_id.reset(token_var)
+    """Retorna, sem efeitos colaterais, as configurações do tenant autenticado."""
+    config = (
+        db.query(ConfiguracaoRestaurante)
+        .options(joinedload(ConfiguracaoRestaurante.restaurante))
+        .filter(ConfiguracaoRestaurante.restaurante_id == current_user.restaurante_id)
+        .first()
+    )
+    if not config:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Configurações do restaurante ainda não foram provisionadas.",
+        )
+    return config
 
 
 @router.put("/configuracoes", response_model=ConfiguracaoRestauranteResponse)
@@ -1417,15 +1401,6 @@ def atualizar_configuracoes(
         config.perm_garcom_chamar = config_in.perm_garcom_chamar
     if config_in.perm_garcom_ociosas is not None:
         config.perm_garcom_ociosas = config_in.perm_garcom_ociosas
-    if config_in.plano is not None:
-        plano_val = config_in.plano.strip().lower()
-        if plano_val not in {"pocket", "pro", "premium"}:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Plano inválido. Deve ser um de: pocket, pro, premium"
-            )
-        if config.restaurante:
-            config.restaurante.plano = plano_val
         
     db.commit()
     db.refresh(config)
@@ -1581,40 +1556,3 @@ def atualizar_config_cardapio(
 ):
     """Atualiza as configurações whitelabel de personalização do restaurante ativo via config-cardapio."""
     return atualizar_configuracao_restaurante(config_in, background_tasks, None, db, current_user)
-
-
-from pydantic import BaseModel
-
-class UpdatePlanoRequest(BaseModel):
-    plano: str
-
-@router.put("/plano")
-def atualizar_plano_restaurante(
-    payload: UpdatePlanoRequest,
-    db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_permission("configuracoes:administrar"))
-):
-    """Atualiza o plano do restaurante ativo."""
-    plano_val = payload.plano.strip().lower()
-    if plano_val not in ['pocket', 'pro', 'premium']:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Plano inválido. Deve ser um de: pocket, pro, premium"
-        )
-    rest_id = require_tenant_id()
-    restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
-    if not restaurante:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Restaurante não encontrado"
-        )
-    restaurante.plano = plano_val
-    db.commit()
-    db.refresh(restaurante)
-    
-    return {
-        "success": True,
-        "plano": restaurante.plano,
-        "id": restaurante.id,
-        "nome": restaurante.nome
-    }

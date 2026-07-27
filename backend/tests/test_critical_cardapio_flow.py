@@ -219,15 +219,23 @@ def test_caixa_delivery_manual_exige_dados_de_entrega():
 
 
 @pytest.mark.parametrize(
-    ("tipo_pedido", "endereco", "tipo_esperado", "endereco_esperado", "taxa_esperada"),
+    (
+        "tipo_pedido",
+        "endereco",
+        "forma_pagamento",
+        "tipo_esperado",
+        "endereco_esperado",
+        "taxa_esperada",
+    ),
     [
-        ("delivery", "Rua das Flores, 123", "Delivery", "Rua das Flores, 123", 8.0),
-        ("retirada", "Retirada no Balcão", "Retirada", None, 0.0),
+        ("delivery", "Rua das Flores, 123", "na_entrega", "Delivery", "Rua das Flores, 123", 8.0),
+        ("retirada", "Retirada no Balcão", "na_entrega", "Retirada", None, 0.0),
     ],
 )
 def test_pedido_online_preserva_modalidade_no_kanban(
     tipo_pedido,
     endereco,
+    forma_pagamento,
     tipo_esperado,
     endereco_esperado,
     taxa_esperada,
@@ -246,12 +254,18 @@ def test_pedido_online_preserva_modalidade_no_kanban(
         "cliente_telefone": "81999990000" if tipo_pedido == "delivery" else "81999990001",
         "endereco_entrega": endereco,
         "taxa_entrega": 8.0,
-        "forma_pagamento": "Dinheiro",
+        "forma_pagamento": forma_pagamento,
         "tipo_pedido": tipo_pedido,
     }
 
     response = client.post("/cardapio/pedidos", json=payload)
     assert response.status_code == 201
+    assert response.json()["pagamento"] == {
+        "status": "pendente_no_atendimento",
+        "cobranca_online": False,
+    }
+    assert "pixCode" not in response.json()
+    assert "orderId" not in response.json()
 
     db = SessionLocal()
     try:
@@ -260,9 +274,141 @@ def test_pedido_online_preserva_modalidade_no_kanban(
         assert comanda.delivery_status == "pendente"
         assert comanda.delivery_endereco == endereco_esperado
         assert comanda.delivery_taxa == taxa_esperada
+        assert comanda.status_comanda is None
         assert len(comanda.itens) == 2
     finally:
         db.close()
+
+
+@pytest.mark.parametrize("forma_pagamento", ["Pix", "PIX", "Cartão de Crédito", "Dinheiro"])
+def test_pedido_online_rejeita_cobranca_nao_integrada(forma_pagamento):
+    """O cardápio não pode fingir que criou uma cobrança sem gateway homologado."""
+    db = SessionLocal()
+    try:
+        comandas_antes = db.query(Comanda).filter(Comanda.restaurante_id == 100).count()
+    finally:
+        db.close()
+
+    response = client.post(
+        "/cardapio/pedidos",
+        json={
+            "restaurante_id": 100,
+            "itens": [
+                {
+                    "produto_id": "prod-cardapio-test",
+                    "quantidade": 1,
+                    "observacao": "",
+                }
+            ],
+            "cliente_nome": "Cliente pagamento",
+            "cliente_telefone": "81999990006",
+            "endereco_entrega": "",
+            "taxa_entrega": 0,
+            "forma_pagamento": forma_pagamento,
+            "tipo_pedido": "retirada",
+        },
+    )
+
+    assert response.status_code == 422
+
+    db = SessionLocal()
+    try:
+        comandas_depois = db.query(Comanda).filter(Comanda.restaurante_id == 100).count()
+        assert comandas_depois == comandas_antes
+    finally:
+        db.close()
+
+
+def test_pedido_online_rejeita_restaurante_inexistente_sem_erro_500():
+    response = client.post(
+        "/cardapio/pedidos",
+        json={
+            "restaurante_id": 999999,
+            "itens": [
+                {
+                    "produto_id": "produto-inexistente",
+                    "quantidade": 1,
+                    "observacao": "",
+                }
+            ],
+            "cliente_nome": "Cliente inexistente",
+            "cliente_telefone": "81999990007",
+            "endereco_entrega": "",
+            "taxa_entrega": 0,
+            "forma_pagamento": "na_entrega",
+            "tipo_pedido": "retirada",
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Restaurante não encontrado."
+
+
+def test_pedido_online_nao_inventa_usuario_para_tenant_sem_equipe():
+    restaurant_id = 909001
+    db = SessionLocal()
+    token = current_restaurante_id.set(restaurant_id)
+    try:
+        restaurant = db.query(Restaurante).filter(
+            Restaurante.id == restaurant_id
+        ).first()
+        if not restaurant:
+            db.add(Restaurante(
+                id=restaurant_id,
+                nome="Restaurante sem equipe",
+                plano="pocket",
+                slug="restaurante-sem-equipe",
+            ))
+            db.commit()
+    finally:
+        db.close()
+        current_restaurante_id.reset(token)
+
+    response = client.post(
+        "/cardapio/pedidos",
+        json={
+            "restaurante_id": restaurant_id,
+            "itens": [
+                {
+                    "produto_id": "produto-inexistente",
+                    "quantidade": 1,
+                    "observacao": "",
+                }
+            ],
+            "cliente_nome": "Cliente sem equipe",
+            "cliente_telefone": "81999990008",
+            "endereco_entrega": "",
+            "taxa_entrega": 0,
+            "forma_pagamento": "na_entrega",
+            "tipo_pedido": "retirada",
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == (
+        "Restaurante ainda não está pronto para receber pedidos online."
+    )
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/cardapio/identificar",
+        "/cardapio/enviar-otp",
+        "/cardapio/verificar-otp",
+    ],
+)
+def test_recuperacao_otp_simulada_nao_esta_publicada(path):
+    response = client.post(
+        path,
+        json={
+            "restaurante_id": 100,
+            "telefone": "81999990000",
+            "otp": "0000",
+        },
+    )
+
+    assert response.status_code == 404
 
 
 def test_caixa_pode_recusar_pedido_antes_da_producao():
@@ -279,7 +425,7 @@ def test_caixa_pode_recusar_pedido_antes_da_producao():
         "cliente_telefone": "81999990002",
         "endereco_entrega": "",
         "taxa_entrega": 0,
-        "forma_pagamento": "Dinheiro",
+        "forma_pagamento": "na_entrega",
         "tipo_pedido": "retirada",
     }
     created = client.post("/cardapio/pedidos", json=payload)
