@@ -11,10 +11,9 @@ import CardapioHeader from "./components/CardapioHeader";
 import CardapioCategoryNav from "./components/CardapioCategoryNav";
 import CardapioProductCard from "./components/CardapioProductCard";
 import CardapioProductModal from "./components/CardapioProductModal";
-import CardapioCartDrawer, { CartItem } from "./components/CardapioCartDrawer";
+import CardapioCartDrawer, { CardapioCheckoutRequest, CartItem } from "./components/CardapioCartDrawer";
 import CardapioAuthModal from "./components/CardapioAuthModal";
 import { API_BASE_URL, WS_BASE_URL } from "../config/api";
-import CardapioOrderHistoryModal from "./components/CardapioOrderHistoryModal";
 import CardapioUserProfileModal from "./components/CardapioUserProfileModal";
 import CardapioDigital from "./components/CardapioDigital";
 import CardapioStoreInfoDrawer from "./components/CardapioStoreInfoDrawer";
@@ -70,19 +69,17 @@ export default function CardapioPage() {
     return false;
   });
   const [isAuthOpen, setIsAuthOpen] = useState(false);
-  const [isOrdersOpen, setIsOrdersOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [checkoutRequest, setCheckoutRequest] = useState<CardapioCheckoutRequest | null>(null);
   const [isStoreInfoOpen, setIsStoreInfoOpen] = useState(false); // Left Sidebar Information State
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   // Quick Sidebar Checkout States
   const [deliveryMethod, setDeliveryMethod] = useState<"delivery" | "pickup">("delivery");
   const [address, setAddress] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("Cartão de Crédito");
 
-  // User Profile State (Simulated)
+  // Customer contact profile saved on this device
   const [user, setUser] = useState<any | null>(null);
-  const [orders, setOrders] = useState<any[]>([]);
   const [sidebarError, setSidebarError] = useState("");
 
   // CEP & Complete Address States
@@ -511,13 +508,16 @@ export default function CardapioPage() {
     };
   }, []);
 
-  // Load user and orders on mount
+  // Load the local contact profile on mount
   useEffect(() => {
     const savedUser = localStorage.getItem("whitelabel_menu_current_user");
     if (savedUser) {
-      setUser(JSON.parse(savedUser));
+      try {
+        setUser(JSON.parse(savedUser));
+      } catch {
+        localStorage.removeItem("whitelabel_menu_current_user");
+      }
     }
-    refreshOrders();
   }, []);
 
   // Update categories active state when active brand changes
@@ -601,15 +601,6 @@ export default function CardapioPage() {
     };
   }, [activeBrand?.id]);
 
-  const refreshOrders = () => {
-    const savedOrders = localStorage.getItem("whitelabel_menu_orders");
-    if (savedOrders) {
-      setOrders(JSON.parse(savedOrders));
-    } else {
-      setOrders([]);
-    }
-  };
-
   const handleBrandChange = (brandId: string) => {
     window.location.search = `?restaurant_id=${brandId}`;
   };
@@ -617,43 +608,12 @@ export default function CardapioPage() {
   const handleLoginSuccess = (profile: any) => {
     setUser(profile);
     localStorage.setItem("whitelabel_menu_current_user", JSON.stringify(profile));
-    refreshOrders();
   };
 
   const handleLogout = () => {
     setUser(null);
     localStorage.removeItem("whitelabel_menu_current_user");
     setIsAuthOpen(false);
-  };
-
-  const handleReorder = (items: any[]) => {
-    const updatedCart = [...cart];
-    
-    items.forEach((item) => {
-      const { product, quantity, selectedOptions, notes } = item;
-      const optionIds = Object.values(selectedOptions || {})
-        .flatMap((list: any) => list.map((o: any) => o.id))
-        .sort()
-        .join("-");
-      const cartItemId = `${product.id}-${optionIds}-${notes ? notes.slice(0, 10) : ""}`;
-      
-      const existingIndex = updatedCart.findIndex((ci) => ci.id === cartItemId);
-      if (existingIndex > -1) {
-        updatedCart[existingIndex].quantity += (quantity || 1);
-      } else {
-        updatedCart.push({
-          id: cartItemId,
-          product,
-          quantity: quantity || 1,
-          selectedOptions: selectedOptions || {},
-          notes: notes || ""
-        });
-      }
-    });
-
-    setCart(updatedCart);
-    setIsOrdersOpen(false);
-    setIsCartOpen(true);
   };
 
   const handleAddToCart = (
@@ -724,16 +684,15 @@ export default function CardapioPage() {
     setCart(filtered);
   };
 
-  const handleCheckoutSuccess = (newOrder: any) => {
+  const handleCheckoutSuccess = () => {
     setCart([]); // Clear cart
     setIsCartOpen(false);
     setIsCheckoutOpen(false);
-    refreshOrders();
-    setIsOrdersOpen(true); // Open order status view immediately for feedback!
+    setCheckoutRequest(null);
   };
 
-  const handlePlaceOrder = (orderPayload: any) => {
-    // Open the interactive digital checkout / payment modal instead of direct placement
+  const handlePlaceOrder = (orderPayload: CardapioCheckoutRequest) => {
+    setCheckoutRequest(orderPayload);
     setIsCheckoutOpen(true);
   };
 
@@ -828,9 +787,6 @@ export default function CardapioPage() {
     return acc + price * item.quantity;
   }, 0);
 
-  // Filter orders corresponding to active brand and customer
-  const userOrders = activeBrand && orders ? orders.filter((o) => o.brandId === activeBrand.id && o.customerName === user?.name) : [];
-
   const handleQuickSidebarCheckout = () => {
     setSidebarError("");
 
@@ -850,44 +806,14 @@ export default function CardapioPage() {
       return;
     }
 
-    // Prepare order items
-    const orderItems = cart.map((item) => {
-      const optionDetails: string[] = [];
-      Object.entries(item.selectedOptions).forEach(([groupName, opts]) => {
-        const optionList = opts as any[];
-        if (optionList.length > 0) {
-          optionDetails.push(`${optionList.map((o) => o.name).join(", ")}`);
-        }
-      });
-
-      return {
-        id: item.product.id,
-        name: item.product.name,
-        quantity: item.quantity,
-        price: item.product.price,
-        notes: item.notes,
-        optionsText: optionDetails.join(" | ")
-      };
-    });
-
     const deliveryFee = deliveryMethod === "delivery" ? 7.00 : 0;
 
-    const orderPayload = {
-      id: "PED-" + Math.floor(1000 + Math.random() * 9000),
-      brandId: activeBrand.id,
-      brandName: activeBrand.name,
-      items: orderItems,
-      subtotal: cartTotal,
+    const orderPayload: CardapioCheckoutRequest = {
       deliveryFee,
-      discount: 0,
-      total: cartTotal + deliveryFee,
       deliveryMethod,
       address: deliveryMethod === "delivery" ? address : "Retirada no Balcão",
-      paymentMethod,
       customerName: user.name,
-      customerPhone: user.phone || "Não informado",
-      status: "pending",
-      createdAt: new Date().toISOString()
+      customerPhone: user.phone || ""
     };
 
     handlePlaceOrder(orderPayload);
@@ -957,7 +883,6 @@ export default function CardapioPage() {
             setIsAuthOpen(true);
           }
         }}
-        onViewOrdersClick={() => setIsOrdersOpen(true)}
         onLogoClick={() => setIsStoreInfoOpen(true)} // Open Left Info Drawer
         onCartToggle={() => setIsCartOpen(!isCartOpen)}
         cartCount={cartCount}
@@ -1309,19 +1234,11 @@ export default function CardapioPage() {
                       </div>
                     )}
 
-                    {/* Payment method selection */}
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-extrabold text-text-app/40 uppercase tracking-wider block">Forma de Pagamento</label>
-                      <select
-                        value={paymentMethod}
-                        onChange={(e) => setPaymentMethod(e.target.value)}
-                        className="w-full rounded-xl border border-slate-500/10 bg-slate-500/5 p-2 text-xs text-text-app focus:border-primary outline-hidden"
-                      >
-                        <option value="Cartão de Crédito" className="bg-card-app text-text-app">Cartão de Crédito (na entrega)</option>
-                        <option value="Cartão de Débito" className="bg-card-app text-text-app">Cartão de Débito (na entrega)</option>
-                        <option value="PIX" className="bg-card-app text-text-app">PIX (Chave na Entrega)</option>
-                        <option value="Dinheiro" className="bg-card-app text-text-app">Dinheiro</option>
-                      </select>
+                    <div className="rounded-xl border border-blue-500/15 bg-blue-500/5 p-2.5">
+                      <p className="text-[9px] font-extrabold text-text-app/60 uppercase tracking-wider">Pagamento no atendimento</p>
+                      <p className="mt-1 text-[10px] text-text-app/45 leading-relaxed">
+                        O restaurante confirmará as formas de pagamento disponíveis ao aceitar o pedido.
+                      </p>
                     </div>
                   </div>
 
@@ -1416,7 +1333,6 @@ export default function CardapioPage() {
       {/* Mobile Cart Drawer (Slide up — only visible on mobile/tablet, desktop uses the sidebar) */}
       {isCartOpen && window.innerWidth < 1024 && (
         <CardapioCartDrawer
-          activeBrand={activeBrand}
           cart={cart}
           onClose={() => setIsCartOpen(false)}
           onUpdateQty={handleUpdateQty}
@@ -1432,46 +1348,33 @@ export default function CardapioPage() {
         <CardapioAuthModal
           onClose={() => setIsAuthOpen(false)}
           onLoginSuccess={handleLoginSuccess}
-          restauranteId={Number(activeBrand.id)}
         />
       )}
 
-      {/* User Profile, Fidelity and Cashback Modal */}
+      {/* Customer contact profile */}
       {isProfileOpen && (
         <CardapioUserProfileModal
           onClose={() => setIsProfileOpen(false)}
-          activeBrand={activeBrand}
           user={user}
           onProfileUpdate={handleLoginSuccess}
           onLogout={handleLogout}
         />
       )}
 
-      {/* User past order history status modal */}
-      {isOrdersOpen && (
-        <CardapioOrderHistoryModal
-          onClose={() => setIsOrdersOpen(false)}
-          orders={userOrders}
-          activeBrand={activeBrand}
-          user={user}
-          onReorder={handleReorder}
-        />
-      )}
-
-      {/* DIGITAL CHECKOUT & PAYMENT MODAL */}
-      {isCheckoutOpen && (
+      {/* DIGITAL ORDER REVIEW */}
+      {isCheckoutOpen && checkoutRequest && (
         <CardapioDigital
           activeBrand={activeBrand}
           cart={cart}
-          subtotal={cartTotal}
-          deliveryFee={deliveryMethod === "delivery" ? 7 : 0}
-          discount={0}
-          total={cartTotal + (deliveryMethod === "delivery" ? 7 : 0)}
-          deliveryMethod={deliveryMethod}
-          address={address}
-          customerName={user?.name || "Cliente Convidado"}
-          customerPhone={user?.phone || "(11) 99999-9999"}
-          onClose={() => setIsCheckoutOpen(false)}
+          deliveryFee={checkoutRequest.deliveryFee}
+          deliveryMethod={checkoutRequest.deliveryMethod}
+          address={checkoutRequest.address}
+          customerName={checkoutRequest.customerName}
+          customerPhone={checkoutRequest.customerPhone}
+          onClose={() => {
+            setIsCheckoutOpen(false);
+            setCheckoutRequest(null);
+          }}
           onOrderSuccess={handleCheckoutSuccess}
         />
       )}

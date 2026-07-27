@@ -4,8 +4,8 @@
  */
 
 import React, { useState } from "react";
-import { Product, ProductOption, BrandConfig, getProductImageUrl } from "../CardapioTypes";
-import { X, Trash2, Plus, Minus, Send, ShoppingBag, MapPin, Ticket } from "lucide-react";
+import { Product, ProductOption, getProductImageUrl } from "../CardapioTypes";
+import { X, Trash2, Plus, Minus, Send, ShoppingBag, MapPin, Info } from "lucide-react";
 
 
 export interface CartItem {
@@ -16,19 +16,25 @@ export interface CartItem {
   notes: string;
 }
 
+export interface CardapioCheckoutRequest {
+  deliveryMethod: "delivery" | "pickup";
+  address: string;
+  deliveryFee: number;
+  customerName: string;
+  customerPhone: string;
+}
+
 interface CardapioCartDrawerProps {
-  activeBrand: BrandConfig;
   cart: CartItem[];
   onClose: () => void;
   onUpdateQty: (itemId: string, newQty: number) => void;
   onRemoveItem: (itemId: string) => void;
-  onPlaceOrder: (orderData: any) => void;
+  onPlaceOrder: (orderData: CardapioCheckoutRequest) => void;
   user: any;
   onAuthClick: () => void;
 }
 
 export default function CardapioCartDrawer({
-  activeBrand,
   cart,
   onClose,
   onUpdateQty,
@@ -39,10 +45,6 @@ export default function CardapioCartDrawer({
 }: CardapioCartDrawerProps) {
   const [deliveryMethod, setDeliveryMethod] = useState<"delivery" | "pickup">("delivery");
   const [address, setAddress] = useState(user?.address || "");
-  const [paymentMethod, setPaymentMethod] = useState("Cartão de Crédito");
-  const [promoCode, setPromoCode] = useState("");
-  const [appliedDiscount, setAppliedDiscount] = useState(0); // value in BRL
-  const [promoMessage, setPromoMessage] = useState("");
 
   const subtotal = cart.reduce((acc, item) => {
     let itemPrice = item.product.price;
@@ -55,24 +57,7 @@ export default function CardapioCartDrawer({
   }, 0);
 
   const deliveryFee = deliveryMethod === "delivery" ? 7.00 : 0;
-  const total = Math.max(0, subtotal + deliveryFee - appliedDiscount);
-
-  const handleApplyPromo = () => {
-    if (promoCode.toUpperCase() === "BEMVINDO") {
-      setAppliedDiscount(10.00);
-      setPromoMessage("Cupom de R$ 10,00 aplicado com sucesso! 🎉");
-    } else if (promoCode.toUpperCase() === "FREE") {
-      if (deliveryMethod === "delivery") {
-        setAppliedDiscount(7.00);
-        setPromoMessage("Entrega Grátis aplicada! 🛵");
-      } else {
-        setPromoMessage("Cupom válido apenas para entregas.");
-      }
-    } else if (promoCode.trim() !== "") {
-      setPromoMessage("Cupom inválido ou expirado.");
-      setAppliedDiscount(0);
-    }
-  };
+  const total = subtotal + deliveryFee;
 
   const handleCheckout = () => {
     if (!user) {
@@ -86,41 +71,12 @@ export default function CardapioCartDrawer({
       return;
     }
 
-    // Prepare order payload
-    const orderItems = cart.map((item) => {
-      const optionDetails: string[] = [];
-      Object.entries(item.selectedOptions).forEach(([groupName, opts]) => {
-        if (opts.length > 0) {
-          optionDetails.push(`${opts.map((o) => o.name).join(", ")}`);
-        }
-      });
-
-      return {
-        id: item.product.id,
-        name: item.product.name,
-        quantity: item.quantity,
-        price: item.product.price,
-        notes: item.notes,
-        optionsText: optionDetails.join(" | ")
-      };
-    });
-
-    const orderPayload = {
-      id: "PED-" + Math.floor(1000 + Math.random() * 9000),
-      brandId: activeBrand.id,
-      brandName: activeBrand.name,
-      items: orderItems,
-      subtotal,
+    const orderPayload: CardapioCheckoutRequest = {
       deliveryFee,
-      discount: appliedDiscount,
-      total,
       deliveryMethod,
       address: deliveryMethod === "delivery" ? address : "Retirada no Balcão",
-      paymentMethod,
       customerName: user.name,
-      customerPhone: user.phone || "Não informado",
-      status: "pending",
-      createdAt: new Date().toISOString()
+      customerPhone: user.phone || ""
     };
 
     onPlaceOrder(orderPayload);
@@ -300,46 +256,14 @@ export default function CardapioCartDrawer({
               )}
             </div>
 
-            {/* Payment Method Selector */}
-            <div className="rounded-2xl border border-slate-500/10 bg-slate-500/5 p-3">
-              <h4 className="text-xs font-bold text-text-app">Forma de Pagamento</h4>
-              <select
-                value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value)}
-                className="mt-2 w-full rounded-xl border border-slate-500/10 bg-slate-500/5 p-2.5 text-xs text-text-app focus:border-primary outline-hidden"
-                id="select-payment"
-              >
-                <option value="Cartão de Crédito" className="bg-card-app text-text-app">Cartão de Crédito (na entrega)</option>
-                <option value="Cartão de Débito" className="bg-card-app text-text-app">Cartão de Débito (na entrega)</option>
-                <option value="PIX" className="bg-card-app text-text-app">PIX (Chave enviada no WhatsApp)</option>
-                <option value="Dinheiro" className="bg-card-app text-text-app">Dinheiro / Troco</option>
-              </select>
-            </div>
-
-            {/* Promo code input */}
-            <div className="rounded-2xl border border-slate-500/10 bg-slate-500/5 p-3">
-              <div className="flex items-center gap-1 text-xs font-bold text-text-app">
-                <Ticket className="h-4 w-4 text-primary" />
-                <span>Possui um cupom de desconto?</span>
+            <div className="rounded-2xl border border-blue-500/15 bg-blue-500/5 p-3 flex gap-2.5">
+              <Info className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="text-xs font-bold text-text-app">Pagamento no atendimento</h4>
+                <p className="mt-1 text-[10px] text-text-app/50 leading-relaxed">
+                  As formas de pagamento disponíveis serão confirmadas diretamente pelo restaurante.
+                </p>
               </div>
-              <div className="mt-2 flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Ex: BEMVINDO (R$ 10 off) ou FREE"
-                  value={promoCode}
-                  onChange={(e) => setPromoCode(e.target.value)}
-                  className="flex-1 rounded-xl border border-slate-500/10 bg-slate-500/5 p-2.5 text-xs uppercase text-text-app placeholder:normal-case focus:border-primary outline-hidden"
-                />
-                <button
-                  onClick={handleApplyPromo}
-                  className="rounded-xl bg-primary px-3.5 text-xs font-bold text-white hover:opacity-90 transition"
-                >
-                  Aplicar
-                </button>
-              </div>
-              {promoMessage && (
-                <p className="mt-1.5 text-[10px] font-semibold text-primary">{promoMessage}</p>
-              )}
             </div>
           </div>
         )}
@@ -359,12 +283,6 @@ export default function CardapioCartDrawer({
                   <span>{formatPrice(deliveryFee)}</span>
                 </div>
               )}
-              {appliedDiscount > 0 && (
-                <div className="flex justify-between text-green-500 font-semibold">
-                  <span>Desconto Aplicado</span>
-                  <span>- {formatPrice(appliedDiscount)}</span>
-                </div>
-              )}
               <div className="flex justify-between text-sm font-bold text-text-app pt-2 border-t border-slate-500/15">
                 <span>Total estimado</span>
                 <span className="text-base text-primary">{formatPrice(total)}</span>
@@ -379,7 +297,7 @@ export default function CardapioCartDrawer({
                 id="btn-confirm-order"
               >
                 <ShoppingBag className="h-4.5 w-4.5" />
-                <span>Confirmar e Enviar para Cozinha</span>
+                <span>Revisar Pedido</span>
               </button>
             </div>
           </div>

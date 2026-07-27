@@ -16,7 +16,6 @@ interface CardapioHeaderProps {
   setSearchQuery: (query: string) => void;
   user: any;
   onAuthClick: () => void;
-  onViewOrdersClick: () => void;
   onLogoClick: () => void; // Click to open the StoreInfoDrawer
   onCartToggle: () => void;
   cartCount: number;
@@ -46,7 +45,6 @@ export default function CardapioHeader({
   setSearchQuery,
   user,
   onAuthClick,
-  onViewOrdersClick,
   onLogoClick,
   onCartToggle,
   cartCount
@@ -221,18 +219,6 @@ export default function CardapioHeader({
                 </span>
               )}
             </button>
-
-            {/* User past order history status link */}
-            {user && (
-              <button
-                onClick={onViewOrdersClick}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl hover:bg-slate-500/10 text-text-app/80 text-xs font-bold transition cursor-pointer"
-                id="btn-view-orders"
-              >
-                <ShoppingBag className="h-4 w-4 text-text-app/50" />
-                <span className="hidden sm:inline">Meus Pedidos</span>
-              </button>
-            )}
 
             {/* User Account Login/Logout Button */}
             {user ? (

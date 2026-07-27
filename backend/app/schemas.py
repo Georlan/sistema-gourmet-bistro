@@ -704,29 +704,42 @@ class RestauranteConfigUpdate(BaseModel):
 
 # ----------------- PEDIDOS CARDAPIO DIGITAL -----------------
 class CardapioItemPedido(BaseModel):
-    produto_id: str
-    quantidade: int = Field(gt=0)
-    observacao: Optional[str] = ""
-    cliente_nome: Optional[str] = "Cliente Online"
+    produto_id: str = Field(min_length=1, max_length=128)
+    quantidade: int = Field(gt=0, le=100)
+    observacao: str = Field(default="", max_length=500)
+    cliente_nome: Optional[str] = Field(default=None, max_length=100)
+
+    model_config = ConfigDict(extra="forbid")
 
 class CardapioPedidoCreate(BaseModel):
-    restaurante_id: int
-    itens: List[CardapioItemPedido]
-    cliente_nome: str
-    cliente_telefone: str
-    endereco_entrega: str
-    taxa_entrega: float = 0.0
-    forma_pagamento: str  # Pix | Cartão na Entrega | Dinheiro
-    tipo_pedido: str = "delivery"  # delivery | retirada
+    restaurante_id: int = Field(gt=0)
+    itens: List[CardapioItemPedido] = Field(min_length=1, max_length=100)
+    cliente_nome: str = Field(min_length=2, max_length=100)
+    cliente_telefone: str = Field(min_length=10, max_length=20)
+    endereco_entrega: str = Field(default="", max_length=300)
+    taxa_entrega: float = Field(default=0.0, ge=0, le=10_000)
+    forma_pagamento: Literal["na_entrega"] = "na_entrega"
+    tipo_pedido: Literal["delivery", "retirada"] = "delivery"
 
+    @field_validator("cliente_nome")
+    @classmethod
+    def validate_customer_name(cls, value: str) -> str:
+        name = value.strip()
+        if len(name) < 2:
+            raise ValueError("Nome do cliente inválido.")
+        return name
 
-# ----------------- JORNADA SEM SENHA & OTP CARDAPIO -----------------
-class CardapioIdentificarRequest(BaseModel):
-    restaurante_id: int
-    telefone: str
+    @field_validator("cliente_telefone")
+    @classmethod
+    def validate_customer_phone(cls, value: str) -> str:
+        phone = "".join(character for character in value if character.isdigit())
+        if len(phone) < 10 or len(phone) > 11:
+            raise ValueError("Telefone do cliente deve conter DDD e 10 ou 11 dígitos.")
+        return phone
 
+    @field_validator("endereco_entrega")
+    @classmethod
+    def normalize_delivery_address(cls, value: str) -> str:
+        return value.strip()
 
-class CardapioVerificarOtpRequest(BaseModel):
-    restaurante_id: int
-    telefone: str
-    otp: str
+    model_config = ConfigDict(extra="forbid")
