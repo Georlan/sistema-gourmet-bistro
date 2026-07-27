@@ -4472,9 +4472,8 @@ export function CaixaPanel({
                       >
                         <option value="garcom">Garçom</option>
                         <option value="caixa">Operador Caixa</option>
-                        <option value="atendente">Atendente</option>
                         <option value="gerente">Gerente</option>
-                        <option value="cozinha">Cozinha</option>
+                        <option value="motoboy">Motoboy</option>
                       </select>
                     </div>
                     <button type="submit" className={clsx('w-full', 'py-2', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'font-bold', 'text-[9px]', 'uppercase', 'tracking-wider', 'rounded-lg', 'transition-all', 'cursor-pointer')}>Cadastrar e Enviar Convite</button>

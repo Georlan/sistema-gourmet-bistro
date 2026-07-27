@@ -31,8 +31,8 @@ export function CaixaAtivarPage({ token }: CaixaAtivarPageProps) {
       return;
     }
 
-    if (senha.length < 3) {
-      setErrorMsg('A senha deve conter pelo menos 3 caracteres.');
+    if (senha.length < 8) {
+      setErrorMsg('A senha deve conter pelo menos 8 caracteres.');
       return;
     }
 
@@ -136,6 +136,8 @@ export function CaixaAtivarPage({ token }: CaixaAtivarPageProps) {
                 <input
                   type="password"
                   required
+                  minLength={8}
+                  maxLength={72}
                   placeholder="Digite sua senha..."
                   value={senha}
                   onChange={(e) => setSenha(e.target.value)}
@@ -151,6 +153,8 @@ export function CaixaAtivarPage({ token }: CaixaAtivarPageProps) {
                 <input
                   type="password"
                   required
+                  minLength={8}
+                  maxLength={72}
                   placeholder="Repita sua nova senha..."
                   value={confirmaSenha}
                   onChange={(e) => setConfirmaSenha(e.target.value)}

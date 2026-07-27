@@ -36,8 +36,9 @@ def setup_database():
         db = TestingSessionLocal()
         
         # Create test users
-        db.add(Usuario(id="u-garcom", restaurante_id=1, nome="Garcom Test", usuario="garcom", senha_hash=get_password_hash("123"), role="garcom"))
-        db.add(Usuario(id="u-caixa", restaurante_id=1, nome="Caixa Test", usuario="caixa", senha_hash=get_password_hash("123"), role="caixa"))
+        db.add(Usuario(id="u-garcom", restaurante_id=1, nome="Garcom Test", usuario="garcom", senha_hash=get_password_hash("123"), role="garcom", status="ativo"))
+        db.add(Usuario(id="u-caixa", restaurante_id=1, nome="Caixa Test", usuario="caixa", senha_hash=get_password_hash("123"), role="caixa", status="ativo"))
+        db.add(Usuario(id="u-admin", restaurante_id=1, nome="Admin Test", usuario="admin", senha_hash=get_password_hash("123"), role="admin", status="ativo"))
         
         # Create category, product, table
         cat = Categoria(id="cat-1", restaurante_id=1, nome="Comida")
@@ -227,9 +228,9 @@ def test_manage_tables():
 def test_configuracoes_requires_auth_and_admin():
     client = TestClient(app)
 
-    # Anonymous GET now returns 200 (public read, required for instant UI loading)
+    # Leitura de configuração exige tenant autenticado.
     resp = client.get("/caixa/configuracoes")
-    assert resp.status_code == 200
+    assert resp.status_code == 401
 
     # Garçom token should be rejected with 403 on PUT
     headers_garcom = get_auth_headers(client, "garcom", "123")
@@ -241,12 +242,6 @@ def test_configuracoes_requires_auth_and_admin():
     assert resp.status_code == 403
 
     # Admin token should be able to update successfully
-    db = TestingSessionLocal()
-    admin_user = Usuario(id="u-admin", nome="Admin Test", usuario="admin", senha_hash=get_password_hash("123"), role="admin")
-    db.add(admin_user)
-    db.commit()
-    db.close()
-
     headers_admin = get_auth_headers(client, "admin", "123")
     resp = client.put(
         "/caixa/configuracoes",
@@ -349,14 +344,14 @@ def test_pagamento_idempotency_race_condition():
 
 def test_cadastrar_e_ativar_funcionario():
     client = TestClient(app)
-    headers_caixa = get_auth_headers(client, "caixa", "123")
+    headers_admin = get_auth_headers(client, "admin", "123")
     
     # 1. Cadastrar funcionário via /caixa/funcionarios
     resp = client.post("/caixa/funcionarios", json={
         "nome": "João Garçom",
         "telefone": "(81) 98888-7777",
         "cargo": "garcom"
-    }, headers=headers_caixa)
+    }, headers=headers_admin)
     assert resp.status_code == 201
     data = resp.json()
     assert data["status"] == "pendente_ativacao"

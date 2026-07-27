@@ -131,7 +131,8 @@ def setup_database():
         nome="Caixa Operator",
         usuario="caixa_test",
         senha_hash=get_password_hash("123"),
-        role="caixa"
+        role="caixa",
+        status="ativo",
     )
     db.add(u1)
     db.commit()

@@ -1,11 +1,24 @@
 import json
 import uuid
 import datetime
+import os
 from app.database import engine, Base, SessionLocal
 from app.models import Restaurante, Usuario, Categoria, Produto, Mesa, ObservacaoPredefinida, Motoboy, Comanda, Item, Lancamento, ConfiguracaoRestaurante, ConfiguracaoIA
 from app.security import get_password_hash
 
 def seed_database():
+    if os.getenv("KOMA_ALLOW_DESTRUCTIVE_SEED") != "YES_I_UNDERSTAND":
+        raise RuntimeError(
+            "Seed destrutivo bloqueado. Defina "
+            "KOMA_ALLOW_DESTRUCTIVE_SEED=YES_I_UNDERSTAND para confirmar o reset."
+        )
+
+    admin_password = os.getenv("KOMA_SEED_ADMIN_PASSWORD", "")
+    if len(admin_password) < 12 or len(admin_password.encode("utf-8")) > 72:
+        raise RuntimeError(
+            "KOMA_SEED_ADMIN_PASSWORD deve ter entre 12 e 72 bytes."
+        )
+
     print("Recriando e limpando o banco de dados...")
     # Drop and recreate tables for a fresh clean seed
     Base.metadata.drop_all(bind=engine)
@@ -25,24 +38,27 @@ def seed_database():
         db.merge(restaurante)
         db.commit()
 
-        # 1. Cadastrar Usuários (Garçons, Caixas e Administradores)
+        # 1. Cadastrar identidades de demonstração e um administrador ativo.
+        # Funcionários reais devem ser adicionados posteriormente por convite.
         usuarios_data = [
-            {"id": "g-01", "nome": "Georlan", "usuario": "georlan", "senha": "123", "role": "garcom"},
-            {"id": "g-02", "nome": "Mateus", "usuario": "mateus", "senha": "123", "role": "garcom"},
-            {"id": "g-03", "nome": "Sarah", "usuario": "sarah", "senha": "123", "role": "garcom"},
-            {"id": "g-04", "nome": "Thiago", "usuario": "thiago", "senha": "123", "role": "garcom"},
-            {"id": "c-01", "nome": "Caixa 1", "usuario": "caixa1", "senha": "123", "role": "caixa"},
-            {"id": "a-01", "nome": "Admin", "usuario": "admin", "senha": "123", "role": "admin"},
+            {"id": "g-01", "nome": "Georlan", "usuario": "georlan", "role": "garcom"},
+            {"id": "g-02", "nome": "Mateus", "usuario": "mateus", "role": "garcom"},
+            {"id": "g-03", "nome": "Sarah", "usuario": "sarah", "role": "garcom"},
+            {"id": "g-04", "nome": "Thiago", "usuario": "thiago", "role": "garcom"},
+            {"id": "c-01", "nome": "Caixa 1", "usuario": "caixa1", "role": "caixa"},
+            {"id": "a-01", "nome": "Admin", "usuario": "admin", "role": "admin"},
         ]
         
         for u in usuarios_data:
+            is_admin = u["role"] == "admin"
             novo_usuario = Usuario(
                 id=u["id"],
                 restaurante_id=1,
                 nome=u["nome"],
                 usuario=u["usuario"],
-                senha_hash=get_password_hash(u["senha"]),
-                role=u["role"]
+                senha_hash=get_password_hash(admin_password) if is_admin else None,
+                role=u["role"],
+                status="ativo" if is_admin else "inativo",
             )
             db.add(novo_usuario)
             print(f"Usuário cadastrado: {u['nome']} ({u['role']})")
@@ -239,6 +255,7 @@ def seed_database():
     except Exception as e:
         db.rollback()
         print(f"Erro ao semear o banco de dados: {e}")
+        raise
     finally:
         db.close()
 

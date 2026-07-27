@@ -50,7 +50,7 @@ def setup_database():
         db.add(rest)
         db.commit()
     
-    db.add(Usuario(id="u-admin", restaurante_id=1, nome="Admin Test", usuario="admin", senha_hash=get_password_hash("123"), role="admin"))
+    db.add(Usuario(id="u-admin", restaurante_id=1, nome="Admin Test", usuario="admin", senha_hash=get_password_hash("123"), role="admin", status="ativo"))
     db.add(Mesa(id=1, restaurante_id=1, capacidade=4, nome=None))
     
     cat1 = Categoria(id="cat-bebidas", restaurante_id=1, nome="Bebidas")

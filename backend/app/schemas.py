@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from typing import List, Optional, Union, Any
+from typing import Any, List, Literal, Optional, Union
 from datetime import datetime
 import uuid
 
@@ -31,14 +31,19 @@ class UsuarioResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class UsuarioCreate(BaseModel):
-    nome: str
-    telefone: Optional[str] = None
-    email: Optional[str] = None
-    cargo: Optional[str] = "garcom"
-    restaurante_id: Optional[int] = None
-    usuario: Optional[str] = None
-    senha: Optional[str] = None
-    role: Optional[str] = "garcom"
+    nome: str = Field(min_length=1, max_length=100)
+    telefone: str = Field(min_length=10, max_length=20)
+    cargo: Literal["gerente", "caixa", "garcom", "motoboy"] = "garcom"
+
+    @field_validator("nome")
+    @classmethod
+    def validate_nome(cls, value: str) -> str:
+        nome = value.strip()
+        if not nome:
+            raise ValueError("Nome é obrigatório.")
+        return nome
+
+    model_config = ConfigDict(extra="forbid")
 
 class LoginResponse(BaseModel):
     access_token: str
@@ -47,9 +52,16 @@ class LoginResponse(BaseModel):
     usuario: UsuarioResponse
 
 class AtivarContaRequest(BaseModel):
-    token_convite: str
-    email: str
-    senha: str
+    token_convite: str = Field(min_length=1, max_length=128)
+    email: str = Field(min_length=3, max_length=100)
+    senha: str = Field(min_length=8, max_length=72)
+
+    @field_validator("senha")
+    @classmethod
+    def validate_bcrypt_password_size(cls, value: str) -> str:
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("A senha deve possuir no máximo 72 bytes.")
+        return value
 
 
 # ----------------- CATEGORY & OBSERVATION -----------------
@@ -404,7 +416,6 @@ class ConfiguracaoRestauranteResponse(BaseModel):
 
 class ConfiguracaoRestauranteUpdate(BaseModel):
     nicho: Optional[str] = None
-    plano: Optional[str] = None
     mapa_mesas_ativo: Optional[bool] = None
     delivery_ativo: Optional[bool] = None
     taxa_servico_ativa: Optional[bool] = None
@@ -427,6 +438,8 @@ class ConfiguracaoRestauranteUpdate(BaseModel):
     perm_garcom_transferir_item: Optional[bool] = None
     perm_garcom_chamar: Optional[bool] = None
     perm_garcom_ociosas: Optional[bool] = None
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class ConfiguracaoIAResponse(BaseModel):

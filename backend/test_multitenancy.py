@@ -32,7 +32,7 @@ def setup_database():
     token_var = current_restaurante_id.set(None)
     try:
         # 2. Seed Restaurant 1 Data
-        u1 = Usuario(id="u-1", restaurante_id=1, nome="Waiter One", usuario="waiter1", senha_hash=get_password_hash("123"), role="garcom")
+        u1 = Usuario(id="u-1", restaurante_id=1, nome="Waiter One", usuario="waiter1", senha_hash=get_password_hash("123"), role="garcom", status="ativo")
         cat1 = Categoria(id="cat-cardapio", restaurante_id=1, nome="Bebidas R1")
         m1 = Mesa(id=1, restaurante_id=1, capacidade=4)
         db.add_all([u1, cat1, m1])
@@ -43,7 +43,7 @@ def setup_database():
         db.commit()
         
         # 3. Seed Restaurant 2 Data
-        u2 = Usuario(id="u-2", restaurante_id=2, nome="Waiter Two", usuario="waiter2", senha_hash=get_password_hash("123"), role="garcom")
+        u2 = Usuario(id="u-2", restaurante_id=2, nome="Waiter Two", usuario="waiter2", senha_hash=get_password_hash("123"), role="garcom", status="ativo")
         # Os mesmos IDs de negócio são válidos em outro tenant.
         cat2 = Categoria(id="cat-cardapio", restaurante_id=2, nome="Bebidas R2")
         m2 = Mesa(id=1, restaurante_id=2, capacidade=4)
