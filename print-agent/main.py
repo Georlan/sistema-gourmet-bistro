@@ -19,8 +19,15 @@ def main():
     config = parse_cli_args(config)
 
     if not config.agent_token:
-        print("[ERRO] Token do agente não informado. Forneça via --token, variável KOMA_AGENT_TOKEN ou arquivo config.json.")
-        sys.exit(1)
+        from pairing import pair_agent
+
+        print("[PAREAMENTO] Nenhuma credencial local encontrada. Abrindo o Kôma...")
+        paired_token = pair_agent()
+        if not paired_token:
+            print("[ERRO] Pareamento não concluído. Entre no Kôma e tente novamente.")
+            sys.exit(1)
+        config.agent_token = paired_token
+        print("[PAREAMENTO] Computador conectado com sucesso.")
 
     run_agent_loop(config)
 
