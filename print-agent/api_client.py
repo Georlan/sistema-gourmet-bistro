@@ -61,7 +61,7 @@ class KomaApiClient:
             return False
 
     def get_next_job(self) -> Optional[Dict[str, Any]]:
-        """Consulta o próximo job pendente na fila do restaurante."""
+        """Consulta o próximo job sem reservá-lo (compatibilidade legada)."""
         if not self.agent_token:
             return None
         url = f"{self.api_url}/api/print-agents/jobs/next"
@@ -72,6 +72,35 @@ class KomaApiClient:
                 return data if data else None
         except Exception as e:
             log.debug(f"Erro ao consultar próximo job: {e}")
+        return None
+
+    def claim_next_job(self) -> Optional[Dict[str, Any]]:
+        """Busca e reserva atomicamente o próximo job em uma única chamada."""
+        if not self.agent_token:
+            return None
+        url = f"{self.api_url}/api/print-agents/jobs/claim-next"
+        try:
+            resp = self.session.post(url, headers=self.headers, timeout=5)
+            if resp.status_code == 200:
+                data = resp.json()
+                return data if data else None
+            if resp.status_code not in (404, 405):
+                log.warning(
+                    "Falha ao buscar e reservar próximo job "
+                    f"(HTTP {resp.status_code}): {resp.text}"
+                )
+                return None
+        except Exception as e:
+            log.debug(f"Erro ao buscar e reservar próximo job: {e}")
+            return None
+
+        # Compatibilidade durante a atualização: o backend antigo ainda usa
+        # GET /jobs/next seguido de POST /jobs/{id}/claim.
+        next_job = self.get_next_job()
+        if not next_job:
+            return None
+        if self.claim_job(next_job["id"]):
+            return next_job
         return None
 
     def claim_job(self, job_id: str) -> Optional[Dict[str, Any]]:

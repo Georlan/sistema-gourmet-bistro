@@ -34,6 +34,19 @@ journalctl --user -u koma-print-agent.service -f
 lpstat -p -d
 ```
 
+Cada impressão concluída registra uma linha `[LATÊNCIA]` com quatro medidas:
+
+- `fila`: tempo entre a criação do job no backend e sua reserva pelo agente;
+- `reserva_api`: chamada ao Railway que busca e reserva o próximo job;
+- `envio_cups`: entrega local do cupom ao CUPS/Spooler;
+- `confirmacao_api`: confirmação posterior, que não atrasa a impressão física.
+
+Para acompanhar somente essas medidas:
+
+```bash
+journalctl --user -u koma-print-agent.service -f | grep --line-buffered LATÊNCIA
+```
+
 ## Execução manual
 
 Útil apenas durante desenvolvimento:
@@ -64,6 +77,7 @@ parte do fluxo normal do cliente.
 ## Garantias do fluxo
 
 - A conexão HTTP é reutilizada entre consultas.
+- A busca e a reserva do próximo cupom ocorrem em uma chamada atômica.
 - Enquanto houver fila, o próximo cupom é buscado sem pausa.
 - O journal SQLite local impede uma segunda impressão após falha de conexão.
 - Trabalhos impressos e ainda não confirmados são reconciliados com o backend.
@@ -74,11 +88,13 @@ Rotas usadas pelo agente:
 
 | Método | Rota |
 |---|---|
-| `GET` | `/api/print-agents/jobs/next` |
-| `POST` | `/api/print-agents/jobs/{id}/claim` |
+| `POST` | `/api/print-agents/jobs/claim-next` |
 | `POST` | `/api/print-agents/jobs/{id}/complete` |
 | `POST` | `/api/print-agents/jobs/{id}/fail` |
 | `POST` | `/api/print-agents/heartbeat` |
+
+As rotas legadas `GET /jobs/next` e `POST /jobs/{id}/claim` permanecem
+disponíveis durante a atualização de instalações antigas.
 
 ## Windows
 

@@ -138,6 +138,52 @@ def test_concurrent_claim_second_agent_gets_conflict():
     assert "já foi assumido" in resp2.json()["detail"]
 
 
+def test_claim_next_reserves_job_in_one_request():
+    """Busca e claim acontecem juntos, com telemetria da fila."""
+    client = TestClient(app)
+    headers = {"X-Agent-Token": "token_agent_1"}
+
+    response = client.post(
+        "/api/print-agents/jobs/claim-next",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["id"] == "job-1001"
+    assert payload["queue_latency_ms"] >= 0
+    assert payload["claimed_at"]
+
+    db = TestingSessionLocal()
+    try:
+        job = db.query(PrintJob).filter_by(id="job-1001").one()
+        assert job.status == "claimed"
+        assert job.agent_id == "agent-box-1"
+    finally:
+        db.close()
+
+
+def test_claim_next_never_delivers_same_job_to_second_agent():
+    """O segundo agente não recebe o job já reservado atomicamente."""
+    client = TestClient(app)
+    headers1 = {"X-Agent-Token": "token_agent_1"}
+    headers2 = {"X-Agent-Token": "token_agent_2"}
+
+    first = client.post(
+        "/api/print-agents/jobs/claim-next",
+        headers=headers1,
+    )
+    second = client.post(
+        "/api/print-agents/jobs/claim-next",
+        headers=headers2,
+    )
+
+    assert first.status_code == 200
+    assert first.json()["id"] == "job-1001"
+    assert second.status_code == 200
+    assert second.json() is None
+
+
 def test_stuck_job_recovery():
     """Jobs em 'claimed' há mais de 5min são liberados automaticamente no /jobs/next."""
     db = TestingSessionLocal()

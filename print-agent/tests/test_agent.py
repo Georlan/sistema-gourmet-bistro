@@ -127,17 +127,35 @@ def test_api_client_reuses_http_session():
 
     with patch("api_client.requests.Session") as SessionClass:
         session = SessionClass.return_value
-        session.get.return_value.status_code = 200
-        session.get.return_value.json.return_value = job
         session.post.return_value.status_code = 200
+        session.post.return_value.json.return_value = job
 
         client = KomaApiClient("https://api.koma.test", "agent-token")
 
-        assert client.get_next_job() == job
+        assert client.claim_next_job() == job
         assert client.heartbeat() is True
         SessionClass.assert_called_once_with()
+        assert session.post.call_count == 2
+
+
+def test_api_client_falls_back_during_backend_rollout():
+    """Agente novo continua funcional enquanto o backend antigo é atualizado."""
+    job = {"id": "job-legacy"}
+
+    with patch("api_client.requests.Session") as SessionClass:
+        session = SessionClass.return_value
+        claim_next_response = MagicMock(status_code=404)
+        claim_response = MagicMock(status_code=200)
+        claim_response.json.return_value = job
+        session.post.side_effect = [claim_next_response, claim_response]
+        session.get.return_value.status_code = 200
+        session.get.return_value.json.return_value = job
+
+        client = KomaApiClient("https://api.koma.test", "agent-token")
+
+        assert client.claim_next_job() == job
         session.get.assert_called_once()
-        session.post.assert_called_once()
+        assert session.post.call_count == 2
 
 
 def test_worker_end_to_end_flow(temp_dir):
@@ -170,14 +188,13 @@ def test_worker_end_to_end_flow(temp_dir):
         MockJournalClass.return_value = journal_instance
 
         client_instance.heartbeat.return_value = True
-        client_instance.get_next_job.side_effect = [mock_job, None]
-        client_instance.claim_job.return_value = mock_job
+        client_instance.claim_next_job.side_effect = [mock_job, None]
         client_instance.complete_job.return_value = True
 
         run_agent_loop(config, max_loops=2)
 
         client_instance.heartbeat.assert_called()
-        client_instance.claim_job.assert_called_with("job-test-999")
+        client_instance.claim_next_job.assert_called()
         client_instance.complete_job.assert_called_with("job-test-999", printer_name="Padrão")
 
         # Verifica se o arquivo físico foi gravado no diretório
@@ -223,8 +240,7 @@ def test_worker_drains_backlog_without_polling_delay(temp_dir):
         adapter = get_adapter_mock.return_value
 
         client.heartbeat.return_value = True
-        client.get_next_job.side_effect = [first_job, second_job]
-        client.claim_job.side_effect = [first_job, second_job]
+        client.claim_next_job.side_effect = [first_job, second_job]
         client.complete_job.return_value = True
         journal.get_unconfirmed_printed_jobs.return_value = []
         journal.is_printed.return_value = False
@@ -264,15 +280,13 @@ def test_worker_reclaims_locally_printed_job_without_reprinting(temp_dir):
         journal = JournalClass.return_value
 
         client.heartbeat.return_value = True
-        client.get_next_job.return_value = job
-        client.claim_job.return_value = job
+        client.claim_next_job.return_value = job
         client.complete_job.return_value = True
         journal.get_unconfirmed_printed_jobs.return_value = []
         journal.is_printed.return_value = True
 
         run_agent_loop(config, max_loops=1)
 
-        client.claim_job.assert_called_once_with("job-recovered")
         client.complete_job.assert_called_once_with(
             "job-recovered",
             printer_name="Padrão",

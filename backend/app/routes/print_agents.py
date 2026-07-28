@@ -1,6 +1,7 @@
 import hashlib
 import secrets
 import datetime
+from collections.abc import Mapping
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Header, status
 from pydantic import BaseModel
@@ -15,9 +16,76 @@ router = APIRouter(prefix="/api/print-agents", tags=["Print Agents"])
 
 MAX_ATTEMPTS = 3
 
+
 def hash_token(token: str) -> str:
     """Gera hash SHA-256 seguro para o token do agente."""
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _field(job, name: str):
+    if isinstance(job, Mapping):
+        return job.get(name)
+    return getattr(job, name)
+
+
+def _queue_latency_ms(
+    created_at: Optional[datetime.datetime],
+    claimed_at: datetime.datetime,
+) -> Optional[int]:
+    """Calcula a espera na fila usando apenas o relógio do servidor."""
+    if not created_at:
+        return None
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=datetime.timezone.utc)
+    return max(
+        0,
+        round(
+            (
+                claimed_at
+                - created_at.astimezone(datetime.timezone.utc)
+            ).total_seconds()
+            * 1000
+        ),
+    )
+
+
+def _claimed_job_payload(job, claimed_at: datetime.datetime) -> dict:
+    created_at = _field(job, "created_at")
+    return {
+        "id": _field(job, "id"),
+        "restaurante_id": _field(job, "restaurante_id"),
+        "document_type": _field(job, "document_type"),
+        "destination": _field(job, "destination"),
+        "source_type": _field(job, "source_type"),
+        "source_id": _field(job, "source_id"),
+        "payload_text": _field(job, "payload_text"),
+        "attempts": _field(job, "attempts"),
+        "idempotency_key": _field(job, "idempotency_key"),
+        "created_at": created_at.isoformat() if created_at else None,
+        "claimed_at": claimed_at.isoformat(),
+        "queue_latency_ms": _queue_latency_ms(created_at, claimed_at),
+    }
+
+
+def _release_stuck_jobs(
+    db: Session,
+    restaurante_id: int,
+    now: datetime.datetime,
+) -> int:
+    stuck_cutoff = now - datetime.timedelta(minutes=5)
+    return db.query(PrintJob).filter(
+        PrintJob.restaurante_id == restaurante_id,
+        PrintJob.status == "claimed",
+        PrintJob.claimed_at < stuck_cutoff,
+    ).update(
+        {
+            "status": "pending",
+            "claimed_at": None,
+            "agent_id": None,
+        },
+        synchronize_session=False,
+    )
+
 
 def get_current_agent(
     x_agent_token: Optional[str] = Header(None, alias="X-Agent-Token"),
@@ -256,18 +324,9 @@ def get_next_job(
     Libera automaticamente jobs travados em 'claimed' há mais de 5 minutos.
     """
     now = datetime.datetime.now(datetime.timezone.utc)
-    stuck_cutoff = now - datetime.timedelta(minutes=5)
-
-    # Libera jobs abandonados/travados
-    released_jobs = db.query(PrintJob).filter(
-        PrintJob.restaurante_id == agent.restaurante_id,
-        PrintJob.status == "claimed",
-        PrintJob.claimed_at < stuck_cutoff
-    ).update({
-        "status": "pending",
-        "claimed_at": None,
-        "agent_id": None
-    }, synchronize_session=False)
+    # Compatibilidade com agentes antigos. Agentes novos usam /jobs/claim-next,
+    # que busca e reserva o trabalho na mesma chamada.
+    released_jobs = _release_stuck_jobs(db, agent.restaurante_id, now)
     if released_jobs:
         db.commit()
 
@@ -291,6 +350,101 @@ def get_next_job(
         "idempotency_key": job.idempotency_key,
         "created_at": job.created_at.isoformat() if job.created_at else None
     }
+
+
+@router.post("/jobs/claim-next")
+def claim_next_job(
+    agent: PrintAgentToken = Depends(get_current_agent),
+    db: Session = Depends(get_db),
+):
+    """
+    Busca e reserva o próximo job em uma única chamada.
+
+    No PostgreSQL, ``FOR UPDATE SKIP LOCKED`` garante que agentes concorrentes
+    nunca recebam o mesmo trabalho. O endpoint antigo em duas etapas permanece
+    disponível para instalações que ainda não atualizaram o agente.
+    """
+    now = datetime.datetime.now(datetime.timezone.utc)
+    _release_stuck_jobs(db, agent.restaurante_id, now)
+
+    if db.get_bind().dialect.name == "postgresql":
+        claimed = db.execute(
+            text(
+                """
+                UPDATE print_jobs AS target
+                SET
+                    status = 'claimed',
+                    claimed_at = :claimed_at,
+                    agent_id = :agent_id
+                WHERE target.id = (
+                    SELECT candidate.id
+                    FROM print_jobs AS candidate
+                    WHERE candidate.restaurante_id = :restaurante_id
+                      AND candidate.status = 'pending'
+                    ORDER BY candidate.created_at ASC
+                    FOR UPDATE SKIP LOCKED
+                    LIMIT 1
+                )
+                RETURNING
+                    target.id,
+                    target.restaurante_id,
+                    target.document_type,
+                    target.destination,
+                    target.source_type,
+                    target.source_id,
+                    target.payload_text,
+                    target.attempts,
+                    target.idempotency_key,
+                    target.created_at
+                """
+            ),
+            {
+                "claimed_at": now,
+                "agent_id": agent.agent_id,
+                "restaurante_id": agent.restaurante_id,
+            },
+        ).mappings().first()
+        if not claimed:
+            db.commit()
+            return None
+        payload = _claimed_job_payload(claimed, now)
+        db.commit()
+        return payload
+
+    # SQLite é usado somente nos testes e no desenvolvimento local. O UPDATE
+    # condicional preserva a mesma regra anti-duplicação sem depender de
+    # FOR UPDATE SKIP LOCKED.
+    while True:
+        candidate = db.query(PrintJob.id).filter(
+            PrintJob.restaurante_id == agent.restaurante_id,
+            PrintJob.status == "pending",
+        ).order_by(PrintJob.created_at.asc()).first()
+        if not candidate:
+            db.commit()
+            return None
+
+        rows_updated = db.query(PrintJob).filter(
+            PrintJob.id == candidate[0],
+            PrintJob.restaurante_id == agent.restaurante_id,
+            PrintJob.status == "pending",
+        ).update(
+            {
+                "status": "claimed",
+                "claimed_at": now,
+                "agent_id": agent.agent_id,
+            },
+            synchronize_session=False,
+        )
+        if rows_updated:
+            job = db.query(PrintJob).filter(
+                PrintJob.id == candidate[0],
+                PrintJob.restaurante_id == agent.restaurante_id,
+            ).first()
+            payload = _claimed_job_payload(job, now)
+            db.commit()
+            return payload
+        db.rollback()
+
 
 @router.post("/jobs/{job_id}/claim")
 def claim_job(

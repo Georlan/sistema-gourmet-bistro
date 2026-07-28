@@ -70,16 +70,30 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
                 process_unconfirmed_journal_jobs(client, journal)
                 last_reconciliation = now
 
-            # 3. Consultar próximo job na fila
-            next_job = client.get_next_job()
+            # 3. Buscar e reservar o próximo job em uma única ida à nuvem.
+            claim_started = time.perf_counter()
+            next_job = client.claim_next_job()
+            claim_api_ms = round(
+                (time.perf_counter() - claim_started) * 1000
+            )
             if next_job:
                 job_id = next_job["id"]
                 ikey = next_job.get("idempotency_key", job_id)
                 doc_type = next_job.get("document_type", "producao").upper()
                 dest = next_job.get("destination", "COZINHA").upper()
                 payload = next_job.get("payload_text", "")
+                queue_latency_ms = next_job.get("queue_latency_ms")
+                queue_metric = (
+                    f"{queue_latency_ms}ms"
+                    if queue_latency_ms is not None
+                    else "indisponível"
+                )
 
-                log.info(f"[JOB DETECTADO] Job ID '{job_id}' (Tipo: {doc_type}, Destino: {dest})")
+                log.info(
+                    f"[JOB RESERVADO] Job ID '{job_id}' "
+                    f"(Tipo: {doc_type}, Destino: {dest}, "
+                    f"Fila: {queue_metric}, API: {claim_api_ms}ms)"
+                )
 
                 # Checar idempotência local no journal SQLite
                 if journal.is_printed(job_id, ikey):
@@ -87,48 +101,99 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
                         f"[IDEMPOTÊNCIA] Job '{job_id}' já foi impresso nesta "
                         "máquina. Não vou imprimir novamente."
                     )
-                    # /jobs/next retorna apenas jobs pendentes. É necessário
-                    # reassumi-lo antes da confirmação, especialmente após uma
-                    # indisponibilidade superior ao prazo de recuperação.
-                    if client.claim_job(job_id):
-                        target_printer = (
-                            config.printers.get(dest)
-                            or config.printers.get("PADRAO")
-                            or "Padrão"
+                    target_printer = (
+                        config.printers.get(dest)
+                        or config.printers.get("PADRAO")
+                        or "Padrão"
+                    )
+                    if client.complete_job(
+                        job_id,
+                        printer_name=target_printer,
+                    ):
+                        journal.mark_backend_confirmed(job_id)
+                        should_wait = False
+                else:
+                    target_printer = (
+                        config.printers.get(dest)
+                        or config.printers.get("PADRAO")
+                        or "Padrão"
+                    )
+                    log.info(
+                        f"[ENVIO À IMPRESSORA] Enviando job '{job_id}' "
+                        f"para o adaptador '{adapter.__class__.__name__}' "
+                        f"(impressora: '{target_printer}')..."
+                    )
+
+                    # Executar impressão física via adaptador da plataforma
+                    print_started = time.perf_counter()
+                    success = adapter.print_ticket(
+                        payload,
+                        target_printer,
+                        doc_type,
+                    )
+                    cups_ms = round(
+                        (time.perf_counter() - print_started) * 1000
+                    )
+
+                    if success:
+                        # 1. Registrar sucesso no Journal SQLite local primeiro
+                        journal.record_print_success(
+                            job_id,
+                            ikey,
+                            target_printer,
+                            confirmed=False,
                         )
-                        if client.complete_job(
+
+                        # 2. Tentar confirmar na API em nuvem. Essa chamada
+                        # acontece depois que o cupom já foi entregue ao CUPS.
+                        confirmation_started = time.perf_counter()
+                        confirmed = client.complete_job(
                             job_id,
                             printer_name=target_printer,
-                        ):
+                        )
+                        confirmation_ms = round(
+                            (
+                                time.perf_counter()
+                                - confirmation_started
+                            )
+                            * 1000
+                        )
+                        if confirmed:
                             journal.mark_backend_confirmed(job_id)
-                            should_wait = False
-                else:
-                    # Tentar Claim atômico no servidor
-                    claimed_data = client.claim_job(job_id)
-                    if claimed_data:
-                        target_printer = config.printers.get(dest) or config.printers.get("PADRAO") or "Padrão"
-                        log.info(f"[CLAIM ACEITO] Enviando job '{job_id}' para o adaptador '{adapter.__class__.__name__}' (impressora: '{target_printer}')...")
-
-                        # Executar impressão física via adaptador da plataforma
-                        success = adapter.print_ticket(payload, target_printer, doc_type)
-
-                        if success:
-                            # 1. Registrar sucesso no Journal SQLite local primeiro
-                            journal.record_print_success(job_id, ikey, target_printer, confirmed=False)
-
-                            # 2. Tentar confirmar na API em nuvem
-                            if client.complete_job(job_id, printer_name=target_printer):
-                                journal.mark_backend_confirmed(job_id)
-                                log.info(f"[SUCESSO] Job '{job_id}' impresso e confirmado com SUCESSO!")
-                            else:
-                                log.warning(f"[PENDÊNCIA HTTP] Job '{job_id}' impresso no papel, mas confirmação na API falhou. Ficará registrado no journal para reconexão.")
-
-                            # Existe trabalho na fila: consulta o próximo
-                            # imediatamente, sem a pausa reservada ao estado ocioso.
-                            should_wait = False
+                            log.info(
+                                f"[SUCESSO] Job '{job_id}' impresso e "
+                                "confirmado com SUCESSO!"
+                            )
                         else:
-                            client.fail_job(job_id, error_msg=f"Falha no adaptador de impressão '{adapter.__class__.__name__}'")
-                            log.error(f"[FALHA] Impressão do job '{job_id}' falhou no adaptador.")
+                            log.warning(
+                                f"[PENDÊNCIA HTTP] Job '{job_id}' impresso "
+                                "no papel, mas a confirmação na API falhou. "
+                                "Ficará registrado no journal para reconexão."
+                            )
+
+                        log.info(
+                            f"[LATÊNCIA] Job '{job_id}': "
+                            f"fila={queue_metric}, "
+                            f"reserva_api={claim_api_ms}ms, "
+                            f"envio_cups={cups_ms}ms, "
+                            f"confirmacao_api={confirmation_ms}ms"
+                        )
+
+                        # Existe trabalho na fila: consulta o próximo
+                        # imediatamente, sem a pausa reservada ao estado ocioso.
+                        should_wait = False
+                    else:
+                        client.fail_job(
+                            job_id,
+                            error_msg=(
+                                "Falha no adaptador de impressão "
+                                f"'{adapter.__class__.__name__}'"
+                            ),
+                        )
+                        log.error(
+                            f"[FALHA] Impressão do job '{job_id}' falhou "
+                            f"no adaptador após {cups_ms}ms."
+                        )
 
         except KeyboardInterrupt:
             print("\n[DAEMON] Encerrando Kôma Print Agent graciosamente...")
