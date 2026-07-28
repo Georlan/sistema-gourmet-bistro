@@ -1,49 +1,116 @@
 """
-Adaptador de Impressão para Windows (Spooler win32print modo RAW).
-Imports são protegidos para que possa ser carregado e testado no Linux sem erros.
+Adaptador de impressão para Windows (Spooler win32print em modo RAW).
+Imports são protegidos para permitir validação do módulo fora do Windows.
 """
 
-import sys
 import logging
+import sys
+from typing import Optional
+
 from .base import BasePrinterAdapter
-from .file import FilePrinterAdapter
+from .escpos import build_escpos_payload
 
 log = logging.getLogger("print-agent.adapter.windows")
 
 
 class WindowsPrinterAdapter(BasePrinterAdapter):
     def __init__(self, output_dir: str = "print_output"):
+        self.output_dir = output_dir
         self._win32print = None
-        self.fallback_file_adapter = FilePrinterAdapter(output_dir)
         if sys.platform == "win32":
             try:
                 import win32print
+
                 self._win32print = win32print
             except ImportError:
-                log.warning("[WINDOWS ADAPTER WARNING] Módulo pywin32 não instalado no Windows.")
+                log.error(
+                    "[WINDOWS ADAPTER] pywin32 não está instalado; "
+                    "a impressão RAW não está disponível."
+                )
+
+    def _resolve_printer(self, requested_name: str) -> Optional[str]:
+        win32print = self._win32print
+        if not win32print:
+            return None
+        if requested_name and requested_name not in ("Padrão", "auto"):
+            return requested_name
+        try:
+            return win32print.GetDefaultPrinter()
+        except Exception:
+            flags = (
+                win32print.PRINTER_ENUM_LOCAL
+                | win32print.PRINTER_ENUM_CONNECTIONS
+            )
+            printers = win32print.EnumPrinters(flags)
+            if len(printers) == 1:
+                selected = printers[0][2]
+                log.info(
+                    "[WINDOWS ADAPTER] Usando automaticamente a única impressora '%s'.",
+                    selected,
+                )
+                return selected
+        return None
 
     def print_ticket(self, payload_text: str, printer_name: str, doc_type: str) -> bool:
         if sys.platform != "win32" or not self._win32print:
-            log.info(f"[WINDOWS ADAPTER MOCK] Executando em ambiente não-Windows. Redirecionando para arquivo...")
-            return self.fallback_file_adapter.print_ticket(payload_text, printer_name, doc_type)
-
-        try:
-            win32print = self._win32print
-            target_printer = printer_name if printer_name and printer_name not in ("Padrão", "auto") else win32print.GetDefaultPrinter()
-            hPrinter = win32print.OpenPrinter(target_printer)
-            try:
-                hJob = win32print.StartDocPrinter(hPrinter, 1, ("Koma Ticket", None, "RAW"))
-                win32print.StartPagePrinter(hPrinter)
-                
-                # Decodificar sequências hex de escape se houver
-                raw_bytes = payload_text.replace("\\x00", "\x00").encode("latin-1", errors="replace")
-                win32print.WritePrinter(hPrinter, raw_bytes)
-                win32print.EndPagePrinter(hPrinter)
-                win32print.EndDocPrinter(hPrinter)
-                log.info(f"[WINDOWS ADAPTER] Impresso com sucesso via Spooler RAW '{target_printer}'")
-                return True
-            finally:
-                win32print.ClosePrinter(hPrinter)
-        except Exception as e:
-            log.error(f"[WINDOWS ADAPTER ERROR] Erro na impressora Windows '{printer_name}': {e}")
+            log.error(
+                "[WINDOWS ADAPTER] Spooler RAW indisponível; "
+                "o trabalho não foi marcado como impresso."
+            )
             return False
+
+        target_printer = self._resolve_printer(printer_name)
+        if not target_printer:
+            log.error(
+                "[WINDOWS ADAPTER] Nenhuma impressora padrão pôde ser selecionada."
+            )
+            return False
+
+        win32print = self._win32print
+        raw_bytes = build_escpos_payload(payload_text, encoding="latin-1")
+        printer_handle = None
+        document_started = False
+        page_started = False
+        try:
+            printer_handle = win32print.OpenPrinter(target_printer)
+            win32print.StartDocPrinter(
+                printer_handle,
+                1,
+                ("Kôma Ticket", None, "RAW"),
+            )
+            document_started = True
+            win32print.StartPagePrinter(printer_handle)
+            page_started = True
+            win32print.WritePrinter(printer_handle, raw_bytes)
+            win32print.EndPagePrinter(printer_handle)
+            page_started = False
+            win32print.EndDocPrinter(printer_handle)
+            document_started = False
+            log.info(
+                "[WINDOWS ADAPTER] Impresso com ESC/POS e corte via Spooler RAW '%s'",
+                target_printer,
+            )
+            return True
+        except Exception as exc:
+            log.error(
+                "[WINDOWS ADAPTER ERROR] Erro na impressora '%s': %s",
+                target_printer,
+                exc,
+            )
+            return False
+        finally:
+            if printer_handle is not None:
+                if page_started:
+                    try:
+                        win32print.EndPagePrinter(printer_handle)
+                    except Exception:
+                        pass
+                if document_started:
+                    try:
+                        win32print.EndDocPrinter(printer_handle)
+                    except Exception:
+                        pass
+                try:
+                    win32print.ClosePrinter(printer_handle)
+                except Exception:
+                    pass
