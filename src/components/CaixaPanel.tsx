@@ -1120,45 +1120,10 @@ export function CaixaPanel({
   const [payPixActive, setPayPixActive] = useState(true);
   const [payCardActive, setPayCardActive] = useState(true);
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlanId>(currentPlanId);
-  const [isChangingPlan, setIsChangingPlan] = useState(false);
 
   useEffect(() => {
     setSelectedPlan(currentPlanId);
   }, [currentPlanId]);
-
-  const handleChangePlan = async () => {
-    if (selectedPlan === currentPlanId || isChangingPlan) return;
-
-    const nextPlan = getSubscriptionPlan(selectedPlan);
-    const confirmed = window.confirm(
-      `Confirmar mudança imediata para ${nextPlan.name} por R$ ${nextPlan.price}/mês?`
-    );
-    if (!confirmed) return;
-
-    setIsChangingPlan(true);
-    try {
-      const response = await fetch(`${apiBaseUrl}/caixa/configuracoes`, {
-        method: 'PUT',
-        headers: {
-          ...authHeaders,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ plano: selectedPlan })
-      });
-      const data = await response.json().catch(() => null);
-      if (!response.ok) {
-        throw new Error(data?.detail || 'Não foi possível alterar o plano.');
-      }
-
-      showToast(`Plano alterado para ${nextPlan.name}.`, 'success');
-      window.setTimeout(() => window.location.reload(), 700);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Erro ao alterar o plano.';
-      showToast(message, 'error');
-    } finally {
-      setIsChangingPlan(false);
-    }
-  };
 
   const [supportChats, setSupportChats] = useState<{ id: number; cliente: string; ultimaMsg: string; status: string; canal: string; }[]>([]);
 
@@ -2444,26 +2409,16 @@ export function CaixaPanel({
     }
   };
 
-  // Search printers trigger
+  // A detecção física acontece no agente local, nunca no servidor Railway.
   const handleSearchPrinters = async () => {
     setIsSearchingPrinters(true);
     setDetectedPrinters([]);
-    try {
-      const res = await fetch(`${apiBaseUrl}/comandas/impressoras/detectadas`, {
-        headers: authHeaders
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setDetectedPrinters(data);
-      } else {
-        alert('Erro ao buscar impressoras conectadas.');
-      }
-    } catch (e) {
-      console.error(e);
-      alert('Erro de conexão ao buscar impressoras.');
-    } finally {
+    window.setTimeout(() => {
+      setDetectedPrinters([
+        'Impressora padrão do computador (agente local)'
+      ]);
       setIsSearchingPrinters(false);
-    }
+    }, 250);
   };
 
   // Chatbot conversation simulation handler
@@ -4773,18 +4728,38 @@ export function CaixaPanel({
                               type="button"
                               onClick={async () => {
                                 try {
-                                  const res = await fetch(`${apiBaseUrl}/comandas/teste-impressao`, {
+                                  const res = await fetch(`${apiBaseUrl}/api/print-agents/jobs/inject`, {
                                     method: 'POST',
-                                    headers: authHeaders
+                                    headers: {
+                                      ...authHeaders,
+                                      'Content-Type': 'application/json'
+                                    },
+                                    body: JSON.stringify({
+                                      document_type: 'fechamento',
+                                      destination: 'FECHAMENTO',
+                                      source_type: 'teste_painel',
+                                      source_id: `teste-${Date.now()}`,
+                                      payload_text: [
+                                        '================================',
+                                        printHeader || 'KÔMA GOURMET BISTRÔ',
+                                        '================================',
+                                        'TESTE REAL DO AGENTE LOCAL',
+                                        'Impressora padrão do computador',
+                                        new Date().toLocaleString('pt-BR'),
+                                        '================================',
+                                        printFooter || ''
+                                      ].join('\\n')
+                                    })
                                   });
+                                  const data = await res.json().catch(() => null);
                                   if (res.ok) {
-                                    alert('Cupom de teste enviado para a impressora Gertec G250!');
+                                    alert('Teste real colocado na fila do agente local.');
                                   } else {
-                                    alert('Erro ao disparar teste de impressão.');
+                                    alert(data?.detail || 'Erro ao colocar o teste na fila.');
                                   }
                                 } catch (e) {
                                   console.error(e);
-                                  alert('Erro de conexão ao testar impressora.');
+                                  alert('Não foi possível comunicar com a fila de impressão.');
                                 }
                               }}
                               className={clsx('text-[8px]', 'uppercase', 'tracking-wider', 'text-[#10b981]', 'font-bold', 'hover:text-white', 'cursor-pointer')}
@@ -5157,24 +5132,6 @@ export function CaixaPanel({
                       )}
                     </div>
                   ))}
-
-                  {selectedPlan !== currentPlanId && (
-                    <button
-                      type="button"
-                      onClick={() => void handleChangePlan()}
-                      disabled={isChangingPlan}
-                      className={clsx(
-                        'w-full py-2.5 rounded-xl bg-[#10b981] hover:bg-[#059669]',
-                        'disabled:bg-zinc-700 disabled:text-zinc-400',
-                        'text-[#121214] text-[9px] font-bold uppercase tracking-wider',
-                        'transition-colors cursor-pointer disabled:cursor-not-allowed'
-                      )}
-                    >
-                      {isChangingPlan
-                        ? 'Alterando plano...'
-                        : `Confirmar mudança para ${getSubscriptionPlan(selectedPlan).name}`}
-                    </button>
-                  )}
                 </div>
 
                 <div className="p-3 rounded-2xl bg-amber-500/5 border border-amber-500/20 text-left">
