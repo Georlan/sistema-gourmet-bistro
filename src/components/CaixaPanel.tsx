@@ -682,6 +682,10 @@ export function CaixaPanel({
     taxa_servico_ativa?: boolean;
     taxa_servico_padrao?: number;
     unificar_vias_delivery?: boolean;
+    impressao_nome_restaurante?: string;
+    impressao_nome_posicao?: 'cabecalho' | 'rodape' | 'oculto';
+    impressao_mensagem_rodape?: string;
+    impressao_mostrar_descricao?: boolean;
     perm_garcom_delivery?: boolean;
     perm_garcom_editar?: boolean;
     perm_garcom_taxas?: boolean;
@@ -705,6 +709,10 @@ export function CaixaPanel({
     }
     if (updates.taxa_servico_padrao !== undefined) setServiceTaxRate(updates.taxa_servico_padrao);
     if (updates.unificar_vias_delivery !== undefined) setUnificarViasDelivery(updates.unificar_vias_delivery);
+    if (updates.impressao_nome_restaurante !== undefined) setPrintHeader(updates.impressao_nome_restaurante);
+    if (updates.impressao_nome_posicao !== undefined) setPrintNamePosition(updates.impressao_nome_posicao);
+    if (updates.impressao_mensagem_rodape !== undefined) setPrintFooter(updates.impressao_mensagem_rodape);
+    if (updates.impressao_mostrar_descricao !== undefined) setPrintShowDescriptions(updates.impressao_mostrar_descricao);
     if (updates.perm_garcom_delivery !== undefined) setPermDelivery(updates.perm_garcom_delivery);
     if (updates.perm_garcom_editar !== undefined) setPermEdit(updates.perm_garcom_editar);
     if (updates.perm_garcom_taxas !== undefined) setPermAddCharges(updates.perm_garcom_taxas);
@@ -796,12 +804,10 @@ export function CaixaPanel({
   const [idleTimeThreshold, setIdleTimeThreshold] = useState(30);
 
   // Printer Messages State
-  const [printHeader, setPrintHeader] = useState(() => {
-    return localStorage.getItem("koma_print_header") || "Kôma Gourmet Bistrô";
-  });
-  const [printFooter, setPrintFooter] = useState(() => {
-    return localStorage.getItem("koma_print_footer") || "Av. do Futuro, 2026 - Recife, PE";
-  });
+  const [printHeader, setPrintHeader] = useState("Kôma Gourmet Bistrô");
+  const [printFooter, setPrintFooter] = useState("");
+  const [printNamePosition, setPrintNamePosition] = useState<'cabecalho' | 'rodape' | 'oculto'>('cabecalho');
+  const [printShowDescriptions, setPrintShowDescriptions] = useState(true);
   const [isSearchingPrinters, setIsSearchingPrinters] = useState(false);
   const [detectedPrinters, setDetectedPrinters] = useState<string[]>([]);
 
@@ -1217,6 +1223,10 @@ export function CaixaPanel({
         setTaxaServicoAtiva(data.taxa_servico_ativa);
         setServiceTaxRate(data.taxa_servico_padrao);
         setUnificarViasDelivery(data.unificar_vias_delivery);
+        setPrintHeader(data.impressao_nome_restaurante || "Kôma Gourmet Bistrô");
+        setPrintNamePosition(data.impressao_nome_posicao || 'cabecalho');
+        setPrintFooter(data.impressao_mensagem_rodape || "");
+        setPrintShowDescriptions(data.impressao_mostrar_descricao !== false);
         setPermDelivery(data.perm_garcom_delivery);
         setPermEdit(data.perm_garcom_editar);
         setPermAddCharges(data.perm_garcom_taxas);
@@ -4666,29 +4676,59 @@ export function CaixaPanel({
 
                   <div className={clsx('space-y-3', 'text-left')}>
                     <div className="space-y-1">
-                      <label className={clsx('text-[9px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Mensagem de Cabeçalho:</label>
+                      <label className={clsx('text-[9px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Nome do restaurante no cupom:</label>
                       <input
                         type="text"
                         value={printHeader}
-                        onChange={(e) => {
-                          setPrintHeader(e.target.value);
-                          localStorage.setItem("koma_print_header", e.target.value);
-                        }}
+                        maxLength={80}
+                        onChange={(e) => setPrintHeader(e.target.value)}
+                        onBlur={() => updateConfiguracoes({ impressao_nome_restaurante: printHeader })}
                         className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-[10px]')}
                       />
                     </div>
 
                     <div className="space-y-1">
-                      <label className={clsx('text-[9px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Mensagem de Rodapé:</label>
+                      <label className={clsx('text-[9px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Onde imprimir o nome:</label>
+                      <select
+                        value={printNamePosition}
+                        onChange={(e) => updateConfiguracoes({
+                          impressao_nome_posicao: e.target.value as 'cabecalho' | 'rodape' | 'oculto'
+                        })}
+                        className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-[10px]')}
+                      >
+                        <option value="cabecalho">Cabeçalho — maior destaque</option>
+                        <option value="rodape">Rodapé</option>
+                        <option value="oculto">Não imprimir</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className={clsx('text-[9px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Mensagem adicional de rodapé:</label>
                       <input
                         type="text"
                         value={printFooter}
-                        onChange={(e) => {
-                          setPrintFooter(e.target.value);
-                          localStorage.setItem("koma_print_footer", e.target.value);
-                        }}
+                        maxLength={160}
+                        placeholder="Ex.: endereço, telefone ou agradecimento"
+                        onChange={(e) => setPrintFooter(e.target.value)}
+                        onBlur={() => updateConfiguracoes({ impressao_mensagem_rodape: printFooter })}
                         className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-[10px]')}
                       />
+                    </div>
+
+                    <div className={clsx('flex', 'justify-between', 'items-center', 'pt-2', 'gap-3')}>
+                      <div>
+                        <span className={clsx('text-[10px]', 'text-gray-300', 'font-semibold', 'block')}>Descrição do produto na produção</span>
+                        <span className={clsx('text-[8px]', 'text-gray-500', 'block')}>Mantém ingredientes e observações legíveis abaixo do item.</span>
+                      </div>
+                      <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer', 'shrink-0')}>
+                        <input
+                          type="checkbox"
+                          checked={printShowDescriptions}
+                          onChange={(e) => updateConfiguracoes({ impressao_mostrar_descricao: e.target.checked })}
+                          className={clsx('sr-only', 'peer')}
+                        />
+                        <div className={clsx('w-9', 'h-5', 'bg-[#27272A]', 'peer-focus:outline-none', 'rounded-full', 'peer', 'peer-checked:after:translate-x-full', 'peer-checked:after:border-white', "after:content-['']", 'after:absolute', 'after:top-[2px]', 'after:left-[2px]', 'after:bg-white', 'after:border-gray-300', 'after:border', 'after:rounded-full', 'after:h-4', 'after:w-4', 'after:transition-all', 'peer-checked:bg-emerald-600')}></div>
+                      </label>
                     </div>
 
                     <div className={clsx('flex', 'justify-between', 'items-center', 'pt-2')}>
@@ -4741,14 +4781,15 @@ export function CaixaPanel({
                                       source_id: `teste-${Date.now()}`,
                                       payload_text: [
                                         '================================',
-                                        printHeader || 'KÔMA GOURMET BISTRÔ',
+                                        ...(printNamePosition === 'cabecalho' && printHeader ? [printHeader] : []),
                                         '================================',
                                         'TESTE REAL DO AGENTE LOCAL',
                                         'Impressora padrão do computador',
                                         new Date().toLocaleString('pt-BR'),
                                         '================================',
-                                        printFooter || ''
-                                      ].join('\\n')
+                                        printFooter || '',
+                                        ...(printNamePosition === 'rodape' && printHeader ? [printHeader] : [])
+                                      ].join('\n')
                                     })
                                   });
                                   const data = await res.json().catch(() => null);
@@ -4775,9 +4816,12 @@ export function CaixaPanel({
 
                 {/* Mockup live preview coupon */}
                 <div className={clsx('bg-[#FFFFFC]', 'text-black', 'p-4', 'rounded-xl', 'border', 'border-gray-300', 'font-mono', 'text-[9px]', 'space-y-3', 'shadow-inner', 'my-2')}>
-                  <div className={clsx('text-center', 'font-bold', 'border-b', 'border-dashed', 'border-gray-400', 'pb-1.5', 'uppercase', 'leading-normal')}>
-                    <span>{printHeader}</span>
-                  </div>
+                  {printNamePosition === 'cabecalho' && printHeader && (
+                    <div className={clsx('text-center', 'font-bold', 'border-b', 'border-dashed', 'border-gray-400', 'pb-1.5', 'uppercase', 'leading-normal')}>
+                      <span>{printHeader}</span>
+                    </div>
+                  )}
+                  <div className={clsx('text-center', 'font-bold', 'uppercase')}>Comanda inteira</div>
                   <div className="space-y-1">
                     <div className={clsx('flex', 'justify-between')}>
                       <span>1x Pastel Carne</span>
@@ -4794,6 +4838,9 @@ export function CaixaPanel({
                   </div>
                   <div className={clsx('text-center', 'text-[8px]', 'text-gray-600', 'border-t', 'border-dashed', 'border-gray-400', 'pt-1.5', 'uppercase', 'leading-normal')}>
                     <span>{printFooter}</span>
+                    {printNamePosition === 'rodape' && printHeader && (
+                      <span className="block font-bold">{printHeader}</span>
+                    )}
                   </div>
                 </div>
 

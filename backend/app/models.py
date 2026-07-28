@@ -492,6 +492,10 @@ class ConfiguracaoRestaurante(Base):
             "taxa_servico_padrao IS NULL OR taxa_servico_padrao BETWEEN 0 AND 100",
             name="ck_config_restaurante_taxa_servico",
         ),
+        CheckConstraint(
+            "impressao_nome_posicao IN ('cabecalho', 'rodape', 'oculto')",
+            name="ck_config_restaurante_impressao_nome_posicao",
+        ),
     )
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
@@ -503,6 +507,14 @@ class ConfiguracaoRestaurante(Base):
     taxa_servico_padrao = Column(Float, default=10.0)
     meta_mensal = Column(Float, default=0.0)
     unificar_vias_delivery = Column(Boolean, default=False)
+    impressao_nome_restaurante = Column(String(80), nullable=True)
+    impressao_nome_posicao = Column(
+        String(20),
+        default="cabecalho",
+        nullable=False,
+    )
+    impressao_mensagem_rodape = Column(String(160), nullable=True)
+    impressao_mostrar_descricao = Column(Boolean, default=True, nullable=False)
     modo_exclusivo_salao = Column(Boolean, default=True)
     perm_garcom_delivery = Column(Boolean, default=True)
     perm_garcom_editar = Column(Boolean, default=True)

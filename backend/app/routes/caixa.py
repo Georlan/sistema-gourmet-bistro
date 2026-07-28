@@ -1368,6 +1368,20 @@ def atualizar_configuracoes(
         config.taxa_servico_padrao = config_in.taxa_servico_padrao
     if config_in.unificar_vias_delivery is not None:
         config.unificar_vias_delivery = config_in.unificar_vias_delivery
+    if config_in.impressao_nome_restaurante is not None:
+        config.impressao_nome_restaurante = (
+            config_in.impressao_nome_restaurante.strip() or None
+        )
+    if config_in.impressao_nome_posicao is not None:
+        config.impressao_nome_posicao = config_in.impressao_nome_posicao
+    if config_in.impressao_mensagem_rodape is not None:
+        config.impressao_mensagem_rodape = (
+            config_in.impressao_mensagem_rodape.strip() or None
+        )
+    if config_in.impressao_mostrar_descricao is not None:
+        config.impressao_mostrar_descricao = (
+            config_in.impressao_mostrar_descricao
+        )
     if config_in.modo_exclusivo_salao is not None:
         config.modo_exclusivo_salao = config_in.modo_exclusivo_salao
     if config_in.plano is not None:

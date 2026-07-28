@@ -4,12 +4,14 @@ from typing import Final
 
 
 INITIALIZE: Final[bytes] = b"\x1b@"
+# ESC t 3 seleciona PC860, a tabela portuguesa documentada pelo ESC/POS.
+PORTUGUESE_CODE_PAGE: Final[bytes] = b"\x1bt\x03"
 PAPER_FEED: Final[bytes] = b"\n\n\n"
 PARTIAL_CUT: Final[bytes] = b"\x1d\x56\x42\x00"
 SIMULATED_CUT_MARKER: Final[str] = "[CUT]"
 
 
-def build_escpos_payload(payload_text: str, encoding: str = "utf-8") -> bytes:
+def build_escpos_payload(payload_text: str, encoding: str = "cp860") -> bytes:
     """
     Prepara um trabalho RAW independente do sistema operacional.
 
@@ -23,4 +25,10 @@ def build_escpos_payload(payload_text: str, encoding: str = "utf-8") -> bytes:
         .replace("\\x00", "\x00")
     )
     body = normalized.encode(encoding, errors="replace")
-    return INITIALIZE + body + PAPER_FEED + PARTIAL_CUT
+    return (
+        INITIALIZE
+        + PORTUGUESE_CODE_PAGE
+        + body
+        + PAPER_FEED
+        + PARTIAL_CUT
+    )

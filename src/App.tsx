@@ -1452,15 +1452,7 @@ export default function App() {
   };
 
   const handlePrintReceipt = async (mesaId: number, apenasValores: boolean = false) => {
-    const printHeader = localStorage.getItem("koma_print_header") || "";
-    const printFooter = localStorage.getItem("koma_print_footer") || "";
-    let url = `${API_BASE_URL}/mesas/${mesaId}/imprimir-recibo?apenas_valores=${apenasValores}`;
-    const params = new URLSearchParams();
-    if (printHeader) params.append("print_header", printHeader);
-    if (printFooter) params.append("print_footer", printFooter);
-    if (params.toString()) {
-      url += `&${params.toString()}`;
-    }
+    const url = `${API_BASE_URL}/mesas/${mesaId}/imprimir-recibo?apenas_valores=${apenasValores}`;
     const response = await fetch(url, {
       method: 'POST',
       headers: getAuthHeaders()

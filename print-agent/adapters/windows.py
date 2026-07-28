@@ -67,7 +67,7 @@ class WindowsPrinterAdapter(BasePrinterAdapter):
             return False
 
         win32print = self._win32print
-        raw_bytes = build_escpos_payload(payload_text, encoding="latin-1")
+        raw_bytes = build_escpos_payload(payload_text, encoding="cp860")
         printer_handle = None
         document_started = False
         page_started = False

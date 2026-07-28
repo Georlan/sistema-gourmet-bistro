@@ -23,6 +23,52 @@ def split_justified(left_text: str, right_text: str, width: int) -> str:
 def draw_separator(char: str = "-", width: int = 40) -> str:
     return char * width
 
+
+ESC_FONT_A = "\x1bM\x00"
+ESC_FONT_B = "\x1bM\x01"
+ESC_BOLD_ON = "\x1bE\x01"
+ESC_BOLD_OFF = "\x1bE\x00"
+ESC_DOUBLE_HEIGHT_ON = "\x1b!\x10"
+ESC_NORMAL_SIZE = "\x1b!\x00"
+ESC_TIGHT_LINE = "\x1b3\x18"
+
+
+def _single_line(value: object) -> str:
+    """Normaliza conteúdo livre sem permitir quebras artificiais no cupom."""
+    return " ".join(str(value or "").replace("\x00", "").split())
+
+
+def _format_brl(value: float) -> str:
+    return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _append_wrapped(lines: list[str], text: str, width: int, prefix: str = "") -> None:
+    available = max(width - len(prefix), 1)
+    wrapped = textwrap.wrap(
+        _single_line(text),
+        width=available,
+        break_long_words=True,
+        break_on_hyphens=False,
+    ) or [""]
+    lines.append(prefix + wrapped[0])
+    continuation_prefix = " " * len(prefix)
+    lines.extend(continuation_prefix + part for part in wrapped[1:])
+
+
+def _append_amount_line(lines: list[str], left: str, right: str, width: int) -> None:
+    """Imprime texto e valor sem cortar nomes longos de produtos/clientes."""
+    max_left = max(width - len(right) - 1, 1)
+    wrapped = textwrap.wrap(
+        _single_line(left),
+        width=max_left,
+        break_long_words=True,
+        break_on_hyphens=False,
+    ) or [""]
+    lines.append(split_justified(wrapped[0], right, width))
+    for continuation in wrapped[1:]:
+        lines.append(f"   {continuation}"[:width])
+
+
 # AJUSTADO: Função utilitária segura para buscar chaves/atributos em dicts ou objetos SQLAlchemy
 def safe_get(obj, key, default=""):
     if obj is None:
@@ -230,113 +276,221 @@ class PrinterService:
         }
 
 
-    def generate_kitchen_ticket(self, num_pedido: int, tipo: str, mesa_id: Optional[int], garcom_nome: str, items: list, is_reprint: bool = False) -> str:
+    def generate_kitchen_ticket(
+        self,
+        num_pedido: int,
+        tipo: str,
+        mesa_id: Optional[int],
+        garcom_nome: str,
+        items: list,
+        is_reprint: bool = False,
+        restaurant_name: Optional[str] = None,
+        restaurant_name_position: str = "cabecalho",
+        print_footer: Optional[str] = None,
+        show_descriptions: bool = True,
+    ) -> str:
         width = self.width
-        lines = []
-        
-        # Comandos de controle de fonte e espaçamento ESC/POS embutidos como string
-        TIGHT_LINE = "\x1b3\x18"  # Espaçamento curto entre linhas (24 dots em vez de 30)
-        FONT_A = "\x1bM\x00"      # Fonte normal (mais legível para cozinha)
-        FONT_B = "\x1bM\x01"      # Fonte condensada pequena (para economizar papel)
-        BOLD_ON = "\x1bE\x01"     # Ativa Negrito
-        BOLD_OFF = "\x1bE\x00"    # Desativa Negrito
-        
-        # Inicia com espaçamento curto de linha e muda para Fonte B para o cabeçalho
-        lines.append(TIGHT_LINE + FONT_B)
-        
-        # Se o garçom não fez o pedido, por padrão vira "CONSUMO LOCAL"
-        order_type = (tipo or "CONSUMO LOCAL").upper()
-        if not garcom_nome or garcom_nome.strip() == "" or garcom_nome.lower() == "caixa":
-            order_type = "CONSUMO LOCAL"
-            
-        mesa_str = f" | MESA: {mesa_id}" if mesa_id is not None else ""
-        reprint_str = "[REIMPRESSÃO] " if is_reprint else ""
-        
-        # Cabeçalho unificado e compacto de 2 linhas
-        lines.append(f"{reprint_str}[{order_type}]{mesa_str} | PEDIDO: #{num_pedido}")
-        
-        garcom_str = garcom_nome.upper() if garcom_nome else "CAIXA"
-        data_hora = datetime.datetime.now().strftime("%d/%m %H:%M")
-        lines.append(f"GARCOM: {garcom_str} | {data_hora}")
-        
-        # Um único traço fino de divisão abaixo do cabeçalho
-        lines.append("-" * 40)
-        
-        # 1. Agrupa os itens idênticos da comanda por (codigo, nome, observacao, cliente_nome) de forma 100% segura
-        grouped = {}
+        lines: list[str] = []
+        position = (
+            restaurant_name_position
+            if restaurant_name_position in {"cabecalho", "rodape", "oculto"}
+            else "cabecalho"
+        )
+        brand = _single_line(restaurant_name or "KÔMA GOURMET BISTRÔ")
+        order_type = _single_line(tipo or "CONSUMO NO LOCAL").upper()
+        garcom_str = _single_line(garcom_nome or "CAIXA").upper()
+        now = datetime.datetime.now()
+
+        lines.append(ESC_TIGHT_LINE + ESC_FONT_A)
+        lines.append(draw_separator("=", width))
+        if position == "cabecalho" and brand:
+            lines.append(
+                ESC_DOUBLE_HEIGHT_ON
+                + ESC_BOLD_ON
+                + align_center(brand.upper(), width)
+                + ESC_BOLD_OFF
+                + ESC_NORMAL_SIZE
+            )
+            lines.append(draw_separator("=", width))
+
+        document_title = (
+            "REIMPRESSÃO - PRODUÇÃO"
+            if is_reprint
+            else "NOVO LANÇAMENTO - PRODUÇÃO"
+        )
+        lines.append(
+            ESC_BOLD_ON + align_center(document_title, width) + ESC_BOLD_OFF
+        )
+        mesa_str = f"MESA: {mesa_id}" if mesa_id is not None else "RETIRADA / BALCÃO"
+        lines.append(split_justified(f"PEDIDO: #{num_pedido}", mesa_str, width))
+        lines.append(
+            split_justified(
+                f"DATA: {now.strftime('%d/%m/%Y')}",
+                f"HORA: {now.strftime('%H:%M')}",
+                width,
+            )
+        )
+        lines.append(split_justified(f"GARÇOM: {garcom_str}", order_type, width))
+        lines.append(draw_separator("-", width))
+
+        # Agrupa primeiro por pessoa e só então por item. Assim o nome do cliente
+        # aparece uma vez por bloco, em vez de ser repetido em cada linha.
+        grouped_by_client: dict[str, dict] = {}
+        total_units = 0
         for item in items:
             if safe_get(item, "status") == "cancelado":
                 continue
-                
-            nome = safe_get(item, "nome") or safe_get(safe_get(item, "produto"), "nome") or ""
-            codigo = safe_get(item, "codigo") or safe_get(safe_get(item, "produto"), "id") or ""
-            obs = str(safe_get(item, "observacao") or "").strip()
-            cliente = str(safe_get(item, "cliente_nome") or safe_get(item, "cliente_nome_custom") or "").strip()
-            
-            key = (codigo, nome, obs, cliente)
-            if key not in grouped:
-                grouped[key] = 0
-            grouped[key] += int(safe_get(item, "quantidade") or 1)
 
-        # 2. Altera para Fonte A Negrito para os itens de comida ficarem bem legíveis
-        lines.append(FONT_A + BOLD_ON)
-        
-        # 3. Varre os itens agrupados gerando o cupom condensado
-        for (codigo, nome, obs, cliente), quantidade in grouped.items():
-            cod_str = f" {codigo} -" if codigo else ""
-            cliente_str = f" [{cliente.upper()}]" if cliente else ""
-            
-            # Linha principal do item
-            item_line = f"{quantidade}x{cod_str} {nome}{cliente_str}"
-            lines.append(item_line)
-            
-            # Observações em Fonte B (pequena e sem negrito) embaixo do item
-            if obs:
-                lines.append(BOLD_OFF + FONT_B)
-                lines.append(f"   * {obs}")
-                lines.append(FONT_A + BOLD_ON)  # Retorna ao estilo dos itens
-                
-        lines.append(BOLD_OFF)  # Desativa o negrito para o rodapé
-        
-        # Um único traço e rodapé em Fonte B
-        lines.append(FONT_B)
-        lines.append("-" * 40)
-        lines.append(align_center("KÔMA BISTRÔ", width))
-        
-        # Adiciona marcador de corte em simulação
+            produto = safe_get(item, "produto")
+            nome = _single_line(
+                safe_get(item, "nome") or safe_get(produto, "nome")
+            )
+            codigo = _single_line(
+                safe_get(item, "codigo") or safe_get(produto, "id")
+            )
+            descricao = _single_line(
+                safe_get(item, "descricao") or safe_get(produto, "descricao")
+            )
+            observacao = _single_line(safe_get(item, "observacao"))
+            cliente = _single_line(
+                safe_get(item, "cliente_nome")
+                or safe_get(item, "cliente_nome_custom")
+                or "Consumo Geral"
+            ) or "Consumo Geral"
+            quantidade = max(int(safe_get(item, "quantidade") or 1), 1)
+            total_units += quantidade
+
+            client_key = cliente.casefold()
+            client_group = grouped_by_client.setdefault(
+                client_key,
+                {"label": cliente, "items": {}},
+            )
+            item_key = (codigo, nome, descricao, observacao)
+            client_group["items"][item_key] = (
+                client_group["items"].get(item_key, 0) + quantidade
+            )
+
+        for group_index, client_group in enumerate(grouped_by_client.values()):
+            if group_index:
+                lines.append(draw_separator("-", width))
+            client_label = f"CLIENTE: {client_group['label'].upper()}"
+            lines.append(
+                ESC_FONT_A
+                + ESC_BOLD_ON
+                + align_center(client_label, width)
+                + ESC_BOLD_OFF
+            )
+
+            for (
+                codigo,
+                nome,
+                descricao,
+                observacao,
+            ), quantidade in client_group["items"].items():
+                code_prefix = f"{codigo} - " if codigo else ""
+                item_text = f"{quantidade}x {code_prefix}{nome}"
+                item_lines = textwrap.wrap(
+                    item_text,
+                    width=width,
+                    break_long_words=True,
+                    break_on_hyphens=False,
+                ) or [""]
+                lines.append(ESC_FONT_A + ESC_BOLD_ON + item_lines[0])
+                lines.extend(f"   {part}"[:width] for part in item_lines[1:])
+                lines.append(ESC_BOLD_OFF)
+
+                if show_descriptions and descricao:
+                    lines.append(ESC_FONT_B)
+                    _append_wrapped(lines, descricao, width, "   DESCRIÇÃO: ")
+
+                if observacao:
+                    lines.append(ESC_FONT_A + ESC_BOLD_ON)
+                    _append_wrapped(
+                        lines,
+                        observacao.upper(),
+                        width,
+                        "   OBS: ",
+                    )
+                    lines.append(ESC_BOLD_OFF)
+
+        lines.append(ESC_FONT_B)
+        lines.append(draw_separator("-", width))
+        lines.append(split_justified("TOTAL DE ITENS:", str(total_units), width))
+        if print_footer:
+            _append_wrapped(lines, print_footer, width)
+        if position == "rodape" and brand:
+            lines.append(
+                ESC_BOLD_ON + align_center(brand.upper(), width) + ESC_BOLD_OFF
+            )
+        lines.append(align_center("Gerenciado por Kôma", width))
+
         if self.simulate:
             lines.append("\n" + align_center("[CUT]", width) + "\n")
-            
+
         return "\n".join(lines)
 
-    def generate_receipt(self, num_pedido: int, tipo: str, mesa_id: Optional[int], garcom_nome: str, comandas_details: list, print_header: Optional[str] = None, print_footer: Optional[str] = None, taxa_servico_ativa: bool = True, taxa_servico_padrao: float = 10.0, apenas_valores: bool = False) -> str:
+
+    def generate_receipt(
+        self,
+        num_pedido: int,
+        tipo: str,
+        mesa_id: Optional[int],
+        garcom_nome: str,
+        comandas_details: list,
+        print_header: Optional[str] = None,
+        print_footer: Optional[str] = None,
+        taxa_servico_ativa: bool = True,
+        taxa_servico_padrao: float = 10.0,
+        apenas_valores: bool = False,
+        restaurant_name_position: str = "cabecalho",
+    ) -> str:
         width = self.width
-        lines = []
-        
-        # Header
+        lines: list[str] = [ESC_TIGHT_LINE + ESC_FONT_A]
+        position = (
+            restaurant_name_position
+            if restaurant_name_position in {"cabecalho", "rodape", "oculto"}
+            else "cabecalho"
+        )
+        header_text = _single_line(print_header or "KÔMA GOURMET BISTRÔ")
+
         lines.append(draw_separator("=", width))
-        header_text = (print_header or "KÔMA GOURMET BISTRÔ").upper()
-        lines.append(align_center(header_text, width))
+        if position == "cabecalho" and header_text:
+            lines.append(
+                ESC_DOUBLE_HEIGHT_ON
+                + ESC_BOLD_ON
+                + align_center(header_text.upper(), width)
+                + ESC_BOLD_OFF
+                + ESC_NORMAL_SIZE
+            )
+            lines.append(draw_separator("=", width))
+        title = "COMANDA - SÓ VALORES" if apenas_valores else "COMANDA INTEIRA"
+        lines.append(ESC_BOLD_ON + align_center(title, width) + ESC_BOLD_OFF)
         lines.append(draw_separator("=", width))
 
-        # Identificação da mesa — informação mais crítica para o garçom
         mesa_str = f"MESA: {mesa_id}" if mesa_id is not None else "RETIRADA / BALCÃO"
         lines.append(split_justified(f"PEDIDO: #{num_pedido}", mesa_str, width))
-        lines.append(split_justified(
-            "DATA: " + datetime.datetime.now().strftime("%d/%m/%Y"),
-            "HORA: " + datetime.datetime.now().strftime("%H:%M"),
-            width
-        ))
-        lines.append(split_justified(f"GARÇOM: {garcom_nome}", tipo.upper(), width))
+        now = datetime.datetime.now()
+        lines.append(
+            split_justified(
+                f"DATA: {now.strftime('%d/%m/%Y')}",
+                f"HORA: {now.strftime('%H:%M')}",
+                width,
+            )
+        )
+        lines.append(
+            split_justified(
+                f"GARÇOM: {_single_line(garcom_nome)}",
+                _single_line(tipo).upper(),
+                width,
+            )
+        )
         lines.append(draw_separator("-", width))
-        
+
         grand_total = 0.0
-        
-        # Agrupa itens ativos por cliente (usado nos dois modos)
-        grouped_by_client = {}
+        total_units = 0
+        grouped_by_client: dict[str, dict] = {}
         for comanda in comandas_details:
-            comanda_items = comanda.get("itens", [])
-            for item in comanda_items:
+            for item in comanda.get("itens", []):
                 if item.get("status") == "cancelado":
                     continue
                 client = (
@@ -345,121 +499,169 @@ class PrinterService:
                     or comanda.get("identificador")
                     or "Consumo Geral"
                 )
-                client = client.strip() or "Consumo Geral"
-                grouped_by_client.setdefault(client, []).append(item)
+                client = _single_line(client) or "Consumo Geral"
+                client_key = client.casefold()
+                group = grouped_by_client.setdefault(
+                    client_key,
+                    {"label": client, "items": []},
+                )
+                group["items"].append(item)
 
         is_split = len(grouped_by_client) > 1
+        lines.append(draw_separator("-", width))
 
-        if apenas_valores:
-            # Modo simplificado: Qtdx ITEM   R$ TOTAL — sem coluna UNIT
-            lines.append(draw_separator("-", width))
+        for group in grouped_by_client.values():
+            client = group["label"]
+            items_list = group["items"]
+            if is_split:
+                lines.append(
+                    ESC_BOLD_ON
+                    + align_center(f"CLIENTE: {client.upper()}", width)
+                    + ESC_BOLD_OFF
+                )
 
-            for client, items_list in grouped_by_client.items():
-                if is_split:
-                    lines.append(align_center(f"--- {client.upper()} ---", width))
+            grouped_items: dict[
+                tuple[str, str, float, str, str],
+                int,
+            ] = {}
+            for item in items_list:
+                produto = item["produto"]
+                product_name = _single_line(produto["nome"])
+                product_code = _single_line(
+                    item.get("codigo") or produto.get("id")
+                )
+                description = (
+                    ""
+                    if apenas_valores
+                    else _single_line(
+                        item.get("descricao") or produto.get("descricao")
+                    )
+                )
+                observation = (
+                    ""
+                    if apenas_valores
+                    else _single_line(item.get("observacao"))
+                )
+                key = (
+                    product_code,
+                    product_name,
+                    float(item["preco_unit"]),
+                    description,
+                    observation,
+                )
+                qty = max(int(item.get("quantidade") or 1), 1)
+                grouped_items[key] = grouped_items.get(key, 0) + qty
+                total_units += qty
 
-                # Agrupa itens repetidos: (nome, preco_unit) → qty
-                grouped_items = {}
-                for item in items_list:
-                    key = (item["produto"]["nome"], item["preco_unit"])
-                    grouped_items[key] = grouped_items.get(key, 0) + 1
+            client_subtotal = 0.0
+            for (
+                product_code,
+                product_name,
+                unit_price,
+                description,
+                observation,
+            ), qty in grouped_items.items():
+                item_total = qty * unit_price
+                client_subtotal += item_total
+                quantity_separator = "x" if apenas_valores else " x"
+                code_prefix = (
+                    f"{product_code} - "
+                    if product_code
+                    and not product_name.casefold().startswith(
+                        f"{product_code} -".casefold()
+                    )
+                    else ""
+                )
+                left = (
+                    f"{qty}{quantity_separator} "
+                    f"{code_prefix}{product_name.upper()}"
+                )
+                _append_amount_line(
+                    lines,
+                    left,
+                    _format_brl(item_total),
+                    width,
+                )
+                if not apenas_valores and qty > 1:
+                    lines.append(
+                        f"   ({qty}x {_format_brl(unit_price)} cada)"[:width]
+                    )
+                if not apenas_valores and description:
+                    _append_wrapped(
+                        lines,
+                        description,
+                        width,
+                        "   DESCRIÇÃO: ",
+                    )
+                if not apenas_valores and observation:
+                    _append_wrapped(
+                        lines,
+                        observation.upper(),
+                        width,
+                        "   OBS: ",
+                    )
 
-                client_subtotal = 0.0
-                for (p_name, p_price), qty in grouped_items.items():
-                    item_total = qty * p_price
-                    client_subtotal += item_total
-                    # "2x PRODUTO            R$ 20,00"
-                    left = f"{qty}x {p_name.upper()}"
-                    right = f"R$ {item_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                    max_left = max(width - len(right) - 1, 1)
-                    if len(left) > max_left:
-                        left = left[:max_left]
-                    spaces = max(width - len(left) - len(right), 1)
-                    lines.append(left + " " * spaces + right)
+            grand_total += client_subtotal
+            if is_split:
+                lines.append(draw_separator("-", width))
+                _append_amount_line(
+                    lines,
+                    f"SUBTOTAL {client.upper()}",
+                    _format_brl(client_subtotal),
+                    width,
+                )
+                lines.append(draw_separator("-", width))
 
-                grand_total += client_subtotal
-
-                if is_split:
-                    lines.append(draw_separator("-", width))
-                    right_sub = f"R$ {client_subtotal:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                    left_sub = f"SUBTOTAL {client.upper()}"
-                    max_l = max(width - len(right_sub) - 1, 1)
-                    if len(left_sub) > max_l:
-                        left_sub = left_sub[:max_l]
-                    lines.append(left_sub + " " * max(width - len(left_sub) - len(right_sub), 1) + right_sub)
-
-            lines.append(draw_separator("-", width))
-        else:
-            # Modo completo: sem cabeçalho de colunas — formato "Qty x NOME  [unit]  total"
-            lines.append(draw_separator("-", width))
-
-            for client, items_list in grouped_by_client.items():
-                if is_split:
-                    lines.append(align_center(f"--- CLIENTE: {client.upper()} ---", width))
-
-                grouped_items = {}
-                for item in items_list:
-                    key = (item["produto"]["nome"], item["preco_unit"])
-                    grouped_items[key] = grouped_items.get(key, 0) + 1
-
-                client_subtotal = 0.0
-                for (p_name, p_price), qty in grouped_items.items():
-                    item_total = qty * p_price
-                    client_subtotal += item_total
-
-                    def _fc(v):
-                        return f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-
-                    left = f"{qty} x {p_name.upper()}"
-                    right = f"R$ {_fc(item_total)}"
-                    max_l = max(width - len(right) - 1, 1)
-                    if len(left) > max_l:
-                        left = left[:max_l]
-                    spaces = max(width - len(left) - len(right), 1)
-                    lines.append(left + " " * spaces + right)
-
-                    # Quando qty > 1: mostra o unit para o garçom conferir
-                    if qty > 1:
-                        unit_info = f"   ({qty}x R$ {_fc(p_price)} cada)"
-                        lines.append(unit_info)
-
-                if is_split:
-                    lines.append(draw_separator("-", width))
-                    right_sub = f"R$ {_fc(client_subtotal)}"
-                    left_sub = f"SUBTOTAL {client.upper()}"
-                    max_l = max(width - len(right_sub) - 1, 1)
-                    if len(left_sub) > max_l:
-                        left_sub = left_sub[:max_l]
-                    lines.append(left_sub + " " * max(width - len(left_sub) - len(right_sub), 1) + right_sub)
-                grand_total += client_subtotal
-
-            # Remove last separator se houver
-            if lines and lines[-1] == draw_separator("-", width):
-                lines.pop()
-
-            lines.append(draw_separator("-", width))
-        
-        # Tax and grand total calculations
+        lines.append(split_justified("TOTAL DE ITENS:", str(total_units), width))
         if taxa_servico_ativa:
             service_charge = grand_total * (taxa_servico_padrao / 100.0)
             total_with_service = grand_total + service_charge
-            lines.append(split_justified("SUBTOTAL CONSUMO:", f"R$ {grand_total:.2f}", width))
-            lines.append(split_justified(f"TAXA DE SERVIÇO ({int(taxa_servico_padrao)}%):", f"R$ {service_charge:.2f}", width))
+            lines.append(
+                split_justified(
+                    "SUBTOTAL CONSUMO:",
+                    _format_brl(grand_total),
+                    width,
+                )
+            )
+            lines.append(
+                split_justified(
+                    f"TAXA DE SERVIÇO ({taxa_servico_padrao:g}%):",
+                    _format_brl(service_charge),
+                    width,
+                )
+            )
             lines.append(draw_separator("-", width))
-            lines.append(split_justified("TOTAL GERAL DA MESA:", f"R$ {total_with_service:.2f}", width))
+            final_total = total_with_service
         else:
-            lines.append(split_justified("TOTAL GERAL DA MESA:", f"R$ {grand_total:.2f}", width))
+            final_total = grand_total
+
+        lines.append(
+            ESC_BOLD_ON
+            + split_justified(
+                "TOTAL GERAL DA MESA:",
+                _format_brl(final_total),
+                width,
+            )
+            + ESC_BOLD_OFF
+        )
         lines.append(draw_separator("=", width))
-        
+
         lines.append(align_center("Gerenciado por Kôma", width))
         if print_footer:
-            lines.append(align_center(print_footer, width))
+            _append_wrapped(lines, print_footer, width)
+        if position == "rodape" and header_text:
+            lines.append(
+                ESC_BOLD_ON
+                + align_center(header_text.upper(), width)
+                + ESC_BOLD_OFF
+            )
         lines.append(align_center("Documento não fiscal", width))
-        
+
         if self.simulate:
             lines.append("\n" + align_center("[CUT]", width) + "\n")
-            
+
         return "\n".join(lines)
+
 
     def generate_delivery_unified_ticket(self, comanda, motoboy_nome: str) -> str:
         width = self.width

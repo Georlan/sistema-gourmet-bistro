@@ -67,7 +67,7 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
         self.output_dir = output_dir
 
     def print_ticket(self, payload_text: str, printer_name: str, doc_type: str) -> bool:
-        raw_payload = build_escpos_payload(payload_text, encoding="utf-8")
+        raw_payload = build_escpos_payload(payload_text, encoding="cp860")
 
         # 1. Porta física USB direta (/dev/usb/lp*).
         if printer_name and printer_name.startswith("/dev/"):

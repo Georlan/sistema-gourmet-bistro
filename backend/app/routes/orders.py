@@ -48,6 +48,37 @@ def gerar_novo_numero_pedido(db: Session) -> int:
     ).order_by(Comanda.numero_pedido.desc()).limit(1).with_for_update().scalar()
     return (max_pedido or 0) + 1
 
+
+def _get_print_preferences(db: Session, restaurante_id: int) -> dict:
+    config = (
+        db.query(ConfiguracaoRestaurante)
+        .options(joinedload(ConfiguracaoRestaurante.restaurante))
+        .filter(
+            ConfiguracaoRestaurante.restaurante_id == restaurante_id
+        )
+        .first()
+    )
+    restaurant_name = "Kôma Gourmet Bistrô"
+    if config:
+        restaurant_name = (
+            config.impressao_nome_restaurante
+            or (config.restaurante.nome if config.restaurante else None)
+            or restaurant_name
+        )
+    return {
+        "restaurant_name": restaurant_name,
+        "restaurant_name_position": (
+            config.impressao_nome_posicao if config else "cabecalho"
+        ),
+        "print_footer": (
+            config.impressao_mensagem_rodape if config else None
+        ),
+        "show_descriptions": (
+            config.impressao_mostrar_descricao if config else True
+        ),
+    }
+
+
 def print_in_background(
     printer_name: str,
     ticket_text: str,
@@ -573,19 +604,26 @@ def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_ta
                 should_print = True
             items_payload.append({
                 "quantidade": 1, # Quantidade unitária
+                "codigo": it.produto.id,
                 "nome": it.produto.nome,
+                "descricao": it.produto.descricao,
                 "observacao": it.observacao,
                 "cliente_nome": it.cliente_nome
             })
             
         if should_print:
+            print_preferences = _get_print_preferences(
+                db,
+                comanda.restaurante_id,
+            )
             ticket_text = printer_service.generate_kitchen_ticket(
                 num_pedido=comanda.numero_pedido,
                 tipo=comanda.tipo,
                 mesa_id=comanda.mesa_id,
                 garcom_nome=garcom.nome,
                 items=items_payload,
-                is_reprint=False
+                is_reprint=False,
+                **print_preferences,
             )
             background_tasks.add_task(
                 print_in_background,
@@ -1181,19 +1219,26 @@ def reimprimir_lancamento_cozinha(
         for it in active_items:
             items_payload.append({
                 "quantidade": 1,
+                "codigo": it.produto.id,
                 "nome": it.produto.nome,
+                "descricao": it.produto.descricao,
                 "observacao": it.observacao,
                 "cliente_nome": it.cliente_nome,
                 "preco_unit": float(it.preco_unit) if it.preco_unit else 0.0
             })
-            
+
+        print_preferences = _get_print_preferences(
+            db,
+            comanda.restaurante_id,
+        )
         ticket_text = printer_service.generate_kitchen_ticket(
             num_pedido=comanda.numero_pedido,
             tipo=comanda.tipo,
             mesa_id=comanda.mesa_id,
             garcom_nome=garcom_nome,
             items=items_payload,
-            is_reprint=True
+            is_reprint=True,
+            **print_preferences,
         )
         background_tasks.add_task(
             print_in_background,

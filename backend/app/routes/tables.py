@@ -180,8 +180,13 @@ def imprimir_recibo_mesa(
                 "preco_unit": item.preco_unit,
                 "status": item.status,
                 "cliente_nome": item.cliente_nome,
+                "codigo": item.produto.id,
+                "descricao": item.produto.descricao,
+                "observacao": item.observacao,
                 "produto": {
-                    "nome": item.produto.nome
+                    "id": item.produto.id,
+                    "nome": item.produto.nome,
+                    "descricao": item.produto.descricao,
                 }
             })
         comandas_details.append(comanda_data)
@@ -207,6 +212,20 @@ def imprimir_recibo_mesa(
         ).first()
         taxa_servico_ativa = config.taxa_servico_ativa if config else True
         taxa_servico_padrao = config.taxa_servico_padrao if config else 10.0
+        configured_name = (
+            print_header
+            or (config.impressao_nome_restaurante if config else None)
+            or (
+                config.restaurante.nome
+                if config and config.restaurante
+                else None
+            )
+            or "Kôma Gourmet Bistrô"
+        )
+        configured_footer = (
+            print_footer
+            or (config.impressao_mensagem_rodape if config else None)
+        )
         
         receipt_text = printer_service.generate_receipt(
             num_pedido=num_pedido,
@@ -214,11 +233,14 @@ def imprimir_recibo_mesa(
             mesa_id=mesa_id,
             garcom_nome=garcom_nome,
             comandas_details=comandas_details,
-            print_header=print_header,
-            print_footer=print_footer,
+            print_header=configured_name,
+            print_footer=configured_footer,
             taxa_servico_ativa=taxa_servico_ativa,
             taxa_servico_padrao=taxa_servico_padrao,
-            apenas_valores=apenas_valores
+            apenas_valores=apenas_valores,
+            restaurant_name_position=(
+                config.impressao_nome_posicao if config else "cabecalho"
+            ),
         )
         
         from ..models import PrintJob
@@ -232,7 +254,7 @@ def imprimir_recibo_mesa(
             destination="FECHAMENTO",
             source_type="comanda",
             source_id=str(mesa_id),
-            payload_text=receipt_text,
+            payload_text=receipt_text.replace("\x00", "\\x00"),
             status="pending",
             idempotency_key=ikey
         )

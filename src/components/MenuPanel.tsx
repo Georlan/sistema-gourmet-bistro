@@ -105,11 +105,24 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
 
   // Combined suggestions
   const combinedSuggestions = React.useMemo(() => {
-    return Array.from(new Set([
+    const availableNames = [
       ...historicClients,
-      ...suggestedClientNames
-    ])).filter(name => name.trim() !== '');
-  }, [historicClients, suggestedClientNames]);
+      ...suggestedClientNames,
+      ...draftItems.map(item => item.clienteNome)
+    ];
+    const uniqueNames = new Map<string, string>();
+
+    availableNames.forEach(rawName => {
+      const name = (rawName || '').trim();
+      if (!name) return;
+      const normalizedName = name.toLocaleLowerCase('pt-BR');
+      if (!uniqueNames.has(normalizedName)) {
+        uniqueNames.set(normalizedName, name);
+      }
+    });
+
+    return Array.from(uniqueNames.values());
+  }, [historicClients, suggestedClientNames, draftItems]);
 
   // Open configuration modal
   const handleOpenConfig = (product: Product) => {

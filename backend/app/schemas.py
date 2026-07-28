@@ -393,6 +393,10 @@ class ConfiguracaoRestauranteResponse(BaseModel):
     taxa_servico_padrao: float
     meta_mensal: Optional[float] = 0.0
     unificar_vias_delivery: bool
+    impressao_nome_restaurante: Optional[str] = None
+    impressao_nome_posicao: Literal["cabecalho", "rodape", "oculto"] = "cabecalho"
+    impressao_mensagem_rodape: Optional[str] = None
+    impressao_mostrar_descricao: bool = True
     modo_exclusivo_salao: bool
     perm_garcom_delivery: bool
     perm_garcom_editar: bool
@@ -422,6 +426,15 @@ class ConfiguracaoRestauranteUpdate(BaseModel):
     taxa_servico_padrao: Optional[float] = None
     meta_mensal: Optional[float] = None
     unificar_vias_delivery: Optional[bool] = None
+    impressao_nome_restaurante: Optional[str] = Field(default=None, max_length=80)
+    impressao_nome_posicao: Optional[
+        Literal["cabecalho", "rodape", "oculto"]
+    ] = None
+    impressao_mensagem_rodape: Optional[str] = Field(
+        default=None,
+        max_length=160,
+    )
+    impressao_mostrar_descricao: Optional[bool] = None
     modo_exclusivo_salao: Optional[bool] = None
     plano: Optional[Literal["pocket", "pro", "premium"]] = None
     perm_garcom_delivery: Optional[bool] = None
