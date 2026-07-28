@@ -93,7 +93,7 @@ def print_in_background(
                 destination=dest_clean,
                 source_type=source_type.lower(),
                 source_id=str(source_id),
-                payload_text=ticket_text,
+                payload_text=ticket_text.replace("\x00", "\\x00"),
                 status="pending",
                 idempotency_key=ikey
             )
