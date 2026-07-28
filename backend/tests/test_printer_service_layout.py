@@ -115,6 +115,39 @@ def test_values_receipt_groups_quantity_and_shows_each_person_subtotal():
     assert "R$ 82,00" in ticket
 
 
+def test_receipt_omits_general_subtotal_when_table_has_no_named_clients():
+    ticket = _service().generate_receipt(
+        num_pedido=306,
+        tipo="Consumo no Local",
+        mesa_id=4,
+        garcom_nome="Georlan",
+        taxa_servico_ativa=False,
+        comandas_details=[
+            {
+                "identificador": "Consumo Geral",
+                "itens": [
+                    {
+                        "produto": {"nome": "Hambúrguer Tradicional"},
+                        "preco_unit": 19.0,
+                        "status": "preparando",
+                    },
+                    {
+                        "produto": {"nome": "Hambúrguer Tradicional"},
+                        "preco_unit": 19.0,
+                        "status": "preparando",
+                    },
+                ],
+            }
+        ],
+    )
+
+    assert "CLIENTE: CONSUMO GERAL" not in ticket
+    assert "SUBTOTAL" not in ticket
+    assert "2x HAMBÚRGUER TRADICIONAL" in ticket
+    assert "TOTAL GERAL DA MESA:" in ticket
+    assert "R$ 38,00" in ticket
+
+
 def test_full_receipt_keeps_product_description_and_distinct_notes():
     ticket = _service().generate_receipt(
         num_pedido=305,
