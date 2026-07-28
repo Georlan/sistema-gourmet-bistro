@@ -558,6 +558,11 @@ class PrinterService:
                 )
                 group["items"].append(item)
 
+        has_named_client = any(
+            not _is_general_client(group["label"])
+            for group in grouped_by_client.values()
+        )
+
         for group_index, group in enumerate(grouped_by_client.values()):
             client = group["label"]
             items_list = group["items"]
@@ -624,6 +629,9 @@ class PrinterService:
 
             grand_total += client_subtotal
             lines.append(draw_separator("-", width))
+            if is_general and not has_named_client:
+                continue
+
             subtotal_label = (
                 "SUBTOTAL CONSUMO GERAL"
                 if is_general
