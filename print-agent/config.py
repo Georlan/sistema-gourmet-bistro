@@ -13,7 +13,7 @@ from typing import Dict, Optional
 
 @dataclass
 class AgentConfig:
-    api_url: str = "http://localhost:8000"
+    api_url: str = "https://sistema-gourmet-bistro-production.up.railway.app"
     agent_token: str = ""
     agent_id: str = "agent-local"
     adapter: str = "auto"  # 'auto', 'file', 'linux', 'windows'
@@ -49,6 +49,14 @@ class AgentConfig:
         config.agent_id = os.getenv("KOMA_AGENT_ID", config.agent_id)
         config.adapter = os.getenv("KOMA_ADAPTER", config.adapter)
         config.output_dir = os.getenv("KOMA_OUTPUT_DIR", config.output_dir)
+
+        # 3. Reutilizar a credencial pareada localmente, sem exigir cópia manual.
+        if not config.agent_token:
+            try:
+                from pairing import load_stored_token
+                config.agent_token = load_stored_token()
+            except ImportError:
+                pass
 
         return config
 
