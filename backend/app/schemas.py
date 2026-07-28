@@ -423,6 +423,7 @@ class ConfiguracaoRestauranteUpdate(BaseModel):
     meta_mensal: Optional[float] = None
     unificar_vias_delivery: Optional[bool] = None
     modo_exclusivo_salao: Optional[bool] = None
+    plano: Optional[Literal["pocket", "pro", "premium"]] = None
     perm_garcom_delivery: Optional[bool] = None
     perm_garcom_editar: Optional[bool] = None
     perm_garcom_taxas: Optional[bool] = None
