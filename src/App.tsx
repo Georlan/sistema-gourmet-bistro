@@ -110,6 +110,73 @@ export default function App() {
   const [pagamentosPendentes, setPagamentosPendentes] = useState<any[]>([]);
   const [isWsConnected, setIsWsConnected] = useState<boolean>(false);
 
+  const printPairingStartedRef = useRef(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const nonce = params.get('pair_print_agent');
+    const portText = params.get('agent_port');
+    if (!nonce || !portText || !isAuthenticated || printPairingStartedRef.current) return;
+
+    const port = Number(portText);
+    if (!Number.isInteger(port) || port < 17654 || port > 17664) return;
+
+    printPairingStartedRef.current = true;
+
+    const authorizePrintAgent = async () => {
+      const jwt = localStorage.getItem('koma_caixa_token');
+      if (!jwt) {
+        printPairingStartedRef.current = false;
+        return;
+      }
+
+      try {
+        const registerResponse = await fetch(`${API_BASE_URL}/api/print-agents/register`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${jwt}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            agent_id: `desktop-${nonce.slice(0, 12)}`
+          })
+        });
+        const registration = await registerResponse.json().catch(() => null);
+        if (!registerResponse.ok || !registration?.agent_token) {
+          throw new Error(registration?.detail || 'Não foi possível autorizar o agente.');
+        }
+
+        const localResponse = await fetch(`http://127.0.0.1:${port}/pair`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            nonce,
+            token: registration.agent_token
+          })
+        });
+        if (!localResponse.ok) {
+          throw new Error('O agente local recusou o pareamento.');
+        }
+
+        params.delete('pair_print_agent');
+        params.delete('agent_port');
+        const query = params.toString();
+        window.history.replaceState(
+          null,
+          '',
+          `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`
+        );
+        window.alert('Agente de impressão conectado. O teste real já pode ser enviado.');
+      } catch (error) {
+        printPairingStartedRef.current = false;
+        const message = error instanceof Error ? error.message : 'Falha ao conectar o agente.';
+        window.alert(message);
+      }
+    };
+
+    void authorizePrintAgent();
+  }, [isAuthenticated]);
+
   const fetchPagamentosPendentes = async () => {
     try {
       const tokenKey = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
