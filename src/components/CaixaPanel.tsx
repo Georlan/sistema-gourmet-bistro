@@ -1120,10 +1120,45 @@ export function CaixaPanel({
   const [payPixActive, setPayPixActive] = useState(true);
   const [payCardActive, setPayCardActive] = useState(true);
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlanId>(currentPlanId);
+  const [isChangingPlan, setIsChangingPlan] = useState(false);
 
   useEffect(() => {
     setSelectedPlan(currentPlanId);
   }, [currentPlanId]);
+
+  const handleChangePlan = async () => {
+    if (selectedPlan === currentPlanId || isChangingPlan) return;
+
+    const nextPlan = getSubscriptionPlan(selectedPlan);
+    const confirmed = window.confirm(
+      `Confirmar mudança imediata para ${nextPlan.name} por R$ ${nextPlan.price}/mês?`
+    );
+    if (!confirmed) return;
+
+    setIsChangingPlan(true);
+    try {
+      const response = await fetch(`${apiBaseUrl}/caixa/configuracoes`, {
+        method: 'PUT',
+        headers: {
+          ...authHeaders,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ plano: selectedPlan })
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(data?.detail || 'Não foi possível alterar o plano.');
+      }
+
+      showToast(`Plano alterado para ${nextPlan.name}.`, 'success');
+      window.setTimeout(() => window.location.reload(), 700);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Erro ao alterar o plano.';
+      showToast(message, 'error');
+    } finally {
+      setIsChangingPlan(false);
+    }
+  };
 
   const [supportChats, setSupportChats] = useState<{ id: number; cliente: string; ultimaMsg: string; status: string; canal: string; }[]>([]);
 
@@ -5122,6 +5157,24 @@ export function CaixaPanel({
                       )}
                     </div>
                   ))}
+
+                  {selectedPlan !== currentPlanId && (
+                    <button
+                      type="button"
+                      onClick={() => void handleChangePlan()}
+                      disabled={isChangingPlan}
+                      className={clsx(
+                        'w-full py-2.5 rounded-xl bg-[#10b981] hover:bg-[#059669]',
+                        'disabled:bg-zinc-700 disabled:text-zinc-400',
+                        'text-[#121214] text-[9px] font-bold uppercase tracking-wider',
+                        'transition-colors cursor-pointer disabled:cursor-not-allowed'
+                      )}
+                    >
+                      {isChangingPlan
+                        ? 'Alterando plano...'
+                        : `Confirmar mudança para ${getSubscriptionPlan(selectedPlan).name}`}
+                    </button>
+                  )}
                 </div>
 
                 <div className="p-3 rounded-2xl bg-amber-500/5 border border-amber-500/20 text-left">
