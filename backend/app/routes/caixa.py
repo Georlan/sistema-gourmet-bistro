@@ -1370,6 +1370,16 @@ def atualizar_configuracoes(
         config.unificar_vias_delivery = config_in.unificar_vias_delivery
     if config_in.modo_exclusivo_salao is not None:
         config.modo_exclusivo_salao = config_in.modo_exclusivo_salao
+    if config_in.plano is not None:
+        restaurante = config.restaurante or db.query(Restaurante).filter(
+            Restaurante.id == current_user.restaurante_id
+        ).first()
+        if not restaurante:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Restaurante não encontrado para alteração do plano.",
+            )
+        restaurante.plano = config_in.plano
         
     if config_in.perm_garcom_delivery is not None:
         config.perm_garcom_delivery = config_in.perm_garcom_delivery
