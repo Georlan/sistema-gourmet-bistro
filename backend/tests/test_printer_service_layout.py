@@ -18,14 +18,14 @@ def test_kitchen_ticket_groups_people_and_repeated_items_once():
         items=[
             {
                 "codigo": "003",
-                "nome": "Cheese Bacon",
+                "nome": "003 - Cheese Bacon",
                 "descricao": "Hambúrguer bovino, queijo e bacon.",
                 "observacao": "sem bacon",
                 "cliente_nome": "Paulo",
             },
             {
                 "codigo": "003",
-                "nome": "Cheese Bacon",
+                "nome": "003 - Cheese Bacon",
                 "descricao": "Hambúrguer bovino, queijo e bacon.",
                 "observacao": "sem bacon",
                 "cliente_nome": "paulo",
@@ -42,7 +42,9 @@ def test_kitchen_ticket_groups_people_and_repeated_items_once():
     assert ticket.count("CLIENTE: PAULO") == 1
     assert "CLIENTE: CONSUMO GERAL" not in ticket
     assert "[PAULO]" not in ticket
-    assert "2x [003] Cheese Bacon" in ticket
+    assert "2x Cheese Bacon" in ticket
+    assert "[003]" not in ticket
+    assert "003 -" not in ticket
     assert "DESCRIÇÃO:" not in ticket
     assert "OBS: SEM BACON" in ticket
     assert f"{ESC_FONT_B}   OBS: SEM BACON{ESC_FONT_A}" in ticket
@@ -98,7 +100,9 @@ def test_values_receipt_groups_quantity_and_shows_each_person_subtotal():
 
     assert "CLIENTE: CONSUMO GERAL" not in ticket
     assert ticket.count("CLIENTE: PAULO") == 1
-    assert "3x [001] HAMBÚRGUER TRADICIONAL" in ticket
+    assert "3x HAMBÚRGUER TRADICIONAL" in ticket
+    assert "[001]" not in ticket
+    assert "001 -" not in ticket
     assert "R$ 57,00" in ticket
     assert "SUBTOTAL CONSUMO GERAL" in ticket
     assert "R$ 57,00" in ticket
@@ -125,7 +129,7 @@ def test_full_receipt_keeps_product_description_and_distinct_notes():
                     {
                         "codigo": "003",
                         "produto": {
-                            "nome": "Cheese Bacon",
+                            "nome": "003 - Cheese Bacon",
                             "descricao": "Hambúrguer bovino e queijo.",
                         },
                         "preco_unit": 25.0,
@@ -136,7 +140,7 @@ def test_full_receipt_keeps_product_description_and_distinct_notes():
                     {
                         "codigo": "003",
                         "produto": {
-                            "nome": "Cheese Bacon",
+                            "nome": "003 - Cheese Bacon",
                             "descricao": "Hambúrguer bovino e queijo.",
                         },
                         "preco_unit": 25.0,
@@ -149,7 +153,9 @@ def test_full_receipt_keeps_product_description_and_distinct_notes():
         ],
     )
 
-    assert ticket.count("1x [003] CHEESE BACON") == 2
+    assert ticket.count("1x CHEESE BACON") == 2
+    assert "[003]" not in ticket
+    assert "003 -" not in ticket
     assert "DESCRIÇÃO:" not in ticket
     assert "OBS: SEM BACON" in ticket
     assert "OBS: COM BACON" in ticket
