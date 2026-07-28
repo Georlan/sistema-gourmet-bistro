@@ -91,16 +91,24 @@ def _append_wrapped_in_font(
     lines.extend(wrapped_lines)
 
 
-def _item_code_prefix(code: str, name: str) -> str:
-    """Mantém o código legível sem parecer parte da quantidade."""
-    if not code:
-        return ""
-    normalized_name = name.casefold()
-    if normalized_name.startswith(
-        f"{code} -".casefold()
-    ) or normalized_name.startswith(f"[{code}]".casefold()):
-        return ""
-    return f"[{code}] "
+def _printable_product_name(code: str, name: str) -> str:
+    """Oculta o código técnico somente na apresentação dos cupons."""
+    clean_name = _single_line(name)
+    clean_code = _single_line(code)
+    if not clean_code:
+        return clean_name
+
+    normalized_name = clean_name.casefold()
+    prefixes = (
+        f"{clean_code} - ",
+        f"{clean_code}-",
+        f"[{clean_code}] ",
+        f"[{clean_code}]",
+    )
+    for prefix in prefixes:
+        if normalized_name.startswith(prefix.casefold()):
+            return clean_name[len(prefix):].lstrip()
+    return clean_name
 
 
 def _append_amount_line(lines: list[str], left: str, right: str, width: int) -> None:
@@ -431,8 +439,8 @@ class PrinterService:
                 nome,
                 observacao,
             ), quantidade in client_group["items"].items():
-                code_prefix = _item_code_prefix(codigo, nome)
-                item_text = f"{quantidade}x {code_prefix}{nome}"
+                printable_name = _printable_product_name(codigo, nome)
+                item_text = f"{quantidade}x {printable_name}"
                 item_lines = textwrap.wrap(
                     item_text,
                     width=width,
@@ -594,8 +602,11 @@ class PrinterService:
             ), qty in grouped_items.items():
                 item_total = qty * unit_price
                 client_subtotal += item_total
-                code_prefix = _item_code_prefix(product_code, product_name)
-                left = f"{qty}x {code_prefix}{product_name.upper()}"
+                printable_name = _printable_product_name(
+                    product_code,
+                    product_name,
+                )
+                left = f"{qty}x {printable_name.upper()}"
                 _append_amount_line(
                     lines,
                     left,
