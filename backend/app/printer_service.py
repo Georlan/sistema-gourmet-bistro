@@ -75,6 +75,34 @@ def _append_wrapped(lines: list[str], text: str, width: int, prefix: str = "") -
     lines.extend(continuation_prefix + part for part in wrapped[1:])
 
 
+def _append_wrapped_in_font(
+    lines: list[str],
+    text: str,
+    width: int,
+    prefix: str,
+    font: str,
+    restore_font: str = ESC_FONT_A,
+) -> None:
+    """Aplica fonte sem criar linhas vazias só para comandos ESC/POS."""
+    wrapped_lines: list[str] = []
+    _append_wrapped(wrapped_lines, text, width, prefix)
+    wrapped_lines[0] = font + wrapped_lines[0]
+    wrapped_lines[-1] += restore_font
+    lines.extend(wrapped_lines)
+
+
+def _item_code_prefix(code: str, name: str) -> str:
+    """Mantém o código legível sem parecer parte da quantidade."""
+    if not code:
+        return ""
+    normalized_name = name.casefold()
+    if normalized_name.startswith(
+        f"{code} -".casefold()
+    ) or normalized_name.startswith(f"[{code}]".casefold()):
+        return ""
+    return f"[{code}] "
+
+
 def _append_amount_line(lines: list[str], left: str, right: str, width: int) -> None:
     """Imprime texto e valor sem cortar nomes longos de produtos/clientes."""
     max_left = max(width - len(right) - 1, 1)
@@ -403,7 +431,7 @@ class PrinterService:
                 nome,
                 observacao,
             ), quantidade in client_group["items"].items():
-                code_prefix = f"{codigo} - " if codigo else ""
+                code_prefix = _item_code_prefix(codigo, nome)
                 item_text = f"{quantidade}x {code_prefix}{nome}"
                 item_lines = textwrap.wrap(
                     item_text,
@@ -411,19 +439,24 @@ class PrinterService:
                     break_long_words=True,
                     break_on_hyphens=False,
                 ) or [""]
-                lines.append(ESC_FONT_A + ESC_BOLD_ON + item_lines[0])
-                lines.extend(f"   {part}"[:width] for part in item_lines[1:])
-                lines.append(ESC_BOLD_OFF)
+                rendered_item_lines = item_lines[:1]
+                rendered_item_lines.extend(
+                    f"   {part}"[:width] for part in item_lines[1:]
+                )
+                rendered_item_lines[0] = (
+                    ESC_FONT_A + ESC_BOLD_ON + rendered_item_lines[0]
+                )
+                rendered_item_lines[-1] += ESC_BOLD_OFF
+                lines.extend(rendered_item_lines)
 
                 if observacao:
-                    lines.append(ESC_FONT_A + ESC_BOLD_ON)
-                    _append_wrapped(
+                    _append_wrapped_in_font(
                         lines,
                         observacao.upper(),
                         width,
                         "   OBS: ",
+                        ESC_FONT_B,
                     )
-                    lines.append(ESC_BOLD_OFF)
 
         lines.append(ESC_FONT_B)
         lines.append(draw_separator("-", width))
@@ -521,8 +554,6 @@ class PrinterService:
             client = group["label"]
             items_list = group["items"]
             is_general = _is_general_client(client)
-            if group_index and not is_general:
-                lines.append(draw_separator("-", width))
             if not is_general:
                 lines.append(
                     ESC_BOLD_ON
@@ -563,47 +594,37 @@ class PrinterService:
             ), qty in grouped_items.items():
                 item_total = qty * unit_price
                 client_subtotal += item_total
-                quantity_separator = "x" if apenas_valores else " x"
-                code_prefix = (
-                    f"{product_code} - "
-                    if product_code
-                    and not product_name.casefold().startswith(
-                        f"{product_code} -".casefold()
-                    )
-                    else ""
-                )
-                left = (
-                    f"{qty}{quantity_separator} "
-                    f"{code_prefix}{product_name.upper()}"
-                )
+                code_prefix = _item_code_prefix(product_code, product_name)
+                left = f"{qty}x {code_prefix}{product_name.upper()}"
                 _append_amount_line(
                     lines,
                     left,
                     _format_brl(item_total),
                     width,
                 )
-                if not apenas_valores and qty > 1:
-                    lines.append(
-                        f"   ({qty}x {_format_brl(unit_price)} cada)"[:width]
-                    )
                 if not apenas_valores and observation:
-                    _append_wrapped(
+                    _append_wrapped_in_font(
                         lines,
                         observation.upper(),
                         width,
                         "   OBS: ",
+                        ESC_FONT_B,
                     )
 
             grand_total += client_subtotal
-            if not is_general:
-                lines.append(draw_separator("-", width))
-                _append_amount_line(
-                    lines,
-                    f"SUBTOTAL {client.upper()}",
-                    _format_brl(client_subtotal),
-                    width,
-                )
-                lines.append(draw_separator("-", width))
+            lines.append(draw_separator("-", width))
+            subtotal_label = (
+                "SUBTOTAL CONSUMO GERAL"
+                if is_general
+                else f"SUBTOTAL {client.upper()}"
+            )
+            _append_amount_line(
+                lines,
+                subtotal_label,
+                _format_brl(client_subtotal),
+                width,
+            )
+            lines.append(draw_separator("-", width))
 
         if taxa_servico_ativa:
             service_charge = grand_total * (taxa_servico_padrao / 100.0)
