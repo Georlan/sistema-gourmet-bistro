@@ -5,24 +5,60 @@ Adaptador de impressão para Linux (CUPS / porta física USB).
 import logging
 import os
 import subprocess
+from typing import Optional
 
 from .base import BasePrinterAdapter
+from .escpos import build_escpos_payload
 
 log = logging.getLogger("print-agent.adapter.linux")
 
-# ESC/POS: avança o papel e solicita corte parcial.
-# GS V 66 n é amplamente suportado por impressoras térmicas com guilhotina.
-PAPER_FEED = b"\n\n\n"
-PARTIAL_CUT = b"\x1d\x56\x42\x00"
 
-
-def build_escpos_payload(payload_text: str) -> bytes:
-    """Converte o texto do cupom e acrescenta avanço/corte ESC/POS."""
-    return (
-        payload_text.replace("\\x00", "").encode("utf-8", errors="replace")
-        + PAPER_FEED
-        + PARTIAL_CUT
+def _run_cups_command(command: list[str]) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=5,
+        check=False,
     )
+
+
+def _resolve_automatic_cups_printer() -> Optional[str]:
+    """
+    Deixa o CUPS usar seu padrão ou seleciona automaticamente a única fila.
+
+    Retorna uma string vazia quando já existe impressora padrão, o nome da
+    única fila encontrada, ou None quando não é possível escolher com segurança.
+    """
+    try:
+        default_probe = _run_cups_command(["lpstat", "-d"])
+        if default_probe.returncode == 0:
+            return ""
+
+        destinations = _run_cups_command(["lpstat", "-e"])
+        if destinations.returncode != 0:
+            return None
+        names = [
+            line.strip()
+            for line in destinations.stdout.decode("utf-8", errors="replace").splitlines()
+            if line.strip()
+        ]
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+    if len(names) == 1:
+        log.info(
+            "[LINUX ADAPTER] Nenhum padrão definido; usando automaticamente '%s'.",
+            names[0],
+        )
+        return names[0]
+    if len(names) > 1:
+        log.error(
+            "[LINUX ADAPTER] Há várias impressoras (%s) e nenhuma padrão. "
+            "Defina uma delas como padrão ou configure o destino no Kôma.",
+            ", ".join(names),
+        )
+    return None
 
 
 class LinuxPrinterAdapter(BasePrinterAdapter):
@@ -31,7 +67,7 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
         self.output_dir = output_dir
 
     def print_ticket(self, payload_text: str, printer_name: str, doc_type: str) -> bool:
-        raw_payload = build_escpos_payload(payload_text)
+        raw_payload = build_escpos_payload(payload_text, encoding="utf-8")
 
         # 1. Porta física USB direta (/dev/usb/lp*).
         if printer_name and printer_name.startswith("/dev/"):
@@ -58,10 +94,19 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
                 )
                 return False
 
-        # 2. CUPS em modo RAW para preservar os comandos ESC/POS.
+        # 2. CUPS em modo RAW para preservar fonte, negrito e guilhotina.
+        target_printer = printer_name
+        if not target_printer or target_printer in ("Padrão", "auto"):
+            target_printer = _resolve_automatic_cups_printer()
+            if target_printer is None:
+                log.error(
+                    "[LINUX ADAPTER] Nenhuma impressora CUPS pôde ser selecionada."
+                )
+                return False
+
         cmd = ["lp"]
-        if printer_name and printer_name not in ("Padrão", "auto"):
-            cmd.extend(["-d", printer_name])
+        if target_printer:
+            cmd.extend(["-d", target_printer])
         cmd.extend(["-o", "raw"])
 
         try:
@@ -83,9 +128,10 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
             return False
 
         job = proc.stdout.decode("utf-8", errors="replace").strip()
+        selected = target_printer or "padrão do sistema"
         log.info(
             "[LINUX ADAPTER] Trabalho enviado via CUPS RAW para '%s'%s",
-            printer_name,
+            selected,
             f": {job}" if job else "",
         )
         return True
