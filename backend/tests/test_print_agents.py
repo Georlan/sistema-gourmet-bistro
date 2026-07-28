@@ -168,6 +168,35 @@ def test_stuck_job_recovery():
     assert next_job is not None
 
 
+def test_only_heartbeat_updates_agent_last_seen():
+    """Polling ocioso não grava no banco; heartbeat registra presença do agente."""
+    client = TestClient(app)
+    headers = {"X-Agent-Token": "token_agent_1"}
+
+    next_response = client.get("/api/print-agents/jobs/next", headers=headers)
+    assert next_response.status_code == 200
+
+    db = TestingSessionLocal()
+    try:
+        agent = db.query(PrintAgentToken).filter_by(id="a1").one()
+        assert agent.last_seen_at is None
+    finally:
+        db.close()
+
+    heartbeat_response = client.post(
+        "/api/print-agents/heartbeat",
+        headers=headers,
+    )
+    assert heartbeat_response.status_code == 200
+
+    db = TestingSessionLocal()
+    try:
+        agent = db.query(PrintAgentToken).filter_by(id="a1").one()
+        assert agent.last_seen_at is not None
+    finally:
+        db.close()
+
+
 @pytest.mark.parametrize(
     ("path", "payload"),
     [

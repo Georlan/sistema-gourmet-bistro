@@ -18,11 +18,11 @@ from app.domain.printing import (
 from app.routes.print_agents import hash_token, MAX_ATTEMPTS
 
 # Import do agente local
-AGENT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../koma-print-agent"))
+AGENT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../print-agent"))
 if AGENT_DIR not in sys.path:
     sys.path.insert(0, AGENT_DIR)
 
-from adapters.dummy import DummyPrinterAdapter
+from adapters.file import FilePrinterAdapter
 from adapters.linux import LinuxPrinterAdapter
 from adapters.windows import WindowsPrinterAdapter
 from adapters import get_adapter
@@ -190,10 +190,14 @@ def test_10_agente_offline_nao_impede_pedido(db_session):
     assert job.status == "pending"
 
 
-def test_11_dummy_adapter_grava_documento(tmp_path):
-    """11. Dummy adapter grava o documento em arquivo."""
-    dummy = DummyPrinterAdapter(output_dir=str(tmp_path))
-    success = dummy.print_ticket("TESTE DE PAYLOAD", "DUMMY_PRINTER", "PRODUCAO")
+def test_11_file_adapter_grava_documento(tmp_path):
+    """11. Adaptador de arquivo grava o documento para testes."""
+    adapter = FilePrinterAdapter(output_dir=str(tmp_path))
+    success = adapter.print_ticket(
+        "TESTE DE PAYLOAD",
+        "FILE_PRINTER",
+        "PRODUCAO",
+    )
     assert success is True
 
     files = list(tmp_path.glob("*.txt"))
@@ -266,6 +270,6 @@ def test_16_windows_adapter_importa_normalmente_no_linux():
     """16. Windows adapter importa normalmente em Linux sem executar código exclusivo do Windows."""
     win_adapter = WindowsPrinterAdapter()
     assert win_adapter is not None
-    # Deve retornar True em modo mock no Linux sem quebrar a aplicação
+    # Fora do Windows não pode fingir que houve impressão física.
     res = win_adapter.print_ticket("PAYLOAD", "Padrão", "PRODUCAO")
-    assert res is True
+    assert res is False

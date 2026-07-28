@@ -143,6 +143,18 @@ def test_print_background_uses_explicit_tenant_for_each_job(monkeypatch):
         def __init__(self, restaurante_id):
             created_sessions.append(restaurante_id)
 
+        def query(self, _model):
+            class FakeQuery:
+                def filter(self, *_args):
+                    return self
+
+                def first(self):
+                    # Plano com impressão habilitada para que o teste alcance
+                    # a criação do job, que é o comportamento sob validação.
+                    return type("FakeRestaurant", (), {"plano": "pro"})()
+
+            return FakeQuery()
+
         def add(self, job):
             created_jobs.append(job)
 

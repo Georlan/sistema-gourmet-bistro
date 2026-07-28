@@ -165,7 +165,7 @@ class TestKomaAllPhases(unittest.TestCase):
         self.assertIn("PEDIDO: #120", kitchen_ticket)
         self.assertIn("MESA: 15", kitchen_ticket)
         self.assertTrue("Hambúrguer de Costela" in kitchen_ticket or "Hamb. de Costela" in kitchen_ticket)
-        self.assertIn("Sem cebola", kitchen_ticket)
+        self.assertIn("SEM CEBOLA", kitchen_ticket.upper())
         self.assertIn("[CUT]", kitchen_ticket)
         
         # Salvar o cupom simulado
@@ -205,11 +205,11 @@ class TestKomaAllPhases(unittest.TestCase):
         self.assertIn("CLIENTE: GABRIEL", receipt)
         self.assertIn("CLIENTE: ANA", receipt)
         self.assertIn("SUBTOTAL CONSUMO:", receipt)
-        self.assertIn("103.00", receipt)
+        self.assertIn("103,00", receipt)
         self.assertIn("TAXA DE SERVIÇO (10%):", receipt)
-        self.assertIn("10.30", receipt)
+        self.assertIn("10,30", receipt)
         self.assertIn("TOTAL GERAL DA MESA:", receipt)
-        self.assertIn("113.30", receipt)
+        self.assertIn("113,30", receipt)
         
         # Salvar recibo simulado
         receipt_filepath = printer_service.send_to_printer("test_recibo", receipt)

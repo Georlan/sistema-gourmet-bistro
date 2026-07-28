@@ -17,7 +17,7 @@ class AgentConfig:
     agent_id: str = "agent-local"
     adapter: str = "auto"  # 'auto', 'file', 'linux', 'windows'
     output_dir: str = "print_output"
-    poll_interval_seconds: float = 2.0
+    poll_interval_seconds: float = 0.5
     heartbeat_interval_seconds: float = 30.0
     printers: Dict[str, str] = field(default_factory=lambda: {"PADRAO": "Padrão"})
     pair_only: bool = False
@@ -62,6 +62,30 @@ class AgentConfig:
         config.agent_id = os.getenv("KOMA_AGENT_ID", config.agent_id)
         config.adapter = os.getenv("KOMA_ADAPTER", config.adapter)
         config.output_dir = os.getenv("KOMA_OUTPUT_DIR", config.output_dir)
+        try:
+            config.poll_interval_seconds = max(
+                0.1,
+                float(
+                    os.getenv(
+                        "KOMA_POLL_SEC",
+                        str(config.poll_interval_seconds),
+                    )
+                ),
+            )
+            config.heartbeat_interval_seconds = max(
+                5.0,
+                float(
+                    os.getenv(
+                        "KOMA_HB_SEC",
+                        str(config.heartbeat_interval_seconds),
+                    )
+                ),
+            )
+        except ValueError:
+            print(
+                "[CONFIG WARNING] KOMA_POLL_SEC/KOMA_HB_SEC inválido; "
+                "mantendo os valores configurados."
+            )
 
         # 3. Reutilizar a credencial pareada localmente, sem exigir cópia manual.
         if not config.agent_token:
@@ -125,8 +149,8 @@ def parse_cli_args(config: AgentConfig) -> AgentConfig:
     config.agent_id = args.agent_id
     config.adapter = args.adapter
     config.output_dir = args.output_dir
-    config.poll_interval_seconds = args.poll_sec
-    config.heartbeat_interval_seconds = args.hb_sec
+    config.poll_interval_seconds = max(0.1, args.poll_sec)
+    config.heartbeat_interval_seconds = max(5.0, args.hb_sec)
     config.pair_only = args.pair_only
 
     return config

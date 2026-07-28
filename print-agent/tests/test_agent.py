@@ -100,15 +100,44 @@ def test_offline_resilience_reconfirms_without_reprinting(temp_dir):
     assert journal.is_confirmed("job-offline-01") is True
 
 
-def test_adapter_factory_fallback(temp_dir):
-    """Testa seleção de adaptadores via get_adapter."""
+def test_linux_adapter_does_not_fake_print_success(temp_dir):
+    """Falha real de CUPS não pode ser registrada como impressão concluída."""
     file_adapter = get_adapter("file", output_dir=temp_dir)
     assert isinstance(file_adapter, FilePrinterAdapter)
 
     linux_adapter = get_adapter("linux", output_dir=temp_dir)
-    # Se CUPS/device não existir, linux adapter faz fallback gracioso para FilePrinterAdapter
-    res = linux_adapter.print_ticket("Teste Linux", "Impressora_Inexistente", "PRODUCAO")
-    assert res is True  # Fallback para arquivo bem-sucedido
+    failed_process = MagicMock(returncode=1, stdout=b"", stderr=b"fila ausente")
+    with patch("adapters.linux.subprocess.run", return_value=failed_process):
+        result = linux_adapter.print_ticket(
+            "Teste Linux",
+            "Impressora_Inexistente",
+            "PRODUCAO",
+        )
+
+    assert result is False
+    assert not [
+        name for name in os.listdir(temp_dir)
+        if name.startswith("ticket_")
+    ]
+
+
+def test_api_client_reuses_http_session():
+    """Polling e heartbeat devem compartilhar a mesma conexão HTTP."""
+    job = {"id": "job-session"}
+
+    with patch("api_client.requests.Session") as SessionClass:
+        session = SessionClass.return_value
+        session.get.return_value.status_code = 200
+        session.get.return_value.json.return_value = job
+        session.post.return_value.status_code = 200
+
+        client = KomaApiClient("https://api.koma.test", "agent-token")
+
+        assert client.get_next_job() == job
+        assert client.heartbeat() is True
+        SessionClass.assert_called_once_with()
+        session.get.assert_called_once()
+        session.post.assert_called_once()
 
 
 def test_worker_end_to_end_flow(temp_dir):
@@ -155,3 +184,98 @@ def test_worker_end_to_end_flow(temp_dir):
         files = os.listdir(temp_dir)
         printed_files = [f for f in files if f.startswith("ticket_")]
         assert len(printed_files) == 1
+
+
+def test_worker_drains_backlog_without_polling_delay(temp_dir):
+    """Dois jobs acumulados são processados em sequência, sem sleep entre eles."""
+    config = AgentConfig(
+        api_url="http://localhost:8000",
+        agent_token="koma_ag_test_token",
+        adapter="file",
+        output_dir=temp_dir,
+        poll_interval_seconds=0.5,
+    )
+    first_job = {
+        "id": "job-backlog-1",
+        "document_type": "producao",
+        "destination": "COZINHA",
+        "source_type": "comanda",
+        "source_id": "c-1",
+        "payload_text": "1x Pedido 1",
+        "idempotency_key": "ikey-backlog-1",
+    }
+    second_job = {
+        **first_job,
+        "id": "job-backlog-2",
+        "source_id": "c-2",
+        "payload_text": "1x Pedido 2",
+        "idempotency_key": "ikey-backlog-2",
+    }
+
+    with (
+        patch("worker.KomaApiClient") as ClientClass,
+        patch("worker.PrintJournal") as JournalClass,
+        patch("worker.get_adapter") as get_adapter_mock,
+        patch("worker.time.sleep") as sleep_mock,
+    ):
+        client = ClientClass.return_value
+        journal = JournalClass.return_value
+        adapter = get_adapter_mock.return_value
+
+        client.heartbeat.return_value = True
+        client.get_next_job.side_effect = [first_job, second_job]
+        client.claim_job.side_effect = [first_job, second_job]
+        client.complete_job.return_value = True
+        journal.get_unconfirmed_printed_jobs.return_value = []
+        journal.is_printed.return_value = False
+        adapter.print_ticket.return_value = True
+
+        run_agent_loop(config, max_loops=2)
+
+        assert adapter.print_ticket.call_count == 2
+        assert client.complete_job.call_count == 2
+        sleep_mock.assert_not_called()
+
+
+def test_worker_reclaims_locally_printed_job_without_reprinting(temp_dir):
+    """Após recuperação do servidor, o journal impede uma segunda via física."""
+    config = AgentConfig(
+        api_url="http://localhost:8000",
+        agent_token="koma_ag_test_token",
+        adapter="file",
+        output_dir=temp_dir,
+    )
+    job = {
+        "id": "job-recovered",
+        "document_type": "producao",
+        "destination": "COZINHA",
+        "source_type": "comanda",
+        "source_id": "c-recovered",
+        "payload_text": "1x Pedido já impresso",
+        "idempotency_key": "ikey-recovered",
+    }
+
+    with (
+        patch("worker.KomaApiClient") as ClientClass,
+        patch("worker.PrintJournal") as JournalClass,
+        patch("worker.get_adapter") as get_adapter_mock,
+    ):
+        client = ClientClass.return_value
+        journal = JournalClass.return_value
+
+        client.heartbeat.return_value = True
+        client.get_next_job.return_value = job
+        client.claim_job.return_value = job
+        client.complete_job.return_value = True
+        journal.get_unconfirmed_printed_jobs.return_value = []
+        journal.is_printed.return_value = True
+
+        run_agent_loop(config, max_loops=1)
+
+        client.claim_job.assert_called_once_with("job-recovered")
+        client.complete_job.assert_called_once_with(
+            "job-recovered",
+            printer_name="Padrão",
+        )
+        journal.mark_backend_confirmed.assert_called_once_with("job-recovered")
+        get_adapter_mock.return_value.print_ticket.assert_not_called()

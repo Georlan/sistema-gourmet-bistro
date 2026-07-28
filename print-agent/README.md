@@ -1,158 +1,87 @@
-# Agente de Impressão Local — Kôma Bistrô
+# Kôma Print Agent
 
-Daemon Python que roda no computador do restaurante e imprime tickets
-diretamente na impressora térmica USB, sem depender de drivers de rede.
+Serviço local que recebe da fila do Kôma e envia cupons ESC/POS para a
+impressora térmica. Ele funciona sem depender do navegador permanecer aberto.
 
----
+## Instalação no Linux
 
-## Pré-requisitos
+Pré-requisitos: Python 3.10+, CUPS e a impressora instalada no sistema.
 
-| Sistema | Requisito |
+```bash
+bash print-agent/install-linux.sh
+```
+
+O instalador:
+
+1. abre o Kôma para autorizar este computador;
+2. guarda a credencial localmente, sem exigir cópia de token;
+3. instala e inicia `koma-print-agent.service` na sessão do usuário;
+4. configura reinício automático.
+
+Para atualizar uma instalação após baixar uma versão nova do repositório,
+execute o instalador novamente. A credencial já pareada é reutilizada.
+
+```bash
+git pull --ff-only origin main
+bash print-agent/install-linux.sh
+```
+
+Diagnóstico:
+
+```bash
+systemctl --user status koma-print-agent.service
+journalctl --user -u koma-print-agent.service -f
+lpstat -p -d
+```
+
+## Execução manual
+
+Útil apenas durante desenvolvimento:
+
+```bash
+python3 -m venv print-agent/.venv
+print-agent/.venv/bin/pip install -r print-agent/requirements.txt
+print-agent/.venv/bin/python print-agent/main.py
+```
+
+Na primeira execução, o navegador é aberto para pareamento. As seguintes usam a
+credencial armazenada em `~/.config/koma-print-agent/credentials.json`.
+
+## Configuração
+
+| Argumento | Variável de ambiente | Padrão | Descrição |
+|---|---|---:|---|
+| `--api-url` | `KOMA_API_URL` | API de produção | URL do backend |
+| `--agent-id` | `KOMA_AGENT_ID` | `agent-local` | Identificador local |
+| `--adapter` | `KOMA_ADAPTER` | `auto` | `auto`, `linux`, `windows` ou `file` |
+| `--output-dir` | `KOMA_OUTPUT_DIR` | `print_output` | Saída do simulador `file` |
+| `--poll-sec` | `KOMA_POLL_SEC` | `0.5` | Espera somente quando a fila está vazia |
+| `--hb-sec` | `KOMA_HB_SEC` | `30` | Intervalo do heartbeat |
+
+O argumento `--token` existe para diagnóstico e automação técnica, mas não faz
+parte do fluxo normal do cliente.
+
+## Garantias do fluxo
+
+- A conexão HTTP é reutilizada entre consultas.
+- Enquanto houver fila, o próximo cupom é buscado sem pausa.
+- O journal SQLite local impede uma segunda impressão após falha de conexão.
+- Trabalhos impressos e ainda não confirmados são reconciliados com o backend.
+- Falha real de CUPS/Spooler não é registrada como impressão concluída.
+- O backend libera claims abandonados e limita cada trabalho a três tentativas.
+
+Rotas usadas pelo agente:
+
+| Método | Rota |
 |---|---|
-| Windows | Python 3.10+, impressora instalada no Spooler |
-| Linux   | Python 3.10+ (modo simulação; sem driver necessário) |
+| `GET` | `/api/print-agents/jobs/next` |
+| `POST` | `/api/print-agents/jobs/{id}/claim` |
+| `POST` | `/api/print-agents/jobs/{id}/complete` |
+| `POST` | `/api/print-agents/jobs/{id}/fail` |
+| `POST` | `/api/print-agents/heartbeat` |
 
----
+## Windows
 
-## Instalação
-
-```bash
-# Entre no diretório do agente
-cd print-agent
-
-# Crie e ative o ambiente virtual
-python -m venv .venv
-
-# Windows
-.venv\Scripts\activate
-
-# Linux / macOS
-source .venv/bin/activate
-
-# Instale as dependências
-pip install -r requirements.txt
-```
-
----
-
-## Uso
-
-```bash
-# Forma básica (Linux — modo simulação)
-python agent.py --api-url http://localhost:8000 --token MEU_TOKEN
-
-# Windows com impressora explícita
-python agent.py \
-  --api-url https://api.seurestaurante.com \
-  --token   MEU_TOKEN \
-  --printer "EPSON TM-T20III"
-
-# Via variáveis de ambiente (ideal para produção)
-KOMA_API_URL=https://api.seurestaurante.com \
-KOMA_TOKEN=MEU_TOKEN \
-KOMA_PRINTER="EPSON TM-T20III" \
-python agent.py
-```
-
-### Parâmetros
-
-| Argumento   | Env Var        | Padrão              | Descrição |
-|---|---|---|---|
-| `--api-url` | `KOMA_API_URL` | `http://localhost:8000` | URL base do backend |
-| `--token`   | `KOMA_TOKEN`   | —                   | Bearer token (obrigatório) |
-| `--printer` | `KOMA_PRINTER` | impressora padrão do SO | Nome exato no Spooler |
-| `--poll-sec`| `KOMA_POLL_SEC`| `2`                 | Intervalo de polling (seg) |
-| `--hb-sec`  | `KOMA_HB_SEC`  | `30`                | Intervalo de heartbeat (seg) |
-
----
-
-## Fluxo de funcionamento
-
-```
-┌─────────────────────────────────────────────┐
-│              Loop principal                  │
-│                                              │
-│  A cada 2s  ─►  GET /api/print-agents/jobs/next
-│                      │                       │
-│                 job encontrado?               │
-│                 ├── NÃO ──► aguarda 2s       │
-│                 └── SIM ──► processa job     │
-│                      │                       │
-│             imprimir_raw(printer, bytes)     │
-│                 ├── Windows: win32print RAW  │
-│                 └── Linux:   log simulado    │
-│                      │                       │
-│         POST /api/print-agents/jobs/{id}/status
-│           {"status": "printed" | "failed"}  │
-│                                              │
-│  A cada 30s ─►  POST /api/print-agents/heartbeat
-└─────────────────────────────────────────────┘
-```
-
----
-
-## Rotas da API consumidas
-
-| Método | Rota | Descrição |
-|---|---|---|
-| `GET`  | `/api/print-agents/jobs/next` | Próximo job pendente (204 se vazio) |
-| `POST` | `/api/print-agents/jobs/{id}/status` | Confirma impressão |
-| `POST` | `/api/print-agents/heartbeat` | Mantém agente ativo |
-
-### Formato esperado do job (`GET .../jobs/next`)
-
-```json
-{
-  "id": "uuid-do-job",
-  "printer_name": "EPSON TM-T20III",
-  "raw_data": "<base64 dos bytes ESC/POS>"
-}
-```
-
-### Payload de confirmação (`POST .../jobs/{id}/status`)
-
-```json
-{
-  "status": "printed",
-  "error": "",
-  "printed_at": "2026-07-23T20:00:00+00:00"
-}
-```
-
----
-
-## Executar como serviço (Windows)
-
-```bat
-:: Instale como serviço com NSSM (https://nssm.cc)
-nssm install KomaPrintAgent "C:\Python311\python.exe" "C:\koma\print-agent\agent.py"
-nssm set KomaPrintAgent AppEnvironmentExtra KOMA_API_URL=https://api.seurestaurante.com
-nssm set KomaPrintAgent AppEnvironmentExtra KOMA_TOKEN=SEU_TOKEN
-nssm set KomaPrintAgent AppEnvironmentExtra KOMA_PRINTER="EPSON TM-T20III"
-nssm start KomaPrintAgent
-```
-
-## Executar como serviço (Linux — systemd)
-
-```ini
-# /etc/systemd/system/koma-print-agent.service
-[Unit]
-Description=Kôma Print Agent
-After=network.target
-
-[Service]
-User=koma
-WorkingDirectory=/opt/koma/print-agent
-Environment=KOMA_API_URL=https://api.seurestaurante.com
-Environment=KOMA_TOKEN=SEU_TOKEN
-ExecStart=/opt/koma/print-agent/.venv/bin/python agent.py
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
-```bash
-sudo systemctl enable --now koma-print-agent
-```
+O adaptador RAW para o Spooler já existe e usa a impressora padrão ou a fila
+configurada. Ainda falta empacotar o instalador do Windows e o serviço de
+inicialização automática antes da distribuição comercial.

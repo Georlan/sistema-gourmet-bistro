@@ -13,6 +13,9 @@ class KomaApiClient:
     def __init__(self, api_url: str, agent_token: str):
         self.api_url = api_url.rstrip("/")
         self.agent_token = agent_token
+        # Mantém a conexão HTTP/TLS aberta entre os ciclos de polling. Além de
+        # reduzir a latência, evita um novo handshake para cada job consultado.
+        self.session = requests.Session()
         self.headers = {
             "Content-Type": "application/json",
             "X-Agent-Token": agent_token,
@@ -26,7 +29,12 @@ class KomaApiClient:
             "Authorization": f"Bearer {jwt_token}",
         }
         try:
-            resp = requests.post(url, json={"agent_id": agent_id}, headers=headers, timeout=10)
+            resp = self.session.post(
+                url,
+                json={"agent_id": agent_id},
+                headers=headers,
+                timeout=10,
+            )
             if resp.status_code == 200:
                 data = resp.json()
                 token = data.get("agent_token")
@@ -46,7 +54,7 @@ class KomaApiClient:
             return False
         url = f"{self.api_url}/api/print-agents/heartbeat"
         try:
-            resp = requests.post(url, headers=self.headers, timeout=5)
+            resp = self.session.post(url, headers=self.headers, timeout=5)
             return resp.status_code == 200
         except Exception as e:
             log.debug(f"Erro ao enviar heartbeat: {e}")
@@ -58,7 +66,7 @@ class KomaApiClient:
             return None
         url = f"{self.api_url}/api/print-agents/jobs/next"
         try:
-            resp = requests.get(url, headers=self.headers, timeout=5)
+            resp = self.session.get(url, headers=self.headers, timeout=5)
             if resp.status_code == 200:
                 data = resp.json()
                 return data if data else None
@@ -72,7 +80,7 @@ class KomaApiClient:
             return None
         url = f"{self.api_url}/api/print-agents/jobs/{job_id}/claim"
         try:
-            resp = requests.post(url, headers=self.headers, timeout=5)
+            resp = self.session.post(url, headers=self.headers, timeout=5)
             if resp.status_code == 200:
                 return resp.json()
             elif resp.status_code in (409, 404):
@@ -87,7 +95,12 @@ class KomaApiClient:
             return False
         url = f"{self.api_url}/api/print-agents/jobs/{job_id}/complete"
         try:
-            resp = requests.post(url, json={"printer_name": printer_name}, headers=self.headers, timeout=10)
+            resp = self.session.post(
+                url,
+                json={"printer_name": printer_name},
+                headers=self.headers,
+                timeout=10,
+            )
             return resp.status_code == 200
         except Exception as e:
             log.error(f"Erro ao confirmar conclusão do job '{job_id}': {e}")
@@ -99,7 +112,12 @@ class KomaApiClient:
             return False
         url = f"{self.api_url}/api/print-agents/jobs/{job_id}/fail"
         try:
-            resp = requests.post(url, json={"error": error_msg[:500]}, headers=self.headers, timeout=10)
+            resp = self.session.post(
+                url,
+                json={"error": error_msg[:500]},
+                headers=self.headers,
+                timeout=10,
+            )
             return resp.status_code == 200
         except Exception as e:
             log.error(f"Erro ao reportar falha do job '{job_id}': {e}")

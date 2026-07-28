@@ -27,7 +27,10 @@ def get_current_agent(
     """
     Dependency de autenticação do Agent Token.
     Extrai o token do cabeçalho 'X-Agent-Token' ou 'Authorization: Bearer <token>'.
-    Valida o hash no banco e atualiza o 'last_seen_at'.
+    Valida o hash no banco e vincula a sessão ao restaurante do agente.
+
+    O ``last_seen_at`` é atualizado apenas no heartbeat explícito; consultas de
+    fila ociosa não precisam gerar uma escrita no banco a cada polling.
     """
     raw_token = x_agent_token
     if not raw_token and authorization:
@@ -81,9 +84,6 @@ def get_current_agent(
                 detail="Token de agente inválido ou revogado"
             )
 
-        # Atualiza o visto por último (heartbeat implícito)
-        agent_record.last_seen_at = datetime.datetime.now(datetime.timezone.utc)
-        db.commit()
         yield agent_record
     finally:
         # Dependencies sync com ``yield`` podem entrar/sair em contextos AnyIO
@@ -232,14 +232,18 @@ def register_agent(
 
 @router.post("/heartbeat")
 def agent_heartbeat(
-    agent: PrintAgentToken = Depends(get_current_agent)
+    agent: PrintAgentToken = Depends(get_current_agent),
+    db: Session = Depends(get_db),
 ):
     """Heartbeat enviado periodicamente pelo agente local."""
+    now = datetime.datetime.now(datetime.timezone.utc)
+    agent.last_seen_at = now
+    db.commit()
     return {
         "status": "ok",
         "agent_id": agent.agent_id,
         "restaurante_id": agent.restaurante_id,
-        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
+        "timestamp": now.isoformat()
     }
 
 @router.get("/jobs/next")
@@ -255,7 +259,7 @@ def get_next_job(
     stuck_cutoff = now - datetime.timedelta(minutes=5)
 
     # Libera jobs abandonados/travados
-    db.query(PrintJob).filter(
+    released_jobs = db.query(PrintJob).filter(
         PrintJob.restaurante_id == agent.restaurante_id,
         PrintJob.status == "claimed",
         PrintJob.claimed_at < stuck_cutoff
@@ -264,7 +268,8 @@ def get_next_job(
         "claimed_at": None,
         "agent_id": None
     }, synchronize_session=False)
-    db.commit()
+    if released_jobs:
+        db.commit()
 
     job = db.query(PrintJob).filter(
         PrintJob.restaurante_id == agent.restaurante_id,

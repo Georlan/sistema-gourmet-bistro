@@ -12,6 +12,8 @@ from adapters import get_adapter
 
 log = logging.getLogger("print-agent.worker")
 
+RECONCILIATION_INTERVAL_SECONDS = 5.0
+
 
 def process_unconfirmed_journal_jobs(client: KomaApiClient, journal: PrintJournal):
     """
@@ -47,19 +49,26 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
     print("=========================================================")
 
     last_heartbeat = 0.0
+    last_reconciliation = 0.0
     loop_count = 0
 
     while True:
+        should_wait = True
         try:
             now = time.time()
 
             # 1. Enviar Heartbeat periódico
             if now - last_heartbeat >= config.heartbeat_interval_seconds:
-                if client.heartbeat():
-                    last_heartbeat = now
+                client.heartbeat()
+                # Evita repetir heartbeat a cada job quando houver uma falha
+                # transitória; a próxima tentativa ocorrerá na cadência normal.
+                last_heartbeat = now
 
-            # 2. Processar reconciliação de impressões locais não confirmadas
-            process_unconfirmed_journal_jobs(client, journal)
+            # 2. Reconciliar confirmações pendentes em cadência própria. Fazer
+            # isso a cada polling abriria o SQLite sem necessidade.
+            if now - last_reconciliation >= RECONCILIATION_INTERVAL_SECONDS:
+                process_unconfirmed_journal_jobs(client, journal)
+                last_reconciliation = now
 
             # 3. Consultar próximo job na fila
             next_job = client.get_next_job()
@@ -74,9 +83,25 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
 
                 # Checar idempotência local no journal SQLite
                 if journal.is_printed(job_id, ikey):
-                    log.info(f"[IDEMPOTÊNCIA] Job '{job_id}' já foi impresso fisicamente nesta máquina. Pulu papel e confirmo API...")
-                    if client.complete_job(job_id):
-                        journal.mark_backend_confirmed(job_id)
+                    log.info(
+                        f"[IDEMPOTÊNCIA] Job '{job_id}' já foi impresso nesta "
+                        "máquina. Não vou imprimir novamente."
+                    )
+                    # /jobs/next retorna apenas jobs pendentes. É necessário
+                    # reassumi-lo antes da confirmação, especialmente após uma
+                    # indisponibilidade superior ao prazo de recuperação.
+                    if client.claim_job(job_id):
+                        target_printer = (
+                            config.printers.get(dest)
+                            or config.printers.get("PADRAO")
+                            or "Padrão"
+                        )
+                        if client.complete_job(
+                            job_id,
+                            printer_name=target_printer,
+                        ):
+                            journal.mark_backend_confirmed(job_id)
+                            should_wait = False
                 else:
                     # Tentar Claim atômico no servidor
                     claimed_data = client.claim_job(job_id)
@@ -97,6 +122,10 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
                                 log.info(f"[SUCESSO] Job '{job_id}' impresso e confirmado com SUCESSO!")
                             else:
                                 log.warning(f"[PENDÊNCIA HTTP] Job '{job_id}' impresso no papel, mas confirmação na API falhou. Ficará registrado no journal para reconexão.")
+
+                            # Existe trabalho na fila: consulta o próximo
+                            # imediatamente, sem a pausa reservada ao estado ocioso.
+                            should_wait = False
                         else:
                             client.fail_job(job_id, error_msg=f"Falha no adaptador de impressão '{adapter.__class__.__name__}'")
                             log.error(f"[FALHA] Impressão do job '{job_id}' falhou no adaptador.")
@@ -111,4 +140,5 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
         if max_loops is not None and loop_count >= max_loops:
             break
 
-        time.sleep(config.poll_interval_seconds)
+        if should_wait:
+            time.sleep(config.poll_interval_seconds)
