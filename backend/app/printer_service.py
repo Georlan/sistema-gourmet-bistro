@@ -42,6 +42,26 @@ def _format_brl(value: float) -> str:
     return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
+def _order_type_label(tipo: object, mesa_id: Optional[int]) -> str:
+    """Converte variações internas no rótulo curto que o salão reconhece."""
+    raw = _single_line(tipo)
+    normalized = raw.casefold()
+    if any(term in normalized for term in ("delivery", "entrega")):
+        return "DELIVERY"
+    if any(term in normalized for term in ("retir", "viagem", "balc")):
+        return "RETIRADA"
+    if mesa_id is not None or any(
+        term in normalized for term in ("mesa", "local", "consumo", "salão", "salao")
+    ):
+        return "CONSUMO NO LOCAL"
+    return raw.upper() or "CONSUMO NO LOCAL"
+
+
+def _is_general_client(value: object) -> bool:
+    """Consumo Geral é a conta padrão da mesa, não uma pessoa identificada."""
+    return _single_line(value).casefold() in {"", "geral", "consumo geral"}
+
+
 def _append_wrapped(lines: list[str], text: str, width: int, prefix: str = "") -> None:
     available = max(width - len(prefix), 1)
     wrapped = textwrap.wrap(
@@ -287,7 +307,6 @@ class PrinterService:
         restaurant_name: Optional[str] = None,
         restaurant_name_position: str = "cabecalho",
         print_footer: Optional[str] = None,
-        show_descriptions: bool = True,
     ) -> str:
         width = self.width
         lines: list[str] = []
@@ -297,7 +316,7 @@ class PrinterService:
             else "cabecalho"
         )
         brand = _single_line(restaurant_name or "KÔMA GOURMET BISTRÔ")
-        order_type = _single_line(tipo or "CONSUMO NO LOCAL").upper()
+        order_type = _order_type_label(tipo, mesa_id)
         garcom_str = _single_line(garcom_nome or "CAIXA").upper()
         now = datetime.datetime.now()
 
@@ -313,15 +332,17 @@ class PrinterService:
             )
             lines.append(draw_separator("=", width))
 
-        document_title = (
-            "REIMPRESSÃO - PRODUÇÃO"
-            if is_reprint
-            else "NOVO LANÇAMENTO - PRODUÇÃO"
-        )
         lines.append(
-            ESC_BOLD_ON + align_center(document_title, width) + ESC_BOLD_OFF
+            ESC_DOUBLE_HEIGHT_ON
+            + ESC_BOLD_ON
+            + align_center(order_type, width)
+            + ESC_BOLD_OFF
+            + ESC_NORMAL_SIZE
         )
-        mesa_str = f"MESA: {mesa_id}" if mesa_id is not None else "RETIRADA / BALCÃO"
+        if is_reprint:
+            lines.append(ESC_BOLD_ON + align_center("REIMPRESSÃO", width) + ESC_BOLD_OFF)
+        lines.append(draw_separator("=", width))
+        mesa_str = f"MESA: {mesa_id}" if mesa_id is not None else "SEM MESA"
         lines.append(split_justified(f"PEDIDO: #{num_pedido}", mesa_str, width))
         lines.append(
             split_justified(
@@ -330,13 +351,12 @@ class PrinterService:
                 width,
             )
         )
-        lines.append(split_justified(f"GARÇOM: {garcom_str}", order_type, width))
+        lines.append(f"GARÇOM: {garcom_str}")
         lines.append(draw_separator("-", width))
 
         # Agrupa primeiro por pessoa e só então por item. Assim o nome do cliente
         # aparece uma vez por bloco, em vez de ser repetido em cada linha.
         grouped_by_client: dict[str, dict] = {}
-        total_units = 0
         for item in items:
             if safe_get(item, "status") == "cancelado":
                 continue
@@ -348,9 +368,6 @@ class PrinterService:
             codigo = _single_line(
                 safe_get(item, "codigo") or safe_get(produto, "id")
             )
-            descricao = _single_line(
-                safe_get(item, "descricao") or safe_get(produto, "descricao")
-            )
             observacao = _single_line(safe_get(item, "observacao"))
             cliente = _single_line(
                 safe_get(item, "cliente_nome")
@@ -358,14 +375,13 @@ class PrinterService:
                 or "Consumo Geral"
             ) or "Consumo Geral"
             quantidade = max(int(safe_get(item, "quantidade") or 1), 1)
-            total_units += quantidade
 
             client_key = cliente.casefold()
             client_group = grouped_by_client.setdefault(
                 client_key,
                 {"label": cliente, "items": {}},
             )
-            item_key = (codigo, nome, descricao, observacao)
+            item_key = (codigo, nome, observacao)
             client_group["items"][item_key] = (
                 client_group["items"].get(item_key, 0) + quantidade
             )
@@ -373,18 +389,18 @@ class PrinterService:
         for group_index, client_group in enumerate(grouped_by_client.values()):
             if group_index:
                 lines.append(draw_separator("-", width))
-            client_label = f"CLIENTE: {client_group['label'].upper()}"
-            lines.append(
-                ESC_FONT_A
-                + ESC_BOLD_ON
-                + align_center(client_label, width)
-                + ESC_BOLD_OFF
-            )
+            if not _is_general_client(client_group["label"]):
+                client_label = f"CLIENTE: {client_group['label'].upper()}"
+                lines.append(
+                    ESC_FONT_A
+                    + ESC_BOLD_ON
+                    + align_center(client_label, width)
+                    + ESC_BOLD_OFF
+                )
 
             for (
                 codigo,
                 nome,
-                descricao,
                 observacao,
             ), quantidade in client_group["items"].items():
                 code_prefix = f"{codigo} - " if codigo else ""
@@ -399,10 +415,6 @@ class PrinterService:
                 lines.extend(f"   {part}"[:width] for part in item_lines[1:])
                 lines.append(ESC_BOLD_OFF)
 
-                if show_descriptions and descricao:
-                    lines.append(ESC_FONT_B)
-                    _append_wrapped(lines, descricao, width, "   DESCRIÇÃO: ")
-
                 if observacao:
                     lines.append(ESC_FONT_A + ESC_BOLD_ON)
                     _append_wrapped(
@@ -415,7 +427,6 @@ class PrinterService:
 
         lines.append(ESC_FONT_B)
         lines.append(draw_separator("-", width))
-        lines.append(split_justified("TOTAL DE ITENS:", str(total_units), width))
         if print_footer:
             _append_wrapped(lines, print_footer, width)
         if position == "rodape" and brand:
@@ -463,11 +474,17 @@ class PrinterService:
                 + ESC_NORMAL_SIZE
             )
             lines.append(draw_separator("=", width))
-        title = "COMANDA - SÓ VALORES" if apenas_valores else "COMANDA INTEIRA"
-        lines.append(ESC_BOLD_ON + align_center(title, width) + ESC_BOLD_OFF)
+        order_type = _order_type_label(tipo, mesa_id)
+        lines.append(
+            ESC_DOUBLE_HEIGHT_ON
+            + ESC_BOLD_ON
+            + align_center(order_type, width)
+            + ESC_BOLD_OFF
+            + ESC_NORMAL_SIZE
+        )
         lines.append(draw_separator("=", width))
 
-        mesa_str = f"MESA: {mesa_id}" if mesa_id is not None else "RETIRADA / BALCÃO"
+        mesa_str = f"MESA: {mesa_id}" if mesa_id is not None else "SEM MESA"
         lines.append(split_justified(f"PEDIDO: #{num_pedido}", mesa_str, width))
         now = datetime.datetime.now()
         lines.append(
@@ -477,17 +494,10 @@ class PrinterService:
                 width,
             )
         )
-        lines.append(
-            split_justified(
-                f"GARÇOM: {_single_line(garcom_nome)}",
-                _single_line(tipo).upper(),
-                width,
-            )
-        )
+        lines.append(f"GARÇOM: {_single_line(garcom_nome)}")
         lines.append(draw_separator("-", width))
 
         grand_total = 0.0
-        total_units = 0
         grouped_by_client: dict[str, dict] = {}
         for comanda in comandas_details:
             for item in comanda.get("itens", []):
@@ -507,13 +517,13 @@ class PrinterService:
                 )
                 group["items"].append(item)
 
-        is_split = len(grouped_by_client) > 1
-        lines.append(draw_separator("-", width))
-
-        for group in grouped_by_client.values():
+        for group_index, group in enumerate(grouped_by_client.values()):
             client = group["label"]
             items_list = group["items"]
-            if is_split:
+            is_general = _is_general_client(client)
+            if group_index and not is_general:
+                lines.append(draw_separator("-", width))
+            if not is_general:
                 lines.append(
                     ESC_BOLD_ON
                     + align_center(f"CLIENTE: {client.upper()}", width)
@@ -521,7 +531,7 @@ class PrinterService:
                 )
 
             grouped_items: dict[
-                tuple[str, str, float, str, str],
+                tuple[str, str, float, str],
                 int,
             ] = {}
             for item in items_list:
@@ -529,13 +539,6 @@ class PrinterService:
                 product_name = _single_line(produto["nome"])
                 product_code = _single_line(
                     item.get("codigo") or produto.get("id")
-                )
-                description = (
-                    ""
-                    if apenas_valores
-                    else _single_line(
-                        item.get("descricao") or produto.get("descricao")
-                    )
                 )
                 observation = (
                     ""
@@ -546,19 +549,16 @@ class PrinterService:
                     product_code,
                     product_name,
                     float(item["preco_unit"]),
-                    description,
                     observation,
                 )
                 qty = max(int(item.get("quantidade") or 1), 1)
                 grouped_items[key] = grouped_items.get(key, 0) + qty
-                total_units += qty
 
             client_subtotal = 0.0
             for (
                 product_code,
                 product_name,
                 unit_price,
-                description,
                 observation,
             ), qty in grouped_items.items():
                 item_total = qty * unit_price
@@ -586,13 +586,6 @@ class PrinterService:
                     lines.append(
                         f"   ({qty}x {_format_brl(unit_price)} cada)"[:width]
                     )
-                if not apenas_valores and description:
-                    _append_wrapped(
-                        lines,
-                        description,
-                        width,
-                        "   DESCRIÇÃO: ",
-                    )
                 if not apenas_valores and observation:
                     _append_wrapped(
                         lines,
@@ -602,7 +595,7 @@ class PrinterService:
                     )
 
             grand_total += client_subtotal
-            if is_split:
+            if not is_general:
                 lines.append(draw_separator("-", width))
                 _append_amount_line(
                     lines,
@@ -612,7 +605,6 @@ class PrinterService:
                 )
                 lines.append(draw_separator("-", width))
 
-        lines.append(split_justified("TOTAL DE ITENS:", str(total_units), width))
         if taxa_servico_ativa:
             service_charge = grand_total * (taxa_servico_padrao / 100.0)
             total_with_service = grand_total + service_charge

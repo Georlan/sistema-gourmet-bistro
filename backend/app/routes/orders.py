@@ -73,9 +73,6 @@ def _get_print_preferences(db: Session, restaurante_id: int) -> dict:
         "print_footer": (
             config.impressao_mensagem_rodape if config else None
         ),
-        "show_descriptions": (
-            config.impressao_mostrar_descricao if config else True
-        ),
     }
 
 

@@ -685,7 +685,6 @@ export function CaixaPanel({
     impressao_nome_restaurante?: string;
     impressao_nome_posicao?: 'cabecalho' | 'rodape' | 'oculto';
     impressao_mensagem_rodape?: string;
-    impressao_mostrar_descricao?: boolean;
     perm_garcom_delivery?: boolean;
     perm_garcom_editar?: boolean;
     perm_garcom_taxas?: boolean;
@@ -712,7 +711,6 @@ export function CaixaPanel({
     if (updates.impressao_nome_restaurante !== undefined) setPrintHeader(updates.impressao_nome_restaurante);
     if (updates.impressao_nome_posicao !== undefined) setPrintNamePosition(updates.impressao_nome_posicao);
     if (updates.impressao_mensagem_rodape !== undefined) setPrintFooter(updates.impressao_mensagem_rodape);
-    if (updates.impressao_mostrar_descricao !== undefined) setPrintShowDescriptions(updates.impressao_mostrar_descricao);
     if (updates.perm_garcom_delivery !== undefined) setPermDelivery(updates.perm_garcom_delivery);
     if (updates.perm_garcom_editar !== undefined) setPermEdit(updates.perm_garcom_editar);
     if (updates.perm_garcom_taxas !== undefined) setPermAddCharges(updates.perm_garcom_taxas);
@@ -807,7 +805,6 @@ export function CaixaPanel({
   const [printHeader, setPrintHeader] = useState("Kôma Gourmet Bistrô");
   const [printFooter, setPrintFooter] = useState("");
   const [printNamePosition, setPrintNamePosition] = useState<'cabecalho' | 'rodape' | 'oculto'>('cabecalho');
-  const [printShowDescriptions, setPrintShowDescriptions] = useState(true);
   const [isSearchingPrinters, setIsSearchingPrinters] = useState(false);
   const [detectedPrinters, setDetectedPrinters] = useState<string[]>([]);
 
@@ -1226,7 +1223,6 @@ export function CaixaPanel({
         setPrintHeader(data.impressao_nome_restaurante || "Kôma Gourmet Bistrô");
         setPrintNamePosition(data.impressao_nome_posicao || 'cabecalho');
         setPrintFooter(data.impressao_mensagem_rodape || "");
-        setPrintShowDescriptions(data.impressao_mostrar_descricao !== false);
         setPermDelivery(data.perm_garcom_delivery);
         setPermEdit(data.perm_garcom_editar);
         setPermAddCharges(data.perm_garcom_taxas);
@@ -4713,22 +4709,6 @@ export function CaixaPanel({
                         onBlur={() => updateConfiguracoes({ impressao_mensagem_rodape: printFooter })}
                         className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-[10px]')}
                       />
-                    </div>
-
-                    <div className={clsx('flex', 'justify-between', 'items-center', 'pt-2', 'gap-3')}>
-                      <div>
-                        <span className={clsx('text-[10px]', 'text-gray-300', 'font-semibold', 'block')}>Descrição do produto na produção</span>
-                        <span className={clsx('text-[8px]', 'text-gray-500', 'block')}>Mantém ingredientes e observações legíveis abaixo do item.</span>
-                      </div>
-                      <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer', 'shrink-0')}>
-                        <input
-                          type="checkbox"
-                          checked={printShowDescriptions}
-                          onChange={(e) => updateConfiguracoes({ impressao_mostrar_descricao: e.target.checked })}
-                          className={clsx('sr-only', 'peer')}
-                        />
-                        <div className={clsx('w-9', 'h-5', 'bg-[#27272A]', 'peer-focus:outline-none', 'rounded-full', 'peer', 'peer-checked:after:translate-x-full', 'peer-checked:after:border-white', "after:content-['']", 'after:absolute', 'after:top-[2px]', 'after:left-[2px]', 'after:bg-white', 'after:border-gray-300', 'after:border', 'after:rounded-full', 'after:h-4', 'after:w-4', 'after:transition-all', 'peer-checked:bg-emerald-600')}></div>
-                      </label>
                     </div>
 
                     <div className={clsx('flex', 'justify-between', 'items-center', 'pt-2')}>

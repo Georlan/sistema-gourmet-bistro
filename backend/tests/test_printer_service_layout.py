@@ -40,12 +40,13 @@ def test_kitchen_ticket_groups_people_and_repeated_items_once():
     )
 
     assert ticket.count("CLIENTE: PAULO") == 1
+    assert "CLIENTE: CONSUMO GERAL" not in ticket
     assert "[PAULO]" not in ticket
     assert "2x 003 - Cheese Bacon" in ticket
-    assert "DESCRIÇÃO: Hambúrguer bovino" in ticket
+    assert "DESCRIÇÃO:" not in ticket
     assert "OBS: SEM BACON" in ticket
-    assert "TOTAL DE ITENS:" in ticket
-    assert "3" in ticket
+    assert "TOTAL DE ITENS:" not in ticket
+    assert "CONSUMO NO LOCAL" in ticket
     assert "PIZZARIA BELLA ITALIA" in ticket
 
 
@@ -91,15 +92,18 @@ def test_values_receipt_groups_quantity_and_shows_each_person_subtotal():
         ],
     )
 
-    assert ticket.count("CLIENTE: CONSUMO GERAL") == 1
+    assert "CLIENTE: CONSUMO GERAL" not in ticket
     assert ticket.count("CLIENTE: PAULO") == 1
     assert "3x HAMBÚRGUER TRADICIONAL" in ticket
     assert "R$ 57,00" in ticket
-    assert "SUBTOTAL CONSUMO GERAL" in ticket
+    assert "SUBTOTAL CONSUMO GERAL" not in ticket
     assert "R$ 57,00" in ticket
     assert "SUBTOTAL PAULO" in ticket
     assert "R$ 25,00" in ticket
-    assert "TOTAL DE ITENS:" in ticket
+    assert "TOTAL DE ITENS:" not in ticket
+    assert "COMANDA INTEIRA" not in ticket
+    assert "COMANDA - SÓ VALORES" not in ticket
+    assert "CONSUMO NO LOCAL" in ticket
     assert "R$ 82,00" in ticket
 
 
@@ -142,9 +146,46 @@ def test_full_receipt_keeps_product_description_and_distinct_notes():
     )
 
     assert ticket.count("1 x 003 - CHEESE BACON") == 2
-    assert "DESCRIÇÃO: Hambúrguer bovino" in ticket
+    assert "DESCRIÇÃO:" not in ticket
     assert "OBS: SEM BACON" in ticket
     assert "OBS: COM BACON" in ticket
+
+
+def test_receipt_emphasizes_delivery_and_retirada_without_mode_title():
+    service = _service()
+    base_args = {
+        "num_pedido": 7,
+        "mesa_id": None,
+        "garcom_nome": "Caixa",
+        "comandas_details": [
+            {
+                "itens": [
+                    {
+                        "produto": {"nome": "Água"},
+                        "preco_unit": 5.0,
+                        "status": "preparando",
+                    }
+                ]
+            }
+        ],
+        "taxa_servico_ativa": False,
+    }
+
+    retirada = service.generate_receipt(
+        **base_args,
+        tipo="viagem",
+        apenas_valores=False,
+    )
+    delivery = service.generate_receipt(
+        **base_args,
+        tipo="delivery",
+        apenas_valores=True,
+    )
+
+    assert "RETIRADA" in retirada
+    assert "DELIVERY" in delivery
+    assert "COMANDA" not in retirada
+    assert "COMANDA" not in delivery
 
 
 def test_restaurant_name_can_move_to_footer_or_be_hidden():
