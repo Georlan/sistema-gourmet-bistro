@@ -806,8 +806,7 @@ export function CaixaPanel({
   const [printHeader, setPrintHeader] = useState("Kôma Gourmet Bistrô");
   const [printFooter, setPrintFooter] = useState("");
   const [printNamePosition, setPrintNamePosition] = useState<'cabecalho' | 'rodape' | 'oculto'>('cabecalho');
-  const [isSearchingPrinters, setIsSearchingPrinters] = useState(false);
-  const [detectedPrinters, setDetectedPrinters] = useState<string[]>([]);
+  const [isTestingPrinter, setIsTestingPrinter] = useState(false);
 
   // AI Chatbot State
   const [aiBotActive, setAiBotActive] = useState(true);
@@ -2416,16 +2415,55 @@ export function CaixaPanel({
     }
   };
 
-  // A detecção física acontece no agente local, nunca no servidor Railway.
-  const handleSearchPrinters = async () => {
-    setIsSearchingPrinters(true);
-    setDetectedPrinters([]);
-    window.setTimeout(() => {
-      setDetectedPrinters([
-        'Impressora padrão do computador (agente local)'
-      ]);
-      setIsSearchingPrinters(false);
-    }, 250);
+  // O navegador não detecta a impressora física. O teste passa pela mesma fila
+  // dos pedidos e confirma, sem confundir o conector local com a impressora.
+  const handleTestPrinter = async () => {
+    if (isTestingPrinter) return;
+    setIsTestingPrinter(true);
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/print-agents/jobs/inject`, {
+        method: 'POST',
+        headers: {
+          ...authHeaders,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          document_type: 'fechamento',
+          destination: 'FECHAMENTO',
+          source_type: 'teste_painel',
+          source_id: `teste-${Date.now()}`,
+          payload_text: [
+            '================================',
+            ...(printNamePosition === 'cabecalho' && printHeader ? [printHeader] : []),
+            '================================',
+            'TESTE REAL DO KÔMA PRINT',
+            new Date().toLocaleString('pt-BR'),
+            '================================',
+            printFooter || '',
+            ...(printNamePosition === 'rodape' && printHeader ? [printHeader] : [])
+          ].join('\n')
+        })
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(data?.detail || 'Erro ao colocar o teste na fila.');
+      }
+      showToast(
+        'Teste enviado. Acompanhe o resultado no Monitor de impressão.',
+        'success'
+      );
+      window.dispatchEvent(new Event('koma_print_monitor_refresh'));
+    } catch (error) {
+      console.error(error);
+      showToast(
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível comunicar com a fila de impressão.',
+        'error'
+      );
+    } finally {
+      setIsTestingPrinter(false);
+    }
   };
 
   // Chatbot conversation simulation handler
@@ -4557,6 +4595,8 @@ export function CaixaPanel({
               <PrintMonitorPanel
                 apiBaseUrl={apiBaseUrl}
                 authHeaders={authHeaders}
+                onTestPrint={handleTestPrinter}
+                testInProgress={isTestingPrinter}
               />
 
               {/* Waiters permissions switches (Left Column) */}
@@ -4735,68 +4775,28 @@ export function CaixaPanel({
 
                   </div>
 
-                  {/* Detected printers list / test search */}
-                  <div className="space-y-2">
+                  {/* O conector local transporta trabalhos; não é uma impressora. */}
+                  <div className="space-y-2 rounded-xl border border-[#27272A] bg-[#09090B] p-3">
+                    <div className="flex items-start gap-2">
+                      <Printer size={14} className="mt-0.5 shrink-0 text-emerald-400" />
+                      <div>
+                        <strong className="block text-[9px] text-gray-200">
+                          Validar impressora física
+                        </strong>
+                        <span className="block text-[8px] leading-relaxed text-gray-500 mt-0.5">
+                          O Kôma Print é o conector do computador, não uma impressora. Use o teste para confirmar o equipamento configurado no sistema.
+                        </span>
+                      </div>
+                    </div>
                     <button
-                      onClick={handleSearchPrinters}
-                      className={clsx('w-full', 'py-1.5', 'bg-[#1C1C1F]', 'hover:bg-[#27272A]', 'border', 'border-[#27272A]', 'text-gray-300', 'font-bold', 'rounded-lg', 'text-[9px]', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1.5', 'cursor-pointer')}
+                      type="button"
+                      onClick={() => void handleTestPrinter()}
+                      disabled={isTestingPrinter}
+                      className={clsx('w-full', 'py-1.5', 'bg-[#1C1C1F]', 'hover:bg-[#27272A]', 'border', 'border-[#27272A]', 'text-gray-300', 'font-bold', 'rounded-lg', 'text-[9px]', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1.5', 'cursor-pointer', 'disabled:opacity-50', 'disabled:cursor-not-allowed')}
                     >
                       <Printer size={12} />
-                      <span>{isSearchingPrinters ? 'Procurando...' : 'Achar Impressoras'}</span>
+                      <span>{isTestingPrinter ? 'Enviando teste...' : 'Enviar teste de impressão'}</span>
                     </button>
-
-                    {detectedPrinters.length > 0 && (
-                      <div className={clsx('space-y-1', 'animate-scale-in')}>
-                        {detectedPrinters.map((p, idx) => (
-                          <div key={idx} className={clsx('p-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'text-[9px]', 'text-gray-400', 'font-mono', 'flex', 'justify-between', 'items-center')}>
-                            <span>{p}</span>
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                try {
-                                  const res = await fetch(`${apiBaseUrl}/api/print-agents/jobs/inject`, {
-                                    method: 'POST',
-                                    headers: {
-                                      ...authHeaders,
-                                      'Content-Type': 'application/json'
-                                    },
-                                    body: JSON.stringify({
-                                      document_type: 'fechamento',
-                                      destination: 'FECHAMENTO',
-                                      source_type: 'teste_painel',
-                                      source_id: `teste-${Date.now()}`,
-                                      payload_text: [
-                                        '================================',
-                                        ...(printNamePosition === 'cabecalho' && printHeader ? [printHeader] : []),
-                                        '================================',
-                                        'TESTE REAL DO AGENTE LOCAL',
-                                        'Impressora padrão do computador',
-                                        new Date().toLocaleString('pt-BR'),
-                                        '================================',
-                                        printFooter || '',
-                                        ...(printNamePosition === 'rodape' && printHeader ? [printHeader] : [])
-                                      ].join('\n')
-                                    })
-                                  });
-                                  const data = await res.json().catch(() => null);
-                                  if (res.ok) {
-                                    alert('Teste real colocado na fila do agente local.');
-                                  } else {
-                                    alert(data?.detail || 'Erro ao colocar o teste na fila.');
-                                  }
-                                } catch (e) {
-                                  console.error(e);
-                                  alert('Não foi possível comunicar com a fila de impressão.');
-                                }
-                              }}
-                              className={clsx('text-[8px]', 'uppercase', 'tracking-wider', 'text-[#10b981]', 'font-bold', 'hover:text-white', 'cursor-pointer')}
-                            >
-                              Teste
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 </div>
 

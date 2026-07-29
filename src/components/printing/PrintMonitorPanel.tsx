@@ -24,6 +24,9 @@ interface PrintJobHistory {
   destination: string;
   source_type: string;
   source_id: string;
+  reference: string;
+  order_number: string | null;
+  table_number: string | null;
   status: string;
   display_status: string;
   accepted_by_spooler: boolean;
@@ -57,12 +60,23 @@ interface PrintMonitorResponse {
     oldest_unresolved_seconds: number | null;
   };
   jobs: PrintJobHistory[];
+  latest_spooler_success: {
+    job_id: string;
+    reference: string;
+    printer_name: string | null;
+    printed_at: string | null;
+    age_seconds: number | null;
+  } | null;
 }
 
 interface PrintMonitorPanelProps {
   apiBaseUrl: string;
   authHeaders: Record<string, string>;
+  onTestPrint?: () => void | Promise<void>;
+  testInProgress?: boolean;
 }
+
+type DiagnosticTone = 'success' | 'warning' | 'danger' | 'neutral';
 
 const STATUS_LABELS: Record<string, string> = {
   pending: 'Na fila',
@@ -107,9 +121,20 @@ function friendlyDocumentType(value: string): string {
   return value.replaceAll('_', ' ').replace(/\b\w/g, letter => letter.toUpperCase());
 }
 
+function friendlyPrinterName(value: string | null): string {
+  if (!value) return 'Não identificada';
+  const normalized = value.trim().toLocaleLowerCase('pt-BR');
+  if (['padrão', 'padrao', 'default', 'auto', 'automática', 'automatica'].includes(normalized)) {
+    return 'Padrão do sistema';
+  }
+  return value;
+}
+
 export function PrintMonitorPanel({
   apiBaseUrl,
-  authHeaders
+  authHeaders,
+  onTestPrint,
+  testInProgress = false
 }: PrintMonitorPanelProps) {
   const [monitor, setMonitor] = useState<PrintMonitorResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -147,7 +172,20 @@ export function PrintMonitorPanel({
     const intervalId = window.setInterval(() => {
       void loadMonitor(false);
     }, 15_000);
-    return () => window.clearInterval(intervalId);
+    const refreshFromPrintTest = () => {
+      void loadMonitor(false);
+    };
+    window.addEventListener(
+      'koma_print_monitor_refresh',
+      refreshFromPrintTest
+    );
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener(
+        'koma_print_monitor_refresh',
+        refreshFromPrintTest
+      );
+    };
   }, [loadMonitor]);
 
   const queueTotal = useMemo(() => {
@@ -161,7 +199,7 @@ export function PrintMonitorPanel({
 
   const requestReprint = async (job: PrintJobHistory) => {
     const confirmed = window.confirm(
-      `Reimprimir ${friendlyDocumentType(job.document_type)} de ${formatDate(job.created_at)}?`
+      `Reimprimir ${job.reference || friendlyDocumentType(job.document_type)} de ${formatDate(job.created_at)}?`
     );
     if (!confirmed) return;
 
@@ -194,6 +232,68 @@ export function PrintMonitorPanel({
   };
 
   const hasOnlineAgent = Boolean(monitor?.summary.online_agents);
+  const latestJob = monitor?.jobs[0] || null;
+  const diagnostic = useMemo<{
+    tone: DiagnosticTone;
+    title: string;
+    detail: string;
+  }>(() => {
+    if (!monitor) {
+      return {
+        tone: 'neutral',
+        title: 'Consultando a impressão…',
+        detail: 'Aguarde a leitura do conector e da fila.'
+      };
+    }
+    if (!hasOnlineAgent) {
+      return {
+        tone: 'danger',
+        title: 'Impressão desconectada',
+        detail: 'Abra o Kôma Print neste computador antes de enviar pedidos.'
+      };
+    }
+    if (monitor.summary.delayed > 0) {
+      return {
+        tone: 'warning',
+        title: 'Impressão precisa de atenção',
+        detail: `${monitor.summary.delayed} trabalho(s) aguardam há mais de 2 minutos.`
+      };
+    }
+    if (latestJob?.status === 'failed') {
+      return {
+        tone: 'danger',
+        title: 'Último envio falhou',
+        detail: latestJob.last_error || 'Confira a impressora e envie um teste.'
+      };
+    }
+    if (queueTotal > 0) {
+      return {
+        tone: 'neutral',
+        title: 'Impressão em andamento',
+        detail: `${queueTotal} trabalho(s) sendo processado(s) pelo conector.`
+      };
+    }
+    if (monitor.latest_spooler_success) {
+      const success = monitor.latest_spooler_success;
+      return {
+        tone: 'success',
+        title: 'Conector pronto para enviar',
+        detail: `Último envio aceito pelo sistema há ${formatAge(success.age_seconds)} · ${friendlyPrinterName(success.printer_name)}.`
+      };
+    }
+    return {
+      tone: 'warning',
+      title: 'Conector online; impressora ainda não confirmada',
+      detail: 'Envie um teste para validar a impressora configurada no computador.'
+    };
+  }, [hasOnlineAgent, latestJob, monitor, queueTotal]);
+
+  const diagnosticStyle: Record<DiagnosticTone, string> = {
+    success: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-100',
+    warning: 'border-amber-500/30 bg-amber-500/10 text-amber-100',
+    danger: 'border-red-500/30 bg-red-500/10 text-red-100',
+    neutral: 'border-sky-500/30 bg-sky-500/10 text-sky-100'
+  };
 
   return (
     <section className="lg:col-span-3 bg-[#121214] border border-[#27272A] rounded-3xl p-5 space-y-4">
@@ -227,13 +327,42 @@ export function PrintMonitorPanel({
         </div>
       )}
 
+      {!error && (
+        <div className={`rounded-2xl border px-4 py-3 flex flex-wrap items-center justify-between gap-3 ${diagnosticStyle[diagnostic.tone]}`}>
+          <div className="flex items-start gap-3 min-w-0">
+            {diagnostic.tone === 'success'
+              ? <CheckCircle2 size={18} className="text-emerald-300 shrink-0 mt-0.5" />
+              : diagnostic.tone === 'danger'
+                ? <WifiOff size={18} className="text-red-300 shrink-0 mt-0.5" />
+                : <AlertTriangle size={18} className="shrink-0 mt-0.5" />}
+            <div className="min-w-0">
+              <strong className="block text-[11px]">{diagnostic.title}</strong>
+              <span className="block text-[9px] opacity-75 mt-0.5">
+                {diagnostic.detail}
+              </span>
+            </div>
+          </div>
+          {onTestPrint && (
+            <button
+              type="button"
+              onClick={() => void onTestPrint()}
+              disabled={testInProgress || !hasOnlineAgent}
+              className="shrink-0 rounded-xl border border-current/20 bg-black/20 px-3 py-2 text-[9px] font-bold hover:bg-black/30 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center gap-2"
+            >
+              <Printer size={12} />
+              {testInProgress ? 'Enviando…' : 'Testar impressão'}
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
         <div className="rounded-2xl border border-[#27272A] bg-[#09090B] p-3">
           <div className="flex items-center gap-2 text-[9px] uppercase tracking-wider text-gray-500">
             {hasOnlineAgent
               ? <Wifi size={12} className="text-emerald-400" />
               : <WifiOff size={12} className="text-red-400" />}
-            Agente
+            Conector
           </div>
           <strong className={hasOnlineAgent ? 'text-emerald-300' : 'text-red-300'}>
             {hasOnlineAgent ? 'Online' : 'Offline'}
@@ -280,26 +409,32 @@ export function PrintMonitorPanel({
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2">
-        {monitor?.agents.length ? monitor.agents.map(agent => (
-          <div
-            key={agent.agent_id}
-            className={`rounded-xl border px-3 py-2 text-[9px] ${
-              agent.online
-                ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-200'
-                : 'border-red-500/25 bg-red-500/10 text-red-200'
-            }`}
-          >
-            <strong>{agent.agent_id}</strong>
-            <span className="block opacity-70">
-              {agent.online ? 'conectado' : `sem contato há ${formatAge(agent.seconds_since_heartbeat)}`}
-            </span>
-          </div>
-        )) : (
-          <div className="text-[9px] text-gray-500">
-            Nenhum agente de impressão ativo para este restaurante.
-          </div>
-        )}
+      <div>
+        <div className="text-[8px] uppercase tracking-wider text-gray-500 mb-2">
+          Computadores com o Kôma Print — não são impressoras
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {monitor?.agents.length ? monitor.agents.map((agent, index) => (
+            <div
+              key={agent.agent_id}
+              title={`Identificador técnico: ${agent.agent_id}`}
+              className={`rounded-xl border px-3 py-2 text-[9px] ${
+                agent.online
+                  ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-200'
+                  : 'border-red-500/25 bg-red-500/10 text-red-200'
+              }`}
+            >
+              <strong>Computador {index + 1}</strong>
+              <span className="block opacity-70">
+                {agent.online ? 'conectado' : `sem contato há ${formatAge(agent.seconds_since_heartbeat)}`}
+              </span>
+            </div>
+          )) : (
+            <div className="text-[9px] text-gray-500">
+              Nenhum computador com o Kôma Print cadastrado para este restaurante.
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="rounded-2xl border border-[#27272A] overflow-hidden">
@@ -312,7 +447,7 @@ export function PrintMonitorPanel({
             <table className="w-full text-left">
               <thead className="sticky top-0 bg-[#121214] text-[8px] uppercase tracking-wider text-gray-500">
                 <tr>
-                  <th className="px-3 py-2">Documento</th>
+                  <th className="px-3 py-2">Referência</th>
                   <th className="px-3 py-2">Estado</th>
                   <th className="px-3 py-2 hidden md:table-cell">Impressora</th>
                   <th className="px-3 py-2">Horário</th>
@@ -326,11 +461,11 @@ export function PrintMonitorPanel({
                     <tr key={job.id} className={job.delayed ? 'bg-amber-500/5' : ''}>
                       <td className="px-3 py-2">
                         <strong className="block text-[9px] text-gray-200">
-                          {friendlyDocumentType(job.document_type)}
+                          {job.reference || friendlyDocumentType(job.document_type)}
                           {job.is_reprint ? ' · Reimpressão' : ''}
                         </strong>
                         <span className="text-[8px] text-gray-500">
-                          {job.destination} · {job.source_type} {job.source_id}
+                          {friendlyDocumentType(job.document_type)} · {job.destination}
                         </span>
                       </td>
                       <td className="px-3 py-2">
@@ -349,7 +484,7 @@ export function PrintMonitorPanel({
                         )}
                       </td>
                       <td className="px-3 py-2 hidden md:table-cell text-[8px] text-gray-400">
-                        {job.printer_name || job.agent_id || '—'}
+                        {friendlyPrinterName(job.printer_name)}
                       </td>
                       <td className="px-3 py-2 text-[8px] text-gray-400 whitespace-nowrap">
                         {formatDate(job.printed_at || job.created_at)}

@@ -1,6 +1,7 @@
 import hashlib
 import secrets
 import datetime
+import re
 from collections.abc import Mapping
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
@@ -18,6 +19,20 @@ MAX_ATTEMPTS = 3
 AGENT_ONLINE_THRESHOLD_SECONDS = 90
 PRINT_DELAY_THRESHOLD_SECONDS = 120
 UNRESOLVED_JOB_STATUSES = ("pending", "claimed", "printing")
+ORDER_REFERENCE_PATTERNS = (
+    re.compile(
+        r"\bPEDIDO\s*:\s*#?\s*([A-Z0-9][A-Z0-9._/-]*)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\bPED(?:IDO)?\s*#\s*([A-Z0-9][A-Z0-9._/-]*)",
+        re.IGNORECASE,
+    ),
+)
+TABLE_REFERENCE_PATTERN = re.compile(
+    r"\bMESA\s*:?\s*(\d+|BALC[AÃ]O)\b",
+    re.IGNORECASE,
+)
 
 
 def hash_token(token: str) -> str:
@@ -69,6 +84,81 @@ def _age_seconds(
     if normalized is None:
         return None
     return max(0, round((now - normalized).total_seconds()))
+
+
+def _match_print_reference(
+    patterns: tuple[re.Pattern[str], ...],
+    payload_text: str,
+) -> Optional[str]:
+    for pattern in patterns:
+        match = pattern.search(payload_text)
+        if match:
+            return match.group(1).strip(" .,:;")
+    return None
+
+
+def _print_job_reference(job: PrintJob) -> dict:
+    """
+    Converte identificadores técnicos em uma referência operacional legível.
+
+    O número exibido no cupom é a fonte preferida porque ``source_id`` pode ser
+    um UUID interno da comanda. O payload completo continua restrito ao backend.
+    """
+    payload_text = job.payload_text or ""
+    source_type = (job.source_type or "").strip().casefold()
+    source_id = (job.source_id or "").strip()
+
+    if source_type.startswith("teste") or "TESTE REAL" in payload_text.upper():
+        return {
+            "label": "Teste de impressão",
+            "order_number": None,
+            "table_number": None,
+        }
+
+    order_number = _match_print_reference(
+        ORDER_REFERENCE_PATTERNS,
+        payload_text,
+    )
+    table_number = _match_print_reference(
+        (TABLE_REFERENCE_PATTERN,),
+        payload_text,
+    )
+
+    if table_number:
+        normalized_table = table_number.casefold()
+        if normalized_table in {"balcao", "balcão"}:
+            table_number = "Balcão"
+
+    if order_number:
+        label = f"Pedido #{order_number}"
+        if table_number:
+            table_label = (
+                table_number
+                if table_number == "Balcão"
+                else f"Mesa {table_number}"
+            )
+            label = f"{label} · {table_label}"
+    elif source_type == "comanda":
+        source_table = re.fullmatch(
+            r"(?:mesa[-_\s]*)?(\d+)",
+            source_id,
+            re.IGNORECASE,
+        )
+        if source_table:
+            table_number = table_number or source_table.group(1)
+            label = f"Mesa {table_number}"
+        else:
+            label = "Fechamento"
+    elif (job.document_type or "").casefold() == "entrega":
+        label = "Pedido de entrega"
+    else:
+        label = "Pedido"
+
+    return {
+        "label": label,
+        "order_number": order_number,
+        "table_number": table_number,
+    }
 
 
 def _claimed_job_payload(job, claimed_at: datetime.datetime) -> dict:
@@ -289,6 +379,18 @@ def get_print_monitor(
         .limit(limit)
         .all()
     )
+    latest_spooler_success = (
+        db.query(PrintJob)
+        .filter(
+            PrintJob.restaurante_id == rest_id,
+            PrintJob.status == "printed",
+        )
+        .order_by(
+            PrintJob.printed_at.desc().nullslast(),
+            PrintJob.created_at.desc(),
+        )
+        .first()
+    )
 
     agent_payload = []
     for agent in agents:
@@ -315,6 +417,7 @@ def get_print_monitor(
             and age_seconds >= PRINT_DELAY_THRESHOLD_SECONDS
         )
         accepted_by_spooler = job.status == "printed"
+        reference = _print_job_reference(job)
 
         job_payload.append(
             {
@@ -323,6 +426,9 @@ def get_print_monitor(
                 "destination": job.destination,
                 "source_type": job.source_type,
                 "source_id": job.source_id,
+                "reference": reference["label"],
+                "order_number": reference["order_number"],
+                "table_number": reference["table_number"],
                 "status": job.status,
                 "display_status": (
                     "spooler_accepted" if accepted_by_spooler else job.status
@@ -349,12 +455,29 @@ def get_print_monitor(
             }
         )
 
+    latest_success_payload = None
+    if latest_spooler_success:
+        latest_printed_at = _as_utc(latest_spooler_success.printed_at)
+        latest_reference = _print_job_reference(latest_spooler_success)
+        latest_success_payload = {
+            "job_id": latest_spooler_success.id,
+            "reference": latest_reference["label"],
+            "printer_name": latest_spooler_success.printer_name,
+            "printed_at": (
+                latest_printed_at.isoformat()
+                if latest_printed_at
+                else None
+            ),
+            "age_seconds": _age_seconds(latest_printed_at, now),
+        }
+
     return {
         "generated_at": now.isoformat(),
         "online_threshold_seconds": AGENT_ONLINE_THRESHOLD_SECONDS,
         "delay_threshold_seconds": PRINT_DELAY_THRESHOLD_SECONDS,
         "physical_completion_tracking": False,
         "agents": agent_payload,
+        "latest_spooler_success": latest_success_payload,
         "summary": {
             "online_agents": sum(
                 1 for agent in agent_payload if agent["online"]
