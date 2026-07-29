@@ -264,7 +264,7 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
                 parsed_queues: list[tuple[str, str]] = []
                 for line in _decode_command_output(devices).splitlines():
                     match = re.match(
-                        r"(?:device for|dispositivo para)\s+(.+?):\s+(.+)$",
+                        r"(?:device for|dispositivo para|dispositivo de|dispositivo)\s+(.+?):\s+(.+)$",
                         line.strip(),
                         re.IGNORECASE,
                     )
