@@ -48,13 +48,18 @@ class KomaApiClient:
             log.error(f"Erro ao conectar na API para registrar agente: {e}")
         return None
 
-    def heartbeat(self) -> bool:
+    def heartbeat(self, diagnostics: Optional[Dict[str, Any]] = None) -> bool:
         """Envia sinal periódico de vida (heartbeat) para o backend."""
         if not self.agent_token:
             return False
         url = f"{self.api_url}/api/print-agents/heartbeat"
         try:
-            resp = self.session.post(url, headers=self.headers, timeout=5)
+            resp = self.session.post(
+                url,
+                json={"diagnostics": diagnostics} if diagnostics else {},
+                headers=self.headers,
+                timeout=5,
+            )
             return resp.status_code == 200
         except Exception as e:
             log.debug(f"Erro ao enviar heartbeat: {e}")
