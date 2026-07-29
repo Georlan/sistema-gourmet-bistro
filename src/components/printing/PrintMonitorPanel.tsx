@@ -68,6 +68,9 @@ interface PrintJobHistory {
 
 interface PrintMonitorResponse {
   generated_at: string;
+  history_date: string;
+  history_limit: number;
+  history_timezone: string;
   online_threshold_seconds: number;
   delay_threshold_seconds: number;
   physical_completion_tracking: boolean;
@@ -196,20 +199,32 @@ export function PrintMonitorPanel({
   useEffect(() => {
     void loadMonitor(true);
     const intervalId = window.setInterval(() => {
-      void loadMonitor(false);
-    }, 15_000);
+      if (document.visibilityState === 'visible') {
+        void loadMonitor(false);
+      }
+    }, 10_000);
     const refreshFromPrintTest = () => {
       void loadMonitor(false);
+    };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') {
+        void loadMonitor(false);
+      }
     };
     window.addEventListener(
       'koma_print_monitor_refresh',
       refreshFromPrintTest
     );
+    document.addEventListener('visibilitychange', refreshWhenVisible);
     return () => {
       window.clearInterval(intervalId);
       window.removeEventListener(
         'koma_print_monitor_refresh',
         refreshFromPrintTest
+      );
+      document.removeEventListener(
+        'visibilitychange',
+        refreshWhenVisible
       );
     };
   }, [loadMonitor]);
@@ -245,9 +260,10 @@ export function PrintMonitorPanel({
       if (!response.ok) {
         throw new Error(data?.detail || 'Não foi possível solicitar a reimpressão.');
       }
+      setError('');
       await loadMonitor(false);
     } catch (requestError) {
-      window.alert(
+      setError(
         requestError instanceof Error
           ? requestError.message
           : 'Não foi possível solicitar a reimpressão.'
@@ -663,7 +679,7 @@ export function PrintMonitorPanel({
             <History size={13} />
             Histórico recente
             <span className="text-[8px] font-normal text-gray-500">
-              últimos {monitor?.jobs.length || 0}
+              hoje · {monitor?.jobs.length || 0}/{monitor?.history_limit || 20}
             </span>
           </span>
           {showHistory ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
@@ -744,7 +760,7 @@ export function PrintMonitorPanel({
             </table>
           ) : (
             <div className="p-5 text-center text-[9px] text-gray-500">
-              Nenhum trabalho de impressão registrado.
+              Nenhum trabalho de impressão registrado hoje.
             </div>
           )}
         </div>}
@@ -754,7 +770,7 @@ export function PrintMonitorPanel({
         “Aceito pelo sistema” significa que o CUPS ou o Spooler do Windows recebeu o trabalho. Impressoras térmicas comuns não confirmam de forma confiável se o papel saiu; por isso o Kôma não apresenta essa etapa como conclusão física.
       </p>
       <p className="text-[8px] text-gray-600 leading-relaxed">
-        Abrir ou fechar o histórico não cria registros extras: ele mostra os mesmos trabalhos da fila, limitado aos 20 mais recentes. A política de retenção do banco será definida separadamente.
+        O painel mostra somente os 20 trabalhos mais recentes do dia atual. Cupons fora dessa janela têm o conteúdo compactado; uma chave técnica leve é mantida temporariamente para impedir impressão duplicada.
       </p>
     </section>
   );

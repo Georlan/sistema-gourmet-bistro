@@ -19,6 +19,7 @@ class AgentConfig:
     output_dir: str = "print_output"
     poll_interval_seconds: float = 0.5
     heartbeat_interval_seconds: float = 30.0
+    claim_batch_size: int = 10
     printers: Dict[str, str] = field(default_factory=lambda: {"PADRAO": "Padrão"})
     pair_only: bool = False
 
@@ -47,6 +48,12 @@ class AgentConfig:
                         data.get(
                             "heartbeat_interval_seconds",
                             config.heartbeat_interval_seconds,
+                        )
+                    )
+                    config.claim_batch_size = int(
+                        data.get(
+                            "claim_batch_size",
+                            config.claim_batch_size,
                         )
                     )
                     config.printers = data.get("printers", config.printers)
@@ -81,9 +88,21 @@ class AgentConfig:
                     )
                 ),
             )
+            config.claim_batch_size = max(
+                1,
+                min(
+                    10,
+                    int(
+                        os.getenv(
+                            "KOMA_CLAIM_BATCH_SIZE",
+                            str(config.claim_batch_size),
+                        )
+                    ),
+                ),
+            )
         except ValueError:
             print(
-                "[CONFIG WARNING] KOMA_POLL_SEC/KOMA_HB_SEC inválido; "
+                "[CONFIG WARNING] Intervalo ou lote inválido; "
                 "mantendo os valores configurados."
             )
 
@@ -138,6 +157,12 @@ def parse_cli_args(config: AgentConfig) -> AgentConfig:
         help="Intervalo de heartbeat em segundos",
     )
     parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=config.claim_batch_size,
+        help="Quantidade máxima de trabalhos reservados por chamada (1–10)",
+    )
+    parser.add_argument(
         "--pair-only",
         action="store_true",
         help="Conclui o pareamento automático e encerra",
@@ -151,6 +176,7 @@ def parse_cli_args(config: AgentConfig) -> AgentConfig:
     config.output_dir = args.output_dir
     config.poll_interval_seconds = max(0.1, args.poll_sec)
     config.heartbeat_interval_seconds = max(5.0, args.hb_sec)
+    config.claim_batch_size = max(1, min(10, args.batch_size))
     config.pair_only = args.pair_only
 
     return config

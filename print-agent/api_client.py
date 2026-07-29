@@ -3,7 +3,7 @@ Cliente HTTP para comunicação com a API de impressão do Kôma Bistrô (/api/p
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Iterable, List, Optional, Set
 import requests
 
 log = logging.getLogger("print-agent.api")
@@ -108,6 +108,42 @@ class KomaApiClient:
             return next_job
         return None
 
+    def claim_jobs(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Reserva um lote curto em uma única chamada.
+
+        Durante a atualização gradual, volta automaticamente ao endpoint
+        unitário sem interromper instalações com backend antigo.
+        """
+        if not self.agent_token:
+            return []
+        safe_limit = max(1, min(int(limit), 10))
+        url = (
+            f"{self.api_url}/api/print-agents/jobs/claim-batch"
+            f"?limit={safe_limit}"
+        )
+        try:
+            resp = self.session.post(
+                url,
+                headers=self.headers,
+                timeout=5,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                return data if isinstance(data, list) else []
+            if resp.status_code not in (404, 405):
+                log.warning(
+                    "Falha ao reservar lote de impressão "
+                    f"(HTTP {resp.status_code}): {resp.text}"
+                )
+                return []
+        except Exception as exc:
+            log.debug(f"Erro ao reservar lote de impressão: {exc}")
+            return []
+
+        legacy_job = self.claim_next_job()
+        return [legacy_job] if legacy_job else []
+
     def claim_job(self, job_id: str) -> Optional[Dict[str, Any]]:
         """Reserva atomicamente o job com ID informado."""
         if not self.agent_token:
@@ -139,6 +175,85 @@ class KomaApiClient:
         except Exception as e:
             log.error(f"Erro ao confirmar conclusão do job '{job_id}': {e}")
             return False
+
+    def complete_jobs(
+        self,
+        jobs: Iterable[Dict[str, str]],
+    ) -> Set[str]:
+        """
+        Confirma várias entregas ao spooler em uma chamada.
+
+        Retorna somente os IDs aceitos pelo backend. Se o endpoint em lote
+        ainda não existir, confirma um por um para manter compatibilidade.
+        """
+        items = [
+            {
+                "job_id": str(item["job_id"]),
+                "printer_name": item.get("printer_name") or "Padrão",
+            }
+            for item in jobs
+        ]
+        if not self.agent_token or not items:
+            return set()
+        url = f"{self.api_url}/api/print-agents/jobs/complete-batch"
+        try:
+            resp = self.session.post(
+                url,
+                json={"jobs": items},
+                headers=self.headers,
+                timeout=10,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                return {
+                    str(job_id)
+                    for job_id in data.get("confirmed_job_ids", [])
+                }
+            if resp.status_code not in (404, 405):
+                log.warning(
+                    "Falha ao confirmar lote de impressão "
+                    f"(HTTP {resp.status_code}): {resp.text}"
+                )
+                return set()
+        except Exception as exc:
+            log.error(f"Erro ao confirmar lote de impressão: {exc}")
+            return set()
+
+        confirmed: Set[str] = set()
+        for item in items:
+            if self.complete_job(
+                item["job_id"],
+                printer_name=item["printer_name"],
+            ):
+                confirmed.add(item["job_id"])
+        return confirmed
+
+    def release_jobs(self, job_ids: Iterable[str]) -> Set[str]:
+        """Devolve ao backend os jobs reservados mas ainda não impressos."""
+        unique_ids = list(dict.fromkeys(str(job_id) for job_id in job_ids))
+        if not self.agent_token or not unique_ids:
+            return set()
+        url = f"{self.api_url}/api/print-agents/jobs/release-batch"
+        try:
+            resp = self.session.post(
+                url,
+                json={"job_ids": unique_ids[:10]},
+                headers=self.headers,
+                timeout=5,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                return {
+                    str(job_id)
+                    for job_id in data.get("released_job_ids", [])
+                }
+            log.warning(
+                "Falha ao devolver lote não impresso "
+                f"(HTTP {resp.status_code}): {resp.text}"
+            )
+        except Exception as exc:
+            log.error(f"Erro ao devolver lote não impresso: {exc}")
+        return set()
 
     def fail_job(self, job_id: str, error_msg: str) -> bool:
         """Notifica o backend sobre falha na impressão do job."""

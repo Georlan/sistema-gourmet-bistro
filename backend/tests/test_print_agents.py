@@ -9,6 +9,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database import Base, get_db, current_restaurante_id
 from app.models import Restaurante, Usuario, PrintAgentToken, PrintJob
+from app.routes import print_agents as print_agents_route
 from app.routes.print_agents import hash_token
 from app.security import create_access_token
 from app.main import app
@@ -31,7 +32,16 @@ def override_get_db():
 
 
 @pytest.fixture(autouse=True)
-def setup_database():
+def setup_database(monkeypatch):
+    def test_session_local(**kwargs):
+        kwargs.pop("restaurante_id", None)
+        return TestingSessionLocal()
+
+    monkeypatch.setattr(
+        print_agents_route,
+        "SessionLocal",
+        test_session_local,
+    )
     token_var = current_restaurante_id.set(1)
     try:
         app.dependency_overrides[get_db] = override_get_db
@@ -217,6 +227,135 @@ def test_claim_next_never_delivers_same_job_to_second_agent():
     assert first.json()["id"] == "job-1001"
     assert second.status_code == 200
     assert second.json() is None
+
+
+def test_claim_batch_reserves_fifo_without_duplicate():
+    """Uma rajada usa uma reserva HTTP e mantém a ordem da fila."""
+    mark_agent_printer_ready("a1")
+    mark_agent_printer_ready("a2")
+    now = datetime.datetime.now(datetime.timezone.utc)
+    db = TestingSessionLocal()
+    try:
+        first = db.query(PrintJob).filter_by(id="job-1001").one()
+        first.created_at = now
+        for index in range(2, 4):
+            db.add(
+                PrintJob(
+                    id=f"job-batch-{index}",
+                    restaurante_id=1,
+                    document_type="producao",
+                    destination="COZINHA",
+                    source_type="comanda",
+                    source_id=f"cmd-{index}",
+                    payload_text=f"Pedido {index}",
+                    status="pending",
+                    idempotency_key=f"idemp:batch:{index}",
+                    created_at=now + datetime.timedelta(seconds=index),
+                )
+            )
+        db.commit()
+    finally:
+        db.close()
+
+    client = TestClient(app)
+    first_response = client.post(
+        "/api/print-agents/jobs/claim-batch?limit=10",
+        headers={"X-Agent-Token": "token_agent_1"},
+    )
+    second_response = client.post(
+        "/api/print-agents/jobs/claim-batch?limit=10",
+        headers={"X-Agent-Token": "token_agent_2"},
+    )
+
+    assert first_response.status_code == 200
+    assert [
+        job["id"]
+        for job in first_response.json()
+    ] == ["job-1001", "job-batch-2", "job-batch-3"]
+    assert second_response.status_code == 200
+    assert second_response.json() == []
+
+
+def test_complete_batch_is_idempotent_and_agent_scoped():
+    """A resposta perdida pode ser repetida sem duplicar a impressão."""
+    mark_agent_printer_ready("a1")
+    mark_agent_printer_ready("a2")
+    client = TestClient(app)
+    claimed = client.post(
+        "/api/print-agents/jobs/claim-batch?limit=10",
+        headers={"X-Agent-Token": "token_agent_1"},
+    )
+    assert claimed.status_code == 200
+    assert [job["id"] for job in claimed.json()] == ["job-1001"]
+
+    body = {
+        "jobs": [
+            {
+                "job_id": "job-1001",
+                "printer_name": "G250",
+            }
+        ]
+    }
+    first = client.post(
+        "/api/print-agents/jobs/complete-batch",
+        headers={"X-Agent-Token": "token_agent_1"},
+        json=body,
+    )
+    repeated = client.post(
+        "/api/print-agents/jobs/complete-batch",
+        headers={"X-Agent-Token": "token_agent_1"},
+        json=body,
+    )
+    wrong_agent = client.post(
+        "/api/print-agents/jobs/complete-batch",
+        headers={"X-Agent-Token": "token_agent_2"},
+        json=body,
+    )
+
+    assert first.status_code == 200
+    assert first.json()["confirmed_job_ids"] == ["job-1001"]
+    assert repeated.status_code == 200
+    assert repeated.json()["confirmed_job_ids"] == ["job-1001"]
+    assert wrong_agent.status_code == 200
+    assert wrong_agent.json()["confirmed_job_ids"] == []
+    assert wrong_agent.json()["rejected_job_ids"] == ["job-1001"]
+
+    db = TestingSessionLocal()
+    try:
+        job = db.query(PrintJob).filter_by(id="job-1001").one()
+        assert job.status == "printed"
+        assert job.printer_name == "G250"
+        assert job.printed_at is not None
+    finally:
+        db.close()
+
+
+def test_release_batch_returns_only_unprinted_jobs_to_queue():
+    mark_agent_printer_ready("a1")
+    client = TestClient(app)
+    claimed = client.post(
+        "/api/print-agents/jobs/claim-batch?limit=10",
+        headers={"X-Agent-Token": "token_agent_1"},
+    )
+    assert claimed.status_code == 200
+
+    response = client.post(
+        "/api/print-agents/jobs/release-batch",
+        headers={"X-Agent-Token": "token_agent_1"},
+        json={"job_ids": ["job-1001"]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["released_job_ids"] == ["job-1001"]
+    db = TestingSessionLocal()
+    try:
+        job = db.query(PrintJob).filter_by(id="job-1001").one()
+        assert job.status == "pending"
+        assert job.agent_id is None
+        assert job.claimed_at is None
+        assert job.attempts == 0
+    finally:
+        db.close()
 
 
 def test_stuck_job_recovery():
@@ -646,3 +785,189 @@ def test_print_monitor_rejects_waiter():
     )
 
     assert response.status_code == 403
+
+
+def test_print_monitor_shows_only_the_latest_20_jobs_from_today():
+    now = datetime.datetime.now(datetime.timezone.utc)
+    tenant_token = current_restaurante_id.set(2)
+    try:
+        db = TestingSessionLocal()
+        try:
+            existing = db.query(PrintJob).filter_by(id="job-2001").one()
+            existing.created_at = now - datetime.timedelta(minutes=1)
+            for index in range(25):
+                db.add(
+                    PrintJob(
+                        id=f"job-today-{index:02d}",
+                        restaurante_id=2,
+                        document_type="fechamento",
+                        destination="FECHAMENTO",
+                        source_type="comanda",
+                        source_id=f"mesa-{index}",
+                        payload_text=f"MESA {index}",
+                        status="printed",
+                        idempotency_key=f"idemp:today:{index}",
+                        created_at=now - datetime.timedelta(
+                            minutes=index + 2
+                        ),
+                        printed_at=now - datetime.timedelta(
+                            minutes=index + 1
+                        ),
+                    )
+                )
+            db.add(
+                PrintJob(
+                    id="job-yesterday",
+                    restaurante_id=2,
+                    document_type="fechamento",
+                    destination="FECHAMENTO",
+                    source_type="comanda",
+                    source_id="mesa-antiga",
+                    payload_text="MESA ANTIGA",
+                    status="printed",
+                    idempotency_key="idemp:yesterday",
+                    created_at=now - datetime.timedelta(days=1),
+                    printed_at=now - datetime.timedelta(days=1),
+                )
+            )
+            db.commit()
+        finally:
+            db.close()
+    finally:
+        current_restaurante_id.reset(tenant_token)
+
+    response = TestClient(app).get(
+        "/api/print-agents/monitor",
+        headers=jwt_headers("2", 2, "admin"),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["history_limit"] == 20
+    assert len(payload["jobs"]) == 20
+    assert "job-yesterday" not in {
+        job["id"]
+        for job in payload["jobs"]
+    }
+
+
+def test_history_maintenance_compacts_old_payloads_but_keeps_queue():
+    now = datetime.datetime.now(datetime.timezone.utc)
+    tenant_token = current_restaurante_id.set(2)
+    try:
+        db = TestingSessionLocal()
+        try:
+            for index in range(23):
+                db.add(
+                    PrintJob(
+                        id=f"job-retention-{index:02d}",
+                        restaurante_id=2,
+                        document_type="fechamento",
+                        destination="FECHAMENTO",
+                        source_type="comanda",
+                        source_id=f"mesa-{index}",
+                        payload_text=f"CUPOM COMPLETO {index}",
+                        status="printed",
+                        idempotency_key=f"idemp:retention:{index}",
+                        created_at=now - datetime.timedelta(minutes=index),
+                        printed_at=now - datetime.timedelta(minutes=index),
+                    )
+                )
+            db.add(
+                PrintJob(
+                    id="job-retention-yesterday",
+                    restaurante_id=2,
+                    document_type="fechamento",
+                    destination="FECHAMENTO",
+                    source_type="comanda",
+                    source_id="mesa-yesterday",
+                    payload_text="CUPOM DE ONTEM",
+                    status="printed",
+                    idempotency_key="idemp:retention:yesterday",
+                    created_at=now - datetime.timedelta(days=1),
+                    printed_at=now - datetime.timedelta(days=1),
+                )
+            )
+            db.add(
+                PrintJob(
+                    id="job-expired-tombstone",
+                    restaurante_id=2,
+                    document_type="fechamento",
+                    destination="FECHAMENTO",
+                    source_type="comanda",
+                    source_id="mesa-expired",
+                    payload_text="",
+                    status="printed",
+                    idempotency_key="idemp:retention:expired",
+                    created_at=now - datetime.timedelta(days=8),
+                    printed_at=now - datetime.timedelta(days=8),
+                )
+            )
+            db.commit()
+        finally:
+            db.close()
+    finally:
+        current_restaurante_id.reset(tenant_token)
+
+    print_agents_route._run_print_history_maintenance(2, now)
+
+    tenant_token = current_restaurante_id.set(2)
+    try:
+        db = TestingSessionLocal()
+        try:
+            terminal_jobs = (
+                db.query(PrintJob)
+                .filter(
+                    PrintJob.restaurante_id == 2,
+                    PrintJob.status == "printed",
+                )
+                .all()
+            )
+            retained_payloads = [
+                job
+                for job in terminal_jobs
+                if job.payload_text
+            ]
+            assert len(retained_payloads) == 20
+            assert (
+                db.query(PrintJob)
+                .filter_by(id="job-retention-yesterday")
+                .one()
+                .payload_text
+                == ""
+            )
+            assert (
+                db.query(PrintJob)
+                .filter_by(id="job-expired-tombstone")
+                .first()
+                is None
+            )
+            pending = db.query(PrintJob).filter_by(id="job-2001").one()
+            assert pending.status == "pending"
+            assert pending.payload_text == "1x Pedido tenant 2"
+        finally:
+            db.close()
+    finally:
+        current_restaurante_id.reset(tenant_token)
+
+
+def test_compacted_print_can_no_longer_be_reprinted():
+    tenant_token = current_restaurante_id.set(2)
+    try:
+        db = TestingSessionLocal()
+        try:
+            job = db.query(PrintJob).filter_by(id="job-2001").one()
+            job.status = "printed"
+            job.payload_text = ""
+            db.commit()
+        finally:
+            db.close()
+    finally:
+        current_restaurante_id.reset(tenant_token)
+
+    response = TestClient(app).post(
+        "/api/print-agents/jobs/job-2001/reprint",
+        headers=jwt_headers("2", 2, "admin"),
+    )
+
+    assert response.status_code == 410

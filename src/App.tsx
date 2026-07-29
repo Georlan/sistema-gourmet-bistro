@@ -674,6 +674,13 @@ export default function App() {
           if (data.event === "new_delivery_order") {
             window.dispatchEvent(new Event('koma_orders_updated'));
           }
+          if (data.event === "print_monitor_updated") {
+            // Atualização silenciosa: o painel refaz a consulta sem toast,
+            // som ou interrupção do operador.
+            window.dispatchEvent(
+              new Event('koma_print_monitor_refresh')
+            );
+          }
           if (data.event === "tables_updated") {
             if (wsUpdateTimeout) {
               clearTimeout(wsUpdateTimeout);

@@ -2451,10 +2451,6 @@ export function CaixaPanel({
       if (!res.ok) {
         throw new Error(data?.detail || 'Erro ao colocar o teste na fila.');
       }
-      showToast(
-        'Teste enviado. Acompanhe o resultado no Monitor de impressão.',
-        'success'
-      );
       window.dispatchEvent(new Event('koma_print_monitor_refresh'));
     } catch (error) {
       console.error(error);
@@ -7462,7 +7458,9 @@ export function CaixaPanel({
                               headers: authHeaders
                             });
                             if (response.ok) {
-                              alert("Extrato completo enviado para a impressora!");
+                              window.dispatchEvent(
+                                new Event('koma_print_monitor_refresh')
+                              );
                             } else {
                               const err = await response.json();
                               alert(`Erro ao imprimir: ${err.detail}`);
@@ -7494,7 +7492,9 @@ export function CaixaPanel({
                               headers: authHeaders
                             });
                             if (response.ok) {
-                              alert("Extrato resumido (apenas valores) enviado para a impressora!");
+                              window.dispatchEvent(
+                                new Event('koma_print_monitor_refresh')
+                              );
                             } else {
                               const err = await response.json();
                               alert(`Erro ao imprimir: ${err.detail}`);
@@ -8095,7 +8095,9 @@ export function CaixaPanel({
                         headers: authHeaders
                       });
                       if (res.ok) {
-                        showToast("Pedido reenviado para a cozinha!", 'success');
+                        window.dispatchEvent(
+                          new Event('koma_print_monitor_refresh')
+                        );
                         setSelectedKanbanOrder(null);
                       } else {
                         showToast("Erro ao solicitar reimpressão.", 'error');
@@ -8126,7 +8128,9 @@ export function CaixaPanel({
                           if (params.toString()) url += `&${params.toString()}`;
                           const response = await fetch(url, { method: 'POST', headers: authHeaders });
                           if (response.ok) {
-                            showToast("Extrato completo enviado!", 'success');
+                            window.dispatchEvent(
+                              new Event('koma_print_monitor_refresh')
+                            );
                             setSelectedKanbanOrder(null);
                           } else {
                             const errD = await response.json();
@@ -8156,7 +8160,9 @@ export function CaixaPanel({
                           if (params.toString()) url += `&${params.toString()}`;
                           const response = await fetch(url, { method: 'POST', headers: authHeaders });
                           if (response.ok) {
-                            showToast("Extrato resumido enviado!", 'success');
+                            window.dispatchEvent(
+                              new Event('koma_print_monitor_refresh')
+                            );
                             setSelectedKanbanOrder(null);
                           } else {
                             const errD = await response.json();
@@ -9164,7 +9170,9 @@ export function CaixaPanel({
               headers: authHeaders
             });
             if (res.ok) {
-              showToast("Ticket enviado para a cozinha com sucesso!");
+              window.dispatchEvent(
+                new Event('koma_print_monitor_refresh')
+              );
             } else {
               const err = await res.json();
               showToast(`Erro ao reimprimir: ${err.detail}`, 'error');
@@ -9191,7 +9199,9 @@ export function CaixaPanel({
               headers: authHeaders
             });
             if (res.ok) {
-              showToast("Pré-conta (apenas valores) enviada para a impressora!");
+              window.dispatchEvent(
+                new Event('koma_print_monitor_refresh')
+              );
             } else {
               const err = await res.json();
               showToast(`Erro ao imprimir pré-conta: ${err.detail}`, 'error');

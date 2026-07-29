@@ -341,6 +341,35 @@ def test_api_client_falls_back_during_backend_rollout():
         assert session.post.call_count == 2
 
 
+def test_api_client_claims_and_completes_a_batch():
+    jobs = [
+        {"id": "job-batch-1"},
+        {"id": "job-batch-2"},
+    ]
+
+    with patch("api_client.requests.Session") as SessionClass:
+        session = SessionClass.return_value
+        claim_response = MagicMock(status_code=200)
+        claim_response.json.return_value = jobs
+        complete_response = MagicMock(status_code=200)
+        complete_response.json.return_value = {
+            "confirmed_job_ids": ["job-batch-1", "job-batch-2"],
+            "rejected_job_ids": [],
+        }
+        session.post.side_effect = [claim_response, complete_response]
+
+        client = KomaApiClient("https://api.koma.test", "agent-token")
+
+        assert client.claim_jobs(limit=10) == jobs
+        assert client.complete_jobs(
+            [
+                {"job_id": "job-batch-1", "printer_name": "Cozinha"},
+                {"job_id": "job-batch-2", "printer_name": "Cozinha"},
+            ]
+        ) == {"job-batch-1", "job-batch-2"}
+        assert session.post.call_count == 2
+
+
 def test_worker_end_to_end_flow(temp_dir):
     """Testa fluxo completo de execução do worker (heartbeat, claim, print, complete)."""
     db_path = os.path.join(temp_dir, "journal.db")
@@ -371,14 +400,21 @@ def test_worker_end_to_end_flow(temp_dir):
         MockJournalClass.return_value = journal_instance
 
         client_instance.heartbeat.return_value = True
-        client_instance.claim_next_job.side_effect = [mock_job, None]
-        client_instance.complete_job.return_value = True
+        client_instance.claim_jobs.side_effect = [[mock_job], []]
+        client_instance.complete_jobs.return_value = {"job-test-999"}
 
         run_agent_loop(config, max_loops=2)
 
         client_instance.heartbeat.assert_called()
-        client_instance.claim_next_job.assert_called()
-        client_instance.complete_job.assert_called_with("job-test-999", printer_name="Padrão")
+        client_instance.claim_jobs.assert_called_with(10)
+        client_instance.complete_jobs.assert_called_once_with(
+            [
+                {
+                    "job_id": "job-test-999",
+                    "printer_name": "Padrão",
+                }
+            ]
+        )
 
         # Verifica se o arquivo físico foi gravado no diretório
         files = os.listdir(temp_dir)
@@ -424,16 +460,36 @@ def test_worker_drains_backlog_without_polling_delay(temp_dir):
         adapter.requires_physical_printer = False
 
         client.heartbeat.return_value = True
-        client.claim_next_job.side_effect = [first_job, second_job]
-        client.complete_job.return_value = True
+        client.claim_jobs.return_value = [first_job, second_job]
+        client.complete_jobs.return_value = {
+            "job-backlog-1",
+            "job-backlog-2",
+        }
         journal.get_unconfirmed_printed_jobs.return_value = []
         journal.is_printed.return_value = False
         adapter.print_ticket.return_value = True
 
-        run_agent_loop(config, max_loops=2)
+        run_agent_loop(config, max_loops=1)
 
         assert adapter.print_ticket.call_count == 2
-        assert client.complete_job.call_count == 2
+        assert [
+            call.args[0]
+            for call in adapter.print_ticket.call_args_list
+        ] == ["1x Pedido 1", "1x Pedido 2"]
+        client.complete_jobs.assert_called_once_with(
+            [
+                {
+                    "job_id": "job-backlog-1",
+                    "printer_name": "Padrão",
+                },
+                {
+                    "job_id": "job-backlog-2",
+                    "printer_name": "Padrão",
+                },
+            ]
+        )
+        assert journal.record_print_success.call_count == 2
+        assert journal.mark_backend_confirmed.call_count == 2
         sleep_mock.assert_not_called()
 
 
@@ -465,19 +521,82 @@ def test_worker_reclaims_locally_printed_job_without_reprinting(temp_dir):
         get_adapter_mock.return_value.requires_physical_printer = False
 
         client.heartbeat.return_value = True
-        client.claim_next_job.return_value = job
-        client.complete_job.return_value = True
+        client.claim_jobs.return_value = [job]
+        client.complete_jobs.return_value = {"job-recovered"}
         journal.get_unconfirmed_printed_jobs.return_value = []
         journal.is_printed.return_value = True
 
         run_agent_loop(config, max_loops=1)
 
-        client.complete_job.assert_called_once_with(
-            "job-recovered",
-            printer_name="Padrão",
+        client.complete_jobs.assert_called_once_with(
+            [
+                {
+                    "job_id": "job-recovered",
+                    "printer_name": "Padrão",
+                }
+            ]
         )
         journal.mark_backend_confirmed.assert_called_once_with("job-recovered")
         get_adapter_mock.return_value.print_ticket.assert_not_called()
+
+
+def test_worker_returns_unprinted_tail_when_printer_fails_mid_batch(
+    temp_dir,
+):
+    """Falha física não perde nem confirma os trabalhos seguintes do lote."""
+    config = AgentConfig(
+        api_url="http://localhost:8000",
+        agent_token="koma_ag_test_token",
+        adapter="file",
+        output_dir=temp_dir,
+    )
+    jobs = [
+        {
+            "id": f"job-failure-{index}",
+            "document_type": "producao",
+            "destination": "COZINHA",
+            "source_type": "comanda",
+            "source_id": f"c-{index}",
+            "payload_text": f"Pedido {index}",
+            "idempotency_key": f"ikey-failure-{index}",
+        }
+        for index in range(1, 4)
+    ]
+
+    with (
+        patch("worker.KomaApiClient") as ClientClass,
+        patch("worker.PrintJournal") as JournalClass,
+        patch("worker.get_adapter") as get_adapter_mock,
+    ):
+        client = ClientClass.return_value
+        journal = JournalClass.return_value
+        adapter = get_adapter_mock.return_value
+        adapter.requires_physical_printer = False
+
+        client.heartbeat.return_value = True
+        client.claim_jobs.return_value = jobs
+        client.complete_jobs.return_value = {"job-failure-1"}
+        client.release_jobs.return_value = {"job-failure-3"}
+        journal.get_unconfirmed_printed_jobs.return_value = []
+        journal.is_printed.return_value = False
+        adapter.print_ticket.side_effect = [True, False]
+
+        run_agent_loop(config, max_loops=1)
+
+        assert adapter.print_ticket.call_count == 2
+        client.fail_job.assert_called_once()
+        client.release_jobs.assert_called_once_with(["job-failure-3"])
+        client.complete_jobs.assert_called_once_with(
+            [
+                {
+                    "job_id": "job-failure-1",
+                    "printer_name": "Padrão",
+                }
+            ]
+        )
+        journal.mark_backend_confirmed.assert_called_once_with(
+            "job-failure-1"
+        )
 
 
 def test_worker_does_not_claim_jobs_without_physical_printer(temp_dir):
@@ -523,6 +642,6 @@ def test_worker_does_not_claim_jobs_without_physical_printer(temp_dir):
         run_agent_loop(config, max_loops=1)
 
         client.heartbeat.assert_called_once_with(diagnostics=diagnostics)
-        client.claim_next_job.assert_not_called()
+        client.claim_jobs.assert_not_called()
         adapter.print_ticket.assert_not_called()
         sleep_mock.assert_not_called()

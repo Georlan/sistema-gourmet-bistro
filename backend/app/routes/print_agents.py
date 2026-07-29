@@ -1,25 +1,66 @@
 import hashlib
 import secrets
 import datetime
+import logging
+import os
 import re
 from collections.abc import Mapping
 from typing import Literal, Optional, List
-from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Header,
+    Query,
+    status,
+)
 from pydantic import BaseModel, Field
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
+from zoneinfo import ZoneInfo
 
-from ..database import bind_session_to_tenant, get_db, current_restaurante_id
+from ..database import (
+    SessionLocal,
+    bind_session_to_tenant,
+    get_db,
+    current_restaurante_id,
+)
 from ..models import PrintJob, PrintAgentToken, Usuario
 from ..security import require_permission
+from ..websocket_manager import manager
 
 router = APIRouter(prefix="/api/print-agents", tags=["Print Agents"])
+log = logging.getLogger("koma.print_agents")
 
 MAX_ATTEMPTS = 3
+MAX_CLAIM_BATCH_SIZE = 10
 AGENT_ONLINE_THRESHOLD_SECONDS = 90
 PRINTER_DIAGNOSTICS_FRESH_SECONDS = 90
 PRINT_DELAY_THRESHOLD_SECONDS = 120
+PRINT_HISTORY_VISIBLE_LIMIT = 20
 UNRESOLVED_JOB_STATUSES = ("pending", "claimed", "printing")
+TERMINAL_JOB_STATUSES = ("printed", "failed", "cancelled")
+
+
+def _positive_int_env(name: str, default: int) -> int:
+    try:
+        return max(1, int(os.getenv(name, str(default))))
+    except (TypeError, ValueError):
+        return default
+
+
+PRINT_JOB_TOMBSTONE_DAYS = _positive_int_env(
+    "KOMA_PRINT_DEDUP_RETENTION_DAYS",
+    7,
+)
+try:
+    PRINT_HISTORY_TIMEZONE = ZoneInfo(
+        os.getenv("KOMA_PRINT_TIMEZONE", "America/Fortaleza")
+    )
+except Exception:
+    PRINT_HISTORY_TIMEZONE = ZoneInfo("America/Fortaleza")
+
 ORDER_REFERENCE_PATTERNS = (
     re.compile(
         r"\bPEDIDO\s*:\s*#?\s*([A-Z0-9][A-Z0-9._/-]*)",
@@ -75,6 +116,136 @@ def _as_utc(value: Optional[datetime.datetime]) -> Optional[datetime.datetime]:
     if value.tzinfo is None:
         return value.replace(tzinfo=datetime.timezone.utc)
     return value.astimezone(datetime.timezone.utc)
+
+
+def _print_history_day_bounds(
+    now: datetime.datetime,
+) -> tuple[datetime.datetime, datetime.datetime, str]:
+    """Retorna o dia operacional local convertido para limites UTC."""
+    local_now = _as_utc(now).astimezone(PRINT_HISTORY_TIMEZONE)
+    local_start = datetime.datetime.combine(
+        local_now.date(),
+        datetime.time.min,
+        tzinfo=PRINT_HISTORY_TIMEZONE,
+    )
+    local_end = local_start + datetime.timedelta(days=1)
+    return (
+        local_start.astimezone(datetime.timezone.utc),
+        local_end.astimezone(datetime.timezone.utc),
+        local_now.date().isoformat(),
+    )
+
+
+def _run_print_history_maintenance(
+    restaurante_id: int,
+    now: datetime.datetime,
+) -> None:
+    """
+    Mantém somente os 20 cupons recentes do dia com conteúdo reimprimível.
+
+    Registros mais antigos viram tombstones leves para preservar a chave de
+    idempotência. Tombstones terminais expiram depois do período técnico
+    configurado; pedidos ainda pendentes nunca são removidos ou compactados.
+    """
+    tenant_token = current_restaurante_id.set(restaurante_id)
+    db = SessionLocal(restaurante_id=restaurante_id)
+    try:
+        day_start, day_end, _ = _print_history_day_bounds(now)
+        keep_ids = [
+            row[0]
+            for row in (
+                db.query(PrintJob.id)
+                .filter(
+                    PrintJob.restaurante_id == restaurante_id,
+                    PrintJob.status.in_(TERMINAL_JOB_STATUSES),
+                    PrintJob.created_at >= day_start,
+                    PrintJob.created_at < day_end,
+                )
+                .order_by(PrintJob.created_at.desc())
+                .limit(PRINT_HISTORY_VISIBLE_LIMIT)
+                .all()
+            )
+        ]
+
+        compact_query = db.query(PrintJob).filter(
+            PrintJob.restaurante_id == restaurante_id,
+            PrintJob.status.in_(TERMINAL_JOB_STATUSES),
+            PrintJob.payload_text != "",
+        )
+        if keep_ids:
+            compact_query = compact_query.filter(
+                ~PrintJob.id.in_(keep_ids)
+            )
+        compacted = compact_query.update(
+            {
+                "payload_text": "",
+                "last_error": None,
+            },
+            synchronize_session=False,
+        )
+
+        retention_cutoff = now - datetime.timedelta(
+            days=PRINT_JOB_TOMBSTONE_DAYS
+        )
+        deleted = (
+            db.query(PrintJob)
+            .filter(
+                PrintJob.restaurante_id == restaurante_id,
+                PrintJob.status.in_(TERMINAL_JOB_STATUSES),
+                PrintJob.payload_text == "",
+                PrintJob.created_at < retention_cutoff,
+            )
+            .delete(synchronize_session=False)
+        )
+        db.commit()
+        if compacted or deleted:
+            log.info(
+                "[RETENÇÃO DE IMPRESSÃO] restaurante=%s compactados=%s "
+                "tombstones_excluídos=%s",
+                restaurante_id,
+                compacted,
+                deleted,
+            )
+    except Exception:
+        db.rollback()
+        log.exception(
+            "Falha na manutenção do histórico de impressão do restaurante %s",
+            restaurante_id,
+        )
+    finally:
+        db.close()
+        current_restaurante_id.reset(tenant_token)
+
+
+def _schedule_print_history_maintenance(
+    background_tasks: BackgroundTasks,
+    restaurante_id: int,
+    now: datetime.datetime,
+) -> None:
+    """
+    Compacta após cada confirmação, fora do tempo de resposta ao agente.
+
+    Assim cada restaurante conserva no máximo 20 cupons completos do dia,
+    mesmo em um turno com alto volume de impressão.
+    """
+    background_tasks.add_task(
+        _run_print_history_maintenance,
+        restaurante_id,
+        now,
+    )
+
+
+def _schedule_print_monitor_refresh(
+    background_tasks: BackgroundTasks,
+    restaurante_id: int,
+) -> None:
+    """Atualiza silenciosamente os monitores abertos via WebSocket."""
+    background_tasks.add_task(
+        manager.broadcast,
+        {"event": "print_monitor_updated"},
+        restaurante_id=restaurante_id,
+        target_audience="internal",
+    )
 
 
 def _age_seconds(
@@ -279,6 +450,116 @@ def _release_stuck_jobs(
     )
 
 
+def _claim_pending_jobs(
+    db: Session,
+    agent: PrintAgentToken,
+    now: datetime.datetime,
+    limit: int,
+) -> list[dict]:
+    """Reserva atomicamente até ``limit`` trabalhos na ordem da fila."""
+    safe_limit = max(1, min(limit, MAX_CLAIM_BATCH_SIZE))
+    _release_stuck_jobs(db, agent.restaurante_id, now)
+
+    if db.get_bind().dialect.name == "postgresql":
+        claimed_rows = db.execute(
+            text(
+                """
+                WITH candidates AS (
+                    SELECT candidate.id
+                    FROM print_jobs AS candidate
+                    WHERE candidate.restaurante_id = :restaurante_id
+                      AND candidate.status = 'pending'
+                    ORDER BY candidate.created_at ASC
+                    FOR UPDATE SKIP LOCKED
+                    LIMIT :claim_limit
+                )
+                UPDATE print_jobs AS target
+                SET
+                    status = 'claimed',
+                    claimed_at = :claimed_at,
+                    agent_id = :agent_id
+                FROM candidates
+                WHERE target.id = candidates.id
+                RETURNING
+                    target.id,
+                    target.restaurante_id,
+                    target.document_type,
+                    target.destination,
+                    target.source_type,
+                    target.source_id,
+                    target.payload_text,
+                    target.attempts,
+                    target.idempotency_key,
+                    target.created_at
+                """
+            ),
+            {
+                "claimed_at": now,
+                "agent_id": agent.agent_id,
+                "restaurante_id": agent.restaurante_id,
+                "claim_limit": safe_limit,
+            },
+        ).mappings().all()
+        ordered_rows = sorted(
+            claimed_rows,
+            key=lambda row: _as_utc(row["created_at"]) or now,
+        )
+        payload = [
+            _claimed_job_payload(row, now)
+            for row in ordered_rows
+        ]
+        db.commit()
+        return payload
+
+    # SQLite é usado nos testes e no desenvolvimento. Cada UPDATE continua
+    # condicional para preservar a exclusividade de dois agentes concorrentes.
+    claimed_jobs: list[dict] = []
+    while len(claimed_jobs) < safe_limit:
+        candidate = (
+            db.query(PrintJob.id)
+            .filter(
+                PrintJob.restaurante_id == agent.restaurante_id,
+                PrintJob.status == "pending",
+            )
+            .order_by(PrintJob.created_at.asc())
+            .first()
+        )
+        if not candidate:
+            break
+
+        rows_updated = (
+            db.query(PrintJob)
+            .filter(
+                PrintJob.id == candidate[0],
+                PrintJob.restaurante_id == agent.restaurante_id,
+                PrintJob.status == "pending",
+            )
+            .update(
+                {
+                    "status": "claimed",
+                    "claimed_at": now,
+                    "agent_id": agent.agent_id,
+                },
+                synchronize_session=False,
+            )
+        )
+        if not rows_updated:
+            db.expire_all()
+            continue
+        job = (
+            db.query(PrintJob)
+            .filter(
+                PrintJob.id == candidate[0],
+                PrintJob.restaurante_id == agent.restaurante_id,
+            )
+            .first()
+        )
+        claimed_jobs.append(_claimed_job_payload(job, now))
+
+    db.commit()
+    return claimed_jobs
+
+
 def get_current_agent(
     x_agent_token: Optional[str] = Header(None, alias="X-Agent-Token"),
     authorization: Optional[str] = Header(None),
@@ -368,6 +649,28 @@ class CompleteJobRequest(BaseModel):
     printer_name: Optional[str] = "Padrão"
 
 
+class CompleteJobItem(BaseModel):
+    job_id: str = Field(min_length=1, max_length=100)
+    printer_name: Optional[str] = Field(
+        default="Padrão",
+        max_length=200,
+    )
+
+
+class CompleteJobsRequest(BaseModel):
+    jobs: List[CompleteJobItem] = Field(
+        min_length=1,
+        max_length=MAX_CLAIM_BATCH_SIZE,
+    )
+
+
+class ReleaseJobsRequest(BaseModel):
+    job_ids: List[str] = Field(
+        min_length=1,
+        max_length=MAX_CLAIM_BATCH_SIZE,
+    )
+
+
 class DetectedPrinterReport(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     connection: Literal["usb", "network", "unknown"] = "unknown"
@@ -411,7 +714,11 @@ class InjectJobRequest(BaseModel):
 
 @router.get("/monitor", summary="Monitorar agentes e fila de impressão")
 def get_print_monitor(
-    limit: int = Query(default=20, ge=1, le=50),
+    limit: int = Query(
+        default=PRINT_HISTORY_VISIBLE_LIMIT,
+        ge=1,
+        le=PRINT_HISTORY_VISIBLE_LIMIT,
+    ),
     current_user: Usuario = Depends(require_permission("impressao:administrar")),
     db: Session = Depends(get_db),
 ):
@@ -434,6 +741,7 @@ def get_print_monitor(
         )
 
     now = datetime.datetime.now(datetime.timezone.utc)
+    day_start, day_end, history_date = _print_history_day_bounds(now)
     delay_cutoff = now - datetime.timedelta(
         seconds=PRINT_DELAY_THRESHOLD_SECONDS
     )
@@ -450,11 +758,25 @@ def get_print_monitor(
 
     status_rows = (
         db.query(PrintJob.status, func.count(PrintJob.id))
-        .filter(PrintJob.restaurante_id == rest_id)
+        .filter(
+            PrintJob.restaurante_id == rest_id,
+            PrintJob.status.in_(UNRESOLVED_JOB_STATUSES),
+        )
         .group_by(PrintJob.status)
         .all()
     )
     status_counts = {job_status: count for job_status, count in status_rows}
+    failed_today = (
+        db.query(func.count(PrintJob.id))
+        .filter(
+            PrintJob.restaurante_id == rest_id,
+            PrintJob.status == "failed",
+            PrintJob.created_at >= day_start,
+            PrintJob.created_at < day_end,
+        )
+        .scalar()
+        or 0
+    )
 
     delayed_count = (
         db.query(func.count(PrintJob.id))
@@ -477,7 +799,11 @@ def get_print_monitor(
 
     jobs = (
         db.query(PrintJob)
-        .filter(PrintJob.restaurante_id == rest_id)
+        .filter(
+            PrintJob.restaurante_id == rest_id,
+            PrintJob.created_at >= day_start,
+            PrintJob.created_at < day_end,
+        )
         .order_by(PrintJob.created_at.desc())
         .limit(limit)
         .all()
@@ -487,6 +813,8 @@ def get_print_monitor(
         .filter(
             PrintJob.restaurante_id == rest_id,
             PrintJob.status == "printed",
+            PrintJob.created_at >= day_start,
+            PrintJob.created_at < day_end,
         )
         .order_by(
             PrintJob.printed_at.desc().nullslast(),
@@ -572,7 +900,7 @@ def get_print_monitor(
                     "printed",
                     "failed",
                     "cancelled",
-                },
+                } and bool(job.payload_text),
             }
         )
 
@@ -594,6 +922,9 @@ def get_print_monitor(
 
     return {
         "generated_at": now.isoformat(),
+        "history_date": history_date,
+        "history_limit": PRINT_HISTORY_VISIBLE_LIMIT,
+        "history_timezone": str(PRINT_HISTORY_TIMEZONE),
         "online_threshold_seconds": AGENT_ONLINE_THRESHOLD_SECONDS,
         "delay_threshold_seconds": PRINT_DELAY_THRESHOLD_SECONDS,
         "physical_completion_tracking": False,
@@ -615,7 +946,7 @@ def get_print_monitor(
             "pending": status_counts.get("pending", 0),
             "claimed": status_counts.get("claimed", 0),
             "printing": status_counts.get("printing", 0),
-            "failed": status_counts.get("failed", 0),
+            "failed": failed_today,
             "delayed": delayed_count,
             "oldest_unresolved_seconds": _age_seconds(
                 oldest_unresolved,
@@ -629,6 +960,7 @@ def get_print_monitor(
 @router.post("/jobs/inject", summary="Injetar PrintJob manualmente (admin)")
 def inject_print_job(
     req: InjectJobRequest,
+    background_tasks: BackgroundTasks,
     current_user: Usuario = Depends(require_permission("impressao:administrar")),
     db: Session = Depends(get_db)
 ):
@@ -695,6 +1027,7 @@ def inject_print_job(
     db.add(job)
     db.commit()
     db.refresh(job)
+    _schedule_print_monitor_refresh(background_tasks, rest_id)
 
     return {
         "status": "enqueued",
@@ -828,85 +1161,26 @@ def claim_next_job(
     if not _agent_printer_state(agent, now)["printer_ready"]:
         return None
 
-    _release_stuck_jobs(db, agent.restaurante_id, now)
+    claimed_jobs = _claim_pending_jobs(db, agent, now, limit=1)
+    return claimed_jobs[0] if claimed_jobs else None
 
-    if db.get_bind().dialect.name == "postgresql":
-        claimed = db.execute(
-            text(
-                """
-                UPDATE print_jobs AS target
-                SET
-                    status = 'claimed',
-                    claimed_at = :claimed_at,
-                    agent_id = :agent_id
-                WHERE target.id = (
-                    SELECT candidate.id
-                    FROM print_jobs AS candidate
-                    WHERE candidate.restaurante_id = :restaurante_id
-                      AND candidate.status = 'pending'
-                    ORDER BY candidate.created_at ASC
-                    FOR UPDATE SKIP LOCKED
-                    LIMIT 1
-                )
-                RETURNING
-                    target.id,
-                    target.restaurante_id,
-                    target.document_type,
-                    target.destination,
-                    target.source_type,
-                    target.source_id,
-                    target.payload_text,
-                    target.attempts,
-                    target.idempotency_key,
-                    target.created_at
-                """
-            ),
-            {
-                "claimed_at": now,
-                "agent_id": agent.agent_id,
-                "restaurante_id": agent.restaurante_id,
-            },
-        ).mappings().first()
-        if not claimed:
-            db.commit()
-            return None
-        payload = _claimed_job_payload(claimed, now)
-        db.commit()
-        return payload
 
-    # SQLite é usado somente nos testes e no desenvolvimento local. O UPDATE
-    # condicional preserva a mesma regra anti-duplicação sem depender de
-    # FOR UPDATE SKIP LOCKED.
-    while True:
-        candidate = db.query(PrintJob.id).filter(
-            PrintJob.restaurante_id == agent.restaurante_id,
-            PrintJob.status == "pending",
-        ).order_by(PrintJob.created_at.asc()).first()
-        if not candidate:
-            db.commit()
-            return None
+@router.post("/jobs/claim-batch")
+def claim_job_batch(
+    limit: int = Query(default=10, ge=1, le=MAX_CLAIM_BATCH_SIZE),
+    agent: PrintAgentToken = Depends(get_current_agent),
+    db: Session = Depends(get_db),
+):
+    """
+    Reserva um pequeno lote FIFO em uma única ida à nuvem.
 
-        rows_updated = db.query(PrintJob).filter(
-            PrintJob.id == candidate[0],
-            PrintJob.restaurante_id == agent.restaurante_id,
-            PrintJob.status == "pending",
-        ).update(
-            {
-                "status": "claimed",
-                "claimed_at": now,
-                "agent_id": agent.agent_id,
-            },
-            synchronize_session=False,
-        )
-        if rows_updated:
-            job = db.query(PrintJob).filter(
-                PrintJob.id == candidate[0],
-                PrintJob.restaurante_id == agent.restaurante_id,
-            ).first()
-            payload = _claimed_job_payload(job, now)
-            db.commit()
-            return payload
-        db.rollback()
+    Os cupons continuam sendo enviados sequencialmente ao CUPS para manter a
+    ordem da impressora; o lote elimina apenas a espera de rede entre eles.
+    """
+    now = datetime.datetime.now(datetime.timezone.utc)
+    if not _agent_printer_state(agent, now)["printer_ready"]:
+        return []
+    return _claim_pending_jobs(db, agent, now, limit=limit)
 
 
 @router.post("/jobs/{job_id}/claim")
@@ -981,15 +1255,117 @@ def claim_job(
         "idempotency_key": job.idempotency_key
     }
 
+@router.post("/jobs/complete-batch")
+def complete_job_batch(
+    req: CompleteJobsRequest,
+    background_tasks: BackgroundTasks,
+    agent: PrintAgentToken = Depends(get_current_agent),
+    db: Session = Depends(get_db),
+):
+    """Confirma vários trabalhos enviados ao spooler em uma única chamada."""
+    requested_items = {
+        item.job_id: item
+        for item in req.jobs
+    }
+    jobs = (
+        db.query(PrintJob)
+        .filter(
+            PrintJob.restaurante_id == agent.restaurante_id,
+            PrintJob.id.in_(requested_items),
+        )
+        .all()
+    )
+    jobs_by_id = {job.id: job for job in jobs}
+    now = datetime.datetime.now(datetime.timezone.utc)
+    confirmed_job_ids: list[str] = []
+    rejected_job_ids: list[str] = []
+    changed = False
+
+    for job_id, item in requested_items.items():
+        job = jobs_by_id.get(job_id)
+        if (
+            not job
+            or job.agent_id != agent.agent_id
+            or job.status not in ("claimed", "printing", "printed")
+        ):
+            rejected_job_ids.append(job_id)
+            continue
+        if job.status != "printed":
+            job.status = "printed"
+            job.printed_at = now
+            job.printer_name = item.printer_name or "Padrão"
+            changed = True
+        confirmed_job_ids.append(job_id)
+
+    db.commit()
+    if confirmed_job_ids:
+        _schedule_print_monitor_refresh(
+            background_tasks,
+            agent.restaurante_id,
+        )
+    if changed:
+        _schedule_print_history_maintenance(
+            background_tasks,
+            agent.restaurante_id,
+            now,
+        )
+
+    return {
+        "status": "processed",
+        "confirmed_job_ids": confirmed_job_ids,
+        "rejected_job_ids": rejected_job_ids,
+    }
+
+
+@router.post("/jobs/release-batch")
+def release_job_batch(
+    req: ReleaseJobsRequest,
+    agent: PrintAgentToken = Depends(get_current_agent),
+    db: Session = Depends(get_db),
+):
+    """
+    Devolve ao estado pendente trabalhos ainda não enviados ao CUPS.
+
+    É usado quando a impressora some no meio de um lote; esses trabalhos não
+    consomem tentativa e permanecem íntegros para o próximo ciclo.
+    """
+    requested_ids = list(dict.fromkeys(req.job_ids))
+    jobs = (
+        db.query(PrintJob)
+        .filter(
+            PrintJob.restaurante_id == agent.restaurante_id,
+            PrintJob.id.in_(requested_ids),
+            PrintJob.agent_id == agent.agent_id,
+            PrintJob.status == "claimed",
+        )
+        .all()
+    )
+    released_ids = []
+    for job in jobs:
+        job.status = "pending"
+        job.claimed_at = None
+        job.agent_id = None
+        released_ids.append(job.id)
+    db.commit()
+    return {
+        "status": "released",
+        "released_job_ids": released_ids,
+    }
+
+
 @router.post("/jobs/{job_id}/complete")
 def complete_job(
     job_id: str,
     req: CompleteJobRequest,
+    background_tasks: BackgroundTasks,
     agent: PrintAgentToken = Depends(get_current_agent),
     db: Session = Depends(get_db)
 ):
     """
     Confirma a impressão bem-sucedida pelo agente que assumiu o job.
+
+    Uma repetição da confirmação pelo mesmo agente é idempotente. Isso cobre o
+    caso em que o servidor gravou o sucesso, mas a resposta HTTP se perdeu.
     """
     job = db.query(PrintJob).filter(
         PrintJob.id == job_id,
@@ -1005,16 +1381,29 @@ def complete_job(
             detail="Operação negada: o job foi assumido por outro agente"
         )
 
+    if job.status == "printed":
+        return {"status": "printed", "job_id": job.id}
+
     if job.status not in ("claimed", "printing"):
         raise HTTPException(
             status_code=400,
             detail=f"Job não está em estado para ser completado (status atual: '{job.status}')"
         )
 
+    now = datetime.datetime.now(datetime.timezone.utc)
     job.status = "printed"
-    job.printed_at = datetime.datetime.now(datetime.timezone.utc)
+    job.printed_at = now
     job.printer_name = req.printer_name or "Padrão"
     db.commit()
+    _schedule_print_monitor_refresh(
+        background_tasks,
+        agent.restaurante_id,
+    )
+    _schedule_print_history_maintenance(
+        background_tasks,
+        agent.restaurante_id,
+        now,
+    )
 
     return {"status": "printed", "job_id": job.id}
 
@@ -1022,6 +1411,7 @@ def complete_job(
 def fail_job(
     job_id: str,
     req: FailJobRequest,
+    background_tasks: BackgroundTasks,
     agent: PrintAgentToken = Depends(get_current_agent),
     db: Session = Depends(get_db)
 ):
@@ -1055,6 +1445,16 @@ def fail_job(
         job.agent_id = None
 
     db.commit()
+    _schedule_print_monitor_refresh(
+        background_tasks,
+        agent.restaurante_id,
+    )
+    if job.status == "failed":
+        _schedule_print_history_maintenance(
+            background_tasks,
+            agent.restaurante_id,
+            datetime.datetime.now(datetime.timezone.utc),
+        )
 
     return {
         "status": job.status,
@@ -1066,6 +1466,7 @@ def fail_job(
 @router.post("/jobs/{job_id}/reprint")
 def request_reprint(
     job_id: str,
+    background_tasks: BackgroundTasks,
     current_user: Usuario = Depends(require_permission("impressao:administrar")),
     db: Session = Depends(get_db)
 ):
@@ -1080,6 +1481,14 @@ def request_reprint(
 
     if not original_job:
         raise HTTPException(status_code=404, detail="Job original não encontrado")
+    if not original_job.payload_text:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail=(
+                "O conteúdo desta impressão já expirou da janela de "
+                "reimpressão de hoje."
+            ),
+        )
 
     timestamp_str = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d%H%M%S%f")
     new_idempotency_key = f"reprint:{original_job.id}:{timestamp_str}"
@@ -1097,6 +1506,7 @@ def request_reprint(
 
     db.add(reprint_job)
     db.commit()
+    _schedule_print_monitor_refresh(background_tasks, rest_id)
 
     return {
         "status": "created",
