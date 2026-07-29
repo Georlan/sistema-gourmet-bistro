@@ -1061,6 +1061,8 @@ class PrintAgentToken(Base):
     ativo = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.timezone.utc))
     last_seen_at = Column(DateTime(timezone=True), nullable=True)
+    printer_diagnostics = Column(JSON, nullable=True)
+    diagnostics_updated_at = Column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         UniqueConstraint("restaurante_id", "agent_id", name="uq_print_agent_tokens_restaurante_agent"),

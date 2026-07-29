@@ -17,6 +17,15 @@ class FilePrinterAdapter(BasePrinterAdapter):
         self.output_dir = output_dir
         os.makedirs(self.output_dir, exist_ok=True)
 
+    def get_diagnostics(self):
+        return {
+            "adapter": "file",
+            "platform": "simulator",
+            "printers": [],
+            "default_printer": None,
+            "error": None,
+        }
+
     def print_ticket(self, payload_text: str, printer_name: str, doc_type: str) -> bool:
         try:
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")

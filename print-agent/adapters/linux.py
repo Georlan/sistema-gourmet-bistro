@@ -4,8 +4,10 @@ Adaptador de impressão para Linux (CUPS / porta física USB).
 
 import logging
 import os
+import glob
+import re
 import subprocess
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from .base import BasePrinterAdapter
 from .escpos import build_escpos_payload
@@ -61,10 +63,101 @@ def _resolve_automatic_cups_printer() -> Optional[str]:
     return None
 
 
+def _decode_command_output(proc: subprocess.CompletedProcess) -> str:
+    return proc.stdout.decode("utf-8", errors="replace").strip()
+
+
+def _cups_default_printer() -> Optional[str]:
+    try:
+        probe = _run_cups_command(["lpstat", "-d"])
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if probe.returncode != 0:
+        return None
+    output = _decode_command_output(probe)
+    if ":" not in output:
+        return None
+    return output.rsplit(":", 1)[1].strip() or None
+
+
+def _connection_from_uri(uri: str) -> str:
+    normalized = (uri or "").strip().lower()
+    if normalized.startswith("usb://") or "/dev/usb/" in normalized:
+        return "usb"
+    if normalized.startswith(
+        ("socket://", "ipp://", "ipps://", "lpd://", "http://", "https://")
+    ):
+        return "network"
+    return "unknown"
+
+
 class LinuxPrinterAdapter(BasePrinterAdapter):
     def __init__(self, output_dir: str = "print_output"):
         # Mantido na assinatura por compatibilidade com a factory.
         self.output_dir = output_dir
+
+    def get_diagnostics(self) -> Dict[str, Any]:
+        """
+        Detecta filas CUPS e portas USB físicas sem enviar papel.
+
+        ``lpstat -v`` informa o URI real da fila (usb://, socket:// etc.).
+        Portas /dev/usb/lp* também aparecem quando a impressora está acessível
+        diretamente, mesmo sem uma fila CUPS configurada.
+        """
+        printers: list[dict[str, Any]] = []
+        default_printer = _cups_default_printer()
+        error: Optional[str] = None
+
+        try:
+            devices = _run_cups_command(["lpstat", "-v"])
+            if devices.returncode == 0:
+                for line in _decode_command_output(devices).splitlines():
+                    match = re.match(
+                        r"(?:device for|dispositivo para)\s+(.+?):\s+(.+)$",
+                        line.strip(),
+                        re.IGNORECASE,
+                    )
+                    if not match:
+                        continue
+                    name, uri = match.group(1).strip(), match.group(2).strip()
+                    printers.append(
+                        {
+                            "name": name[:200],
+                            "connection": _connection_from_uri(uri),
+                            "uri": uri[:300],
+                            "is_default": name == default_printer,
+                            "available": True,
+                        }
+                    )
+            elif devices.stderr:
+                error = devices.stderr.decode(
+                    "utf-8",
+                    errors="replace",
+                ).strip()[:300]
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            error = f"CUPS indisponível: {exc}"[:300]
+
+        known_uris = {str(item.get("uri")) for item in printers}
+        for device_path in sorted(glob.glob("/dev/usb/lp*"))[:10]:
+            if device_path in known_uris:
+                continue
+            printers.append(
+                {
+                    "name": os.path.basename(device_path),
+                    "connection": "usb",
+                    "uri": device_path,
+                    "is_default": False,
+                    "available": os.access(device_path, os.W_OK),
+                }
+            )
+
+        return {
+            "adapter": "linux",
+            "platform": "linux",
+            "printers": printers[:10],
+            "default_printer": default_printer,
+            "error": error,
+        }
 
     def print_ticket(self, payload_text: str, printer_name: str, doc_type: str) -> bool:
         raw_payload = build_escpos_payload(payload_text, encoding="cp860")
