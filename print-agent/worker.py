@@ -59,7 +59,22 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
 
             # 1. Enviar Heartbeat periódico
             if now - last_heartbeat >= config.heartbeat_interval_seconds:
-                client.heartbeat()
+                try:
+                    diagnostics = adapter.get_diagnostics()
+                except Exception as exc:
+                    log.warning(
+                        "[DIAGNÓSTICO] Não foi possível verificar as "
+                        "impressoras locais: %s",
+                        exc,
+                    )
+                    diagnostics = {
+                        "adapter": adapter.__class__.__name__,
+                        "platform": "unknown",
+                        "printers": [],
+                        "default_printer": None,
+                        "error": str(exc)[:300],
+                    }
+                client.heartbeat(diagnostics=diagnostics)
                 # Evita repetir heartbeat a cada job quando houver uma falha
                 # transitória; a próxima tentativa ocorrerá na cadência normal.
                 last_heartbeat = now
