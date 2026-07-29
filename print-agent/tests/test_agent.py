@@ -121,6 +121,40 @@ def test_linux_adapter_does_not_fake_print_success(temp_dir):
     ]
 
 
+def test_linux_adapter_reports_cups_usb_printer(temp_dir):
+    linux_adapter = get_adapter("linux", output_dir=temp_dir)
+    default_probe = MagicMock(
+        returncode=0,
+        stdout=b"destino padrao do sistema: G250\n",
+        stderr=b"",
+    )
+    devices_probe = MagicMock(
+        returncode=0,
+        stdout=b"dispositivo para G250: usb://GERTEC/G250\n",
+        stderr=b"",
+    )
+
+    with (
+        patch(
+            "adapters.linux._run_cups_command",
+            side_effect=[default_probe, devices_probe],
+        ),
+        patch("adapters.linux.glob.glob", return_value=[]),
+    ):
+        diagnostics = linux_adapter.get_diagnostics()
+
+    assert diagnostics["default_printer"] == "G250"
+    assert diagnostics["printers"] == [
+        {
+            "name": "G250",
+            "connection": "usb",
+            "uri": "usb://GERTEC/G250",
+            "is_default": True,
+            "available": True,
+        }
+    ]
+
+
 def test_api_client_reuses_http_session():
     """Polling e heartbeat devem compartilhar a mesma conexão HTTP."""
     job = {"id": "job-session"}
@@ -133,9 +167,17 @@ def test_api_client_reuses_http_session():
         client = KomaApiClient("https://api.koma.test", "agent-token")
 
         assert client.claim_next_job() == job
-        assert client.heartbeat() is True
+        diagnostics = {
+            "adapter": "linux",
+            "platform": "linux",
+            "printers": [],
+        }
+        assert client.heartbeat(diagnostics=diagnostics) is True
         SessionClass.assert_called_once_with()
         assert session.post.call_count == 2
+        assert session.post.call_args.kwargs["json"] == {
+            "diagnostics": diagnostics
+        }
 
 
 def test_api_client_falls_back_during_backend_rollout():
