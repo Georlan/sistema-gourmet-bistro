@@ -13,6 +13,19 @@ from adapters import get_adapter
 log = logging.getLogger("print-agent.worker")
 
 RECONCILIATION_INTERVAL_SECONDS = 5.0
+DIAGNOSTIC_REFRESH_INTERVAL_SECONDS = 5.0
+NOT_READY_LOG_INTERVAL_SECONDS = 30.0
+
+
+def _diagnostics_have_ready_printer(diagnostics: dict) -> bool:
+    printers = diagnostics.get("printers") or []
+    return any(
+        printer.get("available") is True
+        and printer.get("present") is True
+        and printer.get("configured") is True
+        for printer in printers
+        if isinstance(printer, dict)
+    )
 
 
 def process_unconfirmed_journal_jobs(client: KomaApiClient, journal: PrintJournal):
@@ -49,32 +62,58 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
     print("=========================================================")
 
     last_heartbeat = 0.0
+    last_diagnostics_refresh = 0.0
     last_reconciliation = 0.0
+    last_not_ready_log = 0.0
+    latest_diagnostics = {
+        "adapter": adapter.__class__.__name__,
+        "platform": "unknown",
+        "printers": [],
+        "default_printer": None,
+        "error": None,
+    }
     loop_count = 0
 
     while True:
         should_wait = True
         try:
             now = time.time()
+            diagnostics_changed = False
 
-            # 1. Enviar Heartbeat periódico
-            if now - last_heartbeat >= config.heartbeat_interval_seconds:
+            should_refresh_diagnostics = (
+                now - last_diagnostics_refresh
+                >= DIAGNOSTIC_REFRESH_INTERVAL_SECONDS
+            )
+            if should_refresh_diagnostics:
                 try:
-                    diagnostics = adapter.get_diagnostics()
+                    refreshed_diagnostics = adapter.get_diagnostics()
                 except Exception as exc:
                     log.warning(
                         "[DIAGNÓSTICO] Não foi possível verificar as "
                         "impressoras locais: %s",
                         exc,
                     )
-                    diagnostics = {
+                    refreshed_diagnostics = {
                         "adapter": adapter.__class__.__name__,
                         "platform": "unknown",
                         "printers": [],
                         "default_printer": None,
                         "error": str(exc)[:300],
                     }
-                client.heartbeat(diagnostics=diagnostics)
+                diagnostics_changed = (
+                    refreshed_diagnostics != latest_diagnostics
+                )
+                latest_diagnostics = refreshed_diagnostics
+                last_diagnostics_refresh = now
+
+            # 1. Enviar heartbeat periódico ou imediatamente quando o cabo,
+            # a fila ou a disponibilidade física mudarem.
+            if (
+                diagnostics_changed
+                or now - last_heartbeat
+                >= config.heartbeat_interval_seconds
+            ):
+                client.heartbeat(diagnostics=latest_diagnostics)
                 # Evita repetir heartbeat a cada job quando houver uma falha
                 # transitória; a próxima tentativa ocorrerá na cadência normal.
                 last_heartbeat = now
@@ -84,6 +123,30 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
             if now - last_reconciliation >= RECONCILIATION_INTERVAL_SECONDS:
                 process_unconfirmed_journal_jobs(client, journal)
                 last_reconciliation = now
+
+            requires_physical_printer = bool(
+                getattr(adapter, "requires_physical_printer", True)
+            )
+            printer_ready = (
+                not requires_physical_printer
+                or _diagnostics_have_ready_printer(latest_diagnostics)
+            )
+            if not printer_ready:
+                if (
+                    now - last_not_ready_log
+                    >= NOT_READY_LOG_INTERVAL_SECONDS
+                ):
+                    log.warning(
+                        "[IMPRESSORA AUSENTE] Conector online, mas nenhuma "
+                        "impressora física conectada e configurada foi "
+                        "detectada. A fila permanecerá intacta."
+                    )
+                    last_not_ready_log = now
+                loop_count += 1
+                if max_loops is not None and loop_count >= max_loops:
+                    break
+                time.sleep(config.poll_interval_seconds)
+                continue
 
             # 3. Buscar e reservar o próximo job em uma única ida à nuvem.
             claim_started = time.perf_counter()
@@ -209,6 +272,10 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
                             f"[FALHA] Impressão do job '{job_id}' falhou "
                             f"no adaptador após {cups_ms}ms."
                         )
+                        # Um cabo pode ter sido removido entre o último
+                        # diagnóstico e o envio. Releia antes de reservar outro
+                        # trabalho para não esgotar as tentativas da fila.
+                        last_diagnostics_refresh = 0.0
 
         except KeyboardInterrupt:
             print("\n[DAEMON] Encerrando Kôma Print Agent graciosamente...")

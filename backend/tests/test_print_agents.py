@@ -112,8 +112,38 @@ def jwt_headers(user_id: str, restaurante_id: int, role: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+def mark_agent_printer_ready(agent_id: str) -> None:
+    now = datetime.datetime.now(datetime.timezone.utc)
+    db = TestingSessionLocal()
+    try:
+        agent = db.query(PrintAgentToken).filter_by(id=agent_id).one()
+        agent.last_seen_at = now
+        agent.diagnostics_updated_at = now
+        agent.printer_diagnostics = {
+            "adapter": "linux",
+            "platform": "linux",
+            "default_printer": "G250",
+            "printers": [
+                {
+                    "name": "G250",
+                    "connection": "usb",
+                    "uri": "usb://GERTEC/G250",
+                    "is_default": True,
+                    "available": True,
+                    "present": True,
+                    "configured": True,
+                }
+            ],
+            "error": None,
+        }
+        db.commit()
+    finally:
+        db.close()
+
+
 def test_atomic_claim_job_success():
     """Agente 1 faz o claim com sucesso."""
+    mark_agent_printer_ready("a1")
     client = TestClient(app)
     headers = {"X-Agent-Token": "token_agent_1"}
 
@@ -124,6 +154,8 @@ def test_atomic_claim_job_success():
 
 def test_concurrent_claim_second_agent_gets_conflict():
     """Agente 2 tentando o claim do mesmo job já assumido deve receber HTTP 409 Conflict."""
+    mark_agent_printer_ready("a1")
+    mark_agent_printer_ready("a2")
     client = TestClient(app)
     headers1 = {"X-Agent-Token": "token_agent_1"}
     headers2 = {"X-Agent-Token": "token_agent_2"}
@@ -140,6 +172,7 @@ def test_concurrent_claim_second_agent_gets_conflict():
 
 def test_claim_next_reserves_job_in_one_request():
     """Busca e claim acontecem juntos, com telemetria da fila."""
+    mark_agent_printer_ready("a1")
     client = TestClient(app)
     headers = {"X-Agent-Token": "token_agent_1"}
 
@@ -165,6 +198,8 @@ def test_claim_next_reserves_job_in_one_request():
 
 def test_claim_next_never_delivers_same_job_to_second_agent():
     """O segundo agente não recebe o job já reservado atomicamente."""
+    mark_agent_printer_ready("a1")
+    mark_agent_printer_ready("a2")
     client = TestClient(app)
     headers1 = {"X-Agent-Token": "token_agent_1"}
     headers2 = {"X-Agent-Token": "token_agent_2"}
@@ -186,6 +221,7 @@ def test_claim_next_never_delivers_same_job_to_second_agent():
 
 def test_stuck_job_recovery():
     """Jobs em 'claimed' há mais de 5min são liberados automaticamente no /jobs/next."""
+    mark_agent_printer_ready("a1")
     db = TestingSessionLocal()
     stuck_time = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=10)
     db.add(PrintJob(
@@ -244,6 +280,8 @@ def test_only_heartbeat_updates_agent_last_seen():
                         "uri": "usb://GERTEC/G250",
                         "is_default": True,
                         "available": True,
+                        "present": True,
+                        "configured": True,
                     }
                 ],
             }
@@ -261,6 +299,8 @@ def test_only_heartbeat_updates_agent_last_seen():
             agent.printer_diagnostics["printers"][0]["connection"]
             == "usb"
         )
+        assert agent.printer_diagnostics["printers"][0]["present"] is True
+        assert agent.printer_diagnostics["printers"][0]["configured"] is True
     finally:
         db.close()
 
@@ -274,6 +314,90 @@ def test_legacy_heartbeat_without_body_remains_accepted():
     )
 
     assert response.status_code == 200
+
+
+def test_claim_next_keeps_job_pending_without_physical_printer():
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/print-agents/jobs/claim-next",
+        headers={"X-Agent-Token": "token_agent_1"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() is None
+    db = TestingSessionLocal()
+    try:
+        job = db.query(PrintJob).filter_by(id="job-1001").one()
+        assert job.status == "pending"
+        assert job.agent_id is None
+    finally:
+        db.close()
+
+
+def test_print_test_is_rejected_without_physical_printer():
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/print-agents/jobs/inject",
+        headers=jwt_headers("2", 2, "admin"),
+        json={
+            "source_type": "teste_painel",
+            "source_id": "teste-sem-usb",
+            "payload_text": "TESTE REAL DO KÔMA PRINT",
+        },
+    )
+
+    assert response.status_code == 409
+    assert "nenhuma impressora física" in response.json()["detail"]
+
+
+def test_print_test_is_enqueued_with_recent_ready_printer():
+    now = datetime.datetime.now(datetime.timezone.utc)
+    db = TestingSessionLocal()
+    try:
+        agent = PrintAgentToken(
+            id="a-ready-tenant-2",
+            restaurante_id=2,
+            agent_id="agent-ready-tenant-2",
+            token_hash=hash_token("ready-token"),
+            ativo=True,
+            last_seen_at=now,
+            diagnostics_updated_at=now,
+            printer_diagnostics={
+                "adapter": "linux",
+                "platform": "linux",
+                "printers": [
+                    {
+                        "name": "G250",
+                        "connection": "usb",
+                        "uri": "usb://GERTEC/G250",
+                        "is_default": True,
+                        "available": True,
+                        "present": True,
+                        "configured": True,
+                    }
+                ],
+            },
+        )
+        db.add(agent)
+        db.commit()
+    finally:
+        db.close()
+
+    client = TestClient(app)
+    response = client.post(
+        "/api/print-agents/jobs/inject",
+        headers=jwt_headers("2", 2, "admin"),
+        json={
+            "source_type": "teste_painel",
+            "source_id": "teste-com-usb",
+            "payload_text": "TESTE REAL DO KÔMA PRINT",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "enqueued"
 
 
 @pytest.mark.parametrize(
