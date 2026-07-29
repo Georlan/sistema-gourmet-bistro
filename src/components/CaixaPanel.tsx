@@ -498,6 +498,9 @@ export function CaixaPanel({
   };
 
   // Config Salão sub-tab
+  const [printingSettingsTab, setPrintingSettingsTab] = useState<
+    'impressao' | 'garcom' | 'taxa'
+  >('impressao');
   const [configSalSubTab, setConfigSalSubTab] = useState<'pedido' | 'fechamento' | 'atendimento'>('pedido');
 
   // System waiters (users CRUD) list loaded from API
@@ -2644,8 +2647,7 @@ export function CaixaPanel({
                 {group.items.map((tab) => {
                   const Icon = tab.icon;
                   const isLocked = (
-                    (tab.id === 'impressao_salao' && !hasPrinting)
-                    || (tab.id === 'cardapio_digital' && !hasOnlineMenu)
+                    tab.id === 'cardapio_digital' && !hasOnlineMenu
                   );
                   const isActive = (
                     tab.id === 'cardapio_digital' ? (activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital')
@@ -2664,9 +2666,7 @@ export function CaixaPanel({
                           setActiveTab('assinatura_pix');
                           setActiveSubTab('planos');
                           showToast(
-                            tab.id === 'impressao_salao'
-                              ? 'A impressão está disponível a partir do Kôma Pro.'
-                              : currentPlanId === 'pro'
+                            currentPlanId === 'pro'
                                 ? `Ative o ${ONLINE_MENU_ADDON.name} ou migre para o Kôma Premium.`
                                 : 'O cardápio online está disponível no Kôma Pro como adicional e incluído no Premium.',
                             'info'
@@ -2771,7 +2771,7 @@ export function CaixaPanel({
             {activeTab === 'financeiro' && 'GESTÃO DO CAIXA'}
             {activeTab === 'clientes' && 'GESTÃO DE CLIENTES'}
             {(activeTab === 'permissoes_cargos' || (activeTab === 'configuracoes' && activeSubTab === 'equipe')) && 'Permissões e Gestão de Equipe'}
-            {(activeTab === 'impressao_salao' || (activeTab === 'configuracoes' && activeSubTab === 'impressoras')) && 'Configurações de Impressão e Salão'}
+            {(activeTab === 'impressao_salao' || (activeTab === 'configuracoes' && activeSubTab === 'impressoras')) && 'Configurações do Salão'}
             {(activeTab === 'assinatura_pix' || (activeTab === 'configuracoes' && activeSubTab === 'planos')) && 'Planos de Assinatura e Recebimento Pix'}
             {(activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital') && 'Cardápio Digital — Identidade Whitelabel'}
           </h2>
@@ -4528,31 +4528,62 @@ export function CaixaPanel({
           )}
 
 
-          {/* VIEW 7: CONFIGURAÇÕES SALÃO (App Garçom & Impressoras) */}
-          {(activeTab === 'impressao_salao' || activeSubTab === 'impressoras') && !hasPrinting && (
-            <div className="bg-[#121214] border border-amber-500/20 rounded-3xl p-8 text-center max-w-xl mx-auto space-y-3">
-              <Lock size={24} className="text-amber-400 mx-auto" />
-              <h3 className="text-white font-bold">Impressão não incluída no Kôma Pocket</h3>
-              <p className="text-[10px] text-gray-400">
-                O restante da operação continua disponível. Migre para o Kôma Pro ou Premium para liberar impressão de cozinha, pré-conta e fechamento.
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTab('assinatura_pix');
-                  setActiveSubTab('planos');
-                }}
-                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold uppercase cursor-pointer"
-              >
-                Comparar planos
-              </button>
-            </div>
-          )}
+          {/* VIEW 7: CONFIGURAÇÕES SALÃO (Impressão, App Garçom e Taxa) */}
+          {(activeTab === 'impressao_salao' || activeSubTab === 'impressoras') && (
+            <div className="space-y-5">
+              <div className="flex flex-wrap gap-1.5 rounded-xl border border-[#27272A] bg-[#09090B] p-1 w-fit">
+                {[
+                  { id: 'impressao', label: 'Impressão', icon: Printer },
+                  { id: 'garcom', label: 'App do Garçom', icon: Smartphone },
+                  { id: 'taxa', label: 'Taxa de Serviço', icon: Percent }
+                ].map(tab => {
+                  const Icon = tab.icon;
+                  const selected = printingSettingsTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setPrintingSettingsTab(
+                        tab.id as 'impressao' | 'garcom' | 'taxa'
+                      )}
+                      className={`px-3 py-2 text-[9px] font-bold rounded-lg cursor-pointer transition-all flex items-center gap-1.5 ${
+                        selected
+                          ? 'bg-emerald-600 text-white shadow'
+                          : 'text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      <Icon size={12} />
+                      {tab.label}
+                      {tab.id === 'impressao' && !hasPrinting && (
+                        <Lock size={10} className="text-amber-300" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
 
-          {(activeTab === 'impressao_salao' || activeSubTab === 'impressoras') && hasPrinting && (
-            <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5')}>
+              {printingSettingsTab === 'impressao' && !hasPrinting && (
+                <div className="bg-[#121214] border border-amber-500/20 rounded-3xl p-8 text-center max-w-xl mx-auto space-y-3">
+                  <Lock size={24} className="text-amber-400 mx-auto" />
+                  <h3 className="text-white font-bold">Impressão não incluída no Kôma Pocket</h3>
+                  <p className="text-[10px] text-gray-400">
+                    App do Garçom e Taxa de Serviço continuam disponíveis nas abas acima. Migre para o Kôma Pro ou Premium para liberar impressão.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('assinatura_pix');
+                      setActiveSubTab('planos');
+                    }}
+                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold uppercase cursor-pointer"
+                  >
+                    Comparar planos
+                  </button>
+                </div>
+              )}
 
               {/* Service Tax config block moved to Salão e Impressão */}
+              {printingSettingsTab === 'taxa' && (
               <div className={clsx('lg:col-span-3', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-3')}>
                 <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Taxa de Serviço do Salão</span>
 
@@ -4591,15 +4622,19 @@ export function CaixaPanel({
                   </div>
                 )}
               </div>
+              )}
 
+              {printingSettingsTab === 'impressao' && hasPrinting && (
               <PrintMonitorPanel
                 apiBaseUrl={apiBaseUrl}
                 authHeaders={authHeaders}
                 onTestPrint={handleTestPrinter}
                 testInProgress={isTestingPrinter}
               />
+              )}
 
               {/* Waiters permissions switches (Left Column) */}
+              {printingSettingsTab === 'garcom' && (
               <div className={clsx('lg:col-span-2', 'bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'flex', 'flex-col', 'overflow-hidden')}>
                 <div className={clsx('border-b', 'border-[#27272A]', 'pb-3', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
                   <span className={clsx('font-serif', 'font-bold', 'text-gray-300')}>Configurações de Permissões do App do Garçom</span>
@@ -4710,9 +4745,11 @@ export function CaixaPanel({
 
                 </div>
               </div>
+              )}
 
               {/* Printer messages & test (Right Column) */}
-              <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'flex', 'flex-col', 'justify-between')}>
+              {printingSettingsTab === 'impressao' && hasPrinting && (
+              <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'grid', 'grid-cols-1', 'xl:grid-cols-2', 'gap-5')}>
                 <div className="space-y-4">
                   <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Impressoras térmicas</span>
 
@@ -4800,37 +4837,106 @@ export function CaixaPanel({
                   </div>
                 </div>
 
-                {/* Mockup live preview coupon */}
-                <div className={clsx('bg-[#FFFFFC]', 'text-black', 'p-4', 'rounded-xl', 'border', 'border-gray-300', 'font-mono', 'text-[9px]', 'space-y-3', 'shadow-inner', 'my-2')}>
-                  {printNamePosition === 'cabecalho' && printHeader && (
-                    <div className={clsx('text-center', 'font-bold', 'border-b', 'border-dashed', 'border-gray-400', 'pb-1.5', 'uppercase', 'leading-normal')}>
-                      <span>{printHeader}</span>
-                    </div>
-                  )}
-                  <div className={clsx('text-center', 'font-bold', 'uppercase')}>Comanda inteira</div>
-                  <div className="space-y-1">
-                    <div className={clsx('flex', 'justify-between')}>
-                      <span>1x Pastel Carne</span>
-                      <span>R$ 12,00</span>
-                    </div>
-                    <div className={clsx('flex', 'justify-between')}>
-                      <span>1x Coca-Cola</span>
-                      <span>R$ 6,00</span>
-                    </div>
+                {/* Prévia fiel ao formato térmico atual da comanda inteira. */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-serif font-bold text-gray-300">
+                      Prévia da comanda
+                    </span>
+                    <span className="rounded-full border border-[#27272A] px-2 py-1 text-[8px] text-gray-500">
+                      exemplo em escala
+                    </span>
                   </div>
-                  <div className={clsx('flex', 'justify-between', 'font-bold', 'border-t', 'border-dashed', 'border-gray-400', 'pt-1', 'text-[10px]')}>
-                    <span>Total:</span>
-                    <span>R$ 18,00</span>
-                  </div>
-                  <div className={clsx('text-center', 'text-[8px]', 'text-gray-600', 'border-t', 'border-dashed', 'border-gray-400', 'pt-1.5', 'uppercase', 'leading-normal')}>
-                    <span>{printFooter}</span>
-                    {printNamePosition === 'rodape' && printHeader && (
-                      <span className="block font-bold">{printHeader}</span>
+                  <div className="mx-auto w-full max-w-[380px] bg-[#FFFFFC] text-black px-5 py-4 rounded-sm border border-gray-300 font-mono text-[10px] leading-[1.25] shadow-[0_14px_30px_rgba(0,0,0,0.35)]">
+                    {printNamePosition === 'cabecalho' && printHeader && (
+                      <>
+                        <div className="text-center font-bold uppercase text-[12px] leading-tight">
+                          {printHeader}
+                        </div>
+                        <div className="border-t border-dashed border-gray-500 my-1.5" />
+                      </>
                     )}
+
+                    <div className="text-center font-bold text-[12px]">
+                      CONSUMO NO LOCAL
+                    </div>
+                    <div className="border-t border-dashed border-gray-500 my-1.5" />
+                    <div className="flex justify-between">
+                      <span>PEDIDO: #305</span>
+                      <span>MESA: 3</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>DATA: 28/07/2026</span>
+                      <span>HORA: 18:01</span>
+                    </div>
+                    <div>GARÇOM: GEORLAN</div>
+                    <div className="border-t border-dashed border-gray-500 my-1.5" />
+
+                    <div className="space-y-1">
+                      <div className="flex justify-between gap-3">
+                        <span>3x HAMBÚRGUER TRADICIONAL</span>
+                        <span className="shrink-0">R$ 57,00</span>
+                      </div>
+                      <div className="pl-3 text-[8px] text-gray-700">
+                        OBS: SEM CHEDDAR
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <span>2x HEINEKEN LONG NECK</span>
+                        <span className="shrink-0">R$ 24,00</span>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <span>1x BAGUETE DE COSTELA</span>
+                        <span className="shrink-0">R$ 36,00</span>
+                      </div>
+                      <div className="pl-3 text-[8px] text-gray-700">
+                        OBS: SEM SALADA
+                      </div>
+                    </div>
+
+                    <div className="border-t border-dashed border-gray-500 my-1.5" />
+                    <div className="text-center font-bold">CLIENTE: PAULO</div>
+                    <div className="flex justify-between gap-3">
+                      <span>1x CHEESE BACON</span>
+                      <span className="shrink-0">R$ 25,00</span>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span>1x HAMBÚRGUER SUÍNO</span>
+                      <span className="shrink-0">R$ 19,00</span>
+                    </div>
+                    <div className="border-t border-dashed border-gray-500 my-1.5" />
+                    <div className="flex justify-between">
+                      <span>SUBTOTAL CONSUMO GERAL</span>
+                      <span>R$ 117,00</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>SUBTOTAL PAULO</span>
+                      <span>R$ 44,00</span>
+                    </div>
+                    <div className="border-y border-double border-gray-700 my-1.5 py-1 flex justify-between font-bold text-[11px]">
+                      <span>TOTAL GERAL DA MESA</span>
+                      <span>R$ 161,00</span>
+                    </div>
+
+                    <div className="text-center text-[9px] mt-2">
+                      <span className="block">Gerenciado por Kôma</span>
+                      <span className="block">Documento não fiscal</span>
+                      {printFooter && (
+                        <span className="block mt-1 uppercase">{printFooter}</span>
+                      )}
+                      {printNamePosition === 'rodape' && printHeader && (
+                        <span className="block font-bold mt-1 uppercase">
+                          {printHeader}
+                        </span>
+                      )}
+                    </div>
                   </div>
+                  <p className="text-[8px] leading-relaxed text-gray-500">
+                    O nome, a posição e o rodapé acima atualizam esta prévia. A impressão real ajusta as quebras à largura configurada na térmica.
+                  </p>
                 </div>
 
               </div>
+              )}
 
             </div>
           )}
