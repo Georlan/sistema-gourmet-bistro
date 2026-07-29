@@ -205,6 +205,14 @@ def imprimir_recibo_mesa(
         num_pedido = first_comanda.numero_pedido
         tipo = first_comanda.tipo
         garcom_nome = first_comanda.criada_por.nome if first_comanda.criada_por else "Garçom"
+        opened_at = min(
+            (
+                comanda.criado_em
+                for comanda in comandas
+                if comanda.criado_em is not None
+            ),
+            default=None,
+        )
         
         from ..models import ConfiguracaoRestaurante
         config = db.query(ConfiguracaoRestaurante).filter(
@@ -233,6 +241,7 @@ def imprimir_recibo_mesa(
             mesa_id=mesa_id,
             garcom_nome=garcom_nome,
             comandas_details=comandas_details,
+            opened_at=opened_at,
             print_header=configured_name,
             print_footer=configured_footer,
             taxa_servico_ativa=taxa_servico_ativa,
