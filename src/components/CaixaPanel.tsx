@@ -26,6 +26,7 @@ import { RelatoriosVisaoGeralTab } from './relatorios/RelatoriosVisaoGeralTab';
 import { RelatoriosProdutosTab } from './relatorios/RelatoriosProdutosTab';
 import { EquipeDesempenhoTab } from './equipe/EquipeDesempenhoTab';
 import { EquipeCargosTab } from './equipe/EquipeCargosTab';
+import { PrintMonitorPanel } from './printing/PrintMonitorPanel';
 import { PRODUCTS, CATEGORIES } from '../data';
 import { getProductPresets, obterNomeCategoria, smartSearchMatch } from '../domain';
 import { API } from '../config/caixaService';
@@ -4552,6 +4553,11 @@ export function CaixaPanel({
                   </div>
                 )}
               </div>
+
+              <PrintMonitorPanel
+                apiBaseUrl={apiBaseUrl}
+                authHeaders={authHeaders}
+              />
 
               {/* Waiters permissions switches (Left Column) */}
               <div className={clsx('lg:col-span-2', 'bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'flex', 'flex-col', 'overflow-hidden')}>
