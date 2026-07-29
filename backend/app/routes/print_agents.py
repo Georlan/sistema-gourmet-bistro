@@ -3,9 +3,9 @@ import secrets
 import datetime
 import re
 from collections.abc import Mapping
-from typing import Optional, List
+from typing import Literal, Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
@@ -287,6 +287,30 @@ class ClaimJobResponse(BaseModel):
 class CompleteJobRequest(BaseModel):
     printer_name: Optional[str] = "Padrão"
 
+
+class DetectedPrinterReport(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    connection: Literal["usb", "network", "unknown"] = "unknown"
+    uri: Optional[str] = Field(default=None, max_length=300)
+    is_default: bool = False
+    available: bool = True
+
+
+class PrinterDiagnosticsReport(BaseModel):
+    adapter: str = Field(default="unknown", max_length=80)
+    platform: str = Field(default="unknown", max_length=40)
+    printers: List[DetectedPrinterReport] = Field(
+        default_factory=list,
+        max_length=10,
+    )
+    default_printer: Optional[str] = Field(default=None, max_length=200)
+    error: Optional[str] = Field(default=None, max_length=300)
+
+
+class HeartbeatRequest(BaseModel):
+    diagnostics: Optional[PrinterDiagnosticsReport] = None
+
+
 class FailJobRequest(BaseModel):
     error: str
 
@@ -402,6 +426,12 @@ def get_print_monitor(
                 "online": is_online,
                 "last_seen_at": last_seen.isoformat() if last_seen else None,
                 "seconds_since_heartbeat": _age_seconds(last_seen, now),
+                "printer_diagnostics": agent.printer_diagnostics,
+                "diagnostics_updated_at": (
+                    _as_utc(agent.diagnostics_updated_at).isoformat()
+                    if agent.diagnostics_updated_at
+                    else None
+                ),
             }
         )
 
@@ -607,12 +637,16 @@ def register_agent(
 
 @router.post("/heartbeat")
 def agent_heartbeat(
+    req: Optional[HeartbeatRequest] = None,
     agent: PrintAgentToken = Depends(get_current_agent),
     db: Session = Depends(get_db),
 ):
     """Heartbeat enviado periodicamente pelo agente local."""
     now = datetime.datetime.now(datetime.timezone.utc)
     agent.last_seen_at = now
+    if req and req.diagnostics:
+        agent.printer_diagnostics = req.diagnostics.model_dump()
+        agent.diagnostics_updated_at = now
     db.commit()
     return {
         "status": "ok",
