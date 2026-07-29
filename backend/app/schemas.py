@@ -436,7 +436,6 @@ class ConfiguracaoRestauranteUpdate(BaseModel):
     )
     impressao_mostrar_descricao: Optional[bool] = None
     modo_exclusivo_salao: Optional[bool] = None
-    plano: Optional[Literal["pocket", "pro", "premium"]] = None
     perm_garcom_delivery: Optional[bool] = None
     perm_garcom_editar: Optional[bool] = None
     perm_garcom_taxas: Optional[bool] = None
