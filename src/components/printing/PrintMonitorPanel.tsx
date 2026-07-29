@@ -18,6 +18,11 @@ interface PrintAgentHealth {
   online: boolean;
   last_seen_at: string | null;
   seconds_since_heartbeat: number | null;
+  diagnostics_fresh?: boolean;
+  diagnostics_age_seconds?: number | null;
+  physical_printer_present?: boolean;
+  printer_ready?: boolean;
+  ready_printer_count?: number;
   printer_diagnostics: {
     adapter: string;
     platform: string;
@@ -27,6 +32,8 @@ interface PrintAgentHealth {
       uri: string | null;
       is_default: boolean;
       available: boolean;
+      present?: boolean;
+      configured?: boolean;
     }>;
     default_printer: string | null;
     error: string | null;
@@ -73,6 +80,8 @@ interface PrintMonitorResponse {
     printing: number;
     failed: number;
     delayed: number;
+    ready_printers?: number;
+    printer_ready?: boolean;
     oldest_unresolved_seconds: number | null;
   };
   jobs: PrintJobHistory[];
@@ -250,9 +259,26 @@ export function PrintMonitorPanel({
 
   const hasOnlineAgent = Boolean(monitor?.summary.online_agents);
   const latestJob = monitor?.jobs[0] || null;
+  const agentHasFreshDiagnostics = useCallback((agent: PrintAgentHealth) => {
+    if (!agent.online) return false;
+    if (typeof agent.diagnostics_fresh === 'boolean') {
+      return agent.diagnostics_fresh;
+    }
+    if (!agent.diagnostics_updated_at) return false;
+    const updatedAt = new Date(agent.diagnostics_updated_at).getTime();
+    const generatedAt = monitor?.generated_at
+      ? new Date(monitor.generated_at).getTime()
+      : Date.now();
+    return (
+      Number.isFinite(updatedAt)
+      && Number.isFinite(generatedAt)
+      && generatedAt - updatedAt
+        <= (monitor?.online_threshold_seconds || 90) * 1000
+    );
+  }, [monitor]);
   const detectedPrinters = useMemo(() => (
     monitor?.agents
-      .filter(agent => agent.online)
+      .filter(agent => agentHasFreshDiagnostics(agent))
       .flatMap((agent, agentIndex) => (
         (agent.printer_diagnostics?.printers || []).map(printer => ({
           ...printer,
@@ -260,15 +286,26 @@ export function PrintMonitorPanel({
           agentId: agent.agent_id
         }))
       )) || []
-  ), [monitor]);
-  const hasPrinterDiagnostics = Boolean(
+  ), [agentHasFreshDiagnostics, monitor]);
+  const hasFreshPrinterDiagnostics = Boolean(
     monitor?.agents.some(
-      agent => agent.online && agent.diagnostics_updated_at
+      agent => agentHasFreshDiagnostics(agent)
     )
   );
   const availablePrinters = detectedPrinters.filter(
-    printer => printer.available
+    printer => (
+      printer.available
+      && printer.present === true
+      && printer.configured === true
+    )
   );
+  const physicallyPresentPrinters = detectedPrinters.filter(
+    printer => printer.present === true
+  );
+  const configuredDisconnectedPrinters = detectedPrinters.filter(
+    printer => printer.configured === true && printer.present !== true
+  );
+  const hasReadyPrinter = availablePrinters.length > 0;
   const diagnostic = useMemo<{
     tone: DiagnosticTone;
     title: string;
@@ -288,11 +325,32 @@ export function PrintMonitorPanel({
         detail: 'Abra o Kôma Print neste computador antes de enviar pedidos.'
       };
     }
-    if (hasPrinterDiagnostics && availablePrinters.length === 0) {
+    if (!hasFreshPrinterDiagnostics) {
       return {
         tone: 'warning',
-        title: 'Conector online; nenhuma impressora disponível',
-        detail: 'Conecte a impressora por USB/rede, ligue-a e atualize o diagnóstico.'
+        title: 'Conector online; aguardando leitura física',
+        detail: 'Atualize o Kôma Print para confirmar quais equipamentos USB/rede estão realmente presentes.'
+      };
+    }
+    if (!hasReadyPrinter && physicallyPresentPrinters.length > 0) {
+      return {
+        tone: 'warning',
+        title: 'Impressora física detectada, mas ainda não está pronta',
+        detail: 'O USB está conectado, porém falta configurar uma fila válida ou definir a impressora no sistema.'
+      };
+    }
+    if (!hasReadyPrinter && configuredDisconnectedPrinters.length > 0) {
+      return {
+        tone: 'danger',
+        title: 'Impressora configurada, mas desconectada',
+        detail: 'A fila continua cadastrada no computador, porém o equipamento físico não está presente no USB/rede.'
+      };
+    }
+    if (!hasReadyPrinter) {
+      return {
+        tone: 'danger',
+        title: 'Nenhuma impressora física conectada',
+        detail: 'O conector está online, mas não há equipamento pronto. O teste ficará bloqueado.'
       };
     }
     if (monitor.summary.delayed > 0) {
@@ -320,28 +378,24 @@ export function PrintMonitorPanel({
       const success = monitor.latest_spooler_success;
       return {
         tone: 'success',
-        title: 'Conector pronto para enviar',
+        title: `${availablePrinters.length} impressora(s) pronta(s)`,
         detail: `Último envio aceito pelo sistema há ${formatAge(success.age_seconds)} · ${friendlyPrinterName(success.printer_name)}.`
       };
     }
-    if (availablePrinters.length > 0) {
-      return {
-        tone: 'success',
-        title: `${availablePrinters.length} impressora(s) detectada(s)`,
-        detail: 'O equipamento está visível para o computador. Envie um teste para validar a saída no papel.'
-      };
-    }
     return {
-      tone: 'warning',
-      title: 'Conector online; diagnóstico físico indisponível',
-      detail: 'Atualize o Kôma Print neste computador e envie um teste.'
+      tone: 'success',
+      title: `${availablePrinters.length} impressora(s) pronta(s)`,
+      detail: 'A presença física e a configuração no sistema foram confirmadas.'
     };
   }, [
     availablePrinters.length,
+    configuredDisconnectedPrinters.length,
     hasOnlineAgent,
-    hasPrinterDiagnostics,
+    hasFreshPrinterDiagnostics,
+    hasReadyPrinter,
     latestJob,
     monitor,
+    physicallyPresentPrinters.length,
     queueTotal
   ]);
 
@@ -403,17 +457,26 @@ export function PrintMonitorPanel({
             <button
               type="button"
               onClick={() => void onTestPrint()}
-              disabled={testInProgress || !hasOnlineAgent}
+              disabled={testInProgress || !hasReadyPrinter}
+              title={
+                hasReadyPrinter
+                  ? 'Enviar um cupom de teste'
+                  : 'Conecte e configure uma impressora física primeiro'
+              }
               className="shrink-0 rounded-xl border border-current/20 bg-black/20 px-3 py-2 text-[9px] font-bold hover:bg-black/30 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center gap-2"
             >
               <Printer size={12} />
-              {testInProgress ? 'Enviando…' : 'Testar impressão'}
+              {testInProgress
+                ? 'Enviando…'
+                : hasReadyPrinter
+                  ? 'Testar impressão'
+                  : 'Teste indisponível'}
             </button>
           )}
         </div>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-2">
         <div className="rounded-2xl border border-[#27272A] bg-[#09090B] p-3">
           <div className="flex items-center gap-2 text-[9px] uppercase tracking-wider text-gray-500">
             {hasOnlineAgent
@@ -423,6 +486,26 @@ export function PrintMonitorPanel({
           </div>
           <strong className={hasOnlineAgent ? 'text-emerald-300' : 'text-red-300'}>
             {hasOnlineAgent ? 'Online' : 'Offline'}
+          </strong>
+        </div>
+        <div className="rounded-2xl border border-[#27272A] bg-[#09090B] p-3">
+          <div className="flex items-center gap-2 text-[9px] uppercase tracking-wider text-gray-500">
+            <Printer
+              size={12}
+              className={hasReadyPrinter
+                ? 'text-emerald-400'
+                : 'text-red-400'}
+            />
+            Impressora física
+          </div>
+          <strong className={hasReadyPrinter
+            ? 'text-emerald-300'
+            : 'text-red-300'}>
+            {hasReadyPrinter
+              ? `${availablePrinters.length} pronta(s)`
+              : physicallyPresentPrinters.length
+                ? 'Configurar'
+                : 'Ausente'}
           </strong>
         </div>
         <div className="rounded-2xl border border-[#27272A] bg-[#09090B] p-3">
@@ -468,7 +551,7 @@ export function PrintMonitorPanel({
 
       <div>
         <div className="text-[8px] uppercase tracking-wider text-gray-500 mb-2">
-          Impressoras detectadas no computador
+          Impressoras físicas e filas detectadas
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           {detectedPrinters.length ? detectedPrinters.map((printer, index) => (
@@ -476,15 +559,25 @@ export function PrintMonitorPanel({
               key={`${printer.agentId}:${printer.name}:${index}`}
               className={`rounded-xl border px-3 py-2 flex items-start gap-2 ${
                 printer.available
+                  && printer.present === true
+                  && printer.configured === true
                   ? 'border-emerald-500/25 bg-emerald-500/10'
-                  : 'border-amber-500/25 bg-amber-500/10'
+                  : printer.present === true
+                    ? 'border-amber-500/25 bg-amber-500/10'
+                    : 'border-red-500/25 bg-red-500/10'
               }`}
             >
               <Printer
                 size={14}
-                className={printer.available
+                className={(
+                  printer.available
+                  && printer.present === true
+                  && printer.configured === true
+                )
                   ? 'text-emerald-300 shrink-0 mt-0.5'
-                  : 'text-amber-300 shrink-0 mt-0.5'}
+                  : printer.present === true
+                    ? 'text-amber-300 shrink-0 mt-0.5'
+                    : 'text-red-300 shrink-0 mt-0.5'}
               />
               <div className="min-w-0">
                 <strong className="block text-[9px] text-gray-100 truncate">
@@ -498,7 +591,16 @@ export function PrintMonitorPanel({
                       ? 'Rede'
                       : 'Conexão não identificada'}
                   {' · '}
-                  {printer.available ? 'disponível' : 'indisponível'}
+                  {printer.available
+                    && printer.present === true
+                    && printer.configured === true
+                    ? 'pronta para imprimir'
+                    : printer.present === true
+                      && printer.configured !== true
+                      ? 'conectada · falta configurar'
+                      : printer.configured === true
+                        ? 'configurada · desconectada'
+                        : 'indisponível'}
                 </span>
                 {printer.uri && (
                   <span
@@ -513,8 +615,8 @@ export function PrintMonitorPanel({
           )) : (
             <div className="md:col-span-2 rounded-xl border border-[#27272A] bg-[#09090B] px-3 py-3 text-[9px] text-gray-500">
               {hasOnlineAgent
-                ? hasPrinterDiagnostics
-                  ? 'Nenhuma impressora física disponível neste computador.'
+                ? hasFreshPrinterDiagnostics
+                  ? 'Nenhuma impressora física foi encontrada no USB ou na rede.'
                   : 'O conector está online, mas ainda não enviou a leitura das impressoras. Atualize o Kôma Print.'
                 : 'Ligue o computador com o Kôma Print para verificar USB e impressoras de rede.'}
             </div>

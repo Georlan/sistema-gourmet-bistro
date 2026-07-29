@@ -17,6 +17,7 @@ router = APIRouter(prefix="/api/print-agents", tags=["Print Agents"])
 
 MAX_ATTEMPTS = 3
 AGENT_ONLINE_THRESHOLD_SECONDS = 90
+PRINTER_DIAGNOSTICS_FRESH_SECONDS = 90
 PRINT_DELAY_THRESHOLD_SECONDS = 120
 UNRESOLVED_JOB_STATUSES = ("pending", "claimed", "printing")
 ORDER_REFERENCE_PATTERNS = (
@@ -84,6 +85,85 @@ def _age_seconds(
     if normalized is None:
         return None
     return max(0, round((now - normalized).total_seconds()))
+
+
+def _agent_printer_state(
+    agent: PrintAgentToken,
+    now: datetime.datetime,
+) -> dict:
+    """
+    Separa presença do conector da presença da impressora física.
+
+    Uma fila antiga do CUPS/Spooler não é suficiente. Para ficar ``ready``, o
+    agente precisa estar online, o diagnóstico deve ser recente e a impressora
+    deve declarar presença física, configuração e disponibilidade.
+    """
+    last_seen = _as_utc(agent.last_seen_at)
+    diagnostics_updated_at = _as_utc(agent.diagnostics_updated_at)
+    heartbeat_age = _age_seconds(last_seen, now)
+    diagnostics_age = _age_seconds(diagnostics_updated_at, now)
+    online = bool(
+        heartbeat_age is not None
+        and heartbeat_age <= AGENT_ONLINE_THRESHOLD_SECONDS
+    )
+    diagnostics_fresh = bool(
+        online
+        and diagnostics_age is not None
+        and diagnostics_age <= PRINTER_DIAGNOSTICS_FRESH_SECONDS
+    )
+    diagnostics = (
+        agent.printer_diagnostics
+        if isinstance(agent.printer_diagnostics, Mapping)
+        else {}
+    )
+    printers = diagnostics.get("printers")
+    if not isinstance(printers, list):
+        printers = []
+    physical_present = any(
+        isinstance(printer, Mapping)
+        and printer.get("present") is True
+        for printer in printers
+    )
+    ready_printers = [
+        printer
+        for printer in printers
+        if (
+            isinstance(printer, Mapping)
+            and printer.get("available") is True
+            and printer.get("present") is True
+            and printer.get("configured") is True
+        )
+    ]
+    return {
+        "online": online,
+        "heartbeat_age_seconds": heartbeat_age,
+        "diagnostics_fresh": diagnostics_fresh,
+        "diagnostics_age_seconds": diagnostics_age,
+        "physical_printer_present": (
+            diagnostics_fresh and physical_present
+        ),
+        "printer_ready": (
+            diagnostics_fresh and bool(ready_printers)
+        ),
+        "ready_printer_count": (
+            len(ready_printers) if diagnostics_fresh else 0
+        ),
+    }
+
+
+def _restaurant_has_ready_printer(
+    db: Session,
+    restaurante_id: int,
+    now: datetime.datetime,
+) -> bool:
+    agents = db.query(PrintAgentToken).filter(
+        PrintAgentToken.restaurante_id == restaurante_id,
+        PrintAgentToken.ativo == True,
+    ).all()
+    return any(
+        _agent_printer_state(agent, now)["printer_ready"]
+        for agent in agents
+    )
 
 
 def _match_print_reference(
@@ -293,7 +373,9 @@ class DetectedPrinterReport(BaseModel):
     connection: Literal["usb", "network", "unknown"] = "unknown"
     uri: Optional[str] = Field(default=None, max_length=300)
     is_default: bool = False
-    available: bool = True
+    available: bool = False
+    present: bool = False
+    configured: bool = False
 
 
 class PrinterDiagnosticsReport(BaseModel):
@@ -352,9 +434,6 @@ def get_print_monitor(
         )
 
     now = datetime.datetime.now(datetime.timezone.utc)
-    online_cutoff = now - datetime.timedelta(
-        seconds=AGENT_ONLINE_THRESHOLD_SECONDS
-    )
     delay_cutoff = now - datetime.timedelta(
         seconds=PRINT_DELAY_THRESHOLD_SECONDS
     )
@@ -419,13 +498,25 @@ def get_print_monitor(
     agent_payload = []
     for agent in agents:
         last_seen = _as_utc(agent.last_seen_at)
-        is_online = bool(last_seen and last_seen >= online_cutoff)
+        printer_state = _agent_printer_state(agent, now)
+        is_online = printer_state["online"]
         agent_payload.append(
             {
                 "agent_id": agent.agent_id,
                 "online": is_online,
                 "last_seen_at": last_seen.isoformat() if last_seen else None,
                 "seconds_since_heartbeat": _age_seconds(last_seen, now),
+                "diagnostics_fresh": printer_state["diagnostics_fresh"],
+                "diagnostics_age_seconds": printer_state[
+                    "diagnostics_age_seconds"
+                ],
+                "physical_printer_present": printer_state[
+                    "physical_printer_present"
+                ],
+                "printer_ready": printer_state["printer_ready"],
+                "ready_printer_count": printer_state[
+                    "ready_printer_count"
+                ],
                 "printer_diagnostics": agent.printer_diagnostics,
                 "diagnostics_updated_at": (
                     _as_utc(agent.diagnostics_updated_at).isoformat()
@@ -513,6 +604,14 @@ def get_print_monitor(
                 1 for agent in agent_payload if agent["online"]
             ),
             "active_agents": len(agent_payload),
+            "ready_printers": sum(
+                agent["ready_printer_count"]
+                for agent in agent_payload
+            ),
+            "printer_ready": any(
+                agent["printer_ready"]
+                for agent in agent_payload
+            ),
             "pending": status_counts.get("pending", 0),
             "claimed": status_counts.get("claimed", 0),
             "printing": status_counts.get("printing", 0),
@@ -557,6 +656,23 @@ def inject_print_job(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Não é permitido injetar impressão em outro restaurante."
+        )
+
+    is_test_print = (
+        req.source_type.strip().casefold().startswith("teste")
+        or "TESTE REAL DO KÔMA PRINT" in req.payload_text.upper()
+    )
+    if is_test_print and not _restaurant_has_ready_printer(
+        db,
+        rest_id,
+        datetime.datetime.now(datetime.timezone.utc),
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Teste não enviado: nenhuma impressora física conectada e "
+                "pronta foi confirmada pelo Kôma Print."
+            ),
         )
 
     ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d%H%M%S%f")
@@ -665,6 +781,9 @@ def get_next_job(
     Libera automaticamente jobs travados em 'claimed' há mais de 5 minutos.
     """
     now = datetime.datetime.now(datetime.timezone.utc)
+    if not _agent_printer_state(agent, now)["printer_ready"]:
+        return None
+
     # Compatibilidade com agentes antigos. Agentes novos usam /jobs/claim-next,
     # que busca e reserva o trabalho na mesma chamada.
     released_jobs = _release_stuck_jobs(db, agent.restaurante_id, now)
@@ -706,6 +825,9 @@ def claim_next_job(
     disponível para instalações que ainda não atualizaram o agente.
     """
     now = datetime.datetime.now(datetime.timezone.utc)
+    if not _agent_printer_state(agent, now)["printer_ready"]:
+        return None
+
     _release_stuck_jobs(db, agent.restaurante_id, now)
 
     if db.get_bind().dialect.name == "postgresql":
@@ -798,6 +920,14 @@ def claim_job(
     Garante que dois agentes concorrentes NUNCA assumam o mesmo job.
     """
     now = datetime.datetime.now(datetime.timezone.utc)
+    if not _agent_printer_state(agent, now)["printer_ready"]:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Impressora física indisponível; o trabalho permanecerá "
+                "na fila."
+            ),
+        )
 
     # UPDATE atômico condicional — retorna o número de linhas realmente alteradas
     rows_updated = db.query(PrintJob).filter(

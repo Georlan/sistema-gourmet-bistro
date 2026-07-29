@@ -4812,29 +4812,6 @@ export function CaixaPanel({
 
                   </div>
 
-                  {/* O conector local transporta trabalhos; não é uma impressora. */}
-                  <div className="space-y-2 rounded-xl border border-[#27272A] bg-[#09090B] p-3">
-                    <div className="flex items-start gap-2">
-                      <Printer size={14} className="mt-0.5 shrink-0 text-emerald-400" />
-                      <div>
-                        <strong className="block text-[9px] text-gray-200">
-                          Validar impressora física
-                        </strong>
-                        <span className="block text-[8px] leading-relaxed text-gray-500 mt-0.5">
-                          O Kôma Print é o conector do computador, não uma impressora. Use o teste para confirmar o equipamento configurado no sistema.
-                        </span>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => void handleTestPrinter()}
-                      disabled={isTestingPrinter}
-                      className={clsx('w-full', 'py-1.5', 'bg-[#1C1C1F]', 'hover:bg-[#27272A]', 'border', 'border-[#27272A]', 'text-gray-300', 'font-bold', 'rounded-lg', 'text-[9px]', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1.5', 'cursor-pointer', 'disabled:opacity-50', 'disabled:cursor-not-allowed')}
-                    >
-                      <Printer size={12} />
-                      <span>{isTestingPrinter ? 'Enviando teste...' : 'Enviar teste de impressão'}</span>
-                    </button>
-                  </div>
                 </div>
 
                 {/* Prévia fiel ao formato térmico atual da comanda inteira. */}

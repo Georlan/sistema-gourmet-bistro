@@ -13,6 +13,8 @@ log = logging.getLogger("print-agent.adapter.file")
 
 
 class FilePrinterAdapter(BasePrinterAdapter):
+    requires_physical_printer = False
+
     def __init__(self, output_dir: str = "print_output"):
         self.output_dir = output_dir
         os.makedirs(self.output_dir, exist_ok=True)
@@ -25,6 +27,10 @@ class FilePrinterAdapter(BasePrinterAdapter):
             "default_printer": None,
             "error": None,
         }
+
+    def is_printer_ready(self, requested_name: str = "Padrão") -> bool:
+        # Adaptador explicitamente escolhido para desenvolvimento/simulação.
+        return True
 
     def print_ticket(self, payload_text: str, printer_name: str, doc_type: str) -> bool:
         try:

@@ -19,6 +19,7 @@ from config import AgentConfig
 from api_client import KomaApiClient
 from journal import PrintJournal
 from adapters.file import FilePrinterAdapter
+from adapters.windows import _matches_present_usb_device
 from adapters import get_adapter
 from worker import run_agent_loop, process_unconfirmed_journal_jobs
 
@@ -133,11 +134,20 @@ def test_linux_adapter_reports_cups_usb_printer(temp_dir):
         stdout=b"dispositivo para G250: usb://GERTEC/G250\n",
         stderr=b"",
     )
+    live_devices_probe = MagicMock(
+        returncode=0,
+        stdout=b"direct usb://GERTEC/G250\n",
+        stderr=b"",
+    )
 
     with (
         patch(
             "adapters.linux._run_cups_command",
-            side_effect=[default_probe, devices_probe],
+            side_effect=[
+                default_probe,
+                live_devices_probe,
+                devices_probe,
+            ],
         ),
         patch("adapters.linux.glob.glob", return_value=[]),
     ):
@@ -151,8 +161,139 @@ def test_linux_adapter_reports_cups_usb_printer(temp_dir):
             "uri": "usb://GERTEC/G250",
             "is_default": True,
             "available": True,
+            "present": True,
+            "configured": True,
         }
     ]
+
+
+def test_linux_adapter_does_not_treat_stale_cups_queue_as_connected(
+    temp_dir,
+):
+    linux_adapter = get_adapter("linux", output_dir=temp_dir)
+    default_probe = MagicMock(
+        returncode=0,
+        stdout=b"destino padrao do sistema: G250\n",
+        stderr=b"",
+    )
+    live_devices_probe = MagicMock(
+        returncode=0,
+        stdout=b"network socket\n",
+        stderr=b"",
+    )
+    devices_probe = MagicMock(
+        returncode=0,
+        stdout=b"dispositivo para G250: usb://GERTEC/G250\n",
+        stderr=b"",
+    )
+
+    with (
+        patch(
+            "adapters.linux._run_cups_command",
+            side_effect=[
+                default_probe,
+                live_devices_probe,
+                devices_probe,
+            ],
+        ),
+        patch("adapters.linux.glob.glob", return_value=[]),
+    ):
+        diagnostics = linux_adapter.get_diagnostics()
+
+    assert diagnostics["printers"] == [
+        {
+            "name": "G250",
+            "connection": "usb",
+            "uri": "usb://GERTEC/G250",
+            "is_default": True,
+            "available": False,
+            "present": False,
+            "configured": True,
+        }
+    ]
+
+
+def test_linux_adapter_does_not_match_an_unrelated_usb_printer(
+    temp_dir,
+):
+    linux_adapter = get_adapter("linux", output_dir=temp_dir)
+    default_probe = MagicMock(
+        returncode=0,
+        stdout=b"destino padrao do sistema: G250\n",
+        stderr=b"",
+    )
+    live_devices_probe = MagicMock(
+        returncode=0,
+        stdout=b"network socket\n",
+        stderr=b"",
+    )
+    devices_probe = MagicMock(
+        returncode=0,
+        stdout=b"dispositivo para G250: usb://GERTEC/G250\n",
+        stderr=b"",
+    )
+    unrelated_usb = {
+        "name": "EPSON TM-T20",
+        "connection": "usb",
+        "uri": "sysfs://usb/1-2",
+        "is_default": False,
+        "available": False,
+        "present": True,
+        "configured": False,
+        "hardware_id": "1:2",
+        "serial": "EPSON-123",
+    }
+
+    with (
+        patch(
+            "adapters.linux._run_cups_command",
+            side_effect=[
+                default_probe,
+                live_devices_probe,
+                devices_probe,
+            ],
+        ),
+        patch(
+            "adapters.linux._discover_sysfs_usb_printers",
+            return_value=[unrelated_usb],
+        ),
+        patch("adapters.linux.glob.glob", return_value=[]),
+    ):
+        diagnostics = linux_adapter.get_diagnostics()
+
+    assert diagnostics["printers"] == [
+        {
+            "name": "G250",
+            "connection": "usb",
+            "uri": "usb://GERTEC/G250",
+            "is_default": True,
+            "available": False,
+            "present": False,
+            "configured": True,
+        },
+        {
+            "name": "EPSON TM-T20",
+            "connection": "usb",
+            "uri": "sysfs://usb/1-2",
+            "is_default": False,
+            "available": False,
+            "present": True,
+            "configured": False,
+        },
+    ]
+
+
+def test_windows_usb_queue_does_not_match_unrelated_single_device():
+    devices = [
+        {
+            "name": "EPSON TM-T20",
+            "instance_id": r"USBPRINT\EPSON_TM-T20\123",
+            "status": "OK",
+        }
+    ]
+
+    assert _matches_present_usb_device("G250", devices) is False
+    assert _matches_present_usb_device("EPSON TM-T20 Receipt", devices) is True
 
 
 def test_api_client_reuses_http_session():
@@ -280,6 +421,7 @@ def test_worker_drains_backlog_without_polling_delay(temp_dir):
         client = ClientClass.return_value
         journal = JournalClass.return_value
         adapter = get_adapter_mock.return_value
+        adapter.requires_physical_printer = False
 
         client.heartbeat.return_value = True
         client.claim_next_job.side_effect = [first_job, second_job]
@@ -320,6 +462,7 @@ def test_worker_reclaims_locally_printed_job_without_reprinting(temp_dir):
     ):
         client = ClientClass.return_value
         journal = JournalClass.return_value
+        get_adapter_mock.return_value.requires_physical_printer = False
 
         client.heartbeat.return_value = True
         client.claim_next_job.return_value = job
@@ -335,3 +478,51 @@ def test_worker_reclaims_locally_printed_job_without_reprinting(temp_dir):
         )
         journal.mark_backend_confirmed.assert_called_once_with("job-recovered")
         get_adapter_mock.return_value.print_ticket.assert_not_called()
+
+
+def test_worker_does_not_claim_jobs_without_physical_printer(temp_dir):
+    config = AgentConfig(
+        api_url="http://localhost:8000",
+        agent_token="koma_ag_test_token",
+        adapter="linux",
+        output_dir=temp_dir,
+        poll_interval_seconds=0.01,
+        heartbeat_interval_seconds=0.01,
+    )
+    diagnostics = {
+        "adapter": "linux",
+        "platform": "linux",
+        "printers": [
+            {
+                "name": "G250",
+                "connection": "usb",
+                "uri": "usb://GERTEC/G250",
+                "is_default": True,
+                "available": False,
+                "present": False,
+                "configured": True,
+            }
+        ],
+        "default_printer": "G250",
+        "error": None,
+    }
+
+    with (
+        patch("worker.KomaApiClient") as ClientClass,
+        patch("worker.PrintJournal") as JournalClass,
+        patch("worker.get_adapter") as get_adapter_mock,
+        patch("worker.time.sleep") as sleep_mock,
+    ):
+        client = ClientClass.return_value
+        journal = JournalClass.return_value
+        adapter = get_adapter_mock.return_value
+        adapter.requires_physical_printer = True
+        adapter.get_diagnostics.return_value = diagnostics
+        journal.get_unconfirmed_printed_jobs.return_value = []
+
+        run_agent_loop(config, max_loops=1)
+
+        client.heartbeat.assert_called_once_with(diagnostics=diagnostics)
+        client.claim_next_job.assert_not_called()
+        adapter.print_ticket.assert_not_called()
+        sleep_mock.assert_not_called()
