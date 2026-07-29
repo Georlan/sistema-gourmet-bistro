@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Clock3,
   History,
   Printer,
@@ -16,6 +18,20 @@ interface PrintAgentHealth {
   online: boolean;
   last_seen_at: string | null;
   seconds_since_heartbeat: number | null;
+  printer_diagnostics: {
+    adapter: string;
+    platform: string;
+    printers: Array<{
+      name: string;
+      connection: 'usb' | 'network' | 'unknown';
+      uri: string | null;
+      is_default: boolean;
+      available: boolean;
+    }>;
+    default_printer: string | null;
+    error: string | null;
+  } | null;
+  diagnostics_updated_at: string | null;
 }
 
 interface PrintJobHistory {
@@ -140,6 +156,7 @@ export function PrintMonitorPanel({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reprintingId, setReprintingId] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
 
   const authorization = authHeaders.Authorization || authHeaders.authorization || '';
 
@@ -233,6 +250,25 @@ export function PrintMonitorPanel({
 
   const hasOnlineAgent = Boolean(monitor?.summary.online_agents);
   const latestJob = monitor?.jobs[0] || null;
+  const detectedPrinters = useMemo(() => (
+    monitor?.agents
+      .filter(agent => agent.online)
+      .flatMap((agent, agentIndex) => (
+        (agent.printer_diagnostics?.printers || []).map(printer => ({
+          ...printer,
+          agentIndex,
+          agentId: agent.agent_id
+        }))
+      )) || []
+  ), [monitor]);
+  const hasPrinterDiagnostics = Boolean(
+    monitor?.agents.some(
+      agent => agent.online && agent.diagnostics_updated_at
+    )
+  );
+  const availablePrinters = detectedPrinters.filter(
+    printer => printer.available
+  );
   const diagnostic = useMemo<{
     tone: DiagnosticTone;
     title: string;
@@ -250,6 +286,13 @@ export function PrintMonitorPanel({
         tone: 'danger',
         title: 'Impressão desconectada',
         detail: 'Abra o Kôma Print neste computador antes de enviar pedidos.'
+      };
+    }
+    if (hasPrinterDiagnostics && availablePrinters.length === 0) {
+      return {
+        tone: 'warning',
+        title: 'Conector online; nenhuma impressora disponível',
+        detail: 'Conecte a impressora por USB/rede, ligue-a e atualize o diagnóstico.'
       };
     }
     if (monitor.summary.delayed > 0) {
@@ -281,12 +324,26 @@ export function PrintMonitorPanel({
         detail: `Último envio aceito pelo sistema há ${formatAge(success.age_seconds)} · ${friendlyPrinterName(success.printer_name)}.`
       };
     }
+    if (availablePrinters.length > 0) {
+      return {
+        tone: 'success',
+        title: `${availablePrinters.length} impressora(s) detectada(s)`,
+        detail: 'O equipamento está visível para o computador. Envie um teste para validar a saída no papel.'
+      };
+    }
     return {
       tone: 'warning',
-      title: 'Conector online; impressora ainda não confirmada',
-      detail: 'Envie um teste para validar a impressora configurada no computador.'
+      title: 'Conector online; diagnóstico físico indisponível',
+      detail: 'Atualize o Kôma Print neste computador e envie um teste.'
     };
-  }, [hasOnlineAgent, latestJob, monitor, queueTotal]);
+  }, [
+    availablePrinters.length,
+    hasOnlineAgent,
+    hasPrinterDiagnostics,
+    latestJob,
+    monitor,
+    queueTotal
+  ]);
 
   const diagnosticStyle: Record<DiagnosticTone, string> = {
     success: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-100',
@@ -296,7 +353,7 @@ export function PrintMonitorPanel({
   };
 
   return (
-    <section className="lg:col-span-3 bg-[#121214] border border-[#27272A] rounded-3xl p-5 space-y-4">
+    <section className="bg-[#121214] border border-[#27272A] rounded-3xl p-5 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#27272A] pb-3">
         <div>
           <div className="flex items-center gap-2 text-gray-200 font-bold">
@@ -411,6 +468,62 @@ export function PrintMonitorPanel({
 
       <div>
         <div className="text-[8px] uppercase tracking-wider text-gray-500 mb-2">
+          Impressoras detectadas no computador
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          {detectedPrinters.length ? detectedPrinters.map((printer, index) => (
+            <div
+              key={`${printer.agentId}:${printer.name}:${index}`}
+              className={`rounded-xl border px-3 py-2 flex items-start gap-2 ${
+                printer.available
+                  ? 'border-emerald-500/25 bg-emerald-500/10'
+                  : 'border-amber-500/25 bg-amber-500/10'
+              }`}
+            >
+              <Printer
+                size={14}
+                className={printer.available
+                  ? 'text-emerald-300 shrink-0 mt-0.5'
+                  : 'text-amber-300 shrink-0 mt-0.5'}
+              />
+              <div className="min-w-0">
+                <strong className="block text-[9px] text-gray-100 truncate">
+                  {printer.name}
+                  {printer.is_default ? ' · padrão' : ''}
+                </strong>
+                <span className="block text-[8px] text-gray-400">
+                  {printer.connection === 'usb'
+                    ? 'USB'
+                    : printer.connection === 'network'
+                      ? 'Rede'
+                      : 'Conexão não identificada'}
+                  {' · '}
+                  {printer.available ? 'disponível' : 'indisponível'}
+                </span>
+                {printer.uri && (
+                  <span
+                    title={printer.uri}
+                    className="block text-[7px] text-gray-600 truncate mt-0.5"
+                  >
+                    {printer.uri}
+                  </span>
+                )}
+              </div>
+            </div>
+          )) : (
+            <div className="md:col-span-2 rounded-xl border border-[#27272A] bg-[#09090B] px-3 py-3 text-[9px] text-gray-500">
+              {hasOnlineAgent
+                ? hasPrinterDiagnostics
+                  ? 'Nenhuma impressora física disponível neste computador.'
+                  : 'O conector está online, mas ainda não enviou a leitura das impressoras. Atualize o Kôma Print.'
+                : 'Ligue o computador com o Kôma Print para verificar USB e impressoras de rede.'}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div>
+        <div className="text-[8px] uppercase tracking-wider text-gray-500 mb-2">
           Computadores com o Kôma Print — não são impressoras
         </div>
         <div className="flex flex-wrap gap-2">
@@ -438,11 +551,22 @@ export function PrintMonitorPanel({
       </div>
 
       <div className="rounded-2xl border border-[#27272A] overflow-hidden">
-        <div className="px-3 py-2 bg-[#1C1C1F] flex items-center gap-2 text-[10px] font-bold text-gray-300">
-          <History size={13} />
-          Histórico recente
-        </div>
-        <div className="max-h-80 overflow-auto">
+        <button
+          type="button"
+          onClick={() => setShowHistory(current => !current)}
+          className="w-full px-3 py-2 bg-[#1C1C1F] flex items-center justify-between gap-2 text-[10px] font-bold text-gray-300 hover:text-white cursor-pointer"
+          aria-expanded={showHistory}
+        >
+          <span className="flex items-center gap-2">
+            <History size={13} />
+            Histórico recente
+            <span className="text-[8px] font-normal text-gray-500">
+              últimos {monitor?.jobs.length || 0}
+            </span>
+          </span>
+          {showHistory ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+        </button>
+        {showHistory && <div className="max-h-80 overflow-auto">
           {monitor?.jobs.length ? (
             <table className="w-full text-left">
               <thead className="sticky top-0 bg-[#121214] text-[8px] uppercase tracking-wider text-gray-500">
@@ -521,11 +645,14 @@ export function PrintMonitorPanel({
               Nenhum trabalho de impressão registrado.
             </div>
           )}
-        </div>
+        </div>}
       </div>
 
       <p className="text-[8px] text-gray-500 leading-relaxed">
         “Aceito pelo sistema” significa que o CUPS ou o Spooler do Windows recebeu o trabalho. Impressoras térmicas comuns não confirmam de forma confiável se o papel saiu; por isso o Kôma não apresenta essa etapa como conclusão física.
+      </p>
+      <p className="text-[8px] text-gray-600 leading-relaxed">
+        Abrir ou fechar o histórico não cria registros extras: ele mostra os mesmos trabalhos da fila, limitado aos 20 mais recentes. A política de retenção do banco será definida separadamente.
       </p>
     </section>
   );
