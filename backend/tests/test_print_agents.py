@@ -215,7 +215,7 @@ def test_stuck_job_recovery():
 
 
 def test_only_heartbeat_updates_agent_last_seen():
-    """Polling ocioso não grava no banco; heartbeat registra presença do agente."""
+    """Heartbeat registra presença e o último diagnóstico limitado do agente."""
     client = TestClient(app)
     headers = {"X-Agent-Token": "token_agent_1"}
 
@@ -232,6 +232,22 @@ def test_only_heartbeat_updates_agent_last_seen():
     heartbeat_response = client.post(
         "/api/print-agents/heartbeat",
         headers=headers,
+        json={
+            "diagnostics": {
+                "adapter": "linux",
+                "platform": "linux",
+                "default_printer": "G250",
+                "printers": [
+                    {
+                        "name": "G250",
+                        "connection": "usb",
+                        "uri": "usb://GERTEC/G250",
+                        "is_default": True,
+                        "available": True,
+                    }
+                ],
+            }
+        },
     )
     assert heartbeat_response.status_code == 200
 
@@ -239,8 +255,25 @@ def test_only_heartbeat_updates_agent_last_seen():
     try:
         agent = db.query(PrintAgentToken).filter_by(id="a1").one()
         assert agent.last_seen_at is not None
+        assert agent.diagnostics_updated_at is not None
+        assert agent.printer_diagnostics["printers"][0]["name"] == "G250"
+        assert (
+            agent.printer_diagnostics["printers"][0]["connection"]
+            == "usb"
+        )
     finally:
         db.close()
+
+
+def test_legacy_heartbeat_without_body_remains_accepted():
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/print-agents/heartbeat",
+        headers={"X-Agent-Token": "token_agent_1"},
+    )
+
+    assert response.status_code == 200
 
 
 @pytest.mark.parametrize(
@@ -356,6 +389,22 @@ def test_print_monitor_reports_tenant_health_delays_and_spooler_state():
             token_hash=hash_token("online-agent-token"),
             ativo=True,
             last_seen_at=now - datetime.timedelta(seconds=20),
+            printer_diagnostics={
+                "adapter": "linux",
+                "platform": "linux",
+                "default_printer": "G250",
+                "printers": [
+                    {
+                        "name": "G250",
+                        "connection": "usb",
+                        "uri": "usb://GERTEC/G250",
+                        "is_default": True,
+                        "available": True,
+                    }
+                ],
+                "error": None,
+            },
+            diagnostics_updated_at=now - datetime.timedelta(seconds=20),
         ))
         db.add(PrintAgentToken(
             id="agent-offline-2",
@@ -432,6 +481,16 @@ def test_print_monitor_reports_tenant_health_delays_and_spooler_state():
 
     agent_ids = {agent["agent_id"] for agent in payload["agents"]}
     assert agent_ids == {"desktop-caixa-2", "desktop-antigo-2"}
+    online_agent = next(
+        agent
+        for agent in payload["agents"]
+        if agent["agent_id"] == "desktop-caixa-2"
+    )
+    assert (
+        online_agent["printer_diagnostics"]["printers"][0]["name"]
+        == "G250"
+    )
+    assert online_agent["diagnostics_updated_at"] is not None
 
     jobs = {job["id"]: job for job in payload["jobs"]}
     assert "job-1001" not in jobs
