@@ -384,13 +384,33 @@ def test_print_monitor_reports_tenant_health_delays_and_spooler_state():
             destination="FECHAMENTO",
             source_type="comanda",
             source_id="mesa-2",
-            payload_text="fechamento",
+            payload_text=(
+                "KÔMA\n"
+                "PEDIDO: #305                 MESA: 3\n"
+                "TOTAL GERAL DA MESA: R$ 42,00"
+            ),
             status="printed",
             idempotency_key="idemp:printed:2",
             agent_id="desktop-caixa-2",
             printer_name="G250",
             created_at=now - datetime.timedelta(minutes=2),
             printed_at=now - datetime.timedelta(minutes=1),
+        ))
+        db.add(PrintJob(
+            id="job-production-reference-2",
+            restaurante_id=2,
+            document_type="producao",
+            destination="COZINHA",
+            source_type="pedido",
+            source_id="c-98929afa",
+            payload_text=(
+                "KÔMA\n"
+                "PED #9516                       MESA 2\n"
+                "CONSUMO NO LOCAL"
+            ),
+            status="cancelled",
+            idempotency_key="idemp:reference:2",
+            created_at=now - datetime.timedelta(minutes=3),
         ))
         db.commit()
     finally:
@@ -419,6 +439,19 @@ def test_print_monitor_reports_tenant_health_delays_and_spooler_state():
     assert jobs["job-printed-2"]["display_status"] == "spooler_accepted"
     assert jobs["job-printed-2"]["physical_confirmation"] == "not_available"
     assert jobs["job-printed-2"]["can_reprint"] is True
+    assert jobs["job-printed-2"]["reference"] == "Pedido #305 · Mesa 3"
+    assert jobs["job-printed-2"]["order_number"] == "305"
+    assert jobs["job-printed-2"]["table_number"] == "3"
+    assert (
+        jobs["job-production-reference-2"]["reference"]
+        == "Pedido #9516 · Mesa 2"
+    )
+    latest_success = payload["latest_spooler_success"]
+    assert latest_success["job_id"] == "job-printed-2"
+    assert latest_success["reference"] == "Pedido #305 · Mesa 3"
+    assert latest_success["printer_name"] == "G250"
+    assert latest_success["printed_at"] == jobs["job-printed-2"]["printed_at"]
+    assert 0 <= latest_success["age_seconds"] < 120
 
 
 def test_print_monitor_rejects_waiter():
