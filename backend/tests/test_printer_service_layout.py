@@ -1,3 +1,5 @@
+import datetime
+
 from app.printer_service import ESC_FONT_A, ESC_FONT_B, PrinterService
 
 
@@ -59,6 +61,7 @@ def test_values_receipt_groups_quantity_and_shows_each_person_subtotal():
         tipo="Consumo no Local",
         mesa_id=3,
         garcom_nome="Georlan",
+        opened_at=datetime.datetime(2026, 7, 28, 18, 0),
         print_header="Pizzaria Bella Italia",
         taxa_servico_ativa=False,
         apenas_valores=True,
@@ -111,8 +114,45 @@ def test_values_receipt_groups_quantity_and_shows_each_person_subtotal():
     assert "TOTAL DE ITENS:" not in ticket
     assert "COMANDA INTEIRA" not in ticket
     assert "COMANDA - SÓ VALORES" not in ticket
-    assert "CONSUMO NO LOCAL" in ticket
+    assert "PIZZARIA BELLA ITALIA" not in ticket
+    assert "CONSUMO NO LOCAL" not in ticket
+    assert "PEDIDO: #305" not in ticket
+    assert "GARÇOM: GEORLAN" not in ticket
+    assert "DATA:" not in ticket
+    assert "MESA: 3" in ticket
+    assert "ABERTURA: 18:00" in ticket
     assert "R$ 82,00" in ticket
+
+
+def test_full_receipt_keeps_complete_header_unchanged():
+    ticket = _service().generate_receipt(
+        num_pedido=305,
+        tipo="Consumo no Local",
+        mesa_id=3,
+        garcom_nome="Georlan",
+        opened_at=datetime.datetime(2026, 7, 28, 18, 0),
+        print_header="Pizzaria Bella Italia",
+        taxa_servico_ativa=False,
+        apenas_valores=False,
+        comandas_details=[
+            {
+                "itens": [
+                    {
+                        "produto": {"nome": "Hambúrguer Tradicional"},
+                        "preco_unit": 19.0,
+                        "status": "preparando",
+                    }
+                ]
+            }
+        ],
+    )
+
+    assert "PIZZARIA BELLA ITALIA" in ticket
+    assert "CONSUMO NO LOCAL" in ticket
+    assert "PEDIDO: #305" in ticket
+    assert "MESA: 3" in ticket
+    assert "GARÇOM: Georlan" in ticket
+    assert "ABERTURA:" not in ticket
 
 
 def test_receipt_omits_general_subtotal_when_table_has_no_named_clients():
