@@ -5,7 +5,7 @@ Imports são protegidos para permitir validação do módulo fora do Windows.
 
 import logging
 import sys
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from .base import BasePrinterAdapter
 from .escpos import build_escpos_payload
@@ -50,6 +50,82 @@ class WindowsPrinterAdapter(BasePrinterAdapter):
                 )
                 return selected
         return None
+
+    def get_diagnostics(self) -> Dict[str, Any]:
+        win32print = self._win32print
+        if sys.platform != "win32" or not win32print:
+            return {
+                "adapter": "windows",
+                "platform": "windows",
+                "printers": [],
+                "default_printer": None,
+                "error": "Spooler do Windows ou pywin32 indisponível.",
+            }
+
+        try:
+            try:
+                default_printer = win32print.GetDefaultPrinter()
+            except Exception:
+                default_printer = None
+
+            flags = (
+                win32print.PRINTER_ENUM_LOCAL
+                | win32print.PRINTER_ENUM_CONNECTIONS
+            )
+            printers = []
+            for printer_info in win32print.EnumPrinters(flags)[:10]:
+                name = printer_info[2]
+                port_name = ""
+                available = True
+                handle = None
+                try:
+                    handle = win32print.OpenPrinter(name)
+                    details = win32print.GetPrinter(handle, 2)
+                    port_name = str(details.get("pPortName") or "")
+                    status = int(details.get("Status") or 0)
+                    available = status == 0
+                except Exception:
+                    available = False
+                finally:
+                    if handle is not None:
+                        try:
+                            win32print.ClosePrinter(handle)
+                        except Exception:
+                            pass
+
+                normalized_port = port_name.upper()
+                connection = (
+                    "usb"
+                    if normalized_port.startswith("USB")
+                    else "network"
+                    if normalized_port.startswith(("IP_", "WSD-", "\\\\"))
+                    else "unknown"
+                )
+                printers.append(
+                    {
+                        "name": str(name)[:200],
+                        "connection": connection,
+                        "uri": port_name[:300] or None,
+                        "is_default": name == default_printer,
+                        "available": available,
+                    }
+                )
+
+            return {
+                "adapter": "windows",
+                "platform": "windows",
+                "printers": printers,
+                "default_printer": default_printer,
+                "error": None,
+            }
+        except Exception as exc:
+            return {
+                "adapter": "windows",
+                "platform": "windows",
+                "printers": [],
+                "default_printer": None,
+                "error": str(exc)[:300],
+            }
 
     def print_ticket(self, payload_text: str, printer_name: str, doc_type: str) -> bool:
         if sys.platform != "win32" or not self._win32print:
