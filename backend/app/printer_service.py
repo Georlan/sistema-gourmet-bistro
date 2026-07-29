@@ -489,6 +489,7 @@ class PrinterService:
         mesa_id: Optional[int],
         garcom_nome: str,
         comandas_details: list,
+        opened_at: Optional[datetime.datetime] = None,
         print_header: Optional[str] = None,
         print_footer: Optional[str] = None,
         taxa_servico_ativa: bool = True,
@@ -506,37 +507,50 @@ class PrinterService:
         header_text = _single_line(print_header or "KÔMA GOURMET BISTRÔ")
 
         lines.append(draw_separator("=", width))
-        if position == "cabecalho" and header_text:
+        now = datetime.datetime.now()
+        if apenas_valores and mesa_id is not None:
+            opening_time = opened_at or now
+            lines.append(
+                ESC_BOLD_ON
+                + split_justified(
+                    f"MESA: {mesa_id}",
+                    f"ABERTURA: {opening_time.strftime('%H:%M')}",
+                    width,
+                )
+                + ESC_BOLD_OFF
+            )
+            lines.append(draw_separator("=", width))
+        else:
+            if position == "cabecalho" and header_text:
+                lines.append(
+                    ESC_DOUBLE_HEIGHT_ON
+                    + ESC_BOLD_ON
+                    + align_center(header_text.upper(), width)
+                    + ESC_BOLD_OFF
+                    + ESC_NORMAL_SIZE
+                )
+                lines.append(draw_separator("=", width))
+            order_type = _order_type_label(tipo, mesa_id)
             lines.append(
                 ESC_DOUBLE_HEIGHT_ON
                 + ESC_BOLD_ON
-                + align_center(header_text.upper(), width)
+                + align_center(order_type, width)
                 + ESC_BOLD_OFF
                 + ESC_NORMAL_SIZE
             )
             lines.append(draw_separator("=", width))
-        order_type = _order_type_label(tipo, mesa_id)
-        lines.append(
-            ESC_DOUBLE_HEIGHT_ON
-            + ESC_BOLD_ON
-            + align_center(order_type, width)
-            + ESC_BOLD_OFF
-            + ESC_NORMAL_SIZE
-        )
-        lines.append(draw_separator("=", width))
 
-        mesa_str = f"MESA: {mesa_id}" if mesa_id is not None else "SEM MESA"
-        lines.append(split_justified(f"PEDIDO: #{num_pedido}", mesa_str, width))
-        now = datetime.datetime.now()
-        lines.append(
-            split_justified(
-                f"DATA: {now.strftime('%d/%m/%Y')}",
-                f"HORA: {now.strftime('%H:%M')}",
-                width,
+            mesa_str = f"MESA: {mesa_id}" if mesa_id is not None else "SEM MESA"
+            lines.append(split_justified(f"PEDIDO: #{num_pedido}", mesa_str, width))
+            lines.append(
+                split_justified(
+                    f"DATA: {now.strftime('%d/%m/%Y')}",
+                    f"HORA: {now.strftime('%H:%M')}",
+                    width,
+                )
             )
-        )
-        lines.append(f"GARÇOM: {_single_line(garcom_nome)}")
-        lines.append(draw_separator("-", width))
+            lines.append(f"GARÇOM: {_single_line(garcom_nome)}")
+            lines.append(draw_separator("-", width))
 
         grand_total = 0.0
         grouped_by_client: dict[str, dict] = {}
@@ -681,7 +695,7 @@ class PrinterService:
         lines.append(align_center("Gerenciado por Kôma", width))
         if print_footer:
             _append_wrapped(lines, print_footer, width)
-        if position == "rodape" and header_text:
+        if not apenas_valores and position == "rodape" and header_text:
             lines.append(
                 ESC_BOLD_ON
                 + align_center(header_text.upper(), width)
