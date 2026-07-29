@@ -3,9 +3,9 @@ import secrets
 import datetime
 from collections.abc import Mapping
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, Header, status
+from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
 from pydantic import BaseModel
-from sqlalchemy import text
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from ..database import bind_session_to_tenant, get_db, current_restaurante_id
@@ -15,6 +15,9 @@ from ..security import require_permission
 router = APIRouter(prefix="/api/print-agents", tags=["Print Agents"])
 
 MAX_ATTEMPTS = 3
+AGENT_ONLINE_THRESHOLD_SECONDS = 90
+PRINT_DELAY_THRESHOLD_SECONDS = 120
+UNRESOLVED_JOB_STATUSES = ("pending", "claimed", "printing")
 
 
 def hash_token(token: str) -> str:
@@ -47,6 +50,25 @@ def _queue_latency_ms(
             * 1000
         ),
     )
+
+
+def _as_utc(value: Optional[datetime.datetime]) -> Optional[datetime.datetime]:
+    """Normaliza timestamps do PostgreSQL e do SQLite para UTC."""
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=datetime.timezone.utc)
+    return value.astimezone(datetime.timezone.utc)
+
+
+def _age_seconds(
+    value: Optional[datetime.datetime],
+    now: datetime.datetime,
+) -> Optional[int]:
+    normalized = _as_utc(value)
+    if normalized is None:
+        return None
+    return max(0, round((now - normalized).total_seconds()))
 
 
 def _claimed_job_payload(job, claimed_at: datetime.datetime) -> dict:
@@ -189,6 +211,168 @@ class InjectJobRequest(BaseModel):
     idempotency_key: Optional[str] = None
 
 # --- ENDPOINTS ---
+
+
+@router.get("/monitor", summary="Monitorar agentes e fila de impressão")
+def get_print_monitor(
+    limit: int = Query(default=20, ge=1, le=50),
+    current_user: Usuario = Depends(require_permission("impressao:administrar")),
+    db: Session = Depends(get_db),
+):
+    """
+    Retorna a saúde da impressão do restaurante autenticado.
+
+    O status ``printed`` confirma que o sistema operacional aceitou o trabalho
+    no CUPS/Spooler. Impressoras térmicas genéricas não fornecem confirmação
+    confiável de que o papel saiu fisicamente; o painel deixa essa limitação
+    explícita em vez de apresentar uma garantia inexistente.
+    """
+    rest_id = (
+        current_restaurante_id.get()
+        or getattr(current_user, "restaurante_id", None)
+    )
+    if not rest_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Restaurante não selecionado",
+        )
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    online_cutoff = now - datetime.timedelta(
+        seconds=AGENT_ONLINE_THRESHOLD_SECONDS
+    )
+    delay_cutoff = now - datetime.timedelta(
+        seconds=PRINT_DELAY_THRESHOLD_SECONDS
+    )
+
+    agents = (
+        db.query(PrintAgentToken)
+        .filter(
+            PrintAgentToken.restaurante_id == rest_id,
+            PrintAgentToken.ativo == True,
+        )
+        .order_by(PrintAgentToken.last_seen_at.desc())
+        .all()
+    )
+
+    status_rows = (
+        db.query(PrintJob.status, func.count(PrintJob.id))
+        .filter(PrintJob.restaurante_id == rest_id)
+        .group_by(PrintJob.status)
+        .all()
+    )
+    status_counts = {job_status: count for job_status, count in status_rows}
+
+    delayed_count = (
+        db.query(func.count(PrintJob.id))
+        .filter(
+            PrintJob.restaurante_id == rest_id,
+            PrintJob.status.in_(UNRESOLVED_JOB_STATUSES),
+            PrintJob.created_at <= delay_cutoff,
+        )
+        .scalar()
+        or 0
+    )
+    oldest_unresolved = (
+        db.query(func.min(PrintJob.created_at))
+        .filter(
+            PrintJob.restaurante_id == rest_id,
+            PrintJob.status.in_(UNRESOLVED_JOB_STATUSES),
+        )
+        .scalar()
+    )
+
+    jobs = (
+        db.query(PrintJob)
+        .filter(PrintJob.restaurante_id == rest_id)
+        .order_by(PrintJob.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    agent_payload = []
+    for agent in agents:
+        last_seen = _as_utc(agent.last_seen_at)
+        is_online = bool(last_seen and last_seen >= online_cutoff)
+        agent_payload.append(
+            {
+                "agent_id": agent.agent_id,
+                "online": is_online,
+                "last_seen_at": last_seen.isoformat() if last_seen else None,
+                "seconds_since_heartbeat": _age_seconds(last_seen, now),
+            }
+        )
+
+    job_payload = []
+    for job in jobs:
+        created_at = _as_utc(job.created_at)
+        claimed_at = _as_utc(job.claimed_at)
+        printed_at = _as_utc(job.printed_at)
+        age_seconds = _age_seconds(created_at, now)
+        is_delayed = bool(
+            job.status in UNRESOLVED_JOB_STATUSES
+            and age_seconds is not None
+            and age_seconds >= PRINT_DELAY_THRESHOLD_SECONDS
+        )
+        accepted_by_spooler = job.status == "printed"
+
+        job_payload.append(
+            {
+                "id": job.id,
+                "document_type": job.document_type,
+                "destination": job.destination,
+                "source_type": job.source_type,
+                "source_id": job.source_id,
+                "status": job.status,
+                "display_status": (
+                    "spooler_accepted" if accepted_by_spooler else job.status
+                ),
+                "accepted_by_spooler": accepted_by_spooler,
+                "physical_confirmation": (
+                    "not_available" if accepted_by_spooler else None
+                ),
+                "attempts": job.attempts,
+                "agent_id": job.agent_id,
+                "printer_name": job.printer_name,
+                "last_error": job.last_error,
+                "created_at": created_at.isoformat() if created_at else None,
+                "claimed_at": claimed_at.isoformat() if claimed_at else None,
+                "printed_at": printed_at.isoformat() if printed_at else None,
+                "age_seconds": age_seconds,
+                "delayed": is_delayed,
+                "is_reprint": str(job.idempotency_key).startswith("reprint:"),
+                "can_reprint": job.status in {
+                    "printed",
+                    "failed",
+                    "cancelled",
+                },
+            }
+        )
+
+    return {
+        "generated_at": now.isoformat(),
+        "online_threshold_seconds": AGENT_ONLINE_THRESHOLD_SECONDS,
+        "delay_threshold_seconds": PRINT_DELAY_THRESHOLD_SECONDS,
+        "physical_completion_tracking": False,
+        "agents": agent_payload,
+        "summary": {
+            "online_agents": sum(
+                1 for agent in agent_payload if agent["online"]
+            ),
+            "active_agents": len(agent_payload),
+            "pending": status_counts.get("pending", 0),
+            "claimed": status_counts.get("claimed", 0),
+            "printing": status_counts.get("printing", 0),
+            "failed": status_counts.get("failed", 0),
+            "delayed": delayed_count,
+            "oldest_unresolved_seconds": _age_seconds(
+                oldest_unresolved,
+                now,
+            ),
+        },
+        "jobs": job_payload,
+    }
+
 
 @router.post("/jobs/inject", summary="Injetar PrintJob manualmente (admin)")
 def inject_print_job(
