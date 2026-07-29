@@ -342,3 +342,91 @@ def test_register_and_reprint_stay_in_authenticated_tenant_2():
     finally:
         db.close()
         current_restaurante_id.reset(tenant_token)
+
+
+def test_print_monitor_reports_tenant_health_delays_and_spooler_state():
+    now = datetime.datetime.now(datetime.timezone.utc)
+    tenant_token = current_restaurante_id.set(2)
+    db = TestingSessionLocal()
+    try:
+        db.add(PrintAgentToken(
+            id="agent-online-2",
+            restaurante_id=2,
+            agent_id="desktop-caixa-2",
+            token_hash=hash_token("online-agent-token"),
+            ativo=True,
+            last_seen_at=now - datetime.timedelta(seconds=20),
+        ))
+        db.add(PrintAgentToken(
+            id="agent-offline-2",
+            restaurante_id=2,
+            agent_id="desktop-antigo-2",
+            token_hash=hash_token("offline-agent-token"),
+            ativo=True,
+            last_seen_at=now - datetime.timedelta(minutes=10),
+        ))
+        db.add(PrintJob(
+            id="job-delayed-2",
+            restaurante_id=2,
+            document_type="producao",
+            destination="COZINHA",
+            source_type="pedido",
+            source_id="pedido-atrasado",
+            payload_text="1x pedido atrasado",
+            status="pending",
+            idempotency_key="idemp:delayed:2",
+            created_at=now - datetime.timedelta(minutes=5),
+        ))
+        db.add(PrintJob(
+            id="job-printed-2",
+            restaurante_id=2,
+            document_type="fechamento",
+            destination="FECHAMENTO",
+            source_type="comanda",
+            source_id="mesa-2",
+            payload_text="fechamento",
+            status="printed",
+            idempotency_key="idemp:printed:2",
+            agent_id="desktop-caixa-2",
+            printer_name="G250",
+            created_at=now - datetime.timedelta(minutes=2),
+            printed_at=now - datetime.timedelta(minutes=1),
+        ))
+        db.commit()
+    finally:
+        db.close()
+        current_restaurante_id.reset(tenant_token)
+
+    client = TestClient(app)
+    response = client.get(
+        "/api/print-agents/monitor",
+        headers=jwt_headers("2", 2, "admin"),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["summary"]["online_agents"] == 1
+    assert payload["summary"]["active_agents"] == 2
+    assert payload["summary"]["delayed"] == 1
+    assert payload["physical_completion_tracking"] is False
+
+    agent_ids = {agent["agent_id"] for agent in payload["agents"]}
+    assert agent_ids == {"desktop-caixa-2", "desktop-antigo-2"}
+
+    jobs = {job["id"]: job for job in payload["jobs"]}
+    assert "job-1001" not in jobs
+    assert jobs["job-delayed-2"]["delayed"] is True
+    assert jobs["job-printed-2"]["display_status"] == "spooler_accepted"
+    assert jobs["job-printed-2"]["physical_confirmation"] == "not_available"
+    assert jobs["job-printed-2"]["can_reprint"] is True
+
+
+def test_print_monitor_rejects_waiter():
+    client = TestClient(app)
+
+    response = client.get(
+        "/api/print-agents/monitor",
+        headers=jwt_headers("garcom-2", 2, "garcom"),
+    )
+
+    assert response.status_code == 403
