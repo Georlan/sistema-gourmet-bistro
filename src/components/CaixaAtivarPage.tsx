@@ -120,6 +120,9 @@ export function CaixaAtivarPage({ token }: CaixaAtivarPageProps) {
               <div className="relative">
                 <input
                   type="email"
+                  name="email"
+                  autoComplete="username"
+                  inputMode="email"
                   required
                   placeholder="seu@email.com"
                   value={email}
@@ -135,6 +138,8 @@ export function CaixaAtivarPage({ token }: CaixaAtivarPageProps) {
               <div className="relative">
                 <input
                   type="password"
+                  name="new-password"
+                  autoComplete="new-password"
                   required
                   minLength={8}
                   maxLength={72}
@@ -152,6 +157,8 @@ export function CaixaAtivarPage({ token }: CaixaAtivarPageProps) {
               <div className="relative">
                 <input
                   type="password"
+                  name="confirm-password"
+                  autoComplete="new-password"
                   required
                   minLength={8}
                   maxLength={72}

@@ -1696,6 +1696,9 @@ export default function App() {
               <input
                 id="login-username"
                 type="email"
+                name="email"
+                autoComplete="username"
+                inputMode="email"
                 required
                 value={loginUsername}
                 onChange={(e) => setLoginUsername(e.target.value)}
@@ -1709,6 +1712,8 @@ export default function App() {
               <input
                 id="login-password"
                 type="password"
+                name="password"
+                autoComplete="current-password"
                 required
                 value={loginPassword}
                 onChange={(e) => setLoginPassword(e.target.value)}
