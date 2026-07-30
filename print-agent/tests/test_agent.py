@@ -5,7 +5,6 @@ Suíte de Testes Automatizados para o Kôma Print Agent Multiplataforma.
 import os
 import shutil
 import tempfile
-import time
 import pytest
 from unittest.mock import MagicMock, patch
 
@@ -19,9 +18,16 @@ from config import AgentConfig
 from api_client import KomaApiClient
 from journal import PrintJournal
 from adapters.file import FilePrinterAdapter
-from adapters.windows import _matches_present_usb_device
+from adapters.windows import (
+    _is_virtual_printer,
+    _matches_present_usb_device,
+)
 from adapters import get_adapter
-from worker import run_agent_loop, process_unconfirmed_journal_jobs
+from worker import (
+    execute_agent_command,
+    run_agent_loop,
+    process_unconfirmed_journal_jobs,
+)
 
 
 @pytest.fixture
@@ -167,6 +173,54 @@ def test_linux_adapter_reports_cups_usb_printer(temp_dir):
     ]
 
 
+def test_linux_adapter_reconnects_ready_usb_and_sets_default(temp_dir):
+    linux_adapter = get_adapter("linux", output_dir=temp_dir)
+    default_probe = MagicMock(
+        returncode=0,
+        stdout=b"destino padrao do sistema: G250\n",
+        stderr=b"",
+    )
+    live_devices_probe = MagicMock(
+        returncode=0,
+        stdout=b"direct usb://GERTEC/G250\n",
+        stderr=b"",
+    )
+    devices_probe = MagicMock(
+        returncode=0,
+        stdout=b"dispositivo para G250: usb://GERTEC/G250\n",
+        stderr=b"",
+    )
+    set_default = MagicMock(returncode=0, stdout=b"", stderr=b"")
+
+    with (
+        patch(
+            "adapters.linux._run_cups_command",
+            side_effect=[
+                default_probe,
+                live_devices_probe,
+                devices_probe,
+                set_default,
+                default_probe,
+                live_devices_probe,
+                devices_probe,
+            ],
+        ) as command,
+        patch("adapters.linux.glob.glob", return_value=[]),
+    ):
+        result = linux_adapter.connect_usb(
+            requested_name="G250",
+            requested_uri="usb://GERTEC/G250",
+        )
+
+    assert result["success"] is True
+    assert result["code"] == "usb_connected"
+    assert result["printer_name"] == "G250"
+    assert ["lpoptions", "-d", "G250"] in [
+        call.args[0]
+        for call in command.call_args_list
+    ]
+
+
 def test_linux_adapter_does_not_treat_stale_cups_queue_as_connected(
     temp_dir,
 ):
@@ -283,6 +337,51 @@ def test_linux_adapter_does_not_match_an_unrelated_usb_printer(
     ]
 
 
+def test_linux_adapter_deduplicates_sysfs_and_direct_usb_port(temp_dir):
+    linux_adapter = get_adapter("linux", output_dir=temp_dir)
+    unavailable = MagicMock(returncode=1, stdout=b"", stderr=b"")
+    physical_device = {
+        "name": "EPSON TM-T20",
+        "connection": "usb",
+        "uri": "sysfs://usb/1-2",
+        "is_default": False,
+        "available": False,
+        "present": True,
+        "configured": False,
+        "hardware_id": "1:2",
+        "serial": "EPSON-123",
+    }
+
+    with (
+        patch(
+            "adapters.linux._run_cups_command",
+            side_effect=[unavailable, unavailable, unavailable],
+        ),
+        patch(
+            "adapters.linux._discover_sysfs_usb_printers",
+            return_value=[physical_device],
+        ),
+        patch(
+            "adapters.linux.glob.glob",
+            return_value=["/dev/usb/lp0"],
+        ),
+        patch("adapters.linux.os.access", return_value=True),
+    ):
+        diagnostics = linux_adapter.get_diagnostics()
+
+    assert diagnostics["printers"] == [
+        {
+            "name": "EPSON TM-T20",
+            "connection": "usb",
+            "uri": "/dev/usb/lp0",
+            "is_default": False,
+            "available": True,
+            "present": True,
+            "configured": True,
+        }
+    ]
+
+
 def test_windows_usb_queue_does_not_match_unrelated_single_device():
     devices = [
         {
@@ -296,14 +395,32 @@ def test_windows_usb_queue_does_not_match_unrelated_single_device():
     assert _matches_present_usb_device("EPSON TM-T20 Receipt", devices) is True
 
 
+def test_windows_virtual_printers_are_filtered():
+    assert _is_virtual_printer(
+        "Microsoft Print to PDF",
+        "PORTPROMPT:",
+    ) is True
+    assert _is_virtual_printer("OneNote", "nul:") is True
+    assert _is_virtual_printer("G250", "USB001") is False
+
+
 def test_api_client_reuses_http_session():
     """Polling e heartbeat devem compartilhar a mesma conexão HTTP."""
     job = {"id": "job-session"}
 
     with patch("api_client.requests.Session") as SessionClass:
         session = SessionClass.return_value
-        session.post.return_value.status_code = 200
-        session.post.return_value.json.return_value = job
+        claim_response = MagicMock(status_code=200)
+        claim_response.json.return_value = job
+        heartbeat_response = MagicMock(status_code=200)
+        heartbeat_response.json.return_value = {
+            "status": "ok",
+            "command": None,
+        }
+        session.post.side_effect = [
+            claim_response,
+            heartbeat_response,
+        ]
 
         client = KomaApiClient("https://api.koma.test", "agent-token")
 
@@ -313,12 +430,72 @@ def test_api_client_reuses_http_session():
             "platform": "linux",
             "printers": [],
         }
-        assert client.heartbeat(diagnostics=diagnostics) is True
+        assert client.heartbeat(diagnostics=diagnostics) == {
+            "status": "ok",
+            "command": None,
+        }
         SessionClass.assert_called_once_with()
         assert session.post.call_count == 2
         assert session.post.call_args.kwargs["json"] == {
             "diagnostics": diagnostics
         }
+
+
+def test_agent_executes_connect_usb_command():
+    adapter = MagicMock()
+    adapter.connect_usb.return_value = {
+        "success": True,
+        "code": "usb_connected",
+        "message": "Impressora USB conectada e pronta para uso.",
+        "printer_name": "G250",
+        "diagnostics": {
+            "adapter": "linux",
+            "platform": "linux",
+            "printers": [],
+        },
+    }
+
+    result = execute_agent_command(
+        adapter,
+        {
+            "id": "usb-command-1",
+            "action": "connect_usb",
+            "printer_name": "G250",
+            "printer_uri": "usb://GERTEC/G250",
+        },
+    )
+
+    assert result["success"] is True
+    adapter.connect_usb.assert_called_once_with(
+        requested_name="G250",
+        requested_uri="usb://GERTEC/G250",
+    )
+
+
+def test_api_client_completes_usb_command():
+    with patch("api_client.requests.Session") as SessionClass:
+        session = SessionClass.return_value
+        session.post.return_value.status_code = 200
+        client = KomaApiClient("https://api.koma.test", "agent-token")
+        result = {
+            "success": True,
+            "code": "usb_connected",
+            "message": "Pronta.",
+            "printer_name": "G250",
+            "diagnostics": {
+                "adapter": "linux",
+                "platform": "linux",
+                "printers": [],
+            },
+        }
+
+        assert client.complete_command("usb-command-1", result) is True
+        assert session.post.call_args.args[0].endswith(
+            "/api/print-agents/actions/usb-command-1/complete"
+        )
+        assert session.post.call_args.kwargs["json"]["code"] == (
+            "usb_connected"
+        )
 
 
 def test_api_client_falls_back_during_backend_rollout():

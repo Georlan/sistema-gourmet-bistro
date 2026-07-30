@@ -15,7 +15,6 @@ from ..schemas import (
 )
 from ..security import (
     ensure_permission,
-    get_current_garcom_optional,
     get_current_user,
     require_permission,
 )
@@ -203,14 +202,41 @@ def abrir_comanda(comanda_in: ComandaCreate, background_tasks: BackgroundTasks, 
                 detail=f"Mesa {comanda_in.mesa_id} não encontrada"
             )
             
-        # 2. Se a mesa já possuir uma comanda aberta, reutilizar/retornar a comanda existente
-        comanda_aberta = db.query(Comanda).filter(
+        # 2. A mesma mesa pode ter comandas separadas por cliente. Um clique
+        # repetido sem identificador reutiliza a comanda geral; um nome novo
+        # cria outra comanda compartilhando o mesmo número do pedido.
+        comandas_abertas = db.query(Comanda).filter(
             Comanda.mesa_id == comanda_in.mesa_id,
             Comanda.fechada == False
-        ).first()
-        if comanda_aberta:
-            # Return existing comanda to prevent duplicates on double-click
-            return comanda_aberta
+        ).order_by(Comanda.criado_em.asc()).all()
+        identificador = (comanda_in.identificador or "").strip()
+        if comandas_abertas:
+            if not identificador:
+                comanda_geral = next(
+                    (
+                        comanda
+                        for comanda in comandas_abertas
+                        if not (comanda.identificador or "").strip()
+                    ),
+                    None,
+                )
+                return comanda_geral or comandas_abertas[0]
+
+            identificador_normalizado = identificador.casefold()
+            comanda_do_cliente = next(
+                (
+                    comanda
+                    for comanda in comandas_abertas
+                    if (
+                        (comanda.identificador or "").strip().casefold()
+                        == identificador_normalizado
+                    )
+                ),
+                None,
+            )
+            if comanda_do_cliente:
+                return comanda_do_cliente
+            numero_pedido = comandas_abertas[0].numero_pedido
         else:
             numero_pedido = gerar_novo_numero_pedido(db)
     else:
@@ -1012,7 +1038,7 @@ def update_item_details(
         
     # Verificar permissão do garçom
     config = db.query(ConfiguracaoRestaurante).filter(
-        ConfiguracaoRestaurante.restaurante_id == current_user.restaurante_id
+        ConfiguracaoRestaurante.restaurante_id == current_garcom.restaurante_id
     ).first()
     if config and not config.perm_garcom_editar and current_garcom.cargo == "garcom":
         raise HTTPException(
@@ -1060,7 +1086,6 @@ def update_item_details(
 
     # Imprimir via de comanda indicando edição/alteração
     try:
-        from ..printer_service import printer_service
         dest = item.produto.categoria.destino_impressao if (item.produto and item.produto.categoria) else "COZINHA"
         if dest != "NENHUM":
             header = "=== ITEM ALTERADO/ADICIONADO ==="

@@ -787,6 +787,142 @@ def test_print_monitor_rejects_waiter():
     assert response.status_code == 403
 
 
+def test_admin_can_connect_usb_and_agent_reports_result():
+    now = datetime.datetime.now(datetime.timezone.utc)
+    tenant_token = current_restaurante_id.set(2)
+    db = TestingSessionLocal()
+    try:
+        db.add(PrintAgentToken(
+            id="agent-command-2",
+            restaurante_id=2,
+            agent_id="desktop-command-2",
+            token_hash=hash_token("command-agent-token"),
+            ativo=True,
+            last_seen_at=now,
+            printer_diagnostics={
+                "adapter": "linux",
+                "platform": "linux",
+                "printers": [],
+                "default_printer": None,
+                "error": None,
+            },
+            diagnostics_updated_at=now,
+        ))
+        db.commit()
+    finally:
+        db.close()
+        current_restaurante_id.reset(tenant_token)
+
+    client = TestClient(app)
+    requested = client.post(
+        "/api/print-agents/actions/connect-usb",
+        headers=jwt_headers("2", 2, "admin"),
+        json={
+            "agent_id": "desktop-command-2",
+            "printer_name": "G250",
+            "printer_uri": "usb://GERTEC/G250",
+        },
+    )
+
+    assert requested.status_code == 200
+    command = requested.json()["command"]
+    assert command["action"] == "connect_usb"
+    assert command["printer_name"] == "G250"
+
+    heartbeat = client.post(
+        "/api/print-agents/heartbeat",
+        headers={"X-Agent-Token": "command-agent-token"},
+        json={},
+    )
+    assert heartbeat.status_code == 200
+    assert heartbeat.json()["command"]["id"] == command["id"]
+
+    completed = client.post(
+        f"/api/print-agents/actions/{command['id']}/complete",
+        headers={"X-Agent-Token": "command-agent-token"},
+        json={
+            "success": True,
+            "code": "usb_connected",
+            "message": "Impressora USB conectada e pronta para uso.",
+            "printer_name": "G250",
+            "diagnostics": {
+                "adapter": "linux",
+                "platform": "linux",
+                "default_printer": "G250",
+                "printers": [
+                    {
+                        "name": "G250",
+                        "connection": "usb",
+                        "uri": "usb://GERTEC/G250",
+                        "is_default": True,
+                        "available": True,
+                        "present": True,
+                        "configured": True,
+                    }
+                ],
+                "error": None,
+            },
+        },
+    )
+    assert completed.status_code == 200
+
+    repeated = client.post(
+        f"/api/print-agents/actions/{command['id']}/complete",
+        headers={"X-Agent-Token": "command-agent-token"},
+        json={
+            "success": True,
+            "code": "usb_connected",
+            "message": "Impressora USB conectada e pronta para uso.",
+            "printer_name": "G250",
+        },
+    )
+    assert repeated.status_code == 200
+    assert repeated.json()["status"] == "already_completed"
+
+    monitor = client.get(
+        "/api/print-agents/monitor",
+        headers=jwt_headers("2", 2, "admin"),
+    )
+    assert monitor.status_code == 200
+    agent = next(
+        item
+        for item in monitor.json()["agents"]
+        if item["agent_id"] == "desktop-command-2"
+    )
+    assert agent["pending_command"] is None
+    assert agent["last_command_result"]["id"] == command["id"]
+    assert agent["last_command_result"]["success"] is True
+    assert agent["printer_ready"] is True
+
+
+def test_usb_connection_action_is_tenant_scoped_and_rejects_waiter():
+    now = datetime.datetime.now(datetime.timezone.utc)
+    tenant_token = current_restaurante_id.set(1)
+    db = TestingSessionLocal()
+    try:
+        agent = db.query(PrintAgentToken).filter_by(id="a1").one()
+        agent.last_seen_at = now
+        db.commit()
+    finally:
+        db.close()
+        current_restaurante_id.reset(tenant_token)
+
+    client = TestClient(app)
+    cross_tenant = client.post(
+        "/api/print-agents/actions/connect-usb",
+        headers=jwt_headers("2", 2, "admin"),
+        json={"agent_id": "agent-box-1"},
+    )
+    waiter = client.post(
+        "/api/print-agents/actions/connect-usb",
+        headers=jwt_headers("garcom-2", 2, "garcom"),
+        json={},
+    )
+
+    assert cross_tenant.status_code == 404
+    assert waiter.status_code == 403
+
+
 def test_print_monitor_shows_only_the_latest_20_jobs_from_today():
     now = datetime.datetime.now(datetime.timezone.utc)
     tenant_token = current_restaurante_id.set(2)

@@ -39,6 +39,7 @@ AGENT_ONLINE_THRESHOLD_SECONDS = 90
 PRINTER_DIAGNOSTICS_FRESH_SECONDS = 90
 PRINT_DELAY_THRESHOLD_SECONDS = 120
 PRINT_HISTORY_VISIBLE_LIMIT = 20
+AGENT_COMMAND_TIMEOUT_SECONDS = 120
 UNRESOLVED_JOB_STATUSES = ("pending", "claimed", "printing")
 TERMINAL_JOB_STATUSES = ("printed", "failed", "cancelled")
 
@@ -292,6 +293,7 @@ def _agent_printer_state(
         printers = []
     physical_present = any(
         isinstance(printer, Mapping)
+        and printer.get("connection") == "usb"
         and printer.get("present") is True
         for printer in printers
     )
@@ -300,6 +302,7 @@ def _agent_printer_state(
         for printer in printers
         if (
             isinstance(printer, Mapping)
+            and printer.get("connection") == "usb"
             and printer.get("available") is True
             and printer.get("present") is True
             and printer.get("configured") is True
@@ -696,6 +699,20 @@ class HeartbeatRequest(BaseModel):
     diagnostics: Optional[PrinterDiagnosticsReport] = None
 
 
+class ConnectUsbPrinterRequest(BaseModel):
+    agent_id: Optional[str] = Field(default=None, max_length=200)
+    printer_name: Optional[str] = Field(default=None, max_length=200)
+    printer_uri: Optional[str] = Field(default=None, max_length=300)
+
+
+class CompleteAgentCommandRequest(BaseModel):
+    success: bool
+    code: str = Field(min_length=1, max_length=80)
+    message: str = Field(min_length=1, max_length=300)
+    printer_name: Optional[str] = Field(default=None, max_length=200)
+    diagnostics: Optional[PrinterDiagnosticsReport] = None
+
+
 class FailJobRequest(BaseModel):
     error: str
 
@@ -851,6 +868,18 @@ def get_print_monitor(
                     if agent.diagnostics_updated_at
                     else None
                 ),
+                "pending_command": agent.pending_command,
+                "command_requested_at": (
+                    _as_utc(agent.command_requested_at).isoformat()
+                    if agent.command_requested_at
+                    else None
+                ),
+                "last_command_result": agent.last_command_result,
+                "command_completed_at": (
+                    _as_utc(agent.command_completed_at).isoformat()
+                    if agent.command_completed_at
+                    else None
+                ),
             }
         )
 
@@ -954,6 +983,95 @@ def get_print_monitor(
             ),
         },
         "jobs": job_payload,
+    }
+
+
+@router.post(
+    "/actions/connect-usb",
+    summary="Pedir ao agente local para conectar uma impressora USB",
+)
+def request_usb_printer_connection(
+    req: ConnectUsbPrinterRequest,
+    background_tasks: BackgroundTasks,
+    current_user: Usuario = Depends(
+        require_permission("impressao:administrar")
+    ),
+    db: Session = Depends(get_db),
+):
+    """
+    Enfileira um comando curto para o serviço local já pareado.
+
+    O navegador não toca no USB nem no Spooler. O Kôma Print recebe o comando
+    no heartbeat, procura somente hardware USB físico e executa a configuração
+    local com o adaptador da plataforma.
+    """
+    rest_id = (
+        current_restaurante_id.get()
+        or getattr(current_user, "restaurante_id", None)
+    )
+    if not rest_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Restaurante não selecionado",
+        )
+
+    query = db.query(PrintAgentToken).filter(
+        PrintAgentToken.restaurante_id == rest_id,
+        PrintAgentToken.ativo == True,
+    )
+    if req.agent_id:
+        query = query.filter(
+            PrintAgentToken.agent_id == req.agent_id.strip()
+        )
+    agent = query.order_by(
+        PrintAgentToken.last_seen_at.desc()
+    ).first()
+    if not agent:
+        raise HTTPException(
+            status_code=404,
+            detail="Nenhum computador com o Kôma Print foi encontrado.",
+        )
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    if not _agent_printer_state(agent, now)["online"]:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "O Kôma Print deste computador está offline. "
+                "Ative o serviço antes de procurar o USB."
+            ),
+        )
+
+    pending_age = _age_seconds(agent.command_requested_at, now)
+    if (
+        isinstance(agent.pending_command, Mapping)
+        and pending_age is not None
+        and pending_age <= AGENT_COMMAND_TIMEOUT_SECONDS
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="Este computador já está procurando uma impressora USB.",
+        )
+
+    command_id = f"usb_{secrets.token_urlsafe(12)}"
+    command = {
+        "id": command_id,
+        "action": "connect_usb",
+        "printer_name": (req.printer_name or "").strip() or None,
+        "printer_uri": (req.printer_uri or "").strip() or None,
+        "requested_at": now.isoformat(),
+    }
+    agent.pending_command = command
+    agent.command_requested_at = now
+    agent.last_command_result = None
+    agent.command_completed_at = None
+    db.commit()
+    _schedule_print_monitor_refresh(background_tasks, rest_id)
+
+    return {
+        "status": "queued",
+        "agent_id": agent.agent_id,
+        "command": command,
     }
 
 
@@ -1096,13 +1214,103 @@ def agent_heartbeat(
     if req and req.diagnostics:
         agent.printer_diagnostics = req.diagnostics.model_dump()
         agent.diagnostics_updated_at = now
+
+    command = (
+        dict(agent.pending_command)
+        if isinstance(agent.pending_command, Mapping)
+        else None
+    )
+    command_age = _age_seconds(agent.command_requested_at, now)
+    if (
+        command
+        and command_age is not None
+        and command_age > AGENT_COMMAND_TIMEOUT_SECONDS
+    ):
+        agent.last_command_result = {
+            "id": command.get("id"),
+            "success": False,
+            "code": "command_expired",
+            "message": (
+                "O computador não respondeu ao comando dentro do prazo."
+            ),
+            "printer_name": None,
+            "completed_at": now.isoformat(),
+        }
+        agent.command_completed_at = now
+        agent.pending_command = None
+        agent.command_requested_at = None
+        command = None
     db.commit()
     return {
         "status": "ok",
         "agent_id": agent.agent_id,
         "restaurante_id": agent.restaurante_id,
-        "timestamp": now.isoformat()
+        "timestamp": now.isoformat(),
+        "command": command,
     }
+
+
+@router.post(
+    "/actions/{command_id}/complete",
+    summary="Confirmar comando local do agente de impressão",
+)
+def complete_agent_command(
+    command_id: str,
+    req: CompleteAgentCommandRequest,
+    background_tasks: BackgroundTasks,
+    agent: PrintAgentToken = Depends(get_current_agent),
+    db: Session = Depends(get_db),
+):
+    """Registra o resultado idempotente da tentativa de conexão USB."""
+    now = datetime.datetime.now(datetime.timezone.utc)
+    pending = (
+        dict(agent.pending_command)
+        if isinstance(agent.pending_command, Mapping)
+        else None
+    )
+    previous = (
+        dict(agent.last_command_result)
+        if isinstance(agent.last_command_result, Mapping)
+        else None
+    )
+    if not pending or pending.get("id") != command_id:
+        if previous and previous.get("id") == command_id:
+            return {
+                "status": "already_completed",
+                "command_id": command_id,
+            }
+        raise HTTPException(
+            status_code=409,
+            detail="O comando não está mais pendente para este computador.",
+        )
+
+    result = {
+        "id": command_id,
+        "success": req.success,
+        "code": req.code,
+        "message": req.message,
+        "printer_name": req.printer_name,
+        "completed_at": now.isoformat(),
+    }
+    agent.last_command_result = result
+    agent.command_completed_at = now
+    agent.pending_command = None
+    agent.command_requested_at = None
+    agent.last_seen_at = now
+    if req.diagnostics:
+        agent.printer_diagnostics = req.diagnostics.model_dump()
+        agent.diagnostics_updated_at = now
+    db.commit()
+    _schedule_print_monitor_refresh(
+        background_tasks,
+        agent.restaurante_id,
+    )
+    return {
+        "status": "completed",
+        "command_id": command_id,
+        "result": result,
+    }
+
 
 @router.get("/jobs/next")
 def get_next_job(

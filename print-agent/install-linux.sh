@@ -10,6 +10,8 @@ ADAPTER_DIR="$INSTALL_DIR/adapters"
 VENV_DIR="$INSTALL_DIR/.venv"
 UNIT_DIR="$CONFIG_HOME/systemd/user"
 UNIT_FILE="$UNIT_DIR/koma-print-agent.service"
+APPLICATION_DIR="$DATA_HOME/applications"
+DESKTOP_FILE="$APPLICATION_DIR/koma-print-agent.desktop"
 
 required_commands=("$PYTHON_BIN" systemctl install)
 for command_name in "${required_commands[@]}"; do
@@ -60,6 +62,9 @@ done
 for source_file in "${adapter_files[@]}"; do
     install -m 0644 "$SCRIPT_DIR/adapters/$source_file" "$ADAPTER_DIR/$source_file"
 done
+install -m 0755 \
+    "$SCRIPT_DIR/koma-print-launcher.sh" \
+    "$INSTALL_DIR/koma-print-launcher.sh"
 
 if [[ ! -x "$VENV_DIR/bin/python" ]]; then
     "$PYTHON_BIN" -m venv "$VENV_DIR"
@@ -87,6 +92,7 @@ echo "[KÔMA] Conectando este computador ao restaurante..."
         "WorkingDirectory=$INSTALL_DIR" \
         'Environment=PYTHONUNBUFFERED=1' \
         'Environment=KOMA_ADAPTER=auto' \
+        'Environment=KOMA_HB_SEC=5' \
         'Environment=PATH=/usr/local/bin:/usr/bin:/bin' \
         "ExecStart=$VENV_DIR/bin/python $INSTALL_DIR/main.py" \
         'Restart=always' \
@@ -104,6 +110,25 @@ chmod 0644 "$UNIT_FILE"
 systemctl --user daemon-reload
 systemctl --user enable --now koma-print-agent.service
 
+mkdir -p "$APPLICATION_DIR"
+{
+    printf '%s\n' \
+        '[Desktop Entry]' \
+        'Name=Kôma Print' \
+        'Comment=Ativa o serviço local de impressão do Kôma' \
+        'Type=Application' \
+        'NoDisplay=true' \
+        "Exec=\"$INSTALL_DIR/koma-print-launcher.sh\" %u" \
+        'MimeType=x-scheme-handler/koma-print;' \
+        'Terminal=false'
+} > "$DESKTOP_FILE"
+chmod 0644 "$DESKTOP_FILE"
+if command -v xdg-mime >/dev/null 2>&1; then
+    xdg-mime default \
+        koma-print-agent.desktop \
+        x-scheme-handler/koma-print >/dev/null 2>&1 || true
+fi
+
 if ! systemctl --user is-active --quiet koma-print-agent.service; then
     echo "[ERRO] O serviço não permaneceu ativo. Últimos registros:" >&2
     journalctl --user -u koma-print-agent.service -n 30 --no-pager >&2 || true
@@ -113,6 +138,7 @@ fi
 echo
 echo "[OK] Kôma Print Agent instalado e ativo."
 echo "[OK] Ele iniciará automaticamente com sua sessão e não depende do navegador."
+echo "[OK] O painel do Kôma pode reativar o serviço e conectar o USB."
 if command -v lpstat >/dev/null 2>&1; then
     echo "[KÔMA] Impressoras CUPS detectadas:"
     lpstat -e 2>/dev/null || echo "  nenhuma fila CUPS encontrada"

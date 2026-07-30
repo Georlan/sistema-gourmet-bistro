@@ -28,6 +28,37 @@ def _diagnostics_have_ready_printer(diagnostics: dict) -> bool:
     )
 
 
+def execute_agent_command(adapter, command: dict) -> dict:
+    """Executa somente comandos locais conhecidos e sempre devolve diagnóstico."""
+    action = str(command.get("action") or "")
+    if action != "connect_usb":
+        return {
+            "success": False,
+            "code": "unsupported_command",
+            "message": "O agente recebeu um comando que não reconhece.",
+            "printer_name": None,
+            "diagnostics": adapter.get_diagnostics(),
+        }
+    try:
+        return adapter.connect_usb(
+            requested_name=str(command.get("printer_name") or ""),
+            requested_uri=str(command.get("printer_uri") or ""),
+        )
+    except Exception:
+        log.exception(
+            "[COMANDO USB] Falha inesperada ao conectar impressora."
+        )
+        return {
+            "success": False,
+            "code": "command_failed",
+            "message": (
+                "Não foi possível concluir a conexão automática com o USB."
+            ),
+            "printer_name": None,
+            "diagnostics": adapter.get_diagnostics(),
+        }
+
+
 def process_unconfirmed_journal_jobs(client: KomaApiClient, journal: PrintJournal):
     """
     Verifica e reenvia confirmações (complete_job) para o backend de trabalhos
@@ -93,6 +124,8 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
         "default_printer": None,
         "error": None,
     }
+    last_command_id = ""
+    last_command_result = None
     loop_count = 0
 
     while True:
@@ -134,10 +167,59 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
                 or now - last_heartbeat
                 >= config.heartbeat_interval_seconds
             ):
-                client.heartbeat(diagnostics=latest_diagnostics)
+                heartbeat_response = client.heartbeat(
+                    diagnostics=latest_diagnostics
+                )
                 # Evita repetir heartbeat a cada job quando houver uma falha
                 # transitória; a próxima tentativa ocorrerá na cadência normal.
                 last_heartbeat = now
+                command = (
+                    heartbeat_response.get("command")
+                    if isinstance(heartbeat_response, dict)
+                    else None
+                )
+                if isinstance(command, dict) and command.get("id"):
+                    command_id = str(command["id"])
+                    if (
+                        command_id == last_command_id
+                        and isinstance(last_command_result, dict)
+                    ):
+                        command_result = last_command_result
+                    else:
+                        log.info(
+                            "[COMANDO USB] Executando solicitação '%s'.",
+                            command_id,
+                        )
+                        command_result = execute_agent_command(
+                            adapter,
+                            command,
+                        )
+                        last_command_id = command_id
+                        last_command_result = command_result
+
+                    result_diagnostics = command_result.get(
+                        "diagnostics"
+                    )
+                    if isinstance(result_diagnostics, dict):
+                        latest_diagnostics = result_diagnostics
+                        last_diagnostics_refresh = now
+                    if client.complete_command(
+                        command_id,
+                        command_result,
+                    ):
+                        log.info(
+                            "[COMANDO USB] Solicitação '%s' concluída: %s",
+                            command_id,
+                            command_result.get("message"),
+                        )
+                        last_command_id = ""
+                        last_command_result = None
+                    else:
+                        log.warning(
+                            "[COMANDO USB] Resultado de '%s' aguardando "
+                            "confirmação no backend.",
+                            command_id,
+                        )
 
             # 2. Reconciliar confirmações pendentes em cadência própria. Fazer
             # isso a cada polling abriria o SQLite sem necessidade.

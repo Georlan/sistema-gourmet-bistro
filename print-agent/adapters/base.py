@@ -68,6 +68,27 @@ class BasePrinterAdapter(ABC):
                 return True
         return False
 
+    def connect_usb(
+        self,
+        requested_name: str = "",
+        requested_uri: str = "",
+    ) -> Dict[str, Any]:
+        """
+        Procura e prepara uma impressora USB física.
+
+        Adaptadores de sistema sobrescrevem este método. O retorno é curto e
+        próprio para aparecer no painel; detalhes técnicos continuam nos logs.
+        """
+        return {
+            "success": False,
+            "code": "unsupported",
+            "message": (
+                "Este adaptador não permite conectar impressoras USB."
+            ),
+            "printer_name": None,
+            "diagnostics": self.get_diagnostics(),
+        }
+
     @abstractmethod
     def print_ticket(self, payload_text: str, printer_name: str, doc_type: str) -> bool:
         """

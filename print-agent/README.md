@@ -16,7 +16,9 @@ O instalador:
 1. abre o Kôma para autorizar este computador;
 2. guarda a credencial localmente, sem exigir cópia de token;
 3. instala e inicia `koma-print-agent.service` na sessão do usuário;
-4. configura reinício automático.
+4. configura reinício automático;
+5. registra o atalho `koma-print://` para a tela reativar o serviço sem abrir
+   um aplicativo separado.
 
 Para atualizar uma instalação após baixar uma versão nova do repositório,
 execute o instalador novamente. A credencial já pareada é reutilizada.
@@ -69,7 +71,7 @@ credencial armazenada em `~/.config/koma-print-agent/credentials.json`.
 | `--adapter` | `KOMA_ADAPTER` | `auto` | `auto`, `linux`, `windows` ou `file` |
 | `--output-dir` | `KOMA_OUTPUT_DIR` | `print_output` | Saída do simulador `file` |
 | `--poll-sec` | `KOMA_POLL_SEC` | `0.5` | Espera somente quando a fila está vazia |
-| `--hb-sec` | `KOMA_HB_SEC` | `30` | Intervalo do heartbeat |
+| `--hb-sec` | `KOMA_HB_SEC` | `5` | Intervalo do heartbeat e dos comandos do painel |
 
 O argumento `--token` existe para diagnóstico e automação técnica, mas não faz
 parte do fluxo normal do cliente.
@@ -83,6 +85,10 @@ parte do fluxo normal do cliente.
 - Trabalhos impressos e ainda não confirmados são reconciliados com o backend.
 - Falha real de CUPS/Spooler não é registrada como impressão concluída.
 - O backend libera claims abandonados e limita cada trabalho a três tentativas.
+- O botão **Conectar USB** reescaneia somente hardware físico, reativa a fila
+  existente ou cria uma fila RAW quando há um único dispositivo compatível.
+- Filas virtuais, PDF e computadores com o agente não aparecem como
+  impressoras USB disponíveis.
 
 Rotas usadas pelo agente:
 
@@ -92,6 +98,7 @@ Rotas usadas pelo agente:
 | `POST` | `/api/print-agents/jobs/{id}/complete` |
 | `POST` | `/api/print-agents/jobs/{id}/fail` |
 | `POST` | `/api/print-agents/heartbeat` |
+| `POST` | `/api/print-agents/actions/{id}/complete` |
 
 As rotas legadas `GET /jobs/next` e `POST /jobs/{id}/claim` permanecem
 disponíveis durante a atualização de instalações antigas.

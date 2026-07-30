@@ -48,10 +48,13 @@ class KomaApiClient:
             log.error(f"Erro ao conectar na API para registrar agente: {e}")
         return None
 
-    def heartbeat(self, diagnostics: Optional[Dict[str, Any]] = None) -> bool:
-        """Envia sinal periódico de vida (heartbeat) para o backend."""
+    def heartbeat(
+        self,
+        diagnostics: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Envia o heartbeat e recebe um eventual comando do painel."""
         if not self.agent_token:
-            return False
+            return None
         url = f"{self.api_url}/api/print-agents/heartbeat"
         try:
             resp = self.session.post(
@@ -60,9 +63,49 @@ class KomaApiClient:
                 headers=self.headers,
                 timeout=5,
             )
-            return resp.status_code == 200
+            if resp.status_code == 200:
+                payload = resp.json()
+                return payload if isinstance(payload, dict) else {}
+            return None
         except Exception as e:
             log.debug(f"Erro ao enviar heartbeat: {e}")
+            return None
+
+    def complete_command(
+        self,
+        command_id: str,
+        result: Dict[str, Any],
+    ) -> bool:
+        """Confirma o comando USB e atualiza o diagnóstico em uma chamada."""
+        if not self.agent_token or not command_id:
+            return False
+        url = (
+            f"{self.api_url}/api/print-agents/actions/"
+            f"{command_id}/complete"
+        )
+        body = {
+            "success": bool(result.get("success")),
+            "code": str(result.get("code") or "unknown")[:80],
+            "message": str(
+                result.get("message") or "Comando concluído."
+            )[:300],
+            "printer_name": result.get("printer_name"),
+            "diagnostics": result.get("diagnostics"),
+        }
+        try:
+            resp = self.session.post(
+                url,
+                json=body,
+                headers=self.headers,
+                timeout=10,
+            )
+            return resp.status_code == 200
+        except Exception as exc:
+            log.error(
+                "Erro ao confirmar comando local '%s': %s",
+                command_id,
+                exc,
+            )
             return False
 
     def get_next_job(self) -> Optional[Dict[str, Any]]:

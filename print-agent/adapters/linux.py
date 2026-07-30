@@ -225,6 +225,51 @@ def _network_printer_available(uri: str) -> bool:
         return False
 
 
+def _discover_live_cups_usb_uris() -> list[str]:
+    """Retorna apenas dispositivos USB presentes que o CUPS reconhece."""
+    try:
+        live_devices = _run_cups_command(["lpinfo", "-v"])
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    if live_devices.returncode != 0:
+        return []
+    uris = []
+    for line in _decode_command_output(live_devices).splitlines():
+        parts = line.strip().split(maxsplit=1)
+        if (
+            len(parts) == 2
+            and parts[1].casefold().startswith("usb://")
+        ):
+            uris.append(parts[1].strip())
+    return list(dict.fromkeys(uris))
+
+
+def _normalized_device_label(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", unquote(value or "").casefold())
+
+
+def _usb_uri_matches_name(uri: str, name: str) -> bool:
+    normalized_uri = _normalized_device_label(uri)
+    normalized_name = _normalized_device_label(name)
+    return bool(
+        normalized_uri
+        and normalized_name
+        and (
+            normalized_name in normalized_uri
+            or normalized_uri in normalized_name
+        )
+    )
+
+
+def _safe_cups_queue_name(device_name: str) -> str:
+    suffix = re.sub(
+        r"[^A-Za-z0-9]+",
+        "_",
+        unquote(device_name or ""),
+    ).strip("_")
+    return f"Koma_USB_{suffix or 'Termica'}"[:80]
+
+
 class LinuxPrinterAdapter(BasePrinterAdapter):
     def __init__(self, output_dir: str = "print_output"):
         # Mantido na assinatura por compatibilidade com a factory.
@@ -242,21 +287,7 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
         default_printer = _cups_default_printer()
         error: Optional[str] = None
         sysfs_usb_printers = _discover_sysfs_usb_printers()
-        live_usb_uris: list[str] = []
-
-        try:
-            live_devices = _run_cups_command(["lpinfo", "-v"])
-            if live_devices.returncode == 0:
-                for line in _decode_command_output(live_devices).splitlines():
-                    parts = line.strip().split(maxsplit=1)
-                    if (
-                        len(parts) == 2
-                        and parts[1].casefold().startswith("usb://")
-                    ):
-                        live_usb_uris.append(parts[1].strip())
-        except (OSError, subprocess.TimeoutExpired):
-            # O sysfs ainda fornece presença física mesmo sem lpinfo.
-            pass
+        live_usb_uris = _discover_live_cups_usb_uris()
 
         try:
             devices = _run_cups_command(["lpstat", "-v"])
@@ -319,12 +350,31 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
                 matched_sysfs_devices.add(str(device.get("uri")))
 
         known_uris = {str(item.get("uri")) for item in printers}
-        for device_path in sorted(glob.glob("/dev/usb/lp*"))[:10]:
+        direct_device_paths = sorted(glob.glob("/dev/usb/lp*"))[:10]
+        unmatched_sysfs = [
+            device
+            for device in sysfs_usb_printers
+            if str(device.get("uri")) not in matched_sysfs_devices
+        ]
+        can_pair_direct_devices = bool(
+            direct_device_paths
+            and len(direct_device_paths) == len(unmatched_sysfs)
+        )
+        for index, device_path in enumerate(direct_device_paths):
             if device_path in known_uris:
                 continue
+            sysfs_device = (
+                unmatched_sysfs[index]
+                if can_pair_direct_devices
+                else None
+            )
             printers.append(
                 {
-                    "name": os.path.basename(device_path),
+                    "name": (
+                        str(sysfs_device.get("name"))
+                        if sysfs_device
+                        else os.path.basename(device_path)
+                    ),
                     "connection": "usb",
                     "uri": device_path,
                     "is_default": False,
@@ -333,6 +383,10 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
                     "configured": True,
                 }
             )
+            if sysfs_device:
+                matched_sysfs_devices.add(
+                    str(sysfs_device.get("uri"))
+                )
 
         for device in sysfs_usb_printers:
             if str(device.get("uri")) in matched_sysfs_devices:
@@ -350,6 +404,263 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
             "printers": printers[:10],
             "default_printer": default_printer,
             "error": error,
+        }
+
+    def connect_usb(
+        self,
+        requested_name: str = "",
+        requested_uri: str = "",
+    ) -> Dict[str, Any]:
+        """
+        Reabre uma fila existente ou cria uma fila RAW para um USB presente.
+
+        Nenhuma fila de rede ou virtual participa da seleção. Quando há mais
+        de um USB, o painel precisa informar qual dispositivo foi escolhido.
+        """
+        diagnostics = self.get_diagnostics()
+        usb_printers = [
+            printer
+            for printer in diagnostics.get("printers") or []
+            if (
+                isinstance(printer, dict)
+                and printer.get("connection") == "usb"
+            )
+        ]
+        selected = next(
+            (
+                printer
+                for printer in usb_printers
+                if (
+                    requested_uri
+                    and str(printer.get("uri") or "") == requested_uri
+                )
+                or (
+                    requested_name
+                    and str(printer.get("name") or "") == requested_name
+                )
+            ),
+            None,
+        )
+        present_printers = [
+            printer
+            for printer in usb_printers
+            if printer.get("present") is True
+        ]
+        if selected is None:
+            if len(present_printers) == 1:
+                selected = present_printers[0]
+            elif len(present_printers) > 1:
+                return {
+                    "success": False,
+                    "code": "multiple_usb_printers",
+                    "message": (
+                        "Há mais de uma impressora USB conectada. "
+                        "Escolha uma delas no painel."
+                    ),
+                    "printer_name": None,
+                    "diagnostics": diagnostics,
+                }
+
+        if selected and all(
+            selected.get(field) is True
+            for field in ("present", "configured", "available")
+        ):
+            selected_name = str(selected.get("name") or "")
+            selected_uri = str(selected.get("uri") or "")
+            if not selected_uri.startswith("/dev/") and selected_name:
+                try:
+                    set_default = _run_cups_command(
+                        ["lpoptions", "-d", selected_name]
+                    )
+                except (OSError, subprocess.TimeoutExpired):
+                    return {
+                        "success": False,
+                        "code": "cups_unavailable",
+                        "message": (
+                            "A impressora foi encontrada, mas o serviço "
+                            "de impressão não respondeu."
+                        ),
+                        "printer_name": selected_name,
+                        "diagnostics": diagnostics,
+                    }
+                if set_default.returncode != 0:
+                    error = set_default.stderr.decode(
+                        "utf-8",
+                        errors="replace",
+                    ).strip()
+                    log.error(
+                        "[LINUX ADAPTER] Não foi possível definir '%s' "
+                        "como padrão: %s",
+                        selected_name,
+                        error,
+                    )
+                    return {
+                        "success": False,
+                        "code": "usb_configuration_failed",
+                        "message": (
+                            "A impressora foi detectada, mas não pôde ser "
+                            "definida como o destino principal."
+                        ),
+                        "printer_name": selected_name,
+                        "diagnostics": diagnostics,
+                    }
+            return {
+                "success": True,
+                "code": "usb_connected",
+                "message": "Impressora USB conectada e pronta para uso.",
+                "printer_name": selected_name or selected_uri,
+                "diagnostics": self.get_diagnostics(),
+            }
+
+        live_usb_uris = _discover_live_cups_usb_uris()
+        selected_live_uri = next(
+            (
+                uri
+                for uri in live_usb_uris
+                if requested_uri and _usb_uri_matches(uri, requested_uri)
+            ),
+            None,
+        )
+        selected_name = str(
+            (selected or {}).get("name")
+            or requested_name
+            or ""
+        )
+        if not selected_live_uri and selected_name:
+            selected_live_uri = next(
+                (
+                    uri
+                    for uri in live_usb_uris
+                    if _usb_uri_matches_name(uri, selected_name)
+                ),
+                None,
+            )
+        if not selected_live_uri and len(live_usb_uris) == 1:
+            selected_live_uri = live_usb_uris[0]
+
+        if not selected_live_uri:
+            if selected and selected.get("present") is True:
+                return {
+                    "success": False,
+                    "code": "usb_permission_denied",
+                    "message": (
+                        "O USB foi detectado, mas o serviço de impressão "
+                        "ainda não recebeu acesso ao dispositivo."
+                    ),
+                    "printer_name": selected_name or None,
+                    "diagnostics": diagnostics,
+                }
+            return {
+                "success": False,
+                "code": "usb_not_found",
+                "message": (
+                    "Nenhuma impressora física foi encontrada no USB. "
+                    "Reconecte o cabo e tente novamente."
+                ),
+                "printer_name": None,
+                "diagnostics": diagnostics,
+            }
+
+        queue_name = _safe_cups_queue_name(
+            selected_name or selected_live_uri.rsplit("/", 1)[-1]
+        )
+        try:
+            configure = _run_cups_command(
+                [
+                    "lpadmin",
+                    "-p",
+                    queue_name,
+                    "-E",
+                    "-v",
+                    selected_live_uri,
+                    "-m",
+                    "raw",
+                ]
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return {
+                "success": False,
+                "code": "cups_unavailable",
+                "message": (
+                    "O Kôma encontrou o USB, mas não conseguiu acessar "
+                    "o serviço de impressão."
+                ),
+                "printer_name": selected_name or None,
+                "diagnostics": diagnostics,
+            }
+        if configure.returncode != 0:
+            error = configure.stderr.decode(
+                "utf-8",
+                errors="replace",
+            ).strip()
+            log.error(
+                "[LINUX ADAPTER] Falha ao configurar fila USB '%s': %s",
+                queue_name,
+                error,
+            )
+            return {
+                "success": False,
+                "code": "usb_configuration_failed",
+                "message": (
+                    "A impressora foi detectada, mas a configuração "
+                    "automática não foi concluída."
+                ),
+                "printer_name": selected_name or None,
+                "diagnostics": diagnostics,
+            }
+
+        try:
+            _run_cups_command(["cupsenable", queue_name])
+            _run_cups_command(["cupsaccept", queue_name])
+            _run_cups_command(["lpoptions", "-d", queue_name])
+        except (OSError, subprocess.TimeoutExpired):
+            # A fila já foi criada. O diagnóstico abaixo define o resultado.
+            pass
+
+        refreshed = self.get_diagnostics()
+        ready_printers = [
+            printer
+            for printer in refreshed.get("printers") or []
+            if (
+                isinstance(printer, dict)
+                and printer.get("connection") == "usb"
+                and printer.get("present") is True
+                and printer.get("configured") is True
+                and printer.get("available") is True
+            )
+        ]
+        selected_ready = next(
+            (
+                printer
+                for printer in ready_printers
+                if printer.get("name") == queue_name
+            ),
+            None,
+        )
+        ready = bool(
+            selected_ready
+            and (
+                selected_ready.get("is_default") is True
+                or len(ready_printers) == 1
+            )
+        )
+        return {
+            "success": ready,
+            "code": (
+                "usb_connected"
+                if ready
+                else "usb_configuration_failed"
+            ),
+            "message": (
+                "Impressora USB configurada e pronta para uso."
+                if ready
+                else (
+                    "A fila foi criada, mas a impressora ainda não "
+                    "respondeu. Reconecte o cabo e tente novamente."
+                )
+            ),
+            "printer_name": queue_name,
+            "diagnostics": refreshed,
         }
 
     def print_ticket(self, payload_text: str, printer_name: str, doc_type: str) -> bool:
