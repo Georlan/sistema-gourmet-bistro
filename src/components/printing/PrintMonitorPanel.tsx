@@ -12,7 +12,6 @@ import {
   RotateCcw,
   Search,
   Usb,
-  Wifi,
   WifiOff,
   Wrench
 } from 'lucide-react';
@@ -187,6 +186,19 @@ function friendlyPrinterName(value: string | null): string {
   return value;
 }
 
+function friendlyUsbConnectionError(status: number): string {
+  if (status === 409) {
+    return (
+      'Não foi possível preparar a conexão USB. Tente novamente; '
+      + 'se continuar, contate o suporte.'
+    );
+  }
+  return (
+    'Não foi possível procurar a impressora USB. Verifique a conexão '
+    + 'e tente novamente.'
+  );
+}
+
 export function PrintMonitorPanel({
   apiBaseUrl,
   authHeaders,
@@ -214,7 +226,7 @@ export function PrintMonitorPanel({
       );
       const data = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(data?.detail || 'Não foi possível consultar a impressão.');
+        throw new Error('Não foi possível consultar a impressão.');
       }
       setMonitorData(data as PrintMonitorResponse);
       setError('');
@@ -417,24 +429,26 @@ export function PrintMonitorPanel({
       );
       const data = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(data?.detail || 'Não foi possível acionar o USB.');
+        throw new Error(friendlyUsbConnectionError(response.status));
       }
+      setError('');
       setPendingCommandId(data?.command?.id || null);
       setActionMessage('Procurando a impressora no USB…');
       await loadMonitor(false);
     } catch (requestError) {
       setActionSuccessful(false);
-      setError(
+      setActionMessage(
         requestError instanceof Error
           ? requestError.message
-          : 'Não foi possível acionar o USB.'
+          : 'Não foi possível procurar a impressora USB.'
       );
+      setError('');
     }
   };
 
   const startLocalAgent = () => {
     setStartingAgent(true);
-    setActionMessage('Solicitando a ativação do Kôma Print…');
+    setActionMessage('Preparando a impressão neste computador…');
     setActionSuccessful(null);
     const launcher = document.createElement('a');
     launcher.href = 'koma-print://start';
@@ -495,8 +509,8 @@ export function PrintMonitorPanel({
     if (!hasOnlineAgent) {
       return {
         tone: 'danger',
-        title: 'Kôma Print está inativo',
-        detail: 'Ative o serviço por esta tela. Não é necessário abrir outro aplicativo.'
+        title: 'Impressão indisponível neste computador',
+        detail: 'Clique em “Preparar impressão” e tente conectar novamente.'
       };
     }
     if (commandRunning || pendingCommandId) {
@@ -509,15 +523,15 @@ export function PrintMonitorPanel({
     if (!hasFreshPrinterDiagnostics) {
       return {
         tone: 'warning',
-        title: 'Computador conectado; aguardando leitura do USB',
-        detail: 'Use o botão abaixo para forçar uma nova busca física.'
+        title: 'Verificando a porta USB',
+        detail: 'Use o botão abaixo para procurar a impressora conectada.'
       };
     }
     if (!hasUsbCommandAgent) {
       return {
         tone: 'danger',
-        title: 'Kôma Print precisa ser atualizado',
-        detail: 'Esta versão do serviço não executa a busca USB pelo painel.'
+        title: 'Não foi possível preparar a conexão USB',
+        detail: 'Tente novamente; se continuar, contate o suporte.'
       };
     }
     if (!hasReadyPrinter && presentUsbPrinters.length > 0) {
@@ -658,7 +672,7 @@ export function PrintMonitorPanel({
                 {startingAgent
                   ? <RefreshCw size={16} className="animate-spin" />
                   : <Power size={16} />}
-                {startingAgent ? 'Ativando…' : 'Ativar Kôma Print'}
+                {startingAgent ? 'Preparando…' : 'Preparar impressão'}
               </button>
             ) : (
               <button
@@ -702,18 +716,7 @@ export function PrintMonitorPanel({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-        <div className="rounded-2xl border border-[#2a2a2e] bg-[#0b0b0d] p-3">
-          <div className="flex items-center gap-2 text-[9px] uppercase tracking-wider text-gray-500">
-            {hasOnlineAgent
-              ? <Wifi size={13} className="text-emerald-400" />
-              : <WifiOff size={13} className="text-red-400" />}
-            Serviço local
-          </div>
-          <strong className={`mt-1 block text-xs ${hasOnlineAgent ? 'text-emerald-300' : 'text-red-300'}`}>
-            {hasOnlineAgent ? 'Ativo' : 'Inativo'}
-          </strong>
-        </div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <div className="rounded-2xl border border-[#2a2a2e] bg-[#0b0b0d] p-3">
           <div className="flex items-center gap-2 text-[9px] uppercase tracking-wider text-gray-500">
             <Usb size={13} className={hasReadyPrinter ? 'text-emerald-400' : 'text-red-400'} />

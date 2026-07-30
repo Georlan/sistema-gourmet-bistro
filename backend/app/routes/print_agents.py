@@ -282,8 +282,8 @@ def _expire_stale_agent_command(
         "success": False,
         "code": "command_expired",
         "message": (
-            "A busca USB foi encerrada porque o Kôma Print não respondeu. "
-            "Atualize ou reative o serviço e tente novamente."
+            "A busca USB não respondeu dentro do prazo. "
+            "Tente novamente; se continuar, contate o suporte."
         ),
         "printer_name": None,
         "completed_at": now.isoformat(),
@@ -1085,7 +1085,10 @@ def request_usb_printer_connection(
     if not agent:
         raise HTTPException(
             status_code=404,
-            detail="Nenhum computador com o Kôma Print foi encontrado.",
+            detail=(
+                "A impressão não está configurada neste computador. "
+                "Contate o suporte para concluir a preparação inicial."
+            ),
         )
 
     now = datetime.datetime.now(datetime.timezone.utc)
@@ -1094,17 +1097,16 @@ def request_usb_printer_connection(
         raise HTTPException(
             status_code=409,
             detail=(
-                "O Kôma Print deste computador está offline. "
-                "Ative o serviço antes de procurar o USB."
+                "A impressão está temporariamente indisponível neste "
+                "computador. Tente novamente."
             ),
         )
     if not printer_state["supports_usb_commands"]:
         raise HTTPException(
             status_code=409,
             detail=(
-                "O Kôma Print deste computador está desatualizado e não "
-                "consegue executar a busca USB. Atualize o agente e tente "
-                "novamente."
+                "Não foi possível preparar a conexão USB neste computador. "
+                "Tente novamente; se continuar, contate o suporte."
             ),
         )
 
@@ -1187,8 +1189,8 @@ def inject_print_job(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
-                "Teste não enviado: nenhuma impressora física conectada e "
-                "pronta foi confirmada pelo Kôma Print."
+                "Teste não enviado: nenhuma impressora física está "
+                "conectada e pronta."
             ),
         )
 

@@ -490,8 +490,8 @@ class WindowsPrinterAdapter(BasePrinterAdapter):
                     "success": False,
                     "code": "driver_install_failed",
                     "message": (
-                        "O USB foi detectado, mas o Kôma Print não conseguiu "
-                        "instalar a fila automaticamente."
+                        "O USB foi detectado, mas a configuração automática "
+                        "da impressora não foi concluída."
                     ),
                     "printer_name": selected_name or None,
                     "diagnostics": diagnostics,

@@ -931,7 +931,11 @@ def test_usb_connection_rejects_legacy_agent_without_command_support():
     )
 
     assert response.status_code == 409
-    assert "desatualizado" in response.json()["detail"]
+    detail = response.json()["detail"]
+    assert "conexão USB" in detail
+    assert "agente" not in detail.casefold()
+    assert "versão" not in detail.casefold()
+    assert "desatualizado" not in detail.casefold()
 
 
 def test_print_monitor_expires_usb_command_without_agent_heartbeat(
