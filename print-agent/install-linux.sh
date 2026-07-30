@@ -41,7 +41,7 @@ adapter_files=(
 
 for source_file in "${required_files[@]}"; do
     if [[ ! -f "$SCRIPT_DIR/$source_file" ]]; then
-        echo "[ERRO] Arquivo do agente ausente: $source_file" >&2
+        echo "[ERRO] Arquivo de impressão ausente: $source_file" >&2
         exit 1
     fi
 done
@@ -52,7 +52,7 @@ for source_file in "${adapter_files[@]}"; do
     fi
 done
 
-echo "[KÔMA] Instalando o agente local em $INSTALL_DIR"
+echo "[KÔMA] Preparando a impressão neste computador..."
 systemctl --user stop koma-print-agent.service >/dev/null 2>&1 || true
 mkdir -p "$INSTALL_DIR" "$ADAPTER_DIR" "$UNIT_DIR"
 
@@ -83,7 +83,7 @@ echo "[KÔMA] Conectando este computador ao restaurante..."
 {
     printf '%s\n' \
         '[Unit]' \
-        'Description=Kôma Print Agent' \
+        'Description=Integração de impressão do Kôma' \
         'Wants=network-online.target' \
         'After=network-online.target' \
         '' \
@@ -114,8 +114,8 @@ mkdir -p "$APPLICATION_DIR"
 {
     printf '%s\n' \
         '[Desktop Entry]' \
-        'Name=Kôma Print' \
-        'Comment=Ativa o serviço local de impressão do Kôma' \
+        'Name=Kôma Impressão' \
+        'Comment=Prepara a impressão USB do Kôma' \
         'Type=Application' \
         'NoDisplay=true' \
         "Exec=\"$INSTALL_DIR/koma-print-launcher.sh\" %u" \
@@ -136,9 +136,8 @@ if ! systemctl --user is-active --quiet koma-print-agent.service; then
 fi
 
 echo
-echo "[OK] Kôma Print Agent instalado e ativo."
-echo "[OK] Ele iniciará automaticamente com sua sessão e não depende do navegador."
-echo "[OK] O painel do Kôma pode reativar o serviço e conectar o USB."
+echo "[OK] Impressão configurada e pronta para iniciar automaticamente."
+echo "[OK] Agora conecte a impressora USB e use o botão de busca no Kôma."
 if command -v lpstat >/dev/null 2>&1; then
     echo "[KÔMA] Impressoras CUPS detectadas:"
     lpstat -e 2>/dev/null || echo "  nenhuma fila CUPS encontrada"

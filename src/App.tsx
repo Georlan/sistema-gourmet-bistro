@@ -143,7 +143,7 @@ export default function App() {
         });
         const registration = await registerResponse.json().catch(() => null);
         if (!registerResponse.ok || !registration?.agent_token) {
-          throw new Error(registration?.detail || 'Não foi possível autorizar o agente.');
+          throw new Error('Não foi possível configurar a impressão neste computador.');
         }
 
         const localResponse = await fetch(`http://127.0.0.1:${port}/pair`, {
@@ -155,7 +155,7 @@ export default function App() {
           })
         });
         if (!localResponse.ok) {
-          throw new Error('O agente local recusou o pareamento.');
+          throw new Error('Não foi possível concluir a configuração da impressão.');
         }
 
         params.delete('pair_print_agent');
@@ -166,10 +166,12 @@ export default function App() {
           '',
           `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`
         );
-        window.alert('Agente de impressão conectado. O teste real já pode ser enviado.');
+        window.alert('Impressão configurada. O teste já pode ser enviado.');
       } catch (error) {
         printPairingStartedRef.current = false;
-        const message = error instanceof Error ? error.message : 'Falha ao conectar o agente.';
+        const message = error instanceof Error
+          ? error.message
+          : 'Não foi possível configurar a impressão.';
         window.alert(message);
       }
     };
