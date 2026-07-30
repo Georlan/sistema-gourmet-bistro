@@ -36,3 +36,6 @@ scratch/
 *.pem
 *.pfx
 koma-print-agent/config.json
+
+/print_output/
+/print-agent/print_output/
