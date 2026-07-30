@@ -221,6 +221,24 @@ def test_linux_adapter_reconnects_ready_usb_and_sets_default(temp_dir):
     ]
 
 
+def test_linux_adapter_finishes_with_error_when_usb_is_absent(temp_dir):
+    linux_adapter = get_adapter("linux", output_dir=temp_dir)
+    unavailable = MagicMock(returncode=1, stdout=b"", stderr=b"")
+
+    with (
+        patch(
+            "adapters.linux._run_cups_command",
+            return_value=unavailable,
+        ),
+        patch("adapters.linux.glob.glob", return_value=[]),
+    ):
+        result = linux_adapter.connect_usb()
+
+    assert result["success"] is False
+    assert result["code"] == "usb_not_found"
+    assert "Nenhuma impressora física" in result["message"]
+
+
 def test_linux_adapter_does_not_treat_stale_cups_queue_as_connected(
     temp_dir,
 ):
@@ -437,7 +455,10 @@ def test_api_client_reuses_http_session():
         SessionClass.assert_called_once_with()
         assert session.post.call_count == 2
         assert session.post.call_args.kwargs["json"] == {
-            "diagnostics": diagnostics
+            "diagnostics": {
+                **diagnostics,
+                "capabilities": ["connect_usb"],
+            }
         }
 
 
@@ -496,6 +517,9 @@ def test_api_client_completes_usb_command():
         assert session.post.call_args.kwargs["json"]["code"] == (
             "usb_connected"
         )
+        assert session.post.call_args.kwargs["json"][
+            "diagnostics"
+        ]["capabilities"] == ["connect_usb"]
 
 
 def test_api_client_falls_back_during_backend_rollout():

@@ -39,7 +39,7 @@ AGENT_ONLINE_THRESHOLD_SECONDS = 90
 PRINTER_DIAGNOSTICS_FRESH_SECONDS = 90
 PRINT_DELAY_THRESHOLD_SECONDS = 120
 PRINT_HISTORY_VISIBLE_LIMIT = 20
-AGENT_COMMAND_TIMEOUT_SECONDS = 120
+AGENT_COMMAND_TIMEOUT_SECONDS = 45
 UNRESOLVED_JOB_STATUSES = ("pending", "claimed", "printing")
 TERMINAL_JOB_STATUSES = ("printed", "failed", "cancelled")
 
@@ -259,6 +259,41 @@ def _age_seconds(
     return max(0, round((now - normalized).total_seconds()))
 
 
+def _expire_stale_agent_command(
+    agent: PrintAgentToken,
+    now: datetime.datetime,
+) -> bool:
+    """Encerra comandos que o agente não confirmou dentro do prazo."""
+    command = (
+        dict(agent.pending_command)
+        if isinstance(agent.pending_command, Mapping)
+        else None
+    )
+    command_age = _age_seconds(agent.command_requested_at, now)
+    if (
+        not command
+        or command_age is None
+        or command_age <= AGENT_COMMAND_TIMEOUT_SECONDS
+    ):
+        return False
+
+    agent.last_command_result = {
+        "id": command.get("id"),
+        "success": False,
+        "code": "command_expired",
+        "message": (
+            "A busca USB foi encerrada porque o Kôma Print não respondeu. "
+            "Atualize ou reative o serviço e tente novamente."
+        ),
+        "printer_name": None,
+        "completed_at": now.isoformat(),
+    }
+    agent.command_completed_at = now
+    agent.pending_command = None
+    agent.command_requested_at = None
+    return True
+
+
 def _agent_printer_state(
     agent: PrintAgentToken,
     now: datetime.datetime,
@@ -291,6 +326,9 @@ def _agent_printer_state(
     printers = diagnostics.get("printers")
     if not isinstance(printers, list):
         printers = []
+    capabilities = diagnostics.get("capabilities")
+    if not isinstance(capabilities, list):
+        capabilities = []
     physical_present = any(
         isinstance(printer, Mapping)
         and printer.get("connection") == "usb"
@@ -321,6 +359,9 @@ def _agent_printer_state(
         ),
         "ready_printer_count": (
             len(ready_printers) if diagnostics_fresh else 0
+        ),
+        "supports_usb_commands": (
+            diagnostics_fresh and "connect_usb" in capabilities
         ),
     }
 
@@ -693,6 +734,10 @@ class PrinterDiagnosticsReport(BaseModel):
     )
     default_printer: Optional[str] = Field(default=None, max_length=200)
     error: Optional[str] = Field(default=None, max_length=300)
+    capabilities: List[Literal["connect_usb"]] = Field(
+        default_factory=list,
+        max_length=10,
+    )
 
 
 class HeartbeatRequest(BaseModel):
@@ -841,7 +886,12 @@ def get_print_monitor(
     )
 
     agent_payload = []
+    expired_command = False
     for agent in agents:
+        expired_command = (
+            _expire_stale_agent_command(agent, now)
+            or expired_command
+        )
         last_seen = _as_utc(agent.last_seen_at)
         printer_state = _agent_printer_state(agent, now)
         is_online = printer_state["online"]
@@ -861,6 +911,9 @@ def get_print_monitor(
                 "printer_ready": printer_state["printer_ready"],
                 "ready_printer_count": printer_state[
                     "ready_printer_count"
+                ],
+                "supports_usb_commands": printer_state[
+                    "supports_usb_commands"
                 ],
                 "printer_diagnostics": agent.printer_diagnostics,
                 "diagnostics_updated_at": (
@@ -882,6 +935,8 @@ def get_print_monitor(
                 ),
             }
         )
+    if expired_command:
+        db.commit()
 
     job_payload = []
     for job in jobs:
@@ -955,6 +1010,7 @@ def get_print_monitor(
         "history_limit": PRINT_HISTORY_VISIBLE_LIMIT,
         "history_timezone": str(PRINT_HISTORY_TIMEZONE),
         "online_threshold_seconds": AGENT_ONLINE_THRESHOLD_SECONDS,
+        "command_timeout_seconds": AGENT_COMMAND_TIMEOUT_SECONDS,
         "delay_threshold_seconds": PRINT_DELAY_THRESHOLD_SECONDS,
         "physical_completion_tracking": False,
         "agents": agent_payload,
@@ -1033,7 +1089,8 @@ def request_usb_printer_connection(
         )
 
     now = datetime.datetime.now(datetime.timezone.utc)
-    if not _agent_printer_state(agent, now)["online"]:
+    printer_state = _agent_printer_state(agent, now)
+    if not printer_state["online"]:
         raise HTTPException(
             status_code=409,
             detail=(
@@ -1041,7 +1098,17 @@ def request_usb_printer_connection(
                 "Ative o serviço antes de procurar o USB."
             ),
         )
+    if not printer_state["supports_usb_commands"]:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "O Kôma Print deste computador está desatualizado e não "
+                "consegue executar a busca USB. Atualize o agente e tente "
+                "novamente."
+            ),
+        )
 
+    _expire_stale_agent_command(agent, now)
     pending_age = _age_seconds(agent.command_requested_at, now)
     if (
         isinstance(agent.pending_command, Mapping)
@@ -1220,25 +1287,7 @@ def agent_heartbeat(
         if isinstance(agent.pending_command, Mapping)
         else None
     )
-    command_age = _age_seconds(agent.command_requested_at, now)
-    if (
-        command
-        and command_age is not None
-        and command_age > AGENT_COMMAND_TIMEOUT_SECONDS
-    ):
-        agent.last_command_result = {
-            "id": command.get("id"),
-            "success": False,
-            "code": "command_expired",
-            "message": (
-                "O computador não respondeu ao comando dentro do prazo."
-            ),
-            "printer_name": None,
-            "completed_at": now.isoformat(),
-        }
-        agent.command_completed_at = now
-        agent.pending_command = None
-        agent.command_requested_at = None
+    if _expire_stale_agent_command(agent, now):
         command = None
     db.commit()
     return {

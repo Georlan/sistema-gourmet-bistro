@@ -89,6 +89,10 @@ parte do fluxo normal do cliente.
   existente ou cria uma fila RAW quando há um único dispositivo compatível.
 - Filas virtuais, PDF e computadores com o agente não aparecem como
   impressoras USB disponíveis.
+- Uma busca sem resposta é encerrada automaticamente; quando não há hardware
+  físico no USB, o painel recebe um erro em vez de manter carregamento infinito.
+- O heartbeat anuncia a capacidade `connect_usb`, permitindo que o painel
+  rejeite imediatamente versões antigas do agente.
 
 Rotas usadas pelo agente:
 
