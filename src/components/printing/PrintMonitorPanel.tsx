@@ -6,7 +6,6 @@ import {
   ChevronRight,
   Clock3,
   History,
-  Monitor,
   Power,
   Printer,
   RefreshCw,
@@ -55,6 +54,7 @@ interface PrintAgentHealth {
   physical_printer_present?: boolean;
   printer_ready?: boolean;
   ready_printer_count?: number;
+  supports_usb_commands?: boolean;
   printer_diagnostics: {
     adapter: string;
     platform: string;
@@ -100,6 +100,7 @@ interface PrintMonitorResponse {
   history_limit: number;
   history_timezone: string;
   online_threshold_seconds: number;
+  command_timeout_seconds?: number;
   delay_threshold_seconds: number;
   physical_completion_tracking: boolean;
   agents: PrintAgentHealth[];
@@ -248,28 +249,78 @@ export function PrintMonitorPanel({
     };
   }, [loadMonitor]);
 
+  const activePendingCommand = monitorData?.agents
+    .map(agent => ({
+      command: agent.pending_command,
+      requestedAt: agent.command_requested_at
+    }))
+    .find(item => item.command) || null;
+  const pendingCommandAgeMs = activePendingCommand?.requestedAt
+    ? (
+        new Date(monitorData?.generated_at || Date.now()).getTime()
+        - new Date(activePendingCommand.requestedAt).getTime()
+      )
+    : 0;
+  const usbSearchUiTimeoutMs = (
+    (monitorData?.command_timeout_seconds || 45) + 5
+  ) * 1_000;
+  const hasPendingCommand = Boolean(activePendingCommand?.command);
   const commandRunning = Boolean(
-    monitorData?.agents.some(agent => agent.pending_command)
+    hasPendingCommand
+    && pendingCommandAgeMs <= usbSearchUiTimeoutMs
   );
 
   useEffect(() => {
-    if (!commandRunning && !pendingCommandId) return;
+    if (!hasPendingCommand && !pendingCommandId) return;
     const intervalId = window.setInterval(() => {
       void loadMonitor(false);
     }, 1_500);
     return () => window.clearInterval(intervalId);
-  }, [commandRunning, loadMonitor, pendingCommandId]);
+  }, [hasPendingCommand, loadMonitor, pendingCommandId]);
 
   useEffect(() => {
-    if (!pendingCommandId || !monitorData) return;
-    const completed = monitorData.agents
+    const activeId = activePendingCommand?.command?.id || null;
+    if (!pendingCommandId && activeId) {
+      setPendingCommandId(activeId);
+    }
+  }, [activePendingCommand, pendingCommandId]);
+
+  useEffect(() => {
+    if (!monitorData) return;
+    const completedResults = monitorData.agents
       .map(agent => agent.last_command_result)
-      .find(result => result?.id === pendingCommandId);
+      .filter((result): result is AgentCommandResult => Boolean(result))
+      .sort((left, right) => (
+        new Date(right.completed_at).getTime()
+        - new Date(left.completed_at).getTime()
+      ));
+    const latestResult = completedResults[0];
+    const latestResultIsRecent = Boolean(
+      latestResult
+      && (
+        new Date(monitorData.generated_at).getTime()
+        - new Date(latestResult.completed_at).getTime()
+      ) <= 120_000
+    );
+    const completed = pendingCommandId
+      ? completedResults.find(result => result.id === pendingCommandId)
+      : latestResultIsRecent
+        ? latestResult
+        : null;
     if (!completed) return;
     setActionMessage(completed.message);
     setActionSuccessful(completed.success);
     setPendingCommandId(null);
   }, [monitorData, pendingCommandId]);
+
+  useEffect(() => {
+    if (!hasPendingCommand || commandRunning) return;
+    setActionMessage(
+      'A busca USB não respondeu dentro do prazo e foi encerrada.'
+    );
+    setActionSuccessful(false);
+    setPendingCommandId(null);
+  }, [commandRunning, hasPendingCommand]);
 
   const queueTotal = useMemo(() => {
     if (!monitorData) return 0;
@@ -327,11 +378,17 @@ export function PrintMonitorPanel({
   );
   const onlineAgents = monitorData?.agents.filter(agent => agent.online) || [];
   const controlAgent = (
-    onlineAgents.find(agent => agent.printer_ready)
+    onlineAgents.find(
+      agent => agent.printer_ready && agent.supports_usb_commands
+    )
+    || onlineAgents.find(agent => agent.supports_usb_commands)
     || onlineAgents[0]
     || null
   );
   const hasOnlineAgent = onlineAgents.length > 0;
+  const hasUsbCommandAgent = onlineAgents.some(
+    agent => agent.supports_usb_commands
+  );
   const hasReadyPrinter = readyUsbPrinters.length > 0;
   const hasFreshPrinterDiagnostics = Boolean(
     monitorData?.agents.some(agent => agentHasFreshDiagnostics(agent))
@@ -459,6 +516,13 @@ export function PrintMonitorPanel({
         detail: 'Use o botão abaixo para forçar uma nova busca física.'
       };
     }
+    if (!hasUsbCommandAgent) {
+      return {
+        tone: 'danger',
+        title: 'Kôma Print precisa ser atualizado',
+        detail: 'Esta versão do serviço não executa a busca USB pelo painel.'
+      };
+    }
     if (!hasReadyPrinter && presentUsbPrinters.length > 0) {
       return {
         tone: 'warning',
@@ -511,6 +575,7 @@ export function PrintMonitorPanel({
     configuredDisconnectedPrinters.length,
     hasFreshPrinterDiagnostics,
     hasOnlineAgent,
+    hasUsbCommandAgent,
     hasReadyPrinter,
     latestJob,
     monitorData,
@@ -714,7 +779,7 @@ export function PrintMonitorPanel({
             </p>
           </div>
           <span className="rounded-full border border-[#303036] px-2.5 py-1 text-[9px] text-gray-400">
-            {usbPrinters.length} encontrada(s)
+            {presentUsbPrinters.length} conectada(s)
           </span>
         </div>
 
@@ -807,42 +872,6 @@ export function PrintMonitorPanel({
               </span>
             </div>
           )}
-        </div>
-      </div>
-
-      <div className="rounded-2xl border border-[#29292e] bg-[#0d0d0f] p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h3 className="flex items-center gap-2 text-[11px] font-bold text-gray-200">
-              <Monitor size={14} />
-              Computadores autorizados
-            </h3>
-            <p className="mt-1 text-[9px] text-gray-500">
-              São serviços do Kôma Print; não contam como impressoras.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {monitorData?.agents.length ? monitorData.agents.map((agent, index) => (
-              <span
-                key={agent.agent_id}
-                title={`Identificador técnico: ${agent.agent_id}`}
-                className={`rounded-xl border px-3 py-2 text-[9px] ${
-                  agent.online
-                    ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-200'
-                    : 'border-red-500/25 bg-red-500/10 text-red-200'
-                }`}
-              >
-                <strong className="block">Computador {index + 1}</strong>
-                {agent.online
-                  ? 'serviço ativo'
-                  : `sem contato há ${formatAge(agent.seconds_since_heartbeat)}`}
-              </span>
-            )) : (
-              <span className="text-[9px] text-gray-500">
-                Nenhum computador autorizado.
-              </span>
-            )}
-          </div>
         </div>
       </div>
 

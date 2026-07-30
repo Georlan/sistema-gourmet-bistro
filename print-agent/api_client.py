@@ -7,6 +7,18 @@ from typing import Any, Dict, Iterable, List, Optional, Set
 import requests
 
 log = logging.getLogger("print-agent.api")
+AGENT_CAPABILITIES = ["connect_usb"]
+
+
+def _diagnostics_with_capabilities(
+    diagnostics: Optional[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    if not diagnostics:
+        return diagnostics
+    return {
+        **diagnostics,
+        "capabilities": AGENT_CAPABILITIES,
+    }
 
 
 class KomaApiClient:
@@ -59,7 +71,11 @@ class KomaApiClient:
         try:
             resp = self.session.post(
                 url,
-                json={"diagnostics": diagnostics} if diagnostics else {},
+                json={
+                    "diagnostics": _diagnostics_with_capabilities(
+                        diagnostics
+                    )
+                } if diagnostics else {},
                 headers=self.headers,
                 timeout=5,
             )
@@ -90,7 +106,9 @@ class KomaApiClient:
                 result.get("message") or "Comando concluído."
             )[:300],
             "printer_name": result.get("printer_name"),
-            "diagnostics": result.get("diagnostics"),
+            "diagnostics": _diagnostics_with_capabilities(
+                result.get("diagnostics")
+            ),
         }
         try:
             resp = self.session.post(

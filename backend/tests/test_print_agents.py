@@ -132,6 +132,7 @@ def mark_agent_printer_ready(agent_id: str) -> None:
         agent.printer_diagnostics = {
             "adapter": "linux",
             "platform": "linux",
+            "capabilities": ["connect_usb"],
             "default_printer": "G250",
             "printers": [
                 {
@@ -802,6 +803,7 @@ def test_admin_can_connect_usb_and_agent_reports_result():
             printer_diagnostics={
                 "adapter": "linux",
                 "platform": "linux",
+                "capabilities": ["connect_usb"],
                 "printers": [],
                 "default_printer": None,
                 "error": None,
@@ -848,6 +850,7 @@ def test_admin_can_connect_usb_and_agent_reports_result():
             "diagnostics": {
                 "adapter": "linux",
                 "platform": "linux",
+                "capabilities": ["connect_usb"],
                 "default_printer": "G250",
                 "printers": [
                     {
@@ -893,6 +896,105 @@ def test_admin_can_connect_usb_and_agent_reports_result():
     assert agent["last_command_result"]["id"] == command["id"]
     assert agent["last_command_result"]["success"] is True
     assert agent["printer_ready"] is True
+
+
+def test_usb_connection_rejects_legacy_agent_without_command_support():
+    now = datetime.datetime.now(datetime.timezone.utc)
+    tenant_token = current_restaurante_id.set(2)
+    db = TestingSessionLocal()
+    try:
+        db.add(PrintAgentToken(
+            id="legacy-agent-2",
+            restaurante_id=2,
+            agent_id="legacy-desktop-2",
+            token_hash=hash_token("legacy-agent-token"),
+            ativo=True,
+            last_seen_at=now,
+            printer_diagnostics={
+                "adapter": "linux",
+                "platform": "linux",
+                "printers": [],
+                "default_printer": None,
+                "error": None,
+            },
+            diagnostics_updated_at=now,
+        ))
+        db.commit()
+    finally:
+        db.close()
+        current_restaurante_id.reset(tenant_token)
+
+    response = TestClient(app).post(
+        "/api/print-agents/actions/connect-usb",
+        headers=jwt_headers("2", 2, "admin"),
+        json={"agent_id": "legacy-desktop-2"},
+    )
+
+    assert response.status_code == 409
+    assert "desatualizado" in response.json()["detail"]
+
+
+def test_print_monitor_expires_usb_command_without_agent_heartbeat(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        print_agents_route,
+        "AGENT_COMMAND_TIMEOUT_SECONDS",
+        1,
+    )
+    now = datetime.datetime.now(datetime.timezone.utc)
+    command_id = "usb_stale_command"
+    tenant_token = current_restaurante_id.set(2)
+    db = TestingSessionLocal()
+    try:
+        db.add(PrintAgentToken(
+            id="stale-command-agent-2",
+            restaurante_id=2,
+            agent_id="stale-command-desktop-2",
+            token_hash=hash_token("stale-command-token"),
+            ativo=True,
+            last_seen_at=now,
+            printer_diagnostics={
+                "adapter": "linux",
+                "platform": "linux",
+                "capabilities": ["connect_usb"],
+                "printers": [],
+                "default_printer": None,
+                "error": None,
+            },
+            diagnostics_updated_at=now,
+            pending_command={
+                "id": command_id,
+                "action": "connect_usb",
+                "requested_at": (
+                    now - datetime.timedelta(seconds=5)
+                ).isoformat(),
+            },
+            command_requested_at=(
+                now - datetime.timedelta(seconds=5)
+            ),
+        ))
+        db.commit()
+    finally:
+        db.close()
+        current_restaurante_id.reset(tenant_token)
+
+    response = TestClient(app).get(
+        "/api/print-agents/monitor",
+        headers=jwt_headers("2", 2, "admin"),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["command_timeout_seconds"] == 1
+    agent = next(
+        item
+        for item in response.json()["agents"]
+        if item["agent_id"] == "stale-command-desktop-2"
+    )
+    assert agent["pending_command"] is None
+    assert agent["last_command_result"]["id"] == command_id
+    assert agent["last_command_result"]["code"] == "command_expired"
+    assert agent["last_command_result"]["success"] is False
 
 
 def test_usb_connection_action_is_tenant_scoped_and_rejects_waiter():
