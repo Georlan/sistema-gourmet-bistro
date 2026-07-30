@@ -15,9 +15,150 @@ from .escpos import build_escpos_payload
 
 log = logging.getLogger("print-agent.adapter.windows")
 
+VIRTUAL_PRINTER_MARKERS = (
+    "microsoft print to pdf",
+    "microsoft xps",
+    "onenote",
+    "fax",
+    "adobe pdf",
+    "pdfcreator",
+    "pdf24",
+    "cute pdf",
+)
+VIRTUAL_PORT_MARKERS = (
+    "FILE:",
+    "PORTPROMPT:",
+    "SHRFAX:",
+    "NUL:",
+)
+
 
 def _normalize_device_name(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", (value or "").casefold())
+
+
+def _is_virtual_printer(printer_name: str, port_name: str) -> bool:
+    normalized_name = (printer_name or "").casefold()
+    normalized_port = (port_name or "").upper()
+    return any(
+        marker in normalized_name
+        for marker in VIRTUAL_PRINTER_MARKERS
+    ) or normalized_port.startswith(VIRTUAL_PORT_MARKERS)
+
+
+def _rescan_windows_usb_devices() -> None:
+    """Solicita ao Plug and Play uma nova leitura sem abrir Configurações."""
+    if sys.platform != "win32":
+        return
+    try:
+        subprocess.run(
+            ["pnputil.exe", "/scan-devices"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=20,
+            check=False,
+            text=True,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+
+def _windows_usb_ports() -> list[str]:
+    if sys.platform != "win32":
+        return []
+    script = (
+        "$ErrorActionPreference='Stop'; "
+        "@(Get-PrinterPort | Where-Object { $_.Name -match '^USB[0-9]+:?$' } "
+        "| Select-Object -ExpandProperty Name) | ConvertTo-Json -Compress"
+    )
+    try:
+        process = subprocess.run(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                script,
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=8,
+            check=False,
+            text=True,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    if process.returncode != 0 or not process.stdout.strip():
+        return []
+    try:
+        payload = json.loads(process.stdout)
+    except json.JSONDecodeError:
+        return []
+    if isinstance(payload, str):
+        payload = [payload]
+    if not isinstance(payload, list):
+        return []
+    return [
+        str(port)
+        for port in payload
+        if re.fullmatch(r"USB[0-9]+:?", str(port), re.IGNORECASE)
+    ]
+
+
+def _install_generic_usb_queue(
+    device_name: str,
+) -> tuple[bool, Optional[str]]:
+    """
+    Cria uma fila RAW com o driver nativo Generic / Text Only.
+
+    A operação é silenciosa quando o agente foi instalado com as permissões
+    necessárias. Se o Windows negar, o painel informa que o instalador precisa
+    reparar o serviço; o usuário não é enviado às Configurações do sistema.
+    """
+    ports = _windows_usb_ports()
+    if len(ports) != 1:
+        return False, None
+    port_name = ports[0]
+    safe_device_name = re.sub(
+        r"[^A-Za-z0-9 _.-]+",
+        "",
+        device_name or "",
+    ).strip()
+    queue_name = f"Koma {safe_device_name or 'Impressora USB'}"[:80]
+    script = (
+        "$ErrorActionPreference='Stop'; "
+        "$driver='Generic / Text Only'; "
+        f"$queue='{queue_name}'; $port='{port_name}'; "
+        "if (-not (Get-PrinterDriver -Name $driver -ErrorAction SilentlyContinue)) "
+        "{ Add-PrinterDriver -Name $driver }; "
+        "if (-not (Get-Printer -Name $queue -ErrorAction SilentlyContinue)) "
+        "{ Add-Printer -Name $queue -DriverName $driver -PortName $port }; "
+        "Write-Output $queue"
+    )
+    try:
+        process = subprocess.run(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                script,
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=20,
+            check=False,
+            text=True,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False, None
+    if process.returncode != 0:
+        log.error(
+            "[WINDOWS ADAPTER] Falha ao criar fila USB automática: %s",
+            process.stderr.strip(),
+        )
+        return False, None
+    return True, queue_name
 
 
 def _present_windows_usb_printers() -> list[dict[str, str]]:
@@ -186,6 +327,9 @@ class WindowsPrinterAdapter(BasePrinterAdapter):
                         except Exception:
                             pass
 
+                if _is_virtual_printer(str(name), port_name):
+                    continue
+
                 normalized_port = port_name.upper()
                 connection = (
                     "usb"
@@ -199,11 +343,23 @@ class WindowsPrinterAdapter(BasePrinterAdapter):
                         str(name),
                         present_usb_devices,
                     )
+                    if (
+                        not present
+                        and str(name).casefold().startswith("koma ")
+                        and len(present_usb_devices) == 1
+                    ):
+                        present = True
                     if present:
                         for device in present_usb_devices:
-                            if _matches_present_usb_device(
-                                str(name),
-                                [device],
+                            if (
+                                _matches_present_usb_device(
+                                    str(name),
+                                    [device],
+                                )
+                                or (
+                                    str(name).casefold().startswith("koma ")
+                                    and len(present_usb_devices) == 1
+                                )
                             ):
                                 matched_usb_devices.add(
                                     device["instance_id"]
@@ -253,6 +409,156 @@ class WindowsPrinterAdapter(BasePrinterAdapter):
                 "default_printer": None,
                 "error": str(exc)[:300],
             }
+
+    def connect_usb(
+        self,
+        requested_name: str = "",
+        requested_uri: str = "",
+    ) -> Dict[str, Any]:
+        """Reescaneia o PnP, seleciona a fila física e a torna padrão."""
+        if sys.platform != "win32" or not self._win32print:
+            diagnostics = self.get_diagnostics()
+            return {
+                "success": False,
+                "code": "spooler_unavailable",
+                "message": (
+                    "O serviço de impressão do Windows não está disponível."
+                ),
+                "printer_name": None,
+                "diagnostics": diagnostics,
+            }
+
+        _rescan_windows_usb_devices()
+        diagnostics = self.get_diagnostics()
+        usb_printers = [
+            printer
+            for printer in diagnostics.get("printers") or []
+            if (
+                isinstance(printer, dict)
+                and printer.get("connection") == "usb"
+                and printer.get("present") is True
+            )
+        ]
+        selected = next(
+            (
+                printer
+                for printer in usb_printers
+                if (
+                    requested_uri
+                    and str(printer.get("uri") or "") == requested_uri
+                )
+                or (
+                    requested_name
+                    and str(printer.get("name") or "") == requested_name
+                )
+            ),
+            None,
+        )
+        if selected is None:
+            if len(usb_printers) == 1:
+                selected = usb_printers[0]
+            elif len(usb_printers) > 1:
+                return {
+                    "success": False,
+                    "code": "multiple_usb_printers",
+                    "message": (
+                        "Há mais de uma impressora USB conectada. "
+                        "Escolha uma delas no painel."
+                    ),
+                    "printer_name": None,
+                    "diagnostics": diagnostics,
+                }
+        if selected is None:
+            return {
+                "success": False,
+                "code": "usb_not_found",
+                "message": (
+                    "Nenhuma impressora física foi encontrada no USB. "
+                    "Reconecte o cabo e tente novamente."
+                ),
+                "printer_name": None,
+                "diagnostics": diagnostics,
+            }
+
+        selected_name = str(selected.get("name") or "")
+        if selected.get("configured") is not True:
+            installed, queue_name = _install_generic_usb_queue(
+                selected_name
+            )
+            if not installed or not queue_name:
+                return {
+                    "success": False,
+                    "code": "driver_install_failed",
+                    "message": (
+                        "O USB foi detectado, mas o Kôma Print não conseguiu "
+                        "instalar a fila automaticamente."
+                    ),
+                    "printer_name": selected_name or None,
+                    "diagnostics": diagnostics,
+                }
+            selected_name = queue_name
+            diagnostics = self.get_diagnostics()
+
+        try:
+            self._win32print.SetDefaultPrinter(selected_name)
+            handle = self._win32print.OpenPrinter(selected_name)
+            try:
+                self._win32print.SetPrinter(
+                    handle,
+                    0,
+                    None,
+                    getattr(
+                        self._win32print,
+                        "PRINTER_CONTROL_RESUME",
+                        2,
+                    ),
+                )
+            finally:
+                self._win32print.ClosePrinter(handle)
+        except Exception as exc:
+            log.error(
+                "[WINDOWS ADAPTER] Falha ao ativar '%s': %s",
+                selected_name,
+                exc,
+            )
+            return {
+                "success": False,
+                "code": "usb_configuration_failed",
+                "message": (
+                    "A impressora foi detectada, mas não pôde ser ativada."
+                ),
+                "printer_name": selected_name or None,
+                "diagnostics": diagnostics,
+            }
+
+        refreshed = self.get_diagnostics()
+        ready = any(
+            str(printer.get("name") or "") == selected_name
+            and printer.get("connection") == "usb"
+            and printer.get("present") is True
+            and printer.get("configured") is True
+            and printer.get("available") is True
+            for printer in refreshed.get("printers") or []
+            if isinstance(printer, dict)
+        )
+        return {
+            "success": ready,
+            "code": (
+                "usb_connected"
+                if ready
+                else "usb_configuration_failed"
+            ),
+            "message": (
+                "Impressora USB conectada e pronta para uso."
+                if ready
+                else (
+                    "A impressora foi configurada, mas ainda não respondeu "
+                    "ao serviço de impressão."
+                )
+            ),
+            "printer_name": selected_name,
+            "diagnostics": refreshed,
+        }
 
     def print_ticket(self, payload_text: str, printer_name: str, doc_type: str) -> bool:
         if sys.platform != "win32" or not self._win32print:

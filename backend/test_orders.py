@@ -5,8 +5,8 @@ import pytest
 from fastapi.testclient import TestClient
 from app.database import SessionLocal, Base, engine, current_restaurante_id
 from app.main import app
-from app.models import Garcom, Produto, Categoria, Mesa, Comanda, Item
-from app.security import get_password_hash, create_access_token
+from app.models import Garcom, Produto, Categoria, Mesa, Comanda
+from app.security import get_password_hash
 
 client = TestClient(app)
 
@@ -214,11 +214,9 @@ def test_transferir_e_mesclar_limites(setup_db):
 
     resp4 = client.post("/comandas/", json={"mesa_id": 4, "garcom_id": "g-1", "tipo": "Consumo no Local"}, headers=headers)
     assert resp4.status_code == 201
-    comanda4 = resp4.json()
 
     resp5 = client.post("/comandas/", json={"mesa_id": 5, "garcom_id": "g-1", "tipo": "Consumo no Local"}, headers=headers)
     assert resp5.status_code == 201
-    comanda5 = resp5.json()
 
     # 3. Mesclar Mesa 3 na Mesa 4 -> Permitido
     resp_merge = client.post("/comandas/mesclar?mesa_origem_id=3&mesa_destino_id=4", headers=headers)
@@ -269,12 +267,17 @@ def test_venda_direta(setup_db):
     assert len(comanda["itens"]) == 1
     assert comanda["itens"][0]["produto_id"] == "p-1"
 
-    # 3. Verificar no banco que a mesa 3 foi vinculada com comanda_atual_id
+    # 3. A ocupação da mesa é derivada pelas comandas abertas; a Mesa não
+    # mantém mais um ponteiro único porque pode conter comandas divididas.
     db = SessionLocal()
     try:
         mesa = db.query(Mesa).filter(Mesa.id == 3).first()
         assert mesa is not None
-        assert mesa.comanda_atual_id == comanda["id"]
+        comanda_aberta = db.query(Comanda).filter(
+            Comanda.id == comanda["id"],
+            Comanda.mesa_id == mesa.id,
+            Comanda.fechada == False,
+        ).first()
+        assert comanda_aberta is not None
     finally:
         db.close()
-

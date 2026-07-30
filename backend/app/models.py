@@ -1063,6 +1063,10 @@ class PrintAgentToken(Base):
     last_seen_at = Column(DateTime(timezone=True), nullable=True)
     printer_diagnostics = Column(JSON, nullable=True)
     diagnostics_updated_at = Column(DateTime(timezone=True), nullable=True)
+    pending_command = Column(JSON, nullable=True)
+    command_requested_at = Column(DateTime(timezone=True), nullable=True)
+    last_command_result = Column(JSON, nullable=True)
+    command_completed_at = Column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         UniqueConstraint("restaurante_id", "agent_id", name="uq_print_agent_tokens_restaurante_agent"),

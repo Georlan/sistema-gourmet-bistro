@@ -1,9 +1,13 @@
-import pytest
-from unittest.mock import AsyncMock, MagicMock
+import asyncio
+from unittest.mock import AsyncMock
 from app.websocket_manager import ConnectionManager
 
-@pytest.mark.asyncio
-async def test_websocket_audience_segmentation():
+
+def test_websocket_audience_segmentation():
+    asyncio.run(_exercise_websocket_audience_segmentation())
+
+
+async def _exercise_websocket_audience_segmentation():
     manager = ConnectionManager()
     
     # Create mock WebSockets
