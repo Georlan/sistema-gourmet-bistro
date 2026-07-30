@@ -373,9 +373,6 @@ export function PrintMonitorPanel({
   const presentUsbPrinters = usbPrinters.filter(
     printer => printer.present === true
   );
-  const configuredDisconnectedPrinters = usbPrinters.filter(
-    printer => printer.configured === true && printer.present !== true
-  );
   const onlineAgents = monitorData?.agents.filter(agent => agent.online) || [];
   const controlAgent = (
     onlineAgents.find(
@@ -530,13 +527,6 @@ export function PrintMonitorPanel({
         detail: 'O Kôma pode configurar e ativar essa impressora automaticamente.'
       };
     }
-    if (!hasReadyPrinter && configuredDisconnectedPrinters.length > 0) {
-      return {
-        tone: 'danger',
-        title: 'Impressora USB desconectada',
-        detail: 'A fila existe, mas o equipamento físico não está presente na porta USB.'
-      };
-    }
     if (!hasReadyPrinter) {
       return {
         tone: 'danger',
@@ -572,7 +562,6 @@ export function PrintMonitorPanel({
     };
   }, [
     commandRunning,
-    configuredDisconnectedPrinters.length,
     hasFreshPrinterDiagnostics,
     hasOnlineAgent,
     hasUsbCommandAgent,
@@ -784,13 +773,12 @@ export function PrintMonitorPanel({
         </div>
 
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {usbPrinters.length ? usbPrinters.map((printer, index) => {
+          {presentUsbPrinters.length ? presentUsbPrinters.map((printer, index) => {
             const ready = (
               printer.available
               && printer.present === true
               && printer.configured === true
             );
-            const present = printer.present === true;
             const busy = commandRunning || Boolean(pendingCommandId);
             return (
               <div
@@ -798,9 +786,7 @@ export function PrintMonitorPanel({
                 className={`rounded-2xl border p-4 ${
                   ready
                     ? 'border-emerald-500/25 bg-emerald-500/[0.07]'
-                    : present
-                      ? 'border-amber-500/25 bg-amber-500/[0.07]'
-                      : 'border-red-500/25 bg-red-500/[0.07]'
+                    : 'border-amber-500/25 bg-amber-500/[0.07]'
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
@@ -808,9 +794,7 @@ export function PrintMonitorPanel({
                     <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
                       ready
                         ? 'bg-emerald-400/15 text-emerald-300'
-                        : present
-                          ? 'bg-amber-400/15 text-amber-300'
-                          : 'bg-red-400/15 text-red-300'
+                        : 'bg-amber-400/15 text-amber-300'
                     }`}>
                       <Printer size={17} />
                     </div>
@@ -821,17 +805,11 @@ export function PrintMonitorPanel({
                       <span className={`mt-1 block text-[9px] ${
                         ready
                           ? 'text-emerald-300'
-                          : present
-                            ? 'text-amber-300'
-                            : 'text-red-300'
+                          : 'text-amber-300'
                       }`}>
                         {ready
                           ? 'Conectada e pronta'
-                          : present && printer.configured !== true
-                            ? 'USB presente · configuração pendente'
-                            : printer.configured === true
-                              ? 'Fila salva · USB desconectado'
-                              : 'Indisponível'}
+                          : 'USB presente · configuração pendente'}
                       </span>
                     </div>
                   </div>
