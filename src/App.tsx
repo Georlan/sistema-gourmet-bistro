@@ -1967,11 +1967,15 @@ export default function App() {
             {/* Table layout grid */}
             <div className="space-y-3">
               {/* Title + Filters Row */}
-              <div className="flex items-center justify-between gap-3 pb-3 border-b border-[#27272A]">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-[#27272A]">
                 <h3 className="font-serif text-xl sm:text-2xl font-bold tracking-tight text-white shrink-0">Mesas</h3>
 
-                {/* Filters - horizontal scroll on mobile */}
-                <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                {/* Filters */}
+                <div
+                  role="group"
+                  aria-label="Filtrar mesas por status"
+                  className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-1.5 w-full sm:w-auto"
+                >
                   {(['todos', 'livres', 'ocupadas', 'prontas'] as const).map((filter) => {
                     const label = {
                       todos: 'Todas',
@@ -1983,8 +1987,10 @@ export default function App() {
                     return (
                       <button
                         key={filter}
+                        type="button"
                         onClick={() => setTableFilter(filter)}
-                        className={`px-3 py-2 text-xs font-semibold rounded-lg cursor-pointer whitespace-nowrap border ${tableFilter === filter
+                        aria-pressed={tableFilter === filter}
+                        className={`w-full sm:w-auto min-h-11 sm:min-h-0 flex items-center justify-center px-3 py-2 text-xs font-semibold rounded-lg cursor-pointer whitespace-nowrap border ${tableFilter === filter
                           ? 'bg-rose-900/40 border-rose-800/50 text-white'
                           : 'bg-[#1C1C1F] text-gray-300 border-[#27272A]'
                         }`}
