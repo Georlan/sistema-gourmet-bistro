@@ -207,11 +207,18 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
         </div>
 
         {/* MODAL TABS */}
-        <div className="bg-[#121214] border-b border-[#27272A] px-4 sm:px-6 py-2.5 flex gap-2 shrink-0 overflow-x-auto scrollbar-none">
+        <div
+          role="tablist"
+          aria-label="Ações da mesa"
+          className="bg-[#121214] border-b border-[#27272A] px-3 sm:px-6 py-2.5 grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-2 shrink-0"
+        >
           <button
             id="tab-consumo-btn"
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'consumo'}
             onClick={() => setActiveTab('consumo')}
-            className={`px-4.5 py-2 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider font-sans border ${
+            className={`w-full sm:w-auto min-h-11 sm:min-h-0 px-2 sm:px-4.5 py-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider font-sans whitespace-nowrap border ${
               activeTab === 'consumo' 
                 ? 'bg-[#1C1C1F] text-[#10b981] shadow-sm border-[#27272A]' 
                 : 'text-gray-400 hover:text-white border-transparent'
@@ -223,8 +230,11 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
 
           <button
             id="tab-lancamento-btn"
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'lancamento'}
             onClick={() => setActiveTab('lancamento')}
-            className={`px-4.5 py-2 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider font-sans border ${
+            className={`w-full sm:w-auto min-h-11 sm:min-h-0 px-2 sm:px-4.5 py-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider font-sans whitespace-nowrap border ${
               activeTab === 'lancamento' 
                 ? 'bg-[#1C1C1F] text-[#10b981] shadow-sm border-[#27272A]' 
                 : 'text-gray-400 hover:text-white border-transparent'
@@ -240,11 +250,14 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
           {orders.length > 0 && (
             <button
               id="tab-transferir-btn"
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'transferir'}
               onClick={() => {
                 setActiveTab('transferir');
                 setTransferType('total');
               }}
-              className={`px-4.5 py-2 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider font-sans border ${
+              className={`w-full sm:w-auto min-h-11 sm:min-h-0 px-2 sm:px-4.5 py-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider font-sans whitespace-nowrap border ${
                 activeTab === 'transferir' 
                   ? 'bg-[#1C1C1F] text-[#10b981] shadow-sm border-[#27272A]' 
                   : 'text-gray-400 hover:text-white border-transparent'
@@ -258,11 +271,14 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
           {orders.length > 0 && onMergeTables && (
             <button
               id="tab-mesclar-btn"
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'mesclar'}
               onClick={() => {
                 setActiveTab('mesclar');
                 setTransferType('mesclar');
               }}
-              className={`px-4.5 py-2 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider font-sans border ${
+              className={`w-full sm:w-auto min-h-11 sm:min-h-0 px-2 sm:px-4.5 py-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider font-sans whitespace-nowrap border ${
                 activeTab === 'mesclar' 
                   ? 'bg-[#1C1C1F] text-[#10b981] shadow-sm border-[#27272A]' 
                   : 'text-gray-400 hover:text-white border-transparent'
