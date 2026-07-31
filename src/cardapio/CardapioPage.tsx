@@ -122,7 +122,9 @@ export default function CardapioPage() {
         return;
       }
 
-      const res = await fetch(`${API_BASE_URL}/cardapio/pedidos/${parsed.id}/status`);
+      // Ownership proof: send idempotency_key as ?key= query param
+      const ownershipKey = parsed.idempotency_key || "";
+      const res = await fetch(`${API_BASE_URL}/cardapio/pedidos/${parsed.id}/status?key=${encodeURIComponent(ownershipKey)}`);
       if (res.status === 404) {
         localStorage.removeItem("koma_active_order");
         setActiveOrder(null);

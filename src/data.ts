@@ -39,7 +39,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Hambúrgueres Bovinos',
     preco: 19.00,
     descricao: 'Hambúrguer bovino 120g, cheddar cremoso e molho de alho no pão brioche. (Salada opcional).',
-    imagem: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '002',
@@ -47,7 +47,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Hambúrgueres Bovinos',
     preco: 22.00,
     descricao: 'Hambúrguer bovino 120g, queijo coalho, cheddar cremoso e molho de alho no pão brioche. (Salada opcional).',
-    imagem: 'https://images.unsplash.com/photo-1550547660-d9450f859349?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '003',
@@ -55,7 +55,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Hambúrgueres Bovinos',
     preco: 25.00,
     descricao: 'Hambúrguer bovino 120g, queijo coalho, bacon, cheddar cremoso e molho de alho no pão brioche. (Salada opcional).',
-    imagem: 'https://images.unsplash.com/photo-1553979459-d2229ba7433b?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '004',
@@ -63,7 +63,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Hambúrgueres Bovinos',
     preco: 25.00,
     descricao: 'Hambúrguer bovino 120g, queijo coalho, ovo, cheddar cremoso e molho de alho no pão brioche. (Salada opcional).',
-    imagem: 'https://images.unsplash.com/photo-1586190848861-99aa4a171e90?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '005',
@@ -71,7 +71,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Hambúrgueres Bovinos',
     preco: 29.00,
     descricao: '2 Hambúrgueres bovinos 120g, queijo cheddar, bacon e molho de alho no pão brioche. (Salada opcional).',
-    imagem: 'https://images.unsplash.com/photo-1525164286253-04e11400c6d5?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '006',
@@ -79,7 +79,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Hambúrgueres Bovinos',
     preco: 34.00,
     descricao: '2 Hambúrgueres bovinos 120g, queijo coalho, ovo, bacon, cheddar cremoso e molho de alho no pão brioche. (Salada opcional).',
-    imagem: 'https://images.unsplash.com/photo-1594212699903-ec8a3eca50f5?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '007',
@@ -87,7 +87,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Hambúrgueres Bovinos',
     preco: 33.00,
     descricao: 'Cupim desfiado 120g, queijo coalho, geleia de pimenta e mel no pão brioche. (Salada opcional).',
-    imagem: 'https://images.unsplash.com/photo-1606755962773-d324e0a13086?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '008',
@@ -95,7 +95,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Hambúrgueres Bovinos',
     preco: 28.00,
     descricao: 'Hambúrguer bovino 120g, cream cheese, abacaxi grelhado, bacon, molho barbecue e molho de alho no pão brioche.',
-    imagem: 'https://images.unsplash.com/photo-1572802419224-296b0aeee0d9?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
 
   // Hambúrgueres de Frango
@@ -105,7 +105,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Hambúrgueres de Frango',
     preco: 19.00,
     descricao: 'Hambúrguer de frango 120g, cheddar cremoso e molho de alho no pão brioche. (Salada opcional).',
-    imagem: 'https://images.unsplash.com/photo-1625813506062-0aeb1d7a094b?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '072',
@@ -113,7 +113,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Hambúrgueres de Frango',
     preco: 22.00,
     descricao: 'Hambúrguer de frango 120g, queijo coalho, cheddar cremoso e molho de alho no pão brioche. (Salada opcional).',
-    imagem: 'https://images.unsplash.com/photo-1512152272829-e3139592d56f?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '073',
@@ -121,7 +121,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Hambúrgueres de Frango',
     preco: 25.00,
     descricao: 'Hambúrguer de frango 120g, queijo coalho, bacon, cheddar cremoso e molho de alho no pão brioche. (Salada opcional).',
-    imagem: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '074',
@@ -129,7 +129,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Hambúrgueres de Frango',
     preco: 25.00,
     descricao: 'Hambúrguer de frango 120g, queijo coalho, ovo, cheddar cremoso e molho de alho no pão brioche. (Salada opcional).',
-    imagem: 'https://images.unsplash.com/photo-1525059696034-4967a8e1dca2?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '075',
@@ -137,7 +137,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Hambúrgueres de Frango',
     preco: 32.00,
     descricao: '2 Hambúrgueres de frango 120g, queijo coalho, ovo, bacon, cheddar cremoso e molho de alho no pão brioche.',
-    imagem: 'https://images.unsplash.com/photo-1550317138-10000687a72b?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
 
   // Hambúrgueres Suínos
@@ -147,7 +147,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Hambúrgueres Suínos',
     preco: 19.00,
     descricao: 'Hambúrguer suíno 120g, geleia de pimenta e molho de alho no pão brioche. (Salada opcional).',
-    imagem: 'https://images.unsplash.com/photo-1544025162-d76694265947?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '602',
@@ -155,7 +155,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Hambúrgueres Suínos',
     preco: 24.00,
     descricao: 'Hambúrguer suíno 120g, queijo cheddar, geleia de pimenta e molho de alho no pão brioche. (Salada opcional).',
-    imagem: 'https://images.unsplash.com/photo-1582196346030-c052a97c9b83?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '603',
@@ -163,7 +163,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Hambúrgueres Suínos',
     preco: 27.00,
     descricao: 'Hambúrguer suíno 120g, queijo cheddar, bacon, geleia de pimenta e molho de alho no pão brioche. (Salada opcional).',
-    imagem: 'https://images.unsplash.com/photo-1551183053-bf91a1d81141?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '604',
@@ -171,7 +171,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Hambúrgueres Suínos',
     preco: 32.00,
     descricao: '2 Hambúrgueres suínos 120g, queijo cheddar, cebola caramelizada e molho de alho no pão brioche. (Salada opcional).',
-    imagem: 'https://images.unsplash.com/photo-1608750275742-694d21f74c4e?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '605',
@@ -179,7 +179,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Hambúrgueres Suínos',
     preco: 36.00,
     descricao: '3 Hambúrgueres suínos 120g, queijo cheddar, queijo coalho, bacon, cebola caramelizada e molho de alho no pão brioche.',
-    imagem: 'https://images.unsplash.com/photo-1603064752734-4c48fed724c6?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
 
   // Baguetes
@@ -189,7 +189,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Baguetes',
     preco: 36.00,
     descricao: 'Cupim desfiado 120g, creme de queijo, e molho de alho no pão brioche. (Salada opcional).',
-    imagem: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '017',
@@ -197,7 +197,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Baguetes',
     preco: 35.00,
     descricao: 'Filé em cubos 120g, abacaxi em cubos, creme de queijo e molho de alho no pão brioche. (Salada opcional).',
-    imagem: 'https://images.unsplash.com/photo-1554433607-66b5eed9d594?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '018',
@@ -205,7 +205,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Baguetes',
     preco: 30.00,
     descricao: 'Coração de frango 120g, creme de queijo e molho de alho no pão brioche. (Salada opcional).',
-    imagem: 'https://images.unsplash.com/photo-1514516345957-556ca7d90a29?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '019',
@@ -213,7 +213,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Baguetes',
     preco: 30.00,
     descricao: 'Frango em cubos 120g, creme de queijo e molho de alho no pão brioche. (Salada opcional).',
-    imagem: 'https://images.unsplash.com/photo-1562436260-8c9216eeb70a?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '020',
@@ -221,7 +221,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Baguetes',
     preco: 36.00,
     descricao: 'Costela bovina desfiada, creme de queijo, molho barbecue, cebola caramelizada e molho de alho no pão brioche. (Salada opcional).',
-    imagem: 'https://images.unsplash.com/photo-1559561853-08026f989595?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '021',
@@ -229,7 +229,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Baguetes',
     preco: 35.00,
     descricao: 'Camarão salteado, creme de queijo e molho de alho no pão brioche. (Salada opcional).',
-    imagem: 'https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '022',
@@ -237,7 +237,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Baguetes',
     preco: 38.00,
     descricao: 'Picanha bovina 120g, creme de queijo, molho barbecue e molho de alho no pão brioche. (Salada opcional).',
-    imagem: 'https://images.unsplash.com/photo-1544025162-d76694265947?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
 
   // Pastéis Tradicionais
@@ -247,7 +247,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Pastéis Tradicionais',
     preco: 12.00,
     descricao: 'Frango desfiado, queijo coalho e milho.',
-    imagem: 'https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '052',
@@ -255,7 +255,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Pastéis Tradicionais',
     preco: 12.00,
     descricao: 'Carne Moída, queijo coalho e cebola.',
-    imagem: 'https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '053',
@@ -263,7 +263,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Pastéis Tradicionais',
     preco: 10.00,
     descricao: 'Queijo coalho, queijo muçarela e orégano.',
-    imagem: 'https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '054',
@@ -271,7 +271,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Pastéis Tradicionais',
     preco: 12.00,
     descricao: 'Presunto, queijo coalho, tomate, azeitona e orégano.',
-    imagem: 'https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '055',
@@ -279,7 +279,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Pastéis Tradicionais',
     preco: 15.00,
     descricao: 'Calabresa, ovos cozidos, queijo coalho, azeitona e cebola.',
-    imagem: 'https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '056',
@@ -287,7 +287,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Pastéis Tradicionais',
     preco: 16.00,
     descricao: 'Lombinho canadense, cream cheese, azeitona e cebola.',
-    imagem: 'https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '057',
@@ -295,7 +295,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Pastéis Tradicionais',
     preco: 13.00,
     descricao: 'Calabresa, queijo cheddar, azeitona e cebola.',
-    imagem: 'https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '058',
@@ -303,7 +303,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Pastéis Tradicionais',
     preco: 15.00,
     descricao: 'Carne moída, requeijão e cebola.',
-    imagem: 'https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '059',
@@ -311,7 +311,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Pastéis Tradicionais',
     preco: 15.00,
     descricao: 'Frango desfiado, requeijão e molho de alho.',
-    imagem: 'https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
 
   // Pastéis Doces
@@ -321,7 +321,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Pastéis Doces',
     preco: 12.00,
     descricao: 'Banana, queijo coalho, doce de leite e canela.',
-    imagem: 'https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '062',
@@ -329,7 +329,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Pastéis Doces',
     preco: 12.00,
     descricao: 'Queijo coalho e goiabada.',
-    imagem: 'https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '063',
@@ -337,7 +337,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Pastéis Doces',
     preco: 19.00,
     descricao: 'Chocolate branco e bombons Ouro Branco.',
-    imagem: 'https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '064',
@@ -345,7 +345,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Pastéis Doces',
     preco: 16.00,
     descricao: 'Chocolate. (Branco ou ao leite).',
-    imagem: 'https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '065',
@@ -353,7 +353,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Pastéis Doces',
     preco: 16.00,
     descricao: 'Chocolate e banana.',
-    imagem: 'https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
 
   // Pastelões Especiais
@@ -363,7 +363,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Pastelões Especiais',
     preco: 34.00,
     descricao: 'Cupim desfiado, requeijão e queijo muçarela.',
-    imagem: 'https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '032',
@@ -371,7 +371,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Pastelões Especiais',
     preco: 34.00,
     descricao: 'Filé bovino, queijo muçarela, abacaxi e requeijão.',
-    imagem: 'https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '033',
@@ -379,7 +379,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Pastelões Especiais',
     preco: 22.00,
     descricao: 'Frango desfiado, muçarela e milho.',
-    imagem: 'https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '034',
@@ -387,7 +387,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Pastelões Especiais',
     preco: 24.00,
     descricao: 'Frango desfiado, requeijão e milho.',
-    imagem: 'https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '036',
@@ -395,7 +395,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Pastelões Especiais',
     preco: 32.00,
     descricao: 'Camarão salteado, queijo muçarela e requeijão.',
-    imagem: 'https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '037',
@@ -403,7 +403,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Pastelões Especiais',
     preco: 32.00,
     descricao: 'Carne moída, presunto, ovo, bacon, queijo muçarela, cream cheese, milho e azeitona.',
-    imagem: 'https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
 
   // Petiscos
@@ -413,7 +413,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Petiscos',
     preco: 35.90,
     descricao: 'Batata frita 400g, cupim desfiado, bacon em cubos e requeijão.',
-    imagem: 'https://images.unsplash.com/photo-1573080496219-bb080dd4f877?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '042',
@@ -421,7 +421,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Petiscos',
     preco: 12.90,
     descricao: 'Batata frita 250g e cheddar cremoso.',
-    imagem: 'https://images.unsplash.com/photo-1573080496219-bb080dd4f877?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '043',
@@ -429,7 +429,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Petiscos',
     preco: 28.90,
     descricao: 'Batata frita 400g, frango, bacon em cubos e molhos variados.',
-    imagem: 'https://images.unsplash.com/photo-1573080496219-bb080dd4f877?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '044',
@@ -437,7 +437,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Petiscos',
     preco: 18.90,
     descricao: 'Batata frita 250g, bacon em cubos e cheddar cremoso.',
-    imagem: 'https://images.unsplash.com/photo-1573080496219-bb080dd4f877?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '045',
@@ -445,7 +445,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Petiscos',
     preco: 14.90,
     descricao: 'Tiras de pastel sem recheio, acompanhadas com chocolate ou doce de leite.',
-    imagem: 'https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '046',
@@ -453,7 +453,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Petiscos',
     preco: 18.90,
     descricao: 'Tiras de pastel com queijo, acompanhadas de goiabada ou geleia de pimenta.',
-    imagem: 'https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '047',
@@ -461,7 +461,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Petiscos',
     preco: 28.90,
     descricao: '6 Mini pastéis recheados com cupim e cream cheese.',
-    imagem: 'https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
 
   // Combos
@@ -471,7 +471,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Combos Promocionais',
     preco: 79.90,
     descricao: 'Baguete de cupim, baguete de frango, batata tradicional e refrigerante 1L.',
-    imagem: 'https://images.unsplash.com/photo-1606787366850-de6330128bfc?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '202',
@@ -479,7 +479,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Combos Promocionais',
     preco: 59.90,
     descricao: '2 Cheese bacons, batata tradicional e refrigerante 600mL.',
-    imagem: 'https://images.unsplash.com/photo-1606787366850-de6330128bfc?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '203',
@@ -487,7 +487,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Combos Promocionais',
     preco: 45.90,
     descricao: 'Burguer pôr do sol, batata tradicional e refrigerante em lata.',
-    imagem: 'https://images.unsplash.com/photo-1606787366850-de6330128bfc?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '204',
@@ -495,7 +495,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Combos Promocionais',
     preco: 52.90,
     descricao: '2 Cheese burguers, batata tradicional e refrigerante 600mL.',
-    imagem: 'https://images.unsplash.com/photo-1606787366850-de6330128bfc?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '205',
@@ -503,7 +503,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Combos Promocionais',
     preco: 87.90,
     descricao: '3 Cheese bacons, batata tradicional e refrigerante 1L.',
-    imagem: 'https://images.unsplash.com/photo-1606787366850-de6330128bfc?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: '206',
@@ -511,7 +511,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Combos Promocionais',
     preco: 49.90,
     descricao: 'Porcão do sol, batata tradicional e refrigerante em lata.',
-    imagem: 'https://images.unsplash.com/photo-1606787366850-de6330128bfc?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
 
   // Bebidas - Sucos
@@ -521,7 +521,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Sucos',
     preco: 8.00,
     descricao: 'Suco de goiaba natural, batido e gelado.',
-    imagem: 'https://images.unsplash.com/photo-1621506289937-a8e4df240d0b?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: 'suc-02',
@@ -529,7 +529,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Sucos',
     preco: 10.00,
     descricao: 'Suco de maracujá natural, batido e gelado.',
-    imagem: 'https://images.unsplash.com/photo-1621506289937-a8e4df240d0b?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: 'suc-03',
@@ -537,7 +537,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Sucos',
     preco: 10.00,
     descricao: 'Suco de laranja natural, espremido na hora.',
-    imagem: 'https://images.unsplash.com/photo-1621506289937-a8e4df240d0b?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: 'suc-04',
@@ -545,7 +545,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Sucos',
     preco: 8.00,
     descricao: 'Suco de caju de polpa selecionada.',
-    imagem: 'https://images.unsplash.com/photo-1621506289937-a8e4df240d0b?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: 'suc-05',
@@ -553,7 +553,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Sucos',
     preco: 8.00,
     descricao: 'Suco de manga cremoso e gelado.',
-    imagem: 'https://images.unsplash.com/photo-1621506289937-a8e4df240d0b?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: 'suc-06',
@@ -561,7 +561,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Sucos',
     preco: 10.00,
     descricao: 'Suco de abacaxi natural, doce e refrescante.',
-    imagem: 'https://images.unsplash.com/photo-1621506289937-a8e4df240d0b?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
 
   // Bebidas - Refrigerantes
@@ -571,7 +571,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Refrigerantes e Águas',
     preco: 12.00,
     descricao: 'Garrafa pet de 1 litro gelada.',
-    imagem: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: 'ref-02',
@@ -579,7 +579,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Refrigerantes e Águas',
     preco: 8.00,
     descricao: 'Garrafa de 600ml gelada.',
-    imagem: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: 'ref-03',
@@ -587,7 +587,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Refrigerantes e Águas',
     preco: 6.00,
     descricao: 'Lata de refrigerante gelada.',
-    imagem: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: 'ref-04',
@@ -595,7 +595,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Refrigerantes e Águas',
     preco: 6.00,
     descricao: 'Lata de água tônica.',
-    imagem: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: 'ref-05',
@@ -603,7 +603,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Refrigerantes e Águas',
     preco: 3.00,
     descricao: 'Garrafa de água mineral sem gás.',
-    imagem: 'https://images.unsplash.com/photo-1548839140-29a749e1cf4d?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: 'ref-06',
@@ -611,7 +611,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Refrigerantes e Águas',
     preco: 3.00,
     descricao: 'Garrafa de água mineral com gás.',
-    imagem: 'https://images.unsplash.com/photo-1548839140-29a749e1cf4d?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: 'ref-07',
@@ -619,7 +619,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Refrigerantes e Águas',
     preco: 5.00,
     descricao: 'Copo de água de coco natural.',
-    imagem: 'https://images.unsplash.com/photo-1548839140-29a749e1cf4d?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: 'ref-08',
@@ -627,7 +627,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Refrigerantes e Águas',
     preco: 7.00,
     descricao: 'Garrafa de H2O gelada.',
-    imagem: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
 
   // Cervejas
@@ -637,7 +637,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Cervejas',
     preco: 12.00,
     descricao: 'Cerveja Heineken long neck super gelada.',
-    imagem: 'https://images.unsplash.com/photo-1564327021814-a211a19acd8a?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: 'cer-02',
@@ -645,7 +645,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Cervejas',
     preco: 12.00,
     descricao: 'Cerveja Spaten long neck geladíssima.',
-    imagem: 'https://images.unsplash.com/photo-1564327021814-a211a19acd8a?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
 
   // Bebidas Quentes (Doses)
@@ -655,7 +655,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Bebidas Quentes',
     preco: 6.00,
     descricao: 'Dose de whisky Black & White.',
-    imagem: 'https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: 'dos-02',
@@ -663,7 +663,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Bebidas Quentes',
     preco: 8.00,
     descricao: 'Dose de whisky Johnnie Walker Red Label.',
-    imagem: 'https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: 'dos-03',
@@ -671,7 +671,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Bebidas Quentes',
     preco: 5.00,
     descricao: 'Dose de vodka Orloff.',
-    imagem: 'https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: 'dos-04',
@@ -679,7 +679,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Bebidas Quentes',
     preco: 5.00,
     descricao: 'Dose de rum Montilla.',
-    imagem: 'https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   },
   {
     id: 'dos-05',
@@ -687,7 +687,7 @@ export const PRODUCTS: Product[] = [
     categoria: 'Bebidas Quentes',
     preco: 5.00,
     descricao: 'Dose de Campari original.',
-    imagem: 'https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?w=600&auto=format&fit=crop&q=80'
+    imagem: ''
   }
 ];
 

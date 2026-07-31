@@ -324,9 +324,104 @@ def test_idempotency_order_deduplication(test_setup):
     assert d2.get("id") == order_id or d2.get("comanda_id") == order_id
     assert d2["mensagem"] == "Pedido já cadastrado com sucesso!"
 
-    # Verify status query endpoint
-    r_status = client.get(f"/cardapio/pedidos/{order_id}/status")
+    # Verify status query endpoint WITH correct key
+    r_status = client.get(f"/cardapio/pedidos/{order_id}/status?key=test-uuid-idempotency-key-12345")
     assert r_status.status_code == 200
     st_data = r_status.json()
     assert st_data["id"] == order_id
     assert st_data["status"] == "pendente"
+    # Security: ensure PII fields are NOT present in the response
+    assert "cliente_nome" not in st_data
+    assert "cliente_telefone" not in st_data
+    assert "endereco_entrega" not in st_data
+    assert "taxa_entrega" not in st_data
+
+
+def test_status_endpoint_security_requires_idempotency_key():
+    """
+    A3 - Security test: the public status endpoint must require the
+    correct idempotency_key to return data. Wrong/missing key must
+    return 404, never revealing that the order exists.
+    Cross-tenant isolation: order from tenant A must not be accessible
+    with a key from tenant B.
+    """
+    from app.models import Restaurante, Categoria, Produto
+
+    db = SessionLocal()
+
+    # --- Setup Tenant 999 order ---
+    token_var = current_restaurante_id.set(999)
+    try:
+        # Ensure category and product exist for tenant 999
+        if not db.query(Categoria).filter(Categoria.id == "cat-sec-999").first():
+            db.add(Categoria(id="cat-sec-999", nome="Cat Sec 999", restaurante_id=999))
+            db.commit()
+        if not db.query(Produto).filter(Produto.id == "prod-sec-999").first():
+            db.add(Produto(
+                id="prod-sec-999", restaurante_id=999,
+                categoria_id="cat-sec-999", nome="Produto Sec 999",
+                preco=10.0, ativo=True
+            ))
+            db.commit()
+    finally:
+        current_restaurante_id.reset(token_var)
+        db.close()
+
+    # Create order on tenant 999
+    order_a = {
+        "restaurante_id": 999,
+        "itens": [{"produto_id": "prod-sec-999", "quantidade": 1, "observacao": "", "cliente_nome": "Sec A"}],
+        "cliente_nome": "Sec A",
+        "cliente_telefone": "11999990001",
+        "endereco_entrega": "Rua Sec A, 1",
+        "taxa_entrega": 3.0,
+        "forma_pagamento": "na_entrega",
+        "tipo_pedido": "delivery",
+        "idempotency_key": "sec-key-tenant-999"
+    }
+    r1 = client.post("/cardapio/pedidos", json=order_a)
+    assert r1.status_code == 201
+    order_id_a = r1.json()["comanda_id"]
+
+    # --- Test 1: No key → 404 ---
+    r_no_key = client.get(f"/cardapio/pedidos/{order_id_a}/status")
+    assert r_no_key.status_code == 404, "Missing key must return 404"
+
+    # --- Test 2: Wrong key → 404 ---
+    r_wrong = client.get(f"/cardapio/pedidos/{order_id_a}/status?key=wrong-key-abc")
+    assert r_wrong.status_code == 404, "Wrong key must return 404"
+
+    # --- Test 3: Correct key → 200 ---
+    r_ok = client.get(f"/cardapio/pedidos/{order_id_a}/status?key=sec-key-tenant-999")
+    assert r_ok.status_code == 200
+    data = r_ok.json()
+    assert data["id"] == order_id_a
+
+    # --- Test 4: Non-existent comanda_id → 404 ---
+    r_fake = client.get("/cardapio/pedidos/non-existent-id/status?key=sec-key-tenant-999")
+    assert r_fake.status_code == 404
+
+    # --- Test 5: Adjacent comanda_id with correct key of another order → 404 ---
+    # Create a second order on same tenant to test ID guessing
+    order_b = {
+        "restaurante_id": 999,
+        "itens": [{"produto_id": "prod-sec-999", "quantidade": 1, "observacao": "", "cliente_nome": "Sec B"}],
+        "cliente_nome": "Sec B",
+        "cliente_telefone": "11999990002",
+        "endereco_entrega": "Rua Sec B, 2",
+        "taxa_entrega": 3.0,
+        "forma_pagamento": "na_entrega",
+        "tipo_pedido": "delivery",
+        "idempotency_key": "sec-key-tenant-999-order-b"
+    }
+    r2 = client.post("/cardapio/pedidos", json=order_b)
+    assert r2.status_code == 201
+    order_id_b = r2.json()["comanda_id"]
+
+    # Cross-order: order A's key on order B's ID → 404
+    r_cross = client.get(f"/cardapio/pedidos/{order_id_b}/status?key=sec-key-tenant-999")
+    assert r_cross.status_code == 404, "Key from order A must not unlock order B"
+
+    # Cross-order reversed: order B's key on order A's ID → 404
+    r_cross2 = client.get(f"/cardapio/pedidos/{order_id_a}/status?key=sec-key-tenant-999-order-b")
+    assert r_cross2.status_code == 404, "Key from order B must not unlock order A"

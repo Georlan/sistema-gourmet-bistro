@@ -254,13 +254,32 @@ def criar_pedido_online(
 @router.get("/pedidos/{comanda_id}/status")
 def consultar_status_pedido_publico(
     comanda_id: str,
+    key: str = "",
     db: Session = Depends(get_db)
 ):
     """
     Retorna o status atual de um pedido público em andamento para o cliente.
+    Requer a idempotency_key como query param ?key=... para provar posse.
+    Retorna 404 (nunca 403) quando a chave está errada ou ausente, para não
+    revelar que o comanda_id existe.
     """
+    key = (key or "").strip()
+
+    # Busca a comanda e valida posse via idempotency_key em um único passo.
     comanda = db.query(Comanda).filter(Comanda.id == comanda_id).first()
     if not comanda:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Pedido não encontrado."
+        )
+
+    # Validação de posse: idempotency_key obrigatória e deve bater.
+    # Pedidos legados sem idempotency_key no banco também passam se o
+    # cliente enviar a mesma key que foi salva no seu localStorage na
+    # criação do pedido. Se a comanda não tiver idempotency_key salva
+    # (pedido criado antes do hotfix), aceitar apenas se key não for
+    # vazia e bater — caso contrário, retornar 404 para não vazar dados.
+    if not key or not comanda.idempotency_key or comanda.idempotency_key != key:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Pedido não encontrado."
@@ -271,9 +290,6 @@ def consultar_status_pedido_publico(
             "id": item.id,
             "nome": item.produto.nome if item.produto else "Item",
             "quantidade": 1,
-            "preco": item.preco_unit,
-            "observacao": item.observacao,
-            "status": item.status
         }
         for item in comanda.itens
     ]
@@ -285,10 +301,6 @@ def consultar_status_pedido_publico(
         "numero_pedido": comanda.numero_pedido,
         "status": comanda.delivery_status or "pendente",
         "tipo": comanda.tipo,
-        "cliente_nome": comanda.identificador,
-        "cliente_telefone": comanda.delivery_telefone,
-        "endereco_entrega": comanda.delivery_endereco,
-        "taxa_entrega": comanda.delivery_taxa or 0.0,
         "total": total_val,
         "fechada": comanda.fechada,
         "criado_em": comanda.criado_em.isoformat() if comanda.criado_em else None,

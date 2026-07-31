@@ -22,7 +22,7 @@ export const STORE_CONFIG = {
       name: "001 - Hambúrguer Tradicional",
       description: "Hambúrguer bovino 120g, cheddar cremoso e molho de alho no pão brioche. (Salada opcional).",
       price: 19.00,
-      image: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&q=80&w=600",
+      image: "",
       category: "Destaques",
       isAvailable: true,
       modifiers: [
@@ -54,7 +54,7 @@ export const STORE_CONFIG = {
       name: "002 - Cheese Burguer",
       description: "Hambúrguer bovino 120g, queijo coalho, cheddar cremoso e molho de alho no pão brioche. (Salada opcional).",
       price: 22.00,
-      image: "https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&q=80&w=600",
+      image: "",
       category: "Hambúrgueres",
       isAvailable: true,
       modifiers: [
@@ -75,7 +75,7 @@ export const STORE_CONFIG = {
       name: "003 - Cheese Bacon",
       description: "Hambúrguer bovino 120g, queijo coalho, bacon, cheddar cremoso e molho de alho no pão brioche. (Salada opcional).",
       price: 25.00,
-      image: "https://images.unsplash.com/photo-1553979459-d2229ba7433b?auto=format&fit=crop&q=80&w=600",
+      image: "",
       category: "Destaques",
       isAvailable: true,
       modifiers: [
@@ -96,7 +96,7 @@ export const STORE_CONFIG = {
       name: "004 - Cheese Egg",
       description: "Hambúrguer bovino 120g, queijo coalho, ovo, cheddar cremoso e molho de alho no pão brioche. (Salada opcional).",
       price: 25.00,
-      image: "https://images.unsplash.com/photo-1594212699903-ec8a3eca50f5?auto=format&fit=crop&q=80&w=600",
+      image: "",
       category: "Hambúrgueres",
       isAvailable: true
     },
@@ -105,7 +105,7 @@ export const STORE_CONFIG = {
       name: "005 - Duplo Burguer",
       description: "2 Hambúrgueres bovinos 120g, queijo cheddar, bacon e molho de alho no pão brioche. (Salada opcional).",
       price: 29.00,
-      image: "https://images.unsplash.com/photo-1586190848861-99aa4a171e90?auto=format&fit=crop&q=80&w=600",
+      image: "",
       category: "Destaques",
       isAvailable: true
     },
@@ -114,7 +114,7 @@ export const STORE_CONFIG = {
       name: "006 - Burguer Pôr do Sol",
       description: "2 Hambúrgueres bovinos 120g, queijo coalho, ovo, bacon, cheddar cremoso e molho de alho no pão brioche. (Salada opcional).",
       price: 34.00,
-      image: "https://images.unsplash.com/photo-1521305916504-4a1121188589?auto=format&fit=crop&q=80&w=600",
+      image: "",
       category: "Hambúrgueres",
       isAvailable: true
     },
@@ -123,7 +123,7 @@ export const STORE_CONFIG = {
       name: "007 - Cheese Cupim",
       description: "Cupim desfiado 120g, queijo coalho, geleia de pimenta e mel no pão brioche. (Salada opcional).",
       price: 33.00,
-      image: "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=600",
+      image: "",
       category: "Hambúrgueres",
       isAvailable: true
     },
@@ -132,7 +132,7 @@ export const STORE_CONFIG = {
       name: "008 - Hambúrguer Tropical",
       description: "Hambúrguer bovino 120g, cream cheese, abacaxi grelhado, bacon, molho barbecue e molho de alho no pão brioche.",
       price: 28.00,
-      image: "https://images.unsplash.com/photo-1625813506062-0aeb1d7a094b?auto=format&fit=crop&q=80&w=600",
+      image: "",
       category: "Hambúrgueres",
       isAvailable: true
     },
@@ -141,7 +141,7 @@ export const STORE_CONFIG = {
       name: "Batata Frita Rústica",
       description: "Batatas rústicas fritas com casca, temperadas com sal e páprica defumada. Acompanha maionese da casa.",
       price: 15.00,
-      image: "https://images.unsplash.com/photo-1573080496219-bb080dd4f877?auto=format&fit=crop&q=80&w=600",
+      image: "",
       category: "Acompanhamentos",
       isAvailable: true
     },
@@ -150,7 +150,7 @@ export const STORE_CONFIG = {
       name: "Refrigerante em Lata",
       description: "Coca-Cola Original, Coca Zero, Guaraná Antarctica ou Sprite (Lata 350ml). Selecione a sua preferência.",
       price: 6.50,
-      image: "https://images.unsplash.com/photo-1622483767028-3f66f32aef97?auto=format&fit=crop&q=80&w=600",
+      image: "",
       category: "Bebidas",
       isAvailable: true
     },
@@ -159,7 +159,7 @@ export const STORE_CONFIG = {
       name: "Brownie Quente com Sorvete",
       description: "Brownie de chocolate belga bem molhadinho, servido quente com uma bola de sorvete de baunilha e calda de chocolate.",
       price: 18.90,
-      image: "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?auto=format&fit=crop&q=80&w=600",
+      image: "",
       category: "Sobremesas",
       isAvailable: true
     }
@@ -190,8 +190,8 @@ export const whitelabelBrands: Record<string, BrandConfig> = {
     id: "burger",
     name: STORE_CONFIG.name,
     slogan: "Sincronizado com o Sistema Kôma PDV",
-    logo: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&q=80&w=200&h=200",
-    bannerImage: "https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&q=80&w=1200&h=400",
+    logo: "",
+    bannerImage: "",
     phone: "5511999999999",
     address: "Av. Paulista, 1000 - Bela Vista, São Paulo - SP",
     colors: STORE_CONFIG.colors,
@@ -207,8 +207,8 @@ export const whitelabelBrands: Record<string, BrandConfig> = {
     id: "sushi",
     name: "Sushi Zen",
     slogan: "A Essência da Culinária Japonesa Tradicional e Moderna",
-    logo: "https://images.unsplash.com/photo-1579871494447-9811cf80d66c?auto=format&fit=crop&q=80&w=200&h=200",
-    bannerImage: "https://images.unsplash.com/photo-1611143669185-af224c5e3252?auto=format&fit=crop&q=80&w=1200&h=400",
+    logo: "",
+    bannerImage: "",
     phone: "5511888888888",
     address: "Rua Augusta, 1500 - Consolação, São Paulo - SP",
     colors: {
@@ -226,7 +226,7 @@ export const whitelabelBrands: Record<string, BrandConfig> = {
         name: "Combinado Zen Premium (16 un)",
         description: "Saborosa seleção do Chef: 4 Salmon Jô, 4 Uramaki Filadélfia, 4 Niguiri de Salmão e 4 Hosso-maki de Atum.",
         price: 59.90,
-        image: "https://images.unsplash.com/photo-1579871494447-9811cf80d66c?auto=format&fit=crop&q=80&w=600",
+        image: "",
         category: "Combinados",
         isAvailable: true,
         modifiers: [
@@ -248,7 +248,7 @@ export const whitelabelBrands: Record<string, BrandConfig> = {
         name: "Sunomono de Pepino clássico",
         description: "Salada refrescante de pepino japonês em conserva agridoce com gergelim preto e branco torrado.",
         price: 12.00,
-        image: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=600",
+        image: "",
         category: "Entradas",
         isAvailable: true
       },
@@ -257,7 +257,7 @@ export const whitelabelBrands: Record<string, BrandConfig> = {
         name: "Hot Roll Filadélfia (10 un)",
         description: "Sushis empanados fritos recheados com salmão fresco, cream cheese original e cebolinha fresca. Regado com molho teriyaki.",
         price: 29.90,
-        image: "https://images.unsplash.com/photo-1611143669185-af224c5e3252?auto=format&fit=crop&q=80&w=600",
+        image: "",
         category: "Sashimi & Sushi",
         isAvailable: true,
         modifiers: [
@@ -277,7 +277,7 @@ export const whitelabelBrands: Record<string, BrandConfig> = {
         name: "Sashimi de Salmão Fresco (8 fatias)",
         description: "Lâminas super frescas e selecionadas de salmão premium, cortadas na espessura perfeita pelo nosso sushiman.",
         price: 34.00,
-        image: "https://images.unsplash.com/photo-1534482421-64566f976cfa?auto=format&fit=crop&q=80&w=600",
+        image: "",
         category: "Sashimi & Sushi",
         isAvailable: true
       },
@@ -286,7 +286,7 @@ export const whitelabelBrands: Record<string, BrandConfig> = {
         name: "Temaki Completo de Salmão",
         description: "Cone de alga crocante nori recheado com salmão em cubos, cream cheese Filadélfia, cebolinha fresca picada e gergelim.",
         price: 24.90,
-        image: "https://images.unsplash.com/photo-1617196034796-73dfa7b1fd56?auto=format&fit=crop&q=80&w=600",
+        image: "",
         category: "Sashimi & Sushi",
         isAvailable: true
       },
@@ -295,7 +295,7 @@ export const whitelabelBrands: Record<string, BrandConfig> = {
         name: "Cerveja Japonesa Kirin Ichiban",
         description: "Cerveja japonesa puro malte de sabor unique e refrescante. Garrafa long neck de 355ml.",
         price: 11.90,
-        image: "https://images.unsplash.com/photo-1608270176050-dd2ec7098c4b?auto=format&fit=crop&q=80&w=600",
+        image: "",
         category: "Bebidas",
         isAvailable: true
       },
@@ -304,7 +304,7 @@ export const whitelabelBrands: Record<string, BrandConfig> = {
         name: "Chá Verde Quente ou Gelado",
         description: "Infusão tradicional de chá verde japonês (Ocha), rico em antioxidantes. Selecione a temperatura.",
         price: 6.90,
-        image: "https://images.unsplash.com/photo-1564890369478-c90ae83ab28b?auto=format&fit=crop&q=80&w=600",
+        image: "",
         category: "Bebidas",
         isAvailable: true,
         modifiers: [
@@ -345,8 +345,8 @@ export const whitelabelBrands: Record<string, BrandConfig> = {
     id: "pizza",
     name: "Pizzeria Bella",
     slogan: "Pizzas de Fermentação Natural Assadas no Forno a Lenha",
-    logo: "https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&q=80&w=200&h=200",
-    bannerImage: "https://images.unsplash.com/photo-1590947132387-155cc02f3212?auto=format&fit=crop&q=80&w=1200&h=400",
+    logo: "",
+    bannerImage: "",
     phone: "5511777777777",
     address: "Alameda Lorena, 200 - Jardins, São Paulo - SP",
     colors: {
@@ -364,7 +364,7 @@ export const whitelabelBrands: Record<string, BrandConfig> = {
         name: "Pizza Margherita Suprema",
         description: "Molho de tomate pelado italiano, mussarela fior di latte super fresca, tomates cereja doces, pesto de manjericão e folhas de manjericão gigante.",
         price: 49.90,
-        image: "https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&q=80&w=600",
+        image: "",
         category: "Pizzas Especiais",
         isAvailable: true,
         modifiers: [
@@ -386,7 +386,7 @@ export const whitelabelBrands: Record<string, BrandConfig> = {
         name: "Pizza Calabresa Artesanal",
         description: "Molho de tomate pelado, mussarela cremosa, fatias finas de calabresa artesanal defumada e cebola roxa marinada em azeite.",
         price: 45.90,
-        image: "https://images.unsplash.com/photo-1590947132387-155cc02f3212?auto=format&fit=crop&q=80&w=600",
+        image: "",
         category: "Pizzas Especiais",
         isAvailable: true,
         modifiers: [
@@ -407,7 +407,7 @@ export const whitelabelBrands: Record<string, BrandConfig> = {
         name: "Crostini de Ervas Aromáticas",
         description: "Massa fina de pizza bem crocante, assada com azeite de oliva extravirgem, alecrim fresco e sal grosso.",
         price: 14.00,
-        image: "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=600",
+        image: "",
         category: "Entradas",
         isAvailable: true
       },
@@ -416,7 +416,7 @@ export const whitelabelBrands: Record<string, BrandConfig> = {
         name: "Pizza Nutella com Morangos",
         description: "Massa clássica crocante coberta com generosa camada de Nutella original, morangos frescos cortados e raspas de chocolate branco.",
         price: 36.90,
-        image: "https://images.unsplash.com/photo-1511018556340-d16986a1c194?auto=format&fit=crop&q=80&w=600",
+        image: "",
         category: "Pizzas Doces",
         isAvailable: true
       },
@@ -425,7 +425,7 @@ export const whitelabelBrands: Record<string, BrandConfig> = {
         name: "Vinho Tinto Sangiovese (Taça)",
         description: "Taça de vinho tinto seco de uva Sangiovese da região da Toscana. Combina perfeitamente com nossas pizzas vermelhas.",
         price: 18.00,
-        image: "https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&q=80&w=600",
+        image: "",
         category: "Bebidas",
         isAvailable: true
       }

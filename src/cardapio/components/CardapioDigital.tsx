@@ -154,7 +154,8 @@ export default function CardapioDigital({
         restaurante_id: targetRestauranteId,
         cliente_nome: normalizedName,
         tipo: deliveryMethod === "delivery" ? "Delivery" : "Retirada",
-        total: estimatedTotal
+        total: estimatedTotal,
+        idempotency_key: idempotencyKeyRef.current
       };
       try {
         localStorage.setItem("koma_active_order", JSON.stringify(orderObj));
