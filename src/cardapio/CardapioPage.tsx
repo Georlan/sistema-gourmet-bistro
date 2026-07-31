@@ -460,17 +460,21 @@ export default function CardapioPage() {
 
     const wsUrl = `${WS_BASE_URL}/ws/cliente?restaurante_id=${activeBrand.id}`;
 
-    console.log(`🔌 Conectando ao WebSocket do Cardápio: ${wsUrl}`);
     let ws: WebSocket;
     let reconnectTimeout: any;
+    let currentDelay = 2000;
 
     const connectWS = () => {
+      if (document.hidden) return;
       ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        currentDelay = 2000;
+      };
 
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          console.log("📥 Messagem WebSocket recebida no Cardápio:", data);
           
           const eventName = data.event || data.type;
           if (
@@ -490,14 +494,26 @@ export default function CardapioPage() {
       };
 
       ws.onclose = () => {
-        console.log("🔌 Conexão do WebSocket fechada. Tentando reconectar em 5s...");
-        reconnectTimeout = setTimeout(connectWS, 5000);
+        if (!document.hidden) {
+          reconnectTimeout = setTimeout(connectWS, currentDelay);
+          currentDelay = Math.min(currentDelay * 1.5, 30000);
+        }
       };
     };
 
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        currentDelay = 2000;
+        connectWS();
+        loadRestaurantData();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     connectWS();
 
     return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       if (ws) ws.close();
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
     };

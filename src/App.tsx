@@ -632,6 +632,7 @@ export default function App() {
     let ws: WebSocket;
     let reconnectTimeout: any;
     let wsUpdateTimeout: any;
+    let currentDelay = 2000;
 
     const playNotificationSound = () => {
       try {
@@ -656,6 +657,7 @@ export default function App() {
     };
 
     const connectWS = () => {
+      if (document.hidden) return;
       const wsBase = API_BASE_URL.replace(/^http/, 'ws');
       const tokenKey = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
       const token = localStorage.getItem(tokenKey) || "";
@@ -666,6 +668,7 @@ export default function App() {
       ws.onopen = () => {
         console.log("WebSocket connection established");
         setIsWsConnected(true);
+        currentDelay = 2000; // Reset backoff delay on successful connection
         fetchTables();
         fetchOrdersFromAPI();
       };
@@ -759,21 +762,34 @@ export default function App() {
       };
 
       ws.onclose = () => {
-        console.log("WebSocket connection closed, scheduled reconnect in 5s");
         setIsWsConnected(false);
         wsRef.current = null;
-        reconnectTimeout = setTimeout(connectWS, 5000);
+        if (!document.hidden) {
+          console.log(`WebSocket disconnected, reconnecting in ${currentDelay}ms`);
+          reconnectTimeout = setTimeout(connectWS, currentDelay);
+          currentDelay = Math.min(currentDelay * 1.5, 30000); // Exponential backoff max 30s
+        }
       };
 
       ws.onerror = (err) => {
         console.error("WebSocket connection error:", err);
-        ws.close();
       };
     };
 
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+          currentDelay = 2000;
+          connectWS();
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     connectWS();
 
     return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       clearTimeout(reconnectTimeout);
       clearTimeout(wsUpdateTimeout);
       if (ws) {
@@ -1001,16 +1017,35 @@ export default function App() {
       fetchPagamentosPendentes();
     }
 
-    if (isWsConnected) return;
+    const handleVisibilityChange = () => {
+      if (!document.hidden && isAuthenticated) {
+        fetchOrdersFromAPI();
+        fetchTables();
+        if (activeRole === 'caixa' || activeRole === 'admin') {
+          fetchPagamentosPendentes();
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    if (isWsConnected) {
+      return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+    }
 
     const interval = setInterval(() => {
+      if (document.hidden) return; // Skip polling when tab is in background
       fetchOrdersFromAPI();
       fetchTables();
       if (activeRole === 'caixa' || activeRole === 'admin') {
         fetchPagamentosPendentes();
       }
-    }, 4000);
-    return () => clearInterval(interval);
+    }, 8000);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      clearInterval(interval);
+    };
   }, [isAuthenticated, isWsConnected, activeRole]);
 
   // Supabase Realtime: sincroniza mesas em tempo real com o banco de dados
