@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Menu, X, User, Wifi, WifiOff } from 'lucide-react';
+import { Menu, X, User, Wifi, WifiOff, SlidersHorizontal, ArrowDownRight, ArrowUpRight, RefreshCw } from 'lucide-react';
 import { Table, Order, DraftItem, AppSettings, AppRole, Product } from './types';
 import { TABLES, WAITERS, RESTAURANT_CONFIG, PRODUCTS } from './data';
 import { getTableTotal } from './domain';
