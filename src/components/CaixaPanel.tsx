@@ -27,6 +27,9 @@ import { RelatoriosProdutosTab } from './relatorios/RelatoriosProdutosTab';
 import { EquipeDesempenhoTab } from './equipe/EquipeDesempenhoTab';
 import { EquipeCargosTab } from './equipe/EquipeCargosTab';
 import { PrintMonitorPanel } from './printing/PrintMonitorPanel';
+import { CardapioCategoriasTab } from './cardapio/CardapioCategoriasTab';
+import { AssistenteConfigTab } from './assistente/AssistenteConfigTab';
+import { AssistenteSimuladorTab } from './assistente/AssistenteSimuladorTab';
 import { PRODUCTS, CATEGORIES } from '../data';
 import { getProductPresets, obterNomeCategoria, smartSearchMatch } from '../domain';
 import { API } from '../config/caixaService';
@@ -4916,233 +4919,37 @@ export function CaixaPanel({
 
           {/* VIEW 8A: ROBÔ & IA - CONFIGURAÇÕES DO PROMPT & GOVERNANÇA */}
           {(activeTab === 'assistente_koma' || activeTab === 'robo_ia') && ['configuracao', 'prompt', 'prompt_atendente'].includes(activeSubTab) && (
-            <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5', 'text-left', 'animate-fade-in')}>
-              {/* Left Column: System Prompt */}
-              <div className={clsx('lg:col-span-2', 'bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4')}>
-                <div className={clsx('border-b', 'border-[#27272A]', 'pb-3', 'flex', 'justify-between', 'items-center')}>
-                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300')}>Prompt do Atendente Virtual</span>
-                  <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer')}>
-                    <input type="checkbox" checked={aiBotActive} onChange={(e) => setAiBotActive(e.target.checked)} className={clsx('sr-only', 'peer')} />
-                    <div className={clsx('w-8', 'h-4.5', 'bg-[#27272A]', 'peer-focus:outline-none', 'rounded-full', 'peer', 'peer-checked:after:translate-x-full', 'peer-checked:after:border-white', "after:content-['']", 'after:absolute', 'after:top-[2px]', 'after:left-[2px]', 'after:bg-white', 'after:border-gray-300', 'after:border', 'after:rounded-full', 'after:h-3.5', 'after:w-3.5', 'after:transition-all', 'peer-checked:bg-emerald-600')}></div>
-                  </label>
-                </div>
-
-                <div className="space-y-2">
-                  <label className={clsx('text-[9px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Diretrizes da IA (Prompt de Sistema):</label>
-                  <textarea
-                    rows={8}
-                    value={aiSystemPrompt}
-                    onChange={(e) => setAiSystemPrompt(e.target.value)}
-                    className={clsx('w-full', 'p-3', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'focus:outline-none', 'focus:border-[#10b981]', 'text-white', 'text-[10px]', 'resize-none', 'leading-relaxed', 'font-mono')}
-                  />
-                  <span className={clsx('text-[8px]', 'text-gray-500', 'block', 'leading-relaxed')}>
-                    Instrua a inteligência artificial sobre a história da sua casa, especialidades do cardápio e regras de tom de voz. Evite comandos conflitantes com as travas de governança ao lado.
-                  </span>
-                </div>
-              </div>
-
-              {/* Right Column: Painel de Governança */}
-              <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'flex', 'flex-col', 'justify-between')}>
-                <div className="space-y-4">
-                  <div className={clsx('border-b', 'border-[#27272A]', 'pb-2')}>
-                    <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block')}>Segurança & Governança da IA</span>
-                    <span className={clsx('text-[8px]', 'text-gray-500', 'block', 'mt-0.5')}>Defina limites comerciais estritos para evitar abusos ou prejuízos nas conversas automatizadas.</span>
-                  </div>
-
-                  {/* Negociar Descontos Toggle */}
-                  <div className={clsx('bg-[#1C1C1F]/40', 'border', 'border-[#27272A]/40', 'rounded-xl', 'p-3', 'flex', 'justify-between', 'items-center')}>
-                    <div className="space-y-0.5">
-                      <span className={clsx('text-[9px]', 'font-bold', 'text-white', 'block')}>Negociar Descontos</span>
-                      <span className={clsx('text-[7px]', 'text-gray-500', 'block')}>Autoriza IA a oferecer cupons no chat</span>
-                    </div>
-                    <button
-                      onClick={() => setIaDiscountEnabled(!iaDiscountEnabled)}
-                      className={`w-9 h-5 rounded-full p-0.5 transition-colors duration-200 focus:outline-none cursor-pointer ${iaDiscountEnabled ? 'bg-emerald-600' : 'bg-[#27272A]'}`}
-                    >
-                      <div className={`w-4 h-4 rounded-full bg-[#121214] shadow-md transform duration-200 ${iaDiscountEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
-                    </button>
-                  </div>
-
-                  {/* Teto de Desconto Selector */}
-                  {iaDiscountEnabled && (
-                    <div className={clsx('space-y-1.5', 'animate-fade-in')}>
-                      <label className={clsx('text-[8px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-widest', 'block')}>Teto de Desconto Permitido (%):</label>
-                      <div className={clsx('flex', 'gap-2', 'items-center')}>
-                        <input
-                          type="range"
-                          min="5"
-                          max="25"
-                          step="5"
-                          value={iaMaxDiscount}
-                          onChange={(e) => setIaMaxDiscount(Number(e.target.value))}
-                          className={clsx('flex-1', 'accent-[#10b981]', 'cursor-pointer')}
-                        />
-                        <span className={clsx('text-[10px]', 'font-mono', 'font-bold', 'text-white', 'bg-[#09090B]', 'px-2.5', 'py-1', 'border', 'border-[#27272A]', 'rounded-lg')}>{iaMaxDiscount}%</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Upsell Ativo Toggle */}
-                  <div className={clsx('bg-[#1C1C1F]/40', 'border', 'border-[#27272A]/40', 'rounded-xl', 'p-3', 'flex', 'justify-between', 'items-center')}>
-                    <div className="space-y-0.5">
-                      <span className={clsx('text-[9px]', 'font-bold', 'text-white', 'block')}>Upsell / Sugestões Ativas</span>
-                      <span className={clsx('text-[7px]', 'text-gray-500', 'block')}>Sugere adicionais e bebidas para aumentar o ticket</span>
-                    </div>
-                    <button
-                      onClick={() => setIaUpsellEnabled(!iaUpsellEnabled)}
-                      className={`w-9 h-5 rounded-full p-0.5 transition-colors duration-200 focus:outline-none cursor-pointer ${iaUpsellEnabled ? 'bg-emerald-600' : 'bg-[#27272A]'}`}
-                    >
-                      <div className={`w-4 h-4 rounded-full bg-[#121214] shadow-md transform duration-200 ${iaUpsellEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
-                    </button>
-                  </div>
-
-                  {/* Tom de Voz selector */}
-                  <div className="space-y-1.5">
-                    <label className={clsx('text-[8px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-widest', 'block')}>Personalidade / Tom de Voz:</label>
-                    <div className={clsx('grid', 'grid-cols-2', 'gap-2')}>
-                      <button
-                        onClick={() => setIaVoiceTone('direto')}
-                        className={`py-1.5 rounded-xl border text-[9px] font-bold transition-all cursor-pointer ${iaVoiceTone === 'direto'
-                          ? 'bg-[#10b981]/15 border-[#10b981] text-[#10b981]'
-                          : 'bg-[#1C1C1F]/40 border-[#27272A] text-gray-500'
-                          }`}
-                      >
-                        Direto (Economiza Tokens)
-                      </button>
-                      <button
-                        onClick={() => setIaVoiceTone('conversador')}
-                        className={`py-1.5 rounded-xl border text-[9px] font-bold transition-all cursor-pointer ${iaVoiceTone === 'conversador'
-                          ? 'bg-[#10b981]/15 border-[#10b981] text-[#10b981]'
-                          : 'bg-[#1C1C1F]/40 border-[#27272A] text-gray-500'
-                          }`}
-                      >
-                        Conversador (Fidelidade)
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Teto de Interações selector */}
-                  <div className="space-y-1.5">
-                    <label className={clsx('text-[8px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-widest', 'block')}>Teto de Mensagens sem Pedido:</label>
-                    <div className={clsx('flex', 'gap-2', 'items-center')}>
-                      <select
-                        value={iaMaxInteractions}
-                        onChange={(e) => setIaMaxInteractions(Number(e.target.value))}
-                        className={clsx('flex-1', 'px-3', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-[10px]')}
-                      >
-                        <option value="3">3 interações (Máxima economia)</option>
-                        <option value="5">5 interações (Padrão sugerido)</option>
-                        <option value="10">10 interações (Flexível)</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => alert('Parâmetros de governança da IA salvos no banco de dados.')}
-                  className={clsx('w-full', 'py-2', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'font-bold', 'rounded-xl', 'text-[9px]', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-lg', 'mt-4')}
-                >
-                  Salvar Parâmetros
-                </button>
-              </div>
-            </div>
+            <AssistenteConfigTab
+              aiBotActive={aiBotActive}
+              setAiBotActive={setAiBotActive}
+              aiSystemPrompt={aiSystemPrompt}
+              setAiSystemPrompt={setAiSystemPrompt}
+              iaDiscountEnabled={iaDiscountEnabled}
+              setIaDiscountEnabled={setIaDiscountEnabled}
+              iaMaxDiscount={iaMaxDiscount}
+              setIaMaxDiscount={setIaMaxDiscount}
+              iaUpsellEnabled={iaUpsellEnabled}
+              setIaUpsellEnabled={setIaUpsellEnabled}
+              iaVoiceTone={iaVoiceTone}
+              setIaVoiceTone={setIaVoiceTone}
+              iaMaxInteractions={iaMaxInteractions}
+              setIaMaxInteractions={setIaMaxInteractions}
+            />
           )}
 
           {/* VIEW 8B: ROBÔ & IA - SIMULADOR DE CHAT */}
           {(activeTab === 'assistente_koma' || activeTab === 'robo_ia') && ['simulador', 'simulador_chat'].includes(activeSubTab) && (
-            <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5', 'text-left', 'animate-fade-in')}>
-              {/* Left Column: Interactive Chat Simulation */}
-              <div className={clsx('lg:col-span-2', 'bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'flex', 'flex-col', 'overflow-hidden', 'h-[72vh]')}>
-                <div className={clsx('border-b', 'border-[#27272A]', 'pb-3', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
-                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300')}>Simulador de Chat Kôma IA</span>
-                  <span className={clsx('text-[8px]', 'text-emerald-400', 'font-mono', 'flex', 'items-center', 'gap-1')}>
-                    <span className={clsx('h-1.5', 'w-1.5', 'bg-emerald-500', 'rounded-full', 'animate-ping')} />
-                    Robô Ativo
-                  </span>
-                </div>
-
-                <div className={clsx('flex-1', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-2xl', 'p-4', 'flex', 'flex-col', 'justify-between', 'space-y-4')}>
-                  <textarea
-                    readOnly
-                    value={chatbotMessages.map(msg => `[${msg.sender === 'user' ? 'CLIENTE' : 'IA'} - ${msg.timestamp}]: ${msg.text}`).join('\n') + (isBotTyping ? '\n[IA - Digitando...]' : '')}
-                    className={clsx('w-full', 'flex-1', 'p-3', 'bg-[#000000]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-emerald-500', 'font-mono', 'text-[9px]', 'leading-relaxed', 'focus:outline-none', 'resize-none', 'overflow-y-auto')}
-                    ref={(el) => {
-                      if (el) el.scrollTop = el.scrollHeight;
-                    }}
-                  />
-
-                  <form onSubmit={handleSendChatbotMessage} className={clsx('flex', 'gap-2', 'pt-2', 'border-t', 'border-[#27272A]', 'shrink-0')}>
-                    <input
-                      type="text"
-                      placeholder="Simule uma conversa com o bot..."
-                      value={chatInputText}
-                      disabled={!aiBotActive}
-                      onChange={(e) => setChatInputText(e.target.value)}
-                      className={clsx('flex-1', 'px-4', 'py-2', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'focus:outline-none', 'focus:border-[#10b981]', 'text-white', 'disabled:opacity-50', 'text-[10px]')}
-                    />
-                    <button
-                      type="submit"
-                      disabled={!aiBotActive}
-                      className={clsx('p-2', 'bg-[#10b981]', 'hover:bg-[#059669]', 'disabled:bg-[#1C1C1F]', 'text-[#121214]', 'disabled:text-gray-500', 'rounded-xl', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'justify-center', 'shrink-0')}
-                    >
-                      <Send size={14} />
-                    </button>
-                  </form>
-                </div>
-              </div>
-
-              {/* Right Column: Support Tickets and Feedbacks */}
-              <div className="space-y-4">
-                {/* Pending Chats */}
-                <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-3', 'text-left')}>
-                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Chamados de Clientes (IA Pendente)</span>
-                  <div className="space-y-2">
-                    {supportChats.length === 0 ? (
-                      <span className={clsx('text-[10px]', 'text-gray-500', 'italic', 'block', 'text-center', 'py-5')}>Nenhum chamado pendente</span>
-                    ) : (
-                      supportChats.map(chat => (
-                        <div key={chat.id} className={clsx('bg-[#1C1C1F]', 'p-3', 'rounded-xl', 'border', 'border-[#27272A]', 'space-y-2', 'text-left')}>
-                          <div className={clsx('flex', 'justify-between', 'items-center', 'text-[10px]')}>
-                            <strong className={clsx('text-white', 'block', 'truncate', 'w-32', 'font-bold')}>{chat.cliente}</strong>
-                            <span className={clsx('text-[8px]', 'uppercase', 'tracking-wider', 'font-mono', 'font-bold', 'text-rose-500')}>{chat.canal}</span>
-                          </div>
-                          <p className={clsx('text-[10px]', 'text-gray-400', 'line-clamp-2', 'leading-relaxed')}>{chat.ultimaMsg}</p>
-                          <button
-                            onClick={() => {
-                              alert(`Transferindo conversa com ${chat.cliente} para o chat do Caixa...`);
-                              setSupportChats(prev => prev.filter(c => c.id !== chat.id));
-                            }}
-                            className={clsx('w-full', 'py-1', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'font-bold', 'rounded-lg', 'text-[8px]', 'uppercase', 'tracking-wider', 'cursor-pointer')}
-                          >
-                            Conversar
-                          </button>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                {/* Feedbacks list */}
-                <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-3', 'text-left')}>
-                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Últimos Feedbacks / Avaliações</span>
-                  <div className={clsx('space-y-2.5', 'max-h-[30vh]', 'overflow-y-auto', 'pr-1')}>
-                    {customerFeedbacks.map(fb => (
-                      <div key={fb.id} className={clsx('bg-[#1C1C1F]', 'p-2.5', 'rounded-xl', 'border', 'border-[#27272A]', 'space-y-1.5', 'text-left')}>
-                        <div className={clsx('flex', 'justify-between', 'items-center')}>
-                          <strong className={clsx('text-white', 'block', 'text-[10px]', 'font-bold')}>{fb.cliente}</strong>
-                          <div className={clsx('flex', 'gap-0.5', 'text-amber-500')}>
-                            {Array.from({ length: fb.estrelas }, (_, i) => (
-                              <Star key={i} size={8} fill="currentColor" />
-                            ))}
-                          </div>
-                        </div>
-                        <p className={clsx('text-[10px]', 'text-gray-400', 'italic', 'leading-relaxed')}>"{fb.comentario}"</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
+            <AssistenteSimuladorTab
+              aiBotActive={aiBotActive}
+              chatbotMessages={chatbotMessages}
+              isBotTyping={isBotTyping}
+              chatInputText={chatInputText}
+              setChatInputText={setChatInputText}
+              handleSendChatbotMessage={handleSendChatbotMessage}
+              supportChats={supportChats}
+              setSupportChats={setSupportChats}
+              customerFeedbacks={customerFeedbacks}
+            />
           )}
 
           {/* VIEW 9: PAGAMENTOS & PLANOS */}
@@ -6040,110 +5847,12 @@ export function CaixaPanel({
 
           {/* ABA CATEGORIAS */}
           {activeTab === 'cardapio' && activeSubTab === 'categorias' && (
-            <div className={clsx('space-y-4', 'animate-fade-in', 'text-left')}>
-              <div className={clsx('flex', 'justify-between', 'items-center')}>
-                <div>
-                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'text-base', 'block')}>Categorias do Cardápio</span>
-                  <span className={clsx('text-[9px]', 'text-gray-500')}>{apiCategorias.length} categorias cadastradas</span>
-                </div>
-
-              </div>
-
-              <div className={clsx('bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-3xl', 'overflow-hidden')}>
-                <div className={clsx('overflow-x-auto')}>
-                  <table className={clsx('w-full', 'text-left', 'border-collapse', 'font-sans', 'text-[11px]')}>
-                    <thead>
-                      <tr className={clsx('border-b', 'border-[#27272A]', 'bg-[#18181B]/50', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider')}>
-                        <th className={clsx('p-4')}>Nome</th>
-                        <th className={clsx('p-4')}>Impressão</th>
-                        <th className={clsx('p-4', 'text-right')}>Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody className={clsx('divide-y', 'divide-[#27272A]/40')}>
-                      {apiCategorias.map((cat) => (
-                        <tr key={cat.id} className={clsx('hover:bg-[#1C1C1F]/30', 'transition-colors', 'text-white')}>
-                          <td className={clsx('p-4', 'font-semibold')}>{cat.nome}</td>
-                          <td className={clsx('p-4')}>
-                            <span className={clsx('px-2', 'py-0.5', 'text-[9px]', 'font-bold', 'rounded-md', 'border', 
-                              cat.destino_impressao === 'COZINHA' 
-                                ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' 
-                                : cat.destino_impressao === 'BAR' 
-                                  ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' 
-                                  : 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20'
-                            )}>
-                              {cat.destino_impressao}
-                            </span>
-                          </td>
-                          <td className={clsx('p-4', 'text-right', 'space-x-2')}>
-                            <button
-                              onClick={async () => {
-                                const newNome = prompt('Digite o novo nome da categoria (deixe vazio para manter o atual):', cat.nome);
-                                const newDestino = prompt('Digite o novo destino de impressão (COZINHA, BAR, ou NENHUM):', cat.destino_impressao);
-                                if (newDestino && newDestino !== 'COZINHA' && newDestino !== 'BAR' && newDestino !== 'NENHUM') {
-                                  alert('Destino inválido! Deve ser COZINHA, BAR ou NENHUM.');
-                                  return;
-                                }
-                                try {
-                                  const res = await fetch(`${apiBaseUrl}/produtos/categorias/${cat.id}`, {
-                                    method: 'PUT',
-                                    headers: {
-                                      ...authHeaders,
-                                      'Content-Type': 'application/json'
-                                    },
-                                    body: JSON.stringify({
-                                      nome: newNome || undefined,
-                                      destino_impressao: newDestino || undefined
-                                    })
-                                  });
-                                  if (res.ok) {
-                                    alert('Categoria atualizada!');
-                                    await fetchCategorias();
-                                  } else {
-                                    const err = await res.json();
-                                    alert(`Erro: ${err.detail || 'Falha ao atualizar.'}`);
-                                  }
-                                } catch (e) {
-                                  console.error(e);
-                                  alert('Erro ao conectar ao servidor.');
-                                }
-                              }}
-                              className="px-2.5 py-1 border border-zinc-800 hover:border-zinc-700 bg-zinc-900/50 hover:bg-zinc-800 text-gray-300 hover:text-white rounded-lg transition-all cursor-pointer font-bold"
-                            >
-                              Editar
-                            </button>
-                            <button
-                              onClick={async () => {
-                                if (confirm(`Deseja realmente excluir a categoria "${cat.nome}"?`)) {
-                                  try {
-                                    const res = await fetch(`${apiBaseUrl}/produtos/categorias/${cat.id}`, {
-                                      method: 'DELETE',
-                                      headers: authHeaders
-                                    });
-                                    if (res.ok) {
-                                      alert('Categoria excluída!');
-                                      await fetchCategorias();
-                                    } else {
-                                      const err = await res.json();
-                                      alert(`Erro: ${err.detail || 'Falha ao excluir.'}`);
-                                    }
-                                  } catch (e) {
-                                    console.error(e);
-                                    alert('Erro ao conectar ao servidor.');
-                                  }
-                                }
-                              }}
-                              className="px-2.5 py-1 border border-red-900/40 hover:border-red-600/30 bg-red-950/20 hover:bg-red-900/25 text-red-400 hover:text-white rounded-lg transition-all cursor-pointer font-bold"
-                            >
-                              Excluir
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
+            <CardapioCategoriasTab
+              apiCategorias={apiCategorias}
+              apiBaseUrl={apiBaseUrl}
+              authHeaders={authHeaders}
+              fetchCategorias={fetchCategorias}
+            />
           )}
 
           {/* LIVE VIEW: ESTOQUE DE INSUMOS */}
