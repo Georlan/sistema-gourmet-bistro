@@ -271,8 +271,9 @@ export function CaixaPanel({
     if (tableComandas.length === 0) return null;
 
     const primaryComanda = tableComandas[0];
-    const combinedItems = tableComandas.flatMap(comanda =>
-      comanda.itens.map((item: any) => ({
+    const combinedItems = tableComandas.flatMap(comanda => {
+      const arr = Array.isArray(comanda?.itens) ? comanda.itens : Array.isArray(comanda?.items) ? comanda.items : [];
+      return arr.map((item: any) => ({
         id: item.id,
         produtoId: item.produto_id || item.produtoId,
         nome: item.nome || `Item ${item.produto_id || item.produtoId}`,
@@ -282,8 +283,8 @@ export function CaixaPanel({
         status: item.status,
         pago: item.pago,
         comandaId: comanda.id
-      }))
-    );
+      }));
+    });
 
     return {
       ...primaryComanda,
@@ -314,14 +315,15 @@ export function CaixaPanel({
   // Col 1 — somente pedidos vinculados a uma mesa física, lançados pelo garçom ou caixa.
   const tableOrdersInProduction = (() => {
     const list: any[] = [];
-    orders.forEach(comanda => {
+    (orders || []).forEach(comanda => {
       const normalizedType = String(comanda.tipo || '').toLowerCase();
       const isTableOrder = Number(comanda.mesaId) > 0
         && !['delivery', 'entrega', 'retirada'].includes(normalizedType);
       if (!isTableOrder) return;
       if ((comanda as any).statusComanda === 'aguardando_pagamento') return;
       const itemsByLancamento: Record<string, OrderItem[]> = {};
-      comanda.itens.forEach(item => {
+      const itensArr = Array.isArray(comanda?.itens) ? comanda.itens : Array.isArray(comanda?.items) ? comanda.items : [];
+      itensArr.forEach(item => {
         const lid = item.lancamentoId || comanda.id;
         if (!itemsByLancamento[lid]) itemsByLancamento[lid] = [];
         itemsByLancamento[lid].push(item);
@@ -352,14 +354,15 @@ export function CaixaPanel({
     const list: any[] = [];
     const groupedByMesa: Record<number, Array<{ comanda: any; itens: any[]; contaPedida: boolean }>> = {};
 
-    orders.forEach(comanda => {
+    (orders || []).forEach(comanda => {
       const normalizedType = String(comanda.tipo || '').toLowerCase();
       const isTableOrder = Number(comanda.mesaId) > 0
         && !['delivery', 'entrega', 'retirada'].includes(normalizedType);
       if (!isTableOrder) return;
 
-      const unpaid = comanda.itens.filter(i => (i.status as string) !== 'cancelado' && !i.pago);
-      const readyItems = comanda.itens.filter(item => item.status === 'pronto' && !item.pago);
+      const itensArr = Array.isArray(comanda?.itens) ? comanda.itens : Array.isArray(comanda?.items) ? comanda.items : [];
+      const unpaid = itensArr.filter(i => (i.status as string) !== 'cancelado' && !i.pago);
+      const readyItems = itensArr.filter(item => item.status === 'pronto' && !item.pago);
       const contaPedida = (comanda as any).statusComanda === 'aguardando_pagamento';
 
       if (contaPedida && unpaid.length > 0) {
@@ -379,7 +382,7 @@ export function CaixaPanel({
       const mesaId = Number(mesaIdStr);
       const allItems: any[] = [];
       entries.forEach(e => {
-        e.itens.forEach((it: any) => {
+        (e.itens || []).forEach((it: any) => {
           allItems.push({
             ...it,
             comandaId: e.comanda.id
@@ -388,9 +391,12 @@ export function CaixaPanel({
       });
 
       const hasContaPedida = entries.some(e => e.contaPedida);
-      const temItensEmPreparo = orders
+      const temItensEmPreparo = (orders || [])
         .filter(o => o.mesaId === mesaId)
-        .some(o => o.itens.some(i => i.status === 'preparando'));
+        .some(o => {
+          const arr = Array.isArray(o?.itens) ? o.itens : Array.isArray(o?.items) ? o.items : [];
+          return arr.some(i => i.status === 'preparando');
+        });
 
       const firstComanda = entries[0].comanda;
 
@@ -944,7 +950,8 @@ export function CaixaPanel({
 
   const mapComandaToSimulatedDelivery = (c: any): SimulatedDeliveryOrder => {
     const itemCounts: { [name: string]: number } = {};
-    const activeItems = c.itens.filter((it: any) => it.status !== 'cancelado');
+    const itensArr = Array.isArray(c?.itens) ? c.itens : Array.isArray(c?.items) ? c.items : [];
+    const activeItems = itensArr.filter((it: any) => it.status !== 'cancelado');
     activeItems.forEach((it: any) => {
       if (it.status !== 'cancelado') {
         const name = it.produto?.nome || it.nome || 'Item';

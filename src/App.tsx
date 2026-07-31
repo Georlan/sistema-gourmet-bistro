@@ -1688,12 +1688,15 @@ export default function App() {
     let ocupada = 0;
     let pronto = 0;
 
-    salonTables.forEach(table => {
-      const tableOrders = orders.filter(o => o.mesaId === table.id);
+    (salonTables || []).forEach(table => {
+      const tableOrders = (orders || []).filter(o => o.mesaId === table.id);
       if (tableOrders.length === 0) {
         libre++;
       } else {
-        const hasPronto = tableOrders.some(o => o.itens.some(i => i.status === 'pronto'));
+        const hasPronto = tableOrders.some(o => {
+          const arr = Array.isArray(o?.itens) ? o.itens : Array.isArray(o?.items) ? o.items : [];
+          return arr.some((i: any) => i?.status === 'pronto');
+        });
         if (hasPronto) {
           pronto++;
         } else {
@@ -1706,11 +1709,15 @@ export default function App() {
   }, [orders, salonTables]);
 
   const filteredTables = React.useMemo(() => {
-    return salonTables.filter(table => {
-      const tableOrders = orders.filter(o => o.mesaId === table.id);
+    return (salonTables || []).filter(table => {
+      const tableOrders = (orders || []).filter(o => o.mesaId === table.id);
+      const hasPronto = tableOrders.some(o => {
+        const arr = Array.isArray(o?.itens) ? o.itens : Array.isArray(o?.items) ? o.items : [];
+        return arr.some((i: any) => i?.status === 'pronto');
+      });
       const status = tableOrders.length === 0
         ? 'livre'
-        : tableOrders.some(o => o.itens.some(i => i.status === 'pronto'))
+        : hasPronto
           ? 'pronto'
           : 'ocupada';
 
@@ -2302,11 +2309,12 @@ export default function App() {
       {/* MODAL CONTROLLER */}
       {selectedTable && (() => {
         const selectedTableActiveClients = Array.from(new Set(
-          selectedTableOrders.flatMap(order =>
-            order.itens
-              .map(item => item.clienteNome.trim())
-              .filter(name => name !== '' && name !== 'Consumo Geral')
-          )
+          selectedTableOrders.flatMap(order => {
+            const arr = Array.isArray(order?.itens) ? order.itens : Array.isArray(order?.items) ? order.items : [];
+            return arr
+              .map(item => (item?.clienteNome || item?.cliente_nome || '').trim())
+              .filter(name => name !== '' && name !== 'Consumo Geral');
+          })
         ));
 
         // Concurrency: Waiters other than active editing drafts on this table (synced via WebSockets)
