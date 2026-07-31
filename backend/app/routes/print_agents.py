@@ -982,6 +982,7 @@ def get_print_monitor(
                 "is_reprint": str(job.idempotency_key).startswith("reprint:"),
                 "can_reprint": job.status in {
                     "printed",
+                    "spooler_accepted",
                     "failed",
                     "cancelled",
                 } and bool(job.payload_text),

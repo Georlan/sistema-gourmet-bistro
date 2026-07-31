@@ -493,6 +493,16 @@ export function PrintMonitorPanel({
       setReprintingId(null);
     }
   };
+  const failedOrDelayedJobs = useMemo(() => {
+    return monitorData?.jobs.filter(j => (j.status === 'failed' || j.delayed) && j.can_reprint) || [];
+  }, [monitorData]);
+
+  const handleRetryFailedJobs = async () => {
+    if (failedOrDelayedJobs.length === 0) return;
+    for (const job of failedOrDelayedJobs) {
+      await requestReprint(job);
+    }
+  };
 
   const diagnostic = useMemo<{
     tone: DiagnosticTone;
@@ -657,6 +667,18 @@ export function PrintMonitorPanel({
                 }`}>
                   {actionMessage}
                 </span>
+              )}
+              {failedOrDelayedJobs.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => void handleRetryFailedJobs()}
+                  disabled={Boolean(reprintingId)}
+                  className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-xl bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 px-3.5 py-2 text-xs font-bold text-red-200 transition cursor-pointer disabled:opacity-50"
+                  id="btn-retry-failed-print-jobs"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  <span>Reenviar {failedOrDelayedJobs.length} impressão(ões) com falha/atraso</span>
+                </button>
               )}
             </div>
           </div>
