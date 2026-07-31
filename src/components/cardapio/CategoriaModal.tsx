@@ -1,0 +1,425 @@
+import React, { useState, useEffect } from 'react';
+import clsx from 'clsx';
+import { X, Printer, Utensils, Wine, Ban, Check, Loader2 } from 'lucide-react';
+
+export interface CategoryData {
+  id: string;
+  nome: string;
+  destino_impressao: 'COZINHA' | 'BAR' | 'NENHUM' | string;
+}
+
+interface CategoriaModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  categoryToEdit?: CategoryData | null;
+  apiBaseUrl: string;
+  authHeaders: Record<string, string>;
+  onSuccess: () => Promise<void>;
+  showToast?: (message: string, type?: 'success' | 'error') => void;
+}
+
+export function CategoriaModal({
+  isOpen,
+  onClose,
+  categoryToEdit,
+  apiBaseUrl,
+  authHeaders,
+  onSuccess,
+  showToast
+}: CategoriaModalProps) {
+  const isEditing = Boolean(categoryToEdit);
+  const [nome, setNome] = useState('');
+  const [id, setId] = useState('');
+  const [destino, setDestino] = useState<'COZINHA' | 'BAR' | 'NENHUM'>('COZINHA');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      setErrorMsg('');
+      if (categoryToEdit) {
+        setNome(categoryToEdit.nome || '');
+        setId(categoryToEdit.id || '');
+        const dest = (categoryToEdit.destino_impressao || 'COZINHA').toUpperCase();
+        setDestino(dest === 'BAR' ? 'BAR' : dest === 'NENHUM' ? 'NENHUM' : 'COZINHA');
+      } else {
+        setNome('');
+        setId('');
+        setDestino('COZINHA');
+      }
+    }
+  }, [isOpen, categoryToEdit]);
+
+  // Auto-generate ID slug from Name when creating
+  const handleNomeChange = (val: string) => {
+    setNome(val);
+    if (!isEditing) {
+      const generatedId = val
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+      setId(generatedId);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nome.trim()) {
+      setErrorMsg('Digite um nome para a categoria.');
+      return;
+    }
+
+    const categoryId = isEditing ? categoryToEdit!.id : id.trim();
+    if (!categoryId) {
+      setErrorMsg('ID da categoria inválido.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrorMsg('');
+
+    try {
+      if (isEditing) {
+        // PUT update
+        const res = await fetch(`${apiBaseUrl}/produtos/categorias/${categoryId}`, {
+          method: 'PUT',
+          headers: {
+            ...authHeaders,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            nome: nome.trim(),
+            destino_impressao: destino
+          })
+        });
+
+        if (res.ok) {
+          if (showToast) showToast('Categoria atualizada com sucesso!', 'success');
+          await onSuccess();
+          onClose();
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          setErrorMsg(errData.detail || 'Falha ao atualizar categoria.');
+        }
+      } else {
+        // POST create
+        const res = await fetch(`${apiBaseUrl}/produtos/categorias`, {
+          method: 'POST',
+          headers: {
+            ...authHeaders,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            id: categoryId,
+            nome: nome.trim(),
+            destino_impressao: destino
+          })
+        });
+
+        if (res.ok) {
+          if (showToast) showToast('Categoria criada com sucesso!', 'success');
+          await onSuccess();
+          onClose();
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          setErrorMsg(errData.detail || 'Falha ao criar categoria.');
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      setErrorMsg('Erro de conexão com o servidor.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
+      <div className="relative w-full max-w-lg bg-[#121214] border border-[#27272A] rounded-3xl shadow-2xl overflow-hidden text-left font-sans">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#27272A] bg-[#18181B]">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-[#10b981]/10 text-[#10b981] border border-[#10b981]/20">
+              <Printer size={18} />
+            </div>
+            <div>
+              <h3 className="font-serif text-base font-bold text-white leading-tight">
+                {isEditing ? 'Editar Categoria' : 'Nova Categoria'}
+              </h3>
+              <p className="text-[10px] text-gray-400">
+                {isEditing ? 'Atualize as configurações de impressão e exibição' : 'Cadastre uma nova categoria para o cardápio'}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 text-gray-400 hover:text-white rounded-xl bg-[#27272A]/50 hover:bg-[#27272A] transition-colors cursor-pointer"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Form Body */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+          {errorMsg && (
+            <div className="p-3 bg-red-950/40 border border-red-900/50 rounded-xl text-red-400 text-xs font-medium">
+              {errorMsg}
+            </div>
+          )}
+
+          {/* Nome Input */}
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-bold text-gray-300 uppercase tracking-wider block">
+              Nome da Categoria
+            </label>
+            <input
+              type="text"
+              value={nome}
+              onChange={(e) => handleNomeChange(e.target.value)}
+              placeholder="Ex: Hambúrgueres Bovinos, Bebidas, Sobremesas..."
+              className="w-full bg-[#1C1C1F] border border-[#27272A] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder:text-gray-500 focus:outline-none focus:border-[#10b981] transition-colors font-medium"
+              autoFocus
+              required
+            />
+          </div>
+
+          {/* ID Slug Input */}
+          <div className="space-y-1.5">
+            <div className="flex justify-between items-center">
+              <label className="text-[11px] font-bold text-gray-300 uppercase tracking-wider block">
+                ID Único no Sistema
+              </label>
+              {isEditing && (
+                <span className="text-[9px] text-gray-500 font-mono">(ID não editável)</span>
+              )}
+            </div>
+            <input
+              type="text"
+              value={isEditing ? categoryToEdit!.id : id}
+              onChange={(e) => setId(e.target.value)}
+              disabled={isEditing}
+              placeholder="ex: hamburgueres_bovinos"
+              className={clsx(
+                'w-full border rounded-xl px-3.5 py-2 text-xs font-mono transition-colors',
+                isEditing
+                  ? 'bg-[#18181B] border-[#27272A]/60 text-gray-400 cursor-not-allowed'
+                  : 'bg-[#1C1C1F] border-[#27272A] text-emerald-400 placeholder:text-gray-600 focus:outline-none focus:border-[#10b981]'
+              )}
+              required
+            />
+          </div>
+
+          {/* Destino de Impressão Cards */}
+          <div className="space-y-2 pt-1">
+            <label className="text-[11px] font-bold text-gray-300 uppercase tracking-wider block">
+              Destino de Impressão de Pedidos
+            </label>
+            <p className="text-[10px] text-gray-400 leading-normal">
+              Escolha para onde os itens desta categoria serão enviados ao imprimir a via de preparação:
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+              {/* Option: COZINHA */}
+              <button
+                type="button"
+                onClick={() => setDestino('COZINHA')}
+                className={clsx(
+                  'relative p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2',
+                  destino === 'COZINHA'
+                    ? 'bg-orange-500/15 border-orange-500/50 shadow-lg shadow-orange-950/20'
+                    : 'bg-[#1C1C1F]/60 border-[#27272A] hover:bg-[#1C1C1F] hover:border-gray-700'
+                )}
+              >
+                <div className="flex justify-between items-center">
+                  <div className={clsx('p-1.5 rounded-lg', destino === 'COZINHA' ? 'bg-orange-500/20 text-orange-400' : 'bg-zinc-800 text-gray-400')}>
+                    <Utensils size={15} />
+                  </div>
+                  {destino === 'COZINHA' && (
+                    <div className="w-4 h-4 rounded-full bg-orange-500 text-black flex items-center justify-center">
+                      <Check size={10} strokeWidth={3} />
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <span className={clsx('font-bold text-xs block', destino === 'COZINHA' ? 'text-orange-400' : 'text-white')}>
+                    Cozinha
+                  </span>
+                  <span className="text-[9px] text-gray-400 block leading-tight mt-0.5">
+                    Imprime na via da Cozinha
+                  </span>
+                </div>
+              </button>
+
+              {/* Option: BAR */}
+              <button
+                type="button"
+                onClick={() => setDestino('BAR')}
+                className={clsx(
+                  'relative p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2',
+                  destino === 'BAR'
+                    ? 'bg-blue-500/15 border-blue-500/50 shadow-lg shadow-blue-950/20'
+                    : 'bg-[#1C1C1F]/60 border-[#27272A] hover:bg-[#1C1C1F] hover:border-gray-700'
+                )}
+              >
+                <div className="flex justify-between items-center">
+                  <div className={clsx('p-1.5 rounded-lg', destino === 'BAR' ? 'bg-blue-500/20 text-blue-400' : 'bg-zinc-800 text-gray-400')}>
+                    <Wine size={15} />
+                  </div>
+                  {destino === 'BAR' && (
+                    <div className="w-4 h-4 rounded-full bg-blue-500 text-black flex items-center justify-center">
+                      <Check size={10} strokeWidth={3} />
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <span className={clsx('font-bold text-xs block', destino === 'BAR' ? 'text-blue-400' : 'text-white')}>
+                    Bar
+                  </span>
+                  <span className="text-[9px] text-gray-400 block leading-tight mt-0.5">
+                    Imprime na via do Bar
+                  </span>
+                </div>
+              </button>
+
+              {/* Option: NENHUM */}
+              <button
+                type="button"
+                onClick={() => setDestino('NENHUM')}
+                className={clsx(
+                  'relative p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2',
+                  destino === 'NENHUM'
+                    ? 'bg-zinc-500/15 border-zinc-400/50 shadow-lg'
+                    : 'bg-[#1C1C1F]/60 border-[#27272A] hover:bg-[#1C1C1F] hover:border-gray-700'
+                )}
+              >
+                <div className="flex justify-between items-center">
+                  <div className={clsx('p-1.5 rounded-lg', destino === 'NENHUM' ? 'bg-zinc-700 text-zinc-300' : 'bg-zinc-800 text-gray-400')}>
+                    <Ban size={15} />
+                  </div>
+                  {destino === 'NENHUM' && (
+                    <div className="w-4 h-4 rounded-full bg-zinc-400 text-black flex items-center justify-center">
+                      <Check size={10} strokeWidth={3} />
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <span className={clsx('font-bold text-xs block', destino === 'NENHUM' ? 'text-zinc-300' : 'text-white')}>
+                    Não Imprime
+                  </span>
+                  <span className="text-[9px] text-gray-400 block leading-tight mt-0.5">
+                    Sem via física de preparo
+                  </span>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#27272A]">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSubmitting}
+              className="px-4 py-2 bg-[#1C1C1F] hover:bg-[#27272A] text-gray-300 rounded-xl text-xs font-bold transition-all cursor-pointer border border-[#27272A]"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="flex items-center gap-2 px-5 py-2 bg-[#10b981] hover:bg-[#059669] text-[#121214] rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-lg disabled:opacity-50"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" />
+                  <span>Salvando...</span>
+                </>
+              ) : (
+                <span>{isEditing ? 'Salvar Alterações' : 'Criar Categoria'}</span>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+interface DeleteCategoryModalProps {
+  isOpen: boolean;
+  categoryName: string;
+  onClose: () => void;
+  onConfirm: () => Promise<void>;
+}
+
+export function DeleteCategoryModal({
+  isOpen,
+  categoryName,
+  onClose,
+  onConfirm
+}: DeleteCategoryModalProps) {
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  if (!isOpen) return null;
+
+  const handleConfirm = async () => {
+    setIsDeleting(true);
+    try {
+      await onConfirm();
+    } finally {
+      setIsDeleting(false);
+      onClose();
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
+      <div className="relative w-full max-w-md bg-[#121214] border border-red-900/40 rounded-3xl shadow-2xl p-6 text-left space-y-4 font-sans">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-2xl bg-red-950/60 border border-red-900/60 text-red-400">
+            <Ban size={22} />
+          </div>
+          <div>
+            <h3 className="font-serif text-base font-bold text-white">Excluir Categoria</h3>
+            <p className="text-[10px] text-gray-400">Confirmação de exclusão permanente</p>
+          </div>
+        </div>
+
+        <p className="text-xs text-gray-300 leading-relaxed">
+          Tem certeza que deseja excluir a categoria <strong className="text-white font-bold">"{categoryName}"</strong>?
+        </p>
+
+        <div className="flex items-center justify-end gap-2.5 pt-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isDeleting}
+            className="px-4 py-2 bg-[#1C1C1F] hover:bg-[#27272A] text-gray-300 rounded-xl text-xs font-bold transition-all cursor-pointer border border-[#27272A]"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={handleConfirm}
+            disabled={isDeleting}
+            className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-lg disabled:opacity-50"
+          >
+            {isDeleting ? (
+              <>
+                <Loader2 size={14} className="animate-spin" />
+                <span>Excluindo...</span>
+              </>
+            ) : (
+              <span>Sim, Excluir</span>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

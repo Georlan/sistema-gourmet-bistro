@@ -28,6 +28,7 @@ import { EquipeDesempenhoTab } from './equipe/EquipeDesempenhoTab';
 import { EquipeCargosTab } from './equipe/EquipeCargosTab';
 import { PrintMonitorPanel } from './printing/PrintMonitorPanel';
 import { CardapioCategoriasTab } from './cardapio/CardapioCategoriasTab';
+import { CategoriaModal } from './cardapio/CategoriaModal';
 import { AssistenteConfigTab } from './assistente/AssistenteConfigTab';
 import { AssistenteSimuladorTab } from './assistente/AssistenteSimuladorTab';
 import { PRODUCTS, CATEGORIES } from '../data';
@@ -622,6 +623,7 @@ export function CaixaPanel({
   // Product & Category management states
   const [apiCategorias, setApiCategorias] = useState<any[]>([]);
   const [showProductModal, setShowProductModal] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any>(null);
   const [editingCrmUser, setEditingCrmUser] = useState<any>(null);
   const [crmFormNome, setCrmFormNome] = useState('');
@@ -5689,42 +5691,8 @@ export function CaixaPanel({
                     Novo Item
                   </button>
                   <button
-                    onClick={async () => {
-                      const id = prompt('Digite o ID único da nova categoria (ex: sobremesas, petiscos):');
-                      if (!id) return;
-                      const nome = prompt('Digite o nome de exibição da categoria:');
-                      if (!nome) return;
-                      const destino = prompt('Digite o destino de impressão (COZINHA, BAR, ou NENHUM):', 'COZINHA');
-                      if (destino !== 'COZINHA' && destino !== 'BAR' && destino !== 'NENHUM') {
-                        alert('Destino inválido! Deve ser COZINHA, BAR ou NENHUM.');
-                        return;
-                      }
-                      try {
-                        const res = await fetch(`${apiBaseUrl}/produtos/categorias`, {
-                          method: 'POST',
-                          headers: {
-                            ...authHeaders,
-                            'Content-Type': 'application/json'
-                          },
-                          body: JSON.stringify({ id, nome, destino_impressao: destino })
-                        });
-                        if (res.ok) {
-                          alert('Categoria criada com sucesso!');
-                          if (onRefreshCategorias) {
-                            await onRefreshCategorias();
-                          } else {
-                            await fetchCategorias();
-                          }
-                        } else {
-                          const err = await res.json();
-                          alert(`Erro: ${err.detail || 'Falha ao criar categoria.'}`);
-                        }
-                      } catch (e) {
-                        console.error(e);
-                        alert('Erro ao conectar ao servidor.');
-                      }
-                    }}
-                    className={clsx('flex', 'items-center', 'gap-1.5', 'px-3', 'py-1.5', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'hover:border-[#10b981]/40', 'text-gray-300', 'hover:text-[#10b981]', 'rounded-xl', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}
+                    onClick={() => setShowCategoryModal(true)}
+                    className={clsx('flex', 'items-center', 'gap-1.5', 'px-3', 'py-1.5', 'bg-[#10b981]/15', 'hover:bg-[#10b981]/25', 'border', 'border-[#10b981]/30', 'text-[#10b981]', 'rounded-xl', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}
                   >
                     <Plus size={11} />
                     Nova Categoria
@@ -6101,6 +6069,7 @@ export function CaixaPanel({
               apiBaseUrl={apiBaseUrl}
               authHeaders={authHeaders}
               fetchCategorias={fetchCategorias}
+              showToast={showToast}
             />
           )}
 
@@ -8268,42 +8237,7 @@ export function CaixaPanel({
                     </select>
                     <button
                       type="button"
-                      onClick={async () => {
-                        const id = prompt('Digite o ID único da nova categoria (ex: sobremesas, petiscos):');
-                        if (!id) return;
-                        const nome = prompt('Digite o nome de exibição da categoria:');
-                        if (!nome) return;
-                        const destino = prompt('Digite o destino de impressão (COZINHA, BAR, ou NENHUM):', 'COZINHA');
-                        if (destino !== 'COZINHA' && destino !== 'BAR' && destino !== 'NENHUM') {
-                          alert('Destino inválido! Deve ser COZINHA, BAR ou NENHUM.');
-                          return;
-                        }
-                        try {
-                          const res = await fetch(`${apiBaseUrl}/produtos/categorias`, {
-                            method: 'POST',
-                            headers: {
-                              ...authHeaders,
-                              'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({ id, nome, destino_impressao: destino })
-                          });
-                          if (res.ok) {
-                            alert('Categoria criada com sucesso!');
-                            if (onRefreshCategorias) {
-                              await onRefreshCategorias();
-                            } else {
-                              await fetchCategorias();
-                            }
-                            setProdFormCategoriaId(id);
-                          } else {
-                            const err = await res.json();
-                            alert(`Erro: ${err.detail || 'Falha ao criar categoria.'}`);
-                          }
-                        } catch (e) {
-                          console.error(e);
-                          alert('Erro ao conectar ao servidor.');
-                        }
-                      }}
+                      onClick={() => setShowCategoryModal(true)}
                       title="Criar nova categoria"
                       className="px-3 bg-[#10b981]/10 hover:bg-[#10b981]/20 text-[#10b981] border border-[#10b981]/20 hover:border-[#10b981]/30 rounded-xl font-bold text-sm cursor-pointer transition-colors"
                     >
@@ -8366,6 +8300,22 @@ export function CaixaPanel({
           </div>
         </div>
       )}
+
+      {/* MODAL CRIAR/EDITAR CATEGORIA */}
+      <CategoriaModal
+        isOpen={showCategoryModal}
+        onClose={() => setShowCategoryModal(false)}
+        apiBaseUrl={apiBaseUrl}
+        authHeaders={authHeaders}
+        onSuccess={async () => {
+          if (onRefreshCategorias) {
+            await onRefreshCategorias();
+          } else {
+            await fetchCategorias();
+          }
+        }}
+        showToast={showToast}
+      />
 
       {editingCrmUser && (
         <div
