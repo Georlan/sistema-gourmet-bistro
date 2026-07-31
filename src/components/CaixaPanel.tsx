@@ -792,7 +792,7 @@ export function CaixaPanel({
   // Date filters for Meu Desempenho
   const [desempenhoRange, setDesempenhoRange] = useState<'7' | '15' | '30'>('7');
 
-  // Waiter App Settings toggles (stored in states to mock real switches)
+  // Waiter App Settings toggles (persisted via /caixa/configuracoes API)
   const [permDelivery, setPermDelivery] = useState(true);
   const [permEdit, setPermEdit] = useState(true);
   const [permAddCharges, setPermAddCharges] = useState(false);
@@ -1127,8 +1127,10 @@ export function CaixaPanel({
   const [apiProdutos, setApiProdutos] = useState<Product[]>([]);
   // Search state for Disponibilidade tab
   const [disponibilidadeSearch, setDisponibilidadeSearch] = useState<string>('');
+  // Search state for Produtos tab (Cardápio management)
+  const [cardapioProdutosSearch, setCardapioProdutosSearch] = useState<string>('');
 
-  // Online payments & billing plans mock states
+  // Online payments & billing plan states
   const [payPixActive, setPayPixActive] = useState(true);
   const [payCardActive, setPayCardActive] = useState(true);
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlanId>(currentPlanId);
@@ -1154,7 +1156,7 @@ export function CaixaPanel({
     delivery: true
   });
 
-  // Co-pilot Chat thread mock data
+  // Co-pilot Chat thread state (demonstration data)
   const [activeChatContactId, setActiveChatContactId] = useState<number>(1);
   const [copilotContacts, setCopilotContacts] = useState([
     { id: 1, name: "Bruno Santos", phone: "(81) 98877-6655", lastMsg: "Quero 2 pastéis de carne e uma Coca em lata, pfvr", time: "10:32", pendingAction: true, iaStatus: "Aguardando Co-Piloto", audio: true, audioText: "Quero dois pastéis de carne e uma Coca em lata, por favor." },
@@ -3950,10 +3952,17 @@ export function CaixaPanel({
                       <div
                         key={p.id}
                         onClick={() => handlePdvAddToCart(p)}
-                        className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'hover:border-[#10b981]/30', 'p-3', 'rounded-xl', 'flex', 'flex-col', 'justify-between', 'gap-3', 'cursor-pointer', 'group', 'hover:shadow-md', 'transition-all', 'text-left')}
+                        className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'hover:border-[#10b981]/30', 'p-3', 'rounded-xl', 'flex', 'flex-col', 'justify-between', 'gap-2', 'cursor-pointer', 'group', 'hover:shadow-md', 'transition-all', 'text-left')}
                       >
+                        {(p as any).imagem && (
+                          <img src={(p as any).imagem} alt={p.nome} className={clsx('w-full', 'h-20', 'object-cover', 'rounded-lg', '-mt-0.5')} />
+                        )}
+                        <div className="min-h-[28px]">
+                          <h4 className={clsx('font-serif', 'font-bold', 'text-white', 'text-[11px]', 'sm:text-xs', 'group-hover:text-[#10b981]', 'transition-colors', 'leading-tight', 'line-clamp-2')}>{p.nome}</h4>
+                          {p.descricao && <p className={clsx('text-[8px]', 'text-gray-500', 'mt-0.5', 'line-clamp-1', 'leading-tight')}>{p.descricao}</p>}
+                        </div>
                         <div className={clsx('flex', 'justify-between', 'items-center')}>
-                          <span className={clsx('font-bold', 'text-white', 'font-mono')}>R$ {p.preco.toFixed(2)}</span>
+                          <span className={clsx('font-bold', 'text-white', 'font-mono', 'text-[11px]')}>R$ {p.preco.toFixed(2)}</span>
                           <span className={clsx('p-1', 'bg-[#1C1C1F]', 'group-hover:bg-[#10b981]', 'text-gray-400', 'group-hover:text-[#121214]', 'rounded-lg', 'transition-colors', 'border', 'border-[#27272A]/50')}>
                             <Plus size={12} />
                           </span>
@@ -5592,7 +5601,7 @@ export function CaixaPanel({
             <EquipeDesempenhoTab apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} showToast={showToast} />
           )}
 
-          {/* MOCK VIEW: FICHA TÉCNICA (OCULTO - IMPLEMENTAÇÃO REAL FUTURA) */}
+          {/* FICHA TÉCNICA (OCULTO — implementação real futura) */}
           {false && activeTab === 'cardapio' && activeSubTab === 'ficha_tecnica' && (
             <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5', 'text-left', 'animate-fade-in')}>
               <div className={clsx('lg:col-span-1', 'bg-[#121214]', 'border', 'border-[#27272A]', 'p-5', 'rounded-3xl', 'space-y-4', 'h-fit')}>
@@ -5773,10 +5782,27 @@ export function CaixaPanel({
                 </div>
               </div>
 
+              {/* Search bar */}
+              <div className={clsx('relative')}>
+                <input
+                  type="text"
+                  placeholder="Pesquisar produto..."
+                  value={cardapioProdutosSearch}
+                  onChange={e => setCardapioProdutosSearch(e.target.value)}
+                  className={clsx('w-full', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'px-3', 'py-2', 'text-[10px]', 'text-white', 'placeholder:text-gray-500', 'focus:outline-none', 'focus:border-[#10b981]/50', 'transition-colors')}
+                />
+                {cardapioProdutosSearch && (
+                  <button onClick={() => setCardapioProdutosSearch('')} className={clsx('absolute', 'right-3', 'top-1/2', '-translate-y-1/2', 'text-gray-500', 'hover:text-white')}>
+                    <X size={11} />
+                  </button>
+                )}
+              </div>
+
               {/* Grouped by dynamically loaded apiCategorias */}
               {apiCategorias.map((cat) => {
                 const prods = apiProdutos
                   .filter(p => (p as any).categoria_id === cat.id)
+                  .filter(p => !cardapioProdutosSearch.trim() || smartSearchMatch(p.nome, cardapioProdutosSearch) || smartSearchMatch(p.descricao || '', cardapioProdutosSearch))
                   .sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true, sensitivity: 'base' }));
                 if (prods.length === 0) return null;
                 return (
@@ -5949,11 +5975,11 @@ export function CaixaPanel({
                 {apiCategorias.length > 0 && (
                   <div className="space-y-2 bg-[#121214]/40 p-3 rounded-xl border border-[#27272A]/50 text-left">
                     <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Atalhos de Pausa em Lote:</span>
-                    <div className="flex flex-wrap gap-2 text-[8px] font-bold">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[8px] font-bold">
                       {apiCategorias.map(catObj => (
-                        <div key={catObj.id} className="flex gap-1.5 border-r border-[#27272A]/80 pr-2 last:border-r-0">
-                          <button type="button" onClick={() => handleBatchAvailability(catObj.id, false)} className="px-2 py-1 bg-red-950/30 hover:bg-red-900/40 text-red-400 hover:text-white rounded border border-red-900/50 cursor-pointer">Esgotar {catObj.nome}</button>
-                          <button type="button" onClick={() => handleBatchAvailability(catObj.id, true)} className="px-2 py-1 bg-emerald-950/30 hover:bg-emerald-900/40 text-emerald-400 hover:text-white rounded border border-emerald-900/50 cursor-pointer">Liberar {catObj.nome}</button>
+                        <div key={catObj.id} className="grid grid-cols-2 gap-1.5">
+                          <button type="button" onClick={() => handleBatchAvailability(catObj.id, false)} className="px-2 py-1.5 bg-red-950/30 hover:bg-red-900/40 text-red-400 hover:text-white rounded-lg border border-red-900/50 cursor-pointer transition-colors truncate">Esgotar {catObj.nome}</button>
+                          <button type="button" onClick={() => handleBatchAvailability(catObj.id, true)} className="px-2 py-1.5 bg-emerald-950/30 hover:bg-emerald-900/40 text-emerald-400 hover:text-white rounded-lg border border-emerald-900/50 cursor-pointer transition-colors truncate">Liberar {catObj.nome}</button>
                         </div>
                       ))}
                     </div>
@@ -6337,7 +6363,7 @@ export function CaixaPanel({
             />
           )}
 
-          {/* MOCK VIEW: PAINEL FISCAL NFCE */}
+          {/* PAINEL FISCAL NFC-e (dados estáticos de exemplo — implementação futura) */}
           {activeTab === 'financeiro' && activeSubTab === 'fiscal' && (
             <div className={clsx('space-y-5', 'text-left', 'animate-fade-in')}>
               <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-4.5', 'rounded-3xl', 'space-y-2')}>
@@ -6439,7 +6465,7 @@ export function CaixaPanel({
             </div>
           )}
 
-          {/* MOCK VIEW: CHAT CO-PILOTO */}
+          {/* CHAT CO-PILOTO (demonstração) */}
           {(activeTab === 'assistente_koma' || activeTab === 'robo_ia' || (activeTab === 'operacao' && activeSubTab === 'chat_copiloto')) && ['chat', 'chat_copiloto'].includes(activeSubTab) && (
             <div className={clsx('h-[calc(82vh-100px)]', 'flex', 'gap-4', 'text-left', 'animate-fade-in')}>
               {/* Left Column: Contatos */}
@@ -6632,7 +6658,7 @@ export function CaixaPanel({
                         ...prev,
                         { id: Date.now(), contactId: activeChatContactId, sender: 'ia', text: copilotDraftResponses[activeChatContactId], time: "10:33" }
                       ]);
-                      // 2. Mock order generation
+                      // 2. Generate delivery order from Co-pilot draft
                       const draft = copilotDraftCarts[activeChatContactId];
                       if (draft && draft.length > 0) {
                         const newOrd: SimulatedDeliveryOrder = {

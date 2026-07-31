@@ -1,5 +1,6 @@
 import React from 'react';
 import clsx from 'clsx';
+import { Edit3, Trash2 } from 'lucide-react';
 
 interface CardapioCategoriasTabProps {
   apiCategorias: any[];
@@ -48,68 +49,72 @@ export function CardapioCategoriasTab({
                       {cat.destino_impressao}
                     </span>
                   </td>
-                  <td className={clsx('p-4', 'text-right', 'space-x-2')}>
-                    <button
-                      onClick={async () => {
-                        const newNome = prompt('Digite o novo nome da categoria (deixe vazio para manter o atual):', cat.nome);
-                        const newDestino = prompt('Digite o novo destino de impressão (COZINHA, BAR, ou NENHUM):', cat.destino_impressao);
-                        if (newDestino && newDestino !== 'COZINHA' && newDestino !== 'BAR' && newDestino !== 'NENHUM') {
-                          alert('Destino inválido! Deve ser COZINHA, BAR ou NENHUM.');
-                          return;
-                        }
-                        try {
-                          const res = await fetch(`${apiBaseUrl}/produtos/categorias/${cat.id}`, {
-                            method: 'PUT',
-                            headers: {
-                              ...authHeaders,
-                              'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({
-                              nome: newNome || undefined,
-                              destino_impressao: newDestino || undefined
-                            })
-                          });
-                          if (res.ok) {
-                            alert('Categoria atualizada!');
-                            await fetchCategorias();
-                          } else {
-                            const err = await res.json();
-                            alert(`Erro: ${err.detail || 'Falha ao atualizar.'}`);
+                  <td className={clsx('p-4', 'text-right')}>
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        onClick={async () => {
+                          const newNome = prompt('Digite o novo nome da categoria (deixe vazio para manter o atual):', cat.nome);
+                          const newDestino = prompt('Digite o novo destino de impressão (COZINHA, BAR, ou NENHUM):', cat.destino_impressao);
+                          if (newDestino && newDestino !== 'COZINHA' && newDestino !== 'BAR' && newDestino !== 'NENHUM') {
+                            alert('Destino inválido! Deve ser COZINHA, BAR ou NENHUM.');
+                            return;
                           }
-                        } catch (e) {
-                          console.error(e);
-                          alert('Erro ao conectar ao servidor.');
-                        }
-                      }}
-                      className="px-2.5 py-1 border border-zinc-800 hover:border-zinc-700 bg-zinc-900/50 hover:bg-zinc-800 text-gray-300 hover:text-white rounded-lg transition-all cursor-pointer font-bold"
-                    >
-                      Editar
-                    </button>
-                    <button
-                      onClick={async () => {
-                        if (confirm(`Deseja realmente excluir a categoria "${cat.nome}"?`)) {
                           try {
                             const res = await fetch(`${apiBaseUrl}/produtos/categorias/${cat.id}`, {
-                              method: 'DELETE',
-                              headers: authHeaders
+                              method: 'PUT',
+                              headers: {
+                                ...authHeaders,
+                                'Content-Type': 'application/json'
+                              },
+                              body: JSON.stringify({
+                                nome: newNome || undefined,
+                                destino_impressao: newDestino || undefined
+                              })
                             });
                             if (res.ok) {
-                              alert('Categoria excluída!');
+                              alert('Categoria atualizada!');
                               await fetchCategorias();
                             } else {
                               const err = await res.json();
-                              alert(`Erro: ${err.detail || 'Falha ao excluir.'}`);
+                              alert(`Erro: ${err.detail || 'Falha ao atualizar.'}`);
                             }
                           } catch (e) {
                             console.error(e);
                             alert('Erro ao conectar ao servidor.');
                           }
-                        }
-                      }}
-                      className="px-2.5 py-1 border border-red-900/40 hover:border-red-600/30 bg-red-950/20 hover:bg-red-900/25 text-red-400 hover:text-white rounded-lg transition-all cursor-pointer font-bold"
-                    >
-                      Excluir
-                    </button>
+                        }}
+                        className="flex items-center gap-1 px-2.5 py-1 border border-zinc-800 hover:border-zinc-700 bg-zinc-900/60 hover:bg-zinc-800 text-gray-300 hover:text-white rounded-lg transition-all cursor-pointer font-semibold text-[10px]"
+                      >
+                        <Edit3 size={11} />
+                        Editar
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (confirm(`Deseja realmente excluir a categoria "${cat.nome}"?`)) {
+                            try {
+                              const res = await fetch(`${apiBaseUrl}/produtos/categorias/${cat.id}`, {
+                                method: 'DELETE',
+                                headers: authHeaders
+                              });
+                              if (res.ok) {
+                                alert('Categoria excluída!');
+                                await fetchCategorias();
+                              } else {
+                                const err = await res.json();
+                                alert(`Erro: ${err.detail || 'Falha ao excluir.'}`);
+                              }
+                            } catch (e) {
+                              console.error(e);
+                              alert('Erro ao conectar ao servidor.');
+                            }
+                          }
+                        }}
+                        className="flex items-center gap-1 px-2.5 py-1 border border-red-900/40 hover:border-red-600/30 bg-red-950/30 hover:bg-red-900/40 text-red-400 hover:text-red-300 rounded-lg transition-all cursor-pointer font-semibold text-[10px]"
+                      >
+                        <Trash2 size={11} />
+                        Excluir
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
