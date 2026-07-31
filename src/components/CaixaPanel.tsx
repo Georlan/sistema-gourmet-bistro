@@ -7,7 +7,7 @@ import {
   Clock, X, RefreshCw, Edit3, Trash2, Plus, ChevronRight,
   MapPin, ClipboardList, BarChart2, Package, Shield, ShieldCheck, Star,
   MessageSquare, Send, Printer, Cpu, HelpCircle, Smartphone,
-  Gift, Tag, TrendingUp, Heart, Globe
+  Gift, Tag, TrendingUp, Heart, Globe, Menu
 , Upload} from 'lucide-react';
 import { Order, OrderItem, CaixaTurno, CaixaMovimentacao, Pagamento, Table, Product, EntradaEstoque, MovimentacaoEstoque, SessaoContagemEstoque, CaixaTurnoResumo, FechamentoCaixaResult } from '../types';
 import { EstoqueEntradasTab } from './estoque/EstoqueEntradasTab';
@@ -238,6 +238,8 @@ export function CaixaPanel({
     if (['recuperador', 'carrinhos_abandonados'].includes(saved)) return 'clientes';
     return saved;
   });
+
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   useEffect(() => {
     sessionStorage.setItem('koma_active_tab', activeTab);
@@ -2552,9 +2554,233 @@ export function CaixaPanel({
           {toastData.msg}
         </div>
       )}
+      {isMobileSidebarOpen && (
+        <div className="fixed inset-0 z-50 flex lg:hidden animate-fade-in">
+          <div
+            onClick={() => setIsMobileSidebarOpen(false)}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm"
+          />
+          <aside className="relative w-72 max-w-[85vw] bg-[#121214] border-r border-[#27272A] flex flex-col justify-between shrink-0 h-full z-10 shadow-2xl overflow-y-auto">
+            <div className={clsx('space-y-6', 'pt-5')}>
+              {/* Brand header */}
+              <div className={clsx('px-5', 'flex', 'items-center', 'justify-between')}>
+                <div className={clsx('flex', 'items-center', 'gap-2')}>
+                  <div className={clsx('h-7.5', 'w-7.5', 'bg-[#10b981]', 'rounded-xl', 'flex', 'items-center', 'justify-center', 'font-bold', 'text-[#121214]', 'font-serif', 'text-sm')}>K</div>
+                  <div className={clsx('font-serif', 'font-bold', 'text-sm', 'tracking-tight')}>Kôma Caixa</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {turno?.status === 'aberto' ? (
+                    <span className={clsx('h-2', 'w-2', 'rounded-full', 'bg-emerald-500', 'animate-pulse')} title="Caixa Aberto" />
+                  ) : (
+                    <span className={clsx('h-2', 'w-2', 'rounded-full', 'bg-emerald-600')} title="Caixa Fechado" />
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setIsMobileSidebarOpen(false)}
+                    className="p-1 text-gray-400 hover:text-white rounded-lg cursor-pointer"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
 
-      {/* SIDEBAR - ANOTA AI / KOMA THEME */}
-      <aside className={clsx('w-64', 'bg-[#121214]', 'border-r', 'border-[#27272A]', 'flex', 'flex-col', 'justify-between', 'shrink-0')}>
+              {/* Quick status bar */}
+              <div className="px-3.5">
+                <div className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-2xl', 'p-2.5', 'flex', 'items-center', 'justify-between')}>
+                  <div className="space-y-0.5">
+                    <span className={clsx('text-[9px]', 'uppercase', 'tracking-wider', 'text-gray-400', 'font-bold', 'block')}>Status do Turno</span>
+                    <span className={clsx('font-semibold', 'text-[10px]', 'text-white')}>
+                      {turno?.status === 'aberto' ? 'Caixa Aberto' : 'Caixa Fechado'}
+                    </span>
+                  </div>
+                  {turno?.status === 'aberto' ? (
+                    <button
+                      onClick={() => {
+                        setActiveTab('financeiro');
+                        setActiveSubTab('fechamento');
+                        setIsMobileSidebarOpen(false);
+                      }}
+                      className={clsx('px-2', 'py-1', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'text-[9px]', 'font-bold', 'rounded-lg', 'cursor-pointer', 'transition-all', 'uppercase', 'tracking-wider')}
+                    >
+                      Fechar
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setShowAbrirModal(true);
+                        setIsMobileSidebarOpen(false);
+                      }}
+                      className={clsx('px-2', 'py-1', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'text-[9px]', 'font-bold', 'rounded-lg', 'cursor-pointer', 'transition-all', 'uppercase', 'tracking-wider', 'animate-pulse-subtle')}
+                    >
+                      Abrir
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Tabs Navigation */}
+              <nav className={clsx('px-2.5', 'space-y-4', 'overflow-y-auto', 'flex-1', 'max-h-[calc(88vh-230px)]', 'scrollbar-thin', 'scrollbar-thumb-zinc-800', 'text-left')}>
+                {[
+                  {
+                    category: 'Fluxo Operacional',
+                    items: [
+                      { id: 'operacao', label: 'Vendas', icon: ShoppingCart },
+                      { id: 'cardapio', label: 'Cardápio', icon: ClipboardList },
+                      { id: 'estoque', label: 'Estoque', icon: Package }
+                    ]
+                  },
+                  {
+                    category: 'Gestão de Tesouraria',
+                    items: [
+                      { id: 'financeiro', label: 'Caixa', icon: DollarSign },
+                      { id: 'clientes', label: 'Clientes', icon: Users }
+                    ]
+                  },
+                  {
+                    category: 'Performance & BI',
+                    items: [
+                      { id: 'relatorios', label: 'Relatórios', icon: TrendingUp }
+                    ]
+                  },
+                  {
+                    category: 'Processos Inteligentes',
+                    items: [
+                      { id: 'assistente_koma', label: 'Assistente Kôma', icon: Cpu }
+                    ]
+                  },
+                  {
+                    category: 'Parâmetros do Sistema',
+                    items: [
+                      { id: 'permissoes_cargos', label: 'Equipe', icon: ShieldCheck },
+                      { id: 'impressao_salao', label: 'Salão e Impressão', icon: Printer },
+                      { id: 'assinatura_pix', label: 'Assinatura & Pix', icon: CreditCard },
+                      { id: 'cardapio_digital', label: 'Cardápio Digital', icon: Globe }
+                    ]
+                  }
+                ].map((group, gIdx) => (
+                  <div key={gIdx} className="space-y-1">
+                    <span className={clsx('text-[8px]', 'uppercase', 'tracking-wider', 'text-[#10b981]', 'font-bold', 'px-3.5', 'block', 'mb-1')}>
+                      {group.category}
+                    </span>
+                    {group.items.map((tab) => {
+                      const Icon = tab.icon;
+                      const isLocked = (
+                        tab.id === 'cardapio_digital' && !hasOnlineMenu
+                      );
+                      const isActive = (
+                        tab.id === 'cardapio_digital' ? (activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital')
+                        : tab.id === 'permissoes_cargos' ? (activeTab === 'permissoes_cargos' || (activeTab === 'configuracoes' && activeSubTab === 'equipe'))
+                        : tab.id === 'impressao_salao' ? (activeTab === 'impressao_salao' || (activeTab === 'configuracoes' && activeSubTab === 'impressoras'))
+                        : tab.id === 'assinatura_pix' ? (activeTab === 'assinatura_pix' || (activeTab === 'configuracoes' && activeSubTab === 'planos'))
+                        : tab.id === 'relatorios' ? (activeTab === 'relatorios' || activeTab === 'dashboard')
+                        : tab.id === 'assistente_koma' ? (activeTab === 'assistente_koma' || activeTab === 'robo_ia' || (activeTab === 'operacao' && activeSubTab === 'chat_copiloto'))
+                        : activeTab === tab.id
+                      );
+                      return (
+                        <button
+                          key={tab.id}
+                          onClick={() => {
+                            setIsMobileSidebarOpen(false);
+                            if (isLocked) {
+                              setActiveTab('assinatura_pix');
+                              setActiveSubTab('planos');
+                              showToast(
+                                currentPlanId === 'pro'
+                                    ? `Ative o ${ONLINE_MENU_ADDON.name} ou migre para o Kôma Premium.`
+                                    : 'O cardápio online está disponível no Kôma Pro como adicional e incluído no Premium.',
+                                'info'
+                              );
+                              return;
+                            }
+                            if (tab.id === 'cardapio_digital') {
+                              setActiveTab('cardapio_digital');
+                              setActiveSubTab('cardapio_digital');
+                            } else if (tab.id === 'permissoes_cargos') {
+                              setActiveTab('permissoes_cargos');
+                              if (!['pessoas', 'desempenho'].includes(activeSubTab)) {
+                                setActiveSubTab('pessoas');
+                              }
+                            } else if (tab.id === 'impressao_salao') {
+                              setActiveTab('impressao_salao');
+                              setActiveSubTab('impressoras');
+                            } else if (tab.id === 'assinatura_pix') {
+                              setActiveTab('assinatura_pix');
+                              setActiveSubTab('planos');
+                            } else if (tab.id === 'relatorios') {
+                              setActiveTab('relatorios');
+                              if (!['visao_geral', 'financeiro', 'produtos'].includes(activeSubTab)) {
+                                setActiveSubTab('visao_geral');
+                              }
+                            } else if (tab.id === 'assistente_koma') {
+                              setActiveTab('assistente_koma');
+                              if (!['chat', 'configuracao', 'simulador'].includes(activeSubTab)) {
+                                setActiveSubTab('chat');
+                              }
+                            } else {
+                              handleTabChange(tab.id as any);
+                            }
+                          }}
+                          className={`w-full px-3.5 py-1.5 rounded-xl text-left font-semibold transition-all flex items-center justify-between cursor-pointer group ${isLocked
+                            ? 'text-gray-600 hover:text-gray-400 hover:bg-[#1C1C1F]/30 border border-transparent'
+                            : isActive
+                            ? 'bg-[#10b981]/15 text-[#10b981] border border-[#10b981]/10 font-bold shadow-inner'
+                            : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]/50 border border-transparent'
+                            }`}
+                        >
+                          <div className={clsx('flex', 'items-center', 'gap-3')}>
+                            <Icon size={13} className={isActive ? 'text-[#10b981]' : 'text-gray-500 group-hover:text-white'} />
+                            <span className="text-[10px]">{tab.label}</span>
+                          </div>
+                          {tab.id === 'operacao' && (tableOrdersInProduction.length + simulatedOrders.filter(o => ['pendente', 'analise', 'producao', 'pronto', 'transito'].includes(o.status)).length + tableOrdersReady.length) > 0 && (
+                            <span className={clsx('bg-[#10b981]', 'text-[#121214]', 'text-[7px]', 'font-bold', 'px-1.5', 'py-0.5', 'rounded-full', 'font-mono')}>
+                              {tableOrdersInProduction.length + simulatedOrders.filter(o => ['pendente', 'analise', 'producao', 'pronto', 'transito'].includes(o.status)).length + tableOrdersReady.length}
+                            </span>
+                          )}
+                          {isLocked && <Lock size={10} className="text-amber-500/70" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
+              </nav>
+            </div>
+
+            {/* Footer info */}
+            <div className={clsx('p-4', 'border-t', 'border-[#27272A]', 'space-y-2', 'bg-[#18181B]/40')}>
+              <div className="space-y-1">
+                <span className={clsx('text-[8px]', 'text-gray-500', 'uppercase', 'tracking-widest', 'block', 'font-bold')}>Acessibilidade / Fonte</span>
+                <div className={clsx('grid', 'grid-cols-3', 'gap-0.5', 'bg-[#09090B]', 'p-0.5', 'rounded-lg', 'border', 'border-[#27272A]')}>
+                  {(['padrao', 'grande', 'gigante'] as const).map((sz) => (
+                    <button
+                      key={sz}
+                      type="button"
+                      onClick={() => changeFontSize(sz)}
+                      className={`py-0.5 rounded text-[8px] font-bold uppercase transition-all cursor-pointer ${fontSize === sz
+                        ? 'bg-[#10b981] text-[#121214]'
+                        : 'text-gray-400 hover:text-white'
+                        }`}
+                    >
+                      {sz === 'padrao' ? 'Pad' : sz === 'grande' ? 'Grd' : 'Ggt'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className={clsx('border-t', 'border-[#27272A]/50', 'pt-2', 'space-y-1')}>
+                <span className={clsx('text-[9px]', 'text-gray-500', 'uppercase', 'tracking-widest', 'block')}>Operador ativo</span>
+                <span className={clsx('font-bold', 'text-white', 'block', 'truncate')}>{activeWaiterNome}</span>
+                <span className={clsx('text-[9px]', 'text-[#10b981]', 'flex', 'items-center', 'gap-1', 'mt-1', 'font-mono')}>
+                  <span className={clsx('h-1', 'w-1', 'bg-emerald-500', 'rounded-full', 'animate-ping')} />
+                  Sincronização Online
+                </span>
+              </div>
+            </div>
+          </aside>
+        </div>
+      )}
+
+      {/* DESKTOP SIDEBAR - ANOTA AI / KOMA THEME */}
+      <aside className={clsx('hidden', 'lg:flex', 'w-64', 'bg-[#121214]', 'border-r', 'border-[#27272A]', 'flex-col', 'justify-between', 'shrink-0')}>
         <div className={clsx('space-y-6', 'pt-5')}>
           {/* Brand header */}
           <div className={clsx('px-5', 'flex', 'items-center', 'justify-between')}>
@@ -2758,24 +2984,35 @@ export function CaixaPanel({
       </aside>
 
       {/* CONTENT AREA */}
-      <main className={clsx('flex-1', 'bg-[#09090B]', 'flex', 'flex-col', 'overflow-hidden')}>
+      <main className={clsx('flex-1', 'bg-[#09090B]', 'flex', 'flex-col', 'overflow-hidden', 'w-full')}>
         {/* Top header bar */}
-        <header className={clsx('h-14', 'border-b', 'border-[#27272A]', 'bg-[#121214]', 'px-6', 'flex', 'items-center', 'justify-between', 'shrink-0')}>
-          <h2 className={clsx('font-serif', 'font-bold', 'text-sm', 'tracking-tight', 'text-white', 'uppercase', 'tracking-wider')}>
-            {(activeTab === 'relatorios' || activeTab === 'dashboard') && 'Relatórios'}
-            {(activeTab === 'assistente_koma' || activeTab === 'robo_ia') && 'Assistente Kôma'}
-            {activeTab === 'operacao' && 'Gestão de Atendimento Local'}
-            {activeTab === 'cardapio' && 'Gestão e Engenharia do Cardápio'}
-            {activeTab === 'estoque' && 'GESTÃO DE ESTOQUE'}
-            {activeTab === 'financeiro' && 'GESTÃO DO CAIXA'}
-            {activeTab === 'clientes' && 'GESTÃO DE CLIENTES'}
-            {(activeTab === 'permissoes_cargos' || (activeTab === 'configuracoes' && activeSubTab === 'equipe')) && 'Permissões e Gestão de Equipe'}
-            {(activeTab === 'impressao_salao' || (activeTab === 'configuracoes' && activeSubTab === 'impressoras')) && 'Configurações do Salão'}
-            {(activeTab === 'assinatura_pix' || (activeTab === 'configuracoes' && activeSubTab === 'planos')) && 'Planos de Assinatura e Recebimento Pix'}
-            {(activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital') && 'Cardápio Digital — Identidade Whitelabel'}
-          </h2>
+        <header className={clsx('h-14', 'border-b', 'border-[#27272A]', 'bg-[#121214]', 'px-4', 'sm:px-6', 'flex', 'items-center', 'justify-between', 'shrink-0')}>
+          <div className="flex items-center gap-2 truncate">
+            <button
+              type="button"
+              onClick={() => setIsMobileSidebarOpen(true)}
+              className="lg:hidden p-1.5 bg-[#1C1C1F] hover:bg-[#27272A] text-emerald-400 rounded-xl border border-[#27272A] flex items-center justify-center cursor-pointer shrink-0"
+              title="Abrir Menu do Caixa"
+              id="btn-mobile-caixa-sidebar-open"
+            >
+              <Menu size={16} />
+            </button>
+            <h2 className={clsx('font-serif', 'font-bold', 'text-xs', 'sm:text-sm', 'tracking-tight', 'text-white', 'uppercase', 'tracking-wider', 'truncate')}>
+              {(activeTab === 'relatorios' || activeTab === 'dashboard') && 'Relatórios'}
+              {(activeTab === 'assistente_koma' || activeTab === 'robo_ia') && 'Assistente Kôma'}
+              {activeTab === 'operacao' && 'Gestão de Atendimento Local'}
+              {activeTab === 'cardapio' && 'Gestão e Engenharia do Cardápio'}
+              {activeTab === 'estoque' && 'GESTÃO DE ESTOQUE'}
+              {activeTab === 'financeiro' && 'GESTÃO DO CAIXA'}
+              {activeTab === 'clientes' && 'GESTÃO DE CLIENTES'}
+              {(activeTab === 'permissoes_cargos' || (activeTab === 'configuracoes' && activeSubTab === 'equipe')) && 'Permissões e Gestão de Equipe'}
+              {(activeTab === 'impressao_salao' || (activeTab === 'configuracoes' && activeSubTab === 'impressoras')) && 'Configurações do Salão'}
+              {(activeTab === 'assinatura_pix' || (activeTab === 'configuracoes' && activeSubTab === 'planos')) && 'Planos de Assinatura e Recebimento Pix'}
+              {(activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital') && 'Cardápio Digital — Identidade Whitelabel'}
+            </h2>
+          </div>
 
-          <div className={clsx('flex', 'items-center', 'gap-3')}>
+          <div className={clsx('flex', 'items-center', 'gap-3', 'shrink-0')}>
             <button
               onClick={() => {
                 fetchTurno();
@@ -2785,7 +3022,7 @@ export function CaixaPanel({
               className={clsx('p-1.5', 'hover:bg-[#1C1C1F]', 'rounded-lg', 'border', 'border-[#27272A]', 'text-gray-400', 'hover:text-white', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'gap-1.5')}
             >
               <RefreshCw size={12} className={isLoading ? 'animate-spin' : ''} />
-              <span className={clsx('text-[9px]', 'font-bold', 'font-mono')}>Atualizar</span>
+              <span className={clsx('text-[9px]', 'font-bold', 'font-mono', 'hidden', 'sm:inline')}>Atualizar</span>
             </button>
           </div>
         </header>
