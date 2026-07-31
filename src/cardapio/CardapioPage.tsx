@@ -1302,7 +1302,7 @@ export default function CardapioPage() {
       />
 
       {/* FLOATING AI ASSISTANT */}
-      <CardapioAiChefAssistant activeBrand={activeBrand} />
+      <CardapioAiChefAssistant activeBrand={activeBrand} hasCart={cartCount > 0} />
 
     </div>
   );

@@ -148,21 +148,36 @@ export default function CardapioProductModal({
         
         {/* Banner image and close button */}
         <div className="relative h-48 w-full shrink-0">
-          <img src={getProductImageUrl(product.image)} alt={product.name} className="h-full w-full object-cover" />
+          <img
+            src={getProductImageUrl(product.image)}
+            alt={product.name}
+            className="h-full w-full object-cover"
+            crossOrigin="anonymous"
+            referrerPolicy="no-referrer"
+            onError={(e) => {
+              const target = e.currentTarget;
+              target.onerror = null;
+              target.src = "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&w=500&q=80";
+            }}
+          />
           <div className="absolute inset-0 bg-linear-to-b from-black/40 via-transparent to-black/10" />
           
           <button
+            type="button"
             onClick={handleShare}
-            className="absolute top-4 right-14 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 transition cursor-pointer"
+            className="absolute top-3 right-16 flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 transition cursor-pointer"
             title="Compartilhar Produto"
+            aria-label="Compartilhar Produto"
             id="btn-share-product"
           >
             <Share2 className="h-4.5 w-4.5" />
           </button>
 
           <button
+            type="button"
             onClick={onClose}
-            className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 transition cursor-pointer"
+            className="absolute top-3 right-3 flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 transition cursor-pointer"
+            aria-label="Fechar modal de produto"
             id="btn-close-modal"
           >
             <X className="h-5 w-5" />

@@ -76,7 +76,7 @@ export default function CardapioAuthModal({
         <button
           type="button"
           onClick={onClose}
-          className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full hover:bg-gray-800 text-gray-400 transition"
+          className="absolute top-3 right-3 flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full hover:bg-gray-800 text-gray-400 transition cursor-pointer"
           id="btn-close-auth"
           aria-label="Fechar identificação"
         >

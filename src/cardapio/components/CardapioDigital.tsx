@@ -181,11 +181,11 @@ export default function CardapioDigital({
             <button
               type="button"
               onClick={onClose}
-              className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-slate-500/10 text-text-app/50 transition cursor-pointer"
+              className="flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full hover:bg-slate-500/10 text-text-app/50 transition cursor-pointer"
               id="btn-close-checkout"
               aria-label="Fechar revisão do pedido"
             >
-              <X className="h-4 w-4" />
+              <X className="h-5 w-5" />
             </button>
           </div>
         )}

@@ -107,8 +107,10 @@ export default function CardapioCartDrawer({
             </span>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-slate-500/10 text-text-app/50 transition"
+            className="flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full hover:bg-slate-500/10 text-text-app/50 transition cursor-pointer"
+            aria-label="Fechar carrinho"
             id="btn-close-cart"
           >
             <X className="h-5 w-5" />
@@ -152,7 +154,18 @@ export default function CardapioCartDrawer({
                     className="flex items-start gap-3 rounded-2xl border border-slate-500/10 bg-slate-500/5 p-3"
                     id={`cart-item-${item.id}`}
                   >
-                    <img src={getProductImageUrl(item.product.image)} alt={item.product.name} className="h-14 w-14 rounded-xl object-cover shrink-0" />
+                    <img
+                      src={getProductImageUrl(item.product.image)}
+                      alt={item.product.name}
+                      className="h-14 w-14 rounded-xl object-cover shrink-0"
+                      crossOrigin="anonymous"
+                      referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        const target = e.currentTarget;
+                        target.onerror = null;
+                        target.src = "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&w=500&q=80";
+                      }}
+                    />
                     
                     <div className="flex-1 min-w-0">
                       <h4 className="text-xs font-bold text-text-app truncate">{item.product.name}</h4>

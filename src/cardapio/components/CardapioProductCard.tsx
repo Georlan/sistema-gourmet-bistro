@@ -40,6 +40,13 @@ export default function CardapioProductCard({
           alt={product.name}
           className="h-full w-full rounded-xl object-cover shadow-xs transition group-hover:scale-[1.02] duration-300"
           loading="lazy"
+          crossOrigin="anonymous"
+          referrerPolicy="no-referrer"
+          onError={(e) => {
+            const target = e.currentTarget;
+            target.onerror = null;
+            target.src = "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&w=500&q=80";
+          }}
         />
         {product.isAvailable && (
           <button

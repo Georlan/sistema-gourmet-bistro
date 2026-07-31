@@ -135,7 +135,7 @@ export default function CardapioUserProfileModal({
           <button
             type="button"
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-800/50 hover:bg-slate-800 text-slate-400 hover:text-white transition"
+            className="flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full bg-slate-800/50 hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
             id="btn-close-profile"
             aria-label="Fechar perfil"
           >

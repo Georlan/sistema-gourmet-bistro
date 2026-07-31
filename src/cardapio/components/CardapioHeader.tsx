@@ -85,7 +85,18 @@ export default function CardapioHeader({
             id="header-brand-info-trigger"
           >
             <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center text-white font-bold text-2xl shadow-xs overflow-hidden shrink-0 border border-slate-500/10 group-hover:scale-105 group-hover:border-primary transition duration-300">
-              <img src={activeBrand.logo} alt={activeBrand.name} className="w-full h-full object-cover" />
+              <img
+                src={activeBrand.logo}
+                alt={activeBrand.name}
+                className="w-full h-full object-cover"
+                crossOrigin="anonymous"
+                referrerPolicy="no-referrer"
+                onError={(e) => {
+                  const target = e.currentTarget;
+                  target.onerror = null;
+                  target.src = "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&q=80&w=200&h=200";
+                }}
+              />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">

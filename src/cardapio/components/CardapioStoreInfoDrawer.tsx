@@ -39,12 +39,14 @@ export default function CardapioStoreInfoDrawer({ brand, isOpen, onClose }: Card
           
           {/* Close button */}
           <button
+            type="button"
             onClick={onClose}
-            className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 hover:scale-105 transition shadow-md"
+            className="absolute top-3 right-3 flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 hover:scale-105 transition shadow-md cursor-pointer"
             id="btn-close-store-info"
+            aria-label="Fechar informações"
             title="Fechar informações"
           >
-            <X className="h-4 w-4" />
+            <X className="h-5 w-5" />
           </button>
 
           {/* Logo overlapping the cover */}

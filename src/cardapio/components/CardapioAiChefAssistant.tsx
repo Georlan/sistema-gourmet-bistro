@@ -10,6 +10,7 @@ import { API_BASE_URL } from "../../config/api";
 
 interface CardapioAiChefAssistantProps {
   activeBrand: BrandConfig;
+  hasCart?: boolean;
 }
 
 interface ChatMessage {
@@ -17,7 +18,7 @@ interface ChatMessage {
   text: string;
 }
 
-export default function CardapioAiChefAssistant({ activeBrand }: CardapioAiChefAssistantProps) {
+export default function CardapioAiChefAssistant({ activeBrand, hasCart = false }: CardapioAiChefAssistantProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState("");
@@ -103,9 +104,10 @@ export default function CardapioAiChefAssistant({ activeBrand }: CardapioAiChefA
       {/* Floating Sparkles Trigger Button */}
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-white shadow-xl hover:scale-105 active:scale-95 transition-all duration-300"
+        className={`fixed ${hasCart ? "bottom-24" : "bottom-6"} right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-white shadow-xl hover:scale-105 active:scale-95 transition-all duration-300`}
         id="ai-chef-assistant-trigger"
         title="Falar com o Chef Virtual"
+        aria-label="Falar com o Chef Virtual"
       >
         <Sparkles className="h-6 w-6 animate-pulse" />
       </button>
@@ -135,9 +137,11 @@ export default function CardapioAiChefAssistant({ activeBrand }: CardapioAiChefA
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setIsOpen(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-slate-500/10 text-text-app/50 transition cursor-pointer"
+                className="flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full hover:bg-slate-500/10 text-text-app/50 transition cursor-pointer"
                 id="btn-close-ai"
+                aria-label="Fechar assistente virtual"
               >
                 <X className="h-5 w-5" />
               </button>
