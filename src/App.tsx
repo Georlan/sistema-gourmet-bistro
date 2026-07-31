@@ -2093,7 +2093,7 @@ export default function App() {
       <footer className={clsx('bg-[#121214]', 'text-[#71717A]', 'border-t', 'border-[#27272A]', 'py-7', 'text-center', 'text-xs', 'shrink-0', 'font-sans')}>
         <div className={clsx('max-w-7xl', 'mx-auto', 'px-4', 'space-y-1')}>
           <p className={clsx('font-serif', 'text-sm', 'text-[#10b981]', 'font-medium')}>{restaurantName}</p>
-          <p className="text-[10px]">© 2026 Haute Cuisine Controller. Todos os direitos reservados. Sincronização API • Polling 4s.</p>
+          <p className="text-[10px]">© {new Date().getFullYear()} {restaurantName}. Todos os direitos reservados.</p>
         </div>
       </footer>
 
