@@ -333,7 +333,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                         {/* Presets */}
                         <div className="flex flex-wrap gap-1 mt-1">
                           {(() => {
-                            const product = PRODUCTS.find(p => p.id === item.produtoId);
+                            const product = (liveProdutos && liveProdutos.length > 0 ? liveProdutos : PRODUCTS).find(p => p.id === item.produtoId);
                             const presets = product ? getProductPresets(product) : ['VIAGEM', 'PRA MESA'];
                             return presets.map((preset) => {
                               const parts = item.observacao ? item.observacao.split(',').map(p => p.trim()) : [];

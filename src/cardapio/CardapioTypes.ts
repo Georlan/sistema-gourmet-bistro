@@ -99,7 +99,7 @@ export const LOCAL_BANNER_PLACEHOLDER = "data:image/svg+xml;utf8," + encodeURICo
       <stop offset="100%" stop-color="#09090B" stop-opacity="0.8"/>
     </linearGradient>
   </defs>
-  <text x="600" y="215" text-anchor="middle" fill="#3F3F46" font-family="system-ui, sans-serif" font-size="32" font-weight="800">KÔMA BISTRÔ &amp; GOURMET</text>
+  <text x="600" y="215" text-anchor="middle" fill="#3F3F46" font-family="system-ui, sans-serif" font-size="32" font-weight="800">CARDÁPIO DIGITAL</text>
 </svg>
 `);
 
