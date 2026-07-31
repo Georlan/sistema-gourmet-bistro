@@ -1805,9 +1805,9 @@ export default function App() {
 
             {/* Right: Status Badges */}
             <div className="flex items-center gap-2">
-              <div className={clsx('flex', 'items-center', 'gap-1.5', 'px-2.5', 'py-1', 'rounded-full', 'text-[10px]', 'font-semibold', isOnline ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20')}>
-                {isOnline ? <Wifi size={12} /> : <WifiOff size={12} />}
-                <span className="hidden sm:inline">{isOnline ? 'Conectado' : 'Offline'}</span>
+              <div className={clsx('flex', 'items-center', 'gap-1.5', 'px-2.5', 'py-1', 'rounded-full', 'text-[10px]', 'font-semibold', isWsConnected ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20')}>
+                {isWsConnected ? <Wifi size={12} /> : <WifiOff size={12} />}
+                <span className="hidden sm:inline">{isWsConnected ? 'Conectado' : 'Reconectando...'}</span>
               </div>
             </div>
 
