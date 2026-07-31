@@ -37,7 +37,7 @@ function parseStructuredValue(value: unknown): unknown {
   }
 }
 
-function getRestaurantIdentifier(): string {
+function getRestaurantIdentifier(): string | null {
   // 1. Check query parameters first (high priority for testing)
   const params = new URLSearchParams(window.location.search);
   const restaurantId = params.get("restaurant_id") || params.get("restaurante_id");
@@ -61,8 +61,8 @@ function getRestaurantIdentifier(): string {
     return parts[0];
   }
 
-  // Fallback to default restaurant ID "1" if no specific tenant subdomain or param
-  return "1";
+  // Return null if no tenant subdomain or param is present (NEVER fallback to restaurant_id=1)
+  return null;
 }
 
 export default function CardapioPage() {
@@ -201,7 +201,12 @@ export default function CardapioPage() {
     const identifier = getRestaurantIdentifier();
 
     if (!identifier) {
-      setErrorMsg("Restaurante não identificado. Informe o identificador no link de acesso (ex: ?restaurant_id=1 ou ?slug=koma-bistro).");
+      const landingUrl = (import.meta as any).env?.VITE_LANDING_PAGE_URL;
+      if (landingUrl && typeof landingUrl === "string" && landingUrl.trim() !== "") {
+        window.location.href = landingUrl;
+        return;
+      }
+      setErrorMsg("Cardápio não encontrado ou ainda não publicado.");
       setIsLoading(false);
       return;
     }

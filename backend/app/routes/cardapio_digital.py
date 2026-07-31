@@ -156,13 +156,10 @@ def resolve_restaurant_id(
             ).scalar_one_or_none()
 
         if resolved_id is None:
-            if identifier.lower() in ("sistema-gourmet-bistro", "koma-bistro", "default", "main"):
-                resolved_id = 1
-            else:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Restaurante não encontrado.",
-                )
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Restaurante não encontrado.",
+            )
 
         rest_id = int(resolved_id)
     else:
