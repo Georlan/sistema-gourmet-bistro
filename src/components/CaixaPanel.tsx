@@ -784,12 +784,51 @@ export function CaixaPanel({
     }
   }, [selectedOrder]);
 
-  // Limpa apenas ao fechar; o valor calculado ao abrir não pode ser apagado pelo effect.
+  // Auto-initialize paymentValor with open balance when checkout modal opens
   useEffect(() => {
-    if (!showCheckoutModal) {
+    if (showCheckoutModal && selectedOrder) {
+      if (!paymentValor || parseFloat(paymentValor) <= 0) {
+        const balance = getCheckoutBalance(selectedOrder);
+        if (balance > 0) {
+          setPaymentValor(balance.toFixed(2));
+        }
+      }
+    } else if (!showCheckoutModal) {
       setPaymentValor('');
     }
-  }, [showCheckoutModal]);
+  }, [showCheckoutModal, selectedOrder]);
+
+  // POS Drawer Custom Events (Sangria, Suprimento, Sync)
+  useEffect(() => {
+    const handleOpenSangria = () => {
+      setMovTipo('SANGRIA');
+      setMovValor('');
+      setMovDesc('');
+      setShowMovModal(true);
+    };
+    const handleOpenSuprimento = () => {
+      setMovTipo('SUPRIMENTO');
+      setMovValor('');
+      setMovDesc('');
+      setShowMovModal(true);
+    };
+    const handleSyncAll = () => {
+      fetchTurno();
+      fetchProdutos();
+      fetchCategorias();
+      if (onRefreshOrders) onRefreshOrders();
+    };
+
+    window.addEventListener('koma-open-sangria', handleOpenSangria);
+    window.addEventListener('koma-open-suprimento', handleOpenSuprimento);
+    window.addEventListener('koma-sync-all', handleSyncAll);
+
+    return () => {
+      window.removeEventListener('koma-open-sangria', handleOpenSangria);
+      window.removeEventListener('koma-open-suprimento', handleOpenSuprimento);
+      window.removeEventListener('koma-sync-all', handleSyncAll);
+    };
+  }, [onRefreshOrders]);
 
   // Date filters for Meu Desempenho
   const [desempenhoRange, setDesempenhoRange] = useState<'7' | '15' | '30'>('7');
@@ -1957,9 +1996,14 @@ export function CaixaPanel({
     setIsProcessingPayment(true);
 
     try {
-      const valorPagamento = parseFloat(paymentValor);
+      let valorPagamento = parseFloat(paymentValor);
       if (!Number.isFinite(valorPagamento) || valorPagamento <= 0) {
-        throw new Error('Informe um valor de pagamento maior que zero.');
+        const autoBalance = getCheckoutBalance(selectedOrder);
+        if (autoBalance > 0) {
+          valorPagamento = autoBalance;
+        } else {
+          throw new Error('Informe um valor de pagamento maior que zero.');
+        }
       }
 
       const comandaIds: string[] = (selectedOrder as any).comandaIds || [selectedOrder.id];

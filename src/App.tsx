@@ -1771,38 +1771,21 @@ export default function App() {
   }
 
   return (
-    <div className={`min-h-screen bg-[#0B0F19] text-[#FAF7F2] font-sans flex flex-col antialiased selection:bg-emerald-500/30 selection:text-white ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''
-      }`}>
-
-      {/* TOAST NOTIFICATIONS */}
-      <div className={clsx('fixed', 'top-4', 'left-1/2', '-translate-x-1/2', 'z-[100]', 'flex', 'flex-col', 'gap-2', 'pointer-events-none')} aria-live="polite">
-        {toasts.map(toast => (
-          <div
-            key={toast.id}
-            className={`px-5 py-3 rounded-2xl text-sm font-semibold shadow-2xl border animate-fade-in backdrop-blur-md ${toast.type === 'success' ? 'bg-emerald-900/90 border-emerald-700/50 text-emerald-100' :
-              toast.type === 'error' ? 'bg-red-900/90 border-red-700/50 text-red-100' :
-                'bg-[#1C1C1F]/95 border-[#27272A] text-gray-200'
-              }`}
-          >
-            {toast.message}
-          </div>
-        ))}
-      </div>
-
+    <div className={`min-h-screen bg-[#09090B] text-white flex flex-col font-sans ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''}`}>
       {/* GLOBAL TOP HEADER */}
       <header className="bg-[#121214] border-b border-[#27272A]/50 text-white shrink-0 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3">
           <div className="flex justify-between items-center">
 
-            {/* Left: Menu + Logo + Title */}
+            {/* Left: Settings Button + Logo + Title */}
             <div className="flex items-center gap-2 sm:gap-3">
               <button
                 id="open-sidebar-btn"
                 onClick={() => setIsSidebarOpen(true)}
-                className="p-2 bg-[#1C1C1F] text-emerald-400 rounded-xl cursor-pointer border border-[#27272A] flex items-center justify-center"
-                title="Abrir Menu e Configurações"
+                className="p-2 bg-[#1C1C1F] text-emerald-400 hover:bg-[#27272A] hover:text-white rounded-xl cursor-pointer border border-[#27272A] flex items-center justify-center transition-colors"
+                title="Operação & Configurações do Caixa"
               >
-                <Menu size={18} />
+                <SlidersHorizontal size={18} />
               </button>
 
               <div className="flex items-center gap-2">
@@ -1820,36 +1803,21 @@ export default function App() {
               </div>
             </div>
 
-            {/* Right: Status + Profile */}
+            {/* Right: Status Badges */}
             <div className="flex items-center gap-2">
-              <div
-                title={isWsConnected ? 'Conectado em tempo real' : 'Reconectando...'}
-                className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider border ${isWsConnected
-                  ? 'bg-emerald-900/20 border-emerald-800/30 text-emerald-400'
-                  : 'bg-amber-900/20 border-amber-800/30 text-amber-400 animate-pulse'
-                }`}
-              >
-                {isWsConnected ? <Wifi size={9} /> : <WifiOff size={9} />}
-                <span className="hidden sm:inline">{isWsConnected ? 'Online' : 'Reconect.'}</span>
+              <div className={clsx('flex', 'items-center', 'gap-1.5', 'px-2.5', 'py-1', 'rounded-full', 'text-[10px]', 'font-semibold', isOnline ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20')}>
+                {isOnline ? <Wifi size={12} /> : <WifiOff size={12} />}
+                <span className="hidden sm:inline">{isOnline ? 'Conectado' : 'Offline'}</span>
               </div>
-              <button
-                id="header-profile-btn"
-                onClick={() => setIsSidebarOpen(true)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-xs font-semibold text-[#FAF7F2] cursor-pointer"
-              >
-                <User size={13} className="text-emerald-400" />
-                <span className="hidden sm:inline">{activeWaiter.nome}</span>
-              </button>
             </div>
 
           </div>
         </div>
       </header>
 
-      {/* LATERAL DRAWER MENU (Sidebar Overlays) */}
+      {/* LATERAL DRAWER MENU */}
       {isSidebarOpen && (
         <div className="fixed inset-0 z-50 flex animate-fade-in">
-          {/* Backdrop */}
           <div
             id="sidebar-backdrop"
             onClick={() => setIsSidebarOpen(false)}
@@ -1858,17 +1826,13 @@ export default function App() {
 
           {/* Drawer content */}
           <div className="relative w-72 sm:w-80 max-w-sm bg-[#0E0E10] border-r border-emerald-500/10 h-full flex flex-col justify-between shadow-2xl z-10 p-4 sm:p-6 text-[#FAF7F2] overflow-y-auto animate-slide-in-left">
-            <div className="space-y-7">
+            <div className="space-y-6">
 
               {/* Header inside drawer */}
               <div className={clsx('flex', 'items-center', 'justify-between', 'pb-4', 'border-b', 'border-[#27272A]')}>
                 <div className={clsx('flex', 'items-center', 'gap-2')}>
                   <div className={clsx('h-8', 'px-1.5', 'bg-[#2f3d4a]', 'rounded-lg', 'flex', 'items-center', 'justify-center', 'border', 'border-[#2f3d4a]', 'shadow-sm', 'shrink-0')}>
-                    <img
-                      src="/logo.png"
-                      alt="Kôma Logo"
-                      className={clsx('h-5', 'object-contain')}
-                    />
+                    <img src="/logo.png" alt="Kôma Logo" className={clsx('h-5', 'object-contain')} />
                   </div>
                   <span className={clsx('font-serif', 'font-bold', 'text-base', 'text-[#FAF7F2]')}>{restaurantName}</span>
                 </div>
@@ -1881,17 +1845,20 @@ export default function App() {
                 </button>
               </div>
 
-              {/* SECTION 1: MINHA CONTA */}
-              <div className="space-y-3">
-                <h3 className={clsx('text-[10px]', 'uppercase', 'tracking-wider', 'font-bold', 'text-emerald-400', 'font-sans')}>Minha Conta (Operador)</h3>
-                <div className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-2xl', 'p-4', 'space-y-3.5')}>
+              {/* SECTION 1: MINHA CONTA & TURNO */}
+              <div className="space-y-2.5">
+                <h3 className={clsx('text-[10px]', 'uppercase', 'tracking-wider', 'font-bold', 'text-emerald-400', 'font-sans')}>Operador do Caixa</h3>
+                <div className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-2xl', 'p-3.5', 'space-y-3')}>
                   <div className={clsx('flex', 'items-center', 'gap-3')}>
                     <div className={clsx('h-10', 'w-10', 'bg-emerald-500/10', 'border', 'border-emerald-500/20', 'text-emerald-400', 'rounded-full', 'flex', 'items-center', 'justify-center', 'font-bold')}>
                       {activeWaiter.nome[0]}
                     </div>
                     <div>
                       <h4 className={clsx('text-sm', 'font-bold', 'text-white')}>{activeWaiter.nome}</h4>
-                      <p className={clsx('text-[10px]', 'text-[#A1A1AA]')}>Garçom em Atendimento</p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span className="text-[10px] text-emerald-400 font-semibold">Caixa Operacional Ativo</span>
+                      </div>
                     </div>
                   </div>
 
@@ -1904,11 +1871,68 @@ export default function App() {
                 </div>
               </div>
 
-              {/* SECTION 2: CONFIGURAÇÕES DE VISUALIZAÇÃO */}
-              <div className="space-y-3">
-                <h3 className={clsx('text-[10px]', 'uppercase', 'tracking-wider', 'font-bold', 'text-emerald-400', 'font-sans')}>Exibição do Cardápio</h3>
-                <div className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-2xl', 'p-4', 'space-y-3')}>
-                  <label className={clsx('flex', 'items-center', 'justify-between', 'text-xs', 'text-[#FAF7F2]', 'cursor-pointer', 'p-1.5', 'rounded', 'hover:bg-[#27272A]/40')}>
+              {/* SECTION 2: ATALHOS RÁPIDOS DE OPERAÇÃO DO CAIXA */}
+              <div className="space-y-2.5">
+                <h3 className={clsx('text-[10px]', 'uppercase', 'tracking-wider', 'font-bold', 'text-emerald-400', 'font-sans')}>Atalhos Rápidos de Operação</h3>
+                <div className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-2xl', 'p-3', 'space-y-2')}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsSidebarOpen(false);
+                      window.dispatchEvent(new CustomEvent('koma-open-suprimento'));
+                    }}
+                    className="w-full flex items-center justify-between p-2.5 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] rounded-xl text-xs text-white transition-all cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 group-hover:bg-emerald-500/20">
+                        <ArrowDownRight size={14} />
+                      </div>
+                      <span className="font-semibold text-xs">Suprimento de Caixa</span>
+                    </div>
+                    <span className="text-[9px] text-emerald-400 font-mono font-bold">+ Troco</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsSidebarOpen(false);
+                      window.dispatchEvent(new CustomEvent('koma-open-sangria'));
+                    }}
+                    className="w-full flex items-center justify-between p-2.5 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] rounded-xl text-xs text-white transition-all cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 group-hover:bg-rose-500/20">
+                        <ArrowUpRight size={14} />
+                      </div>
+                      <span className="font-semibold text-xs">Sangria de Segurança</span>
+                    </div>
+                    <span className="text-[9px] text-rose-400 font-mono font-bold">- Retirada</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsSidebarOpen(false);
+                      window.dispatchEvent(new CustomEvent('koma-sync-all'));
+                    }}
+                    className="w-full flex items-center justify-between p-2.5 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] rounded-xl text-xs text-white transition-all cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400 group-hover:bg-blue-500/20">
+                        <RefreshCw size={14} />
+                      </div>
+                      <span className="font-semibold text-xs">Sincronizar Dados</span>
+                    </div>
+                    <span className="text-[9px] text-blue-400 font-mono font-bold">Atualizar</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* SECTION 3: EXIBIÇÃO & PREFERÊNCIAS */}
+              <div className="space-y-2.5">
+                <h3 className={clsx('text-[10px]', 'uppercase', 'tracking-wider', 'font-bold', 'text-emerald-400', 'font-sans')}>Exibição e Preferências</h3>
+                <div className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-2xl', 'p-3.5', 'space-y-2.5')}>
+                  <label className={clsx('flex', 'items-center', 'justify-between', 'text-xs', 'text-[#FAF7F2]', 'cursor-pointer', 'p-1', 'rounded', 'hover:bg-[#27272A]/40')}>
                     <span>Exibir Imagens dos Pratos</span>
                     <input
                       id="sidebar-toggle-images"
@@ -1919,7 +1943,7 @@ export default function App() {
                     />
                   </label>
 
-                  <label className={clsx('flex', 'items-center', 'justify-between', 'text-xs', 'text-[#FAF7F2]', 'cursor-pointer', 'p-1.5', 'rounded', 'hover:bg-[#27272A]/40')}>
+                  <label className={clsx('flex', 'items-center', 'justify-between', 'text-xs', 'text-[#FAF7F2]', 'cursor-pointer', 'p-1', 'rounded', 'hover:bg-[#27272A]/40')}>
                     <span>Exibir Descrição dos Pratos</span>
                     <input
                       id="sidebar-toggle-descriptions"
@@ -1929,32 +1953,12 @@ export default function App() {
                       className={clsx('rounded', 'border-[#27272A]', 'text-emerald-500', 'focus:ring-emerald-500', 'h-4', 'w-4', 'bg-[#121214]')}
                     />
                   </label>
-
-                  {/* Tamanho da Fonte */}
-                  <div className={clsx('border-t', 'pt-2.5', 'mt-1', 'border-[#27272A]/60')}>
-                    <span className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'block', 'mb-1.5', 'uppercase', 'tracking-wider')}>Tamanho da Fonte</span>
-                    <div className={clsx('grid', 'grid-cols-3', 'gap-1', 'bg-[#121214]', 'p-1', 'rounded-xl', 'border', 'border-[#27272A]')}>
-                      {(['padrao', 'grande', 'gigante'] as const).map((sz) => (
-                        <button
-                          key={sz}
-                          type="button"
-                          onClick={() => changeFontSize(sz)}
-                          className={`py-1 rounded-lg text-[9px] font-bold uppercase transition-all cursor-pointer ${fontSize === sz
-                            ? 'bg-emerald-500 text-[#121214]'
-                            : 'text-gray-400 hover:text-white'
-                            }`}
-                        >
-                          {sz === 'padrao' ? 'Padrão' : sz === 'grande' ? 'Grande' : 'Gigante'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
                 </div>
               </div>
 
             </div>
 
-            <div className={clsx('pt-6', 'border-t', 'border-[#27272A]', 'text-center', 'text-[10px]', 'text-[#71717A]', 'font-sans')}>
+            <div className={clsx('pt-4', 'border-t', 'border-[#27272A]', 'text-center', 'text-[10px]', 'text-[#71717A]', 'font-sans')}>
               <p>{restaurantName}</p>
               <p className={clsx('mt-0.5', 'font-mono')}>v3.5 • Dark Engine</p>
             </div>
@@ -1964,12 +1968,10 @@ export default function App() {
 
       {/* MAIN CONTAINER */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-4 sm:space-y-7">
-
-        {/* VIEW 1: COZINHA (KITCHEN QUEUE) */}
         {activeRole === 'cozinha' ? (
           <KitchenPanel
             orders={orders}
-            onFinishPreparation={handleFinishPreparation}
+            onFinishPreparation={() => {}}
             currentTime={currentTime}
           />
         ) : activeRole === 'caixa' ? (
@@ -1978,11 +1980,6 @@ export default function App() {
             onRefreshOrders={fetchOrdersFromAPI}
             apiBaseUrl={API_BASE_URL}
             authHeaders={getAuthHeaders()}
-            activeWaiterNome={activeWaiterNome}
-            salonTables={salonTables}
-            onCreateMesa={handleCreateMesa}
-            onUpdateMesa={handleUpdateMesa}
-            onDeleteMesa={handleDeleteMesa}
             pagamentosPendentes={pagamentosPendentes}
             onRefreshPagamentosPendentes={fetchPagamentosPendentes}
             isWsConnected={isWsConnected}
