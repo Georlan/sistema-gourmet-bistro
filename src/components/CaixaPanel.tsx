@@ -818,15 +818,20 @@ export function CaixaPanel({
       fetchCategorias();
       if (onRefreshOrders) onRefreshOrders();
     };
+    const handleOpenImpressoras = () => {
+      setActiveTab('impressao_salao');
+    };
 
     window.addEventListener('koma-open-sangria', handleOpenSangria);
     window.addEventListener('koma-open-suprimento', handleOpenSuprimento);
     window.addEventListener('koma-sync-all', handleSyncAll);
+    window.addEventListener('koma-open-impressoras', handleOpenImpressoras);
 
     return () => {
       window.removeEventListener('koma-open-sangria', handleOpenSangria);
       window.removeEventListener('koma-open-suprimento', handleOpenSuprimento);
       window.removeEventListener('koma-sync-all', handleSyncAll);
+      window.removeEventListener('koma-open-impressoras', handleOpenImpressoras);
     };
   }, [onRefreshOrders]);
 

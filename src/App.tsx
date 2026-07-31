@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Menu, X, User, Wifi, WifiOff, SlidersHorizontal, ArrowDownRight, ArrowUpRight, RefreshCw, Bell } from 'lucide-react';
+import { Menu, X, User, Wifi, WifiOff, SlidersHorizontal, ArrowDownRight, ArrowUpRight, RefreshCw, Bell, Printer, TrendingUp, Utensils, CheckCircle2, UserCheck, UserX, ShoppingBag } from 'lucide-react';
 import { Table, Order, DraftItem, AppSettings, AppRole, Product } from './types';
 import { TABLES, WAITERS, RESTAURANT_CONFIG, PRODUCTS } from './data';
 import { getTableTotal } from './domain';
@@ -109,6 +109,7 @@ export default function App() {
   const [restauranteConfig, setRestauranteConfig] = useState<any>(null);
   const [pagamentosPendentes, setPagamentosPendentes] = useState<any[]>([]);
   const [isWsConnected, setIsWsConnected] = useState<boolean>(false);
+  const [waiterAvailable, setWaiterAvailable] = useState<boolean>(true);
 
   const printPairingStartedRef = useRef(false);
 
@@ -1845,157 +1846,284 @@ export default function App() {
                 </button>
               </div>
 
-              {portal === 'garcom' ? (
-                <>
-                  {/* GARÇOM - MINHA CONTA & SESSÃO */}
-                  <div className="space-y-2.5">
-                    <h3 className="text-[10px] uppercase tracking-wider font-bold text-emerald-400 font-sans">Garçom em Atendimento</h3>
-                    <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-3.5 space-y-3">
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center font-bold">
-                          {activeWaiter.nome ? activeWaiter.nome[0] : 'G'}
+              {/* Calculate real-time metrics for drawer dashboards */}
+              {(() => {
+                const mesasOcupadasCount = salonTables.filter((t: any) => t.status === 'ocupada' || t.status === 'occupied').length;
+                const mesasLivresCount = salonTables.filter((t: any) => t.status === 'livre' || t.status === 'free' || !t.status).length;
+                const pratosProntosCount = orders.reduce((acc, o: any) => {
+                  const prontos = (o.items || []).filter((i: any) => i.status === 'pronto' || i.status === 'READY');
+                  return acc + prontos.length;
+                }, 0);
+
+                const deliveryPendentesCount = orders.filter((o: any) =>
+                  (o.tipo === 'DELIVERY' || o.tipo === 'BALCAO') &&
+                  (o.status === 'NOVO' || o.status === 'PENDENTE' || o.status === 'AGUARDANDO_ACEITE')
+                ).length;
+
+                const totalVendasTurno = orders.reduce((acc: number, o: any) => {
+                  return acc + (parseFloat(o.total) || parseFloat(o.valor_total) || 0);
+                }, 0);
+
+                const totalComandasAbertas = orders.filter((o: any) => o.status === 'ABERTA' || o.status === 'EM_ANDAMENTO' || o.status === 'OPEN').length;
+
+                return portal === 'garcom' ? (
+                  <>
+                    {/* GARÇOM - MINHA CONTA & DISPONIBILIDADE */}
+                    <div className="space-y-2.5">
+                      <h3 className="text-[10px] uppercase tracking-wider font-bold text-emerald-400 font-sans">Garçom em Atendimento</h3>
+                      <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-3.5 space-y-3">
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center font-bold">
+                            {activeWaiter.nome ? activeWaiter.nome[0] : 'G'}
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-bold text-white">{activeWaiter.nome || 'Garçom'}</h4>
+                            <p className="text-[10px] text-gray-400 font-sans">Atendimento • Salão Principal</p>
+                          </div>
                         </div>
-                        <div>
-                          <h4 className="text-sm font-bold text-white">{activeWaiter.nome || 'Garçom'}</h4>
-                          <p className="text-[10px] text-gray-400 font-mono">ID: {activeWaiter.id || 'W-01'} • Salão</p>
+
+                        {/* Disponibilidade Toggle */}
+                        <button
+                          type="button"
+                          onClick={() => setWaiterAvailable(!waiterAvailable)}
+                          className={clsx(
+                            'w-full py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-between border',
+                            waiterAvailable
+                              ? 'bg-emerald-950/30 border-emerald-800/40 text-emerald-400'
+                              : 'bg-amber-950/30 border-amber-800/40 text-amber-400'
+                          )}
+                        >
+                          <div className="flex items-center gap-2">
+                            {waiterAvailable ? <UserCheck size={14} /> : <UserX size={14} />}
+                            <span>{waiterAvailable ? 'Disponível no Salão' : 'Ocupado / Em Atendimento'}</span>
+                          </div>
+                          <span className={clsx('w-2 h-2 rounded-full animate-pulse', waiterAvailable ? 'bg-emerald-400' : 'bg-amber-400')} />
+                        </button>
+
+                        <button
+                          onClick={handleLogout}
+                          className="w-full py-2 bg-red-950/15 hover:bg-red-950/30 text-rose-400 hover:text-rose-300 border border-red-900/40 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                        >
+                          Trocar Garçom / Sair
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* GARÇOM - RESUMO DO SALÃO EM TEMPO REAL */}
+                    <div className="space-y-2.5">
+                      <h3 className="text-[10px] uppercase tracking-wider font-bold text-emerald-400 font-sans">Status do Salão ao Vivo</h3>
+                      <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-3 space-y-2">
+                        <div className="flex items-center justify-between p-2.5 bg-[#121214] border border-[#27272A] rounded-xl text-xs">
+                          <div className="flex items-center gap-2">
+                            <Utensils size={14} className="text-emerald-400" />
+                            <span className="text-gray-300 font-medium">Mesas Salão</span>
+                          </div>
+                          <span className="font-mono font-bold text-white">
+                            <strong className="text-emerald-400">{mesasOcupadasCount}</strong> ocupadas / {mesasLivresCount} livres
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between p-2.5 bg-[#121214] border border-[#27272A] rounded-xl text-xs">
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 size={14} className={pratosProntosCount > 0 ? "text-amber-400 animate-bounce" : "text-gray-500"} />
+                            <span className="text-gray-300 font-medium">Pratos Prontos</span>
+                          </div>
+                          <span className={clsx('font-mono font-bold px-2 py-0.5 rounded-md text-[10px]', pratosProntosCount > 0 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-gray-400 bg-zinc-800')}>
+                            {pratosProntosCount} p/ servir
+                          </span>
                         </div>
                       </div>
-
-                      <button
-                        onClick={handleLogout}
-                        className="w-full py-2 bg-red-950/15 hover:bg-red-950/30 text-rose-400 hover:text-rose-300 border border-red-900/40 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                      >
-                        Trocar Garçom / Sair
-                      </button>
                     </div>
-                  </div>
 
-                  {/* GARÇOM - ATALHOS RÁPIDOS DO ATENDIMENTO (FOCO EM VELOCIDADE) */}
-                  <div className="space-y-2.5">
-                    <h3 className="text-[10px] uppercase tracking-wider font-bold text-emerald-400 font-sans">Atalhos de Atendimento</h3>
-                    <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-3 space-y-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsSidebarOpen(false);
-                          fetchOrdersFromAPI();
-                        }}
-                        className="w-full flex items-center justify-between p-2.5 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] rounded-xl text-xs text-white transition-all cursor-pointer group"
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400 group-hover:bg-blue-500/20">
-                            <RefreshCw size={14} />
+                    {/* GARÇOM - ATALHOS DE ATENDIMENTO */}
+                    <div className="space-y-2.5">
+                      <h3 className="text-[10px] uppercase tracking-wider font-bold text-emerald-400 font-sans">Atalhos de Atendimento</h3>
+                      <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-3 space-y-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsSidebarOpen(false);
+                            fetchOrdersFromAPI();
+                          }}
+                          className="w-full flex items-center justify-between p-2.5 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] rounded-xl text-xs text-white transition-all cursor-pointer group"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400 group-hover:bg-blue-500/20">
+                              <RefreshCw size={14} />
+                            </div>
+                            <span className="font-semibold text-xs">Sincronizar Salão</span>
                           </div>
-                          <span className="font-semibold text-xs">Atualizar Mesas do Salão</span>
-                        </div>
-                        <span className="text-[9px] text-blue-400 font-mono font-bold">Ao Vivo</span>
-                      </button>
+                          <span className="text-[9px] text-blue-400 font-mono font-bold">Ao Vivo</span>
+                        </button>
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsSidebarOpen(false);
-                          window.dispatchEvent(new CustomEvent('koma-notify-caixa'));
-                        }}
-                        className="w-full flex items-center justify-between p-2.5 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] rounded-xl text-xs text-white transition-all cursor-pointer group"
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 group-hover:bg-amber-500/20">
-                            <Bell size={14} />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsSidebarOpen(false);
+                            window.dispatchEvent(new CustomEvent('koma-notify-caixa'));
+                          }}
+                          className="w-full flex items-center justify-between p-2.5 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] rounded-xl text-xs text-white transition-all cursor-pointer group"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 group-hover:bg-amber-500/20">
+                              <Bell size={14} />
+                            </div>
+                            <span className="font-semibold text-xs">Chamar Suporte do Caixa</span>
                           </div>
-                          <span className="font-semibold text-xs">Chamar Suporte do Caixa</span>
-                        </div>
-                        <span className="text-[9px] text-amber-400 font-mono font-bold">Ajuda</span>
-                      </button>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <>
-                  {/* CAIXA - OPERADOR & TURNO */}
-                  <div className="space-y-2.5">
-                    <h3 className="text-[10px] uppercase tracking-wider font-bold text-emerald-400 font-sans">Operador do Caixa</h3>
-                    <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-3.5 space-y-3">
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center font-bold">
-                          {activeWaiter.nome ? activeWaiter.nome[0] : 'C'}
-                        </div>
-                        <div>
-                          <h4 className="text-sm font-bold text-white">{activeWaiter.nome || 'Caixa'}</h4>
-                          <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                            <span className="text-[10px] text-emerald-400 font-semibold">Caixa Operacional Ativo</span>
-                          </div>
-                        </div>
+                          <span className="text-[9px] text-amber-400 font-mono font-bold">Ajuda</span>
+                        </button>
                       </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* CAIXA - OPERADOR & TURNO */}
+                    <div className="space-y-2.5">
+                      <h3 className="text-[10px] uppercase tracking-wider font-bold text-emerald-400 font-sans">Operador do Caixa</h3>
+                      <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-3.5 space-y-3">
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center font-bold">
+                            {activeWaiter.nome ? activeWaiter.nome[0] : 'C'}
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-bold text-white">{activeWaiter.nome || 'Caixa'}</h4>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                              <span className="text-[10px] text-emerald-400 font-semibold">Caixa Operacional Ativo</span>
+                            </div>
+                          </div>
+                        </div>
 
+                        <button
+                          onClick={handleLogout}
+                          className="w-full py-2.5 bg-red-950/10 hover:bg-red-950/20 text-rose-400 hover:text-rose-300 border border-red-900/35 hover:border-red-900/50 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2"
+                        >
+                          Logout / Sair
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* CAIXA - AGENTE DE IMPRESSÃO & MONITOR (PRIORIDADE #1) */}
+                    <div className="space-y-2.5">
+                      <h3 className="text-[10px] uppercase tracking-wider font-bold text-emerald-400 font-sans">Sistema de Impressão</h3>
                       <button
-                        onClick={handleLogout}
-                        className="w-full py-2.5 bg-red-950/10 hover:bg-red-950/20 text-rose-400 hover:text-rose-300 border border-red-900/35 hover:border-red-900/50 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2"
+                        type="button"
+                        onClick={() => {
+                          setIsSidebarOpen(false);
+                          window.dispatchEvent(new CustomEvent('koma-open-impressoras'));
+                        }}
+                        className="w-full flex items-center justify-between p-3 bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] rounded-2xl transition-all cursor-pointer group text-left"
                       >
-                        Logout / Sair
+                        <div className="flex items-center gap-2.5">
+                          <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 group-hover:bg-emerald-500/20">
+                            <Printer size={16} />
+                          </div>
+                          <div>
+                            <h4 className="text-xs font-bold text-white">Agente de Impressão</h4>
+                            <p className="text-[9px] text-emerald-400 font-medium">Servidor Online • Pronto</p>
+                          </div>
+                        </div>
+                        <span className="text-[9px] text-gray-400 font-mono font-bold bg-[#121214] px-2 py-1 rounded-lg border border-[#27272A]">0 Falhas</span>
                       </button>
                     </div>
-                  </div>
 
-                  {/* CAIXA - ATALHOS RÁPIDOS DE TESOURARIA */}
-                  <div className="space-y-2.5">
-                    <h3 className="text-[10px] uppercase tracking-wider font-bold text-emerald-400 font-sans">Atalhos Rápidos de Tesouraria</h3>
-                    <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-3 space-y-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsSidebarOpen(false);
-                          window.dispatchEvent(new CustomEvent('koma-open-suprimento'));
-                        }}
-                        className="w-full flex items-center justify-between p-2.5 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] rounded-xl text-xs text-white transition-all cursor-pointer group"
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 group-hover:bg-emerald-500/20">
-                            <ArrowDownRight size={14} />
+                    {/* CAIXA - RESUMO DO TURNO EM TEMPO REAL (PRIORIDADE #2) */}
+                    <div className="space-y-2.5">
+                      <h3 className="text-[10px] uppercase tracking-wider font-bold text-emerald-400 font-sans">Resumo do Turno ao Vivo</h3>
+                      <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-3 space-y-2">
+                        <div className="flex items-center justify-between p-2 bg-[#121214] border border-[#27272A] rounded-xl text-xs">
+                          <div className="flex items-center gap-2">
+                            <TrendingUp size={13} className="text-emerald-400" />
+                            <span className="text-gray-300 font-medium text-[11px]">Vendas do Turno</span>
                           </div>
-                          <span className="font-semibold text-xs">Suprimento de Caixa</span>
+                          <span className="font-mono font-bold text-emerald-400">
+                            R$ {totalVendasTurno.toFixed(2)}
+                          </span>
                         </div>
-                        <span className="text-[9px] text-emerald-400 font-mono font-bold">+ Troco</span>
-                      </button>
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsSidebarOpen(false);
-                          window.dispatchEvent(new CustomEvent('koma-open-sangria'));
-                        }}
-                        className="w-full flex items-center justify-between p-2.5 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] rounded-xl text-xs text-white transition-all cursor-pointer group"
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <div className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 group-hover:bg-rose-500/20">
-                            <ArrowUpRight size={14} />
+                        <div className="flex items-center justify-between p-2 bg-[#121214] border border-[#27272A] rounded-xl text-xs">
+                          <div className="flex items-center gap-2">
+                            <Utensils size={13} className="text-blue-400" />
+                            <span className="text-gray-300 font-medium text-[11px]">Comandas Abertas</span>
                           </div>
-                          <span className="font-semibold text-xs">Sangria de Segurança</span>
+                          <span className="font-mono font-bold text-white">
+                            {totalComandasAbertas} ativas
+                          </span>
                         </div>
-                        <span className="text-[9px] text-rose-400 font-mono font-bold">- Retirada</span>
-                      </button>
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsSidebarOpen(false);
-                          window.dispatchEvent(new CustomEvent('koma-sync-all'));
-                        }}
-                        className="w-full flex items-center justify-between p-2.5 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] rounded-xl text-xs text-white transition-all cursor-pointer group"
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400 group-hover:bg-blue-500/20">
-                            <RefreshCw size={14} />
+                        {deliveryPendentesCount > 0 && (
+                          <div className="flex items-center justify-between p-2 bg-amber-950/20 border border-amber-800/30 rounded-xl text-xs">
+                            <div className="flex items-center gap-2">
+                              <ShoppingBag size={13} className="text-amber-400 animate-pulse" />
+                              <span className="text-amber-300 font-medium text-[11px]">Delivery Pendente</span>
+                            </div>
+                            <span className="font-mono font-bold text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded text-[10px]">
+                              {deliveryPendentesCount} p/ aceitar
+                            </span>
                           </div>
-                          <span className="font-semibold text-xs">Sincronizar Dados</span>
-                        </div>
-                        <span className="text-[9px] text-blue-400 font-mono font-bold">Atualizar</span>
-                      </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </>
-              )}
+
+                    {/* CAIXA - ATALHOS RÁPIDOS DE TESOURARIA */}
+                    <div className="space-y-2.5">
+                      <h3 className="text-[10px] uppercase tracking-wider font-bold text-emerald-400 font-sans">Operações de Tesouraria</h3>
+                      <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-3 space-y-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsSidebarOpen(false);
+                            window.dispatchEvent(new CustomEvent('koma-open-suprimento'));
+                          }}
+                          className="w-full flex items-center justify-between p-2.5 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] rounded-xl text-xs text-white transition-all cursor-pointer group"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 group-hover:bg-emerald-500/20">
+                              <ArrowDownRight size={14} />
+                            </div>
+                            <span className="font-semibold text-xs">Suprimento de Caixa</span>
+                          </div>
+                          <span className="text-[9px] text-emerald-400 font-mono font-bold">+ Troco</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsSidebarOpen(false);
+                            window.dispatchEvent(new CustomEvent('koma-open-sangria'));
+                          }}
+                          className="w-full flex items-center justify-between p-2.5 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] rounded-xl text-xs text-white transition-all cursor-pointer group"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <div className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 group-hover:bg-rose-500/20">
+                              <ArrowUpRight size={14} />
+                            </div>
+                            <span className="font-semibold text-xs">Sangria de Segurança</span>
+                          </div>
+                          <span className="text-[9px] text-rose-400 font-mono font-bold">- Retirada</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsSidebarOpen(false);
+                            window.dispatchEvent(new CustomEvent('koma-sync-all'));
+                          }}
+                          className="w-full flex items-center justify-between p-2.5 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] rounded-xl text-xs text-white transition-all cursor-pointer group"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400 group-hover:bg-blue-500/20">
+                              <RefreshCw size={14} />
+                            </div>
+                            <span className="font-semibold text-xs">Sincronizar Dados</span>
+                          </div>
+                          <span className="text-[9px] text-blue-400 font-mono font-bold">Atualizar</span>
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
 
               {/* SECTION 3: EXIBIÇÃO & PREFERÊNCIAS */}
               <div className="space-y-2.5">
