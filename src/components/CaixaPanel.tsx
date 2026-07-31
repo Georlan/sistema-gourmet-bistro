@@ -8,7 +8,7 @@ import {
   MapPin, ClipboardList, BarChart2, Package, Shield, ShieldCheck, Star,
   MessageSquare, Send, Printer, Cpu, HelpCircle, Smartphone,
   Gift, Tag, TrendingUp, Heart, Globe, Menu
-, Upload} from 'lucide-react';
+, Upload, Copy} from 'lucide-react';
 import { Order, OrderItem, CaixaTurno, CaixaMovimentacao, Pagamento, Table, Product, EntradaEstoque, MovimentacaoEstoque, SessaoContagemEstoque, CaixaTurnoResumo, FechamentoCaixaResult } from '../types';
 import { EstoqueEntradasTab } from './estoque/EstoqueEntradasTab';
 import { EntradaManualModal } from './estoque/EntradaManualModal';
@@ -2797,7 +2797,12 @@ export function CaixaPanel({
                               {tableOrdersInProduction.length + simulatedOrders.filter(o => ['pendente', 'analise', 'producao', 'pronto', 'transito'].includes(o.status)).length + tableOrdersReady.length}
                             </span>
                           )}
-                          {isLocked && <Lock size={10} className="text-amber-500/70" />}
+                          {isLocked && (
+                            <span className="text-[7.5px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-1">
+                              <Lock size={9} />
+                              <span>Upgrade</span>
+                            </span>
+                          )}
                         </button>
                       );
                     })}
@@ -5846,10 +5851,27 @@ export function CaixaPanel({
                           </div>
                           <div className={clsx('flex', 'items-center', 'gap-3', 'shrink-0')}>
                             <span className={clsx('font-mono', 'font-bold', 'text-[#10b981]', 'text-xs')}>R$ {prod.preco.toFixed(2)}</span>
-                            <span className={`text-[8px] font-bold px-2 py-0.5 rounded-full ${(prod as any).ativo !== false ? 'bg-emerald-600/15 text-emerald-400' : 'bg-red-900/20 text-red-400'}`}>
-                              {(prod as any).ativo !== false ? 'Ativo' : 'Esgotado'}
+                            <span title="Item publicado no catálogo do cardápio" className={`text-[8px] font-bold px-2 py-0.5 rounded-full ${(prod as any).ativo !== false ? 'bg-emerald-600/15 text-emerald-400 border border-emerald-500/20' : 'bg-zinc-800 text-zinc-400 border border-zinc-700'}`}>
+                              {(prod as any).ativo !== false ? '🟢 No Cardápio' : '🔴 Oculto'}
                             </span>
                             <div className="flex gap-1 pl-2">
+                              <button
+                                onClick={() => {
+                                  setEditingProduct(null);
+                                  setProdFormId('');
+                                  setProdFormNome(`${prod.nome} (Cópia)`);
+                                  setProdFormPreco(prod.preco.toString());
+                                  setProdFormCategoriaId((prod as any).categoria_id || '');
+                                  setProdFormDescricao((prod as any).descricao || '');
+                                  setProdFormImagem((prod as any).imagem || '');
+                                  setProdFormAtivo(true);
+                                  setShowProductModal(true);
+                                }}
+                                className="p-1 hover:bg-[#27272A] rounded text-emerald-400 hover:text-emerald-300 transition-all cursor-pointer border border-transparent"
+                                title="Duplicar Produto (Criar variação)"
+                              >
+                                <Copy size={11} />
+                              </button>
                               <button
                                 onClick={() => {
                                   setEditingProduct(prod);
@@ -5995,21 +6017,6 @@ export function CaixaPanel({
                   )}
                 </div>
 
-                {/* Atalhos Rápidos em Massa */}
-                {apiCategorias.length > 0 && (
-                  <div className="space-y-2 bg-[#121214]/40 p-3 rounded-xl border border-[#27272A]/50 text-left">
-                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Atalhos de Pausa em Lote:</span>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[8px] font-bold">
-                      {apiCategorias.map(catObj => (
-                        <div key={catObj.id} className="grid grid-cols-2 gap-1.5">
-                          <button type="button" onClick={() => handleBatchAvailability(catObj.id, false)} className="px-2 py-1.5 bg-red-950/30 hover:bg-red-900/40 text-red-400 hover:text-white rounded-lg border border-red-900/50 cursor-pointer transition-colors truncate">Esgotar {catObj.nome}</button>
-                          <button type="button" onClick={() => handleBatchAvailability(catObj.id, true)} className="px-2 py-1.5 bg-emerald-950/30 hover:bg-emerald-900/40 text-emerald-400 hover:text-white rounded-lg border border-emerald-900/50 cursor-pointer transition-colors truncate">Liberar {catObj.nome}</button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 {/* Dynamic Category Grouping */}
                 {apiCategorias.map((catObj) => {
                   const prods = filtered
@@ -6149,6 +6156,15 @@ export function CaixaPanel({
                     className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm"
                   >
                     + Novo Insumo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveSubTab('entradas')}
+                    className="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-emerald-400 border border-emerald-500/30 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm flex items-center gap-1"
+                    title="Importar Nota Fiscal Eletrônica XML"
+                  >
+                    <Upload size={11} />
+                    <span>Importar NF-e (XML)</span>
                   </button>
                 </div>
                 <div className={clsx('overflow-hidden', 'border', 'border-[#27272A]/40', 'rounded-2xl')}>
