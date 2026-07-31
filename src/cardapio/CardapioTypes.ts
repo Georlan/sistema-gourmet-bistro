@@ -23,6 +23,7 @@ export interface Product {
   description: string;
   price: number;
   image: string;
+  imagesGallery?: string[];
   category: string;
   modifiers?: ProductModifier[];
   isAvailable?: boolean;

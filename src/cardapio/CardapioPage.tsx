@@ -242,6 +242,9 @@ export default function CardapioPage() {
           description: String(product.descricao || ""),
           price: Number(product.preco || 0),
           image: getProductImageUrl(String(product.imagem_url || "")),
+          imagesGallery: Array.isArray(product.imagens_galeria) && product.imagens_galeria.length > 0
+            ? product.imagens_galeria.map((imgUrl: string) => getProductImageUrl(imgUrl))
+            : [getProductImageUrl(String(product.imagem_url || ""))],
           category: categoryMap[String(product.categoria_id)] || "Destaques",
           modifiers: [],
           isAvailable: true,

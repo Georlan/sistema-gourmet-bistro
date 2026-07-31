@@ -457,6 +457,8 @@ def importar_cardapio(
                 existente.descricao = item.descricao
             if item.imagem is not None:
                 existente.imagem = item.imagem
+            if item.imagens_galeria is not None:
+                existente.imagens_galeria = item.imagens_galeria
             # Ativar o produto novamente
             existente.ativo = item.ativo if item.ativo is not None else True
             imported_products.append(existente)
@@ -468,6 +470,7 @@ def importar_cardapio(
                 categoria_id=item.categoria_id,
                 descricao=item.descricao or "",
                 imagem=item.imagem or "",
+                imagens_galeria=item.imagens_galeria or [],
                 ativo=item.ativo if item.ativo is not None else True
             )
             db.add(novo)

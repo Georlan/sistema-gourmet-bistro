@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Product, ProductModifier, ProductOption, getProductImageUrl } from "../CardapioTypes";
-import { X, Plus, Minus, Check, Share2 } from "lucide-react";
+import { X, Plus, Minus, Check, Share2, ChevronLeft, ChevronRight } from "lucide-react";
 
 
 interface CardapioProductModalProps {
@@ -29,6 +29,11 @@ export default function CardapioProductModal({
   const [notes, setNotes] = useState("");
   const [totalPrice, setTotalPrice] = useState(product.price);
   const [showToast, setShowToast] = useState(false);
+
+  const galleryImages = (product.imagesGallery && product.imagesGallery.length > 0)
+    ? product.imagesGallery.slice(0, 3)
+    : [product.image];
+  const [currentImgIndex, setCurrentImgIndex] = useState(0);
 
   const handleShare = async () => {
     const shareData = {
@@ -146,12 +151,12 @@ export default function CardapioProductModal({
       {/* Modal Card wrapper */}
       <div className="relative flex max-h-[92vh] w-full flex-col rounded-t-3xl bg-card-app border border-slate-500/10 shadow-2xl sm:max-w-md sm:rounded-3xl overflow-hidden animate-slide-up">
         
-        {/* Banner image and close button */}
-        <div className="relative h-48 w-full shrink-0">
+        {/* Banner image carousel and close button */}
+        <div className="relative h-48 w-full shrink-0 select-none">
           <img
-            src={getProductImageUrl(product.image)}
+            src={getProductImageUrl(galleryImages[currentImgIndex] || product.image)}
             alt={product.name}
-            className="h-full w-full object-cover"
+            className="h-full w-full object-cover transition-all duration-300"
             crossOrigin="anonymous"
             referrerPolicy="no-referrer"
             onError={(e) => {
@@ -160,23 +165,68 @@ export default function CardapioProductModal({
               target.src = "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&w=500&q=80";
             }}
           />
-          <div className="absolute inset-0 bg-linear-to-b from-black/40 via-transparent to-black/10" />
+          <div className="absolute inset-0 bg-linear-to-b from-black/40 via-transparent to-black/20" />
           
+          {/* Carousel Arrows */}
+          {galleryImages.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCurrentImgIndex((prev) => (prev > 0 ? prev - 1 : galleryImages.length - 1));
+                }}
+                className="absolute left-3 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 transition cursor-pointer"
+                title="Foto anterior"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCurrentImgIndex((prev) => (prev < galleryImages.length - 1 ? prev + 1 : 0));
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 transition cursor-pointer"
+                title="Próxima foto"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+
+              {/* Indicator Dots */}
+              <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-black/40 px-2.5 py-1 rounded-full backdrop-blur-xs">
+                {galleryImages.map((_, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCurrentImgIndex(idx);
+                    }}
+                    className={`h-1.5 rounded-full transition-all cursor-pointer ${
+                      idx === currentImgIndex ? "w-4 bg-primary" : "w-1.5 bg-white/60 hover:bg-white"
+                    }`}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+
           <button
             type="button"
             onClick={handleShare}
-            className="absolute top-3 right-16 flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 transition cursor-pointer"
+            className="absolute top-3 right-16 flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 transition cursor-pointer"
             title="Compartilhar Produto"
             aria-label="Compartilhar Produto"
             id="btn-share-product"
           >
-            <Share2 className="h-4.5 w-4.5" />
+            <Share2 className="h-4 w-4" />
           </button>
 
           <button
             type="button"
             onClick={onClose}
-            className="absolute top-3 right-3 flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 transition cursor-pointer"
+            className="absolute top-3 right-3 flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 transition cursor-pointer"
             aria-label="Fechar modal de produto"
             id="btn-close-modal"
           >

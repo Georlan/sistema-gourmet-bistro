@@ -88,6 +88,7 @@ class ProdutoBase(BaseModel):
     preco: float
     descricao: str = ""
     imagem: str = ""
+    imagens_galeria: List[str] = Field(default_factory=list)
     ativo: bool = True
 
 class ProdutoCreate(ProdutoBase):
@@ -99,6 +100,7 @@ class ProdutoUpdate(BaseModel):
     preco: Optional[float] = None
     descricao: Optional[str] = None
     imagem: Optional[str] = None
+    imagens_galeria: Optional[List[str]] = None
     ativo: Optional[bool] = None
 
 class ProdutoResponse(ProdutoBase):

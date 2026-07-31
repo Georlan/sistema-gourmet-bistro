@@ -172,6 +172,7 @@ class Produto(Base):
     preco = Column(Float, nullable=False)
     descricao = Column(String, default="")
     imagem = Column(String, default="")
+    imagens_galeria = Column(JSON, default=list)  # Up to 3 product gallery URLs
     ativo = Column(Boolean, default=True)  # Toggle product availability
     
     # Relationships

@@ -241,6 +241,7 @@ def _public_product_payload(product: Produto) -> dict:
         "descricao": product.descricao or "",
         "preco": float(product.preco) if product.preco is not None else 0.0,
         "imagem_url": product.imagem or "",
+        "imagens_galeria": product.imagens_galeria or [],
         "categoria_id": product.categoria_id,
     }
 

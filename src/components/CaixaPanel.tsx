@@ -650,6 +650,8 @@ export function CaixaPanel({
   const [prodFormCategoriaId, setProdFormCategoriaId] = useState('');
   const [prodFormDescricao, setProdFormDescricao] = useState('');
   const [prodFormImagem, setProdFormImagem] = useState('');
+  const [prodFormImagem2, setProdFormImagem2] = useState('');
+  const [prodFormImagem3, setProdFormImagem3] = useState('');
   const [prodFormAtivo, setProdFormAtivo] = useState(true);
 
   // Insumos manual management states
@@ -5642,6 +5644,8 @@ export function CaixaPanel({
                       setProdFormCategoriaId(apiCategorias[0]?.id || '');
                       setProdFormDescricao('');
                       setProdFormImagem('');
+                      setProdFormImagem2('');
+                      setProdFormImagem3('');
                       setProdFormAtivo(true);
                       setShowProductModal(true);
                     }}
@@ -5762,7 +5766,10 @@ export function CaixaPanel({
                                   setProdFormPreco(prod.preco.toString());
                                   setProdFormCategoriaId((prod as any).categoria_id || '');
                                   setProdFormDescricao((prod as any).descricao || '');
-                                  setProdFormImagem((prod as any).imagem || '');
+                                  const galeriaDup = (prod as any).imagens_galeria || [];
+                                  setProdFormImagem((prod as any).imagem || galeriaDup[0] || '');
+                                  setProdFormImagem2(galeriaDup[1] || '');
+                                  setProdFormImagem3(galeriaDup[2] || '');
                                   setProdFormAtivo(true);
                                   setShowProductModal(true);
                                 }}
@@ -5779,7 +5786,10 @@ export function CaixaPanel({
                                   setProdFormPreco(prod.preco.toString());
                                   setProdFormCategoriaId((prod as any).categoria_id || '');
                                   setProdFormDescricao((prod as any).descricao || '');
-                                  setProdFormImagem((prod as any).imagem || '');
+                                  const galeriaEdit = (prod as any).imagens_galeria || [];
+                                  setProdFormImagem((prod as any).imagem || galeriaEdit[0] || '');
+                                  setProdFormImagem2(galeriaEdit[1] || '');
+                                  setProdFormImagem3(galeriaEdit[2] || '');
                                   setProdFormAtivo((prod as any).ativo !== false);
                                   setShowProductModal(true);
                                 }}
@@ -8107,12 +8117,14 @@ export function CaixaPanel({
                 if (isLoading) return;
                 setIsLoading(true);
                 try {
+                  const galeriaUrls = [prodFormImagem, prodFormImagem2, prodFormImagem3].map(u => u.trim()).filter(Boolean);
                   const payload = {
                     nome: prodFormNome,
                     categoria_id: prodFormCategoriaId,
                     preco: parseFloat(prodFormPreco),
                     descricao: prodFormDescricao,
-                    imagem: prodFormImagem,
+                    imagem: galeriaUrls[0] || prodFormImagem || '',
+                    imagens_galeria: galeriaUrls,
                     ativo: prodFormAtivo
                   };
 
@@ -8226,14 +8238,28 @@ export function CaixaPanel({
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">URL da Imagem:</label>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">URLs das Imagens do Produto (Até 3 fotos):</label>
                 <input
                   type="text"
-                  placeholder="https://exemplo.com/imagem.jpg"
+                  placeholder="Foto 1 (Principal): https://exemplo.com/foto1.jpg"
                   value={prodFormImagem}
                   onChange={(e) => setProdFormImagem(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white text-xs focus:outline-none focus:border-[#10b981]"
+                />
+                <input
+                  type="text"
+                  placeholder="Foto 2 (Opcional): https://exemplo.com/foto2.jpg"
+                  value={prodFormImagem2}
+                  onChange={(e) => setProdFormImagem2(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white text-xs focus:outline-none focus:border-[#10b981]"
+                />
+                <input
+                  type="text"
+                  placeholder="Foto 3 (Opcional): https://exemplo.com/foto3.jpg"
+                  value={prodFormImagem3}
+                  onChange={(e) => setProdFormImagem3(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white text-xs focus:outline-none focus:border-[#10b981]"
                 />
               </div>
 
