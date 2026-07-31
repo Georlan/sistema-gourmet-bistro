@@ -1253,25 +1253,33 @@ export function CaixaPanel({
     }
   };
 
-  // Fetch registered users (waiters CRUD - admin/gerente only)
+  // Fetch registered users (team CRUD)
   const fetchSystemUsers = async () => {
-    const userRole = localStorage.getItem("koma_caixa_role") || localStorage.getItem("koma_user_role") || "";
-    if (userRole !== "admin" && userRole !== "gerente") {
-      return;
-    }
     try {
       const data = await API.getFuncionarios();
-      setSystemUsers(data);
-    } catch (err) {
-      try {
-        const res = await fetch(`${apiBaseUrl}/auth/usuarios`, { headers: authHeaders });
-        if (res.ok) {
-          const data = await res.json();
-          setSystemUsers(data);
-        }
-      } catch (fallbackErr) {
-        // Gracefully catch any network errors
+      if (Array.isArray(data)) {
+        setSystemUsers(data);
+        return;
       }
+    } catch (err) {
+      // API call fallback
+    }
+    try {
+      const res = await fetch(`${apiBaseUrl}/caixa/funcionarios`, { headers: authHeaders });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setSystemUsers(data);
+          return;
+        }
+      }
+      const resAuth = await fetch(`${apiBaseUrl}/auth/usuarios`, { headers: authHeaders });
+      if (resAuth.ok) {
+        const data = await resAuth.json();
+        if (Array.isArray(data)) setSystemUsers(data);
+      }
+    } catch (fallbackErr) {
+      console.error('Error fetching system users:', fallbackErr);
     }
   };
 
@@ -1623,6 +1631,12 @@ export function CaixaPanel({
 
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'permissoes_cargos' || activeSubTab === 'equipe' || activeSubTab === 'pessoas') {
+      fetchSystemUsers();
+    }
+  }, [activeTab, activeSubTab]);
 
   // Caixa API Handlers
   const fetchTurnoResumo = async () => {
