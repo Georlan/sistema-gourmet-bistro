@@ -86,10 +86,24 @@ class ProdutoBase(BaseModel):
     nome: str
     categoria_id: str
     preco: float
-    descricao: str = ""
-    imagem: str = ""
-    imagens_galeria: List[str] = Field(default_factory=list)
+    descricao: Optional[str] = ""
+    imagem: Optional[str] = ""
+    imagens_galeria: Optional[List[str]] = Field(default_factory=list)
     ativo: bool = True
+
+    @field_validator("descricao", "imagem", mode="before")
+    @classmethod
+    def null_to_empty_str(cls, v):
+        if v is None:
+            return ""
+        return v
+
+    @field_validator("imagens_galeria", mode="before")
+    @classmethod
+    def null_to_empty_list(cls, v):
+        if v is None:
+            return []
+        return v
 
 class ProdutoCreate(ProdutoBase):
     pass

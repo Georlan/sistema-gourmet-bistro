@@ -223,3 +223,51 @@ def require_roles(*allowed_roles: str):
         return current_user
 
     return role_checker
+
+
+def create_motoboy_token(motoboy_id: int, restaurante_id: int) -> str:
+    """Cria um token JWT temporário seguro para o PWA do Motoboy com TTL de 4 horas."""
+    expire = datetime.now(timezone.utc) + timedelta(hours=4)
+    to_encode = {
+        "sub": f"motoboy_{motoboy_id}",
+        "motoboy_id": motoboy_id,
+        "restaurante_id": restaurante_id,
+        "type": "motoboy_pwa",
+        "exp": expire
+    }
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+def verify_motoboy_token(token: str) -> dict:
+    """Valida o token temporário do motoboy e retorna o payload com motoboy_id e restaurante_id."""
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token do entregador não fornecido."
+        )
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        if payload.get("type") != "motoboy_pwa":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Tipo de token inválido."
+            )
+        motoboy_id = payload.get("motoboy_id")
+        restaurante_id = payload.get("restaurante_id")
+        if not motoboy_id or not restaurante_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Dados do entregador incompletos no token."
+            )
+        return {"motoboy_id": int(motoboy_id), "restaurante_id": int(restaurante_id)}
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Link do entregador expirou (válido por 4 horas). Solicite um novo link no Caixa."
+        )
+    except jwt.PyJWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Link de entregador inválido."
+        )
+

@@ -94,6 +94,11 @@ export default function CardapioDigital({
       return;
     }
 
+    const savedMesa = localStorage.getItem("koma_mesa_numero");
+    const finalClienteNome = (savedMesa && deliveryMethod !== "delivery")
+      ? `${normalizedName} (Mesa ${savedMesa})`
+      : normalizedName;
+
     const cleanedItems = cart.map((item) => {
       const optionDetails = Object.values(item.selectedOptions)
         .flatMap((options) => options.map((option) => option.name))
@@ -107,7 +112,7 @@ export default function CardapioDigital({
         produto_id: item.product.id,
         quantidade: item.quantity,
         observacao,
-        cliente_nome: normalizedName
+        cliente_nome: finalClienteNome
       };
     });
 
@@ -124,7 +129,7 @@ export default function CardapioDigital({
         body: JSON.stringify({
           restaurante_id: targetRestauranteId,
           itens: cleanedItems,
-          cliente_nome: normalizedName,
+          cliente_nome: finalClienteNome,
           cliente_telefone: normalizedPhone,
           endereco_entrega: deliveryMethod === "delivery" ? normalizedAddress : "",
           taxa_entrega: deliveryMethod === "delivery" ? deliveryFee : 0,

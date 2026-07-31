@@ -1127,6 +1127,62 @@ export function CaixaPanel({
     }
   };
 
+  const handleDespacharWhatsApp = async (order: any, selectedMotoboyId: string) => {
+    if (!selectedMotoboyId) {
+      showToast('Selecione um motoboy para despachar!', 'info');
+      return;
+    }
+    const mb = motoboys.find(m => String(m.id) === String(selectedMotoboyId));
+    if (!mb) {
+      showToast('Motoboy não encontrado.', 'error');
+      return;
+    }
+
+    try {
+      const linkRes = await fetch(`${apiBaseUrl}/comandas/motoboys/${selectedMotoboyId}/gerar-link`, {
+        method: 'POST',
+        headers: authHeaders
+      });
+      let linkPwa = '';
+      if (linkRes.ok) {
+        const linkData = await linkRes.json();
+        linkPwa = `${window.location.origin}${linkData.link}`;
+      } else {
+        linkPwa = `${window.location.origin}/entregador`;
+      }
+
+      const res = await fetch(`${apiBaseUrl}/comandas/${order.id}/despachar?motoboy_id=${selectedMotoboyId}`, {
+        method: 'POST',
+        headers: authHeaders
+      });
+
+      if (res.ok) {
+        showToast('Pedido despachado! Abrindo WhatsApp...', 'success');
+        if (typeof setSelectedKanbanOrder === 'function') setSelectedKanbanOrder(null);
+        if (typeof fetchDeliveryOrders === 'function') fetchDeliveryOrders();
+        if (typeof onRefreshOrders === 'function') onRefreshOrders();
+
+        const mbTel = (mb.telefone || '').replace(/\D/g, '');
+        const msg = `*NOVA ENTREGA - KÔMA* 🛵💨\n\n` +
+          `📦 *Pedido:* #${order.numero_pedido || order.id}\n` +
+          `👤 *Cliente:* ${order.cliente || order.identificador || 'Cliente'}\n` +
+          `📍 *Endereço:* ${order.endereco || order.delivery_endereco || 'Não informado'}\n` +
+          `📞 *Telefone Cliente:* ${order.telefone || order.delivery_telefone || 'Não informado'}\n` +
+          `💰 *Valor a Cobrar:* R$ ${(order.total || 0).toFixed(2)}\n\n` +
+          `📲 *Acesse o Painel do Entregador:* ${linkPwa}`;
+
+        const waUrl = mbTel ? `https://wa.me/55${mbTel}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+        window.open(waUrl, '_blank');
+      } else {
+        const err = await res.json();
+        showToast(`Erro ao despachar: ${err.detail}`, 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Erro de conexão ao despachar.', 'error');
+    }
+  };
+
   const handleFecharDelivery = async (orderId: string) => {
     try {
       const res = await fetch(`${apiBaseUrl}/comandas/${orderId}/fechar`, {
@@ -6752,9 +6808,18 @@ export function CaixaPanel({
                                   type="button"
                                   disabled={!motoboyId}
                                   onClick={() => handleDespacharPedido(order.id, parseInt(motoboyId))}
-                                  className={clsx('py-1.5', 'px-3', 'bg-emerald-600', 'hover:bg-[#9d2b3c]', 'disabled:opacity-50', 'text-white', 'font-bold', 'rounded-xl', 'text-[10px]', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
+                                  className={clsx('py-1.5', 'px-3', 'bg-emerald-600', 'hover:bg-emerald-500', 'disabled:opacity-50', 'text-white', 'font-bold', 'rounded-xl', 'text-[10px]', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
                                 >
                                   Despachar
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={!motoboyId}
+                                  onClick={() => handleDespacharWhatsApp(order, motoboyId)}
+                                  className={clsx('py-1.5', 'px-2.5', 'bg-[#10b981]/20', 'hover:bg-[#10b981]/30', 'border', 'border-[#10b981]/40', 'disabled:opacity-40', 'text-emerald-300', 'font-bold', 'rounded-xl', 'text-[10px]', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer', 'flex', 'items-center', 'gap-1')}
+                                  title="Despachar pedido e enviar link PWA pelo WhatsApp do Motoboy"
+                                >
+                                  💬 WhatsApp
                                 </button>
                               </div>
                             </div>

@@ -883,56 +883,101 @@ export default function CardapioPage() {
         {/* LEFT COLUMN: Main Restaurant Catalog */}
         <main className="flex-1 min-w-0 flex flex-col gap-6" id="catalog-section">
           
-          {/* ACTIVE ORDER BANNER (PARTE 3) */}
-          {activeOrder && (
-            <div className="w-full bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shadow-lg backdrop-blur-xs animate-fade-in" id="active-order-banner">
-              <div className="flex items-start gap-3">
-                <div className="p-2.5 bg-emerald-500/20 text-emerald-400 rounded-xl mt-0.5 shrink-0">
-                  <Clock className="w-5 h-5 animate-pulse" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-extrabold uppercase tracking-wider text-emerald-400">
-                      Você já tem um pedido em andamento (#{activeOrder.numero_pedido})
-                    </span>
-                    <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                      {activeOrder.status}
-                    </span>
+          {/* ACTIVE ORDER BANNER (PARTE 3 - STATUS EM TEMPO REAL) */}
+          {activeOrder && (() => {
+            const getStatusStepIndex = (statusStr: string) => {
+              const s = (statusStr || "").toLowerCase();
+              if (s.includes("finaliz") || s.includes("entreg")) return 4;
+              if (s.includes("transito") || s.includes("pronto") || s.includes("saiu")) return 3;
+              if (s.includes("produc") || s.includes("prepar") || s.includes("cozinha")) return 2;
+              return 1;
+            };
+            const currentStep = getStatusStepIndex(activeOrder.status);
+            const steps = [
+              { label: "Recebido", step: 1 },
+              { label: "Em Preparo", step: 2 },
+              { label: activeOrder.tipo === "delivery" || activeOrder.tipo === "Delivery" ? "Em Trânsito" : "Pronto", step: 3 },
+              { label: "Entregue", step: 4 },
+            ];
+
+            return (
+              <div className="w-full bg-[#121214] border border-emerald-500/30 rounded-2xl p-4 shadow-xl flex flex-col gap-3 animate-fade-in" id="active-order-banner">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-emerald-500/20 text-emerald-400 rounded-xl shrink-0">
+                      <Clock className="w-5 h-5 animate-pulse" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-extrabold uppercase tracking-wider text-emerald-400">
+                          Pedido em Andamento (#{activeOrder.numero_pedido})
+                        </span>
+                        <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                          {activeOrder.status}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-300 mt-0.5 font-medium">
+                        Modalidade: {activeOrder.tipo === "delivery" || activeOrder.tipo === "Delivery" ? "Delivery" : "Retirada/Balcão"} • Total: {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(activeOrder.total)}
+                      </p>
+                    </div>
                   </div>
-                  <p className="text-xs text-text-app/80 mt-1 font-medium">
-                    Modalidade: {activeOrder.tipo === "delivery" || activeOrder.tipo === "Delivery" ? "Delivery" : "Retirada"} • Total: {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(activeOrder.total)}
-                  </p>
-                  {activeOrder.itens && activeOrder.itens.length > 0 && (
-                    <p className="text-[11px] text-text-app/50 mt-0.5 line-clamp-1">
-                      {activeOrder.itens.map(i => `${i.quantidade}x ${i.nome}`).join(", ")}
-                    </p>
-                  )}
+
+                  <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => checkActiveOrder(Number(activeBrand.id))}
+                      className="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs font-bold rounded-xl transition border border-emerald-500/30 flex items-center gap-1.5 cursor-pointer"
+                      id="btn-refresh-active-order"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Atualizar</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        localStorage.removeItem("koma_active_order");
+                        setActiveOrder(null);
+                      }}
+                      className="px-3 py-1.5 bg-slate-500/10 hover:bg-slate-500/20 text-gray-400 hover:text-white text-xs font-bold rounded-xl transition cursor-pointer"
+                      id="btn-new-order-clear"
+                    >
+                      Fazer Novo Pedido
+                    </button>
+                  </div>
+                </div>
+
+                {/* 4-Step Progress Bar Timeline */}
+                <div className="pt-2 border-t border-[#27272A] grid grid-cols-4 gap-1.5 text-center">
+                  {steps.map((st) => {
+                    const isPassed = currentStep >= st.step;
+                    const isCurrent = currentStep === st.step;
+                    return (
+                      <div key={st.step} className="flex flex-col items-center gap-1">
+                        <div
+                          className={clsx(
+                            "w-full h-1.5 rounded-full transition-all duration-500",
+                            isPassed ? "bg-emerald-500 shadow-xs shadow-emerald-500/50" : "bg-[#27272A]"
+                          )}
+                        />
+                        <span
+                          className={clsx(
+                            "text-[10px] font-bold tracking-tight block",
+                            isCurrent
+                              ? "text-emerald-400 animate-pulse"
+                              : isPassed
+                              ? "text-gray-300"
+                              : "text-gray-600"
+                          )}
+                        >
+                          {st.label}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-              <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-                <button
-                  type="button"
-                  onClick={() => checkActiveOrder(Number(activeBrand.id))}
-                  className="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs font-bold rounded-xl transition border border-emerald-500/30 flex items-center gap-1.5 cursor-pointer"
-                  id="btn-refresh-active-order"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  <span>Atualizar</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    localStorage.removeItem("koma_active_order");
-                    setActiveOrder(null);
-                  }}
-                  className="px-3 py-1.5 bg-slate-500/10 hover:bg-slate-500/20 text-text-app/60 hover:text-text-app text-xs font-bold rounded-xl transition cursor-pointer"
-                  id="btn-new-order-clear"
-                >
-                  Fazer Novo Pedido
-                </button>
-              </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Active Brand Hero Banner (Elegant full-width banner) */}
           <div className="h-44 sm:h-56 w-full overflow-hidden relative rounded-2xl shadow-xs group" id="brand-banner-hero">

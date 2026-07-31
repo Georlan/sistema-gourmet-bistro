@@ -17,6 +17,8 @@ from ..security import (
     ensure_permission,
     get_current_user,
     require_permission,
+    create_motoboy_token,
+    verify_motoboy_token,
 )
 from ..websocket_manager import manager
 
@@ -1478,6 +1480,134 @@ def cadastrar_motoboy(
     db.commit()
     db.refresh(novo_motoboy)
     return novo_motoboy
+
+
+@router.post("/motoboys/{motoboy_id}/gerar-link")
+def gerar_link_motoboy(
+    motoboy_id: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
+    """
+    Gera um link/token de acesso temporário (TTL: 4h) para o PWA do entregador.
+    """
+    rest_id = require_tenant_id()
+    motoboy = db.query(Motoboy).filter(
+        Motoboy.id == motoboy_id,
+        Motoboy.restaurante_id == rest_id
+    ).first()
+    if not motoboy:
+        raise HTTPException(status_code=404, detail="Motoboy não encontrado")
+    
+    token = create_motoboy_token(motoboy.id, rest_id)
+    exp = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=4)).isoformat()
+    return {
+        "token": token,
+        "link": f"/entregador?token={token}",
+        "expires_at": exp,
+        "motoboy_nome": motoboy.nome
+    }
+
+
+@router.get("/motoboys/painel-entregador")
+def painel_entregador(
+    token: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Endpoint público acessível via token do motoboy para carregar o painel do PWA Entregador.
+    """
+    token_data = verify_motoboy_token(token)
+    motoboy_id = token_data["motoboy_id"]
+    rest_id = token_data["restaurante_id"]
+    
+    current_restaurante_id.set(rest_id)
+    
+    motoboy = db.query(Motoboy).filter(
+        Motoboy.id == motoboy_id,
+        Motoboy.restaurante_id == rest_id
+    ).first()
+    if not motoboy:
+        raise HTTPException(status_code=404, detail="Motoboy não encontrado")
+    
+    comandas = db.query(Comanda).filter(
+        Comanda.restaurante_id == rest_id,
+        Comanda.fechada == False,
+        Comanda.delivery_status.in_(["pronto", "transito"]),
+        (Comanda.motoboy_id == motoboy_id) | (Comanda.motoboy_id == None)
+    ).order_by(Comanda.criado_em.desc()).all()
+    
+    entregas = []
+    for c in comandas:
+        calc_total = sum(i.preco_unit for i in c.itens) if c.itens else 0.0
+        total_entrega = calc_total + (c.delivery_taxa or 0.0)
+        
+        prod_counts = {}
+        for i in c.itens:
+            pname = i.produto.nome if i.produto else "Item"
+            prod_counts[pname] = prod_counts.get(pname, 0) + 1
+        
+        itens_str = ", ".join([f"{qty}x {pname}" for pname, qty in prod_counts.items()])
+        
+        entregas.append({
+            "id": c.id,
+            "numero_pedido": c.numero_pedido,
+            "cliente_nome": c.identificador or "Cliente",
+            "delivery_telefone": c.delivery_telefone,
+            "delivery_endereco": c.delivery_endereco,
+            "delivery_taxa": round(c.delivery_taxa or 0.0, 2),
+            "delivery_status": c.delivery_status,
+            "total": round(total_entrega, 2),
+            "valor_pago": round(c.valor_pago or 0.0, 2),
+            "valor_a_cobrar": max(0.0, round(total_entrega - (c.valor_pago or 0.0), 2)),
+            "itens_resumo": itens_str,
+            "criado_em": c.criado_em.isoformat() if c.criado_em else None
+        })
+    
+    return {
+        "motoboy": {
+            "id": motoboy.id,
+            "nome": motoboy.nome,
+            "telefone": motoboy.telefone
+        },
+        "entregas": entregas
+    }
+
+
+@router.post("/motoboys/pedidos/{comanda_id}/confirmar-entrega")
+def confirmar_entrega_motoboy(
+    comanda_id: str,
+    token: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """
+    Permite ao entregador (com token válido) confirmar a entrega de um pedido.
+    """
+    token_data = verify_motoboy_token(token)
+    motoboy_id = token_data["motoboy_id"]
+    rest_id = token_data["restaurante_id"]
+    
+    current_restaurante_id.set(rest_id)
+    
+    comanda = db.query(Comanda).filter(
+        Comanda.id == comanda_id,
+        Comanda.restaurante_id == rest_id
+    ).first()
+    if not comanda:
+        raise HTTPException(status_code=404, detail="Pedido não encontrado")
+    
+    comanda.delivery_status = "finalizado"
+    comanda.motoboy_id = motoboy_id
+    comanda.fechada = True
+    comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
+    
+    db.commit()
+    db.refresh(comanda)
+    
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, rest_id)
+    return {"status": "sucesso", "mensagem": "Entrega confirmada com sucesso!"}
+
 
 
 @router.post("/teste-impressao")

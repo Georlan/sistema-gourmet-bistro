@@ -16,6 +16,7 @@ import clsx from 'clsx';
 import CardapioPage from './cardapio/CardapioPage';
 import SuperAdminPanel from './super-admin/SuperAdminPanel';
 import { CaixaAtivarPage } from './components/CaixaAtivarPage';
+import { MotoboyPwaPage } from './components/MotoboyPwaPage';
 
 import { API_BASE_URL } from './config/api';
 
@@ -54,6 +55,13 @@ export default function App() {
   if (isAtivar) {
     const tokenFromUrl = new URLSearchParams(window.location.search).get('token');
     return <CaixaAtivarPage token={tokenFromUrl} />;
+  }
+
+  // Detect motoboy PWA page (/entregador or ?view=entregador)
+  const isEntregador = window.location.pathname.startsWith('/entregador') ||
+                       window.location.search.includes('view=entregador');
+  if (isEntregador) {
+    return <MotoboyPwaPage />;
   }
 
   // Detect if access is client cardapio (online menu)
