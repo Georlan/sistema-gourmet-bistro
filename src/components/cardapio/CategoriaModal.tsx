@@ -71,9 +71,16 @@ export function CategoriaModal({
       return;
     }
 
-    const categoryId = isEditing ? categoryToEdit!.id : id.trim();
+    const generatedId = id.trim() || nome.trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '') || `cat_${Date.now()}`;
+
+    const categoryId = isEditing ? categoryToEdit!.id : generatedId;
     if (!categoryId) {
-      setErrorMsg('ID da categoria inválido.');
+      setErrorMsg('Informe o nome da categoria.');
       return;
     }
 
@@ -188,31 +195,7 @@ export function CategoriaModal({
             />
           </div>
 
-          {/* ID Slug Input */}
-          <div className="space-y-1.5">
-            <div className="flex justify-between items-center">
-              <label className="text-[11px] font-bold text-gray-300 uppercase tracking-wider block">
-                ID Único no Sistema
-              </label>
-              {isEditing && (
-                <span className="text-[9px] text-gray-500 font-mono">(ID não editável)</span>
-              )}
-            </div>
-            <input
-              type="text"
-              value={isEditing ? categoryToEdit!.id : id}
-              onChange={(e) => setId(e.target.value)}
-              disabled={isEditing}
-              placeholder="ex: hamburgueres_bovinos"
-              className={clsx(
-                'w-full border rounded-xl px-3.5 py-2 text-xs font-mono transition-colors',
-                isEditing
-                  ? 'bg-[#18181B] border-[#27272A]/60 text-gray-400 cursor-not-allowed'
-                  : 'bg-[#1C1C1F] border-[#27272A] text-emerald-400 placeholder:text-gray-600 focus:outline-none focus:border-[#10b981]'
-              )}
-              required
-            />
-          </div>
+
 
           {/* Destino de Impressão Cards */}
           <div className="space-y-2 pt-1">
