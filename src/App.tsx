@@ -221,12 +221,35 @@ export default function App() {
     }
   };
 
+  const [turnoResumo, setTurnoResumo] = useState<{
+    total_vendas?: number;
+    comandas_abertas_count?: number;
+    total_sangrias?: number;
+    total_suprimentos?: number;
+  } | null>(null);
+
+  const fetchTurnoResumo = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/caixa/turno-atual/resumo`, { headers: getAuthHeaders() });
+      if (res.ok) {
+        const data = await res.json();
+        setTurnoResumo(data);
+      }
+    } catch (e) {
+      console.error("Erro ao buscar resumo do turno no App:", e);
+    }
+  }, [API_BASE_URL, getAuthHeaders]);
+
   useEffect(() => {
     fetchConfig();
+    fetchTurnoResumo();
     if (isWsConnected) return;
-    const interval = setInterval(fetchConfig, 40000);
+    const interval = setInterval(() => {
+      fetchConfig();
+      fetchTurnoResumo();
+    }, 15000);
     return () => clearInterval(interval);
-  }, [isWsConnected]);
+  }, [isWsConnected, fetchTurnoResumo]);
 
   useEffect(() => {
     const handleUrlChange = () => {
@@ -697,6 +720,7 @@ export default function App() {
               fetchLiveProdutos();
               fetchLiveCategorias();
               fetchConfig();
+              fetchTurnoResumo();
               if (activeRole === 'caixa' || activeRole === 'admin') {
                 fetchPagamentosPendentes();
               }
@@ -1904,7 +1928,7 @@ export default function App() {
                           onClick={handleLogout}
                           className="w-full py-2 bg-red-950/15 hover:bg-red-950/30 text-rose-400 hover:text-rose-300 border border-red-900/40 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5"
                         >
-                          Trocar Garçom / Sair
+                          Logout / Sair
                         </button>
                       </div>
                     </div>
@@ -1944,6 +1968,7 @@ export default function App() {
                           onClick={() => {
                             setIsSidebarOpen(false);
                             fetchOrdersFromAPI();
+                            fetchTables();
                           }}
                           className="w-full flex items-center justify-between p-2.5 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] rounded-xl text-xs text-white transition-all cursor-pointer group"
                         >
@@ -1954,23 +1979,6 @@ export default function App() {
                             <span className="font-semibold text-xs">Sincronizar Salão</span>
                           </div>
                           <span className="text-[9px] text-blue-400 font-mono font-bold">Ao Vivo</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsSidebarOpen(false);
-                            window.dispatchEvent(new CustomEvent('koma-notify-caixa'));
-                          }}
-                          className="w-full flex items-center justify-between p-2.5 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] rounded-xl text-xs text-white transition-all cursor-pointer group"
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 group-hover:bg-amber-500/20">
-                              <Bell size={14} />
-                            </div>
-                            <span className="font-semibold text-xs">Chamar Suporte do Caixa</span>
-                          </div>
-                          <span className="text-[9px] text-amber-400 font-mono font-bold">Ajuda</span>
                         </button>
                       </div>
                     </div>
@@ -2027,7 +2035,7 @@ export default function App() {
                       </button>
                     </div>
 
-                    {/* CAIXA - RESUMO DO TURNO EM TEMPO REAL (PRIORIDADE #2) */}
+                    {/* CAIXA - RESUMO DO TURNO EM TEMPO REAL (PRIORIDADE #2 - SINCRONIZADO COM BANCO DE DADOS) */}
                     <div className="space-y-2.5">
                       <h3 className="text-[10px] uppercase tracking-wider font-bold text-emerald-400 font-sans">Resumo do Turno ao Vivo</h3>
                       <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-3 space-y-2">
@@ -2037,7 +2045,7 @@ export default function App() {
                             <span className="text-gray-300 font-medium text-[11px]">Vendas do Turno</span>
                           </div>
                           <span className="font-mono font-bold text-emerald-400">
-                            R$ {totalVendasTurno.toFixed(2)}
+                            R$ {(turnoResumo?.total_vendas ?? totalVendasTurno).toFixed(2)}
                           </span>
                         </div>
 
@@ -2047,7 +2055,7 @@ export default function App() {
                             <span className="text-gray-300 font-medium text-[11px]">Comandas Abertas</span>
                           </div>
                           <span className="font-mono font-bold text-white">
-                            {totalComandasAbertas} ativas
+                            {turnoResumo?.comandas_abertas_count ?? totalComandasAbertas} ativas
                           </span>
                         </div>
 
