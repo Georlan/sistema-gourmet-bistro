@@ -9301,3 +9301,5 @@ export function CaixaPanel({
     </div>
   );
 }
+
+export const MemoizedCaixaPanel = React.memo(CaixaPanel);

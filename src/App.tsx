@@ -11,9 +11,7 @@ import { getTableTotal } from './domain';
 import { supabase } from './cardapio/SupabaseClient';
 import { MesaCard } from './components/MesaCard';
 import { MesaDetailsModal } from './components/MesaDetailsModal';
-import { KitchenPanel } from './components/KitchenPanel';
-import { CaixaPanel } from './components/CaixaPanel';
-const MemoizedCaixaPanel = React.memo(CaixaPanel);
+import { CaixaPanel, MemoizedCaixaPanel } from './components/CaixaPanel';
 import clsx from 'clsx';
 import CardapioPage from './cardapio/CardapioPage';
 import SuperAdminPanel from './super-admin/SuperAdminPanel';
@@ -110,6 +108,20 @@ export default function App() {
   const [pagamentosPendentes, setPagamentosPendentes] = useState<any[]>([]);
   const [isWsConnected, setIsWsConnected] = useState<boolean>(false);
   const [waiterAvailable, setWaiterAvailable] = useState<boolean>(true);
+
+  // Helper to get headers for API calls including JWT
+  const getAuthHeaders = useCallback((contentType = "application/json") => {
+    const headers: any = {};
+    if (contentType) {
+      headers["Content-Type"] = contentType;
+    }
+    const tokenKey = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
+    const token = localStorage.getItem(tokenKey);
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    return headers;
+  }, [portal]);
 
   const printPairingStartedRef = useRef(false);
 
@@ -323,20 +335,6 @@ export default function App() {
     setActiveRole(portal === 'caixa' ? "caixa" : "garcom");
     setIsSidebarOpen(false);
   }, [portal]);
-
-  // Helper to get headers for API calls including JWT
-  const getAuthHeaders = (contentType = "application/json") => {
-    const headers: any = {};
-    if (contentType) {
-      headers["Content-Type"] = contentType;
-    }
-    const tokenKey = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
-    const token = localStorage.getItem(tokenKey);
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-    return headers;
-  };
 
   // Sidebar Open State
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
