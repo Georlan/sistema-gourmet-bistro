@@ -56,12 +56,22 @@ class Usuario(Base):
             "status IS NULL OR status IN ('pendente_ativacao', 'ativo', 'inativo')",
             name="ck_usuarios_status",
         ),
+        UniqueConstraint(
+            "restaurante_id",
+            "email",
+            name="uq_usuarios_restaurante_email",
+        ),
+        UniqueConstraint(
+            "restaurante_id",
+            "telefone",
+            name="uq_usuarios_restaurante_telefone",
+        ),
     )
     
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     nome = Column(String(100), nullable=False)
-    telefone = Column(String(50), unique=True, index=True, nullable=True)
-    email = Column(String(100), unique=True, index=True, nullable=True)
+    telefone = Column(String(50), index=True, nullable=True)
+    email = Column(String(100), index=True, nullable=True)
     cargo = Column(String(20), nullable=False, default="garcom")  # 'caixa' | 'garcom' | 'gerente' | 'motoboy' | 'admin'
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id", ondelete="CASCADE"), default=lambda: current_restaurante_id.get(), nullable=False)
     senha_hash = Column(String(255), nullable=True)
@@ -462,16 +472,21 @@ class Pagamento(Base):
             "idempotency_key IS NULL OR trim(idempotency_key) <> ''",
             name="ck_pagamentos_idempotency_nonblank",
         ),
+        UniqueConstraint(
+            "restaurante_id",
+            "idempotency_key",
+            name="uq_pagamentos_restaurante_idempotency",
+        ),
     )
     
     id = Column(String, primary_key=True, index=True)
-    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id", ondelete="CASCADE"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
     comanda_id = Column(String, ForeignKey("comandas.id"), nullable=False, index=True)
     turno_id = Column(Integer, ForeignKey("caixa_turnos.id"), nullable=False)
     valor = Column(Float, nullable=False)
     metodo = Column(String, nullable=False)  # "dinheiro" | "pix" | "cartao"
     status = Column(String, default="aprovado") # "pendente" | "aprovado" | "cancelado"
-    idempotency_key = Column(String, unique=True, nullable=True, index=True)
+    idempotency_key = Column(String(128), nullable=True, index=True)
     cpf_cliente = Column(String, nullable=True, index=True)
     nome_cliente = Column(String, nullable=True)
     nsu_cartao = Column(String, nullable=True)
@@ -1030,7 +1045,7 @@ class PrintJob(Base):
     __tablename__ = "print_jobs"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id", ondelete="CASCADE"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
     document_type = Column(String, nullable=False)  # "producao" | "fechamento" | "entrega"
     destination = Column(String, nullable=False, default="COZINHA")  # "COZINHA" | "BAR" | "FECHAMENTO" | "ENTREGA"
     source_type = Column(String, nullable=False)  # "pedido" | "comanda" | "delivery"
@@ -1055,7 +1070,7 @@ class PrintAgentToken(Base):
     __tablename__ = "print_agent_tokens"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id", ondelete="CASCADE"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
     agent_id = Column(String, nullable=False)  # ex: "caixa-principal"
     token_hash = Column(String, nullable=False)  # SHA-256 hash (nunca token puro!)
     ativo = Column(Boolean, default=True, nullable=False)
