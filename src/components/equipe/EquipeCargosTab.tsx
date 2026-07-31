@@ -66,15 +66,6 @@ export const EquipeCargosTab: React.FC<EquipeCargosTabProps> = ({ apiBaseUrl, au
           </div>
           <div className="flex items-center gap-3">
             <span className="text-[9px] text-gray-500">Controle de acesso por função</span>
-            <button
-              type="button"
-              onClick={fetchCargos}
-              disabled={isLoading}
-              className="p-1.5 hover:bg-[#1C1C1F] rounded-lg border border-[#27272A] text-gray-400 hover:text-white transition-all cursor-pointer flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider disabled:opacity-50"
-            >
-              <RefreshCw size={11} className={isLoading ? 'animate-spin' : ''} />
-              Atualizar
-            </button>
           </div>
         </div>
 

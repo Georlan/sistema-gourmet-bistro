@@ -2130,7 +2130,10 @@ export default function App() {
                             </div>
                             <span className="font-semibold text-xs">Sincronizar Dados</span>
                           </div>
-                          <span className="text-[9px] text-blue-400 font-mono font-bold">Atualizar</span>
+                          <span className="text-[9px] text-emerald-400 font-mono font-bold flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                            Ao Vivo
+                          </span>
                         </button>
                       </div>
                     </div>

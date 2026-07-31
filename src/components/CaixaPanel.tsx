@@ -3077,20 +3077,6 @@ export function CaixaPanel({
               {(activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital') && 'Cardápio Digital — Identidade Whitelabel'}
             </h2>
           </div>
-
-          <div className={clsx('flex', 'items-center', 'gap-3', 'shrink-0')}>
-            <button
-              onClick={() => {
-                fetchTurno();
-                onRefreshOrders();
-                fetchSystemUsers();
-              }}
-              className={clsx('p-1.5', 'hover:bg-[#1C1C1F]', 'rounded-lg', 'border', 'border-[#27272A]', 'text-gray-400', 'hover:text-white', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'gap-1.5')}
-            >
-              <RefreshCw size={12} className={isLoading ? 'animate-spin' : ''} />
-              <span className={clsx('text-[9px]', 'font-bold', 'font-mono', 'hidden', 'sm:inline')}>Atualizar</span>
-            </button>
-          </div>
         </header>
 
         {/* Sub-tabs Navigation Bar */}
@@ -5996,9 +5982,6 @@ export function CaixaPanel({
                     <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block')}>Pausa Rápida de Produtos</span>
                     <span className={clsx('text-[8px]', 'text-gray-500', 'block', 'mt-0.5')}>Esgotado bloqueia o item no app do garçom instantaneamente.</span>
                   </div>
-                  <button onClick={fetchProdutos} className={clsx('text-[9px]', 'text-gray-400', 'hover:text-white', 'flex', 'items-center', 'gap-1', 'cursor-pointer', 'transition-colors')}>
-                    <RefreshCw size={10} /> Atualizar
-                  </button>
                 </div>
 
                 {/* Search */}
