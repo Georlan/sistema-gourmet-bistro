@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Menu, X, User, Wifi, WifiOff, SlidersHorizontal, ArrowDownRight, ArrowUpRight, RefreshCw } from 'lucide-react';
+import { Menu, X, User, Wifi, WifiOff, SlidersHorizontal, ArrowDownRight, ArrowUpRight, RefreshCw, Bell } from 'lucide-react';
 import { Table, Order, DraftItem, AppSettings, AppRole, Product } from './types';
 import { TABLES, WAITERS, RESTAURANT_CONFIG, PRODUCTS } from './data';
 import { getTableTotal } from './domain';
@@ -1845,88 +1845,157 @@ export default function App() {
                 </button>
               </div>
 
-              {/* SECTION 1: MINHA CONTA & TURNO */}
-              <div className="space-y-2.5">
-                <h3 className={clsx('text-[10px]', 'uppercase', 'tracking-wider', 'font-bold', 'text-emerald-400', 'font-sans')}>Operador do Caixa</h3>
-                <div className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-2xl', 'p-3.5', 'space-y-3')}>
-                  <div className={clsx('flex', 'items-center', 'gap-3')}>
-                    <div className={clsx('h-10', 'w-10', 'bg-emerald-500/10', 'border', 'border-emerald-500/20', 'text-emerald-400', 'rounded-full', 'flex', 'items-center', 'justify-center', 'font-bold')}>
-                      {activeWaiter.nome[0]}
-                    </div>
-                    <div>
-                      <h4 className={clsx('text-sm', 'font-bold', 'text-white')}>{activeWaiter.nome}</h4>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                        <span className="text-[10px] text-emerald-400 font-semibold">Caixa Operacional Ativo</span>
+              {portal === 'garcom' ? (
+                <>
+                  {/* GARÇOM - MINHA CONTA & SESSÃO */}
+                  <div className="space-y-2.5">
+                    <h3 className="text-[10px] uppercase tracking-wider font-bold text-emerald-400 font-sans">Garçom em Atendimento</h3>
+                    <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-3.5 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center font-bold">
+                          {activeWaiter.nome ? activeWaiter.nome[0] : 'G'}
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-bold text-white">{activeWaiter.nome || 'Garçom'}</h4>
+                          <p className="text-[10px] text-gray-400 font-mono">ID: {activeWaiter.id || 'W-01'} • Salão</p>
+                        </div>
                       </div>
+
+                      <button
+                        onClick={handleLogout}
+                        className="w-full py-2 bg-red-950/15 hover:bg-red-950/30 text-rose-400 hover:text-rose-300 border border-red-900/40 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        Trocar Garçom / Sair
+                      </button>
                     </div>
                   </div>
 
-                  <button
-                    onClick={handleLogout}
-                    className={clsx('w-full', 'py-2.5', 'bg-red-950/10', 'hover:bg-red-950/20', 'text-rose-400', 'hover:text-rose-300', 'border', 'border-red-900/35', 'hover:border-red-900/50', 'rounded-xl', 'text-xs', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'justify-center', 'gap-2')}
-                  >
-                    Logout / Sair
-                  </button>
-                </div>
-              </div>
+                  {/* GARÇOM - ATALHOS RÁPIDOS DO ATENDIMENTO (FOCO EM VELOCIDADE) */}
+                  <div className="space-y-2.5">
+                    <h3 className="text-[10px] uppercase tracking-wider font-bold text-emerald-400 font-sans">Atalhos de Atendimento</h3>
+                    <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-3 space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsSidebarOpen(false);
+                          fetchOrdersFromAPI();
+                        }}
+                        className="w-full flex items-center justify-between p-2.5 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] rounded-xl text-xs text-white transition-all cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400 group-hover:bg-blue-500/20">
+                            <RefreshCw size={14} />
+                          </div>
+                          <span className="font-semibold text-xs">Atualizar Mesas do Salão</span>
+                        </div>
+                        <span className="text-[9px] text-blue-400 font-mono font-bold">Ao Vivo</span>
+                      </button>
 
-              {/* SECTION 2: ATALHOS RÁPIDOS DE OPERAÇÃO DO CAIXA */}
-              <div className="space-y-2.5">
-                <h3 className={clsx('text-[10px]', 'uppercase', 'tracking-wider', 'font-bold', 'text-emerald-400', 'font-sans')}>Atalhos Rápidos de Operação</h3>
-                <div className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-2xl', 'p-3', 'space-y-2')}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsSidebarOpen(false);
-                      window.dispatchEvent(new CustomEvent('koma-open-suprimento'));
-                    }}
-                    className="w-full flex items-center justify-between p-2.5 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] rounded-xl text-xs text-white transition-all cursor-pointer group"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 group-hover:bg-emerald-500/20">
-                        <ArrowDownRight size={14} />
-                      </div>
-                      <span className="font-semibold text-xs">Suprimento de Caixa</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsSidebarOpen(false);
+                          window.dispatchEvent(new CustomEvent('koma-notify-caixa'));
+                        }}
+                        className="w-full flex items-center justify-between p-2.5 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] rounded-xl text-xs text-white transition-all cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 group-hover:bg-amber-500/20">
+                            <Bell size={14} />
+                          </div>
+                          <span className="font-semibold text-xs">Chamar Suporte do Caixa</span>
+                        </div>
+                        <span className="text-[9px] text-amber-400 font-mono font-bold">Ajuda</span>
+                      </button>
                     </div>
-                    <span className="text-[9px] text-emerald-400 font-mono font-bold">+ Troco</span>
-                  </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* CAIXA - OPERADOR & TURNO */}
+                  <div className="space-y-2.5">
+                    <h3 className="text-[10px] uppercase tracking-wider font-bold text-emerald-400 font-sans">Operador do Caixa</h3>
+                    <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-3.5 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center font-bold">
+                          {activeWaiter.nome ? activeWaiter.nome[0] : 'C'}
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-bold text-white">{activeWaiter.nome || 'Caixa'}</h4>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                            <span className="text-[10px] text-emerald-400 font-semibold">Caixa Operacional Ativo</span>
+                          </div>
+                        </div>
+                      </div>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsSidebarOpen(false);
-                      window.dispatchEvent(new CustomEvent('koma-open-sangria'));
-                    }}
-                    className="w-full flex items-center justify-between p-2.5 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] rounded-xl text-xs text-white transition-all cursor-pointer group"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <div className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 group-hover:bg-rose-500/20">
-                        <ArrowUpRight size={14} />
-                      </div>
-                      <span className="font-semibold text-xs">Sangria de Segurança</span>
+                      <button
+                        onClick={handleLogout}
+                        className="w-full py-2.5 bg-red-950/10 hover:bg-red-950/20 text-rose-400 hover:text-rose-300 border border-red-900/35 hover:border-red-900/50 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2"
+                      >
+                        Logout / Sair
+                      </button>
                     </div>
-                    <span className="text-[9px] text-rose-400 font-mono font-bold">- Retirada</span>
-                  </button>
+                  </div>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsSidebarOpen(false);
-                      window.dispatchEvent(new CustomEvent('koma-sync-all'));
-                    }}
-                    className="w-full flex items-center justify-between p-2.5 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] rounded-xl text-xs text-white transition-all cursor-pointer group"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400 group-hover:bg-blue-500/20">
-                        <RefreshCw size={14} />
-                      </div>
-                      <span className="font-semibold text-xs">Sincronizar Dados</span>
+                  {/* CAIXA - ATALHOS RÁPIDOS DE TESOURARIA */}
+                  <div className="space-y-2.5">
+                    <h3 className="text-[10px] uppercase tracking-wider font-bold text-emerald-400 font-sans">Atalhos Rápidos de Tesouraria</h3>
+                    <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-3 space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsSidebarOpen(false);
+                          window.dispatchEvent(new CustomEvent('koma-open-suprimento'));
+                        }}
+                        className="w-full flex items-center justify-between p-2.5 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] rounded-xl text-xs text-white transition-all cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 group-hover:bg-emerald-500/20">
+                            <ArrowDownRight size={14} />
+                          </div>
+                          <span className="font-semibold text-xs">Suprimento de Caixa</span>
+                        </div>
+                        <span className="text-[9px] text-emerald-400 font-mono font-bold">+ Troco</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsSidebarOpen(false);
+                          window.dispatchEvent(new CustomEvent('koma-open-sangria'));
+                        }}
+                        className="w-full flex items-center justify-between p-2.5 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] rounded-xl text-xs text-white transition-all cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 group-hover:bg-rose-500/20">
+                            <ArrowUpRight size={14} />
+                          </div>
+                          <span className="font-semibold text-xs">Sangria de Segurança</span>
+                        </div>
+                        <span className="text-[9px] text-rose-400 font-mono font-bold">- Retirada</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsSidebarOpen(false);
+                          window.dispatchEvent(new CustomEvent('koma-sync-all'));
+                        }}
+                        className="w-full flex items-center justify-between p-2.5 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] rounded-xl text-xs text-white transition-all cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400 group-hover:bg-blue-500/20">
+                            <RefreshCw size={14} />
+                          </div>
+                          <span className="font-semibold text-xs">Sincronizar Dados</span>
+                        </div>
+                        <span className="text-[9px] text-blue-400 font-mono font-bold">Atualizar</span>
+                      </button>
                     </div>
-                    <span className="text-[9px] text-blue-400 font-mono font-bold">Atualizar</span>
-                  </button>
-                </div>
-              </div>
+                  </div>
+                </>
+              )}
 
               {/* SECTION 3: EXIBIÇÃO & PREFERÊNCIAS */}
               <div className="space-y-2.5">
