@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from "react";
-import { BrandConfig } from "../CardapioTypes";
+import { BrandConfig, LOCAL_LOGO_PLACEHOLDER } from "../CardapioTypes";
 import { Search, User, MapPin, Phone, ShoppingBag, Instagram, Facebook, Globe, Share2 } from "lucide-react";
 
 interface CardapioHeaderProps {
@@ -94,7 +94,7 @@ export default function CardapioHeader({
                 onError={(e) => {
                   const target = e.currentTarget;
                   target.onerror = null;
-                  target.src = "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&q=80&w=200&h=200";
+                  target.src = LOCAL_LOGO_PLACEHOLDER;
                 }}
               />
             </div>

@@ -258,3 +258,75 @@ def test_get_whitelabel_config_by_slug_success(test_setup):
     data = response.json()
     assert data["id"] == 999
     assert "cor_primaria" in data
+
+
+def test_idempotency_order_deduplication(test_setup):
+    """
+    Test that sending an order with the same idempotency_key twice returns the same
+    order without duplicating it in the database.
+    """
+    from app.models import Produto, Categoria
+    db = SessionLocal()
+    token_var = current_restaurante_id.set(999)
+    try:
+        cat = db.query(Categoria).filter(Categoria.id == "cat-idem-1").first()
+        if not cat:
+            cat = Categoria(id="cat-idem-1", restaurante_id=999, nome="Bebidas Idem")
+            db.add(cat)
+            db.commit()
+
+        p = db.query(Produto).filter(Produto.id == "prod-idem-1").first()
+        if not p:
+            p = Produto(
+                id="prod-idem-1",
+                restaurante_id=999,
+                categoria_id="cat-idem-1",
+                nome="Suco Idempotente",
+                preco=15.0,
+                ativo=True
+            )
+            db.add(p)
+            db.commit()
+    finally:
+        current_restaurante_id.reset(token_var)
+        db.close()
+
+    order_payload = {
+        "restaurante_id": 999,
+        "itens": [
+            {
+                "produto_id": "prod-idem-1",
+                "quantidade": 1,
+                "observacao": "Sem açúcar",
+                "cliente_nome": "Cliente Idempotente"
+            }
+        ],
+        "cliente_nome": "Cliente Idempotente",
+        "cliente_telefone": "11988887777",
+        "endereco_entrega": "Rua Idempotente, 123",
+        "taxa_entrega": 5.0,
+        "forma_pagamento": "na_entrega",
+        "tipo_pedido": "delivery",
+        "idempotency_key": "test-uuid-idempotency-key-12345"
+    }
+
+    # First request
+    r1 = client.post("/cardapio/pedidos", json=order_payload)
+    assert r1.status_code == 201
+    d1 = r1.json()
+    assert d1["status"] == "success"
+    order_id = d1["comanda_id"]
+
+    # Second request with identical idempotency_key
+    r2 = client.post("/cardapio/pedidos", json=order_payload)
+    assert r2.status_code in [200, 201]
+    d2 = r2.json()
+    assert d2.get("id") == order_id or d2.get("comanda_id") == order_id
+    assert d2["mensagem"] == "Pedido já cadastrado com sucesso!"
+
+    # Verify status query endpoint
+    r_status = client.get(f"/cardapio/pedidos/{order_id}/status")
+    assert r_status.status_code == 200
+    st_data = r_status.json()
+    assert st_data["id"] == order_id
+    assert st_data["status"] == "pendente"

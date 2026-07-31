@@ -56,14 +56,53 @@ def criar_pedido_online(
     token_context = current_restaurante_id.set(rest_id)
 
     # Definir status operacional do delivery.
-    # status_comanda pertence ao fluxo de solicitação da conta no salão
-    # (null | aguardando_pagamento) e não deve representar pagamento online.
     auto_delivery_status = "pendente"  # Fica na gaveta de aceite do caixa
 
     # Normalizar telefone do cliente
     telefone_clean = limpar_telefone(payload.cliente_telefone)
+    idempotency_key = (payload.idempotency_key or "").strip()
 
     try:
+        # 1. Idempotency Key check: if idempotency_key is provided, return existing order
+        if idempotency_key:
+            existing_comanda = db.query(Comanda).filter(
+                Comanda.restaurante_id == rest_id,
+                Comanda.idempotency_key == idempotency_key
+            ).first()
+            if existing_comanda:
+                logger.info("Pedido retornado via idempotency_key existente: %s", idempotency_key)
+                return {
+                    "status": "success",
+                    "comanda_id": existing_comanda.id,
+                    "numero_pedido": existing_comanda.numero_pedido,
+                    "delivery_status": existing_comanda.delivery_status or "pendente",
+                    "tipo": existing_comanda.tipo,
+                    "mensagem": "Pedido já cadastrado com sucesso!"
+                }
+
+        # 2. Time-window fallback check (5 minutes, same tenant, phone, delivery type):
+        cinco_minutos_atras = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=5)
+        recentes = db.query(Comanda).filter(
+            Comanda.restaurante_id == rest_id,
+            Comanda.delivery_telefone == telefone_clean,
+            Comanda.tipo == tipo_comanda,
+            Comanda.criado_em >= cinco_minutos_atras,
+        ).order_by(Comanda.criado_em.desc()).all()
+
+        payload_items_sig = sorted([f"{i.produto_id}:{i.observacao}" for i in payload.itens for _ in range(i.quantidade)])
+        for rec in recentes:
+            rec_items_sig = sorted([f"{i.produto_id}:{i.observacao}" for i in rec.itens])
+            if payload_items_sig == rec_items_sig:
+                logger.info("Pedido duplicado evitado por janela temporal. Retornando pedido id %s", rec.id)
+                return {
+                    "status": "success",
+                    "comanda_id": rec.id,
+                    "numero_pedido": rec.numero_pedido,
+                    "delivery_status": rec.delivery_status or "pendente",
+                    "tipo": rec.tipo,
+                    "mensagem": "Pedido já cadastrado com sucesso!"
+                }
+
         # Usuário ativo obrigatório para satisfazer a FK sem criar uma
         # identidade fictícia que poderia corromper a autoria do pedido.
         garcom = db.query(Usuario).filter(
@@ -121,7 +160,8 @@ def criar_pedido_online(
             delivery_telefone=telefone_clean,
             delivery_endereco=endereco_comanda,
             delivery_taxa=taxa_entrega,
-            status_comanda=None
+            status_comanda=None,
+            idempotency_key=idempotency_key or None
         )
         db.add(nova_comanda)
         db.flush()
@@ -208,4 +248,49 @@ def criar_pedido_online(
             "status": "pendente_no_atendimento",
             "cobranca_online": False
         }
+    }
+
+
+@router.get("/pedidos/{comanda_id}/status")
+def consultar_status_pedido_publico(
+    comanda_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna o status atual de um pedido público em andamento para o cliente.
+    """
+    comanda = db.query(Comanda).filter(Comanda.id == comanda_id).first()
+    if not comanda:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Pedido não encontrado."
+        )
+
+    itens_payload = [
+        {
+            "id": item.id,
+            "nome": item.produto.nome if item.produto else "Item",
+            "quantidade": 1,
+            "preco": item.preco_unit,
+            "observacao": item.observacao,
+            "status": item.status
+        }
+        for item in comanda.itens
+    ]
+
+    total_val = sum(i.preco_unit for i in comanda.itens) + (comanda.delivery_taxa or 0.0)
+
+    return {
+        "id": comanda.id,
+        "numero_pedido": comanda.numero_pedido,
+        "status": comanda.delivery_status or "pendente",
+        "tipo": comanda.tipo,
+        "cliente_nome": comanda.identificador,
+        "cliente_telefone": comanda.delivery_telefone,
+        "endereco_entrega": comanda.delivery_endereco,
+        "taxa_entrega": comanda.delivery_taxa or 0.0,
+        "total": total_val,
+        "fechada": comanda.fechada,
+        "criado_em": comanda.criado_em.isoformat() if comanda.criado_em else None,
+        "itens": itens_payload
     }

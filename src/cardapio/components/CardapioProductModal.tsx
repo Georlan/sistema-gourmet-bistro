@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { Product, ProductModifier, ProductOption, getProductImageUrl } from "../CardapioTypes";
+import { Product, ProductModifier, ProductOption, getProductImageUrl, LOCAL_PRODUCT_PLACEHOLDER } from "../CardapioTypes";
 import { X, Plus, Minus, Check, Share2, ChevronLeft, ChevronRight } from "lucide-react";
 
 
@@ -162,7 +162,7 @@ export default function CardapioProductModal({
             onError={(e) => {
               const target = e.currentTarget;
               target.onerror = null;
-              target.src = "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&w=500&q=80";
+              target.src = LOCAL_PRODUCT_PLACEHOLDER;
             }}
           />
           <div className="absolute inset-0 bg-linear-to-b from-black/40 via-transparent to-black/20" />

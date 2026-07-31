@@ -4,7 +4,7 @@
  */
 
 import React from "react";
-import { Product, getProductImageUrl } from "../CardapioTypes";
+import { Product, getProductImageUrl, LOCAL_PRODUCT_PLACEHOLDER } from "../CardapioTypes";
 import { Plus } from "lucide-react";
 
 
@@ -45,7 +45,7 @@ export default function CardapioProductCard({
           onError={(e) => {
             const target = e.currentTarget;
             target.onerror = null;
-            target.src = "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&w=500&q=80";
+            target.src = LOCAL_PRODUCT_PLACEHOLDER;
           }}
         />
         {product.isAvailable && (

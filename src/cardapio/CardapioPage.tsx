@@ -16,7 +16,7 @@ import CardapioUserProfileModal from "./components/CardapioUserProfileModal";
 import CardapioDigital from "./components/CardapioDigital";
 import CardapioStoreInfoDrawer from "./components/CardapioStoreInfoDrawer";
 import CardapioAiChefAssistant from "./components/CardapioAiChefAssistant";
-import { ShoppingBag, Eye, X, ArrowRight } from "lucide-react";
+import { ShoppingBag, Eye, X, ArrowRight, Clock, RefreshCw } from "lucide-react";
 import { smartSearchMatch } from "../domain";
 
 const getCategoryId = (name: string) =>
@@ -94,6 +94,62 @@ export default function CardapioPage() {
   const [checkoutRequest, setCheckoutRequest] = useState<CardapioCheckoutRequest | null>(null);
   const [isStoreInfoOpen, setIsStoreInfoOpen] = useState(false); // Left Sidebar Information State
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [activeOrder, setActiveOrder] = useState<{
+    id: string;
+    numero_pedido: string | number;
+    status: string;
+    tipo: string;
+    total: number;
+    created_at?: string;
+    itens?: Array<{ id: string; nome: string; quantidade: number; observacao?: string }>;
+  } | null>(null);
+
+  const checkActiveOrder = useCallback(async (restaurantId: number) => {
+    try {
+      const raw = localStorage.getItem("koma_active_order");
+      if (!raw) {
+        setActiveOrder(null);
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      if (!parsed?.id || Number(parsed.restaurante_id) !== restaurantId) {
+        return;
+      }
+      // Check timeout (6 hours = 21600000 ms)
+      if (Date.now() - (parsed.timestamp || 0) > 21600000) {
+        localStorage.removeItem("koma_active_order");
+        setActiveOrder(null);
+        return;
+      }
+
+      const res = await fetch(`${API_BASE_URL}/cardapio/pedidos/${parsed.id}/status`);
+      if (res.status === 404) {
+        localStorage.removeItem("koma_active_order");
+        setActiveOrder(null);
+        return;
+      }
+      if (!res.ok) return;
+
+      const data = await res.json();
+      const statusLower = (data.status || "").toLowerCase();
+      if (["entregue", "finalizado", "cancelado"].includes(statusLower) || data.fechada) {
+        localStorage.removeItem("koma_active_order");
+        setActiveOrder(null);
+      } else {
+        setActiveOrder({
+          id: data.id,
+          numero_pedido: data.numero_pedido,
+          status: data.status,
+          tipo: data.tipo,
+          total: data.total,
+          created_at: data.criado_em,
+          itens: data.itens
+        });
+      }
+    } catch (e) {
+      console.warn("Erro ao consultar status do pedido ativo:", e);
+    }
+  }, []);
 
   // Quick Sidebar Checkout States
   const [deliveryMethod, setDeliveryMethod] = useState<"delivery" | "pickup">("delivery");
@@ -422,6 +478,7 @@ export default function CardapioPage() {
       };
 
       setActiveBrand(newBrand);
+      checkActiveOrder(Number(newBrand.id));
     } catch (err) {
       console.error("Falha ao carregar cardápio público:", err);
       setActiveBrand(null);
@@ -519,9 +576,10 @@ export default function CardapioPage() {
 
     const handleVisibilityChange = () => {
       if (!document.hidden) {
-        currentDelay = 2000;
-        connectWS();
-        loadRestaurantData();
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          currentDelay = 2000;
+          connectWS();
+        }
       }
     };
 
@@ -533,7 +591,7 @@ export default function CardapioPage() {
       if (ws) ws.close();
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
     };
-  }, [activeBrand?.id, loadRestaurantData]);
+  }, [activeBrand?.id]);
 
   const handleLoginSuccess = (profile: any) => {
     setUser(profile);
@@ -823,6 +881,57 @@ export default function CardapioPage() {
         {/* LEFT COLUMN: Main Restaurant Catalog */}
         <main className="flex-1 min-w-0 flex flex-col gap-6" id="catalog-section">
           
+          {/* ACTIVE ORDER BANNER (PARTE 3) */}
+          {activeOrder && (
+            <div className="w-full bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shadow-lg backdrop-blur-xs animate-fade-in" id="active-order-banner">
+              <div className="flex items-start gap-3">
+                <div className="p-2.5 bg-emerald-500/20 text-emerald-400 rounded-xl mt-0.5 shrink-0">
+                  <Clock className="w-5 h-5 animate-pulse" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-extrabold uppercase tracking-wider text-emerald-400">
+                      Você já tem um pedido em andamento (#{activeOrder.numero_pedido})
+                    </span>
+                    <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      {activeOrder.status}
+                    </span>
+                  </div>
+                  <p className="text-xs text-text-app/80 mt-1 font-medium">
+                    Modalidade: {activeOrder.tipo === "delivery" || activeOrder.tipo === "Delivery" ? "Delivery" : "Retirada"} • Total: {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(activeOrder.total)}
+                  </p>
+                  {activeOrder.itens && activeOrder.itens.length > 0 && (
+                    <p className="text-[11px] text-text-app/50 mt-0.5 line-clamp-1">
+                      {activeOrder.itens.map(i => `${i.quantidade}x ${i.nome}`).join(", ")}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                <button
+                  type="button"
+                  onClick={() => checkActiveOrder(Number(activeBrand.id))}
+                  className="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs font-bold rounded-xl transition border border-emerald-500/30 flex items-center gap-1.5 cursor-pointer"
+                  id="btn-refresh-active-order"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Atualizar</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    localStorage.removeItem("koma_active_order");
+                    setActiveOrder(null);
+                  }}
+                  className="px-3 py-1.5 bg-slate-500/10 hover:bg-slate-500/20 text-text-app/60 hover:text-text-app text-xs font-bold rounded-xl transition cursor-pointer"
+                  id="btn-new-order-clear"
+                >
+                  Fazer Novo Pedido
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Active Brand Hero Banner (Elegant full-width banner) */}
           <div className="h-44 sm:h-56 w-full overflow-hidden relative rounded-2xl shadow-xs group" id="brand-banner-hero">
             <img 

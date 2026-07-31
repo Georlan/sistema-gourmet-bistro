@@ -774,6 +774,7 @@ class CardapioPedidoCreate(BaseModel):
     taxa_entrega: float = Field(default=0.0, ge=0, le=10_000)
     forma_pagamento: Literal["na_entrega"] = "na_entrega"
     tipo_pedido: Literal["delivery", "retirada"] = "delivery"
+    idempotency_key: Optional[str] = Field(default=None, max_length=128)
 
     @field_validator("cliente_nome")
     @classmethod

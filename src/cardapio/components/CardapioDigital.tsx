@@ -41,6 +41,11 @@ export default function CardapioDigital({
   const [errorMessage, setErrorMessage] = useState("");
   const [createdOrder, setCreatedOrder] = useState<CreatedOrder | null>(null);
   const isSubmittingRef = useRef(false);
+  const idempotencyKeyRef = useRef<string>(
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `ik-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+  );
 
   const formatPrice = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -124,7 +129,8 @@ export default function CardapioDigital({
           endereco_entrega: deliveryMethod === "delivery" ? normalizedAddress : "",
           taxa_entrega: deliveryMethod === "delivery" ? deliveryFee : 0,
           forma_pagamento: "na_entrega",
-          tipo_pedido: deliveryMethod === "delivery" ? "delivery" : "retirada"
+          tipo_pedido: deliveryMethod === "delivery" ? "delivery" : "retirada",
+          idempotency_key: idempotencyKeyRef.current
         })
       });
 
@@ -133,13 +139,32 @@ export default function CardapioDigital({
         const detail = typeof data?.detail === "string" ? data.detail : null;
         throw new Error(detail || `Não foi possível enviar o pedido (${response.status}).`);
       }
-      if (data?.status !== "success" || !data.comanda_id || data.numero_pedido == null) {
+
+      const comandaId = data?.comanda_id || data?.id;
+      const numeroPedido = data?.numero_pedido;
+
+      if (!comandaId || numeroPedido == null) {
         throw new Error("O servidor retornou uma confirmação de pedido inválida.");
       }
 
+      const orderObj = {
+        id: String(comandaId),
+        numero_pedido: String(numeroPedido),
+        timestamp: Date.now(),
+        restaurante_id: targetRestauranteId,
+        cliente_nome: normalizedName,
+        tipo: deliveryMethod === "delivery" ? "Delivery" : "Retirada",
+        total: estimatedTotal
+      };
+      try {
+        localStorage.setItem("koma_active_order", JSON.stringify(orderObj));
+      } catch (err) {
+        console.warn("Não foi possível salvar pedido ativo no localStorage:", err);
+      }
+
       setCreatedOrder({
-        comanda_id: String(data.comanda_id),
-        numero_pedido: data.numero_pedido
+        comanda_id: String(comandaId),
+        numero_pedido: numeroPedido
       });
     } catch (error) {
       console.error("Erro ao enviar pedido:", error);
