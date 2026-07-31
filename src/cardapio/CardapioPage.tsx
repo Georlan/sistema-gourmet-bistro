@@ -37,7 +37,7 @@ function parseStructuredValue(value: unknown): unknown {
   }
 }
 
-function getRestaurantIdentifier(): string | null {
+function getRestaurantIdentifier(): string {
   // 1. Check query parameters first (high priority for testing)
   const params = new URLSearchParams(window.location.search);
   const restaurantId = params.get("restaurant_id") || params.get("restaurante_id");
@@ -47,14 +47,22 @@ function getRestaurantIdentifier(): string | null {
   if (slug) return slug;
 
   // 2. Check subdomain in production
-  const hostname = window.location.hostname;
+  const hostname = window.location.hostname.toLowerCase();
   const parts = hostname.split(".");
-  // If we have a subdomain and it's not 'www' or local dev/preview domains
-  if (parts.length > 2 && parts[0] !== "www" && !parts[0].startsWith("ais-dev") && !parts[0].startsWith("ais-pre") && parts[0] !== "localhost") {
+  const ignoredSubdomains = ["www", "localhost", "sistema-gourmet-bistro"];
+  const isPlatformHost = hostname.endsWith(".pages.dev") || 
+                         hostname.endsWith(".railway.app") || 
+                         hostname.endsWith(".up.railway.app") || 
+                         hostname.endsWith(".vercel.app") || 
+                         hostname.endsWith(".netlify.app") || 
+                         hostname.endsWith(".github.io");
+
+  if (parts.length > 2 && !ignoredSubdomains.includes(parts[0]) && !parts[0].startsWith("ais-dev") && !parts[0].startsWith("ais-pre") && !isPlatformHost) {
     return parts[0];
   }
 
-  return null;
+  // Fallback to default restaurant ID "1" if no specific tenant subdomain or param
+  return "1";
 }
 
 export default function CardapioPage() {
