@@ -31,6 +31,7 @@ import { CardapioCategoriasTab } from './cardapio/CardapioCategoriasTab';
 import { CategoriaModal } from './cardapio/CategoriaModal';
 import { AssistenteConfigTab } from './assistente/AssistenteConfigTab';
 import { AssistenteSimuladorTab } from './assistente/AssistenteSimuladorTab';
+import { AssinaturaPixTab } from './assinatura/AssinaturaPixTab';
 import { PRODUCTS, CATEGORIES } from '../data';
 import { getProductPresets, obterNomeCategoria, smartSearchMatch } from '../domain';
 import { API } from '../config/caixaService';
@@ -186,6 +187,7 @@ export function CaixaPanel({
   const isProcessingPaymentRef = React.useRef(false); // Synchronous guard against double-click
   const [idempotencyKey, setIdempotencyKey] = useState('');
   const [toastData, setToastData] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [planNoticeBanner, setPlanNoticeBanner] = useState<string | null>(null);
 
   const showToast = (msg: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToastData({ msg, type });
@@ -2759,11 +2761,10 @@ export function CaixaPanel({
                             if (isLocked) {
                               setActiveTab('assinatura_pix');
                               setActiveSubTab('planos');
-                              showToast(
+                              setPlanNoticeBanner(
                                 currentPlanId === 'pro'
-                                    ? `Ative o ${ONLINE_MENU_ADDON.name} ou migre para o Kôma Premium.`
-                                    : 'O cardápio online está disponível no Kôma Pro como adicional e incluído no Premium.',
-                                'info'
+                                    ? `Ative o ${ONLINE_MENU_ADDON.name} ou migre para o Kôma Premium para utilizar este recurso.`
+                                    : 'O Cardápio Online Kôma está disponível no Kôma Pro como adicional e incluído no Premium.'
                               );
                               return;
                             }
@@ -5249,122 +5250,20 @@ export function CaixaPanel({
 
           {/* VIEW 9: PAGAMENTOS & PLANOS */}
           {activeSubTab === 'planos' && (
-            <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5')}>
-
-              {/* Online payment toggles (Left Column) */}
-              <div className={clsx('lg:col-span-2', 'bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4')}>
-                <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Integrações de Pagamento Online</span>
-
-                <p className={clsx('text-[10px]', 'text-gray-400', 'leading-relaxed', 'bg-[#09090B]', 'p-3', 'rounded-xl', 'border', 'border-[#27272A]/50')}>
-                  Ative formas de recebimento online integradas diretamente na comanda digital do cliente. Os valores são creditados de forma imediata na sua conta bancária.
-                </p>
-
-                <div className="space-y-4">
-                  {[
-                    { title: "Pix Automático in-app", desc: "Gera um QR Code Pix dinâmico para o cliente pagar direto no celular e libera a mesa de forma autônoma.", checked: payPixActive, setChecked: setPayPixActive },
-                    { title: "Cartão de Crédito Online", desc: "Permite pagamentos via crédito diretamente pela carteira digital do cliente na tela de consumo.", checked: payCardActive, setChecked: setPayCardActive }
-                  ].map((item, idx) => (
-                    <div key={idx} className={clsx('flex', 'justify-between', 'items-start', 'gap-4')}>
-                      <div className={clsx('space-y-0.5', 'text-left')}>
-                        <strong className={clsx('text-white', 'block', 'font-semibold')}>{item.title}</strong>
-                        <span className={clsx('text-[9px]', 'text-gray-500', 'block', 'leading-relaxed')}>{item.desc}</span>
-                      </div>
-                      <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer', 'shrink-0', 'mt-0.5')}>
-                        <input type="checkbox" checked={item.checked} onChange={(e) => item.setChecked(e.target.checked)} className={clsx('sr-only', 'peer')} />
-                        <div className={clsx('w-8', 'h-4.5', 'bg-[#27272A]', 'peer-focus:outline-none', 'rounded-full', 'peer', 'peer-checked:after:translate-x-full', 'peer-checked:after:border-white', "after:content-['']", 'after:absolute', 'after:top-[2px]', 'after:left-[2px]', 'after:bg-white', 'after:border-gray-300', 'after:border', 'after:rounded-full', 'after:h-3.5', 'after:w-3.5', 'after:transition-all', 'peer-checked:bg-emerald-600')}></div>
-                      </label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* SaaS Plans (Right Column) */}
-              <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4')}>
-                <div className={clsx('pb-2', 'border-b', 'border-[#27272A]', 'space-y-1')}>
-                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block')}>Assinatura e Planos Kôma</span>
-                  <span className="text-[9px] text-gray-500 block">
-                    Plano atual: <strong className="text-emerald-400">{currentPlan.name}</strong>
-                  </span>
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    <span className={clsx(
-                      'px-2 py-0.5 rounded-full border text-[8px] font-bold',
-                      hasPrinting
-                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
-                        : 'bg-zinc-500/10 border-zinc-500/20 text-zinc-400'
-                    )}>
-                      {hasPrinting ? 'Impressão incluída' : 'Sem impressão'}
-                    </span>
-                    <span className={clsx(
-                      'px-2 py-0.5 rounded-full border text-[8px] font-bold',
-                      hasOnlineMenu
-                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
-                        : 'bg-amber-500/10 border-amber-500/20 text-amber-300'
-                    )}>
-                      {hasOnlineMenu ? 'Cardápio online ativo' : 'Cardápio online opcional'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  {SUBSCRIPTION_PLANS.map((plan) => (
-                    <div
-                      key={plan.id}
-                      onClick={() => setSelectedPlan(plan.id)}
-                      className={`p-3.5 rounded-2xl border transition-all cursor-pointer text-left ${selectedPlan === plan.id
-                        ? 'bg-emerald-600/15 border-[#10b981] shadow'
-                        : 'bg-[#1C1C1F] border-[#27272A] hover:border-[#10b981]/30'
-                        }`}
-                    >
-                      <div className={clsx('flex', 'justify-between', 'items-start', 'gap-2', 'mb-1')}>
-                        <div>
-                          <strong className={clsx('text-white', 'block', 'text-xs')}>
-                            {plan.name}
-                            {plan.recommended && <span className="text-[8px] text-emerald-400 ml-1">(Recomendado)</span>}
-                          </strong>
-                          <span className="text-[8px] text-gray-500 block mt-0.5">{plan.tagline}</span>
-                        </div>
-                        <span className={clsx('font-bold', 'text-[#10b981]', 'font-mono', 'text-[11px]', 'whitespace-nowrap')}>
-                          R$ {plan.price}/mês
-                        </span>
-                      </div>
-                      <ul className={clsx('space-y-0.5', 'text-[9px]', 'text-gray-400', 'pl-3', 'list-disc')}>
-                        {plan.features.map((f, i) => (
-                          <li key={i}>{f}</li>
-                        ))}
-                      </ul>
-                      {plan.limitations.length > 0 && (
-                        <ul className={clsx('space-y-0.5', 'text-[8px]', 'text-amber-300/80', 'pl-3', 'list-disc', 'mt-1.5')}>
-                          {plan.limitations.map((limitation) => (
-                            <li key={limitation}>{limitation}</li>
-                          ))}
-                        </ul>
-                      )}
-                      {currentPlanId === plan.id && (
-                        <span className="inline-block mt-2 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-[8px] font-bold uppercase">
-                          Seu plano
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                <div className="p-3 rounded-2xl bg-amber-500/5 border border-amber-500/20 text-left">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <strong className="text-amber-200 text-[10px] block">{ONLINE_MENU_ADDON.name}</strong>
-                      <span className="text-[8px] text-gray-400 block mt-0.5 leading-relaxed">{ONLINE_MENU_ADDON.description}</span>
-                    </div>
-                    <span className="text-amber-300 text-[10px] font-bold font-mono whitespace-nowrap">
-                      + R$ {ONLINE_MENU_ADDON.price}/mês
-                    </span>
-                  </div>
-                  <p className="text-[8px] text-gray-500 mt-2">
-                    Opcional no Kôma Pro e já incluído no Kôma Premium.
-                  </p>
-                </div>
-              </div>
-
-            </div>
+            <AssinaturaPixTab
+              currentPlanId={currentPlanId}
+              hasPrinting={hasPrinting}
+              hasOnlineMenu={hasOnlineMenu}
+              payPixActive={payPixActive}
+              setPayPixActive={setPayPixActive}
+              payCardActive={payCardActive}
+              setPayCardActive={setPayCardActive}
+              onSelectPlan={(planId) => {
+                setSelectedPlan(planId);
+                showToast(`Plano ${planId.toUpperCase()} selecionado.`, 'info');
+              }}
+              bannerNotice={planNoticeBanner}
+            />
           )}
 
           {/* VIEW: RECUPERADOR DE VENDAS */}
