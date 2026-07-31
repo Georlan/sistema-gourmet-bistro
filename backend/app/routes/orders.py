@@ -3,7 +3,7 @@ import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
-from typing import List, Optional
+from typing import List, Optional, Any
 import logging
 
 from ..database import get_db, current_restaurante_id, require_tenant_id
@@ -73,6 +73,56 @@ def _get_print_preferences(db: Session, restaurante_id: int) -> dict:
             config.impressao_mensagem_rodape if config else None
         ),
     }
+
+
+def enqueue_print_job_in_session(
+    db: Session,
+    restaurante_id: int,
+    printer_name: str,
+    ticket_text: str,
+    document_type: str = "producao",
+    source_type: str = "pedido",
+    source_id: str = "",
+) -> Optional[Any]:
+    """
+    Enfileira um PrintJob na mesma sessão do banco de dados para garantir atomicidade transacional com a criação do pedido.
+    """
+    try:
+        import datetime
+        from ..models import PrintJob, Restaurante
+        restaurante = db.query(Restaurante).filter(Restaurante.id == restaurante_id).first()
+        if restaurante and (restaurante.plano or "pocket").strip().lower() == "pocket":
+            logger.info("Impressão ignorada para restaurante %s: recurso não incluído no Kôma Pocket.", restaurante_id)
+            return None
+
+        dest_clean = "COZINHA"
+        p_upper = (printer_name or "").upper()
+        if "FECHAMENTO" in p_upper or "RECIBO" in p_upper or "VALORES" in p_upper:
+            dest_clean = "FECHAMENTO"
+        elif "DELIVERY" in p_upper or "MOTOBOY" in p_upper or "ENTREGA" in p_upper:
+            dest_clean = "ENTREGA"
+        elif "BAR" in p_upper:
+            dest_clean = "BAR"
+
+        doc_type_clean = "entrega" if "delivery" in p_upper or "motoboy" in p_upper else document_type.lower()
+        ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d%H%M%S%f")
+        ikey = f"{doc_type_clean}:{source_type}:{source_id}:{printer_name}:{ts}"
+
+        job = PrintJob(
+            restaurante_id=restaurante_id,
+            document_type=doc_type_clean,
+            destination=dest_clean,
+            source_type=source_type.lower(),
+            source_id=str(source_id),
+            payload_text=ticket_text.replace("\x00", "\\x00"),
+            status="pending",
+            idempotency_key=ikey
+        )
+        db.add(job)
+        return job
+    except Exception as e:
+        logger.error(f"[PRINT JOB TX ERROR] Falha ao adicionar PrintJob na sessão: {e}")
+        return None
 
 
 def print_in_background(
@@ -600,25 +650,8 @@ def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_ta
             
             itens_criados.append(novo_item)
 
-        db.commit()
-    except HTTPException:
-        raise
-    except Exception:
-        db.rollback()
-        logger.exception("Falha ao processar dado sensível criptografado")
-        raise HTTPException(
-            status_code=500,
-            detail="Erro ao processar dado sensível, contate o suporte."
-        )
-    db.refresh(novo_lancamento)
-    novo_lancamento.itens = itens_criados
-
-    # Auto-print cocina delta (novos itens)
-    novo_lancamento.dispensado_impressao = False
-    try:
-        from ..printer_service import printer_service
-        
-        # Check if we should print based on categories
+        # Auto-print cozinha delta (novos itens)
+        novo_lancamento.dispensado_impressao = False
         should_print = False
         items_payload = []
         for it in itens_criados:
@@ -635,6 +668,7 @@ def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_ta
             })
             
         if should_print:
+            from ..printer_service import printer_service
             print_preferences = _get_print_preferences(
                 db,
                 comanda.restaurante_id,
@@ -648,32 +682,37 @@ def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_ta
                 is_reprint=False,
                 **print_preferences,
             )
-            background_tasks.add_task(
-                print_in_background,
-                "cozinha",
-                ticket_text,
+            enqueue_print_job_in_session(
+                db,
                 restaurante_id=require_tenant_id(),
+                printer_name="cozinha",
+                ticket_text=ticket_text,
+                document_type="producao",
+                source_type="pedido",
+                source_id=comanda_id,
             )
             
             # Mark items as printed
             print_time = datetime.datetime.now(datetime.timezone.utc)
             for it in itens_criados:
                 it.impresso_em = print_time
-            try:
-                db.commit()
-            except HTTPException:
-                raise
-            except Exception:
-                db.rollback()
-                logger.exception("Falha ao processar dado sensível criptografado")
-                raise HTTPException(
-                    status_code=500,
-                    detail="Erro ao processar dado sensível, contate o suporte."
-                )
         else:
             novo_lancamento.dispensado_impressao = True
-    except Exception as print_err:
-        print(f"Error printing kitchen ticket: {print_err}")
+
+        db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        logger.exception("Falha ao lançar itens e registrar impressão")
+        raise HTTPException(
+            status_code=500,
+            detail="Erro ao processar lançamento do pedido."
+        )
+
+    db.refresh(novo_lancamento)
+    novo_lancamento.itens = itens_criados
 
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
     return novo_lancamento
