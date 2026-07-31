@@ -289,19 +289,21 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
           <span className="text-[9px] text-gray-500 block">Média por comanda finalizada</span>
         </div>
 
-        {/* Clientes Ativos */}
-        <div className="bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-2">
-          <div className="flex justify-between items-center text-gray-400">
-            <span className="text-[9px] font-bold uppercase tracking-wider">Clientes Ativos</span>
-            <div className="p-1.5 bg-purple-500/15 text-purple-400 rounded-xl">
-              <Users size={16} />
+        {/* Clientes Ativos (Renderizado apenas se houver dados de clientes cadastrados) */}
+        {(data?.clientes_ativos || 0) > 0 && (
+          <div className="bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-2">
+            <div className="flex justify-between items-center text-gray-400">
+              <span className="text-[9px] font-bold uppercase tracking-wider">Clientes Ativos</span>
+              <div className="p-1.5 bg-purple-500/15 text-purple-400 rounded-xl">
+                <Users size={16} />
+              </div>
             </div>
+            <strong className="text-2xl text-white font-mono block">
+              {data.clientes_ativos}
+            </strong>
+            <span className="text-[9px] text-gray-500 block">Clientes cadastrados com identificação</span>
           </div>
-          <strong className="text-2xl text-white font-mono block">
-            {data?.clientes_ativos ?? 0}
-          </strong>
-          <span className="text-[9px] text-gray-500 block">Comandas cadastradas no período</span>
-        </div>
+        )}
       </div>
 
       {/* Meta Mensal Block */}
@@ -336,62 +338,83 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
               </button>
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={() => {
-                setNewMetaInput(String(data?.meta_mensal || ''));
-                setEditingMeta(true);
-              }}
-              className="px-3 py-1 bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] text-gray-300 hover:text-white rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer"
-            >
-              Configurar Meta
-            </button>
+            (data?.meta_mensal || 0) > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setNewMetaInput(String(data?.meta_mensal || ''));
+                  setEditingMeta(true);
+                }}
+                className="px-3 py-1 bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] text-gray-300 hover:text-white rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+              >
+                Configurar Meta
+              </button>
+            )
           )}
         </div>
 
-        {/* Meta Progress Bar */}
-        <div className="space-y-2">
-          <div className="flex justify-between items-center text-[10px] font-mono">
-            <span className="text-gray-400">
-              Realizado: <strong className="text-white">R$ {data?.meta_realizada?.toFixed(2) ?? '0.00'}</strong>
-            </span>
-            <span className="text-[#10b981] font-bold">
-              {data?.meta_percentual ?? 0}% Alcançado
-            </span>
-            <span className="text-gray-400">
-              Meta: <strong className="text-white">R$ {data?.meta_mensal?.toFixed(2) ?? '0.00'}</strong>
-            </span>
+        {(data?.meta_mensal || 0) <= 0 && !editingMeta ? (
+          <div className="py-6 text-center space-y-3">
+            <p className="text-xs text-gray-400">Nenhuma meta de faturamento mensal definida para este período.</p>
+            <button
+              type="button"
+              onClick={() => {
+                setNewMetaInput('');
+                setEditingMeta(true);
+              }}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-sm"
+            >
+              <Target size={14} />
+              <span>Definir Meta Mensal</span>
+            </button>
           </div>
+        ) : (
+          <>
+            {/* Meta Progress Bar */}
+            <div className="space-y-2">
+              <div className="flex justify-between items-center text-[10px] font-mono">
+                <span className="text-gray-400">
+                  Realizado: <strong className="text-white">R$ {data?.meta_realizada?.toFixed(2) ?? '0.00'}</strong>
+                </span>
+                <span className="text-[#10b981] font-bold">
+                  {data?.meta_percentual ?? 0}% Alcançado
+                </span>
+                <span className="text-gray-400">
+                  Meta: <strong className="text-white">R$ {data?.meta_mensal?.toFixed(2) ?? '0.00'}</strong>
+                </span>
+              </div>
 
-          <div className="w-full h-3 bg-[#09090B] border border-[#27272A] rounded-full overflow-hidden p-0.5">
-            <div
-              className="h-full bg-[#10b981] rounded-full transition-all duration-500"
-              style={{ width: `${Math.min(100, data?.meta_percentual || 0)}%` }}
-            />
-          </div>
-        </div>
+              <div className="w-full h-3 bg-[#09090B] border border-[#27272A] rounded-full overflow-hidden p-0.5">
+                <div
+                  className="h-full bg-[#10b981] rounded-full transition-all duration-500"
+                  style={{ width: `${Math.min(100, data?.meta_percentual || 0)}%` }}
+                />
+              </div>
+            </div>
 
-        {/* Projeção e Ritmo */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-[10px]">
-          <div className="bg-[#1C1C1F]/60 border border-[#27272A]/60 p-3 rounded-2xl space-y-1">
-            <span className="text-gray-400 text-[8px] font-bold uppercase tracking-wider block">Valor Restante</span>
-            <strong className="text-sm font-mono text-white block">
-              R$ {data?.meta_restante?.toFixed(2) ?? '0.00'}
-            </strong>
-          </div>
-          <div className="bg-[#1C1C1F]/60 border border-[#27272A]/60 p-3 rounded-2xl space-y-1">
-            <span className="text-gray-400 text-[8px] font-bold uppercase tracking-wider block">Projeção no Ritmo Atual</span>
-            <strong className="text-sm font-mono text-emerald-400 block">
-              R$ {data?.meta_projecao?.toFixed(2) ?? '0.00'}
-            </strong>
-          </div>
-          <div className="bg-[#1C1C1F]/60 border border-[#27272A]/60 p-3 rounded-2xl space-y-1">
-            <span className="text-gray-400 text-[8px] font-bold uppercase tracking-wider block">Média Diária Necessária</span>
-            <strong className="text-sm font-mono text-amber-400 block">
-              R$ {data?.meta_media_diaria_necessaria?.toFixed(2) ?? '0.00'} / dia
-            </strong>
-          </div>
-        </div>
+            {/* Projeção e Ritmo */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-[10px]">
+              <div className="bg-[#1C1C1F]/60 border border-[#27272A]/60 p-3 rounded-2xl space-y-1">
+                <span className="text-gray-400 text-[8px] font-bold uppercase tracking-wider block">Valor Restante</span>
+                <strong className="text-sm font-mono text-white block">
+                  R$ {data?.meta_restante?.toFixed(2) ?? '0.00'}
+                </strong>
+              </div>
+              <div className="bg-[#1C1C1F]/60 border border-[#27272A]/60 p-3 rounded-2xl space-y-1">
+                <span className="text-gray-400 text-[8px] font-bold uppercase tracking-wider block">Projeção no Ritmo Atual</span>
+                <strong className="text-sm font-mono text-emerald-400 block">
+                  R$ {data?.meta_projecao?.toFixed(2) ?? '0.00'}
+                </strong>
+              </div>
+              <div className="bg-[#1C1C1F]/60 border border-[#27272A]/60 p-3 rounded-2xl space-y-1">
+                <span className="text-gray-400 text-[8px] font-bold uppercase tracking-wider block">Média Diária Necessária</span>
+                <strong className="text-sm font-mono text-amber-400 block">
+                  R$ {data?.meta_media_diaria_necessaria?.toFixed(2) ?? '0.00'} / dia
+                </strong>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Grid: Pedidos por dia (Plano Bistrô: NO delivery) & Horários de Pico */}

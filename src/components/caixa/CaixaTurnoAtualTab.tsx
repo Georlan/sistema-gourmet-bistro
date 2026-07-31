@@ -18,6 +18,7 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
   onOpenNovoTurnoModal
 }) => {
   const isTurnoAberto = turnoResumo?.status === 'aberto';
+  const isTurnoEsquecido = isTurnoAberto && ((turnoResumo?.tempo_aberto_minutos || 0) > 1440 || Boolean((turnoResumo as any)?.turno_esquecido));
 
   const formatMinutos = (mins: number) => {
     if (!mins || mins <= 0) return '0 min';
@@ -29,19 +30,42 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
 
   return (
     <div className="space-y-5 text-left animate-fade-in">
+      {/* Alert Banner if Turno Esquecido */}
+      {isTurnoEsquecido && (
+        <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-center justify-between gap-3 text-amber-300 text-xs font-medium shadow-md">
+          <div className="flex items-center gap-2.5">
+            <Clock size={18} className="shrink-0 text-amber-400 animate-pulse" />
+            <span>
+              <strong>Aviso de Operação:</strong> Este turno de caixa foi aberto há <strong>{formatMinutos(turnoResumo?.tempo_aberto_minutos || 0)}</strong> (mais de 24h) e pode ter sido esquecido aberto. Recomendamos realizar a conferência e o fechamento.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onNavigateToFechamento}
+            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold rounded-xl text-[10px] uppercase tracking-wider transition-all shrink-0 cursor-pointer shadow"
+          >
+            Conferir e Fechar
+          </button>
+        </div>
+      )}
+
       {/* Header Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-[#121214]/60 border border-[#27272A] p-4 rounded-3xl">
         <div className="flex items-center gap-3">
-          <div className={`p-2.5 rounded-2xl ${isTurnoAberto ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-zinc-800 text-gray-400'}`}>
+          <div className={`p-2.5 rounded-2xl ${isTurnoEsquecido ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30' : isTurnoAberto ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-zinc-800 text-gray-400'}`}>
             {isTurnoAberto ? <CheckCircle2 size={20} /> : <Lock size={20} />}
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h3 className="font-serif text-sm font-bold text-white">Status do Turno</h3>
               <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${
-                isTurnoAberto ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'
+                isTurnoEsquecido
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                  : isTurnoAberto
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                  : 'bg-red-500/20 text-red-300 border border-red-500/30'
               }`}>
-                {isTurnoAberto ? '● Caixa Aberto' : '● Caixa Fechado'}
+                {isTurnoEsquecido ? '⚠ Turno Esquecido (+24h)' : isTurnoAberto ? '● Caixa Aberto' : '● Caixa Fechado'}
               </span>
             </div>
             <p className="text-[10px] text-gray-400">

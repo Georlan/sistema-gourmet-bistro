@@ -65,43 +65,55 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
         </div>
       </div>
 
-      {/* Filter Bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-[#121214]/40 border border-[#27272A] p-3 rounded-2xl">
-        <div className="space-y-1">
-          <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
-            <Filter size={10} />
-            <span>Tipo de Movimentação</span>
-          </label>
-          <select
-            value={filterTipo}
-            onChange={(e) => setFilterTipo(e.target.value)}
-            className="w-full px-2.5 py-1.5 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
-          >
-            <option value="todos">Todas as Movimentações</option>
-            <option value="suprimento">Apenas Suprimentos (+)</option>
-            <option value="sangria">Apenas Sangrias (-)</option>
-          </select>
+      {/* Compact Inline Filter Bar */}
+      <div className="flex flex-wrap items-center gap-3 bg-[#121214]/60 border border-[#27272A] px-3.5 py-2 rounded-2xl text-[10px]">
+        <div className="flex items-center gap-1.5 text-gray-400 font-bold uppercase tracking-wider shrink-0">
+          <Filter size={11} className="text-emerald-400" />
+          <span>Filtrar:</span>
         </div>
+        <select
+          value={filterTipo}
+          onChange={(e) => setFilterTipo(e.target.value)}
+          className="px-2.5 py-1 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500 cursor-pointer"
+        >
+          <option value="todos">Todas as Movimentações</option>
+          <option value="suprimento">Apenas Suprimentos (+)</option>
+          <option value="sangria">Apenas Sangrias (-)</option>
+        </select>
 
-        <div className="space-y-1">
-          <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Data Início</label>
+        <div className="flex items-center gap-1.5 text-gray-400">
+          <span className="text-[9px] uppercase font-bold">De:</span>
           <input
             type="date"
             value={filterDataInicio}
             onChange={(e) => setFilterDataInicio(e.target.value)}
-            className="w-full px-2.5 py-1.5 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
+            className="px-2 py-1 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
           />
         </div>
 
-        <div className="space-y-1">
-          <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Data Fim</label>
+        <div className="flex items-center gap-1.5 text-gray-400">
+          <span className="text-[9px] uppercase font-bold">Até:</span>
           <input
             type="date"
             value={filterDataFim}
             onChange={(e) => setFilterDataFim(e.target.value)}
-            className="w-full px-2.5 py-1.5 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
+            className="px-2 py-1 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
           />
         </div>
+
+        {(filterTipo !== 'todos' || filterDataInicio || filterDataFim) && (
+          <button
+            type="button"
+            onClick={() => {
+              setFilterTipo('todos');
+              setFilterDataInicio('');
+              setFilterDataFim('');
+            }}
+            className="text-[9px] text-gray-500 hover:text-white underline cursor-pointer ml-auto"
+          >
+            Limpar filtros
+          </button>
+        )}
       </div>
 
       {/* Audit Log Table */}

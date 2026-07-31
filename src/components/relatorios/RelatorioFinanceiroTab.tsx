@@ -123,65 +123,77 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
         </div>
       </div>
 
-      {/* Structured DRE Statement */}
+      {/* Real Sales & Payment Breakdown */}
       <div className="bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 space-y-4 text-left">
         <div className="border-b border-[#27272A] pb-2 flex items-center justify-between">
           <h4 className="font-serif text-sm font-bold text-white flex items-center gap-2">
             <BarChart3 size={16} className="text-emerald-400" />
-            <span>Demonstrativo do Resultado do Exercício (DRE)</span>
+            <span>Detalhamento Financeiro de Vendas</span>
           </h4>
-          <span className="text-[9px] text-gray-400 font-mono">Consolidado Real</span>
+          <span className="text-[9px] text-gray-400 font-mono">Últimos {periodoDias} dias</span>
         </div>
 
         <div className="overflow-x-auto border border-[#27272A]/40 rounded-2xl">
           <table className="w-full text-left text-xs font-mono">
             <thead>
               <tr className="bg-[#1C1C1F] border-b border-[#27272A] text-gray-400 uppercase text-[9px] tracking-wider">
-                <th className="p-3">Estrutura DRE</th>
-                <th className="p-3 text-right font-mono">Valor Consolidado</th>
+                <th className="p-3">Forma de Recebimento</th>
+                <th className="p-3 text-right font-mono">Valor Total</th>
                 <th className="p-3 text-right font-mono">% do Faturamento</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#27272A]/40 text-gray-200">
-              <tr className="bg-[#1C1C1F]/40 font-bold">
-                <td className="p-3 font-sans text-emerald-400">1. FATURAMENTO BRUTO DE VENDAS</td>
-                <td className="p-3 text-right text-emerald-400">
-                  {faturamentoBruto !== null ? `R$ ${Number(faturamentoBruto).toFixed(2)}` : 'Dados indisponíveis'}
+              <tr className="bg-[#1C1C1F]/60 font-bold">
+                <td className="p-3 font-sans text-emerald-400">1. FATURAMENTO TOTAL BRUTO</td>
+                <td className="p-3 text-right text-emerald-400 font-bold">
+                  {faturamentoBruto !== null ? `R$ ${Number(faturamentoBruto).toFixed(2)}` : 'R$ 0.00'}
                 </td>
-                <td className="p-3 text-right text-gray-400">100.0%</td>
+                <td className="p-3 text-right text-emerald-400 font-bold">100.0%</td>
               </tr>
-              <tr>
-                <td className="p-3 pl-6 text-gray-400 font-sans">(-) Deduções e Descontos Concedidos</td>
-                <td className="p-3 text-right text-gray-400">
-                  {stats?.descontos !== undefined ? `- R$ ${Number(stats.descontos).toFixed(2)}` : 'Dados indisponíveis'}
-                </td>
-                <td className="p-3 text-right text-gray-500">—</td>
-              </tr>
-              <tr className="font-semibold bg-[#1C1C1F]/20">
-                <td className="p-3 font-sans text-white">2. FATURAMENTO LÍQUIDO</td>
-                <td className="p-3 text-right text-white">
-                  {faturamentoBruto !== null ? `R$ ${Number(faturamentoBruto - (stats?.descontos || 0)).toFixed(2)}` : 'Dados indisponíveis'}
-                </td>
-                <td className="p-3 text-right text-gray-400">
-                  {faturamentoBruto ? `${(((faturamentoBruto - (stats?.descontos || 0)) / faturamentoBruto) * 100).toFixed(1)}%` : '—'}
-                </td>
-              </tr>
-              <tr>
-                <td className="p-3 pl-6 text-gray-400 font-sans">(-) Custos de Insumos / CMV Direto</td>
-                <td className="p-3 text-right text-gray-400">
-                  {stats?.cmv_real !== undefined ? `- R$ ${Number(stats.cmv_real).toFixed(2)}` : 'Dados indisponíveis'}
-                </td>
-                <td className="p-3 text-right text-gray-500">—</td>
-              </tr>
-              <tr className="font-bold bg-[#1C1C1F]/40 border-t border-[#27272A]">
-                <td className="p-3 font-sans text-emerald-300">3. MARGEM BRUTA OPERACIONAL</td>
-                <td className="p-3 text-right text-emerald-300">
-                  {faturamentoBruto !== null ? `R$ ${Number(faturamentoBruto - (stats?.descontos || 0) - (stats?.cmv_real || 0)).toFixed(2)}` : 'Dados indisponíveis'}
-                </td>
-                <td className="p-3 text-right text-emerald-400">
-                  {faturamentoBruto ? `${(((faturamentoBruto - (stats?.descontos || 0) - (stats?.cmv_real || 0)) / faturamentoBruto) * 100).toFixed(1)}%` : '—'}
-                </td>
-              </tr>
+              {(() => {
+                const total = Number(faturamentoBruto || 0);
+                const bk = stats?.breakdown_pagamentos || {};
+                const din = Number(bk.dinheiro || 0);
+                const pix = Number(bk.pix || 0);
+                const car = Number(bk.cartao || 0);
+                return (
+                  <>
+                    <tr>
+                      <td className="p-3 pl-6 text-gray-300 font-sans flex items-center gap-2">
+                        <span>💵 Recebimentos em Dinheiro</span>
+                      </td>
+                      <td className="p-3 text-right text-white font-bold">
+                        R$ {din.toFixed(2)}
+                      </td>
+                      <td className="p-3 text-right text-gray-400">
+                        {total > 0 ? `${((din / total) * 100).toFixed(1)}%` : '0.0%'}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="p-3 pl-6 text-gray-300 font-sans flex items-center gap-2">
+                        <span>⚡ Recebimentos via Pix</span>
+                      </td>
+                      <td className="p-3 text-right text-white font-bold">
+                        R$ {pix.toFixed(2)}
+                      </td>
+                      <td className="p-3 text-right text-gray-400">
+                        {total > 0 ? `${((pix / total) * 100).toFixed(1)}%` : '0.0%'}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="p-3 pl-6 text-gray-300 font-sans flex items-center gap-2">
+                        <span>💳 Recebimentos em Cartão (Débito/Crédito)</span>
+                      </td>
+                      <td className="p-3 text-right text-white font-bold">
+                        R$ {car.toFixed(2)}
+                      </td>
+                      <td className="p-3 text-right text-gray-400">
+                        {total > 0 ? `${((car / total) * 100).toFixed(1)}%` : '0.0%'}
+                      </td>
+                    </tr>
+                  </>
+                );
+              })()}
             </tbody>
           </table>
         </div>

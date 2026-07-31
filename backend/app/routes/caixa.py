@@ -277,6 +277,7 @@ def obter_resumo_turno_atual(
         operador_nome=operador_nome,
         aberto_em=turno.aberto_em,
         tempo_aberto_minutos=max(0, tempo_minutos),
+        turno_esquecido=(tempo_minutos > 1440),
         saldo_inicial=turno.saldo_inicial,
         total_vendas=total_vendas,
         total_dinheiro=total_dinheiro,

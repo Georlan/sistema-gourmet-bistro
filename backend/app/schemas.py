@@ -307,6 +307,7 @@ class CaixaTurnoResumoResponse(BaseModel):
     operador_nome: Optional[str] = None
     aberto_em: Optional[datetime] = None
     tempo_aberto_minutos: int = 0
+    turno_esquecido: bool = False
     saldo_inicial: float = 0.0
     total_vendas: float = 0.0
     total_dinheiro: float = 0.0

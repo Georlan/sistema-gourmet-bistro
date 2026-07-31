@@ -136,6 +136,9 @@ def get_estatisticas_geral(
         
     pags = pags_query.all()
     faturamento = sum(p.valor for p in pags)
+    faturamento_dinheiro = sum(p.valor for p in pags if p.metodo == "dinheiro")
+    faturamento_pix = sum(p.valor for p in pags if p.metodo == "pix")
+    faturamento_cartao = sum(p.valor for p in pags if p.metodo in ["cartao", "cartao_debito", "cartao_credito"])
 
     # 1b. Faturamento de hoje
     import sqlalchemy as sa
@@ -250,7 +253,12 @@ def get_estatisticas_geral(
         "weekly_chart": weekly_chart,
         "qualidade_cardapio": qualidade_cardapio,
         "pedidos_modalidade": pedidos_modalidade,
-        "top_itens": top_itens
+        "top_itens": top_itens,
+        "breakdown_pagamentos": {
+            "dinheiro": round(faturamento_dinheiro, 2),
+            "pix": round(faturamento_pix, 2),
+            "cartao": round(faturamento_cartao, 2)
+        }
     }
 
 

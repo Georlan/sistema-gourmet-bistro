@@ -204,18 +204,20 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
           <span className="text-[9px] text-gray-500 block">Vendas diretas da equipe</span>
         </div>
 
-        <div className="bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-2">
-          <div className="flex justify-between items-center text-gray-400">
-            <span className="text-[9px] font-bold uppercase tracking-wider">Comissão Total Proporcional</span>
-            <div className="p-1.5 bg-purple-500/15 text-purple-400 rounded-xl">
-              <Percent size={16} />
+        {taxaAtiva && (
+          <div className="bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-2">
+            <div className="flex justify-between items-center text-gray-400">
+              <span className="text-[9px] font-bold uppercase tracking-wider">Comissão Total Proporcional</span>
+              <div className="p-1.5 bg-purple-500/15 text-purple-400 rounded-xl">
+                <Percent size={16} />
+              </div>
             </div>
+            <strong className="text-2xl text-purple-400 font-mono block">
+              R$ {totalComissao.toFixed(2)}
+            </strong>
+            <span className="text-[9px] text-gray-500 block">Calculada individualmente conforme vendas</span>
           </div>
-          <strong className="text-2xl text-purple-400 font-mono block">
-            R$ {totalComissao.toFixed(2)}
-          </strong>
-          <span className="text-[9px] text-gray-500 block">Calculada individualmente conforme vendas</span>
-        </div>
+        )}
       </div>
 
       {/* Team Performance Table */}
@@ -244,7 +246,7 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
                   <th className="p-3.5 text-center font-mono">Pedidos Atendidos</th>
                   <th className="p-3.5 text-right font-mono">Faturamento Individual</th>
                   <th className="p-3.5 text-right font-mono">Ticket Médio</th>
-                  <th className="p-3.5 text-right font-mono">Comissão ({taxaPadrao}%)</th>
+                  {taxaAtiva && <th className="p-3.5 text-right font-mono">Comissão ({taxaPadrao}%)</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#27272A]/40">
@@ -269,9 +271,11 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
                     <td className="p-3.5 text-right font-mono text-gray-300">
                       R$ {m.ticket_medio.toFixed(2)}
                     </td>
-                    <td className="p-3.5 text-right font-mono font-extrabold text-purple-400">
-                      R$ {m.comissao.toFixed(2)}
-                    </td>
+                    {taxaAtiva && (
+                      <td className="p-3.5 text-right font-mono font-extrabold text-purple-400">
+                        R$ {m.comissao.toFixed(2)}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
