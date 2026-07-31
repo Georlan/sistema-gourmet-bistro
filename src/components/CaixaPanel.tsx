@@ -152,12 +152,12 @@ const isTableCheckoutOrder = (order: Order | null | undefined) => {
 };
 
 export function CaixaPanel({
-  orders,
+  orders = [],
   onRefreshOrders,
   apiBaseUrl,
   authHeaders,
   activeWaiterNome,
-  salonTables,
+  salonTables = [],
   onCreateMesa,
   onUpdateMesa,
   onDeleteMesa,
@@ -4183,7 +4183,7 @@ export function CaixaPanel({
                         required
                       >
                         <option value="">-- Selecione uma mesa --</option>
-                        {salonTables.map(t => (
+                        {(salonTables || []).map(t => (
                           <option key={t.id} value={t.id}>
                             Mesa {t.id} {t.nome ? `(${t.nome})` : ''}
                           </option>
@@ -4291,7 +4291,7 @@ export function CaixaPanel({
 
               <div className={clsx('flex-1', 'bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-3', 'sm:p-5', 'overflow-y-auto')}>
                 <div className={clsx('grid', 'grid-cols-2', 'sm:grid-cols-3', 'md:grid-cols-4', 'lg:grid-cols-5', 'xl:grid-cols-6', 'gap-2.5', 'sm:gap-4')}>
-                   {salonTables.length === 0 ? (
+                   {(salonTables || []).length === 0 ? (
                     <div className="col-span-full py-16 text-center text-zinc-500 font-serif text-sm">
                       {fetchError ? (
                         <div className="space-y-2">
@@ -4307,7 +4307,7 @@ export function CaixaPanel({
                       )}
                     </div>
                   ) : (
-                    salonTables.map((table) => {
+                    (salonTables || []).map((table) => {
                       const mergedIntoMesaId = orders.find(o => o.mesaOrigemId === table.id)?.mesaId || null;
                       const isMerged = mergedIntoMesaId !== null;
                       const displayMesaId = isMerged ? mergedIntoMesaId : table.id;

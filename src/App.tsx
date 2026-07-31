@@ -2190,6 +2190,11 @@ export default function App() {
             onRefreshOrders={fetchOrdersFromAPI}
             apiBaseUrl={API_BASE_URL}
             authHeaders={getAuthHeaders()}
+            activeWaiterNome={activeWaiterNome}
+            salonTables={salonTables}
+            onCreateMesa={handleCreateMesa}
+            onUpdateMesa={handleUpdateMesa}
+            onDeleteMesa={handleDeleteMesa}
             pagamentosPendentes={pagamentosPendentes}
             onRefreshPagamentosPendentes={fetchPagamentosPendentes}
             isWsConnected={isWsConnected}
