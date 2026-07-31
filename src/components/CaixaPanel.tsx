@@ -240,6 +240,7 @@ export function CaixaPanel({
   });
 
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [balcaoMobileView, setBalcaoMobileView] = useState<'produtos' | 'carrinho'>('produtos');
 
   useEffect(() => {
     sessionStorage.setItem('koma_active_tab', activeTab);
@@ -3322,7 +3323,7 @@ export function CaixaPanel({
               )}
 
               {/* Controls bar */}
-              <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-3', 'rounded-2xl', 'flex', 'flex-col', 'sm:flex-row', 'justify-between', 'items-start', 'sm:items-center', 'gap-3')}>
+              <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-3', 'rounded-2xl', 'flex', 'flex-col', 'sm:flex-row', 'justify-between', 'items-start', 'sm:items-center', 'gap-3', 'sticky', 'top-0', 'z-20', 'shadow-md', 'backdrop-blur-md')}>
                   <div className={clsx('flex', 'items-center', 'gap-4')}>
                     <label className={clsx('flex', 'items-center', 'gap-2', 'cursor-pointer', 'font-semibold', 'text-gray-300')}>
                       <input
@@ -3461,11 +3462,11 @@ export function CaixaPanel({
               )}
 
               {/* Kanban operacional universal: mesas, pedidos online e finalização. */}
-              <div className={clsx('flex-1', 'grid', 'grid-cols-1', 'md:grid-cols-3', 'gap-4')}>
+              <div className={clsx('flex-1', 'flex', 'md:grid', 'md:grid-cols-3', 'gap-4', 'overflow-x-auto', 'snap-x', 'snap-mandatory', 'pb-4', 'scrollbar-thin', 'scrollbar-thumb-zinc-800')}>
 
 
                 {/* COLUMN 1: Em produção */}
-                <div className={clsx('bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden')}>
+                <div className={clsx('bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden', 'min-w-[85vw]', 'sm:min-w-[320px]', 'md:min-w-0', 'flex-1', 'snap-center', 'shrink-0', 'md:shrink')}>
                   <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
                     <div>
                       <span className={clsx('font-bold', 'text-white', 'font-serif', 'block')}>Mesas em atendimento</span>
@@ -3571,7 +3572,7 @@ export function CaixaPanel({
                 </div>
 
                 {/* COLUMN 2: pedidos online aceitos, delivery ou retirada. */}
-                <div className={clsx('bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden')}>
+                <div className={clsx('bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden', 'min-w-[85vw]', 'sm:min-w-[320px]', 'md:min-w-0', 'flex-1', 'snap-center', 'shrink-0', 'md:shrink')}>
                   <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
                     <div>
                       <span className={clsx('font-bold', 'text-white', 'font-serif', 'block')}>Online e retirada</span>
@@ -3651,7 +3652,7 @@ export function CaixaPanel({
                 </div>
 
                 {/* COLUMN 3: pagamento e finalização de todas as modalidades. */}
-                <div className={clsx('bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden')}>
+                <div className={clsx('bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden', 'min-w-[85vw]', 'sm:min-w-[320px]', 'md:min-w-0', 'flex-1', 'snap-center', 'shrink-0', 'md:shrink')}>
                   <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
                     <div>
                       <span className={clsx('font-bold', 'text-white', 'font-serif', 'block')}>Pagamento e finalização</span>
@@ -3861,10 +3862,38 @@ export function CaixaPanel({
 
           {/* VIEW 2: PDV (Pedidos Balcão) */}
           {activeSubTab === 'balcao' && (
-            <div className={clsx('h-full', 'flex', 'gap-5', 'overflow-hidden')}>
+            <div className={clsx('h-full', 'flex', 'flex-col', 'lg:flex-row', 'gap-5', 'overflow-hidden', 'relative')}>
+
+              {/* Mobile sub-tab toggle */}
+              <div className="flex lg:hidden gap-1.5 p-1 bg-[#121214] border border-[#27272A] rounded-xl shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setBalcaoMobileView('produtos')}
+                  className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    balcaoMobileView === 'produtos'
+                      ? 'bg-emerald-600 text-white shadow-md'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <Package size={14} />
+                  <span>Produtos (Cardápio)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBalcaoMobileView('carrinho')}
+                  className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    balcaoMobileView === 'carrinho'
+                      ? 'bg-emerald-600 text-white shadow-md'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <ShoppingCart size={14} />
+                  <span>Carrinho ({pdvCart.reduce((sum, item) => sum + item.quantity, 0)})</span>
+                </button>
+              </div>
 
               {/* Product grid column */}
-              <div className={clsx('flex-1', 'flex', 'flex-col', 'space-y-4', 'overflow-hidden')}>
+              <div className={`flex-1 ${balcaoMobileView === 'produtos' ? 'flex' : 'hidden lg:flex'} flex-col space-y-4 overflow-hidden w-full`}>
                 <div className={clsx('space-y-3', 'shrink-0')}>
                   <div className={clsx('flex', 'gap-2')}>
                     <div className="flex-1">
@@ -3923,10 +3952,6 @@ export function CaixaPanel({
                         onClick={() => handlePdvAddToCart(p)}
                         className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'hover:border-[#10b981]/30', 'p-3', 'rounded-xl', 'flex', 'flex-col', 'justify-between', 'gap-3', 'cursor-pointer', 'group', 'hover:shadow-md', 'transition-all', 'text-left')}
                       >
-                        <div>
-                          <h4 className={clsx('font-serif', 'font-bold', 'text-white', 'group-hover:text-[#10b981]', 'transition-colors')}>{p.nome}</h4>
-                          <p className={clsx('text-[9px]', 'text-gray-500', 'mt-1', 'line-clamp-2')}>{p.descricao}</p>
-                        </div>
                         <div className={clsx('flex', 'justify-between', 'items-center')}>
                           <span className={clsx('font-bold', 'text-white', 'font-mono')}>R$ {p.preco.toFixed(2)}</span>
                           <span className={clsx('p-1', 'bg-[#1C1C1F]', 'group-hover:bg-[#10b981]', 'text-gray-400', 'group-hover:text-[#121214]', 'rounded-lg', 'transition-colors', 'border', 'border-[#27272A]/50')}>
@@ -3940,7 +3965,7 @@ export function CaixaPanel({
               </div>
 
               {/* Shopping cart sidebar */}
-              <div className={clsx('w-80', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden', 'shrink-0')}>
+              <div className={`w-full lg:w-80 bg-[#121214] border border-[#27272A] rounded-2xl ${balcaoMobileView === 'carrinho' ? 'flex' : 'hidden lg:flex'} flex-col overflow-hidden shrink-0`}>
                 <div className={clsx('bg-[#18181B]', 'px-4', 'py-3', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
                   <span className={clsx('font-bold', 'text-white', 'font-serif', 'flex', 'items-center', 'gap-1.5')}>
                     <ShoppingCart size={14} className="text-[#10b981]" />
@@ -4052,97 +4077,60 @@ export function CaixaPanel({
                   )}
                 </div>
 
-                <form onSubmit={handlePdvSubmitOrder} className={clsx('bg-[#18181B]', 'p-3', 'border-t', 'border-[#27272A]', 'space-y-3', 'shrink-0')}>
-                  <div className="space-y-1">
-                    <div className={clsx('flex', 'gap-1', 'p-0.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'shrink-0')}>
-                      <button
-                        type="button"
-                        onClick={() => setPdvOrderType('retirada')}
-                        className={`flex-1 py-1 text-[8.5px] font-bold rounded transition-all cursor-pointer ${pdvOrderType === 'retirada' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'
-                          }`}
-                      >
-                        Retirada / Viagem
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPdvOrderType('entrega')}
-                        className={`flex-1 py-1 text-[8.5px] font-bold rounded transition-all cursor-pointer ${pdvOrderType === 'entrega' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'
-                          }`}
-                      >
-                        Delivery
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPdvOrderType('mesa')}
-                        className={`flex-1 py-1 text-[8.5px] font-bold rounded transition-all cursor-pointer ${pdvOrderType === 'mesa' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'
-                          }`}
-                      >
-                        Mesa
-                      </button>
+                {/* Subtotal e formulário de dados do cliente / modalidade */}
+                <form
+                  onSubmit={handlePdvSubmitOrder}
+                  className={clsx('p-3', 'border-t', 'border-[#27272A]', 'space-y-3', 'bg-[#18181B]/40', 'shrink-0')}
+                >
+                  <div className="space-y-1.5">
+                    <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Modalidade:</label>
+                    <div className={clsx('grid', 'grid-cols-3', 'gap-1', 'bg-[#09090B]', 'p-1', 'rounded-xl', 'border', 'border-[#27272A]')}>
+                      {[
+                        { id: 'retirada', label: 'Retirada / Viagem' },
+                        { id: 'entrega', label: 'Delivery' },
+                        { id: 'mesa', label: 'Mesa' }
+                      ].map(type => (
+                        <button
+                          key={type.id}
+                          type="button"
+                          onClick={() => setPdvOrderType(type.id as any)}
+                          className={`py-1.5 rounded-lg text-[9px] font-bold uppercase transition-all cursor-pointer ${pdvOrderType === type.id
+                            ? 'bg-[#10b981] text-[#121214]'
+                            : 'text-gray-400 hover:text-white'
+                            }`}
+                        >
+                          {type.id === 'retirada' ? 'Retirada' : type.id === 'entrega' ? 'Delivery' : 'Mesa'}
+                        </button>
+                      ))}
                     </div>
-                    <span className={clsx('text-[7.5px]', 'text-gray-500', 'font-mono', 'block', 'text-left')}>Atalhos de Tipo: [F2] Retirada • [F3] Mesa • [F8] Delivery</span>
+                    <span className={clsx('text-[8px]', 'text-gray-500', 'font-mono', 'block', 'mt-0.5', 'text-left')}>Atalhos de Tipo: [F2] Retirada • [F3] Mesa • [F8] Delivery</span>
                   </div>
 
                   {pdvOrderType === 'mesa' && (
                     <div className="space-y-1">
                       <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Mesa Destino:</label>
                       <select
-                        id="pdv-mesa-select"
-                        value={pdvTargetMesaId}
-                        onChange={(e) => setPdvTargetMesaId(parseInt(e.target.value))}
-                        className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'focus:border-[#10b981]', 'text-white', 'text-[10px]')}
+                        value={pdvTargetMesaId || ''}
+                        onChange={(e) => setPdvTargetMesaId(Number(e.target.value) || 0)}
+                        className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'text-white', 'text-[10px]')}
+                        required
                       >
-                        <option value={0}>Selecione uma mesa...</option>
-                        {salonTables.map(t => {
-                          const isOccupied = orders.some(o => o.mesaId === t.id);
-                          return (
-                            <option
-                              key={t.id}
-                              value={t.id}
-                              style={{ color: isOccupied ? '#f87171' : '#4ade80' }}
-                            >
-                              {isOccupied ? '🔴' : '🟢'} Mesa {t.id} ({isOccupied ? 'Ocupada' : 'Livre'})
-                            </option>
-                          );
-                        })}
+                        <option value="">-- Selecione uma mesa --</option>
+                        {salonTables.map(t => (
+                          <option key={t.id} value={t.id}>
+                            Mesa {t.id} {t.nome ? `(${t.nome})` : ''}
+                          </option>
+                        ))}
                       </select>
                     </div>
                   )}
 
-                  {pdvOrderType === 'retirada' && (
-                    <div className={clsx('grid', 'grid-cols-2', 'gap-1.5')}>
-                      <div className="space-y-1">
-                        <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Nome Cliente:</label>
-                        <input
-                          id="pdv-customer-name-input"
-                          type="text"
-                          placeholder="Ex: Maria"
-                          required={pdvCart.length > 0}
-                          value={pdvCustomerName}
-                          onChange={(e) => setPdvCustomerName(e.target.value)}
-                          className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'text-white', 'text-[10px]')}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Telefone:</label>
-                        <input
-                          type="text"
-                          placeholder="(81) 9..."
-                          value={pdvCustomerPhone}
-                          onChange={(e) => setPdvCustomerPhone(e.target.value)}
-                          className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'text-white', 'text-[10px]')}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {pdvOrderType === 'entrega' && (
-                    <div className="space-y-2.5">
-                      <div className={clsx('grid', 'grid-cols-2', 'gap-1.5')}>
+                  {(pdvOrderType === 'retirada' || pdvOrderType === 'entrega') && (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
                         <div className="space-y-1">
                           <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Nome Cliente:</label>
                           <input
-                            id="pdv-customer-name-input"
                             type="text"
                             placeholder="Ex: Maria"
                             required={pdvCart.length > 0}
@@ -4156,59 +4144,40 @@ export function CaixaPanel({
                           <input
                             type="text"
                             placeholder="(81) 9..."
-                            required={pdvCart.length > 0}
+                            required={pdvCart.length > 0 && pdvOrderType === 'entrega'}
                             value={pdvCustomerPhone}
                             onChange={(e) => setPdvCustomerPhone(e.target.value)}
                             className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'text-white', 'text-[10px]')}
                           />
                         </div>
                       </div>
-                      <div className="space-y-1">
-                        <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Endereço de Entrega:</label>
-                        <input
-                          type="text"
-                          placeholder="Rua, Número, Bairro, Complemento"
-                          required={pdvCart.length > 0}
-                          value={pdvDeliveryAddress}
-                          onChange={(e) => setPdvDeliveryAddress(e.target.value)}
-                          className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'text-white', 'text-[10px]')}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Taxa de Entrega (R$):</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          placeholder="5.00"
-                          value={pdvDeliveryTaxa}
-                          onChange={(e) => setPdvDeliveryTaxa(e.target.value)}
-                          className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'text-white', 'text-[10px]')}
-                        />
-                      </div>
+                      {pdvOrderType === 'entrega' && (
+                        <div className="space-y-1">
+                          <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Endereço:</label>
+                          <input
+                            type="text"
+                            placeholder="Rua, Número, Bairro"
+                            required
+                            value={pdvDeliveryAddress}
+                            onChange={(e) => setPdvDeliveryAddress(e.target.value)}
+                            className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'text-white', 'text-[10px]')}
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
 
                   <div className={clsx('flex', 'justify-between', 'items-center', 'font-mono', 'border-t', 'border-[#27272A]', 'pt-2', 'text-[11px]', 'font-bold', 'text-white')}>
                     <span>Total Pedido:</span>
                     <span className={clsx('text-[#10b981]', 'text-sm')}>
-                      R$ {(
-                        pdvCart.reduce((sum, item) => sum + (item.product.preco * item.quantity), 0) +
-                        (pdvOrderType === 'entrega' ? parseFloat(pdvDeliveryTaxa) || 0 : 0)
-                      ).toFixed(2)}
+                      R$ {(pdvCart.reduce((sum, item) => sum + (item.product.preco * item.quantity), 0)).toFixed(2)}
                     </span>
                   </div>
-
-                  {pdvOrderType === 'mesa' && (!pdvTargetMesaId || pdvTargetMesaId === 0) && (
-                    <div className={clsx('text-[9.5px]', 'text-amber-500', 'border', 'border-amber-500/20', 'bg-amber-500/5', 'px-2.5', 'py-1.5', 'rounded-lg', 'text-left', 'leading-relaxed')}>
-                      Selecione a mesa de destino para lançar um pedido de salão.
-                    </div>
-                  )}
 
                   <button
                     id="pdv-submit-btn"
                     type="submit"
-                    disabled={pdvOrderType === 'mesa' && (!pdvTargetMesaId || pdvTargetMesaId === 0)}
-                    className={clsx('w-full', 'py-2', 'bg-emerald-600', 'hover:bg-emerald-700', 'disabled:bg-zinc-800', 'disabled:text-zinc-500', 'disabled:border-zinc-800', 'disabled:cursor-not-allowed', 'text-white', 'rounded-lg', 'font-bold', 'text-[9px]', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'flex', 'flex-col', 'items-center', 'justify-center', 'gap-0.5', 'shadow')}
+                    className={clsx('w-full', 'py-2', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'rounded-lg', 'font-bold', 'text-[9px]', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'flex', 'flex-col', 'items-center', 'justify-center', 'gap-0.5', 'shadow')}
                   >
                     <div className={clsx('flex', 'items-center', 'gap-1')}>
                       <Check size={12} />
@@ -4218,6 +4187,23 @@ export function CaixaPanel({
                   </button>
                 </form>
               </div>
+
+              {/* Floating Bottom Bar on Mobile when on Products tab */}
+              {pdvCart.length > 0 && balcaoMobileView === 'produtos' && (
+                <button
+                  type="button"
+                  onClick={() => setBalcaoMobileView('carrinho')}
+                  className="lg:hidden fixed bottom-4 left-4 right-4 z-40 py-3 px-5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl shadow-2xl flex items-center justify-between border border-emerald-400/30 animate-fade-in cursor-pointer"
+                >
+                  <span className="text-xs flex items-center gap-2">
+                    <ShoppingCart size={16} />
+                    <span>{pdvCart.reduce((s, i) => s + i.quantity, 0)} itens no carrinho</span>
+                  </span>
+                  <span className="text-xs font-mono font-extrabold bg-black/30 px-3 py-1 rounded-xl">
+                    R$ {pdvCart.reduce((sum, item) => sum + (item.product.preco * item.quantity), 0).toFixed(2)} →
+                  </span>
+                </button>
+              )}
 
             </div>
           )}
@@ -4236,8 +4222,8 @@ export function CaixaPanel({
                 </button>
               </div>
 
-              <div className={clsx('flex-1', 'bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'overflow-y-auto')}>
-                <div className={clsx('grid', 'grid-cols-1', 'sm:grid-cols-2', 'md:grid-cols-3', 'lg:grid-cols-4', 'xl:grid-cols-6', 'gap-4')}>
+              <div className={clsx('flex-1', 'bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-3', 'sm:p-5', 'overflow-y-auto')}>
+                <div className={clsx('grid', 'grid-cols-2', 'sm:grid-cols-3', 'md:grid-cols-4', 'lg:grid-cols-5', 'xl:grid-cols-6', 'gap-2.5', 'sm:gap-4')}>
                    {salonTables.length === 0 ? (
                     <div className="col-span-full py-16 text-center text-zinc-500 font-serif text-sm">
                       {fetchError ? (
@@ -4270,7 +4256,7 @@ export function CaixaPanel({
                       return (
                         <div
                           key={table.id}
-                          className={`bg-[#121214] border rounded-2xl p-3.5 flex flex-col justify-between gap-3 transition-all relative group shadow-sm ${hasPendingPayment
+                          className={`bg-[#121214] border rounded-2xl p-2.5 sm:p-3.5 flex flex-col justify-between gap-2 sm:gap-3 transition-all relative group shadow-sm ${hasPendingPayment
                             ? 'border-amber-500/80 shadow-[0_0_15px_rgba(245,158,11,0.2)] animate-pulse'
                             : isMerged
                               ? 'border-dashed border-zinc-800 opacity-60 bg-zinc-950/20'
@@ -4283,7 +4269,7 @@ export function CaixaPanel({
                           <div className="flex justify-between items-start">
                             <div>
                               <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest block">Mesa</span>
-                              <strong className="text-xl font-serif text-white leading-none">{table.id}</strong>
+                              <strong className="text-lg sm:text-xl font-serif text-white leading-none">{table.id}</strong>
                               {table.nome && table.nome !== `Mesa ${table.id}` && (
                                 <span className="text-[9px] text-[#10b981] block mt-0.5 font-medium">{table.nome}</span>
                               )}
