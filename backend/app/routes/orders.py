@@ -7,7 +7,19 @@ from typing import List, Optional, Any
 import logging
 
 from ..database import get_db, current_restaurante_id, require_tenant_id
-from ..models import Comanda, Mesa, Usuario, Produto, Lancamento, Item, ActivityLog, Motoboy, MotoboyTokenAtivo, ConfiguracaoRestaurante
+from ..models import (
+    Comanda,
+    Mesa,
+    Usuario,
+    Produto,
+    Lancamento,
+    Item,
+    ActivityLog,
+    Motoboy,
+    MotoboyTokenAtivo,
+    ConfiguracaoRestaurante,
+    Restaurante,
+)
 from ..schemas import (
     ComandaResponse, ComandaDetail, ComandaCreate,
     LancamentoResponse, LancamentoCreate, ItemResponse, ItemUpdate,
@@ -22,7 +34,7 @@ from ..security import (
     motoboy_rate_limiter,
 )
 from ..websocket_manager import manager
-from ..services.whatsapp import enviar_notificacao_whatsapp_status
+from ..services.whatsapp import enviar_notificacao_whatsapp_task
 
 logger = logging.getLogger("koma.orders")
 
@@ -30,6 +42,65 @@ router = APIRouter(
     prefix="/comandas",
     tags=["Comandas e Pedidos"]
 )
+
+
+MENSAGEM_WHATSAPP_PRONTO_RETIRADA = (
+    "Olá, {nome}! 👋 Seu pedido #{numero} no {restaurante} já está PRONTO PARA "
+    "RETIRADA! 🍔 Pode vir buscar no nosso balcão. Te esperamos!"
+)
+MENSAGEM_WHATSAPP_SAIU_ENTREGA = (
+    "Olá, {nome}! 🛵 Seu pedido #{numero} no {restaurante} acabou de SAIR PARA "
+    "ENTREGA! 🚀 Nosso entregador já está a caminho do seu endereço. Bom apetite!"
+)
+MENSAGEM_WHATSAPP_RECUSADO = (
+    "Olá, {nome}. Infelizmente seu pedido #{numero} no {restaurante} não pôde "
+    "ser aceito no momento. Entre em contato conosco para mais detalhes."
+)
+
+
+def _agendar_notificacao_whatsapp_status(
+    background_tasks: BackgroundTasks,
+    db: Session,
+    comanda: Comanda,
+    status_anterior: Optional[str],
+    novo_status: str,
+) -> None:
+    if status_anterior == novo_status:
+        return
+
+    tipo = (comanda.tipo or "").strip().lower()
+    mensagem_modelo: Optional[str] = None
+    if novo_status == "pronto" and tipo == "retirada":
+        mensagem_modelo = MENSAGEM_WHATSAPP_PRONTO_RETIRADA
+    elif novo_status == "transito" and tipo in {"delivery", "entrega"}:
+        mensagem_modelo = MENSAGEM_WHATSAPP_SAIU_ENTREGA
+    elif novo_status == "recusado" and tipo in {"retirada", "delivery", "entrega"}:
+        mensagem_modelo = MENSAGEM_WHATSAPP_RECUSADO
+
+    if mensagem_modelo is None:
+        return
+
+    telefone = (comanda.delivery_telefone or "").strip()
+    if not telefone:
+        logger.warning(
+            "[EVOLUTION API] Notificação de status ignorada para comanda_id=%s: telefone ausente.",
+            comanda.id,
+        )
+        return
+
+    restaurante = db.query(Restaurante).filter(
+        Restaurante.id == comanda.restaurante_id
+    ).first()
+    mensagem = mensagem_modelo.format(
+        nome=(comanda.identificador or "cliente").strip() or "cliente",
+        numero=comanda.numero_pedido,
+        restaurante=(restaurante.nome if restaurante else "restaurante"),
+    )
+    background_tasks.add_task(
+        enviar_notificacao_whatsapp_task,
+        telefone,
+        mensagem,
+    )
 
 def gerar_novo_numero_pedido(db: Session) -> int:
     """
@@ -1359,7 +1430,12 @@ def atualizar_status_delivery(
             detail=f"Status inválido. Use um de: {', '.join(sorted(status_validos))}"
         )
 
-    comanda = db.query(Comanda).filter(Comanda.id == comanda_id).first()
+    comanda = (
+        db.query(Comanda)
+        .filter(Comanda.id == comanda_id)
+        .with_for_update()
+        .first()
+    )
     if not comanda:
         raise HTTPException(status_code=404, detail="Comanda não encontrada")
 
@@ -1381,15 +1457,14 @@ def atualizar_status_delivery(
 
     db.commit()
     db.refresh(comanda)
+    _agendar_notificacao_whatsapp_status(
+        background_tasks,
+        db,
+        comanda,
+        status_anterior,
+        status_normalizado,
+    )
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
-    if status_anterior != status_normalizado:
-        background_tasks.add_task(
-            enviar_notificacao_whatsapp_status,
-            comanda.id,
-            status_normalizado,
-            status_anterior,
-            comanda.restaurante_id,
-        )
     return comanda
 
 
@@ -1404,7 +1479,12 @@ def despachar_delivery(
     """
     Vincula um motoboy à comanda e altera o status para 'transito'.
     """
-    comanda = db.query(Comanda).filter(Comanda.id == comanda_id).first()
+    comanda = (
+        db.query(Comanda)
+        .filter(Comanda.id == comanda_id)
+        .with_for_update()
+        .first()
+    )
     if not comanda:
         raise HTTPException(status_code=404, detail="Comanda não encontrada")
     
@@ -1419,14 +1499,6 @@ def despachar_delivery(
     status_anterior = comanda.delivery_status
     comanda.motoboy_id = motoboy_id
     comanda.delivery_status = "transito"
-    if status_anterior != "transito":
-        background_tasks.add_task(
-            enviar_notificacao_whatsapp_status,
-            comanda.id,
-            "transito",
-            status_anterior,
-            comanda.restaurante_id,
-        )
     
     # Trigger printing based on configurations
     try:
@@ -1465,6 +1537,13 @@ def despachar_delivery(
         
     db.commit()
     db.refresh(comanda)
+    _agendar_notificacao_whatsapp_status(
+        background_tasks,
+        db,
+        comanda,
+        status_anterior,
+        "transito",
+    )
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
     return comanda
 
