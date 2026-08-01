@@ -22,6 +22,7 @@ from ..security import (
     motoboy_rate_limiter,
 )
 from ..websocket_manager import manager
+from ..services.whatsapp import enviar_notificacao_whatsapp_status
 
 logger = logging.getLogger("koma.orders")
 
@@ -1368,6 +1369,7 @@ def atualizar_status_delivery(
             detail="A comanda informada não é um pedido online de delivery ou retirada."
         )
 
+    status_anterior = comanda.delivery_status
     comanda.delivery_status = status_normalizado
     if status_normalizado == "recusado":
         for item in comanda.itens:
@@ -1380,6 +1382,14 @@ def atualizar_status_delivery(
     db.commit()
     db.refresh(comanda)
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
+    if status_anterior != status_normalizado:
+        background_tasks.add_task(
+            enviar_notificacao_whatsapp_status,
+            comanda.id,
+            status_normalizado,
+            status_anterior,
+            comanda.restaurante_id,
+        )
     return comanda
 
 
@@ -1406,8 +1416,17 @@ def despachar_delivery(
     if not motoboy:
         raise HTTPException(status_code=404, detail="Motoboy não encontrado")
         
+    status_anterior = comanda.delivery_status
     comanda.motoboy_id = motoboy_id
     comanda.delivery_status = "transito"
+    if status_anterior != "transito":
+        background_tasks.add_task(
+            enviar_notificacao_whatsapp_status,
+            comanda.id,
+            "transito",
+            status_anterior,
+            comanda.restaurante_id,
+        )
     
     # Trigger printing based on configurations
     try:
