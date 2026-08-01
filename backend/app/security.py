@@ -225,21 +225,22 @@ def require_roles(*allowed_roles: str):
     return role_checker
 
 
-def create_motoboy_token(motoboy_id: int, restaurante_id: int) -> str:
-    """Cria um token JWT temporário seguro para o PWA do Motoboy com TTL de 4 horas."""
+def create_motoboy_token(motoboy_id: int, restaurante_id: int, jti: str) -> str:
+    """Cria um token JWT temporário seguro para o PWA do Motoboy com TTL de 4 horas e JTI de controle."""
     expire = datetime.now(timezone.utc) + timedelta(hours=4)
     to_encode = {
         "sub": f"motoboy_{motoboy_id}",
         "motoboy_id": motoboy_id,
         "restaurante_id": restaurante_id,
         "type": "motoboy_pwa",
+        "jti": jti,
         "exp": expire
     }
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
-def verify_motoboy_token(token: str) -> dict:
-    """Valida o token temporário do motoboy e retorna o payload com motoboy_id e restaurante_id."""
+def verify_motoboy_token(token: str, db: Optional[Any] = None) -> dict:
+    """Valida o token temporário do motoboy, checando assinatura, expiração e status de revogação no banco."""
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -254,12 +255,28 @@ def verify_motoboy_token(token: str) -> dict:
             )
         motoboy_id = payload.get("motoboy_id")
         restaurante_id = payload.get("restaurante_id")
+        jti = payload.get("jti")
         if not motoboy_id or not restaurante_id:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Dados do entregador incompletos no token."
             )
-        return {"motoboy_id": int(motoboy_id), "restaurante_id": int(restaurante_id)}
+
+        # Checar revogação no banco de dados se a sessão db for fornecida e jti existir
+        if db is not None and jti:
+            from .models import MotoboyTokenAtivo
+            token_db = db.query(MotoboyTokenAtivo).filter(
+                MotoboyTokenAtivo.jti == jti,
+                MotoboyTokenAtivo.motoboy_id == int(motoboy_id),
+                MotoboyTokenAtivo.restaurante_id == int(restaurante_id)
+            ).first()
+            if not token_db or token_db.revogado:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Link do entregador foi revogado ou é inválido. Solicite um novo link no Caixa."
+                )
+
+        return {"motoboy_id": int(motoboy_id), "restaurante_id": int(restaurante_id), "jti": jti}
     except jwt.ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -270,4 +287,31 @@ def verify_motoboy_token(token: str) -> dict:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Link de entregador inválido."
         )
+
+
+import time
+from collections import defaultdict
+
+class IPRateLimiter:
+    """Rate limiter em memória com janela deslizante de 60 segundos."""
+    def __init__(self, requests_per_minute: int = 30):
+        self.requests_per_minute = requests_per_minute
+        self.history = defaultdict(list)
+
+    def check(self, request: Any):
+        client_ip = request.client.host if request and hasattr(request, 'client') and request.client else "127.0.0.1"
+        now = time.time()
+        cutoff = now - 60.0
+
+        # Purga requisições com mais de 60 segundos
+        timestamps = [t for t in self.history[client_ip] if t > cutoff]
+        if len(timestamps) >= self.requests_per_minute:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Muitas requisições. Aguarde um momento antes de tentar novamente."
+            )
+        timestamps.append(now)
+        self.history[client_ip] = timestamps
+
+motoboy_rate_limiter = IPRateLimiter(requests_per_minute=30)
 

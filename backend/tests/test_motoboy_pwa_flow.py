@@ -135,3 +135,29 @@ def test_gerar_link_motoboy_flow():
     # 7. Testar token inválido
     resp_invalid = client.get("/comandas/motoboys/painel-entregador?token=invalid_token_xyz")
     assert resp_invalid.status_code == 401
+
+    # 8. Testar revogação de token por geração de novo link
+    token1 = token
+    resp_new_link = client.post("/comandas/motoboys/10/gerar-link", headers=headers)
+    assert resp_new_link.status_code == 200
+    token2 = resp_new_link.json()["token"]
+    assert token2 != token1
+
+    # Token1 antigo deve retornar 401 por estar revogado
+    resp_old = client.get(f"/comandas/motoboys/painel-entregador?token={token1}")
+    assert resp_old.status_code == 401
+    assert "revogado" in resp_old.json()["detail"].lower()
+
+    # Token2 novo deve funcionar
+    resp_new = client.get(f"/comandas/motoboys/painel-entregador?token={token2}")
+    assert resp_new.status_code == 200
+
+    # 9. Testar revogação manual de token
+    resp_revoke = client.post("/comandas/motoboys/10/revogar-link", headers=headers)
+    assert resp_revoke.status_code == 200
+
+    # Token2 agora deve ser rejeitado
+    resp_revoked2 = client.get(f"/comandas/motoboys/painel-entregador?token={token2}")
+    assert resp_revoked2.status_code == 401
+    assert "revogado" in resp_revoked2.json()["detail"].lower()
+

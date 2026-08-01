@@ -811,6 +811,18 @@ class Motoboy(Base):
     comandas = relationship("Comanda", back_populates="motoboy")
 
 
+class MotoboyTokenAtivo(Base):
+    __tablename__ = "motoboy_tokens_ativos"
+    
+    jti = Column(String(64), primary_key=True, index=True)
+    motoboy_id = Column(Integer, ForeignKey("motoboys.id"), nullable=False, index=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
+    criado_em = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    revogado = Column(Boolean, default=False, nullable=False)
+
+    motoboy = relationship("Motoboy")
+
+
 class Distribuidor(Base):
     __tablename__ = "distribuidores"
     

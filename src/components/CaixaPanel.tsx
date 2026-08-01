@@ -1183,6 +1183,32 @@ export function CaixaPanel({
     }
   };
 
+  const handleRevogarAcessoMotoboy = async (selectedMotoboyId: string) => {
+    if (!selectedMotoboyId) {
+      showToast('Selecione um motoboy para revogar o acesso!', 'info');
+      return;
+    }
+    const mb = motoboys.find(m => String(m.id) === String(selectedMotoboyId));
+    if (!mb) {
+      showToast('Motoboy não encontrado.', 'error');
+      return;
+    }
+    try {
+      const res = await fetch(`${apiBaseUrl}/comandas/motoboys/${selectedMotoboyId}/revogar-link`, {
+        method: 'POST',
+        headers: authHeaders
+      });
+      if (res.ok) {
+        showToast(`Acesso do entregador '${mb.nome}' revogado com sucesso!`, 'success');
+      } else {
+        showToast('Não foi possível revogar o acesso.', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Erro ao tentar revogar o acesso.', 'error');
+    }
+  };
+
   const handleFecharDelivery = async (orderId: string) => {
     try {
       const res = await fetch(`${apiBaseUrl}/comandas/${orderId}/fechar`, {
@@ -6820,6 +6846,15 @@ export function CaixaPanel({
                                   title="Despachar pedido e enviar link PWA pelo WhatsApp do Motoboy"
                                 >
                                   💬 WhatsApp
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={!motoboyId}
+                                  onClick={() => handleRevogarAcessoMotoboy(motoboyId)}
+                                  className={clsx('py-1.5', 'px-2.5', 'bg-rose-500/20', 'hover:bg-rose-500/30', 'border', 'border-rose-500/40', 'disabled:opacity-40', 'text-rose-300', 'font-bold', 'rounded-xl', 'text-[10px]', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer', 'flex', 'items-center', 'gap-1')}
+                                  title="Revogar todos os links ativos do entregador selecionado"
+                                >
+                                  🚫 Revogar
                                 </button>
                               </div>
                             </div>

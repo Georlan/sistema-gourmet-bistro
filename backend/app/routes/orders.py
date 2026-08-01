@@ -1,13 +1,13 @@
 import uuid
 import datetime
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from typing import List, Optional, Any
 import logging
 
 from ..database import get_db, current_restaurante_id, require_tenant_id
-from ..models import Comanda, Mesa, Usuario, Produto, Lancamento, Item, ActivityLog, Motoboy, ConfiguracaoRestaurante
+from ..models import Comanda, Mesa, Usuario, Produto, Lancamento, Item, ActivityLog, Motoboy, MotoboyTokenAtivo, ConfiguracaoRestaurante
 from ..schemas import (
     ComandaResponse, ComandaDetail, ComandaCreate,
     LancamentoResponse, LancamentoCreate, ItemResponse, ItemUpdate,
@@ -19,6 +19,7 @@ from ..security import (
     require_permission,
     create_motoboy_token,
     verify_motoboy_token,
+    motoboy_rate_limiter,
 )
 from ..websocket_manager import manager
 
@@ -1490,6 +1491,7 @@ def gerar_link_motoboy(
 ):
     """
     Gera um link/token de acesso temporário (TTL: 4h) para o PWA do entregador.
+    Invalida/revoga automaticamente qualquer token ativo gerado anteriormente para este motoboy.
     """
     rest_id = require_tenant_id()
     motoboy = db.query(Motoboy).filter(
@@ -1498,8 +1500,26 @@ def gerar_link_motoboy(
     ).first()
     if not motoboy:
         raise HTTPException(status_code=404, detail="Motoboy não encontrado")
-    
-    token = create_motoboy_token(motoboy.id, rest_id)
+
+    # 1. Revogar tokens ativos prévios deste motoboy
+    db.query(MotoboyTokenAtivo).filter(
+        MotoboyTokenAtivo.motoboy_id == motoboy_id,
+        MotoboyTokenAtivo.restaurante_id == rest_id,
+        MotoboyTokenAtivo.revogado == False
+    ).update({MotoboyTokenAtivo.revogado: True})
+
+    # 2. Criar novo JTI e token JWT
+    new_jti = str(uuid.uuid4())
+    novo_token_db = MotoboyTokenAtivo(
+        jti=new_jti,
+        motoboy_id=motoboy.id,
+        restaurante_id=rest_id,
+        revogado=False
+    )
+    db.add(novo_token_db)
+    db.commit()
+
+    token = create_motoboy_token(motoboy.id, rest_id, new_jti)
     exp = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=4)).isoformat()
     return {
         "token": token,
@@ -1509,15 +1529,44 @@ def gerar_link_motoboy(
     }
 
 
+@router.post("/motoboys/{motoboy_id}/revogar-link")
+def revogar_link_motoboy(
+    motoboy_id: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
+    """
+    Revoga manualmente todos os links/tokens de acesso ativos para um motoboy.
+    """
+    rest_id = require_tenant_id()
+    motoboy = db.query(Motoboy).filter(
+        Motoboy.id == motoboy_id,
+        Motoboy.restaurante_id == rest_id
+    ).first()
+    if not motoboy:
+        raise HTTPException(status_code=404, detail="Motoboy não encontrado")
+
+    db.query(MotoboyTokenAtivo).filter(
+        MotoboyTokenAtivo.motoboy_id == motoboy_id,
+        MotoboyTokenAtivo.restaurante_id == rest_id,
+        MotoboyTokenAtivo.revogado == False
+    ).update({MotoboyTokenAtivo.revogado: True})
+    db.commit()
+
+    return {"status": "sucesso", "mensagem": f"Acesso do entregador '{motoboy.nome}' revogado com sucesso."}
+
+
 @router.get("/motoboys/painel-entregador")
 def painel_entregador(
     token: str,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """
     Endpoint público acessível via token do motoboy para carregar o painel do PWA Entregador.
     """
-    token_data = verify_motoboy_token(token)
+    motoboy_rate_limiter.check(request)
+    token_data = verify_motoboy_token(token, db)
     motoboy_id = token_data["motoboy_id"]
     rest_id = token_data["restaurante_id"]
     
@@ -1578,13 +1627,15 @@ def painel_entregador(
 def confirmar_entrega_motoboy(
     comanda_id: str,
     token: str,
+    request: Request,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     """
     Permite ao entregador (com token válido) confirmar a entrega de um pedido.
     """
-    token_data = verify_motoboy_token(token)
+    motoboy_rate_limiter.check(request)
+    token_data = verify_motoboy_token(token, db)
     motoboy_id = token_data["motoboy_id"]
     rest_id = token_data["restaurante_id"]
     
