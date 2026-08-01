@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
 from pydantic import BaseModel
 import logging
@@ -11,6 +12,7 @@ from ..schemas import InsumoResponse, ConfigFidelizacaoResponse, HistoricoFideli
 from ..security import require_permission
 from ..models import Usuario
 from ..crypt import decrypt_field
+from ..services.clientes import normalizar_telefone_cliente
 
 logger = logging.getLogger("koma.optimization")
 
@@ -601,38 +603,68 @@ def update_loyalty_client(
     Edita o nome, telefone, pontos e cashback de um cliente.
     Atualiza tabela Cliente, HistoricoFidelidade e Pagamentos correspondentes.
     """
+    restaurante_id = require_tenant_id()
+    try:
+        telefone_anterior = normalizar_telefone_cliente(old_phone)
+        telefone_novo = normalizar_telefone_cliente(data.telefone)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     # 1. Fetch and filter HistoricoFidelidade in Python due to non-deterministic encryption
     all_movements = db.query(HistoricoFidelidade).all()
-    movements = [m for m in all_movements if m.cliente_telefone.strip() == old_phone]
+    movements = []
+    for movement in all_movements:
+        try:
+            if normalizar_telefone_cliente(movement.cliente_telefone) == telefone_anterior:
+                movements.append(movement)
+        except ValueError:
+            # Registros legados inválidos não devem impedir a edição de uma
+            # ficha válida; permanecem disponíveis para saneamento separado.
+            continue
     
     # 2. Fetch Pagamento entries (which are unencrypted)
-    pagamentos = db.query(Pagamento).filter(Pagamento.cpf_cliente == old_phone).all()
+    pagamentos = db.query(Pagamento).filter(
+        Pagamento.restaurante_id == restaurante_id,
+        Pagamento.cpf_cliente == telefone_anterior,
+    ).all()
     
     # 3. Buscar ou criar o cliente na tabela dedicada 'clientes'
-    cliente_db = db.query(Cliente).filter(Cliente.telefone == old_phone).first()
+    cliente_db = db.query(Cliente).filter(
+        Cliente.restaurante_id == restaurante_id,
+        Cliente.telefone == telefone_anterior,
+    ).first()
     
+    conflito = db.query(Cliente).filter(
+        Cliente.restaurante_id == restaurante_id,
+        Cliente.telefone == telefone_novo,
+    ).first()
+    if conflito and (cliente_db is None or conflito.id != cliente_db.id):
+        raise HTTPException(status_code=400, detail="Cliente com este telefone já cadastrado.")
+
     if not movements and not pagamentos and not cliente_db:
         raise HTTPException(status_code=404, detail="Cliente não encontrado.")
-        
+
     if not cliente_db:
-        # Se não existia, cria um novo
-        cliente_db = Cliente(telefone=old_phone, nome=data.cliente.strip())
+        # Se havia histórico/pagamento legado, cria a ficha na mesma transação.
+        cliente_db = Cliente(
+            restaurante_id=restaurante_id,
+            telefone=telefone_anterior,
+            nome=data.cliente.strip(),
+        )
         db.add(cliente_db)
-        db.commit()
-        db.refresh(cliente_db)
         
     # Atualizar dados do cliente na tabela 'clientes'
     cliente_db.nome = data.cliente.strip()
-    cliente_db.telefone = data.telefone.strip()
+    cliente_db.telefone = telefone_novo
     
     try:
         # 4. Update HistoricoFidelidade entries
         for m in movements:
-            m.cliente_telefone = data.telefone.strip()
+            m.cliente_telefone = telefone_novo
             
         # 5. Update Pagamento entries
         for p in pagamentos:
-            p.cpf_cliente = data.telefone.strip()
+            p.cpf_cliente = telefone_novo
             p.nome_cliente = data.cliente.strip()
             
         # 6. Tratar ajuste manual de saldo se fornecido
@@ -654,13 +686,19 @@ def update_loyalty_client(
             if abs(diff) > 0.001:
                 tipo = "ACUMULO" if diff > 0 else "RESGATE"
                 ajuste = HistoricoFidelidade(
-                    cliente_telefone=data.telefone.strip(),
+                    cliente_telefone=telefone_novo,
                     tipo_movimentacao=tipo,
                     valor_delta=abs(diff)
                 )
                 db.add(ajuste)
                 
         db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail="Cliente com este telefone já cadastrado.",
+        ) from exc
     except HTTPException:
         raise
     except Exception:
@@ -688,15 +726,27 @@ def create_loyalty_client(
     """
     Cadastra manualmente um novo cliente e lança o saldo inicial se fornecido.
     """
-    tel_limpo = data.telefone.strip()
-    cliente_existente = db.query(Cliente).filter(Cliente.telefone == tel_limpo).first()
+    restaurante_id = require_tenant_id()
+    try:
+        tel_limpo = normalizar_telefone_cliente(data.telefone)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    cliente_existente = db.query(Cliente).filter(
+        Cliente.restaurante_id == restaurante_id,
+        Cliente.telefone == tel_limpo,
+    ).first()
     if cliente_existente:
         raise HTTPException(status_code=400, detail="Cliente com este telefone já cadastrado.")
         
     try:
         # Cliente e saldo inicial pertencem à mesma transação: se a
         # criptografia do histórico falhar, nenhum dado parcial é persistido.
-        new_c = Cliente(telefone=tel_limpo, nome=data.cliente.strip())
+        new_c = Cliente(
+            restaurante_id=restaurante_id,
+            telefone=tel_limpo,
+            nome=data.cliente.strip(),
+        )
         db.add(new_c)
 
         saldo_inicial = 0.0
@@ -714,6 +764,12 @@ def create_loyalty_client(
             db.add(ajuste)
 
         db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail="Cliente com este telefone já cadastrado.",
+        ) from exc
     except HTTPException:
         raise
     except Exception:

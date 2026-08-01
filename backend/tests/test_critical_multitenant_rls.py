@@ -2,8 +2,9 @@ import pytest
 from fastapi.testclient import TestClient
 from app.main import app
 from app.database import engine, Base, SessionLocal, current_restaurante_id
-from app.models import Restaurante, Categoria, Produto
+from app.models import Restaurante, Categoria, Produto, Cliente
 from app.routes.cardapio_digital import public_tenant_scope
+from app.services.clientes import cadastrar_ou_atualizar_cliente
 
 client = TestClient(app)
 
@@ -167,3 +168,32 @@ def test_public_tenant_scope_switches_and_restores_session_identity():
     finally:
         db.close()
         current_restaurante_id.reset(token)
+
+
+def test_mesmo_telefone_cria_fichas_isoladas_por_restaurante():
+    telefone = "81977776666"
+    db = SessionLocal()
+    try:
+        for restaurante_id, nome in (
+            (101, "Cliente do Tenant A"),
+            (202, "Cliente do Tenant B"),
+        ):
+            token = current_restaurante_id.set(restaurante_id)
+            try:
+                cadastrar_ou_atualizar_cliente(
+                    db,
+                    restaurante_id=restaurante_id,
+                    telefone=telefone,
+                    nome=nome,
+                )
+                db.commit()
+            finally:
+                current_restaurante_id.reset(token)
+
+        clientes = db.query(Cliente).filter(Cliente.telefone == telefone).all()
+        assert {(cliente.restaurante_id, cliente.nome) for cliente in clientes} == {
+            (101, "Cliente do Tenant A"),
+            (202, "Cliente do Tenant B"),
+        }
+    finally:
+        db.close()

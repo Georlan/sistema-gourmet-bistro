@@ -4,22 +4,21 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from ..database import get_db, current_restaurante_id
-from ..models import Comanda, Lancamento, Item, Produto, Usuario, Cliente
+from ..models import Comanda, Lancamento, Item, Produto, Usuario
 from ..schemas import CardapioPedidoCreate
 from ..websocket_manager import manager
 from .cardapio_digital import resolve_restaurant_id
 from .orders import gerar_novo_numero_pedido
+from ..services.clientes import (
+    cadastrar_ou_atualizar_cliente,
+    normalizar_telefone_cliente,
+)
 
 logger = logging.getLogger("koma.cardapio")
 router = APIRouter(
     prefix="/cardapio",
     tags=["Cardápio Digital Client"]
 )
-
-def limpar_telefone(tel: str) -> str:
-    if not tel:
-        return ""
-    return "".join(c for c in tel if c.isdigit())
 
 @router.post("/pedidos", status_code=status.HTTP_201_CREATED)
 def criar_pedido_online(
@@ -59,7 +58,7 @@ def criar_pedido_online(
     auto_delivery_status = "pendente"  # Fica na gaveta de aceite do caixa
 
     # Normalizar telefone do cliente
-    telefone_clean = limpar_telefone(payload.cliente_telefone)
+    telefone_clean = normalizar_telefone_cliente(payload.cliente_telefone)
     idempotency_key = (payload.idempotency_key or "").strip()
 
     try:
@@ -121,28 +120,15 @@ def criar_pedido_online(
 
         numero_pedido = gerar_novo_numero_pedido(db)
         
-        # Upsert do Cliente (CRM Multicanal)
-        cliente = db.query(Cliente).filter(
-            Cliente.restaurante_id == rest_id,
-            Cliente.telefone == telefone_clean
-        ).first()
-        
-        if cliente:
-            cliente.nome = payload.cliente_nome
-            if endereco_comanda:
-                cliente.endereco = endereco_comanda
-        else:
-            cliente = Cliente(
-                id=str(uuid.uuid4()),
-                restaurante_id=rest_id,
-                telefone=telefone_clean,
-                nome=payload.cliente_nome,
-                endereco=endereco_comanda,
-                saldo_pontos=0,
-                saldo_cashback=0.0
-            )
-            db.add(cliente)
-        db.flush()
+        # A mesma ficha alimenta Clientes, fidelidade e pedidos, sempre dentro
+        # do tenant resolvido pelo cardápio público.
+        cadastrar_ou_atualizar_cliente(
+            db,
+            restaurante_id=rest_id,
+            telefone=telefone_clean,
+            nome=payload.cliente_nome,
+            endereco=endereco_comanda,
+        )
         
         # Criar a Comanda (comanda pai)
         comanda_id = f"c-{uuid.uuid4().hex[:8]}"

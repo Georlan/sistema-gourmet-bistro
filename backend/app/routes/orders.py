@@ -35,6 +35,10 @@ from ..security import (
 )
 from ..websocket_manager import manager
 from ..services.whatsapp import enviar_notificacao_whatsapp_task
+from ..services.clientes import (
+    cadastrar_ou_atualizar_cliente,
+    normalizar_telefone_cliente,
+)
 
 logger = logging.getLogger("koma.orders")
 
@@ -473,6 +477,16 @@ async def criar_venda_direta(
             detail="Informe o nome do cliente para a retirada.",
         )
 
+    telefone_cliente = None
+    if venda_in.delivery_telefone:
+        try:
+            telefone_cliente = normalizar_telefone_cliente(venda_in.delivery_telefone)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(exc),
+            ) from exc
+
     garcom_id = venda_in.garcom_id or current_user.id
     garcom = db.query(Usuario).filter(Usuario.id == garcom_id).first()
     if not garcom:
@@ -497,6 +511,19 @@ async def criar_venda_direta(
 
     try:
         rid = current_restaurante_id.get() or current_user.restaurante_id
+        if tipo_pedido in {"Entrega", "Retirada"} and telefone_cliente:
+            cadastrar_ou_atualizar_cliente(
+                db,
+                restaurante_id=rid,
+                telefone=telefone_cliente,
+                nome=venda_in.identificador or "Cliente",
+                endereco=(
+                    venda_in.delivery_endereco
+                    if tipo_pedido == "Entrega"
+                    else None
+                ),
+            )
+
         nova_comanda = Comanda(
             id=comanda_id,
             restaurante_id=rid,
@@ -508,7 +535,7 @@ async def criar_venda_direta(
             fechada=False,
             criado_em=datetime.datetime.now(datetime.timezone.utc),
             delivery_status=auto_delivery_status,
-            delivery_telefone=venda_in.delivery_telefone,
+            delivery_telefone=telefone_cliente,
             delivery_endereco=venda_in.delivery_endereco,
             delivery_taxa=venda_in.delivery_taxa
         )

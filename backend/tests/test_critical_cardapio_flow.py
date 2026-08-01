@@ -2,7 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 from app.main import app
 from app.database import engine, Base, SessionLocal, current_restaurante_id
-from app.models import Restaurante, Categoria, Produto, Usuario, Mesa, PrintJob, Comanda
+from app.models import Restaurante, Categoria, Produto, Usuario, Mesa, PrintJob, Comanda, Cliente
 from app.security import create_access_token
 
 client = TestClient(app)
@@ -159,7 +159,7 @@ def test_caixa_venda_direta_mesa():
 @pytest.mark.parametrize(
     ("tipo", "identificador", "telefone", "endereco"),
     [
-        ("Entrega", "Cliente Delivery", "81999990003", "Rua Manual, 123"),
+        ("Entrega", "Cliente Delivery", "(81) 99999-0003", "Rua Manual, 123"),
         ("Retirada", "Cliente Retirada", "81999990004", None),
     ],
 )
@@ -199,6 +199,127 @@ def test_caixa_venda_direta_nao_passa_pela_gaveta_online(
     assert data["tipo"] == tipo
     assert data["mesa_id"] is None
     assert data["delivery_status"] == "producao"
+
+    db = SessionLocal()
+    token_var = current_restaurante_id.set(100)
+    try:
+        cliente = db.query(Cliente).filter(
+            Cliente.restaurante_id == 100,
+            Cliente.telefone == "".join(c for c in telefone if c.isdigit()),
+        ).one()
+        assert cliente.nome == identificador
+        assert cliente.endereco == endereco
+    finally:
+        current_restaurante_id.reset(token_var)
+        db.close()
+
+
+def test_pedido_digital_normaliza_e_atualiza_cliente_sem_duplicar():
+    telefone_formatado = "(81) 98888-7711"
+    telefone_normalizado = "81988887711"
+
+    primeiro = client.post(
+        "/cardapio/pedidos",
+        json={
+            "restaurante_id": 100,
+            "itens": [{
+                "produto_id": "prod-cardapio-test",
+                "quantidade": 1,
+                "observacao": "Primeira compra",
+            }],
+            "cliente_nome": "Cliente Inicial",
+            "cliente_telefone": telefone_formatado,
+            "endereco_entrega": "Rua Inicial, 10",
+            "taxa_entrega": 5,
+            "forma_pagamento": "na_entrega",
+            "tipo_pedido": "delivery",
+            "idempotency_key": "cliente-auto-primeiro",
+        },
+    )
+    assert primeiro.status_code == 201
+
+    segundo = client.post(
+        "/cardapio/pedidos",
+        json={
+            "restaurante_id": 100,
+            "itens": [{
+                "produto_id": "prod-cardapio-test",
+                "quantidade": 1,
+                "observacao": "Segunda compra",
+            }],
+            "cliente_nome": "Cliente Atualizado",
+            "cliente_telefone": telefone_normalizado,
+            "endereco_entrega": "Rua Nova, 20",
+            "taxa_entrega": 6,
+            "forma_pagamento": "na_entrega",
+            "tipo_pedido": "delivery",
+            "idempotency_key": "cliente-auto-segundo",
+        },
+    )
+    assert segundo.status_code == 201
+
+    db = SessionLocal()
+    token_var = current_restaurante_id.set(100)
+    try:
+        clientes = db.query(Cliente).filter(
+            Cliente.restaurante_id == 100,
+            Cliente.telefone == telefone_normalizado,
+        ).all()
+        assert len(clientes) == 1
+        assert clientes[0].nome == "Cliente Atualizado"
+        assert clientes[0].endereco == "Rua Nova, 20"
+    finally:
+        current_restaurante_id.reset(token_var)
+        db.close()
+
+    token = create_access_token(
+        subject="usr_cardapio_100",
+        restaurante_id=100,
+        role="admin",
+    )
+    lista = client.get(
+        "/fidelidade/clientes",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert lista.status_code == 200
+    assert any(
+        item["telefone"] == telefone_normalizado
+        and item["cliente"] == "Cliente Atualizado"
+        for item in lista.json()
+    )
+
+    duplicado_manual = client.post(
+        "/fidelidade/clientes",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "cliente": "Não deve duplicar",
+            "telefone": "(81) 98888-7711",
+            "saldo_pontos": 0,
+            "saldo_cashback": 0,
+        },
+    )
+    assert duplicado_manual.status_code == 400
+
+    atualizado_manual = client.put(
+        f"/fidelidade/clientes/{telefone_normalizado}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "cliente": "Cliente Editado no CRM",
+            "telefone": "(81) 97777-6611",
+        },
+    )
+    assert atualizado_manual.status_code == 200
+
+    lista_atualizada = client.get(
+        "/fidelidade/clientes",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert lista_atualizada.status_code == 200
+    assert any(
+        item["telefone"] == "81977776611"
+        and item["cliente"] == "Cliente Editado no CRM"
+        for item in lista_atualizada.json()
+    )
 
 
 def test_caixa_delivery_manual_exige_dados_de_entrega():
