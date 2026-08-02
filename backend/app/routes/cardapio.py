@@ -1,7 +1,7 @@
 import uuid
 import datetime
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, Header, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from ..database import get_db, current_restaurante_id
 from ..models import Comanda, Lancamento, Item, Produto, Usuario
@@ -13,6 +13,7 @@ from ..services.clientes import (
     cadastrar_ou_atualizar_cliente,
     normalizar_telefone_cliente,
 )
+from .cardapio_clientes import authenticated_customer
 
 logger = logging.getLogger("koma.cardapio")
 router = APIRouter(
@@ -24,7 +25,11 @@ router = APIRouter(
 def criar_pedido_online(
     payload: CardapioPedidoCreate,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    customer_token: str | None = Header(
+        default=None,
+        alias="X-Koma-Customer-Token",
+    ),
 ):
     """
     Recebe um novo pedido do cardápio digital do cliente final.
@@ -57,8 +62,22 @@ def criar_pedido_online(
     # Definir status operacional do delivery.
     auto_delivery_status = "pendente"  # Fica na gaveta de aceite do caixa
 
-    # Normalizar telefone do cliente
-    telefone_clean = normalizar_telefone_cliente(payload.cliente_telefone)
+    # Um telefone digitado serve para contato, mas só uma sessão OTP comprova
+    # que o pedido pertence à ficha de fidelidade daquele número.
+    cliente = None
+    if customer_token:
+        _claims, cliente = authenticated_customer(
+            db,
+            raw_token=customer_token,
+            expected_restaurante_id=rest_id,
+        )
+
+    telefone_clean = (
+        cliente.telefone
+        if cliente is not None
+        else normalizar_telefone_cliente(payload.cliente_telefone)
+    )
+    cliente_nome = cliente.nome if cliente is not None else payload.cliente_nome
     idempotency_key = (payload.idempotency_key or "").strip()
 
     try:
@@ -81,12 +100,14 @@ def criar_pedido_online(
 
         # 2. Time-window fallback check (5 minutes, same tenant, phone, delivery type):
         cinco_minutos_atras = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=5)
-        recentes = db.query(Comanda).filter(
-            Comanda.restaurante_id == rest_id,
-            Comanda.delivery_telefone == telefone_clean,
-            Comanda.tipo == tipo_comanda,
-            Comanda.criado_em >= cinco_minutos_atras,
-        ).order_by(Comanda.criado_em.desc()).all()
+        recentes = []
+        if cliente is not None:
+            recentes = db.query(Comanda).filter(
+                Comanda.restaurante_id == rest_id,
+                Comanda.cliente_id == cliente.id,
+                Comanda.tipo == tipo_comanda,
+                Comanda.criado_em >= cinco_minutos_atras,
+            ).order_by(Comanda.criado_em.desc()).all()
 
         payload_items_sig = sorted([f"{i.produto_id}:{i.observacao}" for i in payload.itens for _ in range(i.quantidade)])
         for rec in recentes:
@@ -120,25 +141,25 @@ def criar_pedido_online(
 
         numero_pedido = gerar_novo_numero_pedido(db)
         
-        # A mesma ficha alimenta Clientes, fidelidade e pedidos, sempre dentro
-        # do tenant resolvido pelo cardápio público.
-        cadastrar_ou_atualizar_cliente(
-            db,
-            restaurante_id=rest_id,
-            telefone=telefone_clean,
-            nome=payload.cliente_nome,
-            endereco=endereco_comanda,
-        )
+        if cliente is not None:
+            cliente = cadastrar_ou_atualizar_cliente(
+                db,
+                restaurante_id=rest_id,
+                telefone=cliente.telefone,
+                nome=cliente.nome,
+                endereco=endereco_comanda,
+            )
         
         # Criar a Comanda (comanda pai)
         comanda_id = f"c-{uuid.uuid4().hex[:8]}"
         nova_comanda = Comanda(
             id=comanda_id,
             restaurante_id=rest_id,
+            cliente_id=cliente.id if cliente is not None else None,
             mesa_id=None,
             garcom_id=garcom_id,
             tipo=tipo_comanda,
-            identificador=payload.cliente_nome,
+            identificador=cliente_nome,
             numero_pedido=numero_pedido,
             fechada=False,
             criado_em=datetime.datetime.now(datetime.timezone.utc),
@@ -186,7 +207,7 @@ def criar_pedido_online(
                     produto_id=item_in.produto_id,
                     preco_unit=produto.preco,
                     observacao=item_in.observacao or "",
-                    cliente_nome=item_in.cliente_nome or payload.cliente_nome,
+                    cliente_nome=item_in.cliente_nome or cliente_nome,
                     status="preparando",
                     pago=False
                 )
@@ -220,16 +241,30 @@ def criar_pedido_online(
         manager.broadcast,
         {
             "event": "new_delivery_order",
-            "message": f"Novo pedido online de {payload.cliente_nome} recebido!"
+            "message": f"Novo pedido online de {cliente_nome} recebido!"
         },
         rest_id
     )
+    if cliente is not None:
+        background_tasks.add_task(
+            manager.broadcast,
+            {
+                "event": "customers_updated",
+                "detail": {
+                    "action": "order_linked",
+                    "cliente_id": cliente.id,
+                },
+            },
+            rest_id,
+            target_audience="internal",
+        )
     
     return {
         "status": "success",
         "message": "Pedido enviado e integrado ao caixa com sucesso!",
         "comanda_id": comanda_id,
         "numero_pedido": numero_pedido,
+        "cliente_id": cliente.id if cliente is not None else None,
         "pagamento": {
             "status": "pendente_no_atendimento",
             "cobranca_online": False

@@ -27,6 +27,27 @@ class Settings:
         raise RuntimeError("A variável de ambiente 'SECRET_KEY' é obrigatória e não foi configurada.")
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 43200  # 30 days (43200 minutes) to keep waiters logged in
+    CUSTOMER_TOKEN_EXPIRE_MINUTES: int = int(
+        os.getenv("CUSTOMER_TOKEN_EXPIRE_MINUTES", "43200")
+    )
+    CUSTOMER_OTP_TTL_SECONDS: int = int(
+        os.getenv("CUSTOMER_OTP_TTL_SECONDS", "300")
+    )
+    CUSTOMER_OTP_RESEND_SECONDS: int = int(
+        os.getenv("CUSTOMER_OTP_RESEND_SECONDS", "60")
+    )
+    CUSTOMER_OTP_WINDOW_SECONDS: int = int(
+        os.getenv("CUSTOMER_OTP_WINDOW_SECONDS", "900")
+    )
+    CUSTOMER_OTP_MAX_SENDS: int = int(
+        os.getenv("CUSTOMER_OTP_MAX_SENDS", "5")
+    )
+    CUSTOMER_OTP_MAX_ATTEMPTS: int = int(
+        os.getenv("CUSTOMER_OTP_MAX_ATTEMPTS", "5")
+    )
+    CUSTOMER_OTP_MAX_IP_REQUESTS: int = int(
+        os.getenv("CUSTOMER_OTP_MAX_IP_REQUESTS", "20")
+    )
     
     # ENCRYPTION_KEY environment check
     ENCRYPTION_KEY: str = os.getenv("ENCRYPTION_KEY", "")

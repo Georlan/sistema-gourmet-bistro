@@ -17,6 +17,7 @@ import CardapioPage from './cardapio/CardapioPage';
 import SuperAdminPanel from './super-admin/SuperAdminPanel';
 import { CaixaAtivarPage } from './components/CaixaAtivarPage';
 import { MotoboyPwaPage } from './components/MotoboyPwaPage';
+import { KitchenPanel } from './components/KitchenPanel';
 
 import { API_BASE_URL } from './config/api';
 
@@ -719,6 +720,9 @@ export default function App() {
               new Event('koma_print_monitor_refresh')
             );
           }
+          if (data.event === "customers_updated") {
+            window.dispatchEvent(new Event('koma_customers_updated'));
+          }
           if (data.event === "tables_updated") {
             if (wsUpdateTimeout) {
               clearTimeout(wsUpdateTimeout);
@@ -988,6 +992,8 @@ export default function App() {
       const mappedOrders = comandas.map((comanda: any) => {
         return {
           id: comanda.id,
+          clienteId: comanda.cliente_id || null,
+          clientePhone: comanda.delivery_telefone || null,
           mesaId: comanda.mesa_id || 0,
           garcomId: comanda.garcom_id,
           // Use name from API response (criada_por populated by SQLAlchemy relationship)

@@ -18,6 +18,14 @@ import CardapioStoreInfoDrawer from "./components/CardapioStoreInfoDrawer";
 import CardapioAiChefAssistant from "./components/CardapioAiChefAssistant";
 import { ShoppingBag, Eye, X, ArrowRight, Clock, RefreshCw } from "lucide-react";
 import { smartSearchMatch } from "../domain";
+import clsx from "clsx";
+import {
+  CustomerProfile,
+  clearCustomerSession,
+  loadCustomerSession,
+  mapCustomerProfile,
+  saveCustomerSession,
+} from "./customerSession";
 
 const getCategoryId = (name: string) =>
   'sec-' + name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-');
@@ -158,7 +166,8 @@ export default function CardapioPage() {
   const [address, setAddress] = useState("");
 
   // Customer contact profile saved on this device
-  const [user, setUser] = useState<any | null>(null);
+  const [user, setUser] = useState<CustomerProfile | null>(null);
+  const [customerToken, setCustomerToken] = useState<string | null>(null);
   const [sidebarError, setSidebarError] = useState("");
 
   // CEP & Complete Address States
@@ -498,17 +507,50 @@ export default function CardapioPage() {
     loadRestaurantData();
   }, [loadRestaurantData]);
 
-  // Load the local contact profile on mount
+  // A sessão é isolada por restaurante e revalidada no backend. Nunca reaproveite
+  // um perfil global, pois o mesmo aparelho pode acessar vários cardápios.
   useEffect(() => {
-    const savedUser = localStorage.getItem("whitelabel_menu_current_user");
-    if (savedUser) {
-      try {
-        setUser(JSON.parse(savedUser));
-      } catch {
-        localStorage.removeItem("whitelabel_menu_current_user");
-      }
+    if (!activeBrand?.id) return;
+    let cancelled = false;
+    const session = loadCustomerSession(activeBrand.id);
+
+    // Remove as chaves antigas, que não eram separadas por tenant nem provavam
+    // que o telefone pertencia à pessoa.
+    localStorage.removeItem("koma_cliente_perfil");
+    localStorage.removeItem("whitelabel_menu_current_user");
+
+    if (!session) {
+      setUser(null);
+      setCustomerToken(null);
+      return;
     }
-  }, []);
+
+    setUser(session.profile);
+    setCustomerToken(session.token);
+    void fetch(`${API_BASE_URL}/cardapio/clientes/me`, {
+      headers: { "X-Koma-Customer-Token": session.token },
+    }).then(async (response) => {
+      const data = await response.json().catch(() => null);
+      if (cancelled) return;
+      if (response.status === 401) {
+        clearCustomerSession(activeBrand.id);
+        setUser(null);
+        setCustomerToken(null);
+        return;
+      }
+      if (response.ok && data?.id) {
+        const profile = mapCustomerProfile(data);
+        setUser(profile);
+        saveCustomerSession(activeBrand.id, { token: session.token, profile });
+      }
+    }).catch(() => {
+      // Em uma queda breve de rede, preserve a sessão e o carrinho locais.
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBrand?.id]);
 
   // Update categories active state when active brand changes
   useEffect(() => {
@@ -595,15 +637,34 @@ export default function CardapioPage() {
     };
   }, [activeBrand?.id]);
 
-  const handleLoginSuccess = (profile: any) => {
+  const handleLoginSuccess = (profile: CustomerProfile, token: string) => {
     setUser(profile);
-    localStorage.setItem("whitelabel_menu_current_user", JSON.stringify(profile));
+    setCustomerToken(token);
+    if (activeBrand?.id) {
+      saveCustomerSession(activeBrand.id, { token, profile });
+    }
+  };
+
+  const handleProfileUpdate = (profile: CustomerProfile) => {
+    setUser(profile);
+    if (activeBrand?.id && customerToken) {
+      saveCustomerSession(activeBrand.id, { token: customerToken, profile });
+    }
   };
 
   const handleLogout = () => {
     setUser(null);
-    localStorage.removeItem("whitelabel_menu_current_user");
+    setCustomerToken(null);
+    if (activeBrand?.id) clearCustomerSession(activeBrand.id);
     setIsAuthOpen(false);
+  };
+
+  const handleCustomerSessionExpired = () => {
+    handleLogout();
+    setIsCheckoutOpen(false);
+    setCheckoutRequest(null);
+    setSidebarError("Sua sessão expirou. Confirme o celular; sua sacola foi preservada.");
+    setIsAuthOpen(true);
   };
 
   const handleAddToCart = (
@@ -780,8 +841,8 @@ export default function CardapioPage() {
   const handleQuickSidebarCheckout = () => {
     setSidebarError("");
 
-    if (!user) {
-      setSidebarError("Clique em 'Entrar' no menu para fazer o pedido.");
+    if (!user || !customerToken) {
+      setSidebarError("Confirme seu celular para fazer o pedido.");
       setIsAuthOpen(true);
       return;
     }
@@ -1449,6 +1510,7 @@ export default function CardapioPage() {
       {/* User Login/Register Modal */}
       {isAuthOpen && activeBrand?.id && (
         <CardapioAuthModal
+          restaurantId={activeBrand.id}
           onClose={() => setIsAuthOpen(false)}
           onLoginSuccess={handleLoginSuccess}
         />
@@ -1459,7 +1521,8 @@ export default function CardapioPage() {
         <CardapioUserProfileModal
           onClose={() => setIsProfileOpen(false)}
           user={user}
-          onProfileUpdate={handleLoginSuccess}
+          customerToken={customerToken}
+          onProfileUpdate={handleProfileUpdate}
           onLogout={handleLogout}
         />
       )}
@@ -1474,11 +1537,13 @@ export default function CardapioPage() {
           address={checkoutRequest.address}
           customerName={checkoutRequest.customerName}
           customerPhone={checkoutRequest.customerPhone}
+          customerToken={customerToken || ""}
           onClose={() => {
             setIsCheckoutOpen(false);
             setCheckoutRequest(null);
           }}
           onOrderSuccess={handleCheckoutSuccess}
+          onSessionExpired={handleCustomerSessionExpired}
         />
       )}
 

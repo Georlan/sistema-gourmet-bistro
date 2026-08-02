@@ -2,8 +2,19 @@ import pytest
 from fastapi.testclient import TestClient
 from app.main import app
 from app.database import engine, Base, SessionLocal, current_restaurante_id
-from app.models import Restaurante, Categoria, Produto, Usuario, Mesa, PrintJob, Comanda, Cliente
+from app.models import (
+    Restaurante,
+    Categoria,
+    Produto,
+    Usuario,
+    Mesa,
+    PrintJob,
+    Comanda,
+    Cliente,
+    OtpChallenge,
+)
 from app.security import create_access_token
+from app.services.customer_auth import create_customer_access_token
 
 client = TestClient(app)
 
@@ -214,7 +225,7 @@ def test_caixa_venda_direta_nao_passa_pela_gaveta_online(
         db.close()
 
 
-def test_pedido_digital_normaliza_e_atualiza_cliente_sem_duplicar():
+def test_pedido_digital_sem_otp_nao_se_apropria_de_cadastro():
     telefone_formatado = "(81) 98888-7711"
     telefone_normalizado = "81988887711"
 
@@ -238,26 +249,6 @@ def test_pedido_digital_normaliza_e_atualiza_cliente_sem_duplicar():
     )
     assert primeiro.status_code == 201
 
-    segundo = client.post(
-        "/cardapio/pedidos",
-        json={
-            "restaurante_id": 100,
-            "itens": [{
-                "produto_id": "prod-cardapio-test",
-                "quantidade": 1,
-                "observacao": "Segunda compra",
-            }],
-            "cliente_nome": "Cliente Atualizado",
-            "cliente_telefone": telefone_normalizado,
-            "endereco_entrega": "Rua Nova, 20",
-            "taxa_entrega": 6,
-            "forma_pagamento": "na_entrega",
-            "tipo_pedido": "delivery",
-            "idempotency_key": "cliente-auto-segundo",
-        },
-    )
-    assert segundo.status_code == 201
-
     db = SessionLocal()
     token_var = current_restaurante_id.set(100)
     try:
@@ -265,35 +256,112 @@ def test_pedido_digital_normaliza_e_atualiza_cliente_sem_duplicar():
             Cliente.restaurante_id == 100,
             Cliente.telefone == telefone_normalizado,
         ).all()
-        assert len(clientes) == 1
-        assert clientes[0].nome == "Cliente Atualizado"
-        assert clientes[0].endereco == "Rua Nova, 20"
+        assert clientes == []
     finally:
         current_restaurante_id.reset(token_var)
         db.close()
 
-    token = create_access_token(
+
+def test_cliente_do_caixa_faz_login_otp_e_pedido_vincula_mesmo_id(monkeypatch):
+    telefone = "81977776666"
+    staff_token = create_access_token(
         subject="usr_cardapio_100",
         restaurante_id=100,
         role="admin",
     )
-    lista = client.get(
+    staff_headers = {"Authorization": f"Bearer {staff_token}"}
+
+    criado = client.post(
         "/fidelidade/clientes",
-        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "cliente": "Cliente do Caixa",
+            "telefone": telefone,
+            "saldo_pontos": 12,
+        },
+        headers=staff_headers,
     )
-    assert lista.status_code == 200
-    assert any(
-        item["telefone"] == telefone_normalizado
-        and item["cliente"] == "Cliente Atualizado"
-        for item in lista.json()
+    assert criado.status_code == 201
+    cliente_id = criado.json()["id"]
+
+    monkeypatch.setattr(
+        "app.routes.cardapio_clientes.generate_otp",
+        lambda: "246810",
     )
+    monkeypatch.setattr(
+        "app.routes.cardapio_clientes.enviar_codigo_otp_whatsapp",
+        lambda _telefone, _codigo: True,
+    )
+
+    solicitado = client.post(
+        "/cardapio/clientes/otp/solicitar",
+        json={"restaurante_id": 100, "telefone": "(81) 97777-6666"},
+    )
+    assert solicitado.status_code == 202
+
+    login = client.post(
+        "/cardapio/clientes/otp/verificar",
+        json={
+            "restaurante_id": 100,
+            "telefone": telefone,
+            "codigo": "246810",
+            "nome": "Cliente do Caixa",
+            "endereco": "",
+        },
+    )
+    assert login.status_code == 200
+    sessao = login.json()
+    assert sessao["cliente"]["id"] == cliente_id
+    assert sessao["cliente"]["saldo_pontos"] == 12
+
+    pedido = client.post(
+        "/cardapio/pedidos",
+        headers={"X-Koma-Customer-Token": sessao["access_token"]},
+        json={
+            "restaurante_id": 100,
+            "itens": [{
+                "produto_id": "prod-cardapio-test",
+                "quantidade": 1,
+                "observacao": "Pedido autenticado",
+            }],
+            # O backend ignora snapshots manipulados e usa a ficha verificada.
+            "cliente_nome": "Outro Nome",
+            "cliente_telefone": "81911112222",
+            "endereco_entrega": "Rua OTP, 20",
+            "taxa_entrega": 6,
+            "forma_pagamento": "na_entrega",
+            "tipo_pedido": "delivery",
+            "idempotency_key": "cliente-otp-vinculo-estavel",
+        },
+    )
+    assert pedido.status_code == 201
+
+    db = SessionLocal()
+    token_var = current_restaurante_id.set(100)
+    try:
+        comanda = db.query(Comanda).filter(
+            Comanda.restaurante_id == 100,
+            Comanda.id == pedido.json()["comanda_id"],
+        ).one()
+        assert comanda.cliente_id == cliente_id
+        assert comanda.delivery_telefone == telefone
+        assert db.query(Cliente).filter(
+            Cliente.restaurante_id == 100,
+            Cliente.telefone == telefone,
+        ).count() == 1
+        assert db.query(Cliente).filter(
+            Cliente.restaurante_id == 100,
+            Cliente.telefone == "81911112222",
+        ).count() == 0
+    finally:
+        current_restaurante_id.reset(token_var)
+        db.close()
 
     duplicado_manual = client.post(
         "/fidelidade/clientes",
-        headers={"Authorization": f"Bearer {token}"},
+        headers=staff_headers,
         json={
             "cliente": "Não deve duplicar",
-            "telefone": "(81) 98888-7711",
+            "telefone": "(81) 97777-6666",
             "saldo_pontos": 0,
             "saldo_cashback": 0,
         },
@@ -301,24 +369,146 @@ def test_pedido_digital_normaliza_e_atualiza_cliente_sem_duplicar():
     assert duplicado_manual.status_code == 400
 
     atualizado_manual = client.put(
-        f"/fidelidade/clientes/{telefone_normalizado}",
-        headers={"Authorization": f"Bearer {token}"},
+        f"/fidelidade/clientes/{cliente_id}",
+        headers=staff_headers,
         json={
             "cliente": "Cliente Editado no CRM",
-            "telefone": "(81) 97777-6611",
+            "telefone": "(81) 97777-6667",
         },
     )
     assert atualizado_manual.status_code == 200
 
     lista_atualizada = client.get(
         "/fidelidade/clientes",
-        headers={"Authorization": f"Bearer {token}"},
+        headers=staff_headers,
     )
     assert lista_atualizada.status_code == 200
     assert any(
-        item["telefone"] == "81977776611"
+        item["id"] == cliente_id
+        and item["telefone"] == "81977776667"
         and item["cliente"] == "Cliente Editado no CRM"
         for item in lista_atualizada.json()
+    )
+
+
+def test_otp_nao_persiste_codigo_ou_telefone_e_bloqueia_forca_bruta(monkeypatch):
+    telefone = "81960000001"
+    codigo = "135790"
+    monkeypatch.setattr(
+        "app.routes.cardapio_clientes.generate_otp",
+        lambda: codigo,
+    )
+    monkeypatch.setattr(
+        "app.routes.cardapio_clientes.enviar_codigo_otp_whatsapp",
+        lambda _telefone, _codigo: True,
+    )
+
+    solicitado = client.post(
+        "/cardapio/clientes/otp/solicitar",
+        json={"restaurante_id": 100, "telefone": telefone},
+    )
+    assert solicitado.status_code == 202
+
+    db = SessionLocal()
+    token_var = current_restaurante_id.set(100)
+    try:
+        challenge = db.query(OtpChallenge).filter(
+            OtpChallenge.restaurante_id == 100,
+        ).order_by(OtpChallenge.id.desc()).first()
+        assert challenge is not None
+        assert challenge.telefone_hash != telefone
+        assert challenge.otp_hash != codigo
+        assert len(challenge.telefone_hash) == 64
+        assert len(challenge.otp_hash) == 64
+    finally:
+        current_restaurante_id.reset(token_var)
+        db.close()
+
+    payload_invalido = {
+        "restaurante_id": 100,
+        "telefone": telefone,
+        "codigo": "000000",
+        "nome": "Cliente Protegido",
+        "endereco": "",
+    }
+    for _ in range(5):
+        resposta = client.post(
+            "/cardapio/clientes/otp/verificar",
+            json=payload_invalido,
+        )
+        assert resposta.status_code == 400
+        assert resposta.json()["detail"] == (
+            "Código inválido ou expirado. Solicite um novo código."
+        )
+
+    resposta_apos_bloqueio = client.post(
+        "/cardapio/clientes/otp/verificar",
+        json={**payload_invalido, "codigo": codigo},
+    )
+    assert resposta_apos_bloqueio.status_code == 400
+
+
+def test_sessao_de_funcionario_nao_e_sessao_de_cliente():
+    staff_token = create_access_token(
+        subject="usr_cardapio_100",
+        restaurante_id=100,
+        role="admin",
+    )
+
+    response = client.get(
+        "/cardapio/clientes/me",
+        headers={"X-Koma-Customer-Token": staff_token},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Tipo de sessão inválido."
+
+
+def test_sessao_de_cliente_nao_cruza_restaurantes():
+    outro_restaurante_id = 101
+    db = SessionLocal()
+    token_var = current_restaurante_id.set(outro_restaurante_id)
+    try:
+        if db.query(Restaurante).filter(
+            Restaurante.id == outro_restaurante_id,
+        ).first() is None:
+            db.add(Restaurante(
+                id=outro_restaurante_id,
+                nome="Outro Restaurante",
+                plano="pro",
+                slug="outro-restaurante-customer-test",
+            ))
+            db.commit()
+    finally:
+        current_restaurante_id.reset(token_var)
+        db.close()
+
+    customer_token = create_customer_access_token(
+        cliente_id="cliente-do-restaurante-100",
+        restaurante_id=100,
+    )
+    response = client.post(
+        "/cardapio/pedidos",
+        headers={"X-Koma-Customer-Token": customer_token},
+        json={
+            "restaurante_id": outro_restaurante_id,
+            "itens": [{
+                "produto_id": "produto-qualquer",
+                "quantidade": 1,
+                "observacao": "",
+            }],
+            "cliente_nome": "Cliente Manipulado",
+            "cliente_telefone": "81960000002",
+            "endereco_entrega": "",
+            "taxa_entrega": 0,
+            "forma_pagamento": "na_entrega",
+            "tipo_pedido": "retirada",
+        },
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == (
+        "Sessão não pertence a este restaurante."
     )
 
 

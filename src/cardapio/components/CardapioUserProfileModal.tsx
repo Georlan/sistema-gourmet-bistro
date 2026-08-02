@@ -4,108 +4,118 @@
  */
 
 import React, { useEffect, useState } from "react";
-import { LogOut, MapPin, Phone, ShieldCheck, User, X } from "lucide-react";
-
-interface CustomerProfile {
-  name: string;
-  phone: string;
-  address: string;
-}
+import { Coins, LogOut, MapPin, Phone, ShieldCheck, User, X } from "lucide-react";
+import { API_BASE_URL } from "../../config/api";
+import {
+  CustomerProfile,
+  formatBrazilianPhone,
+  mapCustomerProfile,
+} from "../customerSession";
 
 interface CardapioUserProfileModalProps {
   onClose: () => void;
-  user: Partial<CustomerProfile> | null;
+  user: CustomerProfile | null;
+  customerToken: string | null;
   onProfileUpdate: (profile: CustomerProfile) => void;
   onLogout: () => void;
 }
 
-const getSavedProfile = (): Partial<CustomerProfile> | null => {
-  const raw = localStorage.getItem("koma_cliente_perfil");
-  if (!raw) return null;
-
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-};
-
-const formatPhoneBrazilian = (value: string) => {
-  const numbers = value.replace(/\D/g, "").slice(0, 11);
-  if (numbers.length <= 2) return numbers ? `(${numbers}` : "";
-  if (numbers.length <= 6) return `(${numbers.slice(0, 2)}) ${numbers.slice(2)}`;
-  if (numbers.length <= 10) {
-    return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 6)}-${numbers.slice(6)}`;
-  }
-  return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 7)}-${numbers.slice(7)}`;
-};
-
 export default function CardapioUserProfileModal({
   onClose,
   user,
+  customerToken,
   onProfileUpdate,
-  onLogout
+  onLogout,
 }: CardapioUserProfileModalProps) {
-  const initialProfile = getSavedProfile() || user;
-  const [profile, setProfile] = useState<Partial<CustomerProfile> | null>(initialProfile);
-  const [isEditing, setIsEditing] = useState(!initialProfile);
-  const [name, setName] = useState(initialProfile?.name || "");
-  const [phone, setPhone] = useState(formatPhoneBrazilian(initialProfile?.phone || ""));
-  const [address, setAddress] = useState(initialProfile?.address || "");
+  const [isEditing, setIsEditing] = useState(false);
+  const [name, setName] = useState(user?.name || "");
+  const [address, setAddress] = useState(user?.address || "");
+  const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
-    const activeProfile = getSavedProfile() || user;
-    setProfile(activeProfile);
-    setName(activeProfile?.name || "");
-    setPhone(formatPhoneBrazilian(activeProfile?.phone || ""));
-    setAddress(activeProfile?.address || "");
-    setIsEditing(!activeProfile);
+    setName(user?.name || "");
+    setAddress(user?.address || "");
+    setIsEditing(false);
   }, [user]);
 
-  const saveProfile = () => {
-    const cleanName = name.trim();
-    const cleanPhone = phone.replace(/\D/g, "");
-    const cleanAddress = address.trim();
+  useEffect(() => {
+    if (!customerToken) return;
+    const controller = new AbortController();
+    void fetch(`${API_BASE_URL}/cardapio/clientes/me`, {
+      headers: { "X-Koma-Customer-Token": customerToken },
+      signal: controller.signal,
+    }).then(async (response) => {
+      const data = await response.json().catch(() => null);
+      if (response.status === 401) {
+        onLogout();
+        return;
+      }
+      if (response.ok && data?.id) onProfileUpdate(mapCustomerProfile(data));
+    }).catch((error) => {
+      if ((error as Error).name !== "AbortError") {
+        setErrorMessage("Não foi possível atualizar os pontos agora.");
+      }
+    });
+    return () => controller.abort();
+  }, [customerToken]);
 
+  const saveProfile = async () => {
+    const cleanName = name.trim();
+    const cleanAddress = address.trim();
     if (cleanName.length < 2) {
       setErrorMessage("Informe um nome válido.");
       return;
     }
-    if (cleanPhone.length < 10 || cleanPhone.length > 11) {
-      setErrorMessage("Informe um celular válido com DDD.");
+    if (!customerToken) {
+      setErrorMessage("Sua sessão expirou. Confirme seu celular novamente.");
       return;
     }
 
-    const newProfile: CustomerProfile = {
-      name: cleanName,
-      phone: cleanPhone,
-      address: cleanAddress
-    };
-
-    localStorage.setItem("koma_cliente_perfil", JSON.stringify(newProfile));
-    localStorage.setItem("whitelabel_menu_current_user", JSON.stringify(newProfile));
-    setProfile(newProfile);
-    setName(newProfile.name);
-    setPhone(formatPhoneBrazilian(newProfile.phone));
-    setAddress(newProfile.address);
+    setIsSaving(true);
     setErrorMessage("");
-    setIsEditing(false);
-    onProfileUpdate(newProfile);
+    try {
+      const response = await fetch(`${API_BASE_URL}/cardapio/clientes/me`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Koma-Customer-Token": customerToken,
+        },
+        body: JSON.stringify({ nome: cleanName, endereco: cleanAddress }),
+      });
+      const data = await response.json().catch(() => null);
+      if (response.status === 401) {
+        onLogout();
+        throw new Error("Sua sessão expirou. Confirme seu celular novamente.");
+      }
+      if (!response.ok) {
+        throw new Error(
+          typeof data?.detail === "string"
+            ? data.detail
+            : "Não foi possível atualizar o perfil.",
+        );
+      }
+      const updatedProfile = mapCustomerProfile(data);
+      onProfileUpdate(updatedProfile);
+      setName(updatedProfile.name);
+      setAddress(updatedProfile.address);
+      setIsEditing(false);
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Não foi possível atualizar o perfil.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    saveProfile();
+    void saveProfile();
   };
 
-  const handleClearProfile = () => {
-    if (!window.confirm("Remover deste dispositivo os dados usados para agilizar seus pedidos?")) {
-      return;
-    }
-
-    localStorage.removeItem("koma_cliente_perfil");
-    localStorage.removeItem("whitelabel_menu_current_user");
+  const handleLogout = () => {
+    if (!window.confirm("Sair deste cardápio neste dispositivo?")) return;
     onLogout();
     onClose();
   };
@@ -118,10 +128,7 @@ export default function CardapioUserProfileModal({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 animate-fade-in cursor-pointer"
       id="user-profile-overlay"
     >
-      <div
-        className="relative w-full max-w-md rounded-3xl bg-[#121420] border border-slate-800 p-6 shadow-2xl flex flex-col max-h-[90vh] text-slate-100 animate-scale-up"
-        id="user-profile-card"
-      >
+      <div className="relative w-full max-w-md rounded-3xl bg-[#121420] border border-slate-800 p-6 shadow-2xl flex flex-col max-h-[90vh] text-slate-100 animate-scale-up">
         <div className="flex items-center justify-between border-b border-slate-800/60 pb-4 shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center border border-primary/20">
@@ -129,14 +136,13 @@ export default function CardapioUserProfileModal({
             </div>
             <div>
               <h2 className="font-display text-base font-black uppercase tracking-wide text-white">Meu Perfil</h2>
-              <p className="text-[10px] text-slate-500 font-medium">Dados usados nos seus pedidos</p>
+              <p className="text-[10px] text-slate-500 font-medium">Pedidos e pontos sincronizados</p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full bg-slate-800/50 hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
-            id="btn-close-profile"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-800/50 hover:bg-slate-800 text-slate-400 hover:text-white transition"
             aria-label="Fechar perfil"
           >
             <X className="h-4 w-4" />
@@ -144,105 +150,105 @@ export default function CardapioUserProfileModal({
         </div>
 
         <div className="flex-1 overflow-y-auto mt-4 space-y-5 pr-1 no-scrollbar text-xs">
-          {!profile || isEditing ? (
+          {!user ? (
+            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-center text-amber-300">
+              Confirme seu celular para acessar o perfil.
+            </div>
+          ) : isEditing ? (
             <form onSubmit={handleSubmit} className="space-y-4 animate-fade-in">
               <div className="bg-gradient-to-br from-primary/10 to-transparent p-4 rounded-2xl border border-primary/10 text-center space-y-1.5">
                 <ShieldCheck className="h-6 w-6 text-primary mx-auto" />
-                <h3 className="font-display font-extrabold text-sm text-white">
-                  {profile ? "Atualize seus dados" : "Agilize seu próximo pedido"}
-                </h3>
+                <h3 className="font-display font-extrabold text-sm text-white">Atualize seus dados</h3>
                 <p className="text-[11px] text-slate-400 leading-relaxed">
-                  Nome e telefone identificam o pedido. O endereço é opcional e pode ser alterado no checkout.
+                  O celular é sua identidade. Para trocá-lo, saia e confirme o novo número.
                 </p>
               </div>
 
-              <div className="space-y-3">
-                <label className="block">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                    Nome completo
-                  </span>
-                  <span className="relative block">
-                    <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                    <input
-                      type="text"
-                      required
-                      maxLength={100}
-                      autoComplete="name"
-                      placeholder="Ex: João Silva"
-                      value={name}
-                      onChange={(event) => setName(event.target.value)}
-                      className="w-full rounded-xl border border-slate-800 bg-slate-900/60 py-2.5 pl-10 pr-4 text-xs text-white focus:bg-slate-900 focus:border-primary outline-hidden transition"
-                    />
-                  </span>
-                </label>
+              <label className="block">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Celular verificado</span>
+                <span className="relative block">
+                  <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                  <input
+                    type="tel"
+                    value={formatBrazilianPhone(user.phone)}
+                    readOnly
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950/50 py-2.5 pl-10 pr-4 text-xs text-slate-400 cursor-not-allowed"
+                  />
+                </span>
+              </label>
 
-                <label className="block">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                    Celular com DDD
-                  </span>
-                  <span className="relative block">
-                    <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                    <input
-                      type="tel"
-                      required
-                      inputMode="numeric"
-                      autoComplete="tel"
-                      placeholder="Ex: (11) 99999-9999"
-                      value={phone}
-                      onChange={(event) => setPhone(formatPhoneBrazilian(event.target.value))}
-                      className="w-full rounded-xl border border-slate-800 bg-slate-900/60 py-2.5 pl-10 pr-4 text-xs text-white focus:bg-slate-900 focus:border-primary outline-hidden transition"
-                    />
-                  </span>
-                </label>
+              <label className="block">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Nome completo</span>
+                <span className="relative block">
+                  <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                  <input
+                    type="text"
+                    required
+                    maxLength={100}
+                    autoComplete="name"
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    className="w-full rounded-xl border border-slate-800 bg-slate-900/60 py-2.5 pl-10 pr-4 text-xs text-white focus:border-primary outline-hidden transition"
+                  />
+                </span>
+              </label>
 
-                <label className="block">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                    Endereço principal de entrega
-                  </span>
-                  <span className="relative block">
-                    <MapPin className="absolute left-3.5 top-3 h-4 w-4 text-slate-500" />
-                    <textarea
-                      maxLength={300}
-                      autoComplete="street-address"
-                      placeholder="Rua, número, complemento e bairro"
-                      value={address}
-                      onChange={(event) => setAddress(event.target.value)}
-                      rows={2}
-                      className="w-full rounded-xl border border-slate-800 bg-slate-900/60 py-2.5 pl-10 pr-4 text-xs text-white focus:bg-slate-900 focus:border-primary outline-hidden transition resize-none"
-                    />
-                  </span>
-                </label>
-              </div>
+              <label className="block">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Endereço principal</span>
+                <span className="relative block">
+                  <MapPin className="absolute left-3.5 top-3 h-4 w-4 text-slate-500" />
+                  <textarea
+                    maxLength={300}
+                    autoComplete="street-address"
+                    value={address}
+                    onChange={(event) => setAddress(event.target.value)}
+                    rows={2}
+                    className="w-full rounded-xl border border-slate-800 bg-slate-900/60 py-2.5 pl-10 pr-4 text-xs text-white focus:border-primary outline-hidden transition resize-none"
+                  />
+                </span>
+              </label>
 
               {errorMessage && (
                 <p className="rounded-xl bg-red-500/10 border border-red-500/20 p-3 text-red-400 text-[11px] font-semibold">
                   {errorMessage}
                 </p>
               )}
-
               <button
                 type="submit"
-                className="w-full rounded-xl bg-primary py-3 text-center text-xs font-black uppercase tracking-wider text-white hover:opacity-95 active:scale-98 transition"
+                disabled={isSaving}
+                className="w-full rounded-xl bg-primary py-3 text-center text-xs font-black uppercase tracking-wider text-white disabled:opacity-60"
               >
-                Salvar Perfil
+                {isSaving ? "Salvando..." : "Salvar Perfil"}
               </button>
             </form>
           ) : (
             <div className="space-y-5 animate-fade-in">
               <div className="flex items-center justify-between">
                 <div>
-                  <span className="text-[9px] font-bold text-primary tracking-widest uppercase">Dados salvos</span>
-                  <h3 className="font-display font-black text-sm text-white">{profile.name}</h3>
+                  <span className="text-[9px] font-bold text-primary tracking-widest uppercase">Celular verificado</span>
+                  <h3 className="font-display font-black text-sm text-white">{user.name}</h3>
                 </div>
                 <button
                   type="button"
-                  onClick={handleClearProfile}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-[10px] text-red-400 font-extrabold tracking-wider uppercase border border-red-500/10 transition"
-                  title="Remover dados deste dispositivo"
+                  onClick={handleLogout}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-[10px] text-red-400 font-extrabold uppercase border border-red-500/10 transition"
                 >
-                  <LogOut className="h-3 w-3" />
-                  <span>Limpar</span>
+                  <LogOut className="h-3 w-3" /> Sair
                 </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-2xl border border-primary/15 bg-primary/5 p-3">
+                  <Coins className="h-4 w-4 text-primary mb-1" />
+                  <p className="text-[9px] uppercase text-slate-500 font-bold">Pontos</p>
+                  <p className="text-base font-black text-white">{user.points}</p>
+                </div>
+                <div className="rounded-2xl border border-emerald-500/15 bg-emerald-500/5 p-3">
+                  <p className="text-[9px] uppercase text-slate-500 font-bold mt-5">Cashback</p>
+                  <p className="text-base font-black text-white">
+                    {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(user.cashback)}
+                  </p>
+                </div>
               </div>
 
               <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 space-y-3">
@@ -250,20 +256,19 @@ export default function CardapioUserProfileModal({
                   <Phone className="h-4 w-4 text-primary mt-0.5 shrink-0" />
                   <div>
                     <p className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">Celular</p>
-                    <p className="text-xs text-white">{formatPhoneBrazilian(profile.phone || "")}</p>
+                    <p className="text-xs text-white">{formatBrazilianPhone(user.phone)}</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
                   <MapPin className="h-4 w-4 text-primary mt-0.5 shrink-0" />
                   <div>
                     <p className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">Endereço</p>
-                    <p className="text-xs text-white leading-relaxed">
-                      {profile.address || "Nenhum endereço salvo"}
-                    </p>
+                    <p className="text-xs text-white leading-relaxed">{user.address || "Nenhum endereço salvo"}</p>
                   </div>
                 </div>
               </div>
 
+              {errorMessage && <p className="text-red-400 text-[11px]">{errorMessage}</p>}
               <button
                 type="button"
                 onClick={() => setIsEditing(true)}
@@ -277,7 +282,7 @@ export default function CardapioUserProfileModal({
 
         <div className="mt-4 pt-3 border-t border-slate-800/60 text-center shrink-0">
           <p className="text-[9px] text-slate-500 leading-tight">
-            Estes dados ficam neste dispositivo para preencher pedidos futuros.
+            Alterações são sincronizadas com o cadastro do restaurante.
           </p>
         </div>
       </div>

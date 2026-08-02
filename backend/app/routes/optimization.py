@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
 from pydantic import BaseModel
+from decimal import Decimal, ROUND_HALF_UP
 import logging
 
 from ..database import get_db, require_tenant_id
@@ -11,8 +12,16 @@ from ..models import Comanda, Insumo, ConfigFidelizacao, HistoricoFidelidade, Ac
 from ..schemas import InsumoResponse, ConfigFidelizacaoResponse, HistoricoFidelidadeResponse
 from ..security import require_permission
 from ..models import Usuario
-from ..crypt import decrypt_field
-from ..services.clientes import normalizar_telefone_cliente
+from ..services.clientes import (
+    buscar_cliente_por_id,
+    buscar_cliente_por_telefone,
+    cadastrar_ou_atualizar_cliente,
+    cliente_payload,
+    normalizar_nome_cliente,
+    normalizar_telefone_cliente,
+    registrar_movimento_fidelidade,
+)
+from ..websocket_manager import manager
 
 logger = logging.getLogger("koma.optimization")
 
@@ -273,7 +282,8 @@ class ConfigFidelizacaoCreate(BaseModel):
     valor_ponto_em_dinheiro: float
 
 class CheckoutFidelidadeRequest(BaseModel):
-    cliente_telefone: str
+    cliente_id: Optional[str] = None
+    cliente_telefone: Optional[str] = None
     valor_total: float
     resgatar: bool = False
     pontos_a_resgatar: Optional[float] = 0.0
@@ -306,67 +316,32 @@ def get_loyalty_clients(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("fidelidade:operar"))
 ):
-    """
-    Retorna a lista de saldos reais de fidelidade agregados por cliente a partir do histórico.
-    """
-    # 1. Obter todos os clientes cadastrados manualmente
-    clientes_manuais = db.query(Cliente).all()
-    pag_names = {c.telefone.strip(): c.nome.strip() for c in clientes_manuais if c.telefone}
+    """Retorna a ficha canônica; o ID não muda quando nome/telefone mudam."""
+    restaurante_id = require_tenant_id()
+    clientes = db.query(Cliente).filter(
+        Cliente.restaurante_id == restaurante_id,
+    ).order_by(Cliente.criado_em.desc(), Cliente.id.asc()).all()
+    return [cliente_payload(cliente) for cliente in clientes]
 
-    # 2. Busca histórico
-    historico = db.query(
-        HistoricoFidelidade._cliente_telefone,
-        HistoricoFidelidade.tipo_movimentacao,
-        HistoricoFidelidade.valor_delta
-    ).all()
 
-    saldos = {}
-    
-    # Inicializa saldos dos clientes cadastrados manualmente
-    for c in clientes_manuais:
-        if c.telefone:
-            saldos[c.telefone.strip()] = {"pontos": 0.0, "cashback": 0.0}
-
-    for encrypted_tel, tipo_mov, delta in historico:
-        if not encrypted_tel:
-            continue
-        tel = decrypt_field(encrypted_tel).strip()
-        if tel not in saldos:
-            saldos[tel] = {"pontos": 0.0, "cashback": 0.0}
-        if tipo_mov == "ACUMULO":
-            saldos[tel]["pontos"] += delta
-            saldos[tel]["cashback"] += delta
-        else:
-            saldos[tel]["pontos"] -= delta
-            saldos[tel]["cashback"] -= delta
-            
-    # 3. Busca nomes de pagamentos (se não cadastrados na tabela Cliente)
-    unique_tels = [t for t in saldos.keys() if t not in pag_names]
-    if unique_tels:
-        from ..models import Pagamento
-        pags = db.query(
-            Pagamento.cpf_cliente,
-            Pagamento.nome_cliente
-        ).filter(
-            Pagamento.cpf_cliente.in_(unique_tels)
-        ).all()
-        
-        for cpf, nome in pags:
-            if cpf and nome and cpf.strip() not in pag_names:
-                pag_names[cpf.strip()] = nome.strip()
-
-    result = []
-    for idx, (tel, balance) in enumerate(saldos.items()):
-        p_name = pag_names.get(tel) or f"Cliente {tel[-4:] if len(tel) >= 4 else tel}"
-            
-        result.append({
-            "id": idx + 1,
-            "cliente": p_name,
-            "telefone": tel,
-            "pontos": max(0, int(balance["pontos"])),
-            "saldoCashback": max(0.0, balance["cashback"])
-        })
-    return result
+@router.get("/fidelidade/clientes/lookup")
+def lookup_loyalty_client(
+    telefone: str,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("fidelidade:operar")),
+):
+    restaurante_id = require_tenant_id()
+    try:
+        cliente = buscar_cliente_por_telefone(
+            db,
+            restaurante_id=restaurante_id,
+            telefone=telefone,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if cliente is None:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado.")
+    return cliente_payload(cliente)
 
 @router.post("/fidelidade/config", response_model=ConfigFidelizacaoResponse)
 def update_fidelidade_config(
@@ -395,6 +370,7 @@ def update_fidelidade_config(
 @router.post("/fidelidade/checkout")
 def checkout_fidelidade(
     req: CheckoutFidelidadeRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("fidelidade:operar"))
 ):
@@ -403,88 +379,101 @@ def checkout_fidelidade(
     Se tipo_recompensa for PONTOS: calcula a pontuação (R$ 1 = X pontos) ou aplica resgate.
     Se for CASHBACK: acumula cashback (X% do total) ou deduz do saldo do cliente.
     """
+    restaurante_id = require_tenant_id()
     config = db.query(ConfigFidelizacao).filter(
-        ConfigFidelizacao.restaurante_id == require_tenant_id()
+        ConfigFidelizacao.restaurante_id == restaurante_id
     ).first()
     if not config or not config.ativo:
         raise HTTPException(status_code=400, detail="Programa de fidelidade inativo.")
-        
-    telefone = req.cliente_telefone.strip()
-    
-    # Calcular saldo atual do cliente
-    historico = db.query(
-        HistoricoFidelidade._cliente_telefone,
-        HistoricoFidelidade.tipo_movimentacao,
-        HistoricoFidelidade.valor_delta
-    ).filter(HistoricoFidelidade.restaurante_id == require_tenant_id()).all()
-    
-    saldo_atual = 0.0
-    for encrypted_tel, tipo_mov, delta in historico:
-        if not encrypted_tel:
-            continue
-        if decrypt_field(encrypted_tel).strip() == telefone:
-            if tipo_mov == "ACUMULO":
-                saldo_atual += delta
-            else:
-                saldo_atual -= delta
-                
-    desconto_aplicado = 0.0
-    valor_final = req.valor_total
-    
+
+    cliente = None
+    if req.cliente_id:
+        cliente = buscar_cliente_por_id(
+            db,
+            restaurante_id=restaurante_id,
+            cliente_id=req.cliente_id,
+            bloquear=True,
+        )
+    elif req.cliente_telefone:
+        try:
+            cliente = buscar_cliente_por_telefone(
+                db,
+                restaurante_id=restaurante_id,
+                telefone=req.cliente_telefone,
+                bloquear=True,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if cliente is None:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado.")
+
+    recompensa = config.tipo_recompensa.upper()
+    saldo_atual = (
+        Decimal(int(cliente.saldo_pontos or 0))
+        if recompensa == "PONTOS"
+        else Decimal(str(cliente.saldo_cashback or 0))
+    )
+    valor_total = Decimal(str(req.valor_total)).quantize(
+        Decimal("0.01"),
+        rounding=ROUND_HALF_UP,
+    )
+    if valor_total <= 0:
+        raise HTTPException(status_code=422, detail="Valor total deve ser positivo.")
+
+    desconto_aplicado = Decimal("0.00")
+    valor_final = valor_total
+    acumulado = Decimal("0")
     try:
         if req.resgatar:
-            if config.tipo_recompensa == "PONTOS":
-                pontos_necessarios = req.pontos_a_resgatar or 0.0
+            if recompensa == "PONTOS":
+                pontos_necessarios = Decimal(str(req.pontos_a_resgatar or 0))
                 if pontos_necessarios > saldo_atual:
                     raise HTTPException(status_code=400, detail="Pontos insuficientes.")
-                desconto_aplicado = pontos_necessarios * config.valor_ponto_em_dinheiro
-                valor_final = max(0.0, req.valor_total - desconto_aplicado)
-                
-                # Registrar resgate
-                mov = HistoricoFidelidade(
-                    cliente_telefone=telefone,
+                desconto_aplicado = (
+                    pontos_necessarios
+                    * Decimal(str(config.valor_ponto_em_dinheiro))
+                ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                valor_final = max(Decimal("0.00"), valor_total - desconto_aplicado)
+                registrar_movimento_fidelidade(
+                    db,
+                    cliente=cliente,
                     tipo_movimentacao="RESGATE",
-                    valor_delta=pontos_necessarios
+                    valor_delta=pontos_necessarios,
+                    tipo_recompensa=recompensa,
                 )
-                db.add(mov)
-            else: # CASHBACK
-                cashback_resgate = min(saldo_atual, req.valor_total)
+            else:
+                cashback_resgate = min(saldo_atual, valor_total)
                 desconto_aplicado = cashback_resgate
-                valor_final = max(0.0, req.valor_total - cashback_resgate)
-                
-                # Registrar resgate
-                mov = HistoricoFidelidade(
-                    cliente_telefone=telefone,
-                    tipo_movimentacao="RESGATE",
-                    valor_delta=cashback_resgate
-                )
-                db.add(mov)
-                
-        # Registrar acúmulo da nova compra (calculado sobre o valor final pago)
+                valor_final = max(Decimal("0.00"), valor_total - cashback_resgate)
+                if cashback_resgate > 0:
+                    registrar_movimento_fidelidade(
+                        db,
+                        cliente=cliente,
+                        tipo_movimentacao="RESGATE",
+                        valor_delta=cashback_resgate,
+                        tipo_recompensa=recompensa,
+                    )
+
         if valor_final > 0:
-            if config.tipo_recompensa == "PONTOS":
-                pontos_gerados = valor_final * config.taxa_conversao
-                mov_acumulo = HistoricoFidelidade(
-                    cliente_telefone=telefone,
+            if recompensa == "PONTOS":
+                acumulado = Decimal(str(config.taxa_conversao)) * valor_final
+            else:
+                acumulado = (
+                    valor_final
+                    * Decimal(str(config.taxa_conversao))
+                    / Decimal("100")
+                ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            if acumulado > 0:
+                registrar_movimento_fidelidade(
+                    db,
+                    cliente=cliente,
                     tipo_movimentacao="ACUMULO",
-                    valor_delta=pontos_gerados
+                    valor_delta=acumulado,
+                    tipo_recompensa=recompensa,
                 )
-                db.add(mov_acumulo)
-                ret_delta = pontos_gerados
-            else: # CASHBACK
-                cashback_gerado = valor_final * (config.taxa_conversao / 100.0)
-                mov_acumulo = HistoricoFidelidade(
-                    cliente_telefone=telefone,
-                    tipo_movimentacao="ACUMULO",
-                    valor_delta=cashback_gerado
-                )
-                db.add(mov_acumulo)
-                ret_delta = cashback_gerado
-        else:
-            ret_delta = 0.0
-            
         db.commit()
     except HTTPException:
+        db.rollback()
         raise
     except Exception:
         db.rollback()
@@ -494,13 +483,28 @@ def checkout_fidelidade(
             detail="Erro ao processar dado sensível, contate o suporte."
         )
     
+    background_tasks.add_task(
+        manager.broadcast,
+        {
+            "event": "customers_updated",
+            "detail": {"action": "loyalty", "cliente_id": cliente.id},
+        },
+        restaurante_id,
+        target_audience="internal",
+    )
+    saldo_final = (
+        int(cliente.saldo_pontos or 0)
+        if recompensa == "PONTOS"
+        else float(cliente.saldo_cashback or 0)
+    )
     return {
         "status": "success",
-        "tipo_recompensa": config.tipo_recompensa,
-        "desconto_aplicado": desconto_aplicado,
-        "valor_final": valor_final,
-        "acumulado_nesta_compra": ret_delta,
-        "saldo_atual": max(0.0, saldo_atual - (req.pontos_a_resgatar if config.tipo_recompensa == "PONTOS" and req.resgatar else (desconto_aplicado if req.resgatar else 0.0)) + ret_delta)
+        "cliente_id": cliente.id,
+        "tipo_recompensa": recompensa,
+        "desconto_aplicado": float(desconto_aplicado),
+        "valor_final": float(valor_final),
+        "acumulado_nesta_compra": float(acumulado),
+        "saldo_atual": saldo_final,
     }
 
 
@@ -592,106 +596,88 @@ class ClientUpdate(BaseModel):
     saldo_pontos: Optional[int] = None
     saldo_cashback: Optional[float] = None
 
-@router.put("/fidelidade/clientes/{old_phone}")
+@router.put("/fidelidade/clientes/{cliente_id}")
 def update_loyalty_client(
-    old_phone: str,
+    cliente_id: str,
     data: ClientUpdate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("fidelidade:operar"))
 ):
     """
-    Edita o nome, telefone, pontos e cashback de um cliente.
-    Atualiza tabela Cliente, HistoricoFidelidade e Pagamentos correspondentes.
+    Edita a ficha pelo ID estável. Telefone é um identificador natural
+    tenant-scoped, nunca a chave estrangeira de pedidos ou pontos.
     """
     restaurante_id = require_tenant_id()
     try:
-        telefone_anterior = normalizar_telefone_cliente(old_phone)
+        nome_novo = normalizar_nome_cliente(data.cliente)
         telefone_novo = normalizar_telefone_cliente(data.telefone)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    # 1. Fetch and filter HistoricoFidelidade in Python due to non-deterministic encryption
-    all_movements = db.query(HistoricoFidelidade).all()
-    movements = []
-    for movement in all_movements:
-        try:
-            if normalizar_telefone_cliente(movement.cliente_telefone) == telefone_anterior:
-                movements.append(movement)
-        except ValueError:
-            # Registros legados inválidos não devem impedir a edição de uma
-            # ficha válida; permanecem disponíveis para saneamento separado.
-            continue
-    
-    # 2. Fetch Pagamento entries (which are unencrypted)
-    pagamentos = db.query(Pagamento).filter(
-        Pagamento.restaurante_id == restaurante_id,
-        Pagamento.cpf_cliente == telefone_anterior,
-    ).all()
-    
-    # 3. Buscar ou criar o cliente na tabela dedicada 'clientes'
-    cliente_db = db.query(Cliente).filter(
-        Cliente.restaurante_id == restaurante_id,
-        Cliente.telefone == telefone_anterior,
-    ).first()
-    
-    conflito = db.query(Cliente).filter(
-        Cliente.restaurante_id == restaurante_id,
-        Cliente.telefone == telefone_novo,
-    ).first()
-    if conflito and (cliente_db is None or conflito.id != cliente_db.id):
-        raise HTTPException(status_code=400, detail="Cliente com este telefone já cadastrado.")
-
-    if not movements and not pagamentos and not cliente_db:
+    cliente_db = buscar_cliente_por_id(
+        db,
+        restaurante_id=restaurante_id,
+        cliente_id=cliente_id,
+        bloquear=True,
+    )
+    if cliente_db is None:
         raise HTTPException(status_code=404, detail="Cliente não encontrado.")
 
-    if not cliente_db:
-        # Se havia histórico/pagamento legado, cria a ficha na mesma transação.
-        cliente_db = Cliente(
-            restaurante_id=restaurante_id,
-            telefone=telefone_anterior,
-            nome=data.cliente.strip(),
-        )
-        db.add(cliente_db)
-        
-    # Atualizar dados do cliente na tabela 'clientes'
-    cliente_db.nome = data.cliente.strip()
+    conflito = buscar_cliente_por_telefone(
+        db,
+        restaurante_id=restaurante_id,
+        telefone=telefone_novo,
+    )
+    if conflito and conflito.id != cliente_db.id:
+        raise HTTPException(status_code=400, detail="Cliente com este telefone já cadastrado.")
+
+    cliente_db.nome = nome_novo
     cliente_db.telefone = telefone_novo
-    
+
     try:
-        # 4. Update HistoricoFidelidade entries
-        for m in movements:
-            m.cliente_telefone = telefone_novo
-            
-        # 5. Update Pagamento entries
+        # Campos legados são snapshots; relações permanecem em cliente_id.
+        pagamentos = db.query(Pagamento).filter(
+            Pagamento.restaurante_id == restaurante_id,
+            Pagamento.cliente_id == cliente_db.id,
+        ).all()
         for p in pagamentos:
             p.cpf_cliente = telefone_novo
-            p.nome_cliente = data.cliente.strip()
-            
-        # 6. Tratar ajuste manual de saldo se fornecido
-        pontos_atual = 0.0
-        for m in movements:
-            if m.tipo_movimentacao == "ACUMULO":
-                pontos_atual += m.valor_delta
-            else:
-                pontos_atual -= m.valor_delta
+            p.nome_cliente = nome_novo
 
-        novo_saldo = None
-        if data.saldo_pontos is not None:
-            novo_saldo = float(data.saldo_pontos)
-        elif data.saldo_cashback is not None:
-            novo_saldo = float(data.saldo_cashback)
-            
-        if novo_saldo is not None:
-            diff = novo_saldo - pontos_atual
-            if abs(diff) > 0.001:
-                tipo = "ACUMULO" if diff > 0 else "RESGATE"
-                ajuste = HistoricoFidelidade(
-                    cliente_telefone=telefone_novo,
-                    tipo_movimentacao=tipo,
-                    valor_delta=abs(diff)
+        config = db.query(ConfigFidelizacao).filter(
+            ConfigFidelizacao.restaurante_id == restaurante_id,
+        ).first()
+        recompensa = (
+            config.tipo_recompensa.upper()
+            if config is not None
+            else "PONTOS"
+        )
+        saldo_desejado = (
+            Decimal(data.saldo_pontos)
+            if recompensa == "PONTOS" and data.saldo_pontos is not None
+            else Decimal(str(data.saldo_cashback))
+            if recompensa == "CASHBACK" and data.saldo_cashback is not None
+            else None
+        )
+        saldo_atual = (
+            Decimal(int(cliente_db.saldo_pontos or 0))
+            if recompensa == "PONTOS"
+            else Decimal(str(cliente_db.saldo_cashback or 0))
+        )
+        if saldo_desejado is not None:
+            if saldo_desejado < 0:
+                raise HTTPException(status_code=422, detail="Saldo não pode ser negativo.")
+            diferenca = saldo_desejado - saldo_atual
+            if diferenca != 0:
+                registrar_movimento_fidelidade(
+                    db,
+                    cliente=cliente_db,
+                    tipo_movimentacao="ACUMULO" if diferenca > 0 else "RESGATE",
+                    valor_delta=abs(diferenca),
+                    tipo_recompensa=recompensa,
                 )
-                db.add(ajuste)
-                
+
         db.commit()
     except IntegrityError as exc:
         db.rollback()
@@ -700,6 +686,7 @@ def update_loyalty_client(
             detail="Cliente com este telefone já cadastrado.",
         ) from exc
     except HTTPException:
+        db.rollback()
         raise
     except Exception:
         db.rollback()
@@ -708,7 +695,16 @@ def update_loyalty_client(
             status_code=500,
             detail="Erro ao processar dado sensível, contate o suporte."
         )
-    return {"success": True, "detail": "Cliente atualizado com sucesso."}
+    background_tasks.add_task(
+        manager.broadcast,
+        {
+            "event": "customers_updated",
+            "detail": {"action": "updated", "cliente_id": cliente_db.id},
+        },
+        restaurante_id,
+        target_audience="internal",
+    )
+    return cliente_payload(cliente_db)
 
 
 class ClientCreate(BaseModel):
@@ -720,6 +716,7 @@ class ClientCreate(BaseModel):
 @router.post("/fidelidade/clientes", status_code=201)
 def create_loyalty_client(
     data: ClientCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("fidelidade:operar"))
 ):
@@ -729,6 +726,7 @@ def create_loyalty_client(
     restaurante_id = require_tenant_id()
     try:
         tel_limpo = normalizar_telefone_cliente(data.telefone)
+        nome_limpo = normalizar_nome_cliente(data.cliente)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -740,28 +738,35 @@ def create_loyalty_client(
         raise HTTPException(status_code=400, detail="Cliente com este telefone já cadastrado.")
         
     try:
-        # Cliente e saldo inicial pertencem à mesma transação: se a
-        # criptografia do histórico falhar, nenhum dado parcial é persistido.
-        new_c = Cliente(
+        new_c = cadastrar_ou_atualizar_cliente(
+            db,
             restaurante_id=restaurante_id,
             telefone=tel_limpo,
-            nome=data.cliente.strip(),
+            nome=nome_limpo,
         )
-        db.add(new_c)
-
-        saldo_inicial = 0.0
-        if data.saldo_pontos and data.saldo_pontos > 0:
-            saldo_inicial = float(data.saldo_pontos)
-        elif data.saldo_cashback and data.saldo_cashback > 0:
-            saldo_inicial = float(data.saldo_cashback)
-
+        config = db.query(ConfigFidelizacao).filter(
+            ConfigFidelizacao.restaurante_id == restaurante_id,
+        ).first()
+        recompensa = (
+            config.tipo_recompensa.upper()
+            if config is not None
+            else "PONTOS"
+        )
+        saldo_inicial = (
+            Decimal(data.saldo_pontos or 0)
+            if recompensa == "PONTOS"
+            else Decimal(str(data.saldo_cashback or 0))
+        )
+        if saldo_inicial < 0:
+            raise HTTPException(status_code=422, detail="Saldo inicial não pode ser negativo.")
         if saldo_inicial > 0:
-            ajuste = HistoricoFidelidade(
-                cliente_telefone=tel_limpo,
+            registrar_movimento_fidelidade(
+                db,
+                cliente=new_c,
                 tipo_movimentacao="ACUMULO",
-                valor_delta=saldo_inicial
+                valor_delta=saldo_inicial,
+                tipo_recompensa=recompensa,
             )
-            db.add(ajuste)
 
         db.commit()
     except IntegrityError as exc:
@@ -771,6 +776,7 @@ def create_loyalty_client(
             detail="Cliente com este telefone já cadastrado.",
         ) from exc
     except HTTPException:
+        db.rollback()
         raise
     except Exception:
         db.rollback()
@@ -780,4 +786,13 @@ def create_loyalty_client(
             detail="Erro ao processar dado sensível, contate o suporte."
         )
 
-    return {"success": True, "detail": "Cliente criado com sucesso."}
+    background_tasks.add_task(
+        manager.broadcast,
+        {
+            "event": "customers_updated",
+            "detail": {"action": "created", "cliente_id": new_c.id},
+        },
+        restaurante_id,
+        target_audience="internal",
+    )
+    return cliente_payload(new_c)

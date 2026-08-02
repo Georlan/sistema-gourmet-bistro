@@ -182,6 +182,7 @@ class ItemResponse(BaseModel):
 # ----------------- COMANDA -----------------
 class ComandaResponse(BaseModel):
     id: str
+    cliente_id: Optional[str] = None
     mesa_id: Optional[int] = None
     mesa_origem_id: Optional[int] = None
     mesa_transferida_de: Optional[int] = None
@@ -230,6 +231,7 @@ class VendaDiretaItemSchema(BaseModel):
     cliente_nome: Optional[str] = None
 
 class VendaDiretaCreate(BaseModel):
+    cliente_id: Optional[str] = None
     mesa_id: Optional[int] = None
     garcom_id: Optional[str] = None
     tipo: str = "Retirada"
@@ -364,7 +366,8 @@ class PagamentoRequest(BaseModel):
     valor: float = Field(gt=0)
     metodo: str  # "dinheiro" | "pix" | "cartao"
     item_ids: Optional[List[str]] = None  # Specific item IDs to settle if paying by item
-    idempotency_key: Optional[str] = None
+    idempotency_key: str = Field(min_length=8, max_length=128)
+    cliente_id: Optional[str] = None
     cpf_cliente: Optional[str] = None
     nome_cliente: Optional[str] = None
 
@@ -384,6 +387,7 @@ class PagamentoResponse(BaseModel):
     metodo: str
     status: str
     idempotency_key: Optional[str] = None
+    cliente_id: Optional[str] = None
     cpf_cliente: Optional[str] = None
     nome_cliente: Optional[str] = None
     nsu_cartao: Optional[str] = None
@@ -771,6 +775,75 @@ class CardapioPublicResponse(BaseModel):
     restaurante: CardapioPublicRestaurantResponse
     categorias: List[CardapioPublicCategoryResponse]
     produtos: List[CardapioPublicProductResponse]
+
+
+class CustomerOtpRequest(BaseModel):
+    restaurante_id: int = Field(gt=0)
+    telefone: str = Field(min_length=10, max_length=20)
+
+    @field_validator("telefone")
+    @classmethod
+    def normalize_phone(cls, value: str) -> str:
+        phone = "".join(character for character in value if character.isdigit())
+        if len(phone) not in {10, 11}:
+            raise ValueError("Telefone do cliente deve conter DDD e 10 ou 11 dígitos.")
+        return phone
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class CustomerOtpVerify(CustomerOtpRequest):
+    codigo: str = Field(pattern=r"^\d{6}$")
+    nome: str = Field(min_length=2, max_length=100)
+    endereco: str = Field(default="", max_length=300)
+
+    @field_validator("nome")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        name = " ".join(value.strip().split())
+        if len(name) < 2:
+            raise ValueError("Nome do cliente inválido.")
+        return name
+
+    @field_validator("endereco")
+    @classmethod
+    def normalize_address(cls, value: str) -> str:
+        return value.strip()
+
+
+class CustomerProfileResponse(BaseModel):
+    id: str
+    nome: str
+    telefone: str
+    endereco: str = ""
+    saldo_pontos: int = 0
+    saldo_cashback: float = 0.0
+
+
+class CustomerSessionResponse(BaseModel):
+    access_token: str
+    token_type: Literal["customer"] = "customer"
+    cliente: CustomerProfileResponse
+
+
+class CustomerProfileUpdate(BaseModel):
+    nome: str = Field(min_length=2, max_length=100)
+    endereco: str = Field(default="", max_length=300)
+
+    @field_validator("nome")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        name = " ".join(value.strip().split())
+        if len(name) < 2:
+            raise ValueError("Nome do cliente inválido.")
+        return name
+
+    @field_validator("endereco")
+    @classmethod
+    def normalize_address(cls, value: str) -> str:
+        return value.strip()
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class CardapioItemPedido(BaseModel):

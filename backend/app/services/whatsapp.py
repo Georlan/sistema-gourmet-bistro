@@ -15,8 +15,13 @@ def _normalizar_telefone(telefone: str) -> str:
     return numero
 
 
-def enviar_notificacao_whatsapp_task(telefone: str, mensagem: str) -> None:
-    """Envia pela Evolution API sem permitir que falhas afetem a rota principal."""
+def enviar_texto_whatsapp(
+    telefone: str,
+    mensagem: str,
+    *,
+    contexto: str = "mensagem",
+) -> bool:
+    """Envia texto pela Evolution API e nunca registra telefone ou conteúdo."""
     try:
         evolution_url = settings.EVOLUTION_API_URL.strip()
         evolution_key = settings.EVOLUTION_API_KEY.strip()
@@ -25,15 +30,17 @@ def enviar_notificacao_whatsapp_task(telefone: str, mensagem: str) -> None:
 
         if not evolution_url or not evolution_key or not evolution_instance:
             logger.warning(
-                "[EVOLUTION API] Notificação não enviada: configuração incompleta."
+                "[EVOLUTION API] %s não enviada: configuração incompleta.",
+                contexto,
             )
-            return
+            return False
 
         if not numero:
             logger.warning(
-                "[EVOLUTION API] Notificação não enviada: telefone ausente."
+                "[EVOLUTION API] %s não enviada: telefone ausente.",
+                contexto,
             )
-            return
+            return False
 
         url = f"{evolution_url.rstrip('/')}/message/sendText/{evolution_instance}"
         headers = {
@@ -48,8 +55,32 @@ def enviar_notificacao_whatsapp_task(telefone: str, mensagem: str) -> None:
         with httpx.Client(timeout=5.0) as client:
             response = client.post(url, headers=headers, json=payload)
             response.raise_for_status()
+        return True
     except Exception as exc:
         logger.warning(
-            "[EVOLUTION API] Falha ao enviar notificação de status: %s",
+            "[EVOLUTION API] Falha ao enviar %s: %s",
+            contexto,
             type(exc).__name__,
         )
+        return False
+
+
+def enviar_codigo_otp_whatsapp(telefone: str, codigo: str) -> bool:
+    mensagem = (
+        f"Seu código de acesso Kôma é {codigo}. "
+        "Ele expira em poucos minutos. Não compartilhe este código."
+    )
+    return enviar_texto_whatsapp(
+        telefone,
+        mensagem,
+        contexto="código de acesso",
+    )
+
+
+def enviar_notificacao_whatsapp_task(telefone: str, mensagem: str) -> None:
+    """Envia sem permitir que falhas afetem a rota principal do pedido."""
+    enviar_texto_whatsapp(
+        telefone,
+        mensagem,
+        contexto="notificação de status",
+    )

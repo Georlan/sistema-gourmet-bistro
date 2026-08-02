@@ -36,6 +36,7 @@ from ..security import (
 from ..websocket_manager import manager
 from ..services.whatsapp import enviar_notificacao_whatsapp_task
 from ..services.clientes import (
+    buscar_cliente_por_id,
     cadastrar_ou_atualizar_cliente,
     normalizar_telefone_cliente,
 )
@@ -282,7 +283,8 @@ def get_comandas(
     """
     Retorna a lista de comandas, com filtros opcionais por mesa e status (aberta/fechada).
     """
-    query = db.query(Comanda)
+    rest_id = require_tenant_id()
+    query = db.query(Comanda).filter(Comanda.restaurante_id == rest_id)
     if mesa_id is not None:
         query = query.filter(Comanda.mesa_id == mesa_id)
     if fechada is not None:
@@ -302,7 +304,7 @@ def get_comandas_detalhes(
     query = db.query(Comanda).options(
         joinedload(Comanda.itens).joinedload(Item.produto),
         joinedload(Comanda.criada_por)
-    )
+    ).filter(Comanda.restaurante_id == require_tenant_id())
     if mesa_id is not None:
         query = query.filter(Comanda.mesa_id == mesa_id)
     if fechada is not None:
@@ -314,7 +316,10 @@ def get_comanda(comanda_id: str, db: Session = Depends(get_db), current_user: Us
     """
     Retorna os detalhes completos de uma comanda específica (incluindo lançamentos e itens).
     """
-    comanda = db.query(Comanda).filter(Comanda.id == comanda_id).first()
+    comanda = db.query(Comanda).filter(
+        Comanda.restaurante_id == require_tenant_id(),
+        Comanda.id == comanda_id,
+    ).first()
     if not comanda:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -439,6 +444,7 @@ async def criar_venda_direta(
     Elimina a necessidade de 2 chamadas HTTP separadas no PDV. Pedidos de
     delivery e retirada criados pelo caixa já entram aceitos em produção.
     """
+    rid = require_tenant_id()
     tipo_pedido = {
         "consumo no local": "Consumo no Local",
         "mesa": "Consumo no Local",
@@ -478,11 +484,17 @@ async def criar_venda_direta(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Informe o endereço de entrega.",
             )
-    if tipo_pedido == "Retirada" and not (venda_in.identificador or "").strip():
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Informe o nome do cliente para a retirada.",
-        )
+    if tipo_pedido == "Retirada":
+        if not (venda_in.identificador or "").strip():
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Informe o nome do cliente para a retirada.",
+            )
+        if not (venda_in.delivery_telefone or "").strip():
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Informe o telefone do cliente para a retirada.",
+            )
 
     telefone_cliente = None
     if venda_in.delivery_telefone:
@@ -495,16 +507,26 @@ async def criar_venda_direta(
             ) from exc
 
     garcom_id = venda_in.garcom_id or current_user.id
-    garcom = db.query(Usuario).filter(Usuario.id == garcom_id).first()
+    garcom = db.query(Usuario).filter(
+        Usuario.restaurante_id == rid,
+        Usuario.id == garcom_id,
+    ).first()
     if not garcom:
         garcom_id = current_user.id
         garcom = current_user
 
     if venda_in.mesa_id is not None:
-        mesa = db.query(Mesa).filter(Mesa.id == venda_in.mesa_id).first()
+        mesa = db.query(Mesa).filter(
+            Mesa.restaurante_id == rid,
+            Mesa.id == venda_in.mesa_id,
+        ).first()
         if not mesa:
             raise HTTPException(status_code=404, detail=f"Mesa {venda_in.mesa_id} não encontrada")
-        comanda_aberta = db.query(Comanda).filter(Comanda.mesa_id == venda_in.mesa_id, Comanda.fechada == False).first()
+        comanda_aberta = db.query(Comanda).filter(
+            Comanda.restaurante_id == rid,
+            Comanda.mesa_id == venda_in.mesa_id,
+            Comanda.fechada == False,
+        ).first()
         numero_pedido = comanda_aberta.numero_pedido if comanda_aberta else gerar_novo_numero_pedido(db)
     else:
         numero_pedido = gerar_novo_numero_pedido(db)
@@ -517,23 +539,44 @@ async def criar_venda_direta(
     lancamento_id = f"l-{uuid.uuid4().hex[:8]}"
 
     try:
-        rid = current_restaurante_id.get() or current_user.restaurante_id
-        if tipo_pedido in {"Entrega", "Retirada"} and telefone_cliente:
-            cadastrar_ou_atualizar_cliente(
+        cliente = None
+        if venda_in.cliente_id:
+            cliente = buscar_cliente_por_id(
                 db,
                 restaurante_id=rid,
-                telefone=telefone_cliente,
-                nome=venda_in.identificador or "Cliente",
-                endereco=(
-                    venda_in.delivery_endereco
-                    if tipo_pedido == "Entrega"
-                    else None
-                ),
+                cliente_id=venda_in.cliente_id,
+                bloquear=True,
             )
+            if cliente is None:
+                raise HTTPException(status_code=404, detail="Cliente não encontrado.")
+            if telefone_cliente and cliente.telefone != telefone_cliente:
+                raise HTTPException(
+                    status_code=409,
+                    detail="O telefone não corresponde ao cliente selecionado.",
+                )
+
+        if tipo_pedido in {"Entrega", "Retirada"} and telefone_cliente:
+            if cliente is None:
+                cliente = cadastrar_ou_atualizar_cliente(
+                    db,
+                    restaurante_id=rid,
+                    telefone=telefone_cliente,
+                    nome=venda_in.identificador or "Cliente",
+                    endereco=(
+                        venda_in.delivery_endereco
+                        if tipo_pedido == "Entrega"
+                        else None
+                    ),
+                )
+            else:
+                cliente.nome = (venda_in.identificador or cliente.nome).strip()
+                if tipo_pedido == "Entrega" and venda_in.delivery_endereco:
+                    cliente.endereco = venda_in.delivery_endereco.strip()
 
         nova_comanda = Comanda(
             id=comanda_id,
             restaurante_id=rid,
+            cliente_id=cliente.id if cliente is not None else None,
             mesa_id=venda_in.mesa_id,
             garcom_id=garcom_id,
             tipo=tipo_pedido,
@@ -559,7 +602,10 @@ async def criar_venda_direta(
 
         itens_cozinha = []
         for item_in in venda_in.itens:
-            produto = db.query(Produto).filter(Produto.id == item_in.produto_id).first()
+            produto = db.query(Produto).filter(
+                Produto.restaurante_id == rid,
+                Produto.id == item_in.produto_id,
+            ).first()
             if not produto:
                 continue
             novo_item = Item(
@@ -630,11 +676,30 @@ async def criar_venda_direta(
                 logger.warning(f"Falha ao gerar impressões de venda direta: {print_err}")
 
         background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
+        if cliente is not None:
+            background_tasks.add_task(
+                manager.broadcast,
+                {
+                    "event": "customers_updated",
+                    "detail": {
+                        "action": "order_linked",
+                        "cliente_id": cliente.id,
+                    },
+                },
+                rid,
+                target_audience="internal",
+            )
         comanda_completa = db.query(Comanda).options(
             joinedload(Comanda.itens).joinedload(Item.produto),
             joinedload(Comanda.criada_por)
-        ).filter(Comanda.id == comanda_id).first()
+        ).filter(
+            Comanda.restaurante_id == rid,
+            Comanda.id == comanda_id,
+        ).first()
         return comanda_completa
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
         db.rollback()
         logger.exception(f"Erro ao criar venda direta atômica: {e}")
