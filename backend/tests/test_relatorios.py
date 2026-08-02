@@ -319,6 +319,13 @@ def test_cargos_permissoes_endpoint():
     assert p_admin["relatorios"] is True
     assert p_admin["admin"]      is True
 
+    # Gerente e caixa usam o mesmo conjunto operacional no MVP.
+    p_gerente = cargos["gerente"]["permissoes"]
+    p_caixa = cargos["caixa"]["permissoes"]
+    assert p_caixa == p_gerente
+    assert p_caixa["relatorios"] is True
+    assert p_caixa["equipe"] is True
+
     # Permissões do garçom
     p_garcom = cargos["garcom"]["permissoes"]
     assert p_garcom["pedidos"]    is True

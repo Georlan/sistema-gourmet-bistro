@@ -25,6 +25,9 @@ const LOCAL_STORAGE_SETTINGS_KEY = 'koma_settings_vFinal_v3';
 const LOCAL_STORAGE_RESTAURANT_NAME_KEY = 'koma_restaurant_name_v3';
 const LOCAL_STORAGE_HIST_CLIENTS_KEY = 'koma_historic_clients_v3';
 
+const MANAGEMENT_ROLES = new Set<AppRole>(['admin', 'gerente', 'caixa']);
+const isManagementRole = (role: AppRole) => MANAGEMENT_ROLES.has(role);
+
 const parseBackendDateTime = (dateStr: string): number => {
   if (!dateStr) return Date.now();
   if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !/-\d{2}:\d{2}$/.test(dateStr)) {
@@ -727,7 +730,7 @@ export default function App() {
               fetchLiveCategorias();
               fetchConfig();
               fetchTurnoResumo();
-              if (activeRole === 'caixa' || activeRole === 'admin') {
+              if (isManagementRole(activeRole)) {
                 fetchPagamentosPendentes();
               }
               window.dispatchEvent(new Event('koma_orders_updated'));
@@ -1044,7 +1047,7 @@ export default function App() {
     if (!isAuthenticated) return;
     fetchOrdersFromAPI();
     fetchTables();
-    if (activeRole === 'caixa' || activeRole === 'admin') {
+    if (isManagementRole(activeRole)) {
       fetchPagamentosPendentes();
     }
 
@@ -1052,7 +1055,7 @@ export default function App() {
       if (!document.hidden && isAuthenticated) {
         fetchOrdersFromAPI();
         fetchTables();
-        if (activeRole === 'caixa' || activeRole === 'admin') {
+        if (isManagementRole(activeRole)) {
           fetchPagamentosPendentes();
         }
       }
@@ -1068,7 +1071,7 @@ export default function App() {
       if (document.hidden) return; // Skip polling when tab is in background
       fetchOrdersFromAPI();
       fetchTables();
-      if (activeRole === 'caixa' || activeRole === 'admin') {
+      if (isManagementRole(activeRole)) {
         fetchPagamentosPendentes();
       }
     }, 8000);
@@ -1121,8 +1124,8 @@ export default function App() {
 
       // Enforce portal-specific permissions
       const role = data.usuario.role;
-      if (portal === 'caixa' && role !== 'caixa' && role !== 'admin') {
-        setLoginError("Acesso negado. Apenas operadores de caixa ou administradores.");
+      if (portal === 'caixa' && !isManagementRole(role)) {
+        setLoginError("Acesso negado. Use uma conta de caixa, gerente ou administrador.");
         setIsLoggingIn(false);
         return;
       }
@@ -2195,7 +2198,7 @@ export default function App() {
             onFinishPreparation={() => {}}
             currentTime={currentTime}
           />
-        ) : activeRole === 'caixa' ? (
+        ) : isManagementRole(activeRole) ? (
           <MemoizedCaixaPanel
             orders={orders}
             onRefreshOrders={fetchOrdersFromAPI}

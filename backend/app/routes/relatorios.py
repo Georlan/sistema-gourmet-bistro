@@ -418,8 +418,8 @@ def get_equipe_desempenho(
 CARGO_PERMISSIONS: Dict[str, Dict[str, Any]] = {
     "admin": {"label": "Administrador", "pedidos": True, "caixa": True, "relatorios": True, "equipe": True, "admin": True},
     "gerente": {"label": "Gerente", "pedidos": True, "caixa": True, "relatorios": True, "equipe": True, "admin": False},
-    "caixa": {"label": "Operador Caixa", "pedidos": True, "caixa": True, "relatorios": False, "equipe": False, "admin": False},
-    "operador_caixa": {"label": "Operador Caixa", "pedidos": True, "caixa": True, "relatorios": False, "equipe": False, "admin": False},
+    "caixa": {"label": "Operador Caixa", "pedidos": True, "caixa": True, "relatorios": True, "equipe": True, "admin": False},
+    "operador_caixa": {"label": "Operador Caixa", "pedidos": True, "caixa": True, "relatorios": True, "equipe": True, "admin": False},
     "garcom": {"label": "Gar\u00e7om", "pedidos": True, "caixa": False, "relatorios": False, "equipe": False, "admin": False},
     "atendente": {"label": "Atendente", "pedidos": True, "caixa": False, "relatorios": False, "equipe": False, "admin": False},
     "cozinha": {"label": "Cozinha", "pedidos": False, "caixa": False, "relatorios": False, "equipe": False, "admin": False},

@@ -242,7 +242,7 @@ def test_invite_activation_rejects_weak_password():
 
 
 @pytest.mark.parametrize("username", ["gerente", "caixa"])
-def test_only_admin_can_administer_team(username):
+def test_manager_and_cashier_can_administer_team(username):
     client = TestClient(app)
     headers = get_auth_headers(client, username, "123")
     payload = {
@@ -251,15 +251,19 @@ def test_only_admin_can_administer_team(username):
         "cargo": "garcom",
     }
 
-    assert client.get("/caixa/funcionarios", headers=headers).status_code == 403
-    assert (
-        client.post("/caixa/funcionarios", headers=headers, json=payload).status_code
-        == 403
+    assert client.get("/caixa/funcionarios", headers=headers).status_code == 200
+    created_response = client.post(
+        "/caixa/funcionarios",
+        headers=headers,
+        json=payload,
     )
-    assert (
-        client.delete("/auth/usuarios/u-garcom", headers=headers).status_code
-        == 403
-    )
+    assert created_response.status_code == 201, created_response.text
+    created = created_response.json()
+    assert created["status"] == "pendente_ativacao"
+    assert client.delete(
+        f"/auth/usuarios/{created['id']}",
+        headers=headers,
+    ).status_code == 204
 
     with TestingSessionLocal() as db:
         assert (

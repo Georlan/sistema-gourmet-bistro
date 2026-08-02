@@ -9,6 +9,7 @@ from sqlalchemy import (
     Index,
     Integer,
     JSON,
+    Numeric,
     String,
     UniqueConstraint,
     event,
@@ -169,7 +170,7 @@ class Produto(Base):
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False)
     nome = Column(String, nullable=False)
     categoria_id = Column(String, nullable=False)
-    preco = Column(Float, nullable=False)
+    preco = Column(Numeric(14, 2, asdecimal=False), nullable=False)
     descricao = Column(String, default="")
     imagem = Column(String, default="")
     imagens_galeria = Column(JSON, default=list)  # Up to 3 product gallery URLs
@@ -284,11 +285,11 @@ class Comanda(Base):
     fechada = Column(Boolean, default=False, index=True)
     criado_em = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
     fechado_em = Column(DateTime, nullable=True)
-    valor_pago = Column(Float, default=0.0, nullable=False)  # Sum of generic partial payments made
+    valor_pago = Column(Numeric(14, 2, asdecimal=False), default=0.0, nullable=False)  # Sum of generic partial payments made
     
     # Delivery operational fields
     delivery_status = Column(String, nullable=True)  # analise | pendente | producao | pronto | transito | finalizado
-    delivery_taxa = Column(Float, default=0.0)
+    delivery_taxa = Column(Numeric(14, 2, asdecimal=False), default=0.0)
     _delivery_telefone = Column("delivery_telefone", String, nullable=True)
     _delivery_endereco = Column("delivery_endereco", String, nullable=True)
     motoboy_id = Column(Integer, ForeignKey("motoboys.id"), nullable=True)
@@ -364,7 +365,7 @@ class Item(Base):
     lancamento_id = Column(String, ForeignKey("lancamentos.id"), nullable=False, index=True)
     produto_id = Column(String, nullable=False)
     
-    preco_unit = Column(Float, nullable=False)  # Snapshot of price at order time
+    preco_unit = Column(Numeric(14, 2, asdecimal=False), nullable=False)  # Snapshot of price at order time
     observacao = Column(String, default="")
     _cliente_nome = Column("cliente_nome", String, default=lambda: encrypt_field("Consumo Geral"))
 
@@ -410,10 +411,10 @@ class CaixaTurno(Base):
     fechado_em = Column(DateTime, nullable=True)
     fechado_por_id = Column(String, ForeignKey("usuarios.id"), nullable=True)
     
-    saldo_inicial = Column(Float, nullable=False)
-    declarado_dinheiro = Column(Float, nullable=True)
-    declarado_pix = Column(Float, nullable=True)
-    declarado_cartao = Column(Float, nullable=True)
+    saldo_inicial = Column(Numeric(14, 2, asdecimal=False), nullable=False)
+    declarado_dinheiro = Column(Numeric(14, 2, asdecimal=False), nullable=True)
+    declarado_pix = Column(Numeric(14, 2, asdecimal=False), nullable=True)
+    declarado_cartao = Column(Numeric(14, 2, asdecimal=False), nullable=True)
     observacao = Column(String, default="")
     status = Column(String, default="aberto", index=True)  # "aberto" | "fechado"
 
@@ -443,9 +444,9 @@ class CaixaMovimentacao(Base):
     turno_id = Column(Integer, ForeignKey("caixa_turnos.id"), nullable=False, index=True)
     usuario_id = Column(String, ForeignKey("usuarios.id"), nullable=True)
     tipo = Column(String, nullable=False)  # "suprimento" | "sangria"
-    valor = Column(Float, nullable=False)
-    saldo_anterior = Column(Float, default=0.0)
-    saldo_posterior = Column(Float, default=0.0)
+    valor = Column(Numeric(14, 2, asdecimal=False), nullable=False)
+    saldo_anterior = Column(Numeric(14, 2, asdecimal=False), default=0.0)
+    saldo_posterior = Column(Numeric(14, 2, asdecimal=False), default=0.0)
     descricao = Column(String, default="")
     observacao = Column(String, default="")
     criado_em = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
@@ -484,7 +485,7 @@ class Pagamento(Base):
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id", ondelete="CASCADE"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
     comanda_id = Column(String, ForeignKey("comandas.id"), nullable=False, index=True)
     turno_id = Column(Integer, ForeignKey("caixa_turnos.id"), nullable=False)
-    valor = Column(Float, nullable=False)
+    valor = Column(Numeric(14, 2, asdecimal=False), nullable=False)
     metodo = Column(String, nullable=False)  # "dinheiro" | "pix" | "cartao"
     status = Column(String, default="aprovado") # "pendente" | "aprovado" | "cancelado"
     idempotency_key = Column(String(128), nullable=True, index=True)
@@ -521,7 +522,7 @@ class ConfiguracaoRestaurante(Base):
     delivery_ativo = Column(Boolean, default=True)
     taxa_servico_ativa = Column(Boolean, default=True)
     taxa_servico_padrao = Column(Float, default=10.0)
-    meta_mensal = Column(Float, default=0.0)
+    meta_mensal = Column(Numeric(14, 2, asdecimal=False), default=0.0)
     unificar_vias_delivery = Column(Boolean, default=False)
     impressao_nome_restaurante = Column(String(80), nullable=True)
     impressao_nome_posicao = Column(
@@ -664,7 +665,7 @@ class OpcaoModificador(Base):
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
     grupo_id = Column(String, ForeignKey("grupo_modificadores.id"), nullable=False)
     nome = Column(String, nullable=False)
-    preco_adicional = Column(Float, default=0.0)
+    preco_adicional = Column(Numeric(14, 2, asdecimal=False), default=0.0)
     ativo = Column(Boolean, default=True)
 
 
@@ -697,7 +698,7 @@ class ItemModificador(Base):
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
     item_id = Column(String, ForeignKey("itens.id"), nullable=False)
     opcao_modificador_id = Column(String, ForeignKey("opcao_modificadores.id"), nullable=False)
-    preco_aplicado = Column(Float, nullable=False)
+    preco_aplicado = Column(Numeric(14, 2, asdecimal=False), nullable=False)
 
 
 class ActivityLog(Base):
@@ -733,7 +734,7 @@ class Insumo(Base):
     estoque_minimo = Column(Float, default=10.0)
     estoque_maximo = Column(Float, default=50.0)
     unidade_medida = Column(String, default="un")  # kg, g, l, ml, un
-    preco_medio_custo = Column(Float, default=0.0)
+    preco_medio_custo = Column(Numeric(14, 4, asdecimal=False), default=0.0)
 
 
 class ConfigFidelizacao(Base):
@@ -749,7 +750,7 @@ class ConfigFidelizacao(Base):
     ativo = Column(Boolean, default=False)
     tipo_recompensa = Column(String, default="PONTOS")  # PONTOS | CASHBACK
     taxa_conversao = Column(Float, default=1.0)  # R$ 1 = X points or X% cashback
-    valor_ponto_em_dinheiro = Column(Float, default=0.05)  # 1 point = R$ 0.05 discount
+    valor_ponto_em_dinheiro = Column(Numeric(14, 4, asdecimal=False), default=0.05)  # 1 point = R$ 0.05 discount
 
 
 class HistoricoFidelidade(Base):
@@ -764,7 +765,7 @@ class HistoricoFidelidade(Base):
     )
     _cliente_telefone = Column("cliente_telefone", String, nullable=False)
     tipo_movimentacao = Column(String, nullable=False)  # ACUMULO | RESGATE
-    valor_delta = Column(Float, nullable=False)
+    valor_delta = Column(Numeric(14, 4, asdecimal=False), nullable=False)
     comanda_id = Column(String, ForeignKey("comandas.id"), nullable=True)
     criado_em = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
@@ -786,7 +787,7 @@ class Cliente(Base):
     nome = Column(String, nullable=False)
     endereco = Column(String, nullable=True)
     saldo_pontos = Column(Integer, default=0, nullable=False)
-    saldo_cashback = Column(Float, default=0.0, nullable=False)
+    saldo_cashback = Column(Numeric(14, 2, asdecimal=False), default=0.0, nullable=False)
     criado_em = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
     
     __table_args__ = (
@@ -843,7 +844,7 @@ class NotaEntrada(Base):
     numero_nota = Column(String, nullable=False)
     data_emissao = Column(String, nullable=True)
     distribuidor_id = Column(String, ForeignKey("distribuidores.id"), nullable=False)
-    valor_total = Column(Float, default=0.0)
+    valor_total = Column(Numeric(14, 2, asdecimal=False), default=0.0)
     
     # Relationships
     distribuidor = relationship("Distribuidor")
@@ -858,7 +859,7 @@ class ItemNotaEntrada(Base):
     nota_id = Column(String, ForeignKey("notas_entrada.id"), nullable=False)
     insumo_id = Column(String, ForeignKey("insumos.id"), nullable=False)
     quantidade = Column(Float, nullable=False)
-    preco_unitario = Column(Float, nullable=False)
+    preco_unitario = Column(Numeric(14, 4, asdecimal=False), nullable=False)
     
     # Relationships
     nota = relationship("NotaEntrada", back_populates="itens")
@@ -884,7 +885,7 @@ class EntradaEstoque(Base):
     numero_documento = Column(String, nullable=True)
     data_emissao = Column(String, nullable=True)
     observacao = Column(String, default="")
-    valor_total = Column(Float, default=0.0)
+    valor_total = Column(Numeric(14, 2, asdecimal=False), default=0.0)
     tipo_entrada = Column(String, default="MANUAL")  # MANUAL | XML
     usuario_id = Column(String, ForeignKey("usuarios.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.timezone.utc))
@@ -914,8 +915,8 @@ class ItemEntradaEstoque(Base):
     insumo_id = Column(String, ForeignKey("insumos.id"), nullable=False)
     quantidade = Column(Float, nullable=False)
     unidade_medida = Column(String, default="un")
-    custo_unitario = Column(Float, nullable=False)
-    subtotal = Column(Float, nullable=False)
+    custo_unitario = Column(Numeric(14, 4, asdecimal=False), nullable=False)
+    subtotal = Column(Numeric(14, 2, asdecimal=False), nullable=False)
 
     # Relationships
     entrada = relationship("EntradaEstoque", back_populates="itens")
@@ -938,7 +939,7 @@ class MovimentacaoEstoque(Base):
     quantidade = Column(Float, nullable=False)
     saldo_anterior = Column(Float, nullable=False)
     saldo_posterior = Column(Float, nullable=False)
-    custo_unitario = Column(Float, default=0.0)
+    custo_unitario = Column(Numeric(14, 4, asdecimal=False), default=0.0)
     motivo = Column(String, nullable=False)
     observacao = Column(String, default="")
     origem = Column(String, default="movimentacao_manual")  # entrada_manual | xml | movimentacao_manual | contagem

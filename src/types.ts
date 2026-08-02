@@ -70,7 +70,7 @@ export interface Waiter {
   nome: string;
 }
 
-export type AppRole = 'garcom' | 'caixa' | 'cozinha' | 'admin';
+export type AppRole = 'garcom' | 'caixa' | 'gerente' | 'cozinha' | 'admin';
 
 export interface AppSettings {
   exibirImagens: boolean;
