@@ -15,6 +15,7 @@ from ..security import (
     require_permission,
     verify_password,
 )
+from ..services.whatsapp import enviar_texto_whatsapp
 
 logger = logging.getLogger("koma.auth")
 
@@ -365,11 +366,8 @@ def reenviar_convite_usuario(
     current_user: Usuario = Depends(require_permission("equipe:administrar"))
 ):
     """Reenvia o link de convite por WhatsApp para o usuário pendente de ativação."""
-    import os
     import datetime
     from datetime import timezone
-    import httpx
-    from ..config import settings
 
     usuario = db.query(Usuario).filter(
         Usuario.id == user_id,
@@ -398,43 +396,11 @@ def reenviar_convite_usuario(
     convite_link = f"https://sistema-gourmet-bistro.pages.dev/ativar?token={usuario.token_convite}"
     mensagem_texto = f"Olá {usuario.nome}! Você foi convidado para trabalhar no Kôma. Clique no link para criar sua senha e ativar sua conta: {convite_link}"
 
-    evolution_sent = False
-    evolution_url = getattr(settings, "EVOLUTION_API_URL", None) or os.getenv("EVOLUTION_API_URL", "")
-    evolution_key = getattr(settings, "EVOLUTION_API_KEY", None) or os.getenv("EVOLUTION_API_KEY", "")
-    evolution_instance = getattr(settings, "EVOLUTION_INSTANCE_NAME", None) or os.getenv("EVOLUTION_INSTANCE_NAME", "")
-
-    if evolution_url and evolution_key and evolution_instance:
-        try:
-            url_disparo = f"{evolution_url.rstrip('/')}/message/sendText/{evolution_instance}"
-            headers = {
-                "Content-Type": "application/json",
-                "apikey": evolution_key
-            }
-            payload = {
-                "number": tel_clean,
-                "text": mensagem_texto
-            }
-            with httpx.Client(timeout=5.0) as client:
-                res = client.post(url_disparo, headers=headers, json=payload)
-                if res.status_code in [200, 201]:
-                    evolution_sent = True
-                    logger.info(
-                        "[EVOLUTION API] Convite reenviado para usuario_id=%s: %s",
-                        usuario.id,
-                        res.status_code,
-                    )
-                else:
-                    logger.warning(
-                        "[EVOLUTION API] Falha HTTP %s ao reenviar convite para usuario_id=%s",
-                        res.status_code,
-                        usuario.id,
-                    )
-        except Exception as err:
-            logger.warning(
-                "[EVOLUTION API] Exceção ao reenviar convite para usuario_id=%s: %s",
-                usuario.id,
-                type(err).__name__,
-            )
+    evolution_sent = enviar_texto_whatsapp(
+        tel_clean,
+        mensagem_texto,
+        contexto="reenvio de convite de funcionário",
+    )
 
     return {
         "message": f"Convite gerado com sucesso para {usuario.nome}.",

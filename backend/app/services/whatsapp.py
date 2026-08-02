@@ -52,10 +52,17 @@ def enviar_texto_whatsapp(
             "text": mensagem,
         }
 
-        with httpx.Client(timeout=5.0) as client:
+        with httpx.Client(timeout=10.0) as client:
             response = client.post(url, headers=headers, json=payload)
             response.raise_for_status()
         return True
+    except httpx.HTTPStatusError as exc:
+        logger.warning(
+            "[EVOLUTION API] Falha HTTP %s ao enviar %s.",
+            exc.response.status_code,
+            contexto,
+        )
+        return False
     except Exception as exc:
         logger.warning(
             "[EVOLUTION API] Falha ao enviar %s: %s",
@@ -63,6 +70,55 @@ def enviar_texto_whatsapp(
             type(exc).__name__,
         )
         return False
+
+
+def obter_status_evolution() -> dict[str, object]:
+    """Diagnóstico sem segredos para a área autenticada de operações."""
+    evolution_url = settings.EVOLUTION_API_URL.strip()
+    evolution_key = settings.EVOLUTION_API_KEY.strip()
+    evolution_instance = settings.EVOLUTION_INSTANCE_NAME.strip()
+
+    if not evolution_url or not evolution_key or not evolution_instance:
+        return {
+            "status": "red",
+            "configured": False,
+            "connected": False,
+            "details": "Evolution API não configurada",
+        }
+
+    url = (
+        f"{evolution_url.rstrip('/')}/instance/connectionState/"
+        f"{evolution_instance}"
+    )
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            response = client.get(url, headers={"apikey": evolution_key})
+            response.raise_for_status()
+            data = response.json()
+        instance = data.get("instance") if isinstance(data, dict) else None
+        state = instance.get("state") if isinstance(instance, dict) else None
+        connected = state == "open"
+        return {
+            "status": "green" if connected else "yellow",
+            "configured": True,
+            "connected": connected,
+            "details": (
+                "WhatsApp conectado"
+                if connected
+                else f"WhatsApp aguardando conexão ({state or 'desconhecido'})"
+            ),
+        }
+    except Exception as exc:
+        logger.warning(
+            "[EVOLUTION API] Falha no diagnóstico: %s",
+            type(exc).__name__,
+        )
+        return {
+            "status": "red",
+            "configured": True,
+            "connected": False,
+            "details": "Evolution API indisponível",
+        }
 
 
 def enviar_codigo_otp_whatsapp(telefone: str, codigo: str) -> bool:

@@ -39,3 +39,6 @@ koma-print-agent/config.json
 
 /print_output/
 /print-agent/print_output/
+
+# QR temporário gerado no provisionamento da Evolution API
+/evolution-qr.png
