@@ -18,6 +18,7 @@ from .super_admin_services import (
     TelegramService,
     logger
 )
+from ..services.whatsapp import obter_status_evolution
 
 # --- ENVIRONMENT VARIABLES VALIDATION ---
 sentry_auth_token = os.getenv("SENTRY_AUTH_TOKEN", "")
@@ -279,14 +280,15 @@ async def create_cloudflare_cname(payload: Dict[str, Any] = Body(...), admin: di
     return {"success": True, "id": "dns_dyn_mock", "subdomain": payload.get("subdomain"), "proxied": True, "status": "ACTIVE"}
 
 @router.get("/integrations/health")
-async def get_integrations_health(admin: dict = Depends(get_current_admin)):
+def get_integrations_health(admin: dict = Depends(get_current_admin)):
     return {
         "supabase": { "status": "green", "ping": "142ms", "details": "Multi-tenant connection pool operational" },
         "cloudflare": { "status": "green", "ping": "89ms", "details": "Zone koma.com routing operational" },
         "railway": { "status": "green", "ping": "210ms", "details": "RAM footprint stable under 60%" },
         "github": { "status": "green", "ping": "174ms", "details": "V3 Actions REST Gateway active" },
         "sentry": { "status": "green", "ping": "95ms", "details": "Error tracking stream established" },
-        "telegram": { "status": "green", "ping": "120ms", "details": "Emergency notification service active" }
+        "telegram": { "status": "green", "ping": "120ms", "details": "Emergency notification service active" },
+        "evolution": obter_status_evolution(),
     }
 
 

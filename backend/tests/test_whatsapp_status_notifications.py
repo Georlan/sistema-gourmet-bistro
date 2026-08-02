@@ -231,3 +231,60 @@ def test_falha_evolution_nao_impede_transicao(monkeypatch):
     with SessionLocal() as db:
         comanda = db.query(Comanda).filter(Comanda.id == comanda_id).one()
         assert comanda.delivery_status == "pronto"
+
+
+def test_diagnostico_evolution_indica_configuracao_ausente(monkeypatch):
+    monkeypatch.setattr(settings, "EVOLUTION_API_URL", "")
+    monkeypatch.setattr(settings, "EVOLUTION_API_KEY", "")
+    monkeypatch.setattr(settings, "EVOLUTION_INSTANCE_NAME", "")
+
+    resultado = whatsapp_service.obter_status_evolution()
+
+    assert resultado == {
+        "status": "red",
+        "configured": False,
+        "connected": False,
+        "details": "Evolution API não configurada",
+    }
+
+
+def test_diagnostico_evolution_confirma_instancia_conectada(monkeypatch):
+    class RespostaConectada:
+        status_code = 200
+
+        @staticmethod
+        def raise_for_status():
+            return None
+
+        @staticmethod
+        def json():
+            return {"instance": {"instanceName": "koma-teste", "state": "open"}}
+
+    class ClienteConectado:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+        @staticmethod
+        def get(*args, **kwargs):
+            return RespostaConectada()
+
+    monkeypatch.setattr(settings, "EVOLUTION_API_URL", "https://evolution.test")
+    monkeypatch.setattr(settings, "EVOLUTION_API_KEY", "chave-teste")
+    monkeypatch.setattr(settings, "EVOLUTION_INSTANCE_NAME", "koma-teste")
+    monkeypatch.setattr(
+        whatsapp_service.httpx,
+        "Client",
+        lambda *args, **kwargs: ClienteConectado(),
+    )
+
+    resultado = whatsapp_service.obter_status_evolution()
+
+    assert resultado == {
+        "status": "green",
+        "configured": True,
+        "connected": True,
+        "details": "WhatsApp conectado",
+    }

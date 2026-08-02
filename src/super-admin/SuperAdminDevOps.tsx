@@ -340,8 +340,8 @@ export default function SuperAdminDevOps({
         </div>
 
         {!apiHealth ? (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map((i) => (
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            {[1, 2, 3, 4, 5].map((i) => (
               <div key={i} className="bg-black/40 border border-zinc-900 p-3.5 rounded animate-pulse space-y-2">
                 <div className="h-4 bg-zinc-800 rounded w-1/2"></div>
                 <div className="h-3 bg-zinc-800 rounded w-3/4"></div>
@@ -350,7 +350,7 @@ export default function SuperAdminDevOps({
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 text-xs">
             {/* Cloudflare */}
             <div className={`p-3.5 rounded border transition-all ${
               apiHealth.cloudflare?.status === "CONNECTED"
@@ -457,6 +457,38 @@ export default function SuperAdminDevOps({
                   * Dica: O token de autenticação do Sentry requer o escopo "project:read" habilitado.
                 </p>
               )}
+            </div>
+
+            {/* Evolution API */}
+            <div className={`p-3.5 rounded border transition-all ${
+              apiHealth.evolution?.status === "green"
+                ? "bg-emerald-950/20/10 border-emerald-950 text-slate-300"
+                : apiHealth.evolution?.status === "yellow"
+                  ? "bg-amber-950/10 border-amber-900/40 text-slate-300"
+                  : "bg-red-950/10 border-red-900/40 text-slate-300"
+            }`}>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="font-bold font-mono text-white flex items-center gap-1.5">
+                  <Zap className="w-3.5 h-3.5 text-slate-400" />
+                  WhatsApp OTP
+                </span>
+                <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                  apiHealth.evolution?.status === "green"
+                    ? "bg-emerald-950/20/40 border border-[#00b894]/20 text-[#00b894]"
+                    : apiHealth.evolution?.status === "yellow"
+                      ? "bg-amber-950/40 border border-amber-850 text-amber-400"
+                      : "bg-red-950/40 border border-red-900/60 text-red-400"
+                }`}>
+                  {apiHealth.evolution?.status === "green"
+                    ? "CONECTADO"
+                    : apiHealth.evolution?.configured
+                      ? "AGUARDANDO QR"
+                      : "NÃO CONFIGURADO"}
+                </span>
+              </div>
+              <p className="text-[11px] font-mono text-slate-400">
+                {apiHealth.evolution?.details || "Diagnóstico indisponível"}
+              </p>
             </div>
           </div>
         )}
