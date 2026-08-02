@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 import datetime
 
 from app.database import Base, get_db, current_restaurante_id
-from app.models import Usuario, Produto, Categoria, Mesa, Comanda, Item, Insumo, ConfigFidelizacao, HistoricoFidelidade, ActivityLog, Restaurante, Lancamento
+from app.models import Usuario, Produto, Categoria, Mesa, Comanda, Item, Insumo, ConfigFidelizacao, HistoricoFidelidade, ActivityLog, Restaurante, Lancamento, Cliente
 from app.security import get_password_hash
 from app.main import app
 
@@ -117,10 +117,17 @@ def test_unified_fidelity_points_and_cashback():
     config = resp.json()
     assert config["ativo"] is True
     assert config["tipo_recompensa"] == "PONTOS"
+
+    cliente_pontos = client.post("/fidelidade/clientes", json={
+        "cliente": "Cliente Pontos",
+        "telefone": "81987654321",
+    }, headers=headers)
+    assert cliente_pontos.status_code == 201
+    cliente_pontos_id = cliente_pontos.json()["id"]
     
     # 2. Accumulate points: R$ 100 purchase. Conversion rate R$ 1 = 1 point.
     resp = client.post("/fidelidade/checkout", json={
-        "cliente_telefone": "81987654321",
+        "cliente_id": cliente_pontos_id,
         "valor_total": 100.0,
         "resgatar": False
     }, headers=headers)
@@ -131,12 +138,19 @@ def test_unified_fidelity_points_and_cashback():
     
     # 3. Redeem points: conversion: 100 points = R$ 5 discount (1 point = R$ 0.05)
     resp = client.post("/fidelidade/checkout", json={
-        "cliente_telefone": "81987654321",
+        "cliente_id": cliente_pontos_id,
         "valor_total": 50.0,
         "resgatar": True,
         "pontos_a_resgatar": 100.0
     }, headers=headers)
     assert resp.status_code == 200
+
+    cliente_cashback = client.post("/fidelidade/clientes", json={
+        "cliente": "Cliente Cashback",
+        "telefone": "99988887777",
+    }, headers=headers)
+    assert cliente_cashback.status_code == 201
+    cliente_cashback_id = cliente_cashback.json()["id"]
     res2 = resp.json()
     assert res2["desconto_aplicado"] == 5.0
     assert res2["valor_final"] == 45.0 # R$ 50 - R$ 5 discount
@@ -155,7 +169,7 @@ def test_unified_fidelity_points_and_cashback():
     
     # 5. Accumulate cashback on new checkout (total = R$ 100)
     resp = client.post("/fidelidade/checkout", json={
-        "cliente_telefone": "99988887777",
+        "cliente_id": cliente_cashback_id,
         "valor_total": 100.0,
         "resgatar": False
     }, headers=headers)
@@ -215,7 +229,7 @@ def test_manual_clients_and_fidelity_adjustments():
     }, headers=headers)
     assert resp.status_code == 201
     data = resp.json()
-    assert data["success"] is True
+    cliente_id = data["id"]
     
     # 2. Verificar listagem de clientes (GET /fidelidade/clientes)
     resp = client.get("/fidelidade/clientes", headers=headers)
@@ -225,25 +239,27 @@ def test_manual_clients_and_fidelity_adjustments():
     assert jose is not None
     assert jose["cliente"] == "José da Silva"
     assert jose["pontos"] == 100
-    assert jose["saldoCashback"] == 100.0
+    assert jose["saldoCashback"] == 0.0
     
     # 3. Editar cliente e ajustar saldo de pontos/cashback (PUT)
     # Vamos mudar o nome para "José da Silva Santos" e diminuir os pontos para 80
-    resp = client.put("/fidelidade/clientes/81999998888", json={
+    resp = client.put(f"/fidelidade/clientes/{cliente_id}", json={
         "cliente": "José da Silva Santos",
-        "telefone": "81999998888",
+        "telefone": "81999997777",
         "saldo_pontos": 80
     }, headers=headers)
     assert resp.status_code == 200
+    assert resp.json()["id"] == cliente_id
     
     # 4. Verificar novos saldos e histórico gerado
     resp = client.get("/fidelidade/clientes", headers=headers)
     assert resp.status_code == 200
     clientes_updated = resp.json()
-    jose_updated = next((c for c in clientes_updated if c["telefone"] == "81999998888"), None)
+    jose_updated = next((c for c in clientes_updated if c["id"] == cliente_id), None)
     assert jose_updated["cliente"] == "José da Silva Santos"
+    assert jose_updated["telefone"] == "81999997777"
     assert jose_updated["pontos"] == 80
-    assert jose_updated["saldoCashback"] == 80.0
+    assert jose_updated["saldoCashback"] == 0.0
 
 
 def test_manual_insumos_and_distribuidores():

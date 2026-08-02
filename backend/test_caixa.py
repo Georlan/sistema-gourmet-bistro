@@ -9,7 +9,11 @@ import datetime
 import uuid
 
 from app.database import Base, get_db, current_restaurante_id
-from app.models import Usuario, Produto, Categoria, Mesa, Comanda, Item, Lancamento, CaixaTurno, CaixaMovimentacao, Pagamento
+from app.models import (
+    Usuario, Produto, Categoria, Mesa, Comanda, Item, Lancamento,
+    CaixaTurno, CaixaMovimentacao, Pagamento, Cliente,
+    ConfigFidelizacao, HistoricoFidelidade,
+)
 from app.security import get_password_hash
 from app.main import app
 
@@ -138,7 +142,11 @@ def test_caixa_payments():
     assert resp.status_code == 201
     
     # 2. Try to pay without open shift (should fail with 400)
-    resp = client.post(f"/caixa/comandas/{comanda_id}/pagar", json={"valor": 20.0, "metodo": "dinheiro"}, headers=headers_caixa)
+    resp = client.post(f"/caixa/comandas/{comanda_id}/pagar", json={
+        "valor": 20.0,
+        "metodo": "dinheiro",
+        "idempotency_key": "sem-turno-pagamento",
+    }, headers=headers_caixa)
     assert resp.status_code == 400
     
     # 3. Open shift
@@ -155,7 +163,8 @@ def test_caixa_payments():
     resp = client.post(f"/caixa/comandas/{comanda_id}/pagar", json={
         "valor": 5.0,
         "metodo": "dinheiro",
-        "item_ids": [item_id]
+        "item_ids": [item_id],
+        "idempotency_key": "pagamento-parcial-item",
     }, headers=headers_caixa)
     assert resp.status_code == 201
     
@@ -170,7 +179,8 @@ def test_caixa_payments():
     resp = client.post(f"/caixa/comandas/{comanda_id}/pagar", json={
         "valor": 20.0,
         "metodo": "pix",
-        "item_ids": [item_id]
+        "item_ids": [item_id],
+        "idempotency_key": "pagamento-item-restante",
     }, headers=headers_caixa)
     assert resp.status_code == 201
     assert resp.json()["valor"] == 20.0
@@ -183,10 +193,11 @@ def test_caixa_payments():
     assert comanda["fechada"] == False
     assert comanda["valor_pago"] == 25.0
     
-    # 6. Settle remaining comanda value (let's pay R$ 19 in cash)
+    # 6. Liquida exatamente o saldo restante; o backend rejeita sobrepagamento.
     resp = client.post(f"/caixa/comandas/{comanda_id}/pagar", json={
-        "valor": 19.0,
-        "metodo": "dinheiro"
+        "valor": 15.0,
+        "metodo": "dinheiro",
+        "idempotency_key": "pagamento-comanda-final",
     }, headers=headers_caixa)
     assert resp.status_code == 201
     
@@ -194,6 +205,131 @@ def test_caixa_payments():
     resp = client.get(f"/comandas/detalhes/todos?fechada=false", headers=headers_garcom)
     assert resp.status_code == 200
     assert len(resp.json()) == 0  # No open comandas left
+
+
+def test_pagamento_credita_cliente_estavel_uma_vez_inclusive_quando_pendente():
+    client = TestClient(app)
+    headers_caixa = get_auth_headers(client, "caixa", "123")
+    headers_garcom = get_auth_headers(client, "garcom", "123")
+
+    assert client.get("/fidelidade/config", headers=headers_caixa).status_code == 200
+    cadastro = client.post(
+        "/fidelidade/clientes",
+        headers=headers_caixa,
+        json={"cliente": "Cliente Fidelidade", "telefone": "81912345678"},
+    )
+    assert cadastro.status_code == 201
+    cliente_id = cadastro.json()["id"]
+
+    assert client.post(
+        "/caixa/turno/abrir",
+        json={"saldo_inicial": 100.0},
+        headers=headers_caixa,
+    ).status_code == 201
+
+    def criar_comanda_com_item():
+        aberta = client.post(
+            "/comandas/",
+            json={"mesa_id": 1, "garcom_id": "u-garcom", "tipo": "Consumo no Local"},
+            headers=headers_garcom,
+        )
+        assert aberta.status_code == 201
+        comanda_id = aberta.json()["id"]
+        lancamento = client.post(
+            f"/comandas/{comanda_id}/lancamentos",
+            json={
+                "garcom_id": "u-garcom",
+                "itens": [{
+                    "produto_id": "p-1",
+                    "observacao": "",
+                    "cliente_nome": "Cliente Fidelidade",
+                }],
+            },
+            headers=headers_garcom,
+        )
+        assert lancamento.status_code == 201
+        return comanda_id
+
+    primeira_comanda = criar_comanda_com_item()
+    payload = {
+        "valor": 20.0,
+        "metodo": "pix",
+        "idempotency_key": "fidelidade-pix-unica",
+        "cliente_id": cliente_id,
+    }
+    primeiro = client.post(
+        f"/caixa/comandas/{primeira_comanda}/pagar",
+        json=payload,
+        headers=headers_caixa,
+    )
+    assert primeiro.status_code == 201
+    repetido = client.post(
+        f"/caixa/comandas/{primeira_comanda}/pagar",
+        json=payload,
+        headers=headers_caixa,
+    )
+    assert repetido.status_code == 201
+    assert repetido.json()["id"] == primeiro.json()["id"]
+
+    segunda_comanda = criar_comanda_com_item()
+    pendente = client.post(
+        f"/caixa/comandas/{segunda_comanda}/pagar",
+        json={
+            "valor": 20.0,
+            "metodo": "dinheiro",
+            "idempotency_key": "fidelidade-dinheiro-pendente",
+            "cliente_id": cliente_id,
+        },
+        headers=headers_garcom,
+    )
+    assert pendente.status_code == 201
+    assert pendente.json()["status"] == "pendente"
+
+    db = TestingSessionLocal()
+    try:
+        cliente = db.query(Cliente).filter(Cliente.id == cliente_id).one()
+        assert cliente.saldo_pontos == 20
+    finally:
+        db.close()
+
+    aprovado = client.post(
+        f"/caixa/pagamentos/{pendente.json()['id']}/aprovar",
+        headers=headers_caixa,
+    )
+    assert aprovado.status_code == 200
+
+    terceira_comanda = criar_comanda_com_item()
+    identificado_por_telefone = client.post(
+        f"/caixa/comandas/{terceira_comanda}/pagar",
+        json={
+            "valor": 20.0,
+            "metodo": "pix",
+            "idempotency_key": "fidelidade-telefone-existente",
+            "cpf_cliente": "(81) 91234-5678",
+            # Um snapshot operacional nunca deve sobrescrever a ficha do CRM.
+            "nome_cliente": "Mesa 1",
+        },
+        headers=headers_caixa,
+    )
+    assert identificado_por_telefone.status_code == 201
+    assert identificado_por_telefone.json()["cliente_id"] == cliente_id
+
+    db = TestingSessionLocal()
+    try:
+        cliente = db.query(Cliente).filter(Cliente.id == cliente_id).one()
+        assert cliente.nome == "Cliente Fidelidade"
+        assert cliente.saldo_pontos == 60
+        movimentos = db.query(HistoricoFidelidade).filter(
+            HistoricoFidelidade.cliente_id == cliente_id,
+            HistoricoFidelidade.tipo_movimentacao == "ACUMULO",
+        ).all()
+        assert {movimento.comanda_id for movimento in movimentos} == {
+            primeira_comanda,
+            segunda_comanda,
+            terceira_comanda,
+        }
+    finally:
+        db.close()
 
 def test_manage_tables():
     client = TestClient(app)

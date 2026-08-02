@@ -125,6 +125,16 @@ interface BotChatMessage {
   timestamp: string;
 }
 
+interface LoyaltyCustomer {
+  id: string;
+  cliente: string;
+  nome?: string;
+  telefone: string;
+  endereco?: string;
+  pontos: number;
+  saldoCashback: number;
+}
+
 const aplicarMascaraTelefoneInput = (valor: string) => {
   const apenasNumeros = valor.replace(/\D/g, '').slice(0, 11);
   if (apenasNumeros.length === 0) return '';
@@ -478,7 +488,7 @@ export function CaixaPanel({
   const [cashbackActive, setCashbackActive] = useState(true);
   const [cashbackHistory, setCashbackHistory] = useState<{ id: number; cliente: string; valorCompra: number; cashbackGerado: number; data: string; }[]>([]);
   const [abandonedCarts, setAbandonedCarts] = useState<{ id: number; cliente: string; telefone: string; itens: string; total: number; abandonadoEm: string; status: string; }[]>([]);
-  const [loyaltyUsers, setLoyaltyUsers] = useState<{ id: number; cliente: string; telefone: string; pontos: number; saldoCashback: number; }[]>([]);
+  const [loyaltyUsers, setLoyaltyUsers] = useState<LoyaltyCustomer[]>([]);
   const [compreGanheRules, setCompreGanheRules] = useState<{ id: number; titulo: string; descricao: string; ativa: boolean; }[]>([]);
 
   const handleRecuperarCart = (id: number, cliente: string, telefone: string) => {
@@ -779,12 +789,62 @@ export function CaixaPanel({
   const [pdvCart, setPdvCart] = useState<{ product: Product; quantity: number; obs: string; client: string }[]>([]);
   const [pdvCustomerName, setPdvCustomerName] = useState('');
   const [pdvCustomerPhone, setPdvCustomerPhone] = useState('');
+  const [pdvCustomerId, setPdvCustomerId] = useState<string | null>(null);
+  const [pdvCustomerLookup, setPdvCustomerLookup] = useState<'idle' | 'loading' | 'found' | 'new'>('idle');
   const [pdvCustomerCPF, setPdvCustomerCPF] = useState('');
   const [paymentCPF, setPaymentCPF] = useState('');
   const [pdvOrderType, setPdvOrderType] = useState<'retirada' | 'entrega' | 'mesa'>('retirada');
   const [pdvDeliveryAddress, setPdvDeliveryAddress] = useState('');
   const [pdvDeliveryTaxa, setPdvDeliveryTaxa] = useState('0.00');
   const [pdvTargetMesaId, setPdvTargetMesaId] = useState<number>(0);
+
+  useEffect(() => {
+    if (pdvOrderType === 'mesa') {
+      setPdvCustomerId(null);
+      setPdvCustomerLookup('idle');
+      return;
+    }
+    const normalizedPhone = pdvCustomerPhone.replace(/\D/g, '');
+    if (normalizedPhone.length < 10 || normalizedPhone.length > 11) {
+      setPdvCustomerId(null);
+      setPdvCustomerLookup('idle');
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      setPdvCustomerLookup('loading');
+      try {
+        const response = await fetch(
+          `${apiBaseUrl}/fidelidade/clientes/lookup?telefone=${encodeURIComponent(normalizedPhone)}`,
+          { headers: authHeaders, signal: controller.signal },
+        );
+        if (response.status === 404) {
+          setPdvCustomerId(null);
+          setPdvCustomerLookup('new');
+          return;
+        }
+        if (!response.ok) {
+          setPdvCustomerLookup('idle');
+          return;
+        }
+        const customer = await response.json();
+        setPdvCustomerId(String(customer.id));
+        setPdvCustomerName(String(customer.cliente || customer.nome || ''));
+        if (pdvOrderType === 'entrega' && customer.endereco) {
+          setPdvDeliveryAddress(String(customer.endereco));
+        }
+        setPdvCustomerLookup('found');
+      } catch (error) {
+        if ((error as Error).name !== 'AbortError') setPdvCustomerLookup('idle');
+      }
+    }, 350);
+
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [pdvCustomerPhone, pdvOrderType, apiBaseUrl]);
 
   // Generate idempotency key when checkout order changes
   useEffect(() => {
@@ -812,13 +872,13 @@ export function CaixaPanel({
   // POS Drawer Custom Events (Sangria, Suprimento, Sync)
   useEffect(() => {
     const handleOpenSangria = () => {
-      setMovTipo('SANGRIA');
+      setMovTipo('sangria');
       setMovValor('');
       setMovDesc('');
       setShowMovModal(true);
     };
     const handleOpenSuprimento = () => {
-      setMovTipo('SUPRIMENTO');
+      setMovTipo('suprimento');
       setMovValor('');
       setMovDesc('');
       setShowMovModal(true);
@@ -1453,9 +1513,23 @@ export function CaixaPanel({
     }
   };
 
-  const handleUpdateClient = async (oldPhone: string, newNome: string, newPhone: string, newSaldo?: number) => {
+  const refreshLoyaltyUsers = async () => {
     try {
-      const body: any = { cliente: newNome, telefone: newPhone };
+      const response = await fetch(`${apiBaseUrl}/fidelidade/clientes`, { headers: authHeaders });
+      if (!response.ok) return;
+      const data = await response.json();
+      if (Array.isArray(data)) setLoyaltyUsers(data);
+    } catch (error) {
+      console.error('Error fetching loyalty clients:', error);
+    }
+  };
+
+  const handleUpdateClient = async (clienteId: string, newNome: string, newPhone: string, newSaldo?: number) => {
+    try {
+      const body: any = {
+        cliente: newNome.trim(),
+        telefone: newPhone.replace(/\D/g, ''),
+      };
       if (newSaldo !== undefined && !isNaN(newSaldo)) {
         if (fidelidadeConfig.tipo_recompensa === 'PONTOS') {
           body.saldo_pontos = Math.round(newSaldo);
@@ -1463,7 +1537,7 @@ export function CaixaPanel({
           body.saldo_cashback = newSaldo;
         }
       }
-      const res = await fetch(`${apiBaseUrl}/fidelidade/clientes/${oldPhone}`, {
+      const res = await fetch(`${apiBaseUrl}/fidelidade/clientes/${clienteId}`, {
         method: 'PUT',
         headers: {
           ...authHeaders,
@@ -1472,26 +1546,26 @@ export function CaixaPanel({
         body: JSON.stringify(body)
       });
       if (res.ok) {
-        alert('Cliente atualizado com sucesso!');
-        // Refresh client lists
-        const freshRes = await fetch(`${apiBaseUrl}/fidelidade/clientes`, { headers: authHeaders });
-        if (freshRes.ok) {
-          const data = await freshRes.json();
-          if (Array.isArray(data)) setLoyaltyUsers(data);
-        }
+        showToast('Cliente atualizado com sucesso!');
+        await refreshLoyaltyUsers();
+        return true;
       } else {
         const err = await res.json();
-        alert(`Erro: ${err.detail || 'Falha ao atualizar cliente.'}`);
+        showToast(err.detail || 'Falha ao atualizar cliente.', 'error');
       }
     } catch (e) {
       console.error(e);
-      alert('Erro de conexão.');
+      showToast('Erro de conexão.', 'error');
     }
+    return false;
   };
 
   const handleCreateClient = async (nome: string, telefone: string, saldoInicial: number) => {
     try {
-      const body: any = { cliente: nome, telefone: telefone };
+      const body: any = {
+        cliente: nome.trim(),
+        telefone: telefone.replace(/\D/g, ''),
+      };
       if (!isNaN(saldoInicial)) {
         if (fidelidadeConfig.tipo_recompensa === 'PONTOS') {
           body.saldo_pontos = Math.round(saldoInicial);
@@ -1508,21 +1582,18 @@ export function CaixaPanel({
         body: JSON.stringify(body)
       });
       if (res.ok) {
-        alert('Cliente cadastrado com sucesso!');
-        // Refresh client lists
-        const freshRes = await fetch(`${apiBaseUrl}/fidelidade/clientes`, { headers: authHeaders });
-        if (freshRes.ok) {
-          const data = await freshRes.json();
-          if (Array.isArray(data)) setLoyaltyUsers(data);
-        }
+        showToast('Cliente cadastrado com sucesso!');
+        await refreshLoyaltyUsers();
+        return true;
       } else {
         const err = await res.json();
-        alert(err.detail || 'Erro ao cadastrar cliente.');
+        showToast(err.detail || 'Erro ao cadastrar cliente.', 'error');
       }
     } catch (e) {
       console.error(e);
-      alert('Erro de conexão.');
+      showToast('Erro de conexão.', 'error');
     }
+    return false;
   };
 
   const refreshEstoqueData = () => {
@@ -1870,12 +1941,7 @@ export function CaixaPanel({
         })
         .catch(err => console.error('Error fetching fidelity config:', err));
 
-      fetch(`${apiBaseUrl}/fidelidade/clientes`, { headers: authHeaders })
-        .then(res => res.json())
-        .then(data => {
-          if (Array.isArray(data)) setLoyaltyUsers(data);
-        })
-        .catch(err => console.error('Error fetching loyalty clients:', err));
+      void refreshLoyaltyUsers();
     }
     if (activeTab === 'cardapio') {
       fetchProdutos();
@@ -1885,6 +1951,14 @@ export function CaixaPanel({
       fetchCardapioConfig();
     }
   }, [activeTab, activeSubTab, desempenhoRange]);
+
+  useEffect(() => {
+    const refreshCustomers = () => {
+      void refreshLoyaltyUsers();
+    };
+    window.addEventListener('koma_customers_updated', refreshCustomers);
+    return () => window.removeEventListener('koma_customers_updated', refreshCustomers);
+  }, [apiBaseUrl]);
 
   // Sincronização em tempo real do cardápio via WebSocket / Props
   useEffect(() => {
@@ -1920,8 +1994,8 @@ export function CaixaPanel({
         e.preventDefault();
         setPdvOrderType('retirada');
         setTimeout(() => {
-          const nameInput = document.getElementById('pdv-customer-name-input');
-          if (nameInput) nameInput.focus();
+          const phoneInput = document.getElementById('pdv-customer-phone-input');
+          if (phoneInput) phoneInput.focus();
         }, 50);
       } else if (e.key === 'F3') {
         e.preventDefault();
@@ -1934,8 +2008,8 @@ export function CaixaPanel({
         e.preventDefault();
         setPdvOrderType('entrega');
         setTimeout(() => {
-          const nameInput = document.getElementById('pdv-customer-name-input');
-          if (nameInput) nameInput.focus();
+          const phoneInput = document.getElementById('pdv-customer-phone-input');
+          if (phoneInput) phoneInput.focus();
         }, 50);
       } else if (e.key === 'F4') {
         e.preventDefault();
@@ -2144,7 +2218,9 @@ export function CaixaPanel({
             incluir_taxa_servico: taxaServicoAtiva && checkoutServiceTax,
             item_ids: selectedItemIds.length > 0 ? selectedItemIds : null,
             idempotency_key: effectiveIdempotencyKey,
-            cpf_cliente: paymentCPF || null
+            cliente_id: selectedOrder.clienteId || null,
+            cpf_cliente: paymentCPF.replace(/\D/g, '') || null,
+            nome_cliente: selectedOrder.identificador || null,
           })
         });
         if (!res.ok) {
@@ -2188,7 +2264,9 @@ export function CaixaPanel({
               metodo: paymentMetodo,
               item_ids: data.itemIds,
               idempotency_key: `${effectiveIdempotencyKey}-${cid}`,
-              cpf_cliente: paymentCPF || null
+              cliente_id: selectedOrder.clienteId || null,
+              cpf_cliente: paymentCPF.replace(/\D/g, '') || null,
+              nome_cliente: selectedOrder.identificador || null,
             })
           });
           if (!res.ok) {
@@ -2223,7 +2301,9 @@ export function CaixaPanel({
               metodo: paymentMetodo,
               item_ids: null,
               idempotency_key: `${effectiveIdempotencyKey}-${cid}`,
-              cpf_cliente: paymentCPF || null
+              cliente_id: selectedOrder.clienteId || null,
+              cpf_cliente: paymentCPF.replace(/\D/g, '') || null,
+              nome_cliente: selectedOrder.identificador || null,
             })
           });
           if (!res.ok) {
@@ -2479,6 +2559,15 @@ export function CaixaPanel({
       showToast("Selecione a mesa de destino antes de lançar o pedido.", 'info');
       return;
     }
+    const normalizedCustomerPhone = pdvCustomerPhone.replace(/\D/g, '');
+    if (pdvOrderType !== 'mesa' && ![10, 11].includes(normalizedCustomerPhone.length)) {
+      showToast("Informe um celular válido com DDD.", 'info');
+      return;
+    }
+    if (pdvOrderType !== 'mesa' && pdvCustomerName.trim().length < 2) {
+      showToast("Informe o nome do cliente.", 'info');
+      return;
+    }
     isPdvSubmittingRef.current = true;
     setIsLoading(true);
 
@@ -2488,6 +2577,7 @@ export function CaixaPanel({
     const mesaId = pdvTargetMesaId;
     const orderType = pdvOrderType;
     const customerPhone = pdvCustomerPhone;
+    const customerId = pdvCustomerId;
     const deliveryAddress = pdvDeliveryAddress;
     const deliveryTaxa = pdvDeliveryTaxa;
 
@@ -2534,6 +2624,8 @@ export function CaixaPanel({
     setPdvCart([]);
     setPdvCustomerName('');
     setPdvCustomerPhone('');
+    setPdvCustomerId(null);
+    setPdvCustomerLookup('idle');
     setPdvCustomerCPF('');
     setPdvDeliveryAddress('');
     setPdvDeliveryTaxa('0.00');
@@ -2551,6 +2643,7 @@ export function CaixaPanel({
         method: "POST",
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          cliente_id: orderType === 'mesa' ? undefined : customerId || undefined,
           mesa_id: orderType === 'mesa' ? mesaId : null,
           tipo: orderType === 'mesa' ? 'Consumo no Local' : (orderType === 'entrega' ? 'Entrega' : 'Retirada'),
           identificador: customerName || undefined,
@@ -2569,10 +2662,22 @@ export function CaixaPanel({
       } else {
         const err = await res.json();
         showToast(`Erro ao registrar venda: ${err.detail || 'Falha no servidor'}`, 'error');
+        setPdvCart(prev => prev.length > 0 ? prev : cartItems);
+        setPdvCustomerName(customerName);
+        setPdvCustomerPhone(customerPhone);
+        setPdvCustomerId(customerId);
+        setPdvDeliveryAddress(deliveryAddress);
+        setPdvDeliveryTaxa(deliveryTaxa);
       }
     } catch (err) {
       console.error(err);
-      showToast("Erro ao conectar ao servidor.", 'error');
+      showToast("A rede falhou. O carrinho foi restaurado para você tentar novamente.", 'error');
+      setPdvCart(prev => prev.length > 0 ? prev : cartItems);
+      setPdvCustomerName(customerName);
+      setPdvCustomerPhone(customerPhone);
+      setPdvCustomerId(customerId);
+      setPdvDeliveryAddress(deliveryAddress);
+      setPdvDeliveryTaxa(deliveryTaxa);
     } finally {
       isPdvSubmittingRef.current = false;
       setIsLoading(false);
@@ -4332,9 +4437,28 @@ export function CaixaPanel({
                     <div className="space-y-2">
                       <div className="grid grid-cols-2 gap-2">
                         <div className="space-y-1">
+                          <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Telefone:</label>
+                          <input
+                            id="pdv-customer-phone-input"
+                            type="tel"
+                            inputMode="numeric"
+                            autoComplete="tel"
+                            placeholder="(00) 00000-0000"
+                            required={pdvCart.length > 0}
+                            value={pdvCustomerPhone}
+                            onChange={(e) => {
+                              setPdvCustomerPhone(aplicarMascaraTelefoneInput(e.target.value));
+                              setPdvCustomerId(null);
+                            }}
+                            className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'text-white', 'text-[10px]')}
+                          />
+                        </div>
+                        <div className="space-y-1">
                           <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Nome Cliente:</label>
                           <input
+                            id="pdv-customer-name-input"
                             type="text"
+                            autoComplete="name"
                             placeholder="Ex: Maria"
                             required={pdvCart.length > 0}
                             value={pdvCustomerName}
@@ -4342,18 +4466,18 @@ export function CaixaPanel({
                             className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'text-white', 'text-[10px]')}
                           />
                         </div>
-                        <div className="space-y-1">
-                          <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Telefone:</label>
-                          <input
-                            type="text"
-                            placeholder="(81) 9..."
-                            required={pdvCart.length > 0 && pdvOrderType === 'entrega'}
-                            value={pdvCustomerPhone}
-                            onChange={(e) => setPdvCustomerPhone(e.target.value)}
-                            className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'text-white', 'text-[10px]')}
-                          />
-                        </div>
                       </div>
+                      {pdvCustomerLookup !== 'idle' && (
+                        <p className={clsx(
+                          'text-[8px]',
+                          'font-bold',
+                          pdvCustomerLookup === 'found' ? 'text-emerald-400' : 'text-gray-500',
+                        )}>
+                          {pdvCustomerLookup === 'loading' && 'Buscando cliente...'}
+                          {pdvCustomerLookup === 'found' && 'Cliente encontrado — nome e endereço preenchidos automaticamente.'}
+                          {pdvCustomerLookup === 'new' && 'Novo número — o cliente será criado ao lançar o pedido.'}
+                        </p>
+                      )}
                       {pdvOrderType === 'entrega' && (
                         <div className="space-y-1">
                           <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Endereço:</label>
@@ -6498,8 +6622,8 @@ export function CaixaPanel({
                 <table className={clsx('w-full', 'text-left', 'text-[10px]')}>
                   <thead>
                     <tr className={clsx('bg-[#1C1C1F]', 'border-b', 'border-[#27272A]', 'text-gray-400', 'uppercase', 'tracking-wider', 'font-bold')}>
-                      <th className="p-3.5">Nome</th>
                       <th className="p-3.5">WhatsApp</th>
+                      <th className="p-3.5">Nome</th>
                       <th className={clsx('p-3.5', 'font-mono')}>Saldo</th>
                       <th className={clsx('p-3.5', 'text-right')}>Ações</th>
                     </tr>
@@ -6507,8 +6631,8 @@ export function CaixaPanel({
                   <tbody className={clsx('divide-y', 'divide-[#27272A]/40')}>
                     {loyaltyUsers.map((user) => (
                       <tr key={user.id} className={clsx('hover:bg-[#1C1C1F]/20', 'transition-colors')}>
+                        <td className={clsx('p-3.5', 'font-mono', 'text-gray-300')}>{formatarTelefoneTabela(user.telefone)}</td>
                         <td className={clsx('p-3.5', 'font-bold', 'text-white')}>{user.cliente}</td>
-                        <td className={clsx('p-3.5', 'font-mono', 'text-gray-300')}>{user.telefone}</td>
                         <td className={clsx('p-3.5', 'font-mono', 'text-emerald-400')}>
                           {fidelidadeConfig.tipo_recompensa === 'PONTOS' ? `${user.pontos} pts` : `R$ ${user.saldoCashback.toFixed(2)}`}
                         </td>
@@ -6517,7 +6641,7 @@ export function CaixaPanel({
                             onClick={() => {
                               setEditingCrmUser(user);
                               setCrmFormNome(user.cliente);
-                              setCrmFormTelefone(user.telefone);
+                              setCrmFormTelefone(aplicarMascaraTelefoneInput(user.telefone));
                               setCrmFormPontos(user.pontos || 0);
                               setCrmFormCashback(user.saldoCashback || 0);
                             }}
@@ -6528,6 +6652,13 @@ export function CaixaPanel({
                         </td>
                       </tr>
                     ))}
+                    {loyaltyUsers.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="p-8 text-center text-gray-500">
+                          Nenhum cliente cadastrado. O primeiro cadastro feito aqui, no balcão ou no cardápio aparecerá automaticamente.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -7721,12 +7852,14 @@ export function CaixaPanel({
                     </div>
 
                     <div className="space-y-1.5 font-sans">
-                      <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>CPF/Telefone (Opcional - Fidelidade):</label>
+                      <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Celular do cliente (Opcional - Fidelidade):</label>
                       <input
-                        type="text"
+                        type="tel"
+                        inputMode="numeric"
+                        autoComplete="tel"
                         value={paymentCPF}
-                        onChange={(e) => setPaymentCPF(e.target.value)}
-                        placeholder="Ex: 123.456.789-00 ou Celular"
+                        onChange={(e) => setPaymentCPF(aplicarMascaraTelefoneInput(e.target.value))}
+                        placeholder="(00) 00000-0000"
                         className={clsx('w-full', 'px-3', 'py-2', 'text-xs', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'focus:outline-none', 'focus:border-[#10b981]', 'text-white')}
                       />
                     </div>
@@ -8478,11 +8611,25 @@ export function CaixaPanel({
                   return;
                 }
                 const newSaldo = fidelidadeConfig.tipo_recompensa === 'PONTOS' ? crmFormPontos : crmFormCashback;
-                await handleUpdateClient(editingCrmUser.telefone, crmFormNome, crmFormTelefone, newSaldo);
-                setEditingCrmUser(null);
+                const updated = await handleUpdateClient(editingCrmUser.id, crmFormNome, crmFormTelefone, newSaldo);
+                if (updated) setEditingCrmUser(null);
               }}
               className="space-y-4"
             >
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Telefone / WhatsApp:</label>
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  required
+                  autoFocus
+                  placeholder="(00) 00000-0000"
+                  value={crmFormTelefone}
+                  onChange={(e) => setCrmFormTelefone(aplicarMascaraTelefoneInput(e.target.value))}
+                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                />
+              </div>
+
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Nome:</label>
                 <input
@@ -8490,17 +8637,6 @@ export function CaixaPanel({
                   required
                   value={crmFormNome}
                   onChange={(e) => setCrmFormNome(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Telefone / WhatsApp:</label>
-                <input
-                  type="text"
-                  required
-                  value={crmFormTelefone}
-                  onChange={(e) => setCrmFormTelefone(e.target.value)}
                   className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
                 />
               </div>
@@ -8579,11 +8715,25 @@ export function CaixaPanel({
                   alert('Preencha todos os campos!');
                   return;
                 }
-                await handleCreateClient(newCrmNome, newCrmTelefone, Number(newCrmSaldo));
-                setShowNewCrmModal(false);
+                const created = await handleCreateClient(newCrmNome, newCrmTelefone, Number(newCrmSaldo));
+                if (created) setShowNewCrmModal(false);
               }}
               className="space-y-4"
             >
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Telefone / WhatsApp:</label>
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  required
+                  autoFocus
+                  placeholder="(00) 00000-0000"
+                  value={newCrmTelefone}
+                  onChange={(e) => setNewCrmTelefone(aplicarMascaraTelefoneInput(e.target.value))}
+                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                />
+              </div>
+
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Nome:</label>
                 <input
@@ -8591,17 +8741,6 @@ export function CaixaPanel({
                   required
                   value={newCrmNome}
                   onChange={(e) => setNewCrmNome(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Telefone / WhatsApp:</label>
-                <input
-                  type="text"
-                  required
-                  value={newCrmTelefone}
-                  onChange={(e) => setNewCrmTelefone(e.target.value)}
                   className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
                 />
               </div>

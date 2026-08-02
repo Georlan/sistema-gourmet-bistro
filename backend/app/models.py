@@ -229,6 +229,12 @@ class Comanda(Base):
             name='fk_comandas_mesa_tenant',
             ondelete='RESTRICT',
         ),
+        ForeignKeyConstraint(
+            ['restaurante_id', 'cliente_id'],
+            ['clientes.restaurante_id', 'clientes.id'],
+            name='fk_comandas_cliente_tenant',
+            ondelete='RESTRICT',
+        ),
         UniqueConstraint(
             'restaurante_id',
             'idempotency_key',
@@ -260,6 +266,11 @@ class Comanda(Base):
             "restaurante_id",
             "mesa_id",
         ).ddl_if(dialect="postgresql"),
+        Index(
+            "ix_comandas_tenant_cliente_fk",
+            "restaurante_id",
+            "cliente_id",
+        ).ddl_if(dialect="postgresql"),
     )
     
     id = Column(String, primary_key=True, index=True)
@@ -268,6 +279,7 @@ class Comanda(Base):
     mesa_origem_id = Column(Integer, nullable=True)
     mesa_transferida_de = Column(Integer, nullable=True)
     garcom_id = Column(String, ForeignKey("usuarios.id"), nullable=False)
+    cliente_id = Column(String, nullable=True)
     
     tipo = Column(String, default="Consumo no Local")  # Consumo no Local | Retirada
     _identificador = Column("identificador", String, nullable=True)  # Client name encrypted
@@ -318,6 +330,7 @@ class Comanda(Base):
     lancamentos = relationship("Lancamento", back_populates="comanda", cascade="all, delete-orphan")
     itens = relationship("Item", back_populates="comanda", cascade="all, delete-orphan")
     motoboy = relationship("Motoboy", back_populates="comandas")
+    cliente = relationship("Cliente", back_populates="comandas")
 
 
 class Lancamento(Base):
@@ -479,6 +492,17 @@ class Pagamento(Base):
             "idempotency_key",
             name="uq_pagamentos_restaurante_idempotency",
         ),
+        ForeignKeyConstraint(
+            ["restaurante_id", "cliente_id"],
+            ["clientes.restaurante_id", "clientes.id"],
+            name="fk_pagamentos_cliente_tenant",
+            ondelete="RESTRICT",
+        ),
+        Index(
+            "ix_pagamentos_tenant_cliente_fk",
+            "restaurante_id",
+            "cliente_id",
+        ).ddl_if(dialect="postgresql"),
     )
     
     id = Column(String, primary_key=True, index=True)
@@ -489,6 +513,7 @@ class Pagamento(Base):
     metodo = Column(String, nullable=False)  # "dinheiro" | "pix" | "cartao"
     status = Column(String, default="aprovado") # "pendente" | "aprovado" | "cancelado"
     idempotency_key = Column(String(128), nullable=True, index=True)
+    cliente_id = Column(String, nullable=True)
     cpf_cliente = Column(String, nullable=True, index=True)
     nome_cliente = Column(String, nullable=True)
     nsu_cartao = Column(String, nullable=True)
@@ -497,6 +522,7 @@ class Pagamento(Base):
 
     # Relationships
     comanda = relationship("Comanda")
+    cliente = relationship("Cliente", back_populates="pagamentos")
 
 # Alias compatibility
 Garcom = Usuario
@@ -755,6 +781,19 @@ class ConfigFidelizacao(Base):
 
 class HistoricoFidelidade(Base):
     __tablename__ = "historico_fidelidade"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["restaurante_id", "cliente_id"],
+            ["clientes.restaurante_id", "clientes.id"],
+            name="fk_historico_fidelidade_cliente_tenant",
+            ondelete="RESTRICT",
+        ),
+        Index(
+            "ix_historico_fidelidade_tenant_cliente_fk",
+            "restaurante_id",
+            "cliente_id",
+        ).ddl_if(dialect="postgresql"),
+    )
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     restaurante_id = Column(
@@ -763,6 +802,7 @@ class HistoricoFidelidade(Base):
         default=lambda: current_restaurante_id.get(),
         nullable=False,
     )
+    cliente_id = Column(String, nullable=True)
     _cliente_telefone = Column("cliente_telefone", String, nullable=False)
     tipo_movimentacao = Column(String, nullable=False)  # ACUMULO | RESGATE
     valor_delta = Column(Numeric(14, 4, asdecimal=False), nullable=False)
@@ -776,6 +816,8 @@ class HistoricoFidelidade(Base):
     @cliente_telefone.setter
     def cliente_telefone(self, value):
         self._cliente_telefone = encrypt_field(value)
+
+    cliente = relationship("Cliente", back_populates="historico_fidelidade")
 
 
 class Cliente(Base):
@@ -791,11 +833,23 @@ class Cliente(Base):
     criado_em = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
     
     __table_args__ = (
+        UniqueConstraint(
+            'restaurante_id',
+            'id',
+            name='uq_clientes_restaurante_id_id',
+        ),
         UniqueConstraint('restaurante_id', 'telefone', name='uq_restaurante_cliente_telefone'),
         CheckConstraint(
             "saldo_cashback >= 0",
             name="ck_clientes_cashback_nonnegative_finite",
         ),
+    )
+
+    comandas = relationship("Comanda", back_populates="cliente")
+    pagamentos = relationship("Pagamento", back_populates="cliente")
+    historico_fidelidade = relationship(
+        "HistoricoFidelidade",
+        back_populates="cliente",
     )
 
 

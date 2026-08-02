@@ -22,8 +22,10 @@ interface CardapioDigitalProps {
   address: string;
   customerName: string;
   customerPhone: string;
+  customerToken: string;
   onClose: () => void;
   onOrderSuccess: (order: CreatedOrder) => void;
+  onSessionExpired: () => void;
 }
 
 export default function CardapioDigital({
@@ -34,8 +36,10 @@ export default function CardapioDigital({
   address,
   customerName,
   customerPhone,
+  customerToken,
   onClose,
-  onOrderSuccess
+  onOrderSuccess,
+  onSessionExpired,
 }: CardapioDigitalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -85,6 +89,11 @@ export default function CardapioDigital({
       setErrorMessage("Informe um telefone válido com DDD antes de enviar o pedido.");
       return;
     }
+    if (!customerToken) {
+      setErrorMessage("Confirme seu celular novamente antes de enviar o pedido.");
+      onSessionExpired();
+      return;
+    }
     if (deliveryMethod === "delivery" && normalizedAddress.length < 5) {
       setErrorMessage("Informe o endereço completo de entrega.");
       return;
@@ -124,7 +133,8 @@ export default function CardapioDigital({
       const response = await fetch(`${API_BASE_URL}/cardapio/pedidos`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          "X-Koma-Customer-Token": customerToken,
         },
         body: JSON.stringify({
           restaurante_id: targetRestauranteId,
@@ -140,6 +150,9 @@ export default function CardapioDigital({
       });
 
       const data = await response.json().catch(() => null);
+      if (response.status === 401) {
+        onSessionExpired();
+      }
       if (!response.ok) {
         const detail = typeof data?.detail === "string" ? data.detail : null;
         throw new Error(detail || `Não foi possível enviar o pedido (${response.status}).`);

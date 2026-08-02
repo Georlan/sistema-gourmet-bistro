@@ -29,6 +29,7 @@ export interface OrderItem {
   preco: number;
   observacao: string;
   clienteNome: string;
+  cliente_nome?: string;
   status: 'preparando' | 'pronto' | 'entregue';
   pago?: boolean;
   lancamentoId?: string;
@@ -37,11 +38,15 @@ export interface OrderItem {
 
 export interface Order {
   id: string;
+  clienteId?: string | null;
+  clientePhone?: string | null;
   mesaId: number;
   garcomId: string;
   garcomNome: string;
   timestamp: number; // Order creation time
   itens: OrderItem[];
+  /** Alias legado ainda aceito em alguns componentes durante a normalização. */
+  items?: OrderItem[];
   tipo?: 'Consumo no Local' | 'Retirada' | 'Entrega'; // Order type
   valorPago?: number;
   identificador?: string;
