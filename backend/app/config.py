@@ -39,6 +39,13 @@ class Settings:
     PRINTER_WIDTH: int = int(os.getenv("PRINTER_WIDTH", "40"))
     PRINT_JOBS_DIR: str = os.getenv("PRINT_JOBS_DIR", "./print_jobs")
 
+    # Libera recursos Premium somente para restaurantes explicitamente
+    # autorizados durante homologação. Não altera a assinatura armazenada.
+    KOMA_TEST_PREMIUM_RESTAURANTE_IDS: str = os.getenv(
+        "KOMA_TEST_PREMIUM_RESTAURANTE_IDS",
+        "1",  # tenant de homologação atual; definir "" antes de uso comercial
+    )
+
     # Evolution API (WhatsApp)
     EVOLUTION_API_URL: str = os.getenv("EVOLUTION_API_URL", "")
     EVOLUTION_API_KEY: str = os.getenv("EVOLUTION_API_KEY", "")

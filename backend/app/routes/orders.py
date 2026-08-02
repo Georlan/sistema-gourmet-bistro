@@ -39,6 +39,7 @@ from ..services.clientes import (
     cadastrar_ou_atualizar_cliente,
     normalizar_telefone_cliente,
 )
+from ..subscription import subscription_has_printing
 
 logger = logging.getLogger("koma.orders")
 
@@ -170,7 +171,10 @@ def enqueue_print_job_in_session(
         import datetime
         from ..models import PrintJob, Restaurante
         restaurante = db.query(Restaurante).filter(Restaurante.id == restaurante_id).first()
-        if restaurante and (restaurante.plano or "pocket").strip().lower() == "pocket":
+        if restaurante and not subscription_has_printing(
+            restaurante_id,
+            restaurante.plano,
+        ):
             logger.info("Impressão ignorada para restaurante %s: recurso não incluído no Kôma Pocket.", restaurante_id)
             return None
 
@@ -223,7 +227,10 @@ def print_in_background(
         try:
             db = SessionLocal(restaurante_id=restaurante_id)
             restaurante = db.query(Restaurante).filter(Restaurante.id == restaurante_id).first()
-            if restaurante and (restaurante.plano or "pocket").strip().lower() == "pocket":
+            if restaurante and not subscription_has_printing(
+                restaurante_id,
+                restaurante.plano,
+            ):
                 logger.info(
                     "Impressão ignorada para restaurante %s: recurso não incluído no Kôma Pocket.",
                     restaurante_id,

@@ -30,6 +30,10 @@ from ..security import (
     get_current_user,
     require_permission,
 )
+from ..subscription import (
+    get_effective_subscription_plan,
+    is_test_premium_restaurant,
+)
 from .websocket import manager
 
 logger = logging.getLogger("koma.caixa")
@@ -1321,6 +1325,18 @@ from ..models import ConfiguracaoRestaurante
 from ..schemas import ConfiguracaoRestauranteResponse, ConfiguracaoRestauranteUpdate
 from sqlalchemy.orm import joinedload
 
+
+def _serializar_configuracoes(config: ConfiguracaoRestaurante) -> dict:
+    payload = ConfiguracaoRestauranteResponse.model_validate(config).model_dump()
+    payload["plano_efetivo"] = get_effective_subscription_plan(
+        config.restaurante_id,
+        config.plano,
+    )
+    payload["plano_modo_teste"] = is_test_premium_restaurant(
+        config.restaurante_id
+    )
+    return payload
+
 @router.get("/configuracoes", response_model=ConfiguracaoRestauranteResponse)
 def obter_configuracoes(
     db: Session = Depends(get_db),
@@ -1338,7 +1354,7 @@ def obter_configuracoes(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Configurações do restaurante ainda não foram provisionadas.",
         )
-    return config
+    return _serializar_configuracoes(config)
 
 
 @router.put("/configuracoes", response_model=ConfiguracaoRestauranteResponse)
@@ -1352,7 +1368,9 @@ def atualizar_configuracoes(
         ConfiguracaoRestaurante.restaurante_id == current_user.restaurante_id
     ).first()
     if not config:
-        config = ConfiguracaoRestaurante()
+        config = ConfiguracaoRestaurante(
+            restaurante_id=current_user.restaurante_id
+        )
         db.add(config)
         db.commit()
         db.refresh(config)
@@ -1419,7 +1437,7 @@ def atualizar_configuracoes(
     db.commit()
     db.refresh(config)
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
-    return config
+    return _serializar_configuracoes(config)
 
 
 # ----------------- CONFIGURAÇÕES WHITELABEL DO RESTAURANTE -----------------

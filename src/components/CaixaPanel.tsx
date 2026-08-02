@@ -38,7 +38,6 @@ import { API } from '../config/caixaService';
 import {
   ONLINE_MENU_ADDON,
   SUBSCRIPTION_PLANS,
-  SubscriptionPlanId,
   getSubscriptionPlan,
   normalizeSubscriptionPlan
 } from '../config/subscriptionPlans';
@@ -173,7 +172,9 @@ export function CaixaPanel({
   onOptimisticAddOrder,
   onRemovePendingPaymentOptimistic
 }: CaixaPanelProps) {
-  const currentPlanId = normalizeSubscriptionPlan(restauranteConfig?.plano);
+  const currentPlanId = normalizeSubscriptionPlan(
+    restauranteConfig?.plano_efetivo ?? restauranteConfig?.plano
+  );
   const currentPlan = getSubscriptionPlan(currentPlanId);
   const hasPrinting = currentPlanId !== 'pocket';
   const hasOnlineMenu = currentPlanId === 'premium' || restauranteConfig?.cardapio_online_addon === true;
@@ -1272,12 +1273,6 @@ export function CaixaPanel({
   // Online payments & billing plan states
   const [payPixActive, setPayPixActive] = useState(true);
   const [payCardActive, setPayCardActive] = useState(true);
-  const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlanId>(currentPlanId);
-
-  useEffect(() => {
-    setSelectedPlan(currentPlanId);
-  }, [currentPlanId]);
-
   const [supportChats, setSupportChats] = useState<{ id: number; cliente: string; ultimaMsg: string; status: string; canal: string; }[]>([]);
 
   const [customerFeedbacks, setCustomerFeedbacks] = useState<{ id: number; cliente: string; estrelas: number; comentario: string; data: string; }[]>([]);
@@ -5390,10 +5385,7 @@ export function CaixaPanel({
               setPayPixActive={setPayPixActive}
               payCardActive={payCardActive}
               setPayCardActive={setPayCardActive}
-              onSelectPlan={(planId) => {
-                setSelectedPlan(planId);
-                showToast(`Plano ${planId.toUpperCase()} selecionado.`, 'info');
-              }}
+              isTestPlan={restauranteConfig?.plano_modo_teste === true}
               bannerNotice={planNoticeBanner}
             />
           )}

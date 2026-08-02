@@ -431,6 +431,8 @@ class ConfiguracaoRestauranteResponse(BaseModel):
     perm_garcom_chamar: bool
     perm_garcom_ociosas: bool
     plano: Optional[str] = "pocket"
+    plano_efetivo: Optional[str] = "pocket"
+    plano_modo_teste: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 

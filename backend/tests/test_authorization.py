@@ -429,7 +429,10 @@ def test_configuracoes_requires_authentication_and_does_not_provision():
         )
 
 
-def test_configuracoes_cannot_be_redirected_to_another_tenant():
+def test_configuracoes_cannot_be_redirected_to_another_tenant(monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "KOMA_TEST_PREMIUM_RESTAURANTE_IDS", "1")
     client = TestClient(app)
     headers = get_auth_headers(client, "admin", "123")
 
@@ -441,6 +444,9 @@ def test_configuracoes_cannot_be_redirected_to_another_tenant():
     assert response.status_code == 200
     assert response.json()["nicho"] == "hamburgueria"
     assert response.json()["taxa_servico_padrao"] == 10.0
+    assert response.json()["plano"] == "bistro"
+    assert response.json()["plano_efetivo"] == "premium"
+    assert response.json()["plano_modo_teste"] is True
 
 
 def test_configuracoes_missing_returns_404_without_writing():

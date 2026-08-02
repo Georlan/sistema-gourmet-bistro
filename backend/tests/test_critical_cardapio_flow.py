@@ -569,7 +569,10 @@ def test_caixa_pode_recusar_pedido_antes_da_producao():
         db.close()
 
 
-def test_koma_pocket_nao_enfileira_impressao_automatica():
+def test_koma_pocket_nao_enfileira_impressao_automatica(monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "KOMA_TEST_PREMIUM_RESTAURANTE_IDS", "")
     db = SessionLocal()
     try:
         restaurante = db.query(Restaurante).filter(Restaurante.id == 100).one()
@@ -578,7 +581,11 @@ def test_koma_pocket_nao_enfileira_impressao_automatica():
     finally:
         db.close()
 
-    token = create_access_token(subject="usr_cardapio_100", restaurante_id=100, role="admin")
+    token = create_access_token(
+        subject="usr_cardapio_100",
+        restaurante_id=100,
+        role="admin",
+    )
     response = client.post(
         "/comandas/venda-direta",
         headers={"Authorization": f"Bearer {token}"},
@@ -607,5 +614,62 @@ def test_koma_pocket_nao_enfileira_impressao_automatica():
             PrintJob.source_id == response.json()["id"],
         ).first()
         assert print_job is None
+    finally:
+        db.close()
+
+
+def test_premium_de_homologacao_enfileira_sem_alterar_plano(monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(
+        settings,
+        "KOMA_TEST_PREMIUM_RESTAURANTE_IDS",
+        "100",
+    )
+
+    db = SessionLocal()
+    try:
+        restaurante = db.query(Restaurante).filter(Restaurante.id == 100).one()
+        restaurante.plano = "pocket"
+        db.commit()
+    finally:
+        db.close()
+
+    token = create_access_token(
+        subject="usr_cardapio_100",
+        restaurante_id=100,
+        role="admin",
+    )
+    response = client.post(
+        "/comandas/venda-direta",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "restaurante_id": 100,
+            "mesa_id": 1,
+            "garcom_id": "usr_cardapio_100",
+            "tipo": "Consumo no Local",
+            "itens": [
+                {
+                    "produto_id": "prod-cardapio-test",
+                    "quantidade": 1,
+                    "preco_unitario": 25.0,
+                    "observacao": "",
+                }
+            ],
+        },
+    )
+    assert response.status_code in (200, 201)
+
+    db = SessionLocal()
+    try:
+        restaurante = db.query(Restaurante).filter(Restaurante.id == 100).one()
+        assert restaurante.plano == "pocket"
+
+        print_job = db.query(PrintJob).filter(
+            PrintJob.restaurante_id == 100,
+            PrintJob.source_type == "pedido",
+            PrintJob.source_id == response.json()["id"],
+        ).first()
+        assert print_job is not None
     finally:
         db.close()

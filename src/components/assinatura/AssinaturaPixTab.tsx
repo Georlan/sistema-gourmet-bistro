@@ -35,7 +35,7 @@ interface AssinaturaPixTabProps {
   setPayPixActive: (v: boolean) => void;
   payCardActive: boolean;
   setPayCardActive: (v: boolean) => void;
-  onSelectPlan: (planId: SubscriptionPlanId) => void;
+  isTestPlan?: boolean;
   bannerNotice?: string | null;
 }
 
@@ -47,7 +47,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
   setPayPixActive,
   payCardActive,
   setPayCardActive,
-  onSelectPlan,
+  isTestPlan = false,
   bannerNotice
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'meu_plano' | 'pagamentos' | 'planos_upgrade'>('meu_plano');
@@ -248,6 +248,11 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
             </div>
 
             <div className="flex flex-wrap gap-2 text-[10px] font-mono">
+              {isTestPlan && (
+                <span className="px-3 py-1 rounded-xl border border-sky-500/30 bg-sky-500/10 text-sky-300 font-bold">
+                  Modo de teste Premium — assinatura não alterada
+                </span>
+              )}
               <span className={clsx(
                 'px-3 py-1 rounded-xl border font-bold',
                 hasPrinting
@@ -276,7 +281,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                 onClick={() => setActiveSubTab('planos_upgrade')}
                 className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold rounded-2xl text-xs uppercase tracking-wider transition-all cursor-pointer shadow-lg shadow-emerald-950/40 flex items-center justify-center gap-2"
               >
-                <span>Ver Todos os Planos e Fazer Upgrade</span>
+                <span>Comparar planos</span>
                 <ArrowUpRight size={16} />
               </button>
             </div>
@@ -430,19 +435,14 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                       ) : (
                         <button
                           type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onSelectPlan(plan.id);
-                          }}
+                          disabled
+                          title="A contratação será liberada quando a cobrança estiver integrada."
                           className={clsx(
-                            'w-full py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow',
-                            isRecommended
-                              ? 'bg-emerald-500 hover:bg-emerald-400 text-zinc-950 shadow-emerald-950/50'
-                              : 'bg-zinc-800 hover:bg-zinc-700 text-white border border-[#27272A]'
+                            'w-full py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5',
+                            'bg-zinc-900 text-zinc-500 border border-[#27272A] cursor-not-allowed'
                           )}
                         >
-                          <span>Fazer Upgrade</span>
-                          <ArrowUpRight size={14} />
+                          <span>Contratação em breve</span>
                         </button>
                       )}
                     </div>
@@ -583,4 +583,3 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
     </div>
   );
 };
-
