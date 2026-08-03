@@ -201,5 +201,3 @@ def enviar_otp_whatsapp_meta(telefone: str, nome_restaurante: str, codigo_otp: s
     except Exception as exc:
         logger.warning("[META CLOUD API EXCEPTION] Erro ao enviar OTP: %s", exc)
         return False
-
->>>>>>> c226700 (feat(meta-webhook): implement Meta Cloud API webhook verification handshake and OTP sending)

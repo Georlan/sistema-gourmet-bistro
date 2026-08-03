@@ -127,6 +127,10 @@ async def lifespan(app: FastAPI):
         )
     from .database import validate_postgres_runtime_role
     validate_postgres_runtime_role()
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception:
+        pass
     yield
 
 app = FastAPI(
