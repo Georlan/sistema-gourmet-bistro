@@ -3829,20 +3829,20 @@ export function CaixaPanel({
 
 
                 {/* COLUMN 1: Em produção */}
-                <div className={clsx('bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden', 'min-w-[85vw]', 'sm:min-w-[320px]', 'md:min-w-0', 'flex-1', 'snap-center', 'shrink-0', 'md:shrink')}>
-                  <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
+                <div className={clsx('bg-[#181a1f]', 'border', 'border-[#2a2f38]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden', 'min-w-[85vw]', 'sm:min-w-[320px]', 'md:min-w-0', 'flex-1', 'snap-center', 'shrink-0', 'md:shrink')}>
+                  <div className={clsx('bg-[#1e2229]', 'px-4', 'py-3', 'border-b', 'border-[#2a2f38]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
                     <div>
-                      <span className={clsx('font-bold', 'text-white', 'font-serif', 'block')}>Mesas em atendimento</span>
-                      <span className="text-[8px] text-emerald-400/80 block mt-0.5">Lançados pelo garçom ou caixa</span>
+                      <span className={clsx('font-bold', 'text-slate-100', 'font-sans', 'block', 'text-sm')}>Mesas em Atendimento</span>
+                      <span className="text-xs text-emerald-400/90 block mt-0.5 font-normal">Lançados pelo garçom ou caixa</span>
                     </div>
-                    <span className={clsx('bg-[#10b981]/10', 'text-[#10b981]', 'font-bold', 'px-2', 'py-0.5', 'rounded-full', 'font-mono', 'text-[9px]')}>
+                    <span className={clsx('bg-emerald-500/15', 'text-emerald-400', 'font-bold', 'px-2.5', 'py-0.5', 'rounded-full', 'font-mono', 'text-xs', 'border', 'border-emerald-500/20')}>
                       {tableOrdersInProduction.length}
                     </span>
                   </div>
 
                   <div className={clsx('p-3', 'flex-1', 'overflow-y-auto', 'space-y-3')}>
                     {tableOrdersInProduction.length === 0 ? (
-                      <div className={clsx('py-20', 'text-center', 'text-gray-500', 'italic', 'text-[10px]')}>Nenhum pedido local em produção</div>
+                      <div className={clsx('py-20', 'text-center', 'text-slate-400', 'italic', 'text-xs')}>Nenhum pedido local em produção</div>
                     ) : (
                       <>
                         {/* Pedidos do Salão (Mesa) em Produção */}
@@ -3861,39 +3861,38 @@ export function CaixaPanel({
                             <div 
                               key={`table-prod-${order.id}`} 
                               onClick={() => setSelectedKanbanOrder(order)}
-                              className={clsx('bg-linear-to-br', 'from-emerald-950/35', 'to-[#121214]', 'border', 'border-emerald-500/25', 'border-l-4', 'border-l-emerald-500', 'hover:border-emerald-400/50', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all', 'text-left', 'cursor-pointer', 'shadow-sm')}
+                              className={clsx('bg-[#1e2428]', 'border', 'border-[#2e3540]', 'border-l-4', 'border-l-emerald-500', 'hover:border-emerald-400/60', 'p-3.5', 'rounded-xl', 'space-y-3', 'transition-all', 'text-left', 'cursor-pointer', 'shadow-sm')}
                             >
                               <div className={clsx('flex', 'justify-between', 'items-start')}>
                                 <div>
-                                  <div className="flex gap-1.5 flex-wrap mb-1">
-                                    <span className={clsx('px-1.5', 'py-0.5', 'text-[8px]', 'uppercase', 'tracking-wider', 'font-bold', 'bg-[#10b981]/15', 'text-[#10b981]', 'rounded', 'font-mono', 'block', 'w-fit')}>
+                                  <div className="flex gap-1.5 flex-wrap mb-1.5">
+                                    <span className={clsx('px-2', 'py-0.5', 'text-[9px]', 'uppercase', 'tracking-wider', 'font-bold', 'bg-emerald-500/15', 'text-emerald-400', 'border', 'border-emerald-500/25', 'rounded-md', 'font-mono', 'block', 'w-fit')}>
                                       {order.mesaId && order.mesaId > 0 ? `Mesa ${order.mesaId}` : 'Balcão'}
                                     </span>
                                     {order.mesaOrigemId && Number(order.mesaOrigemId) !== Number(order.mesaId) && (
-                                      <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/35 rounded font-sans block w-fit shadow-xs" title="Essa mesa possui consumo mesclado de outra">
+                                      <span className="px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/35 rounded-md font-sans block w-fit shadow-xs" title="Essa mesa possui consumo mesclado de outra">
                                         🔗 Mesclado de Mesa {order.mesaOrigemId}
                                       </span>
                                     )}
                                     {order.mesaTransferidaDe && Number(order.mesaTransferidaDe) !== Number(order.mesaId) && (
-                                      <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-purple-500/20 text-purple-300 border border-purple-500/35 rounded font-sans block w-fit shadow-xs" title="Essa mesa teve consumo transferido de outra">
+                                      <span className="px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold bg-purple-500/20 text-purple-300 border border-purple-500/35 rounded-md font-sans block w-fit shadow-xs" title="Essa mesa teve consumo transferido de outra">
                                         🔗 Transferido da Mesa {order.mesaTransferidaDe}
                                       </span>
                                     )}
                                   </div>
-                                  <strong className={clsx('text-white', 'text-xs', 'block')}>
+                                  <strong className={clsx('font-bold', 'text-base', 'text-slate-100', 'block')}>
                                     {(order as any).identificador || (order.mesaId && order.mesaId > 0 ? `Consumo Mesa ${order.mesaId}` : 'Consumo Balcão')}
                                   </strong>
-                                  <span className={clsx('text-[9px]', 'text-gray-500', 'block')}>Atendente: {order.garcomNome || 'Garçom'}</span>
+                                  <span className={clsx('font-normal', 'text-xs', 'text-slate-400', 'block', 'mt-0.5')}>Atendente: {order.garcomNome || 'Garçom'}</span>
                                 </div>
                                 <div className="text-right shrink-0">
-                                  <span className={clsx('text-[9px]', 'text-gray-500', 'font-mono', 'block')}>#{order.id.slice(-4)}</span>
-                                  <span className="font-bold text-white font-mono text-[11px] block mt-1">
+                                  <span className="font-extrabold text-lg text-emerald-400 font-mono block">
                                     R$ {order.itens.reduce((sum: number, it: any) => sum + (it.preco_unit || it.preco || 0), 0).toFixed(2)}
                                   </span>
                                 </div>
                               </div>
 
-                              <p className={clsx('text-[10px]', 'text-[#10b981]', 'bg-[#09090B]', 'p-1.5', 'rounded', 'border', 'border-[#27272A]/30', 'leading-relaxed', 'font-mono')}>
+                              <p className={clsx('font-medium', 'text-sm', 'text-slate-200', 'bg-[#121417]', 'p-2.5', 'rounded-lg', 'border', 'border-[#2a2f38]', 'leading-relaxed', 'font-sans')}>
                                 {itemsStr}
                               </p>
 
@@ -3921,10 +3920,10 @@ export function CaixaPanel({
                                     setIsLoading(false);
                                   }
                                 }}
-                                className={clsx('w-full', 'py-1.5', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1')}
+                                className={clsx('w-full', 'py-2', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'rounded-lg', 'font-bold', 'text-xs', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1.5', 'shadow-sm')}
                               >
-                                <Check size={11} />
-                                <span>Pronto → pagamento</span>
+                                <Check size={13} />
+                                <span>Pronto → Pagamento</span>
                               </button>
                             </div>
                           );
@@ -3935,63 +3934,63 @@ export function CaixaPanel({
                 </div>
 
                 {/* COLUMN 2: pedidos online aceitos, delivery ou retirada. */}
-                <div className={clsx('bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden', 'min-w-[85vw]', 'sm:min-w-[320px]', 'md:min-w-0', 'flex-1', 'snap-center', 'shrink-0', 'md:shrink')}>
-                  <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
+                <div className={clsx('bg-[#181a1f]', 'border', 'border-[#2a2f38]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden', 'min-w-[85vw]', 'sm:min-w-[320px]', 'md:min-w-0', 'flex-1', 'snap-center', 'shrink-0', 'md:shrink')}>
+                  <div className={clsx('bg-[#1f1d24]', 'px-4', 'py-3', 'border-b', 'border-[#2a2f38]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
                     <div>
-                      <span className={clsx('font-bold', 'text-white', 'font-serif', 'block')}>Online e retirada</span>
-                      <span className="text-[8px] text-orange-400/80 block mt-0.5">Pedidos aceitos no sino</span>
+                      <span className={clsx('font-bold', 'text-slate-100', 'font-sans', 'block', 'text-sm')}>Online e Retirada</span>
+                      <span className="text-xs text-amber-400/90 block mt-0.5 font-normal">Pedidos aceitos no sino</span>
                     </div>
-                    <span className={clsx('bg-orange-500/10', 'text-orange-400', 'font-bold', 'px-2', 'py-0.5', 'rounded-full', 'font-mono', 'text-[9px]')}>
+                    <span className={clsx('bg-amber-500/15', 'text-amber-400', 'font-bold', 'px-2.5', 'py-0.5', 'rounded-full', 'font-mono', 'text-xs', 'border', 'border-amber-500/20')}>
                       {simulatedOrders.filter(o => o.status === 'producao').length}
                     </span>
                   </div>
 
                   <div className={clsx('p-3', 'flex-1', 'overflow-y-auto', 'space-y-3')}>
                     {simulatedOrders.filter(o => o.status === 'producao').length === 0 ? (
-                      <div className={clsx('py-20', 'text-center', 'text-gray-500', 'italic', 'text-[10px]')}>Nenhum pedido online em preparo</div>
+                      <div className={clsx('py-20', 'text-center', 'text-slate-400', 'italic', 'text-xs')}>Nenhum pedido online em preparo</div>
                     ) : (
                       <>
                         {simulatedOrders.filter(o => o.status === 'producao').map((order) => {
                           const isDeliveryOrder = order.modalidade === 'delivery';
                           const badgeText = isDeliveryOrder ? 'DELIVERY — PREPARANDO' : 'RETIRADA — PREPARANDO';
                           const badgeColor = isDeliveryOrder
-                            ? 'bg-orange-500/15 text-orange-300 border-orange-500/25'
-                            : 'bg-violet-500/15 text-violet-300 border-violet-500/25';
+                            ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                            : 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30';
                           const buttonText = isDeliveryOrder ? 'Saiu para entrega' : 'Pronto para retirada';
                           const buttonColor = isDeliveryOrder
-                            ? 'bg-orange-600 hover:bg-orange-700 text-white'
-                            : 'bg-violet-600 hover:bg-violet-700 text-white';
+                            ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                            : 'bg-indigo-600 hover:bg-indigo-700 text-white';
                           const cardTone = isDeliveryOrder
-                            ? 'from-orange-950/35 border-orange-500/25 border-l-orange-500 hover:border-orange-400/50'
-                            : 'from-violet-950/35 border-violet-500/25 border-l-violet-500 hover:border-violet-400/50';
+                            ? 'bg-[#251e18] border-[#382d24] border-l-amber-500 hover:border-amber-400/60'
+                            : 'bg-[#201d2a] border-[#302a3f] border-l-indigo-500 hover:border-indigo-400/60';
 
                           return (
                             <div 
                               key={order.id} 
                               onClick={() => openSimulatedOrderDetails(order)}
-                              className={clsx('bg-linear-to-br', 'to-[#121214]', 'border', 'border-l-4', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all', 'cursor-pointer', 'shadow-sm', cardTone)}
+                              className={clsx('border', 'border-l-4', 'p-3.5', 'rounded-xl', 'space-y-3', 'transition-all', 'cursor-pointer', 'shadow-sm', 'hover:shadow-md', cardTone)}
                             >
                               <div className={clsx('flex', 'justify-between', 'items-start')}>
                                 <div>
-                                  <div className="flex flex-wrap gap-1 mb-1">
-                                    <span className={clsx('px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold rounded border font-mono block w-fit', badgeColor)}>{badgeText}</span>
-                                    <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold rounded border border-slate-500/20 bg-slate-500/10 text-slate-300 font-mono">
+                                  <div className="flex flex-wrap gap-1.5 mb-1.5">
+                                    <span className={clsx('px-2', 'py-0.5', 'text-[9px]', 'uppercase', 'tracking-wider', 'font-bold', 'rounded-md', 'border', 'font-mono', 'block', 'w-fit', badgeColor)}>{badgeText}</span>
+                                    <span className="px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md border border-slate-500/20 bg-slate-500/10 text-slate-300 font-mono">
                                       {order.canal}
                                     </span>
                                   </div>
-                                  <strong className={clsx('text-white', 'text-xs', 'block')}>{order.cliente}</strong>
-                                  <span className={clsx('text-[9px]', 'text-gray-400', 'block')}>{order.telefone}</span>
+                                  <strong className={clsx('font-bold', 'text-base', 'text-slate-100', 'block')}>{order.cliente}</strong>
+                                  <span className={clsx('font-normal', 'text-xs', 'text-slate-400', 'block', 'mt-0.5')}>{order.telefone}</span>
                                 </div>
-                                <span className={clsx('font-bold', 'text-white', 'font-mono', 'text-[11px]', 'shrink-0')}>R$ {order.total.toFixed(2)}</span>
+                                <span className={clsx('font-extrabold', 'text-lg', 'text-emerald-400', 'font-mono', 'shrink-0')}>R$ {order.total.toFixed(2)}</span>
                               </div>
 
-                              <p className={clsx('text-[10px]', 'text-gray-300', 'bg-[#09090B]', 'p-1.5', 'rounded', 'border', 'border-[#27272A]/30', 'leading-relaxed', 'font-mono')}>
+                              <p className={clsx('font-medium', 'text-sm', 'text-slate-200', 'bg-[#121417]', 'p-2.5', 'rounded-lg', 'border', 'border-[#2a2f38]', 'leading-relaxed', 'font-sans')}>
                                 {order.itens}
                               </p>
 
                               {isDeliveryOrder && order.endereco && (
-                                <span className={clsx('text-[9px]', 'text-gray-400', 'flex', 'items-start', 'gap-1', 'block')}>
-                                  <MapPin size={10} className={clsx('shrink-0', 'text-rose-500', 'mt-0.5')} />
+                                <span className={clsx('font-normal', 'text-xs', 'text-slate-400', 'flex', 'items-start', 'gap-1', 'block')}>
+                                  <MapPin size={12} className={clsx('shrink-0', 'text-amber-500', 'mt-0.5')} />
                                   <span className="leading-relaxed">{order.endereco}</span>
                                 </span>
                               )}
@@ -4002,7 +4001,7 @@ export function CaixaPanel({
                                   if (isLoading) return;
                                   handleUpdateDeliveryStatus(order.id, 'transito');
                                 }}
-                                className={clsx('w-full', 'py-1.5', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1', buttonColor)}
+                                className={clsx('w-full', 'py-2', 'rounded-lg', 'font-bold', 'text-xs', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1.5', 'shadow-sm', buttonColor)}
                               >
                                 <span>{buttonText}</span>
                               </button>
@@ -4015,20 +4014,20 @@ export function CaixaPanel({
                 </div>
 
                 {/* COLUMN 3: pagamento e finalização de todas as modalidades. */}
-                <div className={clsx('bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden', 'min-w-[85vw]', 'sm:min-w-[320px]', 'md:min-w-0', 'flex-1', 'snap-center', 'shrink-0', 'md:shrink')}>
-                  <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
+                <div className={clsx('bg-[#181a1f]', 'border', 'border-[#2a2f38]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden', 'min-w-[85vw]', 'sm:min-w-[320px]', 'md:min-w-0', 'flex-1', 'snap-center', 'shrink-0', 'md:shrink')}>
+                  <div className={clsx('bg-[#182026]', 'px-4', 'py-3', 'border-b', 'border-[#2a2f38]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
                     <div>
-                      <span className={clsx('font-bold', 'text-white', 'font-serif', 'block')}>Pagamento e finalização</span>
-                      <span className="text-[8px] text-blue-400/80 block mt-0.5">Prontos para receber ou concluir</span>
+                      <span className={clsx('font-bold', 'text-slate-100', 'font-sans', 'block', 'text-sm')}>Pagamento e Finalização</span>
+                      <span className="text-xs text-indigo-400/90 block mt-0.5 font-normal">Prontos para receber ou concluir</span>
                     </div>
-                    <span className={clsx('bg-blue-500/10', 'text-blue-400', 'font-bold', 'px-2', 'py-0.5', 'rounded-full', 'font-mono', 'text-[9px]')}>
+                    <span className={clsx('bg-indigo-500/15', 'text-indigo-400', 'font-bold', 'px-2.5', 'py-0.5', 'rounded-full', 'font-mono', 'text-xs', 'border', 'border-indigo-500/20')}>
                       {tableOrdersReady.length + simulatedOrders.filter(o => o.status === 'transito').length}
                     </span>
                   </div>
 
                   <div className={clsx('p-3', 'flex-1', 'overflow-y-auto', 'space-y-3')}>
                     {tableOrdersReady.length === 0 && simulatedOrders.filter(o => o.status === 'transito').length === 0 ? (
-                      <div className={clsx('py-20', 'text-center', 'text-gray-500', 'italic', 'text-[10px]')}>Nenhum pedido aguardando finalização</div>
+                      <div className={clsx('py-20', 'text-center', 'text-slate-400', 'italic', 'text-xs')}>Nenhum pedido aguardando finalização</div>
                     ) : (
                       <>
                         {/* 1. Mesas/Consumo Local aguardando pagamento */}
@@ -4050,53 +4049,51 @@ export function CaixaPanel({
                               key={`close-${order.id}`}
                               onClick={() => setSelectedKanbanOrder(order)}
                               className={clsx(
-                                'bg-linear-to-br',
-                                'to-[#121214]',
+                                'bg-[#1a232b]',
                                 'border',
+                                'border-[#2e3540]',
                                 'border-l-4',
-                                'p-3',
+                                'border-l-emerald-500',
+                                'hover:border-emerald-400/60',
+                                'p-3.5',
                                 'rounded-xl',
-                                'space-y-2.5',
+                                'space-y-3',
                                 'transition-all',
                                 'text-left',
                                 'cursor-pointer',
-                                'shadow-sm',
-                                contaPedida
-                                  ? 'from-blue-950/40 border-blue-500/35 border-l-blue-500 hover:border-blue-400/60'
-                                  : 'from-emerald-950/35 border-emerald-500/30 border-l-emerald-500 hover:border-emerald-400/55'
+                                'shadow-sm'
                               )}
                             >
                               <div className="flex justify-between items-start">
                                 <div>
-                                  <div className="flex gap-1.5 flex-wrap mb-1">
-                                    <span className={clsx('px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold rounded font-mono block w-fit', contaPedida ? 'bg-blue-500/10 text-blue-400' : 'bg-emerald-500/10 text-emerald-400')}>{badgeText}</span>
+                                  <div className="flex gap-1.5 flex-wrap mb-1.5">
+                                    <span className={clsx('px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md font-mono block w-fit', contaPedida ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30' : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30')}>{badgeText}</span>
                                     {!contaPedida && order.temItensEmPreparo && (
-                                      <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-amber-500/10 text-amber-400 rounded font-mono block w-fit" title="Outros itens desta mesa ainda estão sendo preparados">
+                                      <span className="px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 rounded-md font-mono block w-fit" title="Outros itens desta mesa ainda estão sendo preparados">
                                         ⏳ Outros itens em preparo
                                       </span>
                                     )}
                                     {order.mesaOrigemId && Number(order.mesaOrigemId) !== Number(order.mesaId) && (
-                                      <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/35 rounded font-sans block w-fit shadow-xs" title="Essa mesa possui consumo mesclado de outra">
+                                      <span className="px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/35 rounded-md font-sans block w-fit shadow-xs" title="Essa mesa possui consumo mesclado de outra">
                                         🔗 Mesclado de Mesa {order.mesaOrigemId}
                                       </span>
                                     )}
                                     {order.mesaTransferidaDe && Number(order.mesaTransferidaDe) !== Number(order.mesaId) && (
-                                      <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-purple-500/20 text-purple-300 border border-purple-500/35 rounded font-sans block w-fit shadow-xs" title="Essa mesa teve consumo transferido de outra">
+                                      <span className="px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold bg-purple-500/20 text-purple-300 border border-purple-500/35 rounded-md font-sans block w-fit shadow-xs" title="Essa mesa teve consumo transferido de outra">
                                         🔗 Transferido da Mesa {order.mesaTransferidaDe}
                                       </span>
                                     )}
                                   </div>
-                                  <strong className="text-white text-xs block">{order.identificador || ((order.mesaId && order.mesaId > 0) ? `Consumo Mesa ${order.mesaId}` : 'Consumo Balcão')}</strong>
-                                  <span className="text-[9px] text-gray-500 block">Atendente: {order.garcomNome || 'Garçom'}</span>
+                                  <strong className="font-bold text-base text-slate-100 block">{order.identificador || ((order.mesaId && order.mesaId > 0) ? `Consumo Mesa ${order.mesaId}` : 'Consumo Balcão')}</strong>
+                                  <span className="font-normal text-xs text-slate-400 block mt-0.5">Atendente: {order.garcomNome || 'Garçom'}</span>
                                 </div>
                                 <div className="text-right shrink-0">
-                                  <span className="text-[9px] text-gray-500 font-mono block">#{order.id.slice(-4)}</span>
-                                  <span className="font-bold text-white font-mono text-[11px] block mt-1">
+                                  <span className="font-extrabold text-lg text-emerald-400 font-mono block">
                                     R$ {order.itens.reduce((sum: number, it: any) => sum + (it.preco_unit || it.preco || 0), 0).toFixed(2)}
                                   </span>
                                 </div>
                               </div>
-                              <p className={clsx('text-[10px] bg-[#09090B] p-1.5 rounded border border-[#27272A]/30 leading-relaxed font-mono', contaPedida ? 'text-blue-300' : 'text-emerald-300')}>{itemsStr}</p>
+                              <p className={clsx('font-medium text-sm text-slate-200 bg-[#121417] p-2.5 rounded-lg border border-[#2a2f38] leading-relaxed font-sans')}>{itemsStr}</p>
                               <button
                                 type="button"
                                 onClick={async (e) => {
@@ -4127,9 +4124,9 @@ export function CaixaPanel({
                                     Math.max(0, total - Number(checkoutOrder.valorPago || 0)).toFixed(2)
                                   );
                                 }}
-                                className={clsx('w-full', 'py-1.5', contaPedida ? 'bg-blue-600 hover:bg-blue-700' : 'bg-emerald-600 hover:bg-emerald-700', 'text-white', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1')}
+                                className={clsx('w-full', 'py-2', contaPedida ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-emerald-600 hover:bg-emerald-700', 'text-white', 'rounded-lg', 'font-bold', 'text-xs', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1.5', 'shadow-sm')}
                               >
-                                <Check size={11} /><span>Abrir pagamento da mesa</span>
+                                <Check size={13} /><span>Abrir Pagamento da Mesa</span>
                               </button>
                             </div>
                           );
@@ -4142,38 +4139,38 @@ export function CaixaPanel({
                             ? `DELIVERY — ${order.pago ? 'PAGO / EM ROTA' : 'EM ROTA'}`
                             : `RETIRADA — ${order.pago ? 'PAGO' : 'AGUARDANDO PAGAMENTO'}`;
                           const badgeColor = isDeliveryOrder
-                            ? 'bg-orange-500/15 text-orange-300 border-orange-500/25'
-                            : 'bg-violet-500/15 text-violet-300 border-violet-500/25';
+                            ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                            : 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30';
                           const cardTone = isDeliveryOrder
-                            ? 'from-orange-950/35 border-orange-500/25 border-l-orange-500 hover:border-orange-400/50'
-                            : 'from-violet-950/35 border-violet-500/25 border-l-violet-500 hover:border-violet-400/50';
+                            ? 'bg-[#251e18] border-[#382d24] border-l-amber-500 hover:border-amber-400/60'
+                            : 'bg-[#201d2a] border-[#302a3f] border-l-indigo-500 hover:border-indigo-400/60';
                           return (
                             <div 
                               key={`transito-${order.id}`} 
                               onClick={() => openSimulatedOrderDetails(order)}
-                              className={clsx('bg-linear-to-br', 'to-[#121214]', 'border', 'border-l-4', 'p-3', 'rounded-xl', 'space-y-2.5', 'transition-all', 'cursor-pointer', 'shadow-sm', cardTone)}
+                              className={clsx('border', 'border-l-4', 'p-3.5', 'rounded-xl', 'space-y-3', 'transition-all', 'cursor-pointer', 'shadow-sm', 'hover:shadow-md', cardTone)}
                             >
                               <div className={clsx('flex', 'justify-between', 'items-start')}>
                                 <div>
-                                  <div className="flex flex-wrap gap-1 mb-1">
-                                    <span className={clsx('px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold rounded border font-mono block w-fit', badgeColor)}>{badgeText}</span>
-                                    <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold rounded border border-slate-500/20 bg-slate-500/10 text-slate-300 font-mono">
+                                  <div className="flex flex-wrap gap-1.5 mb-1.5">
+                                    <span className={clsx('px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md border font-mono block w-fit', badgeColor)}>{badgeText}</span>
+                                    <span className="px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md border border-slate-500/20 bg-slate-500/10 text-slate-300 font-mono">
                                       {order.canal}
                                     </span>
                                   </div>
-                                  <strong className={clsx('text-white', 'text-xs', 'block')}>{order.cliente}</strong>
-                                  <span className={clsx('text-[9px]', 'text-gray-400', 'block')}>{order.telefone}</span>
+                                  <strong className={clsx('font-bold', 'text-base', 'text-slate-100', 'block')}>{order.cliente}</strong>
+                                  <span className={clsx('font-normal', 'text-xs', 'text-slate-400', 'block', 'mt-0.5')}>{order.telefone}</span>
                                 </div>
-                                <span className={clsx('font-bold', isDeliveryOrder ? 'text-orange-300' : 'text-violet-300', 'font-mono', 'text-[11px]', 'shrink-0')}>R$ {order.total.toFixed(2)}</span>
+                                <span className={clsx('font-extrabold', 'text-lg', 'text-emerald-400', 'font-mono', 'shrink-0')}>R$ {order.total.toFixed(2)}</span>
                               </div>
 
-                              <p className={clsx('text-[10px]', 'text-gray-300', 'bg-[#09090B]', 'p-1.5', 'rounded', 'border', 'border-[#27272A]/30', 'leading-relaxed', 'font-mono')}>
+                              <p className={clsx('font-medium', 'text-sm', 'text-slate-200', 'bg-[#121417]', 'p-2.5', 'rounded-lg', 'border', 'border-[#2a2f38]', 'leading-relaxed', 'font-sans')}>
                                 {order.itens}
                               </p>
 
                               {isDeliveryOrder && order.endereco && (
-                                <span className={clsx('text-[9px]', 'text-gray-400', 'flex', 'items-start', 'gap-1', 'block')}>
-                                  <MapPin size={10} className={clsx('shrink-0', 'text-rose-500', 'mt-0.5')} />
+                                <span className={clsx('font-normal', 'text-xs', 'text-slate-400', 'flex', 'items-start', 'gap-1', 'block')}>
+                                  <MapPin size={12} className={clsx('shrink-0', 'text-amber-500', 'mt-0.5')} />
                                   <span className="leading-relaxed">{order.endereco}</span>
                                 </span>
                               )}
@@ -4207,9 +4204,9 @@ export function CaixaPanel({
                                     handleFinalizarPedido(order.id);
                                   }
                                 }}
-                                className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[9px] transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1"
+                                className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm"
                               >
-                                <Check size={11} /><span>{order.pago ? 'Finalizar pedido' : 'Receber e finalizar'}</span>
+                                <Check size={13} /><span>{order.pago ? 'Finalizar Pedido' : 'Receber e Finalizar'}</span>
                               </button>
                             </div>
                           );
