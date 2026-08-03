@@ -47,3 +47,16 @@ def test_enviar_otp_whatsapp_meta_simulated():
     )
     # Returns False gracefully in test environment without raising exceptions
     assert res is False
+
+
+def test_enviar_otp_whatsapp_meta_missing_phone_number_id(monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings, "META_ACCESS_TOKEN", "mock_token")
+    monkeypatch.setattr(settings, "META_PHONE_NUMBER_ID", "")
+    res = enviar_otp_whatsapp_meta(
+        telefone="88999616937",
+        nome_restaurante="Bistrô Kôma Teste",
+        codigo_otp="849201"
+    )
+    assert res is False
+

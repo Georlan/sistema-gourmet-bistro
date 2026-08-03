@@ -159,7 +159,7 @@ def enviar_otp_whatsapp_meta(telefone: str, nome_restaurante: str, codigo_otp: s
             return False
 
         meta_token = getattr(settings, "META_ACCESS_TOKEN", None) or os.getenv("META_ACCESS_TOKEN", "")
-        phone_number_id = getattr(settings, "META_PHONE_NUMBER_ID", None) or os.getenv("META_PHONE_NUMBER_ID", "128608279268222")
+        phone_number_id = getattr(settings, "META_PHONE_NUMBER_ID", None) or os.getenv("META_PHONE_NUMBER_ID", "")
 
         mensagem = f"Olá! Seu código de acesso para o *{nome_restaurante}* é: *{codigo_otp}*\n\nDigite no cardápio digital para continuar. Válido por 10 minutos."
 
@@ -171,7 +171,11 @@ def enviar_otp_whatsapp_meta(telefone: str, nome_restaurante: str, codigo_otp: s
             )
             return False
 
-        url = f"https://graph.facebook.com/v25.0/{phone_number_id}/messages"
+        if not phone_number_id:
+            logger.error("[META CLOUD API ERRO] META_PHONE_NUMBER_ID não está configurado.")
+            return False
+
+        url = f"https://graph.facebook.com/v20.0/{phone_number_id}/messages"
         headers = {
             "Authorization": f"Bearer {meta_token}",
             "Content-Type": "application/json",

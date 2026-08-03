@@ -74,7 +74,7 @@ class Settings:
 
     # Meta Cloud API (WhatsApp Oficial)
     META_VERIFY_TOKEN: str = os.getenv("META_VERIFY_TOKEN", "1505")
-    META_PHONE_NUMBER_ID: str = os.getenv("META_PHONE_NUMBER_ID", "1206090279260222")
+    META_PHONE_NUMBER_ID: str = os.getenv("META_PHONE_NUMBER_ID", "")
     META_ACCESS_TOKEN: str = os.getenv("META_ACCESS_TOKEN", os.getenv("META_ACESS_TOKEN", ""))
 
     # Supabase (Storage & Service Role)
@@ -84,5 +84,11 @@ class Settings:
     if os.getenv("ENVIRONMENT") != "test":
         if SUPABASE_SERVICE_ROLE_KEY and SUPABASE_SERVICE_ROLE_KEY.startswith("sb_publishable_"):
             raise RuntimeError("A chave 'SUPABASE_SERVICE_ROLE_KEY' fornecida é uma chave pública (publishable). É obrigatório utilizar a Service Role Key do Supabase no backend.")
+
+    if META_ACCESS_TOKEN and not META_PHONE_NUMBER_ID:
+        import logging
+        logging.getLogger("koma.config").warning(
+            "[META CLOUD API WARNING CRÍTICO] META_ACCESS_TOKEN está preenchido mas META_PHONE_NUMBER_ID está vazio! O envio de WhatsApp irá falhar."
+        )
 
 settings = Settings()
