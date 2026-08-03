@@ -53,3 +53,13 @@ async def receive_meta_webhook(request: Request):
         logger.error("[META WEBHOOK ERROR] Erro ao processar payload: %s", err)
 
     return {"status": "EVENT_RECEIVED"}
+
+
+@router.get("/diagnostico")
+def get_whatsapp_diagnostic():
+    """
+    Retorna o diagnóstico completo das integrações com WhatsApp (Meta Cloud API e Evolution API).
+    """
+    from ..services.whatsapp import obter_diagnostico_whatsapp
+    return obter_diagnostico_whatsapp()
+

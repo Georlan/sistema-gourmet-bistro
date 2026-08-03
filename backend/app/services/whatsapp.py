@@ -8,6 +8,29 @@ from ..config import settings
 logger = logging.getLogger("koma.whatsapp")
 
 
+_META_LAST_ERROR: str | None = None
+_META_COUNTRY_RESTRICTION: bool = False
+
+
+def obter_diagnostico_whatsapp() -> dict[str, object]:
+    """Retorna o estado de diagnóstico atual das integrações Meta Cloud API e Evolution API."""
+    import os
+    meta_token = getattr(settings, "META_ACCESS_TOKEN", None) or os.getenv("META_ACCESS_TOKEN", "")
+    phone_id = getattr(settings, "META_PHONE_NUMBER_ID", None) or os.getenv("META_PHONE_NUMBER_ID", "")
+
+    evolution_diag = obter_status_evolution()
+
+    return {
+        "meta": {
+            "phone_number_id_configured": bool(phone_id.strip()),
+            "access_token_configured": bool(meta_token.strip()),
+            "last_error": _META_LAST_ERROR,
+            "country_restriction": _META_COUNTRY_RESTRICTION,
+        },
+        "evolution": evolution_diag,
+    }
+
+
 def _normalizar_telefone(telefone: str) -> str:
     numero = re.sub(r"\D", "", telefone or "")
     if len(numero) in {10, 11}:
@@ -57,11 +80,15 @@ def enviar_texto_whatsapp(
             response.raise_for_status()
         return True
     except httpx.HTTPStatusError as exc:
-        logger.warning(
-            "[EVOLUTION API] Falha HTTP %s ao enviar %s.",
-            exc.response.status_code,
-            contexto,
-        )
+        status_code = exc.response.status_code
+        if status_code == 401:
+            logger.error("[EVOLUTION API 401] Apikey inválida ou não autorizada ao enviar %s.", contexto)
+        elif status_code == 404:
+            logger.error("[EVOLUTION API 404] Instância não encontrada ao enviar %s.", contexto)
+        elif status_code == 429:
+            logger.warning("[EVOLUTION API 429] Rate limit excedido ao enviar %s.", contexto)
+        else:
+            logger.warning("[EVOLUTION API HTTP %s] Falha ao enviar %s.", status_code, contexto)
         return False
     except Exception as exc:
         logger.warning(
@@ -152,6 +179,8 @@ def enviar_otp_whatsapp_meta(telefone: str, nome_restaurante: str, codigo_otp: s
     Retorna True se enviado com sucesso, False se simulado/falha.
     """
     import os
+    global _META_LAST_ERROR, _META_COUNTRY_RESTRICTION
+
     try:
         numero = _normalizar_telefone(telefone)
         if not numero:
@@ -172,6 +201,7 @@ def enviar_otp_whatsapp_meta(telefone: str, nome_restaurante: str, codigo_otp: s
             return False
 
         if not phone_number_id:
+            _META_LAST_ERROR = "META_PHONE_NUMBER_ID não está configurado."
             logger.error("[META CLOUD API ERRO] META_PHONE_NUMBER_ID não está configurado.")
             return False
 
@@ -193,12 +223,53 @@ def enviar_otp_whatsapp_meta(telefone: str, nome_restaurante: str, codigo_otp: s
 
         with httpx.Client(timeout=5.0) as client:
             res = client.post(url, headers=headers, json=payload)
+            data = None
+            try:
+                data = res.json()
+            except Exception:
+                pass
+
+            # Verifica se a Meta retornou payload de erro (mesmo com HTTP 200 ou 400+)
+            if isinstance(data, dict) and "error" in data:
+                err = data["error"]
+                code = err.get("code")
+                msg = err.get("message", res.text)
+
+                if code == 130497:
+                    _META_COUNTRY_RESTRICTION = True
+                    _META_LAST_ERROR = (
+                        "130497: Conta restrita para enviar ao país do destinatário. "
+                        "Vá para Etapa 2 (Configuração da produção) no Meta Developers "
+                        "e adicione um número de telefone real do Brasil."
+                    )
+                    logger.error(
+                        "[META 130497] Conta restrita para enviar ao país do destinatário. "
+                        "Vá para Etapa 2 (Configuração da produção) no Meta Developers "
+                        "e adicione um número de telefone real do Brasil."
+                    )
+                    return False
+                elif code == 130429:
+                    _META_LAST_ERROR = f"130429: Limite de envios excedido (rate limit): {msg}"
+                    logger.error("[META 130429 ERRO RATE LIMIT] %s", msg)
+                    return False
+                elif code == 132000:
+                    _META_LAST_ERROR = f"132000: Modelo de mensagem não encontrado: {msg}"
+                    logger.error("[META 132000 ERRO TEMPLATE] %s", msg)
+                    return False
+                else:
+                    _META_LAST_ERROR = f"{code or 'ERRO'}: {msg}"
+                    logger.error("[META API ERRO %s] %s", code or res.status_code, msg)
+                    return False
+
             if res.status_code in (200, 201):
                 logger.info("[META CLOUD API SUCCESS] OTP enviado para %s", numero)
+                _META_LAST_ERROR = None
                 return True
             else:
+                _META_LAST_ERROR = f"HTTP {res.status_code}: {res.text}"
                 logger.warning("[META CLOUD API HTTP %s] Falha ao enviar OTP: %s", res.status_code, res.text)
                 return False
     except Exception as exc:
+        _META_LAST_ERROR = f"Exception: {str(exc)}"
         logger.warning("[META CLOUD API EXCEPTION] Erro ao enviar OTP: %s", exc)
         return False
