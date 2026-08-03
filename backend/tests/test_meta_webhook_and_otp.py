@@ -102,3 +102,39 @@ def test_whatsapp_diagnostico_endpoint():
     assert "country_restriction" in data["meta"]
 
 
+def test_meta_otp_template_mode(monkeypatch):
+    import httpx
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "META_ACCESS_TOKEN", "mock_token_123")
+    monkeypatch.setattr(settings, "META_PHONE_NUMBER_ID", "1206090279260222")
+    monkeypatch.setattr(settings, "META_USE_TEMPLATE", True)
+    monkeypatch.setattr(settings, "META_OTP_TEMPLATE_NAME", "koma_otp")
+
+    posted_payload = {}
+
+    class MockResponse:
+        status_code = 200
+        text = '{"messages":[{"id":"wmid.123"}]}'
+        def json(self):
+            return {"messages": [{"id": "wmid.123"}]}
+
+    def mock_post(self, url, headers=None, json=None, **kwargs):
+        nonlocal posted_payload
+        posted_payload = json
+        return MockResponse()
+
+    monkeypatch.setattr(httpx.Client, "post", mock_post)
+
+    res = enviar_otp_whatsapp_meta(
+        telefone="88999616937",
+        nome_restaurante="Bistrô Kôma Teste",
+        codigo_otp="849201"
+    )
+    assert res is True
+    assert posted_payload.get("type") == "template"
+    assert posted_payload.get("template", {}).get("name") == "koma_otp"
+    assert posted_payload.get("template", {}).get("components")[0]["parameters"][1]["text"] == "849201"
+
+
+

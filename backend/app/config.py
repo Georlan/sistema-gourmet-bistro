@@ -76,6 +76,9 @@ class Settings:
     META_VERIFY_TOKEN: str = os.getenv("META_VERIFY_TOKEN", "1505")
     META_PHONE_NUMBER_ID: str = os.getenv("META_PHONE_NUMBER_ID", "")
     META_ACCESS_TOKEN: str = os.getenv("META_ACCESS_TOKEN", os.getenv("META_ACESS_TOKEN", ""))
+    META_USE_TEMPLATE: bool = os.getenv("META_USE_TEMPLATE", "False").lower() == "true"
+    META_OTP_TEMPLATE_NAME: str = os.getenv("META_OTP_TEMPLATE_NAME", "koma_otp")
+
 
     # Supabase (Storage & Service Role)
     SUPABASE_URL: str = os.getenv("SUPABASE_URL", "https://iiowhekvahxiepwcdidm.supabase.co")

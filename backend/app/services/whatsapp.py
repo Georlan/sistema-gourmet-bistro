@@ -1,3 +1,10 @@
+# INSTRUÇÕES PARA CRIAÇÃO DE TEMPLATE NA META:
+# 1. Vá em Meta Developers > Kôma > WhatsApp > Message Templates
+# 2. Crie template "koma_otp" com categoria AUTHENTICATION
+# 3. Corpo: "Seu código de acesso {{1}} é: {{2}}. Válido por 10 minutos."
+# 4. Aguarde aprovação (pode levar horas)
+# 5. Altere META_USE_TEMPLATE para True no .env
+
 import logging
 import re
 
@@ -6,6 +13,7 @@ import httpx
 from ..config import settings
 
 logger = logging.getLogger("koma.whatsapp")
+
 
 
 _META_LAST_ERROR: str | None = None
@@ -210,16 +218,44 @@ def enviar_otp_whatsapp_meta(telefone: str, nome_restaurante: str, codigo_otp: s
             "Authorization": f"Bearer {meta_token}",
             "Content-Type": "application/json",
         }
-        payload = {
-            "messaging_product": "whatsapp",
-            "recipient_type": "individual",
-            "to": numero,
-            "type": "text",
-            "text": {
-                "preview_url": False,
-                "body": mensagem
+
+        use_template = getattr(settings, "META_USE_TEMPLATE", False)
+        if isinstance(use_template, str):
+            use_template = use_template.lower() == "true"
+
+        if use_template:
+            template_name = getattr(settings, "META_OTP_TEMPLATE_NAME", "koma_otp") or "koma_otp"
+            payload = {
+                "messaging_product": "whatsapp",
+                "recipient_type": "individual",
+                "to": numero,
+                "type": "template",
+                "template": {
+                    "name": template_name,
+                    "language": {"code": "pt_BR"},
+                    "components": [
+                        {
+                            "type": "body",
+                            "parameters": [
+                                {"type": "text", "text": nome_restaurante},
+                                {"type": "text", "text": codigo_otp}
+                            ]
+                        }
+                    ]
+                }
             }
-        }
+        else:
+            payload = {
+                "messaging_product": "whatsapp",
+                "recipient_type": "individual",
+                "to": numero,
+                "type": "text",
+                "text": {
+                    "preview_url": False,
+                    "body": mensagem
+                }
+            }
+
 
         with httpx.Client(timeout=5.0) as client:
             res = client.post(url, headers=headers, json=payload)
