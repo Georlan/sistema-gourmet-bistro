@@ -137,4 +137,82 @@ def test_meta_otp_template_mode(monkeypatch):
     assert posted_payload.get("template", {}).get("components")[0]["parameters"][1]["text"] == "849201"
 
 
+def test_meta_webhook_real_payload_parsing_and_persistence():
+    from app.database import SessionLocal
+    from app.models import NotificacaoWhatsApp
+    from app.services.whatsapp import obter_diagnostico_whatsapp
+
+    real_payload = {
+        "object": "whatsapp_business_account",
+        "entry": [{
+            "id": "2109845133274480",
+            "changes": [{
+                "value": {
+                    "messaging_product": "whatsapp",
+                    "metadata": {"display_phone_number": "15556698832", "phone_number_id": "1206090279260222"},
+                    "statuses": [{
+                        "id": "wamid.HBgMNTU4ODk5NjE2OTM3FQIAERgSOUE5M0ZFRTg3RDBDMEVBNkU0AA==",
+                        "status": "failed",
+                        "timestamp": "1785786720",
+                        "recipient_id": "558899616937",
+                        "errors": [{"code": 130497, "title": "Business account is restricted..."}]
+                    }]
+                },
+                "field": "messages"
+            }]
+        }]
+    }
+
+    response = client.post("/api/whatsapp/webhook", json=real_payload)
+    assert response.status_code == 200
+    assert response.json() == {"status": "EVENT_RECEIVED"}
+
+    # Check state update
+    diag = obter_diagnostico_whatsapp()
+    assert diag["meta"]["country_restriction"] is True
+    assert "130497" in diag["meta"]["last_error"]
+
+    # Check DB record
+    db = SessionLocal()
+    try:
+        record = db.query(NotificacaoWhatsApp).filter(
+            NotificacaoWhatsApp.wamid == "wamid.HBgMNTU4ODk5NjE2OTM3FQIAERgSOUE5M0ZFRTg3RDBDMEVBNkU0AA=="
+        ).first()
+        assert record is not None
+        assert record.recipient_id == "558899616937"
+        assert record.status == "failed"
+        assert record.error_code == 130497
+        assert record.error_title == "Business account is restricted..."
+    finally:
+        db.close()
+
+
+def test_meta_webhook_incoming_message_payload():
+    incoming_payload = {
+        "object": "whatsapp_business_account",
+        "entry": [{
+            "id": "2109845133274480",
+            "changes": [{
+                "value": {
+                    "messaging_product": "whatsapp",
+                    "metadata": {"display_phone_number": "15556698832", "phone_number_id": "1206090279260222"},
+                    "messages": [{
+                        "from": "558899616937",
+                        "id": "wamid.HBgMNTU4ODk5NjE2OTM3",
+                        "timestamp": "1785786730",
+                        "text": {"body": "Olá, qual o horário de funcionamento?"},
+                        "type": "text"
+                    }]
+                },
+                "field": "messages"
+            }]
+        }]
+    }
+
+    response = client.post("/api/whatsapp/webhook", json=incoming_payload)
+    assert response.status_code == 200
+    assert response.json() == {"status": "EVENT_RECEIVED"}
+
+
+
 

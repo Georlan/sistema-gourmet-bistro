@@ -11,6 +11,7 @@ from sqlalchemy import (
     JSON,
     Numeric,
     String,
+    Text,
     UniqueConstraint,
     event,
 )
@@ -1154,3 +1155,17 @@ class PrintAgentToken(Base):
     __table_args__ = (
         UniqueConstraint("restaurante_id", "agent_id", name="uq_print_agent_tokens_restaurante_agent"),
     )
+
+
+class NotificacaoWhatsApp(Base):
+    __tablename__ = "notificacoes_whatsapp"
+
+    id = Column(Integer, primary_key=True, autoincrement=True, index=True)
+    wamid = Column(String(255), nullable=True, index=True)
+    recipient_id = Column(String(50), nullable=True)
+    status = Column(String(50), nullable=False)
+    error_code = Column(Integer, nullable=True)
+    error_title = Column(Text, nullable=True)
+    raw_payload = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.timezone.utc))
+
