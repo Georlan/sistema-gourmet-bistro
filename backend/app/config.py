@@ -72,6 +72,11 @@ class Settings:
     EVOLUTION_API_KEY: str = os.getenv("EVOLUTION_API_KEY", "")
     EVOLUTION_INSTANCE_NAME: str = os.getenv("EVOLUTION_INSTANCE_NAME", "")
 
+    # Meta Cloud API (WhatsApp Oficial)
+    META_VERIFY_TOKEN: str = os.getenv("META_VERIFY_TOKEN", "1505")
+    META_PHONE_NUMBER_ID: str = os.getenv("META_PHONE_NUMBER_ID", "128608279268222")
+    META_ACCESS_TOKEN: str = os.getenv("META_ACCESS_TOKEN", "")
+
     # Supabase (Storage & Service Role)
     SUPABASE_URL: str = os.getenv("SUPABASE_URL", "https://iiowhekvahxiepwcdidm.supabase.co")
     SUPABASE_SERVICE_ROLE_KEY: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", os.getenv("SUPABASE_SERVICE_KEY", ""))

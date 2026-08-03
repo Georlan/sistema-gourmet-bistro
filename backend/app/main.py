@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from .config import settings
 from .database import engine, Base, current_restaurante_id
-from .routes import auth, products, tables, orders, websocket, caixa, optimization, estoque, cardapio, cardapio_clientes, super_admin, ai, print_agents, cardapio_digital, relatorios
+from .routes import auth, products, tables, orders, websocket, caixa, optimization, estoque, cardapio, cardapio_clientes, super_admin, ai, print_agents, cardapio_digital, relatorios, whatsapp_webhook
 
 import os
 # Inicializa o Sentry antes de qualquer coisa no app (desativado em testes e PII desativado por padrão)
@@ -383,6 +383,7 @@ app.include_router(cardapio_digital.router)
 app.include_router(relatorios.router)
 app.include_router(super_admin.router, prefix="/api")
 app.include_router(ai.router, prefix="/api")
+app.include_router(whatsapp_webhook.router)
 
 
 @app.get("/")
