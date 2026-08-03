@@ -7,7 +7,7 @@ import {
   Clock, X, RefreshCw, Edit3, Trash2, Plus, ChevronRight,
   MapPin, ClipboardList, BarChart2, Package, Shield, ShieldCheck, Star,
   MessageSquare, Send, Printer, Cpu, HelpCircle, Smartphone,
-  Gift, Tag, TrendingUp, Heart, Globe, Menu
+  Gift, Tag, TrendingUp, Heart, Globe, Menu, Maximize2, Minimize2
 , Upload, Copy} from 'lucide-react';
 import { Order, OrderItem, CaixaTurno, CaixaMovimentacao, Pagamento, Table, Product, EntradaEstoque, MovimentacaoEstoque, SessaoContagemEstoque, CaixaTurnoResumo, FechamentoCaixaResult } from '../types';
 import { EstoqueEntradasTab } from './estoque/EstoqueEntradasTab';
@@ -189,6 +189,49 @@ export function CaixaPanel({
   const hasPrinting = currentPlanId !== 'pocket';
   const hasOnlineMenu = currentPlanId === 'premium' || restauranteConfig?.cardapio_online_addon === true;
 
+
+  // Fullscreen / Modo PDV state
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(() => typeof document !== 'undefined' && !!document.fullscreenElement);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+    };
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      const docEl = document.documentElement as any;
+      if (docEl.requestFullscreen) {
+        docEl.requestFullscreen().catch(() => {});
+      } else if (docEl.webkitRequestFullscreen) {
+        docEl.webkitRequestFullscreen();
+      } else if (docEl.msRequestFullscreen) {
+        docEl.msRequestFullscreen();
+      }
+    } else {
+      const doc = document as any;
+      if (doc.exitFullscreen) {
+        doc.exitFullscreen().catch(() => {});
+      } else if (doc.webkitExitFullscreen) {
+        doc.webkitExitFullscreen();
+      } else if (doc.msExitFullscreen) {
+        doc.msExitFullscreen();
+      }
+    }
+  };
 
   // Turno & Sync state
   const [turno, setTurno] = useState<CaixaTurno | null>(null);
@@ -2852,7 +2895,7 @@ export function CaixaPanel({
   );
 
   return (
-    <div className={`flex h-[88vh] bg-[#0B0B0C] text-white overflow-hidden rounded-3xl border border-[#27272A] font-sans selection:bg-[#10b981]/30 text-xs ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''
+    <div className={`flex w-full h-screen bg-[#0B0B0C] text-white overflow-hidden font-sans selection:bg-[#10b981]/30 text-xs ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''
       }`}>
 
       {/* TOAST DE FEEDBACK NÃO-BLOQUEANTE */}
@@ -3326,6 +3369,25 @@ export function CaixaPanel({
               {(activeTab === 'assinatura_pix' || (activeTab === 'configuracoes' && activeSubTab === 'planos')) && 'Planos de Assinatura e Recebimento Pix'}
               {(activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital') && 'Cardápio Digital — Identidade Whitelabel'}
             </h2>
+          </div>
+
+          {/* Botão MODO PDV / FULLSCREEN */}
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={toggleFullscreen}
+              className={clsx(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border',
+                isFullscreen
+                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30'
+                  : 'bg-[#1C1C1F] text-gray-300 border-[#27272A] hover:bg-[#27272A] hover:text-white'
+              )}
+              title={isFullscreen ? "Sair do Modo PDV Tela Cheia" : "Entrar no Modo PDV Tela Cheia"}
+              id="btn-modo-pdv-fullscreen"
+            >
+              {isFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+              <span className="hidden sm:inline">{isFullscreen ? "Sair da Tela Cheia" : "Modo PDV"}</span>
+            </button>
           </div>
         </header>
 

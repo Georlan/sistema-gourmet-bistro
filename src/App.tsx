@@ -1817,6 +1817,35 @@ export default function App() {
     );
   }
 
+  if (isManagementRole(activeRole)) {
+    return (
+      <div className={`w-full h-screen bg-[#09090B] text-white flex flex-col font-sans overflow-hidden ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''}`}>
+        <MemoizedCaixaPanel
+          orders={orders}
+          onRefreshOrders={fetchOrdersFromAPI}
+          apiBaseUrl={API_BASE_URL}
+          authHeaders={getAuthHeaders()}
+          activeWaiterNome={activeWaiterNome}
+          salonTables={salonTables}
+          onCreateMesa={handleCreateMesa}
+          onUpdateMesa={handleUpdateMesa}
+          onDeleteMesa={handleDeleteMesa}
+          pagamentosPendentes={pagamentosPendentes}
+          onRefreshPagamentosPendentes={fetchPagamentosPendentes}
+          isWsConnected={isWsConnected}
+          liveProdutos={liveProdutos}
+          liveCategorias={liveCategorias}
+          onRefreshCategorias={fetchLiveCategorias}
+          restauranteConfig={restauranteConfig}
+          fetchError={fetchError}
+          onOptimisticUpdateItemStatus={handleOptimisticUpdateItemStatus}
+          onOptimisticAddOrder={handleOptimisticAddOrder}
+          onRemovePendingPaymentOptimistic={handleRemovePendingPaymentOptimistic}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className={`min-h-screen bg-[#09090B] text-white flex flex-col font-sans ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''}`}>
       {/* GLOBAL TOP HEADER */}
