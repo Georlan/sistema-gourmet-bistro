@@ -74,7 +74,7 @@ class Settings:
 
     # Meta Cloud API (WhatsApp Oficial)
     META_VERIFY_TOKEN: str = os.getenv("META_VERIFY_TOKEN", "1505")
-    META_PHONE_NUMBER_ID: str = os.getenv("META_PHONE_NUMBER_ID", "128608279268222")
+    META_PHONE_NUMBER_ID: str = os.getenv("META_PHONE_NUMBER_ID", "1206090279260222")
     META_ACCESS_TOKEN: str = os.getenv("META_ACCESS_TOKEN", "")
 
     # Supabase (Storage & Service Role)
