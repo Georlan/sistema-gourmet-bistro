@@ -74,22 +74,10 @@ def _agendar_notificacao_whatsapp_status(
     if status_anterior == novo_status:
         return
 
-    tipo = (comanda.tipo or "").strip().lower()
-    mensagem_modelo: Optional[str] = None
-    if novo_status == "pronto" and tipo == "retirada":
-        mensagem_modelo = MENSAGEM_WHATSAPP_PRONTO_RETIRADA
-    elif novo_status == "transito" and tipo in {"delivery", "entrega"}:
-        mensagem_modelo = MENSAGEM_WHATSAPP_SAIU_ENTREGA
-    elif novo_status == "recusado" and tipo in {"retirada", "delivery", "entrega"}:
-        mensagem_modelo = MENSAGEM_WHATSAPP_RECUSADO
-
-    if mensagem_modelo is None:
-        return
-
     telefone = (comanda.delivery_telefone or "").strip()
     if not telefone:
         logger.warning(
-            "[EVOLUTION API] Notificação de status ignorada para comanda_id=%s: telefone ausente.",
+            "[NOTIFICAÇÃO WA] Notificação de status ignorada para comanda_id=%s: telefone ausente.",
             comanda.id,
         )
         return
@@ -97,16 +85,45 @@ def _agendar_notificacao_whatsapp_status(
     restaurante = db.query(Restaurante).filter(
         Restaurante.id == comanda.restaurante_id
     ).first()
-    mensagem = mensagem_modelo.format(
-        nome=(comanda.identificador or "cliente").strip() or "cliente",
-        numero=comanda.numero_pedido,
-        restaurante=(restaurante.nome if restaurante else "restaurante"),
+
+    nome_restaurante = restaurante.nome if restaurante else "restaurante"
+    tel_restaurante = getattr(restaurante, "telefone", None) if restaurante else None
+
+
+    status_map = {
+        "pendente": "recebido",
+        "recebido": "recebido",
+        "producao": "em_preparo",
+        "preparando": "em_preparo",
+        "em_preparo": "em_preparo",
+        "pronto": "pronto",
+        "transito": "saiu_entrega",
+        "saiu_entrega": "saiu_entrega",
+        "entregue": "entregue",
+        "finalizado": "entregue",
+        "recusado": "recusado",
+        "cancelado": "recusado",
+    }
+    key_status = status_map.get((novo_status or "").lower(), novo_status)
+
+    link_rastreio = None
+    if key_status == "saiu_entrega" and comanda.id:
+        link_rastreio = f"/pedidos/{comanda.id}"
+
+    from ..services.notificacoes import agendar_notificacao_status_task
+
+    agendar_notificacao_status_task(
+        background_tasks=background_tasks,
+        db=db,
+        comanda_id=comanda.id,
+        novo_status=key_status,
+        telefone_cliente=telefone,
+        nome_restaurante=nome_restaurante,
+        link_rastreamento=link_rastreio,
+        telefone_restaurante=tel_restaurante,
+        restaurante_id=comanda.restaurante_id,
     )
-    background_tasks.add_task(
-        enviar_notificacao_whatsapp_task,
-        telefone,
-        mensagem,
-    )
+
 
 def gerar_novo_numero_pedido(db: Session) -> int:
     """
@@ -1350,8 +1367,23 @@ def update_item_status(
     item.status = status
     db.commit()
     db.refresh(item)
+
+    if status == "pronto" and item.comanda_id:
+        comanda = db.query(Comanda).filter(Comanda.id == item.comanda_id).first()
+        if comanda:
+            todos_prontos = all(it.status in ("pronto", "entregue", "cancelado") for it in comanda.itens)
+            if todos_prontos:
+                _agendar_notificacao_whatsapp_status(
+                    background_tasks,
+                    db,
+                    comanda,
+                    None,
+                    "pronto"
+                )
+
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
     return item
+
 
 
 @router.post("/lancamentos/{lancamento_id}/reimprimir", status_code=status.HTTP_200_OK)
@@ -1845,6 +1877,7 @@ def confirmar_entrega_motoboy(
     if not comanda:
         raise HTTPException(status_code=404, detail="Pedido não encontrado")
     
+    status_anterior = comanda.delivery_status
     comanda.delivery_status = "finalizado"
     comanda.motoboy_id = motoboy_id
     comanda.fechada = True
@@ -1852,9 +1885,18 @@ def confirmar_entrega_motoboy(
     
     db.commit()
     db.refresh(comanda)
+
+    _agendar_notificacao_whatsapp_status(
+        background_tasks,
+        db,
+        comanda,
+        status_anterior,
+        "entregue",
+    )
     
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, rest_id)
     return {"status": "sucesso", "mensagem": "Entrega confirmada com sucesso!"}
+
 
 
 

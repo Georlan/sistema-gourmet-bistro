@@ -1161,11 +1161,21 @@ class NotificacaoWhatsApp(Base):
     __tablename__ = "notificacoes_whatsapp"
 
     id = Column(Integer, primary_key=True, autoincrement=True, index=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id", ondelete="CASCADE"), default=lambda: current_restaurante_id.get(), nullable=True, index=True)
+    comanda_id = Column(String(100), nullable=True, index=True)
+
+    telefone = Column(String(20), nullable=True)
+    tipo = Column(String(50), default="status_pedido", nullable=True)  # "otp", "status_pedido", "marketing"
+    status_envio = Column(String(20), default="pendente", nullable=True)  # "pendente", "enviado", "entregue", "falhou"
     wamid = Column(String(255), nullable=True, index=True)
     recipient_id = Column(String(50), nullable=True)
-    status = Column(String(50), nullable=False)
+    status = Column(String(50), nullable=True)
     error_code = Column(Integer, nullable=True)
     error_title = Column(Text, nullable=True)
+    error_message = Column(Text, nullable=True)
+    conteudo = Column(Text, nullable=True)
     raw_payload = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.timezone.utc), onupdate=lambda: datetime.datetime.now(datetime.timezone.utc))
+
 

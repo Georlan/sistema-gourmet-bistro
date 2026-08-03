@@ -109,22 +109,22 @@ def _criar_comanda(tipo: str, status_inicial: str = "pendente") -> str:
 
 
 @pytest.mark.parametrize(
-    ("tipo", "novo_status", "mensagem_esperada"),
+    ("tipo", "novo_status", "trecho_esperado"),
     [
         (
             "Retirada",
             "pronto",
-            "Olá, Maria Cliente! 👋 Seu pedido #321 no Restaurante WhatsApp Teste já está PRONTO PARA RETIRADA! 🍔 Pode vir buscar no nosso balcão. Te esperamos!",
+            "🎉 Seu pedido está pronto! Pode retirar na loja.",
         ),
         (
             "Entrega",
             "transito",
-            "Olá, Maria Cliente! 🛵 Seu pedido #321 no Restaurante WhatsApp Teste acabou de SAIR PARA ENTREGA! 🚀 Nosso entregador já está a caminho do seu endereço. Bom apetite!",
+            "🛵 Saiu para entrega!",
         ),
         (
             "Delivery",
             "recusado",
-            "Olá, Maria Cliente. Infelizmente seu pedido #321 no Restaurante WhatsApp Teste não pôde ser aceito no momento. Entre em contato conosco para mais detalhes.",
+            "❌ Não conseguimos atender seu pedido.",
         ),
     ],
 )
@@ -132,13 +132,13 @@ def test_mudanca_status_enfileira_notificacao(
     monkeypatch,
     tipo,
     novo_status,
-    mensagem_esperada,
+    trecho_esperado,
 ):
     chamadas = []
     monkeypatch.setattr(
-        orders,
-        "enviar_notificacao_whatsapp_task",
-        lambda telefone, mensagem: chamadas.append((telefone, mensagem)),
+        whatsapp_service,
+        "enviar_texto_whatsapp",
+        lambda telefone, mensagem, contexto="": chamadas.append((telefone, mensagem)) or True,
     )
     comanda_id = _criar_comanda(tipo)
 
@@ -148,15 +148,18 @@ def test_mudanca_status_enfileira_notificacao(
     )
 
     assert response.status_code == 200, response.text
-    assert chamadas == [(TELEFONE, mensagem_esperada)]
+    assert len(chamadas) == 1
+    assert chamadas[0][0] == TELEFONE
+    assert trecho_esperado in chamadas[0][1]
+
 
 
 def test_status_repetido_nao_duplica_notificacao(monkeypatch):
     chamadas = []
     monkeypatch.setattr(
-        orders,
-        "enviar_notificacao_whatsapp_task",
-        lambda telefone, mensagem: chamadas.append((telefone, mensagem)),
+        whatsapp_service,
+        "enviar_texto_whatsapp",
+        lambda telefone, mensagem, contexto="": chamadas.append((telefone, mensagem)) or True,
     )
     comanda_id = _criar_comanda("Retirada")
 
@@ -177,9 +180,9 @@ def test_status_repetido_nao_duplica_notificacao(monkeypatch):
 def test_despachar_enfileira_notificacao_transito(monkeypatch):
     chamadas = []
     monkeypatch.setattr(
-        orders,
-        "enviar_notificacao_whatsapp_task",
-        lambda telefone, mensagem: chamadas.append((telefone, mensagem)),
+        whatsapp_service,
+        "enviar_texto_whatsapp",
+        lambda telefone, mensagem, contexto="": chamadas.append((telefone, mensagem)) or True,
     )
     comanda_id = _criar_comanda("Entrega")
 
@@ -198,7 +201,8 @@ def test_despachar_enfileira_notificacao_transito(monkeypatch):
     assert repetida.status_code == 200, repetida.text
     assert len(chamadas) == 1
     assert chamadas[0][0] == TELEFONE
-    assert "SAIR PARA ENTREGA" in chamadas[0][1]
+    assert "entrega" in chamadas[0][1].lower()
+
 
 
 def test_falha_evolution_nao_impede_transicao(monkeypatch):
