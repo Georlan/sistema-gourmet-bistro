@@ -70,13 +70,6 @@ def enviar_texto_whatsapp(
             type(exc).__name__,
         )
         return False
-    except Exception as exc:
-        logger.warning(
-            "[EVOLUTION API] Falha ao enviar %s: %s",
-            contexto,
-            type(exc).__name__,
-        )
-        return False
 
 
 def obter_status_evolution() -> dict[str, object]:
