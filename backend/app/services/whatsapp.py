@@ -128,9 +128,13 @@ def obter_status_evolution() -> dict[str, object]:
         }
 
 
-def enviar_codigo_otp_whatsapp(telefone: str, codigo: str) -> bool:
+def enviar_codigo_otp_whatsapp(telefone: str, codigo: str, nome_restaurante: str = "Kôma") -> bool:
+    """Envia código OTP usando preferencialmente a Meta Cloud API com fallback para Evolution API."""
+    if enviar_otp_whatsapp_meta(telefone, nome_restaurante, codigo):
+        return True
+
     mensagem = (
-        f"Seu código de acesso Kôma é {codigo}. "
+        f"Seu código de acesso {nome_restaurante} é {codigo}. "
         "Ele expira em poucos minutos. Não compartilhe este código."
     )
     return enviar_texto_whatsapp(

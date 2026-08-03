@@ -278,7 +278,16 @@ def request_customer_otp(
         db.commit()
         challenge_id = challenge.id
 
-        if not enviar_codigo_otp_whatsapp(payload.telefone, codigo):
+        from ..models import Restaurante
+        restaurante = db.query(Restaurante).filter(Restaurante.id == restaurante_id).first()
+        nome_rest = restaurante.nome if restaurante and restaurante.nome else "Kôma"
+
+        try:
+            sent_ok = enviar_codigo_otp_whatsapp(payload.telefone, codigo, nome_rest)
+        except TypeError:
+            sent_ok = enviar_codigo_otp_whatsapp(payload.telefone, codigo)
+
+        if not sent_ok:
             db.query(OtpChallenge).filter(
                 OtpChallenge.restaurante_id == restaurante_id,
                 OtpChallenge.id == challenge_id,
