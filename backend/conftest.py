@@ -6,12 +6,18 @@ os.environ.setdefault("ENCRYPTION_KEY", "jW-j311rF_qj0Fh_77R-2n1B-Q0v4sK9M1S2T3U
 
 import pytest
 from app.main import app
+from app.database import Base, engine
+
+Base.metadata.create_all(bind=engine)
+
 
 @pytest.fixture(autouse=True)
 def clear_dependency_overrides():
+    Base.metadata.create_all(bind=engine)
     app.dependency_overrides.clear()
     yield
     app.dependency_overrides.clear()
+
 
 
 
