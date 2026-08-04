@@ -1,6 +1,6 @@
 import { CardapioAssetUploader } from './CardapioAssetUploader';
 import { supabase } from '../cardapio/SupabaseClient';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   DollarSign, ArrowUpRight, ArrowDownRight, Lock, Unlock, Users,
   Receipt, ShoppingCart, Percent, CreditCard, Check, AlertTriangle,
@@ -8,7 +8,7 @@ import {
   MapPin, ClipboardList, BarChart2, Package, Shield, ShieldCheck, Star,
   MessageSquare, Send, Printer, Cpu, HelpCircle, Smartphone,
   Gift, Tag, TrendingUp, Heart, Globe, Menu, Maximize2, Minimize2,
-  SlidersHorizontal, Upload, Copy} from 'lucide-react';
+  SlidersHorizontal, Upload, Copy, Search} from 'lucide-react';
 import { Order, OrderItem, CaixaTurno, CaixaMovimentacao, Pagamento, Table, Product, EntradaEstoque, MovimentacaoEstoque, SessaoContagemEstoque, CaixaTurnoResumo, FechamentoCaixaResult } from '../types';
 import { EstoqueEntradasTab } from './estoque/EstoqueEntradasTab';
 import { EntradaManualModal } from './estoque/EntradaManualModal';
@@ -668,6 +668,8 @@ export function CaixaPanel({
     taxa_conversao: 1.0,
     valor_ponto_em_dinheiro: 0.05
   });
+
+  const [searchQuery, setSearchQuery] = useState('');
 
   const getPeriodString = () => {
     const endDate = new Date();
@@ -3181,6 +3183,82 @@ export function CaixaPanel({
         timestamp: (item as any).created_at || (item as any).timestamp || order.timestamp
       }))
   );
+  // Lógica de filtragem multi-campo em tempo real para cards do Kanban
+  const matchesSearchQuery = useCallback((card: any, query: string) => {
+    if (!query || !query.trim()) return true;
+    const q = query.toLowerCase().trim();
+
+    const cliente = (
+      card.cliente || 
+      card.nome_cliente || 
+      card.clienteNome || 
+      card.cliente_nome || 
+      card.identificador || 
+      ''
+    ).toLowerCase();
+
+    const mesaNome = (
+      card.mesa_nome || 
+      card.mesa?.nome || 
+      (card.mesaId ? `mesa ${card.mesaId}` : '') || 
+      ''
+    ).toLowerCase();
+
+    const mesaNum = String(
+      card.mesa_numero || 
+      card.mesa_id || 
+      card.mesa?.numero || 
+      card.mesaId || 
+      ''
+    );
+
+    const telefone = (card.telefone || card.celular || '').toLowerCase();
+
+    let itensStr = '';
+    if (Array.isArray(card.itens)) {
+      itensStr = card.itens
+        .map((i: any) => (i.nome || i.produto_nome || i.produtoNome || i.name || '').toLowerCase())
+        .join(' ');
+    } else if (typeof card.itens === 'string') {
+      itensStr = card.itens.toLowerCase();
+    }
+
+    const garcom = (card.garcomNome || card.garcom || '').toLowerCase();
+    const numeroPedido = String(card.numeroPedido || card.numero_pedido || card.id || '');
+
+    return (
+      cliente.includes(q) ||
+      mesaNome.includes(q) ||
+      (mesaNum !== '' && mesaNum === q) ||
+      (mesaNum !== '' && `mesa ${mesaNum}`.includes(q)) ||
+      (mesaNum !== '' && `m${mesaNum}`.includes(q)) ||
+      telefone.includes(q) ||
+      itensStr.includes(q) ||
+      garcom.includes(q) ||
+      numeroPedido.includes(q)
+    );
+  }, []);
+
+  // Real-time filtered cards for Kanban columns
+  const filteredCol1 = useMemo(() => {
+    return tableOrdersInProduction.filter(order => matchesSearchQuery(order, searchQuery));
+  }, [tableOrdersInProduction, searchQuery, matchesSearchQuery]);
+
+  const filteredCol2Simulated = useMemo(() => {
+    return simulatedOrders.filter(o => o.status === 'producao').filter(order => matchesSearchQuery(order, searchQuery));
+  }, [simulatedOrders, searchQuery, matchesSearchQuery]);
+
+  const filteredCol2Table = useMemo(() => {
+    return tableOrdersReady.filter(order => matchesSearchQuery(order, searchQuery));
+  }, [tableOrdersReady, searchQuery, matchesSearchQuery]);
+
+  const filteredCol3Simulated = useMemo(() => {
+    return simulatedOrders.filter(o => o.status === 'transito').filter(order => matchesSearchQuery(order, searchQuery));
+  }, [simulatedOrders, searchQuery, matchesSearchQuery]);
+
+  const totalResultadosBusca = useMemo(() => {
+    return filteredCol1.length + filteredCol2Simulated.length + filteredCol2Table.length + filteredCol3Simulated.length;
+  }, [filteredCol1, filteredCol2Simulated, filteredCol2Table, filteredCol3Simulated]);
 
   return (
     <div className={`flex w-full h-screen bg-[#0B0B0C] text-white overflow-hidden font-sans selection:bg-[#10b981]/30 text-xs ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''
@@ -3996,39 +4074,74 @@ export function CaixaPanel({
                 </div>
               )}
 
-              {/* Controls bar */}
-              <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-3', 'rounded-2xl', 'flex', 'flex-col', 'sm:flex-row', 'justify-between', 'items-start', 'sm:items-center', 'gap-3', 'sticky', 'top-0', 'z-20', 'shadow-md', 'backdrop-blur-md')}>
-                  <div className={clsx('flex', 'items-center', 'gap-4')}>
-                    <label className={clsx('flex', 'items-center', 'gap-2', 'cursor-pointer', 'font-semibold', 'text-gray-300')}>
-                      <input
-                        type="checkbox"
-                        checked={autoAccept}
-                        onChange={(e) => setAutoAccept(e.target.checked)}
-                        className={clsx('rounded', 'border-[#27272A]', 'text-emerald-500', 'focus:ring-emerald-500', 'h-3.5', 'w-3.5', 'bg-[#121214]')}
-                      />
-                      <span>Aceitar os pedidos automaticamente (iFood/Apps)</span>
-                    </label>
-                  </div>
-                  <div className={clsx('flex', 'items-center', 'gap-4')}>
-                    <div className={clsx('text-[10px]', 'text-gray-400')}>
-                      Total Delivery hoje: <strong className="text-white">R$ {simulatedOrders.reduce((s, o) => s + o.total, 0).toFixed(2)}</strong>
-                    </div>
-                    {/* Bell button — opens floating drawer */}
+              {/* Controls bar with Search Input */}
+              <div className="bg-[#121214] border border-[#27272A] p-3 rounded-2xl flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3 sticky top-0 z-20 shadow-md backdrop-blur-md">
+                {/* Search Bar Component */}
+                <div className="relative flex-1 max-w-md">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="🔍 Buscar cliente, mesa (ex: 10), telefone ou item..."
+                    className="w-full pl-9 pr-8 py-1.5 text-xs sm:text-sm bg-slate-800/90 border border-slate-700/80 rounded-lg text-slate-100 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all"
+                  />
+                  {searchQuery && (
                     <button
-                      type="button"
-                      onClick={() => { setIsDrawerOpen(true); }}
-                      className="relative flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 text-amber-400 hover:text-amber-300 rounded-xl transition-all cursor-pointer"
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs font-bold cursor-pointer"
+                      title="Limpar busca"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-                      <span className="text-[10px] font-bold">Novos Pedidos</span>
-                      {simulatedOrders.filter(o => o.status === 'pendente').length > 0 && (
-                        <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[8px] font-bold text-black animate-bounce">
-                          {simulatedOrders.filter(o => o.status === 'pendente').length}
-                        </span>
-                      )}
+                      ✕
                     </button>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between md:justify-end gap-3 shrink-0">
+                  <label className="flex items-center gap-2 cursor-pointer font-semibold text-gray-300 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={autoAccept}
+                      onChange={(e) => setAutoAccept(e.target.checked)}
+                      className="rounded border-[#27272A] text-emerald-500 focus:ring-emerald-500 h-3.5 w-3.5 bg-[#121214]"
+                    />
+                    <span>Aceitar os pedidos automaticamente (iFood/Apps)</span>
+                  </label>
+                  <div className="text-[10px] text-gray-400">
+                    Total Delivery hoje: <strong className="text-white">R$ {simulatedOrders.reduce((s, o) => s + o.total, 0).toFixed(2)}</strong>
                   </div>
+                  {/* Bell button — opens floating drawer */}
+                  <button
+                    type="button"
+                    onClick={() => { setIsDrawerOpen(true); }}
+                    className="relative flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 text-amber-400 hover:text-amber-300 rounded-xl transition-all cursor-pointer"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                    <span className="text-[10px] font-bold">Novos Pedidos</span>
+                    {simulatedOrders.filter(o => o.status === 'pendente').length > 0 && (
+                      <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[8px] font-bold text-black animate-bounce">
+                        {simulatedOrders.filter(o => o.status === 'pendente').length}
+                      </span>
+                    )}
+                  </button>
+                </div>
               </div>
+
+              {/* Badge indicador de busca ativa */}
+              {searchQuery.trim() !== '' && (
+                <div className="bg-slate-800/90 border border-slate-700/80 px-4 py-2 rounded-xl flex items-center justify-between text-xs text-slate-300 shadow-sm transition-all mt-2">
+                  <div className="flex items-center gap-2">
+                    <Search size={14} className="text-emerald-400" />
+                    <span>Exibindo <strong className="text-white font-mono">{totalResultadosBusca}</strong> {totalResultadosBusca === 1 ? 'resultado' : 'resultados'} para "<strong className="text-emerald-300">{searchQuery}</strong>"</span>
+                  </div>
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="text-emerald-400 hover:text-emerald-300 font-bold ml-2 underline cursor-pointer text-xs transition-colors"
+                  >
+                    Limpar busca
+                  </button>
+                </div>
+              )}
 
               {/* ── FLOATING DRAWER: Pedidos Pendentes ─────────────────────────────── */}
               {isDrawerOpen && (
@@ -4147,16 +4260,19 @@ export function CaixaPanel({
                       <span className="text-xs text-emerald-400/90 block mt-0.5 font-normal">Lançados pelo garçom ou caixa</span>
                     </div>
                     <span className={clsx('bg-emerald-500/15', 'text-emerald-400', 'font-bold', 'px-2.5', 'py-0.5', 'rounded-full', 'font-mono', 'text-xs', 'border', 'border-emerald-500/20')}>
-                      {tableOrdersInProduction.length}
+                      {filteredCol1.length}
                     </span>
                   </div>
 
                   <div className={clsx('p-2.5', 'sm:p-3', 'flex-1', 'overflow-y-auto', 'space-y-2.5')}>
-                    {tableOrdersInProduction.length === 0 ? (
-                      <div className={clsx('py-20', 'text-center', 'text-slate-400', 'italic', 'text-xs')}>Nenhum pedido local em produção</div>
+                    {filteredCol1.length === 0 ? (
+                      <div className="py-16 text-center text-slate-400 italic text-xs space-y-1">
+                        <Search size={20} className="mx-auto opacity-40 mb-2 text-slate-500" />
+                        <p>{searchQuery ? "Nenhum pedido encontrado para a busca" : "Nenhum pedido local em produção"}</p>
+                      </div>
                     ) : (
                       <>
-                        {tableOrdersInProduction.map((order) => {
+                        {filteredCol1.map((order) => {
                           const preparingItems = order.itens.filter(item => item.status === 'preparando');
                           const cardId = `prod-${order.id}`;
                           const sla = getOrderSlaData(order, nowTimestamp);
@@ -4270,16 +4386,19 @@ export function CaixaPanel({
                       <span className="text-xs text-amber-400/90 block mt-0.5 font-normal">Pedidos aceitos no sino</span>
                     </div>
                     <span className={clsx('bg-amber-500/15', 'text-amber-400', 'font-bold', 'px-2.5', 'py-0.5', 'rounded-full', 'font-mono', 'text-xs', 'border', 'border-amber-500/20')}>
-                      {simulatedOrders.filter(o => o.status === 'producao').length}
+                      {filteredCol2Simulated.length}
                     </span>
                   </div>
 
                   <div className={clsx('p-2.5', 'sm:p-3', 'flex-1', 'overflow-y-auto', 'space-y-2.5')}>
-                    {simulatedOrders.filter(o => o.status === 'producao').length === 0 ? (
-                      <div className={clsx('py-20', 'text-center', 'text-slate-400', 'italic', 'text-xs')}>Nenhum pedido online em preparo</div>
+                    {filteredCol2Simulated.length === 0 ? (
+                      <div className="py-16 text-center text-slate-400 italic text-xs space-y-1">
+                        <Search size={20} className="mx-auto opacity-40 mb-2 text-slate-500" />
+                        <p>{searchQuery ? "Nenhum pedido encontrado para a busca" : "Nenhum pedido online em preparo"}</p>
+                      </div>
                     ) : (
                       <>
-                        {simulatedOrders.filter(o => o.status === 'producao').map((order) => {
+                        {filteredCol2Simulated.map((order) => {
                           const cardId = `sim-prod-${order.id}`;
                           const sla = getOrderSlaData(order, nowTimestamp);
                           const isExpanded = !!expandedCardIds[cardId];
@@ -4383,17 +4502,20 @@ export function CaixaPanel({
                       <span className="text-xs text-indigo-400/90 block mt-0.5 font-normal">Prontos para receber ou concluir</span>
                     </div>
                     <span className={clsx('bg-indigo-500/15', 'text-indigo-400', 'font-bold', 'px-2.5', 'py-0.5', 'rounded-full', 'font-mono', 'text-xs', 'border', 'border-indigo-500/20')}>
-                      {tableOrdersReady.length + simulatedOrders.filter(o => o.status === 'transito').length}
+                      {filteredCol2Table.length + filteredCol3Simulated.length}
                     </span>
                   </div>
 
                   <div className={clsx('p-2.5', 'sm:p-3', 'flex-1', 'overflow-y-auto', 'space-y-2.5')}>
-                    {tableOrdersReady.length === 0 && simulatedOrders.filter(o => o.status === 'transito').length === 0 ? (
-                      <div className={clsx('py-20', 'text-center', 'text-slate-400', 'italic', 'text-xs')}>Nenhum pedido aguardando finalização</div>
+                    {filteredCol2Table.length === 0 && filteredCol3Simulated.length === 0 ? (
+                      <div className="py-16 text-center text-slate-400 italic text-xs space-y-1">
+                        <Search size={20} className="mx-auto opacity-40 mb-2 text-slate-500" />
+                        <p>{searchQuery ? "Nenhum pedido encontrado para a busca" : "Nenhum pedido aguardando finalização"}</p>
+                      </div>
                     ) : (
                       <>
                         {/* 1. Mesas/Consumo Local aguardando pagamento */}
-                        {tableOrdersReady.map((order) => {
+                        {filteredCol2Table.map((order) => {
                           const cardId = `ready-${order.id}`;
                           const sla = getOrderSlaData(order, nowTimestamp);
                           const isExpanded = !!expandedCardIds[cardId];
@@ -4493,7 +4615,7 @@ export function CaixaPanel({
                         })}
 
                         {/* 2. Delivery/Retirada em trânsito (aguardando retorno/pagamento) */}
-                        {simulatedOrders.filter(o => o.status === 'transito').map((order) => {
+                        {filteredCol3Simulated.map((order) => {
                           const cardId = `transito-${order.id}`;
                           const sla = getOrderSlaData(order, nowTimestamp);
                           const isExpanded = !!expandedCardIds[cardId];
