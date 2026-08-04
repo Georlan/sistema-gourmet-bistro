@@ -7,8 +7,8 @@ import {
   Clock, X, RefreshCw, Edit3, Trash2, Plus, ChevronRight,
   MapPin, ClipboardList, BarChart2, Package, Shield, ShieldCheck, Star,
   MessageSquare, Send, Printer, Cpu, HelpCircle, Smartphone,
-  Gift, Tag, TrendingUp, Heart, Globe, Menu, Maximize2, Minimize2
-, Upload, Copy} from 'lucide-react';
+  Gift, Tag, TrendingUp, Heart, Globe, Menu, Maximize2, Minimize2,
+  SlidersHorizontal, Upload, Copy} from 'lucide-react';
 import { Order, OrderItem, CaixaTurno, CaixaMovimentacao, Pagamento, Table, Product, EntradaEstoque, MovimentacaoEstoque, SessaoContagemEstoque, CaixaTurnoResumo, FechamentoCaixaResult } from '../types';
 import { EstoqueEntradasTab } from './estoque/EstoqueEntradasTab';
 import { EntradaManualModal } from './estoque/EntradaManualModal';
@@ -3067,6 +3067,18 @@ export function CaixaPanel({
                   <div className={clsx('font-serif', 'font-bold', 'text-sm', 'tracking-tight')}>Kôma Caixa</div>
                 </div>
                 <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('configuracoes');
+                      setActiveSubTab('impressoras');
+                      setIsMobileSidebarOpen(false);
+                    }}
+                    className="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                    title="Opções do Caixa / Login"
+                  >
+                    <SlidersHorizontal size={15} />
+                  </button>
                   {turno?.status === 'aberto' ? (
                     <span className={clsx('h-2', 'w-2', 'rounded-full', 'bg-emerald-500', 'animate-pulse')} title="Caixa Aberto" />
                   ) : (
@@ -3290,11 +3302,24 @@ export function CaixaPanel({
               <div className={clsx('h-7.5', 'w-7.5', 'bg-[#10b981]', 'rounded-xl', 'flex', 'items-center', 'justify-center', 'font-bold', 'text-[#121214]', 'font-serif', 'text-sm')}>K</div>
               <div className={clsx('font-serif', 'font-bold', 'text-sm', 'tracking-tight')}>Kôma Caixa</div>
             </div>
-            {turno?.status === 'aberto' ? (
-              <span className={clsx('h-2', 'w-2', 'rounded-full', 'bg-emerald-500', 'animate-pulse')} title="Caixa Aberto" />
-            ) : (
-              <span className={clsx('h-2', 'w-2', 'rounded-full', 'bg-emerald-600')} title="Caixa Fechado" />
-            )}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('configuracoes');
+                  setActiveSubTab('impressoras');
+                }}
+                className="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                title="Opções do Caixa / Login"
+              >
+                <SlidersHorizontal size={15} />
+              </button>
+              {turno?.status === 'aberto' ? (
+                <span className={clsx('h-2', 'w-2', 'rounded-full', 'bg-emerald-500', 'animate-pulse')} title="Caixa Aberto" />
+              ) : (
+                <span className={clsx('h-2', 'w-2', 'rounded-full', 'bg-emerald-600')} title="Caixa Fechado" />
+              )}
+            </div>
           </div>
 
           {/* Quick status bar */}
