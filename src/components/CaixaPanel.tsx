@@ -1124,6 +1124,48 @@ export function CaixaPanel({
     };
   }, [onRefreshOrders]);
 
+  // Função auxiliar para calcular e formatar o tempo real decorrido da mesa/pedido
+  const getMinutosDecorridos = (card: any) => {
+    const timestamp =
+      card.mesa?.aberta_em ||
+      card.mesa?.data_abertura ||
+      card.mesa?.created_at ||
+      card.aberta_em ||
+      card.data_abertura ||
+      card.aberto_em ||
+      card.created_at ||
+      card.timestamp ||
+      card.criadoEm ||
+      (Array.isArray(card.itens) && card.itens.length > 0 && Math.min(
+        ...card.itens.map((i: any) => {
+          const t = i.criadoEm || i.created_at || i.timestamp;
+          if (typeof t === 'number') return t;
+          if (typeof t === 'string') { const p = Date.parse(t); return isNaN(p) ? Infinity : p; }
+          return Infinity;
+        }).filter((t: number) => t < Infinity)
+      ));
+
+    if (!timestamp) return '0 MIN';
+
+    let start = 0;
+    if (typeof timestamp === 'number') start = timestamp;
+    else if (typeof timestamp === 'string') {
+      const p = Date.parse(timestamp);
+      start = isNaN(p) ? 0 : p;
+    } else if (timestamp instanceof Date) {
+      start = timestamp.getTime();
+    }
+
+    if (!start || isNaN(start)) return '0 MIN';
+
+    const now = Date.now();
+    const diff = Math.max(0, Math.floor((now - start) / 60000));
+    if (diff >= 60) {
+      return `${Math.floor(diff / 60)}h ${diff % 60}m`;
+    }
+    return `${diff} MIN`;
+  };
+
   // Função robusta de parser e cálculo de tempo decorrido (evitando UTC/NaN e nunca usando updated_at)
   function calcularMinutosDecorridos(timestamp: any, agora: number): number {
     if (!timestamp) return 0;
@@ -1146,19 +1188,9 @@ export function CaixaPanel({
     return minutos > 0 ? minutos : 0;
   }
 
-  // Formatação padronizada de tempo decorrido: X MIN ou Xh Ym
-  const formatElapsedDuration = (minutes: number) => {
-    if (minutes < 60) {
-      return `⏱️ ${minutes} MIN`;
-    }
-    const hours = Math.floor(minutes / 60);
-    const remMins = minutes % 60;
-    return `⏱️ ${hours}h ${remMins}m`;
-  };
-
   // Cálculo de tempo de espera dinâmico (SLA) sincronizado entre Salão/Garçom e Caixa
   const getOrderSlaData = (order: any, now: number) => {
-    // Extrai a data de abertura priorizando a Entidade da Mesa e campos de abertura do Garçom
+    const timeFormatted = getMinutosDecorridos(order);
     const timestampReal =
       order.mesa?.aberta_em ||
       order.mesa?.data_abertura ||
@@ -1168,19 +1200,11 @@ export function CaixaPanel({
       order.aberto_em ||
       order.created_at ||
       order.timestamp ||
-      order.criadoEm ||
-      (Array.isArray(order.itens) && order.itens.length > 0 && Math.min(
-        ...order.itens.map((i: any) => {
-          const t = i.criadoEm || i.created_at || i.timestamp;
-          if (typeof t === 'number') return t;
-          if (typeof t === 'string') { const p = Date.parse(t); return isNaN(p) ? Infinity : p; }
-          return Infinity;
-        }).filter((t: number) => t < Infinity)
-      ));
+      order.criadoEm;
 
     const elapsedMinutes = calcularMinutosDecorridos(timestampReal, now);
-    const labelText = formatElapsedDuration(elapsedMinutes);
-    
+    const labelText = `⏱️ ${timeFormatted}`;
+
     if (elapsedMinutes > 25) {
       return {
         minutes: elapsedMinutes,
@@ -1203,6 +1227,63 @@ export function CaixaPanel({
         label: labelText
       };
     }
+  };
+
+  // Renderizador compacto de itens de alta densidade
+  const renderCompactItemsList = (
+    items: any,
+    cardId: string,
+    isExpanded: boolean,
+    onToggle: (cardId: string, e: React.MouseEvent) => void
+  ) => {
+    let itemList: { name: string; qty: number }[] = [];
+
+    if (Array.isArray(items)) {
+      const counts: Record<string, number> = {};
+      items.forEach(it => {
+        const name = it.nome || 'Item';
+        counts[name] = (counts[name] || 0) + 1;
+      });
+      itemList = Object.entries(counts).map(([name, qty]) => ({ name, qty }));
+    } else if (typeof items === 'string') {
+      const parts = items.split(/\+|\,/);
+      itemList = parts.map(p => {
+        const trimmed = p.trim();
+        const match = trimmed.match(/^(\d+)x?\s*(.+)$/i);
+        if (match) {
+          return { qty: parseInt(match[1], 10), name: match[2].trim() };
+        }
+        return { qty: 1, name: trimmed };
+      }).filter(it => it.name.length > 0);
+    }
+
+    if (itemList.length === 0) {
+      return <p className="font-medium text-[11px] text-slate-400 italic bg-[#121417] py-1 px-2.5 rounded-md border border-[#27272a]">Nenhum item adicionado</p>;
+    }
+
+    const visibleItems = isExpanded ? itemList : itemList.slice(0, 3);
+    const hiddenCount = itemList.length - 3;
+
+    return (
+      <div className="space-y-0.5 bg-[#121417] py-1.5 px-2.5 rounded-md border border-[#27272a]">
+        <ul className="space-y-0.5">
+          {visibleItems.map((it, idx) => (
+            <li key={idx} className="font-medium text-xs text-slate-200 flex items-center justify-between font-sans truncate">
+              <span className="truncate">{it.qty}× {it.name}</span>
+            </li>
+          ))}
+        </ul>
+        {itemList.length > 3 && (
+          <button
+            type="button"
+            onClick={(e) => onToggle(cardId, e)}
+            className="mt-0.5 text-[11px] font-bold text-emerald-400 hover:text-emerald-300 underline cursor-pointer block transition-all"
+          >
+            {isExpanded ? "▲ Recolher itens" : `+ ${hiddenCount} mais itens (expandir)`}
+          </button>
+        )}
+      </div>
+    );
   };
 
   // Impressão rápida de pré-conta do card no Kanban
@@ -1236,62 +1317,7 @@ export function CaixaPanel({
     }
   };
 
-  // Exibição compacta de até 3 itens com expansão interativa
-  const renderCompactItemsList = (
-    items: any,
-    cardId: string,
-    isExpanded: boolean,
-    onToggle: (cardId: string, e: React.MouseEvent) => void
-  ) => {
-    let itemList: { name: string; qty: number }[] = [];
 
-    if (Array.isArray(items)) {
-      const counts: Record<string, number> = {};
-      items.forEach(it => {
-        const name = it.nome || 'Item';
-        counts[name] = (counts[name] || 0) + 1;
-      });
-      itemList = Object.entries(counts).map(([name, qty]) => ({ name, qty }));
-    } else if (typeof items === 'string') {
-      const parts = items.split(/\+|\,/);
-      itemList = parts.map(p => {
-        const trimmed = p.trim();
-        const match = trimmed.match(/^(\d+)x?\s*(.+)$/i);
-        if (match) {
-          return { qty: parseInt(match[1], 10), name: match[2].trim() };
-        }
-        return { qty: 1, name: trimmed };
-      }).filter(it => it.name.length > 0);
-    }
-
-    if (itemList.length === 0) {
-      return <p className="font-medium text-xs text-slate-400 italic bg-[#121417] p-2 rounded-lg border border-[#2a2f38]">Nenhum item adicionado</p>;
-    }
-
-    const visibleItems = isExpanded ? itemList : itemList.slice(0, 3);
-    const hiddenCount = itemList.length - 3;
-
-    return (
-      <div className="space-y-1 bg-[#121417] p-2.5 rounded-lg border border-[#2a2f38]">
-        <ul className="space-y-1">
-          {visibleItems.map((it, idx) => (
-            <li key={idx} className="font-medium text-sm text-slate-200 flex items-center justify-between font-sans">
-              <span className="truncate">{it.qty}x {it.name}</span>
-            </li>
-          ))}
-        </ul>
-        {itemList.length > 3 && (
-          <button
-            type="button"
-            onClick={(e) => onToggle(cardId, e)}
-            className="mt-1 text-xs font-bold text-emerald-400 hover:text-emerald-300 underline cursor-pointer block transition-all"
-          >
-            {isExpanded ? "▲ Recolher itens" : `+ ${hiddenCount} mais itens (clique para expandir)`}
-          </button>
-        )}
-      </div>
-    );
-  };
 
   const [fontSize, setFontSize] = useState<'padrao' | 'grande' | 'gigante'>(() => {
     return (localStorage.getItem('koma_font_size') as any) || 'padrao';
@@ -4123,7 +4149,7 @@ export function CaixaPanel({
                     </span>
                   </div>
 
-                  <div className={clsx('p-3', 'flex-1', 'overflow-y-auto', 'space-y-3')}>
+                  <div className={clsx('p-2.5', 'sm:p-3', 'flex-1', 'overflow-y-auto', 'space-y-2.5')}>
                     {tableOrdersInProduction.length === 0 ? (
                       <div className={clsx('py-20', 'text-center', 'text-slate-400', 'italic', 'text-xs')}>Nenhum pedido local em produção</div>
                     ) : (
@@ -4133,69 +4159,66 @@ export function CaixaPanel({
                           const cardId = `prod-${order.id}`;
                           const sla = getOrderSlaData(order, nowTimestamp);
                           const isExpanded = !!expandedCardIds[cardId];
+                          const totalVal = order.itens.reduce((sum: number, it: any) => sum + (it.preco_unit || it.preco || 0), 0);
 
                           return (
                             <div 
                               key={`table-prod-${order.id}`} 
                               onClick={() => setSelectedKanbanOrder(order)}
                               className={clsx(
-                                'bg-[#1e2428]', 'border', 'border-[#2e3540]', 'border-l-4', 'border-l-emerald-500',
+                                'bg-[#1e1e24] border border-[#32323d] border-l-4 border-l-emerald-500',
                                 sla.borderTopClass,
-                                'hover:border-emerald-400/60', 'p-3.5', 'rounded-xl', 'space-y-3', 'transition-all',
-                                'text-left', 'cursor-pointer', 'shadow-sm'
+                                'hover:border-emerald-400/60 p-2.5 sm:p-3 rounded-xl space-y-2 transition-all',
+                                'text-left cursor-pointer shadow-sm'
                               )}
                             >
-                              <div className={clsx('flex', 'justify-between', 'items-start')}>
-                                <div>
-                                  <div className="flex gap-1.5 flex-wrap mb-1.5">
-                                    <span className={clsx('px-2', 'py-0.5', 'text-[9px]', 'uppercase', 'tracking-wider', 'font-bold', 'rounded-md', 'border', 'font-mono', 'block', 'w-fit', 'shadow-xs', sla.badgeClass)}>
-                                      {sla.label}
+                              {/* LINHA 1 (Top Bar do Card) */}
+                              <div className="flex justify-between items-center gap-2">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className={clsx('px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md border font-mono block w-fit shadow-xs', sla.badgeClass)}>
+                                    {sla.label}
+                                  </span>
+                                  <span className="px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 rounded-md font-mono block w-fit">
+                                    {order.mesaId && order.mesaId > 0 ? `MESA ${order.mesaId}` : 'BALCÃO'}
+                                  </span>
+                                  {order.mesaOrigemId && Number(order.mesaOrigemId) !== Number(order.mesaId) && (
+                                    <span className="px-1.5 py-0.5 text-[9px] uppercase tracking-wider font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/35 rounded-md font-sans block w-fit shadow-xs">
+                                      🔗 M{order.mesaOrigemId}
                                     </span>
-                                    <span className={clsx('px-2', 'py-0.5', 'text-[9px]', 'uppercase', 'tracking-wider', 'font-bold', 'bg-emerald-500/15', 'text-emerald-400', 'border', 'border-emerald-500/25', 'rounded-md', 'font-mono', 'block', 'w-fit')}>
-                                      {order.mesaId && order.mesaId > 0 ? `Mesa ${order.mesaId}` : 'Balcão'}
-                                    </span>
-                                    {order.mesaOrigemId && Number(order.mesaOrigemId) !== Number(order.mesaId) && (
-                                      <span className="px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/35 rounded-md font-sans block w-fit shadow-xs" title="Essa mesa possui consumo mesclado de outra">
-                                        🔗 Mesclado de Mesa {order.mesaOrigemId}
-                                      </span>
-                                    )}
-                                    {order.mesaTransferidaDe && Number(order.mesaTransferidaDe) !== Number(order.mesaId) && (
-                                      <span className="px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold bg-purple-500/20 text-purple-300 border border-purple-500/35 rounded-md font-sans block w-fit shadow-xs" title="Essa mesa teve consumo transferido de outra">
-                                        🔗 Transferido da Mesa {order.mesaTransferidaDe}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <strong className={clsx('font-bold', 'text-base', 'text-slate-100', 'block')}>
-                                    {(order as any).identificador || (order.mesaId && order.mesaId > 0 ? `Consumo Mesa ${order.mesaId}` : 'Consumo Balcão')}
-                                  </strong>
-                                  <span className={clsx('font-normal', 'text-xs', 'text-slate-400', 'block', 'mt-0.5')}>Atendente: {order.garcomNome || 'Garçom'}</span>
+                                  )}
                                 </div>
-                                <div className="text-right shrink-0 space-y-1">
-                                  <div className="flex items-center justify-end gap-1">
-                                    <button
-                                      type="button"
-                                      onClick={(e) => handleQuickPrintOrder(order, e)}
-                                      className="p-1.5 bg-[#121417] hover:bg-[#2a2f38] text-slate-300 hover:text-emerald-400 rounded-lg border border-[#2a2f38] transition-all cursor-pointer shadow-xs"
-                                      title="Imprimir pré-conta / conferência"
-                                    >
-                                      <Printer size={13} />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectedKanbanOrder(order);
-                                      }}
-                                      className="p-1.5 bg-[#121417] hover:bg-[#2a2f38] text-slate-300 hover:text-indigo-400 rounded-lg border border-[#2a2f38] transition-all cursor-pointer shadow-xs"
-                                      title="Ver detalhes do pedido"
-                                    >
-                                      <Edit3 size={13} />
-                                    </button>
-                                  </div>
-                                  <span className="font-extrabold text-lg text-emerald-400 font-mono block">
-                                    R$ {order.itens.reduce((sum: number, it: any) => sum + (it.preco_unit || it.preco || 0), 0).toFixed(2)}
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => handleQuickPrintOrder(order, e)}
+                                    className="p-1 bg-[#121417] hover:bg-[#2a2f38] text-slate-300 hover:text-emerald-400 rounded-md border border-[#2a2f38] transition-all cursor-pointer shadow-xs"
+                                    title="Imprimir pré-conta / conferência"
+                                  >
+                                    <Printer size={12} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedKanbanOrder(order);
+                                    }}
+                                    className="p-1 bg-[#121417] hover:bg-[#2a2f38] text-slate-300 hover:text-indigo-400 rounded-md border border-[#2a2f38] transition-all cursor-pointer shadow-xs"
+                                    title="Ver detalhes do pedido"
+                                  >
+                                    <Edit3 size={12} />
+                                  </button>
+                                  <span className="font-extrabold text-base text-emerald-400 font-mono block ml-1">
+                                    R$ {totalVal.toFixed(2)}
                                   </span>
                                 </div>
+                              </div>
+
+                              {/* LINHA 2 (Sub-header) */}
+                              <div className="flex items-center justify-between text-xs text-[#94a3b8]">
+                                <strong className="font-bold text-white text-xs truncate">
+                                  {(order as any).identificador || (order.mesaId && order.mesaId > 0 ? `Consumo Mesa ${order.mesaId}` : 'Consumo Balcão')}
+                                </strong>
+                                <span className="shrink-0 text-[11px]">Atendente: {order.garcomNome || 'Garçom'}</span>
                               </div>
 
                               {renderCompactItemsList(order.itens, cardId, isExpanded, toggleCardExpansion)}
@@ -4224,10 +4247,10 @@ export function CaixaPanel({
                                     setIsLoading(false);
                                   }
                                 }}
-                                className={clsx('w-full', 'py-2', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'rounded-lg', 'font-bold', 'text-xs', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1.5', 'shadow-sm')}
+                                className="w-full py-1.5 px-3 h-8 sm:h-9 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-xs transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm"
                               >
                                 <Check size={13} />
-                                <span>Pronto → Pagamento</span>
+                                <span>PRONTO → PAGAMENTO</span>
                               </button>
                             </div>
                           );
@@ -4249,7 +4272,7 @@ export function CaixaPanel({
                     </span>
                   </div>
 
-                  <div className={clsx('p-3', 'flex-1', 'overflow-y-auto', 'space-y-3')}>
+                  <div className={clsx('p-2.5', 'sm:p-3', 'flex-1', 'overflow-y-auto', 'space-y-2.5')}>
                     {simulatedOrders.filter(o => o.status === 'producao').length === 0 ? (
                       <div className={clsx('py-20', 'text-center', 'text-slate-400', 'italic', 'text-xs')}>Nenhum pedido online em preparo</div>
                     ) : (
@@ -4263,79 +4286,82 @@ export function CaixaPanel({
                           const badgeColor = isDeliveryOrder
                             ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
                             : 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30';
-                          const buttonText = isDeliveryOrder ? 'Saiu para entrega' : 'Pronto para retirada';
+                          const buttonText = isDeliveryOrder ? 'SAIU PARA ENTREGA' : 'PRONTO PARA RETIRADA';
                           const buttonColor = isDeliveryOrder
-                            ? 'bg-amber-600 hover:bg-amber-700 text-white'
-                            : 'bg-indigo-600 hover:bg-indigo-700 text-white';
-                          const cardTone = isDeliveryOrder
-                            ? 'bg-[#251e18] border-[#382d24] border-l-amber-500 hover:border-amber-400/60'
-                            : 'bg-[#201d2a] border-[#302a3f] border-l-indigo-500 hover:border-indigo-400/60';
+                            ? 'bg-amber-600 hover:bg-amber-500 text-white'
+                            : 'bg-indigo-600 hover:bg-indigo-500 text-white';
 
                           return (
                             <div 
                               key={order.id} 
                               onClick={() => openSimulatedOrderDetails(order)}
                               className={clsx(
-                                'border', 'border-l-4', sla.borderTopClass,
-                                'p-3.5', 'rounded-xl', 'space-y-3', 'transition-all', 'cursor-pointer', 'shadow-sm', 'hover:shadow-md', cardTone
+                                'bg-[#1e1e24] border border-[#32323d] border-l-4',
+                                isDeliveryOrder ? 'border-l-amber-500' : 'border-l-indigo-500',
+                                sla.borderTopClass,
+                                'p-2.5 sm:p-3 rounded-xl space-y-2 transition-all cursor-pointer shadow-sm hover:border-slate-500/50'
                               )}
                             >
-                              <div className={clsx('flex', 'justify-between', 'items-start')}>
-                                <div>
-                                  <div className="flex flex-wrap gap-1.5 mb-1.5">
-                                    <span className={clsx('px-2', 'py-0.5', 'text-[9px]', 'uppercase', 'tracking-wider', 'font-bold', 'rounded-md', 'border', 'font-mono', 'block', 'w-fit', 'shadow-xs', sla.badgeClass)}>
-                                      {sla.label}
-                                    </span>
-                                    <span className={clsx('px-2', 'py-0.5', 'text-[9px]', 'uppercase', 'tracking-wider', 'font-bold', 'rounded-md', 'border', 'font-mono', 'block', 'w-fit', badgeColor)}>{badgeText}</span>
-                                    <span className="px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md border border-slate-500/20 bg-slate-500/10 text-slate-300 font-mono">
-                                      {order.canal}
-                                    </span>
-                                  </div>
-                                  <strong className={clsx('font-bold', 'text-base', 'text-slate-100', 'block')}>{order.cliente}</strong>
-                                  <span className={clsx('font-normal', 'text-xs', 'text-slate-400', 'block', 'mt-0.5')}>{order.telefone}</span>
+                              {/* LINHA 1 (Top Bar do Card) */}
+                              <div className="flex justify-between items-center gap-2">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className={clsx('px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md border font-mono block w-fit shadow-xs', sla.badgeClass)}>
+                                    {sla.label}
+                                  </span>
+                                  <span className={clsx('px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md border font-mono block w-fit', badgeColor)}>{badgeText}</span>
+                                  <span className="px-1.5 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md border border-slate-500/20 bg-slate-500/10 text-slate-300 font-mono">
+                                    {order.canal}
+                                  </span>
                                 </div>
-                                <div className="text-right shrink-0 space-y-1">
-                                  <div className="flex items-center justify-end gap-1">
-                                    <button
-                                      type="button"
-                                      onClick={(e) => handleQuickPrintOrder(order, e)}
-                                      className="p-1.5 bg-[#121417] hover:bg-[#2a2f38] text-slate-300 hover:text-emerald-400 rounded-lg border border-[#2a2f38] transition-all cursor-pointer shadow-xs"
-                                      title="Imprimir pré-conta / conferência"
-                                    >
-                                      <Printer size={13} />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        openSimulatedOrderDetails(order);
-                                      }}
-                                      className="p-1.5 bg-[#121417] hover:bg-[#2a2f38] text-slate-300 hover:text-indigo-400 rounded-lg border border-[#2a2f38] transition-all cursor-pointer shadow-xs"
-                                      title="Ver detalhes do pedido"
-                                    >
-                                      <Edit3 size={13} />
-                                    </button>
-                                  </div>
-                                  <span className={clsx('font-extrabold', 'text-lg', 'text-emerald-400', 'font-mono', 'block')}>R$ {order.total.toFixed(2)}</span>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => handleQuickPrintOrder(order, e)}
+                                    className="p-1 bg-[#121417] hover:bg-[#2a2f38] text-slate-300 hover:text-emerald-400 rounded-md border border-[#2a2f38] transition-all cursor-pointer shadow-xs"
+                                    title="Imprimir pré-conta / conferência"
+                                  >
+                                    <Printer size={12} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openSimulatedOrderDetails(order);
+                                    }}
+                                    className="p-1 bg-[#121417] hover:bg-[#2a2f38] text-slate-300 hover:text-indigo-400 rounded-md border border-[#2a2f38] transition-all cursor-pointer shadow-xs"
+                                    title="Ver detalhes do pedido"
+                                  >
+                                    <Edit3 size={12} />
+                                  </button>
+                                  <span className="font-extrabold text-base text-emerald-400 font-mono block ml-1">
+                                    R$ {order.total.toFixed(2)}
+                                  </span>
                                 </div>
+                              </div>
+
+                              {/* LINHA 2 (Sub-header) */}
+                              <div className="flex items-center justify-between text-xs text-[#94a3b8]">
+                                <strong className="font-bold text-white text-xs truncate">{order.cliente}</strong>
+                                <span className="shrink-0 text-[11px]">{order.telefone}</span>
                               </div>
 
                               {renderCompactItemsList(order.itens, cardId, isExpanded, toggleCardExpansion)}
 
                               {isDeliveryOrder && order.endereco && (
-                                <span className={clsx('font-normal', 'text-xs', 'text-slate-400', 'flex', 'items-start', 'gap-1', 'block')}>
-                                  <MapPin size={12} className={clsx('shrink-0', 'text-amber-500', 'mt-0.5')} />
-                                  <span className="leading-relaxed">{order.endereco}</span>
+                                <span className="font-normal text-xs text-[#94a3b8] flex items-center gap-1 truncate">
+                                  <MapPin size={11} className="shrink-0 text-amber-500" />
+                                  <span className="truncate">{order.endereco}</span>
                                 </span>
                               )}
 
                               <button
+                                type="button"
                                 onClick={async (e) => {
                                   e.stopPropagation();
                                   if (isLoading) return;
                                   handleUpdateDeliveryStatus(order.id, 'transito');
                                 }}
-                                className={clsx('w-full', 'py-2', 'rounded-lg', 'font-bold', 'text-xs', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1.5', 'shadow-sm', buttonColor)}
+                                className={clsx('w-full py-1.5 px-3 h-8 sm:h-9 rounded-lg font-bold text-xs transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm', buttonColor)}
                               >
                                 <span>{buttonText}</span>
                               </button>
@@ -4359,7 +4385,7 @@ export function CaixaPanel({
                     </span>
                   </div>
 
-                  <div className={clsx('p-3', 'flex-1', 'overflow-y-auto', 'space-y-3')}>
+                  <div className={clsx('p-2.5', 'sm:p-3', 'flex-1', 'overflow-y-auto', 'space-y-2.5')}>
                     {tableOrdersReady.length === 0 && simulatedOrders.filter(o => o.status === 'transito').length === 0 ? (
                       <div className={clsx('py-20', 'text-center', 'text-slate-400', 'italic', 'text-xs')}>Nenhum pedido aguardando finalização</div>
                     ) : (
@@ -4371,81 +4397,60 @@ export function CaixaPanel({
                           const isExpanded = !!expandedCardIds[cardId];
                           const contaPedida = !!(order as any).contaPedida;
                           const badgeText = (order.mesaId && order.mesaId > 0)
-                            ? (contaPedida ? `Mesa ${order.mesaId} — Conta Pedida` : `Mesa ${order.mesaId} — Pronto p/ Receber`)
-                            : (contaPedida ? 'Balcão — Conta Pedida' : 'Balcão — Pronto');
+                            ? (contaPedida ? `MESA ${order.mesaId} — CONTA PEDIDA` : `MESA ${order.mesaId} — PRONTO P/ RECEBER`)
+                            : (contaPedida ? 'BALCÃO — CONTA PEDIDA' : 'BALCÃO — PRONTO');
+                          const totalVal = order.itens.reduce((sum: number, it: any) => sum + (it.preco_unit || it.preco || 0), 0);
+
                           return (
                             <div
                               key={`close-${order.id}`}
                               onClick={() => setSelectedKanbanOrder(order)}
                               className={clsx(
-                                'bg-[#1a232b]',
-                                'border',
-                                'border-[#2e3540]',
-                                'border-l-4',
-                                'border-l-emerald-500',
+                                'bg-[#1e1e24] border border-[#32323d] border-l-4 border-l-emerald-500',
                                 sla.borderTopClass,
-                                'hover:border-emerald-400/60',
-                                'p-3.5',
-                                'rounded-xl',
-                                'space-y-3',
-                                'transition-all',
-                                'text-left',
-                                'cursor-pointer',
-                                'shadow-sm'
+                                'hover:border-emerald-400/60 p-2.5 sm:p-3 rounded-xl space-y-2 transition-all text-left cursor-pointer shadow-sm'
                               )}
                             >
-                              <div className="flex justify-between items-start">
-                                <div>
-                                  <div className="flex gap-1.5 flex-wrap mb-1.5">
-                                    <span className={clsx('px-2', 'py-0.5', 'text-[9px]', 'uppercase', 'tracking-wider', 'font-bold', 'rounded-md', 'border', 'font-mono', 'block', 'w-fit', 'shadow-xs', sla.badgeClass)}>
-                                      {sla.label}
-                                    </span>
-                                    <span className={clsx('px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md font-mono block w-fit', contaPedida ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30' : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30')}>{badgeText}</span>
-                                    {!contaPedida && order.temItensEmPreparo && (
-                                      <span className="px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 rounded-md font-mono block w-fit" title="Outros itens desta mesa ainda estão sendo preparados">
-                                        ⏳ Outros itens em preparo
-                                      </span>
-                                    )}
-                                    {order.mesaOrigemId && Number(order.mesaOrigemId) !== Number(order.mesaId) && (
-                                      <span className="px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/35 rounded-md font-sans block w-fit shadow-xs" title="Essa mesa possui consumo mesclado de outra">
-                                        🔗 Mesclado de Mesa {order.mesaOrigemId}
-                                      </span>
-                                    )}
-                                    {order.mesaTransferidaDe && Number(order.mesaTransferidaDe) !== Number(order.mesaId) && (
-                                      <span className="px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold bg-purple-500/20 text-purple-300 border border-purple-500/35 rounded-md font-sans block w-fit shadow-xs" title="Essa mesa teve consumo transferido de outra">
-                                        🔗 Transferido da Mesa {order.mesaTransferidaDe}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <strong className="font-bold text-base text-slate-100 block">{order.identificador || ((order.mesaId && order.mesaId > 0) ? `Consumo Mesa ${order.mesaId}` : 'Consumo Balcão')}</strong>
-                                  <span className="font-normal text-xs text-slate-400 block mt-0.5">Atendente: {order.garcomNome || 'Garçom'}</span>
+                              {/* LINHA 1 (Top Bar do Card) */}
+                              <div className="flex justify-between items-center gap-2">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className={clsx('px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md border font-mono block w-fit shadow-xs', sla.badgeClass)}>
+                                    {sla.label}
+                                  </span>
+                                  <span className={clsx('px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md font-mono block w-fit', contaPedida ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30' : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30')}>{badgeText}</span>
                                 </div>
-                                <div className="text-right shrink-0 space-y-1">
-                                  <div className="flex items-center justify-end gap-1">
-                                    <button
-                                      type="button"
-                                      onClick={(e) => handleQuickPrintOrder(order, e)}
-                                      className="p-1.5 bg-[#121417] hover:bg-[#2a2f38] text-slate-300 hover:text-emerald-400 rounded-lg border border-[#2a2f38] transition-all cursor-pointer shadow-xs"
-                                      title="Imprimir pré-conta / conferência"
-                                    >
-                                      <Printer size={13} />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectedKanbanOrder(order);
-                                      }}
-                                      className="p-1.5 bg-[#121417] hover:bg-[#2a2f38] text-slate-300 hover:text-indigo-400 rounded-lg border border-[#2a2f38] transition-all cursor-pointer shadow-xs"
-                                      title="Ver detalhes do pedido"
-                                    >
-                                      <Edit3 size={13} />
-                                    </button>
-                                  </div>
-                                  <span className="font-extrabold text-lg text-emerald-400 font-mono block">
-                                    R$ {order.itens.reduce((sum: number, it: any) => sum + (it.preco_unit || it.preco || 0), 0).toFixed(2)}
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => handleQuickPrintOrder(order, e)}
+                                    className="p-1 bg-[#121417] hover:bg-[#2a2f38] text-slate-300 hover:text-emerald-400 rounded-md border border-[#2a2f38] transition-all cursor-pointer shadow-xs"
+                                    title="Imprimir pré-conta / conferência"
+                                  >
+                                    <Printer size={12} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedKanbanOrder(order);
+                                    }}
+                                    className="p-1 bg-[#121417] hover:bg-[#2a2f38] text-slate-300 hover:text-indigo-400 rounded-md border border-[#2a2f38] transition-all cursor-pointer shadow-xs"
+                                    title="Ver detalhes do pedido"
+                                  >
+                                    <Edit3 size={12} />
+                                  </button>
+                                  <span className="font-extrabold text-base text-emerald-400 font-mono block ml-1">
+                                    R$ {totalVal.toFixed(2)}
                                   </span>
                                 </div>
+                              </div>
+
+                              {/* LINHA 2 (Sub-header) */}
+                              <div className="flex items-center justify-between text-xs text-[#94a3b8]">
+                                <strong className="font-bold text-white text-xs truncate">
+                                  {order.identificador || ((order.mesaId && order.mesaId > 0) ? `Consumo Mesa ${order.mesaId}` : 'Consumo Balcão')}
+                                </strong>
+                                <span className="shrink-0 text-[11px]">Atendente: {order.garcomNome || 'Garçom'}</span>
                               </div>
 
                               {renderCompactItemsList(order.itens, cardId, isExpanded, toggleCardExpansion)}
@@ -4456,8 +4461,6 @@ export function CaixaPanel({
                                   e.stopPropagation();
                                   if (isLoading) return;
                                   
-                                  // O checkout sempre representa a conta inteira da mesa,
-                                  // inclusive comandas que ainda não chegaram a esta coluna.
                                   const tableComandas = orders.filter(
                                     o => Number(o.mesaId) === Number(order.mesaId)
                                       && isTableCheckoutOrder(o)
@@ -4466,7 +4469,6 @@ export function CaixaPanel({
                                   if (!checkoutOrder) return;
 
                                   setSelectedOrder(checkoutOrder);
-
                                   setShowCheckoutModal(true);
                                   setCheckoutServiceTax(true);
                                   setSplitPeople('1');
@@ -4480,9 +4482,9 @@ export function CaixaPanel({
                                     Math.max(0, total - Number(checkoutOrder.valorPago || 0)).toFixed(2)
                                   );
                                 }}
-                                className={clsx('w-full', 'py-2', contaPedida ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-emerald-600 hover:bg-emerald-700', 'text-white', 'rounded-lg', 'font-bold', 'text-xs', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1.5', 'shadow-sm')}
+                                className={clsx('w-full py-1.5 px-3 h-8 sm:h-9', contaPedida ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-emerald-600 hover:bg-emerald-500', 'text-white rounded-lg font-bold text-xs transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm')}
                               >
-                                <Check size={13} /><span>Abrir Pagamento da Mesa</span>
+                                <Check size={13} /><span>ABRIR PAGAMENTO DA MESA</span>
                               </button>
                             </div>
                           );
@@ -4500,61 +4502,66 @@ export function CaixaPanel({
                           const badgeColor = isDeliveryOrder
                             ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
                             : 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30';
-                          const cardTone = isDeliveryOrder
-                            ? 'bg-[#251e18] border-[#382d24] border-l-amber-500 hover:border-amber-400/60'
-                            : 'bg-[#201d2a] border-[#302a3f] border-l-indigo-500 hover:border-indigo-400/60';
                           return (
                             <div 
                               key={`transito-${order.id}`} 
                               onClick={() => openSimulatedOrderDetails(order)}
-                              className={clsx('border', 'border-l-4', sla.borderTopClass, 'p-3.5', 'rounded-xl', 'space-y-3', 'transition-all', 'cursor-pointer', 'shadow-sm', 'hover:shadow-md', cardTone)}
+                              className={clsx(
+                                'bg-[#1e1e24] border border-[#32323d] border-l-4',
+                                isDeliveryOrder ? 'border-l-amber-500' : 'border-l-indigo-500',
+                                sla.borderTopClass,
+                                'p-2.5 sm:p-3 rounded-xl space-y-2 transition-all cursor-pointer shadow-sm hover:border-slate-500/50'
+                              )}
                             >
-                              <div className={clsx('flex', 'justify-between', 'items-start')}>
-                                <div>
-                                  <div className="flex flex-wrap gap-1.5 mb-1.5">
-                                    <span className={clsx('px-2', 'py-0.5', 'text-[9px]', 'uppercase', 'tracking-wider', 'font-bold', 'rounded-md', 'border', 'font-mono', 'block', 'w-fit', 'shadow-xs', sla.badgeClass)}>
-                                      {sla.label}
-                                    </span>
-                                    <span className={clsx('px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md border font-mono block w-fit', badgeColor)}>{badgeText}</span>
-                                    <span className="px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md border border-slate-500/20 bg-slate-500/10 text-slate-300 font-mono">
-                                      {order.canal}
-                                    </span>
-                                  </div>
-                                  <strong className={clsx('font-bold', 'text-base', 'text-slate-100', 'block')}>{order.cliente}</strong>
-                                  <span className={clsx('font-normal', 'text-xs', 'text-slate-400', 'block', 'mt-0.5')}>{order.telefone}</span>
+                              {/* LINHA 1 (Top Bar do Card) */}
+                              <div className="flex justify-between items-center gap-2">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className={clsx('px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md border font-mono block w-fit shadow-xs', sla.badgeClass)}>
+                                    {sla.label}
+                                  </span>
+                                  <span className={clsx('px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md border font-mono block w-fit', badgeColor)}>{badgeText}</span>
+                                  <span className="px-1.5 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md border border-slate-500/20 bg-slate-500/10 text-slate-300 font-mono">
+                                    {order.canal}
+                                  </span>
                                 </div>
-                                <div className="text-right shrink-0 space-y-1">
-                                  <div className="flex items-center justify-end gap-1">
-                                    <button
-                                      type="button"
-                                      onClick={(e) => handleQuickPrintOrder(order, e)}
-                                      className="p-1.5 bg-[#121417] hover:bg-[#2a2f38] text-slate-300 hover:text-emerald-400 rounded-lg border border-[#2a2f38] transition-all cursor-pointer shadow-xs"
-                                      title="Imprimir pré-conta / conferência"
-                                    >
-                                      <Printer size={13} />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        openSimulatedOrderDetails(order);
-                                      }}
-                                      className="p-1.5 bg-[#121417] hover:bg-[#2a2f38] text-slate-300 hover:text-indigo-400 rounded-lg border border-[#2a2f38] transition-all cursor-pointer shadow-xs"
-                                      title="Ver detalhes do pedido"
-                                    >
-                                      <Edit3 size={13} />
-                                    </button>
-                                  </div>
-                                  <span className={clsx('font-extrabold', 'text-lg', 'text-emerald-400', 'font-mono', 'block')}>R$ {order.total.toFixed(2)}</span>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => handleQuickPrintOrder(order, e)}
+                                    className="p-1 bg-[#121417] hover:bg-[#2a2f38] text-slate-300 hover:text-emerald-400 rounded-md border border-[#2a2f38] transition-all cursor-pointer shadow-xs"
+                                    title="Imprimir pré-conta / conferência"
+                                  >
+                                    <Printer size={12} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openSimulatedOrderDetails(order);
+                                    }}
+                                    className="p-1 bg-[#121417] hover:bg-[#2a2f38] text-slate-300 hover:text-indigo-400 rounded-md border border-[#2a2f38] transition-all cursor-pointer shadow-xs"
+                                    title="Ver detalhes do pedido"
+                                  >
+                                    <Edit3 size={12} />
+                                  </button>
+                                  <span className="font-extrabold text-base text-emerald-400 font-mono block ml-1">
+                                    R$ {order.total.toFixed(2)}
+                                  </span>
                                 </div>
+                              </div>
+
+                              {/* LINHA 2 (Sub-header) */}
+                              <div className="flex items-center justify-between text-xs text-[#94a3b8]">
+                                <strong className="font-bold text-white text-xs truncate">{order.cliente}</strong>
+                                <span className="shrink-0 text-[11px]">{order.telefone}</span>
                               </div>
 
                               {renderCompactItemsList(order.itens, cardId, isExpanded, toggleCardExpansion)}
 
                               {isDeliveryOrder && order.endereco && (
-                                <span className={clsx('font-normal', 'text-xs', 'text-slate-400', 'flex', 'items-start', 'gap-1', 'block')}>
-                                  <MapPin size={12} className={clsx('shrink-0', 'text-amber-500', 'mt-0.5')} />
-                                  <span className="leading-relaxed">{order.endereco}</span>
+                                <span className="font-normal text-xs text-[#94a3b8] flex items-center gap-1 truncate">
+                                  <MapPin size={11} className="shrink-0 text-amber-500" />
+                                  <span className="truncate">{order.endereco}</span>
                                 </span>
                               )}
 
@@ -4587,9 +4594,9 @@ export function CaixaPanel({
                                     handleFinalizarPedido(order.id);
                                   }
                                 }}
-                                className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm"
+                                className="w-full py-1.5 px-3 h-8 sm:h-9 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-xs transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm"
                               >
-                                <Check size={13} /><span>{order.pago ? 'Finalizar Pedido' : 'Receber e Finalizar'}</span>
+                                <Check size={13} /><span>{order.pago ? 'FINALIZAR PEDIDO' : 'RECEBER E FINALIZAR'}</span>
                               </button>
                             </div>
                           );
