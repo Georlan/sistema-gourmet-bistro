@@ -710,7 +710,8 @@ export default function App() {
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          if (data.event === "new_delivery_order") {
+          if (data.event === "new_delivery_order" || data.event === "ORDER_UPDATED" || data.event === "NEW_ORDER") {
+            fetchOrdersFromAPI();
             window.dispatchEvent(new Event('koma_orders_updated'));
           }
           if (data.event === "print_monitor_updated") {
@@ -723,7 +724,7 @@ export default function App() {
           if (data.event === "customers_updated") {
             window.dispatchEvent(new Event('koma_customers_updated'));
           }
-          if (data.event === "tables_updated") {
+          if (data.event === "tables_updated" || data.event === "TABLE_UPDATED") {
             if (wsUpdateTimeout) {
               clearTimeout(wsUpdateTimeout);
             }
@@ -743,6 +744,8 @@ export default function App() {
               showToast(`💵 CONFIRMAR DINHEIRO: R$ ${data.detail.valor.toFixed(2)} - Garçom ${data.detail.garcom_nome}`, 'info', 5000);
             }
           } else if (data.event === "MESA_ATUALIZADA") {
+            fetchOrdersFromAPI();
+            window.dispatchEvent(new Event('koma_orders_updated'));
             const { mesa_id, status, comanda_id } = data.data;
             if (status === 'livre') {
               setOrders(prevOrders => prevOrders.filter(o => o.mesaId !== mesa_id));

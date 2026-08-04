@@ -1047,9 +1047,41 @@ export function CaixaPanel({
     setExpandedCardIds(prev => ({ ...prev, [cardId]: !prev[cardId] }));
   };
 
-  // Cálculo de tempo de espera dinâmico (SLA)
+  useEffect(() => {
+    const handleOrdersUpdated = () => {
+      setNowTimestamp(Date.now());
+      if (onRefreshOrders) {
+        onRefreshOrders();
+      }
+    };
+    window.addEventListener('koma_orders_updated', handleOrdersUpdated);
+    return () => {
+      window.removeEventListener('koma_orders_updated', handleOrdersUpdated);
+    };
+  }, [onRefreshOrders]);
+
+  // Formatação padronizada de tempo decorrido: X min ou Xh Ym
+  const formatElapsedDuration = (minutes: number) => {
+    if (minutes < 60) {
+      return `⏱️ ${minutes} min`;
+    }
+    const hours = Math.floor(minutes / 60);
+    const remMins = minutes % 60;
+    return `⏱️ ${hours}h ${remMins}m`;
+  };
+
+  // Cálculo de tempo de espera dinâmico (SLA) sincronizado entre Salão/Garçom e Caixa
   const getOrderSlaData = (order: any, now: number) => {
-    const rawTime = order.created_at || order.timestamp || order.criadoEm || (order.itens && order.itens[0]?.criadoEm);
+    const rawTime =
+      order.aberta_em ||
+      order.data_abertura ||
+      order.created_at ||
+      order.timestamp ||
+      order.criadoEm ||
+      order.updated_at ||
+      (order.itens && order.itens[0]?.criadoEm) ||
+      (order.itens && order.itens[0]?.created_at);
+
     let orderTimeMs = 0;
     if (typeof rawTime === 'number') {
       orderTimeMs = rawTime;
@@ -1061,27 +1093,28 @@ export function CaixaPanel({
     }
 
     const elapsedMinutes = Math.max(0, Math.floor((now - orderTimeMs) / 60000));
+    const labelText = formatElapsedDuration(elapsedMinutes);
     
     if (elapsedMinutes > 25) {
       return {
         minutes: elapsedMinutes,
-        badgeClass: 'bg-rose-500/20 text-rose-400 border-rose-500/40 animate-pulse',
+        badgeClass: 'bg-rose-500/20 text-rose-400 border-rose-500/40 animate-pulse font-extrabold',
         borderTopClass: 'border-t-2 border-t-rose-500',
-        label: `⏱️ ${elapsedMinutes} min`
+        label: labelText
       };
     } else if (elapsedMinutes >= 15) {
       return {
         minutes: elapsedMinutes,
-        badgeClass: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+        badgeClass: 'bg-amber-500/15 text-amber-400 border-amber-500/30 font-bold',
         borderTopClass: 'border-t-2 border-t-amber-500',
-        label: `⏱️ ${elapsedMinutes} min`
+        label: labelText
       };
     } else {
       return {
         minutes: elapsedMinutes,
         badgeClass: 'bg-slate-500/15 text-slate-300 border-slate-500/25',
         borderTopClass: '',
-        label: `⏱️ ${elapsedMinutes} min`
+        label: labelText
       };
     }
   };
