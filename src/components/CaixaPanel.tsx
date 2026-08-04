@@ -1031,6 +1031,19 @@ export function CaixaPanel({
     } catch (e) { /* audio not available */ }
   };
 
+  // Drawer Overlay do Operador/Login
+  const [isOperatorDrawerOpen, setIsOperatorDrawerOpen] = useState(false);
+
+  const handleLogoutOperator = () => {
+    localStorage.removeItem("koma_token");
+    localStorage.removeItem("koma_user_id");
+    localStorage.removeItem("koma_user_name");
+    localStorage.removeItem("koma_user_role");
+    localStorage.removeItem("koma_auth_token");
+    localStorage.clear();
+    window.location.reload();
+  };
+
   // ── MÓDULO 3: SLA, Impressão Rápida e Expansão Compacta de Itens ──────────────
   const [nowTimestamp, setNowTimestamp] = useState<number>(() => Date.now());
   const [expandedCardIds, setExpandedCardIds] = useState<Record<string, boolean>>({});
@@ -3103,8 +3116,7 @@ export function CaixaPanel({
                   <button
                     type="button"
                     onClick={() => {
-                      setActiveTab('configuracoes');
-                      setActiveSubTab('impressoras');
+                      setIsOperatorDrawerOpen(true);
                       setIsMobileSidebarOpen(false);
                     }}
                     className="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-300 hover:text-white transition-colors cursor-pointer"
@@ -3338,10 +3350,7 @@ export function CaixaPanel({
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => {
-                  setActiveTab('configuracoes');
-                  setActiveSubTab('impressoras');
-                }}
+                onClick={() => setIsOperatorDrawerOpen(true)}
                 className="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-300 hover:text-white transition-colors cursor-pointer"
                 title="Opções do Caixa / Login"
               >
@@ -9873,6 +9882,171 @@ export function CaixaPanel({
           onClose={() => setShowSuprimentoModal(false)}
           onSubmit={handleRegistrarSuprimento}
         />
+      )}
+
+      {/* OPERATOR MENU DRAWER OVERLAY */}
+      {isOperatorDrawerOpen && (
+        <div className="fixed inset-0 z-[9998] flex justify-start animate-fade-in">
+          {/* Backdrop escuro com clique para fechar */}
+          <div
+            onClick={() => setIsOperatorDrawerOpen(false)}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm transition-opacity cursor-pointer"
+          />
+
+          {/* Drawer Lateral */}
+          <div className="relative w-80 max-w-[85vw] h-full bg-[#181a1f] border-r border-[#2a2f38] shadow-2xl flex flex-col justify-between z-10 overflow-y-auto p-5 text-slate-100 font-sans">
+            <div className="space-y-6">
+              {/* Header do Drawer */}
+              <div className="flex items-center justify-between border-b border-[#2a2f38] pb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-400">
+                    <SlidersHorizontal size={18} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-base text-slate-100">Opções do Caixa</h3>
+                    <span className="text-xs text-slate-400 block">Sessão e Preferências</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsOperatorDrawerOpen(false)}
+                  className="p-1.5 text-slate-400 hover:text-white bg-[#121417] hover:bg-[#2a2f38] border border-[#2a2f38] rounded-lg cursor-pointer transition-all"
+                  title="Fechar Menu"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* 1. SEÇÃO GARÇOM / OPERADOR EM ATENDIMENTO */}
+              <div className="bg-[#121417] border border-[#2a2f38] rounded-2xl p-4 space-y-3.5">
+                <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">
+                  Garçom / Operador em Atendimento
+                </span>
+                <div className="flex items-center gap-3">
+                  <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-indigo-600 flex items-center justify-center font-bold text-white text-lg shadow-md shrink-0 font-serif">
+                    {(activeWaiterNome || "G").charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <strong className="font-bold text-base text-slate-100 block truncate">
+                      {activeWaiterNome || "Georlan"}
+                    </strong>
+                    <span className="text-xs text-emerald-400 font-medium block">
+                      Operador de Caixa / Gerência
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleLogoutOperator}
+                  className="w-full py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-2 shadow-md"
+                >
+                  <Lock size={14} />
+                  <span>LOGOUT / TROCAR OPERADOR</span>
+                </button>
+              </div>
+
+              {/* 2. SEÇÃO STATUS DO SALÃO AO VIVO */}
+              <div className="bg-[#121417] border border-[#2a2f38] rounded-2xl p-4 space-y-3">
+                <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">
+                  Status do Salão ao Vivo
+                </span>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="bg-[#181a1f] border border-[#2a2f38] p-2.5 rounded-xl text-center">
+                    <span className="text-[9px] text-slate-400 block font-medium">LIVRES</span>
+                    <strong className="text-lg font-bold text-emerald-400 font-mono">
+                      {salonTables.filter(t => t.status === 'livre').length}
+                    </strong>
+                  </div>
+                  <div className="bg-[#181a1f] border border-[#2a2f38] p-2.5 rounded-xl text-center">
+                    <span className="text-[9px] text-slate-400 block font-medium">OCUPADAS</span>
+                    <strong className="text-lg font-bold text-amber-400 font-mono">
+                      {salonTables.filter(t => t.status === 'ocupada').length}
+                    </strong>
+                  </div>
+                  <div className="bg-[#181a1f] border border-[#2a2f38] p-2.5 rounded-xl text-center">
+                    <span className="text-[9px] text-slate-400 block font-medium">TOTAL</span>
+                    <strong className="text-lg font-bold text-indigo-400 font-mono">
+                      {salonTables.length}
+                    </strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. SEÇÃO ATALHOS DE ATENDIMENTO */}
+              <div className="bg-[#121417] border border-[#2a2f38] rounded-2xl p-4 space-y-2.5">
+                <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">
+                  Atalhos de Atendimento
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onRefreshOrders) onRefreshOrders();
+                    showToast("Salão e pedidos sincronizados!", "success");
+                  }}
+                  className="w-full py-2 px-3 bg-[#181a1f] hover:bg-[#252a33] border border-[#2a2f38] text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-2">
+                    <RefreshCw size={14} className="text-emerald-400" />
+                    <span>Sincronizar Salão e Pedidos</span>
+                  </div>
+                  <ChevronRight size={14} className="text-slate-500" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    toggleFullscreen();
+                    setIsOperatorDrawerOpen(false);
+                  }}
+                  className="w-full py-2 px-3 bg-[#181a1f] hover:bg-[#252a33] border border-[#2a2f38] text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-2">
+                    {isFullscreen ? <Minimize2 size={14} className="text-indigo-400" /> : <Maximize2 size={14} className="text-indigo-400" />}
+                    <span>{isFullscreen ? "Sair do Modo PDV" : "Modo PDV Imersivo"}</span>
+                  </div>
+                  <ChevronRight size={14} className="text-slate-500" />
+                </button>
+              </div>
+
+              {/* 4. SEÇÃO EXIBIÇÃO E PREFERÊNCIAS */}
+              <div className="bg-[#121417] border border-[#2a2f38] rounded-2xl p-4 space-y-3">
+                <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">
+                  Exibição e Preferências
+                </span>
+                
+                <div className="space-y-1.5">
+                  <span className="text-xs text-slate-300 font-medium block">Tamanho da Fonte:</span>
+                  <div className="grid grid-cols-3 gap-1 bg-[#181a1f] p-1 rounded-xl border border-[#2a2f38]">
+                    {(['padrao', 'grande', 'gigante'] as const).map((sz) => (
+                      <button
+                        key={sz}
+                        type="button"
+                        onClick={() => changeFontSize(sz)}
+                        className={`py-1 rounded-lg text-xs font-bold uppercase transition-all cursor-pointer ${fontSize === sz
+                          ? 'bg-emerald-600 text-white shadow-xs'
+                          : 'text-slate-400 hover:text-slate-200'
+                          }`}
+                      >
+                        {sz === 'padrao' ? 'Padrão' : sz === 'grande' ? 'Grande' : 'Gigante'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* RODAPÉ */}
+            <div className="pt-6 border-t border-[#2a2f38] text-center space-y-1">
+              <span className="text-xs font-bold text-slate-400 block font-mono">
+                Kôma v3.5 • Dark Engine
+              </span>
+              <span className="text-[10px] text-slate-500 block">
+                Sistema PDV Gourmet Multi-Tenant
+              </span>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>
