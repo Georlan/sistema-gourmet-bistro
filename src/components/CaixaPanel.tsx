@@ -387,6 +387,18 @@ export function CaixaPanel({
       Object.entries(itemsByLancamento).forEach(([lid, items]) => {
         const preparingItems = items.filter(i => i.status === 'preparando');
         if (preparingItems.length > 0) {
+          const mesaEntity = (salonTables || []).find(t => t.id === comanda.mesaId);
+          const rawTableTimestamp =
+            (comanda as any).aberta_em ||
+            (comanda as any).data_abertura ||
+            (comanda as any).aberto_em ||
+            (mesaEntity as any)?.aberta_em ||
+            (mesaEntity as any)?.data_abertura ||
+            (mesaEntity as any)?.created_at ||
+            comanda.created_at ||
+            comanda.timestamp ||
+            (comanda as any).criadoEm;
+
           list.push({
             id: lid,
             comandaId: comanda.id,
@@ -396,6 +408,13 @@ export function CaixaPanel({
             identificador: (comanda as any).identificador ?? null,
             garcomNome: comanda.garcomNome,
             tipo: comanda.tipo,
+            aberta_em: rawTableTimestamp,
+            data_abertura: (comanda as any).data_abertura || rawTableTimestamp,
+            aberto_em: (comanda as any).aberto_em || rawTableTimestamp,
+            created_at: comanda.created_at || (comanda as any).criadoEm || rawTableTimestamp,
+            timestamp: comanda.timestamp || (typeof rawTableTimestamp === 'number' ? rawTableTimestamp : Date.parse(rawTableTimestamp || '')),
+            criadoEm: (comanda as any).criadoEm || comanda.created_at,
+            mesa: mesaEntity,
             itens: preparingItems
           });
         }
@@ -455,6 +474,31 @@ export function CaixaPanel({
         });
 
       const firstComanda = entries[0].comanda;
+      const mesaEntity = (salonTables || []).find(t => t.id === mesaId);
+
+      let oldestComandaTime: any = null;
+      entries.forEach(e => {
+        const cTime =
+          (e.comanda as any).aberta_em ||
+          (e.comanda as any).data_abertura ||
+          (e.comanda as any).aberto_em ||
+          e.comanda.created_at ||
+          e.comanda.timestamp ||
+          (e.comanda as any).criadoEm;
+        if (!oldestComandaTime) {
+          oldestComandaTime = cTime;
+        } else if (cTime) {
+          const t1 = typeof cTime === 'number' ? cTime : Date.parse(cTime);
+          const t2 = typeof oldestComandaTime === 'number' ? oldestComandaTime : Date.parse(oldestComandaTime);
+          if (!isNaN(t1) && (isNaN(t2) || t1 < t2)) {
+            oldestComandaTime = cTime;
+          }
+        }
+      });
+
+      if (!oldestComandaTime && mesaEntity) {
+        oldestComandaTime = (mesaEntity as any).aberta_em || (mesaEntity as any).data_abertura || (mesaEntity as any).created_at;
+      }
 
       list.push({
         id: firstComanda.id, // ID real da comanda principal para rotear requisições
@@ -465,6 +509,13 @@ export function CaixaPanel({
         identificador: firstComanda.identificador ?? null,
         garcomNome: firstComanda.garcomNome,
         tipo: firstComanda.tipo,
+        aberta_em: oldestComandaTime || (firstComanda as any).aberta_em,
+        data_abertura: (firstComanda as any).data_abertura || oldestComandaTime,
+        aberto_em: (firstComanda as any).aberto_em || oldestComandaTime,
+        created_at: firstComanda.created_at || (firstComanda as any).criadoEm || oldestComandaTime,
+        timestamp: firstComanda.timestamp || (typeof oldestComandaTime === 'number' ? oldestComandaTime : Date.parse(oldestComandaTime || '')),
+        criadoEm: (firstComanda as any).criadoEm || firstComanda.created_at,
+        mesa: mesaEntity,
         valorPago: entries.reduce((sum, e) => sum + (e.comanda.valorPago || 0), 0),
         itens: allItems,
         contaPedida: hasContaPedida,
@@ -1073,10 +1124,32 @@ export function CaixaPanel({
     };
   }, [onRefreshOrders]);
 
-  // Formatação padronizada de tempo decorrido: X min ou Xh Ym
+  // Função robusta de parser e cálculo de tempo decorrido (evitando UTC/NaN e nunca usando updated_at)
+  function calcularMinutosDecorridos(timestamp: any, agora: number): number {
+    if (!timestamp) return 0;
+
+    let dataInicio = 0;
+    if (typeof timestamp === 'number') {
+      dataInicio = timestamp;
+    } else if (typeof timestamp === 'string') {
+      const parsed = Date.parse(timestamp);
+      dataInicio = isNaN(parsed) ? 0 : parsed;
+    } else if (timestamp instanceof Date) {
+      dataInicio = timestamp.getTime();
+    }
+
+    if (!dataInicio || isNaN(dataInicio)) return 0;
+
+    const diferencaMs = agora - dataInicio;
+    const minutos = Math.floor(diferencaMs / (1000 * 60));
+
+    return minutos > 0 ? minutos : 0;
+  }
+
+  // Formatação padronizada de tempo decorrido: X MIN ou Xh Ym
   const formatElapsedDuration = (minutes: number) => {
     if (minutes < 60) {
-      return `⏱️ ${minutes} min`;
+      return `⏱️ ${minutes} MIN`;
     }
     const hours = Math.floor(minutes / 60);
     const remMins = minutes % 60;
@@ -1085,27 +1158,27 @@ export function CaixaPanel({
 
   // Cálculo de tempo de espera dinâmico (SLA) sincronizado entre Salão/Garçom e Caixa
   const getOrderSlaData = (order: any, now: number) => {
-    const rawTime =
+    // Extrai a data de abertura priorizando a Entidade da Mesa e campos de abertura do Garçom
+    const timestampReal =
+      order.mesa?.aberta_em ||
+      order.mesa?.data_abertura ||
+      order.mesa?.created_at ||
       order.aberta_em ||
       order.data_abertura ||
+      order.aberto_em ||
       order.created_at ||
       order.timestamp ||
       order.criadoEm ||
-      order.updated_at ||
-      (order.itens && order.itens[0]?.criadoEm) ||
-      (order.itens && order.itens[0]?.created_at);
+      (Array.isArray(order.itens) && order.itens.length > 0 && Math.min(
+        ...order.itens.map((i: any) => {
+          const t = i.criadoEm || i.created_at || i.timestamp;
+          if (typeof t === 'number') return t;
+          if (typeof t === 'string') { const p = Date.parse(t); return isNaN(p) ? Infinity : p; }
+          return Infinity;
+        }).filter((t: number) => t < Infinity)
+      ));
 
-    let orderTimeMs = 0;
-    if (typeof rawTime === 'number') {
-      orderTimeMs = rawTime;
-    } else if (typeof rawTime === 'string') {
-      const parsed = Date.parse(rawTime);
-      orderTimeMs = isNaN(parsed) ? now : parsed;
-    } else {
-      orderTimeMs = now;
-    }
-
-    const elapsedMinutes = Math.max(0, Math.floor((now - orderTimeMs) / 60000));
+    const elapsedMinutes = calcularMinutosDecorridos(timestampReal, now);
     const labelText = formatElapsedDuration(elapsedMinutes);
     
     if (elapsedMinutes > 25) {
