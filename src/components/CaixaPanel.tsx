@@ -3749,7 +3749,7 @@ export function CaixaPanel({
               {(activeTab === 'relatorios' || activeTab === 'dashboard') && 'Relatórios'}
               {(activeTab === 'assistente_koma' || activeTab === 'robo_ia') && 'Assistente Kôma'}
               {activeTab === 'operacao' && 'Gestão de Atendimento Local'}
-              {activeTab === 'cardapio' && 'Gestão e Engenharia do Cardápio'}
+              {activeTab === 'cardapio' && 'CARDÁPIO DO RESTAURANTE'}
               {activeTab === 'estoque' && 'GESTÃO DE ESTOQUE'}
               {activeTab === 'financeiro' && 'GESTÃO DO CAIXA'}
               {activeTab === 'clientes' && 'GESTÃO DE CLIENTES'}
@@ -3825,8 +3825,8 @@ export function CaixaPanel({
           ))}
 
           {activeTab === 'cardapio' && [
-            { id: 'produtos', label: 'Produtos' },
-            { id: 'disponibilidade', label: 'Disponibilidade' },
+            { id: 'produtos', label: 'Lista de Produtos' },
+            { id: 'disponibilidade', label: 'Pausar / Ativar Pratos' },
             { id: 'categorias', label: 'Categorias' }
           ].map(sub => (
             <button
@@ -6718,27 +6718,27 @@ export function CaixaPanel({
               byCat[cat].push(p);
             });
             return (
-              <div className={clsx('space-y-4', 'animate-fade-in', 'text-left', 'max-w-2xl')}>
+              <div className="space-y-4 animate-fade-in text-left w-full">
                 {/* Header */}
-                <div className={clsx('flex', 'justify-between', 'items-center')}>
+                <div className="flex justify-between items-center">
                   <div>
-                    <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block')}>Pausa Rápida de Produtos</span>
-                    <span className={clsx('text-[8px]', 'text-gray-500', 'block', 'mt-0.5')}>Esgotado bloqueia o item no app do garçom instantaneamente.</span>
+                    <h3 className="font-serif font-bold text-slate-100 text-sm sm:text-base block">Disponibilidade Rápida do Cardápio</h3>
+                    <p className="text-xs text-slate-400 block mt-0.5">Itens pausados não aparecem no aplicativo do garçom.</p>
                   </div>
                 </div>
 
                 {/* Search */}
                 <div className="relative">
-                  <svg className={clsx('absolute', 'left-3', 'top-1/2', '-translate-y-1/2', 'text-gray-500')} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+                  <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
                   <input
                     value={disponibilidadeSearch}
                     onChange={e => setDisponibilidadeSearch(e.target.value)}
                     placeholder="Pesquisar produto..."
-                    className={clsx('w-full', 'pl-8', 'pr-4', 'py-2', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-xs', 'placeholder-gray-600', 'focus:outline-none', 'focus:border-[#10b981]/40', 'transition-colors')}
+                    className="w-full pl-9 pr-8 py-2 bg-slate-800/80 border border-slate-700/80 rounded-xl text-slate-100 text-xs sm:text-sm placeholder-slate-400 focus:outline-none focus:border-emerald-500 transition-colors"
                   />
                   {disponibilidadeSearch && (
-                    <button onClick={() => setDisponibilidadeSearch('')} className={clsx('absolute', 'right-3', 'top-1/2', '-translate-y-1/2', 'text-gray-500', 'hover:text-white')}>
-                      <X size={11} />
+                    <button onClick={() => setDisponibilidadeSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer">
+                      <X size={13} />
                     </button>
                   )}
                 </div>
@@ -6750,18 +6750,18 @@ export function CaixaPanel({
                     .sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true, sensitivity: 'base' }));
                   if (prods.length === 0) return null;
                   return (
-                    <div key={catObj.id} className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-2xl', 'overflow-hidden')}>
-                      <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'gap-3')}>
+                    <div key={catObj.id} className="bg-[#18181b] border border-[#27272a] rounded-2xl overflow-hidden w-full shadow-sm">
+                      <div className="bg-[#141417] px-4 py-3 border-b border-[#27272a] flex justify-between items-center gap-3">
                         <div className="flex items-baseline gap-2">
-                          <span className={clsx('font-bold', 'text-[#10b981]', 'text-[10px]', 'uppercase', 'tracking-wider')}>{catObj.nome}</span>
-                          <span className={clsx('text-[8px]', 'text-gray-500')}>{prods.length} item{prods.length !== 1 ? 's' : ''}</span>
+                          <span className="font-bold text-emerald-400 text-xs sm:text-sm uppercase tracking-wider">{catObj.nome}</span>
+                          <span className="text-xs text-slate-400">({prods.length} {prods.length === 1 ? 'item' : 'itens'})</span>
                         </div>
                         
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-2">
                           <button
                             type="button"
                             onClick={async () => {
-                              if (confirm(`Deseja realmente esgotar todos os itens da categoria "${catObj.nome}"?`)) {
+                              if (confirm(`Deseja realmente pausar todos os itens da categoria "${catObj.nome}"?`)) {
                                 try {
                                   await Promise.all(prods.map(prod => 
                                     fetch(`${apiBaseUrl}/produtos/${prod.id}`, {
@@ -6777,14 +6777,14 @@ export function CaixaPanel({
                                 }
                               }
                             }}
-                            className="px-2 py-0.5 border border-red-900/40 hover:border-red-600/30 bg-red-950/20 hover:bg-red-900/25 text-red-400 hover:text-white text-[8px] font-bold rounded transition-all cursor-pointer uppercase tracking-wide border"
+                            className="px-2.5 py-1 border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-bold rounded-lg transition-all cursor-pointer uppercase tracking-wider"
                           >
-                            Esgotar Todos
+                            Pausar Categoria
                           </button>
                           <button
                             type="button"
                             onClick={async () => {
-                              if (confirm(`Deseja realmente disponibilizar todos os itens da categoria "${catObj.nome}"?`)) {
+                              if (confirm(`Deseja realmente ativar todos os itens da categoria "${catObj.nome}"?`)) {
                                 try {
                                   await Promise.all(prods.map(prod => 
                                     fetch(`${apiBaseUrl}/produtos/${prod.id}`, {
@@ -6800,25 +6800,50 @@ export function CaixaPanel({
                                 }
                               }
                             }}
-                            className="px-2 py-0.5 border border-emerald-900/40 hover:border-emerald-600/30 bg-emerald-950/20 hover:bg-emerald-900/25 text-emerald-400 hover:text-white text-[8px] font-bold rounded transition-all cursor-pointer uppercase tracking-wide border"
+                            className="px-2.5 py-1 border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-bold rounded-lg transition-all cursor-pointer uppercase tracking-wider"
                           >
-                            Disponibilizar Todos
+                            Ativar Categoria
                           </button>
                         </div>
                       </div>
-                      <div className={clsx('divide-y', 'divide-[#27272A]/40')}>
+
+                      {/* Grid de 2 a 3 colunas preenchendo 100% da página */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-3 w-full">
                         {prods.map(prod => {
                           const isAtivo = (prod as any).ativo !== false;
+                          const codigoFormatado = `#${String(prod.id).padStart(3, '0')}`;
+
                           return (
-                            <div key={prod.id} className={`flex items-center justify-between px-4 py-3 transition-colors ${isAtivo ? 'hover:bg-[#1C1C1F]/30' : 'bg-red-950/10'}`}>
-                              <div className={clsx('flex', 'items-center', 'gap-3')}>
-                                {(prod as any).imagem && <img src={(prod as any).imagem} alt={prod.nome} className={`w-8 h-8 rounded-lg object-cover ${!isAtivo ? 'opacity-40 grayscale' : ''}`} />}
-                                <div>
-                                  <span className={`text-xs font-semibold block ${isAtivo ? 'text-white' : 'text-gray-500 line-through'}`}>{prod.nome}</span>
-                                  <span className={clsx('text-[9px]', 'text-gray-500', 'font-mono')}>R$ {prod.preco.toFixed(2)}</span>
+                            <div
+                              key={prod.id}
+                              className={clsx(
+                                'bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 rounded-xl p-3 flex items-center justify-between shadow-sm transition-all gap-3',
+                                !isAtivo && 'opacity-85'
+                              )}
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                {(prod as any).imagem && (
+                                  <img
+                                    src={(prod as any).imagem}
+                                    alt={prod.nome}
+                                    className={clsx('w-10 h-10 rounded-lg object-cover shrink-0', !isAtivo && 'opacity-40 grayscale')}
+                                  />
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5 truncate">
+                                    <span className="text-xs text-slate-400 font-mono shrink-0">{codigoFormatado}</span>
+                                    <span className={clsx('text-sm font-bold truncate', isAtivo ? 'text-slate-100' : 'text-slate-400 line-through')}>
+                                      {prod.nome}
+                                    </span>
+                                  </div>
+                                  <span className="text-xs font-semibold text-emerald-400 mt-0.5 block font-mono">
+                                    R$ {prod.preco.toFixed(2)}
+                                  </span>
                                 </div>
                               </div>
+
                               <button
+                                type="button"
                                 onClick={async () => {
                                   try {
                                     const res = await fetch(`${apiBaseUrl}/produtos/${prod.id}`, {
@@ -6830,12 +6855,14 @@ export function CaixaPanel({
                                     else { alert('Erro ao atualizar disponibilidade.'); }
                                   } catch { alert('Erro de conexão.'); }
                                 }}
-                                className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase transition-all cursor-pointer border ${isAtivo
-                                  ? 'bg-emerald-600/10 text-emerald-500 hover:bg-red-800/20 hover:text-red-400 border-emerald-600/20 hover:border-red-600/20'
-                                  : 'bg-red-800/15 text-red-400 hover:bg-emerald-600/20 hover:text-emerald-400 border-red-600/20 hover:border-emerald-600/20'
-                                  }`}
+                                className={clsx(
+                                  'px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border shrink-0 flex items-center gap-1.5',
+                                  isAtivo
+                                    ? 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border-emerald-500/30'
+                                    : 'bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border-rose-500/30'
+                                )}
                               >
-                                {isAtivo ? '✓ Disponível' : '✗ Esgotado'}
+                                <span>{isAtivo ? '🟢 Disponível' : '🔴 Pausado'}</span>
                               </button>
                             </div>
                           );
@@ -6845,7 +6872,9 @@ export function CaixaPanel({
                   );
                 })}
                 {filtered.length === 0 && (
-                  <div className={clsx('py-16', 'text-center', 'text-gray-500', 'italic', 'text-xs')}>Nenhum produto encontrado para "{disponibilidadeSearch}".</div>
+                  <div className="py-16 text-center text-slate-400 italic text-xs">
+                    Nenhum produto encontrado para "{disponibilidadeSearch}".
+                  </div>
                 )}
               </div>
             );
