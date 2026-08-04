@@ -1031,6 +1031,149 @@ export function CaixaPanel({
     } catch (e) { /* audio not available */ }
   };
 
+  // ── MÓDULO 3: SLA, Impressão Rápida e Expansão Compacta de Itens ──────────────
+  const [nowTimestamp, setNowTimestamp] = useState<number>(() => Date.now());
+  const [expandedCardIds, setExpandedCardIds] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNowTimestamp(Date.now());
+    }, 15000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const toggleCardExpansion = (cardId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setExpandedCardIds(prev => ({ ...prev, [cardId]: !prev[cardId] }));
+  };
+
+  // Cálculo de tempo de espera dinâmico (SLA)
+  const getOrderSlaData = (order: any, now: number) => {
+    const rawTime = order.created_at || order.timestamp || order.criadoEm || (order.itens && order.itens[0]?.criadoEm);
+    let orderTimeMs = 0;
+    if (typeof rawTime === 'number') {
+      orderTimeMs = rawTime;
+    } else if (typeof rawTime === 'string') {
+      const parsed = Date.parse(rawTime);
+      orderTimeMs = isNaN(parsed) ? now : parsed;
+    } else {
+      orderTimeMs = now;
+    }
+
+    const elapsedMinutes = Math.max(0, Math.floor((now - orderTimeMs) / 60000));
+    
+    if (elapsedMinutes > 25) {
+      return {
+        minutes: elapsedMinutes,
+        badgeClass: 'bg-rose-500/20 text-rose-400 border-rose-500/40 animate-pulse',
+        borderTopClass: 'border-t-2 border-t-rose-500',
+        label: `⏱️ ${elapsedMinutes} min`
+      };
+    } else if (elapsedMinutes >= 15) {
+      return {
+        minutes: elapsedMinutes,
+        badgeClass: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+        borderTopClass: 'border-t-2 border-t-amber-500',
+        label: `⏱️ ${elapsedMinutes} min`
+      };
+    } else {
+      return {
+        minutes: elapsedMinutes,
+        badgeClass: 'bg-slate-500/15 text-slate-300 border-slate-500/25',
+        borderTopClass: '',
+        label: `⏱️ ${elapsedMinutes} min`
+      };
+    }
+  };
+
+  // Impressão rápida de pré-conta do card no Kanban
+  const handleQuickPrintOrder = async (order: any, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    try {
+      const printHeaderStr = localStorage.getItem("koma_print_header") || printHeader || "";
+      const printFooterStr = localStorage.getItem("koma_print_footer") || printFooter || "";
+      let url = "";
+      if (order.mesaId && Number(order.mesaId) > 0) {
+        url = `${apiBaseUrl}/mesas/${order.mesaId}/imprimir-recibo?apenas_valores=true`;
+      } else {
+        url = `${apiBaseUrl}/comandas/${order.id}/imprimir-recibo`;
+      }
+      const params = new URLSearchParams();
+      if (printHeaderStr) params.append("print_header", printHeaderStr);
+      if (printFooterStr) params.append("print_footer", printFooterStr);
+      if (params.toString()) url += (url.includes('?') ? '&' : '?') + params.toString();
+
+      const response = await fetch(url, { method: 'POST', headers: authHeaders });
+      if (response.ok) {
+        showToast("Impressão via de conferência enviada para a fila!", "success");
+        window.dispatchEvent(new Event('koma_print_monitor_refresh'));
+      } else {
+        const errData = await response.json().catch(() => null);
+        showToast(errData?.detail || "Solicitação de impressão rápida concluída.", "info");
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Falha na comunicação com o servidor de impressão.", "error");
+    }
+  };
+
+  // Exibição compacta de até 3 itens com expansão interativa
+  const renderCompactItemsList = (
+    items: any,
+    cardId: string,
+    isExpanded: boolean,
+    onToggle: (cardId: string, e: React.MouseEvent) => void
+  ) => {
+    let itemList: { name: string; qty: number }[] = [];
+
+    if (Array.isArray(items)) {
+      const counts: Record<string, number> = {};
+      items.forEach(it => {
+        const name = it.nome || 'Item';
+        counts[name] = (counts[name] || 0) + 1;
+      });
+      itemList = Object.entries(counts).map(([name, qty]) => ({ name, qty }));
+    } else if (typeof items === 'string') {
+      const parts = items.split(/\+|\,/);
+      itemList = parts.map(p => {
+        const trimmed = p.trim();
+        const match = trimmed.match(/^(\d+)x?\s*(.+)$/i);
+        if (match) {
+          return { qty: parseInt(match[1], 10), name: match[2].trim() };
+        }
+        return { qty: 1, name: trimmed };
+      }).filter(it => it.name.length > 0);
+    }
+
+    if (itemList.length === 0) {
+      return <p className="font-medium text-xs text-slate-400 italic bg-[#121417] p-2 rounded-lg border border-[#2a2f38]">Nenhum item adicionado</p>;
+    }
+
+    const visibleItems = isExpanded ? itemList : itemList.slice(0, 3);
+    const hiddenCount = itemList.length - 3;
+
+    return (
+      <div className="space-y-1 bg-[#121417] p-2.5 rounded-lg border border-[#2a2f38]">
+        <ul className="space-y-1">
+          {visibleItems.map((it, idx) => (
+            <li key={idx} className="font-medium text-sm text-slate-200 flex items-center justify-between font-sans">
+              <span className="truncate">{it.qty}x {it.name}</span>
+            </li>
+          ))}
+        </ul>
+        {itemList.length > 3 && (
+          <button
+            type="button"
+            onClick={(e) => onToggle(cardId, e)}
+            className="mt-1 text-xs font-bold text-emerald-400 hover:text-emerald-300 underline cursor-pointer block transition-all"
+          >
+            {isExpanded ? "▲ Recolher itens" : `+ ${hiddenCount} mais itens (clique para expandir)`}
+          </button>
+        )}
+      </div>
+    );
+  };
+
   const [fontSize, setFontSize] = useState<'padrao' | 'grande' | 'gigante'>(() => {
     return (localStorage.getItem('koma_font_size') as any) || 'padrao';
   });
@@ -3845,27 +3988,29 @@ export function CaixaPanel({
                       <div className={clsx('py-20', 'text-center', 'text-slate-400', 'italic', 'text-xs')}>Nenhum pedido local em produção</div>
                     ) : (
                       <>
-                        {/* Pedidos do Salão (Mesa) em Produção */}
                         {tableOrdersInProduction.map((order) => {
-                          const itemCounts: Record<string, number> = {};
                           const preparingItems = order.itens.filter(item => item.status === 'preparando');
-                          preparingItems.forEach(item => {
-                            const name = item.nome || 'Item';
-                            itemCounts[name] = (itemCounts[name] || 0) + 1;
-                          });
-                          const itemsStr = Object.entries(itemCounts)
-                            .map(([name, qty]) => `${qty}x ${name}`)
-                            .join(' + ');
+                          const cardId = `prod-${order.id}`;
+                          const sla = getOrderSlaData(order, nowTimestamp);
+                          const isExpanded = !!expandedCardIds[cardId];
 
                           return (
                             <div 
                               key={`table-prod-${order.id}`} 
                               onClick={() => setSelectedKanbanOrder(order)}
-                              className={clsx('bg-[#1e2428]', 'border', 'border-[#2e3540]', 'border-l-4', 'border-l-emerald-500', 'hover:border-emerald-400/60', 'p-3.5', 'rounded-xl', 'space-y-3', 'transition-all', 'text-left', 'cursor-pointer', 'shadow-sm')}
+                              className={clsx(
+                                'bg-[#1e2428]', 'border', 'border-[#2e3540]', 'border-l-4', 'border-l-emerald-500',
+                                sla.borderTopClass,
+                                'hover:border-emerald-400/60', 'p-3.5', 'rounded-xl', 'space-y-3', 'transition-all',
+                                'text-left', 'cursor-pointer', 'shadow-sm'
+                              )}
                             >
                               <div className={clsx('flex', 'justify-between', 'items-start')}>
                                 <div>
                                   <div className="flex gap-1.5 flex-wrap mb-1.5">
+                                    <span className={clsx('px-2', 'py-0.5', 'text-[9px]', 'uppercase', 'tracking-wider', 'font-bold', 'rounded-md', 'border', 'font-mono', 'block', 'w-fit', 'shadow-xs', sla.badgeClass)}>
+                                      {sla.label}
+                                    </span>
                                     <span className={clsx('px-2', 'py-0.5', 'text-[9px]', 'uppercase', 'tracking-wider', 'font-bold', 'bg-emerald-500/15', 'text-emerald-400', 'border', 'border-emerald-500/25', 'rounded-md', 'font-mono', 'block', 'w-fit')}>
                                       {order.mesaId && order.mesaId > 0 ? `Mesa ${order.mesaId}` : 'Balcão'}
                                     </span>
@@ -3885,16 +4030,35 @@ export function CaixaPanel({
                                   </strong>
                                   <span className={clsx('font-normal', 'text-xs', 'text-slate-400', 'block', 'mt-0.5')}>Atendente: {order.garcomNome || 'Garçom'}</span>
                                 </div>
-                                <div className="text-right shrink-0">
+                                <div className="text-right shrink-0 space-y-1">
+                                  <div className="flex items-center justify-end gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => handleQuickPrintOrder(order, e)}
+                                      className="p-1.5 bg-[#121417] hover:bg-[#2a2f38] text-slate-300 hover:text-emerald-400 rounded-lg border border-[#2a2f38] transition-all cursor-pointer shadow-xs"
+                                      title="Imprimir pré-conta / conferência"
+                                    >
+                                      <Printer size={13} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedKanbanOrder(order);
+                                      }}
+                                      className="p-1.5 bg-[#121417] hover:bg-[#2a2f38] text-slate-300 hover:text-indigo-400 rounded-lg border border-[#2a2f38] transition-all cursor-pointer shadow-xs"
+                                      title="Ver detalhes do pedido"
+                                    >
+                                      <Edit3 size={13} />
+                                    </button>
+                                  </div>
                                   <span className="font-extrabold text-lg text-emerald-400 font-mono block">
                                     R$ {order.itens.reduce((sum: number, it: any) => sum + (it.preco_unit || it.preco || 0), 0).toFixed(2)}
                                   </span>
                                 </div>
                               </div>
 
-                              <p className={clsx('font-medium', 'text-sm', 'text-slate-200', 'bg-[#121417]', 'p-2.5', 'rounded-lg', 'border', 'border-[#2a2f38]', 'leading-relaxed', 'font-sans')}>
-                                {itemsStr}
-                              </p>
+                              {renderCompactItemsList(order.itens, cardId, isExpanded, toggleCardExpansion)}
 
                               <button
                                 type="button"
@@ -3951,6 +4115,9 @@ export function CaixaPanel({
                     ) : (
                       <>
                         {simulatedOrders.filter(o => o.status === 'producao').map((order) => {
+                          const cardId = `sim-prod-${order.id}`;
+                          const sla = getOrderSlaData(order, nowTimestamp);
+                          const isExpanded = !!expandedCardIds[cardId];
                           const isDeliveryOrder = order.modalidade === 'delivery';
                           const badgeText = isDeliveryOrder ? 'DELIVERY — PREPARANDO' : 'RETIRADA — PREPARANDO';
                           const badgeColor = isDeliveryOrder
@@ -3968,11 +4135,17 @@ export function CaixaPanel({
                             <div 
                               key={order.id} 
                               onClick={() => openSimulatedOrderDetails(order)}
-                              className={clsx('border', 'border-l-4', 'p-3.5', 'rounded-xl', 'space-y-3', 'transition-all', 'cursor-pointer', 'shadow-sm', 'hover:shadow-md', cardTone)}
+                              className={clsx(
+                                'border', 'border-l-4', sla.borderTopClass,
+                                'p-3.5', 'rounded-xl', 'space-y-3', 'transition-all', 'cursor-pointer', 'shadow-sm', 'hover:shadow-md', cardTone
+                              )}
                             >
                               <div className={clsx('flex', 'justify-between', 'items-start')}>
                                 <div>
                                   <div className="flex flex-wrap gap-1.5 mb-1.5">
+                                    <span className={clsx('px-2', 'py-0.5', 'text-[9px]', 'uppercase', 'tracking-wider', 'font-bold', 'rounded-md', 'border', 'font-mono', 'block', 'w-fit', 'shadow-xs', sla.badgeClass)}>
+                                      {sla.label}
+                                    </span>
                                     <span className={clsx('px-2', 'py-0.5', 'text-[9px]', 'uppercase', 'tracking-wider', 'font-bold', 'rounded-md', 'border', 'font-mono', 'block', 'w-fit', badgeColor)}>{badgeText}</span>
                                     <span className="px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md border border-slate-500/20 bg-slate-500/10 text-slate-300 font-mono">
                                       {order.canal}
@@ -3981,12 +4154,33 @@ export function CaixaPanel({
                                   <strong className={clsx('font-bold', 'text-base', 'text-slate-100', 'block')}>{order.cliente}</strong>
                                   <span className={clsx('font-normal', 'text-xs', 'text-slate-400', 'block', 'mt-0.5')}>{order.telefone}</span>
                                 </div>
-                                <span className={clsx('font-extrabold', 'text-lg', 'text-emerald-400', 'font-mono', 'shrink-0')}>R$ {order.total.toFixed(2)}</span>
+                                <div className="text-right shrink-0 space-y-1">
+                                  <div className="flex items-center justify-end gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => handleQuickPrintOrder(order, e)}
+                                      className="p-1.5 bg-[#121417] hover:bg-[#2a2f38] text-slate-300 hover:text-emerald-400 rounded-lg border border-[#2a2f38] transition-all cursor-pointer shadow-xs"
+                                      title="Imprimir pré-conta / conferência"
+                                    >
+                                      <Printer size={13} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openSimulatedOrderDetails(order);
+                                      }}
+                                      className="p-1.5 bg-[#121417] hover:bg-[#2a2f38] text-slate-300 hover:text-indigo-400 rounded-lg border border-[#2a2f38] transition-all cursor-pointer shadow-xs"
+                                      title="Ver detalhes do pedido"
+                                    >
+                                      <Edit3 size={13} />
+                                    </button>
+                                  </div>
+                                  <span className={clsx('font-extrabold', 'text-lg', 'text-emerald-400', 'font-mono', 'block')}>R$ {order.total.toFixed(2)}</span>
+                                </div>
                               </div>
 
-                              <p className={clsx('font-medium', 'text-sm', 'text-slate-200', 'bg-[#121417]', 'p-2.5', 'rounded-lg', 'border', 'border-[#2a2f38]', 'leading-relaxed', 'font-sans')}>
-                                {order.itens}
-                              </p>
+                              {renderCompactItemsList(order.itens, cardId, isExpanded, toggleCardExpansion)}
 
                               {isDeliveryOrder && order.endereco && (
                                 <span className={clsx('font-normal', 'text-xs', 'text-slate-400', 'flex', 'items-start', 'gap-1', 'block')}>
@@ -4032,14 +4226,9 @@ export function CaixaPanel({
                       <>
                         {/* 1. Mesas/Consumo Local aguardando pagamento */}
                         {tableOrdersReady.map((order) => {
-                          const itemCounts: Record<string, number> = {};
-                          order.itens.forEach(item => {
-                            const name = item.nome || 'Item';
-                            itemCounts[name] = (itemCounts[name] || 0) + 1;
-                          });
-                          const itemsStr = Object.entries(itemCounts)
-                            .map(([name, qty]) => `${qty}x ${name}`)
-                            .join(' + ') || 'Nenhum item';
+                          const cardId = `ready-${order.id}`;
+                          const sla = getOrderSlaData(order, nowTimestamp);
+                          const isExpanded = !!expandedCardIds[cardId];
                           const contaPedida = !!(order as any).contaPedida;
                           const badgeText = (order.mesaId && order.mesaId > 0)
                             ? (contaPedida ? `Mesa ${order.mesaId} — Conta Pedida` : `Mesa ${order.mesaId} — Pronto p/ Receber`)
@@ -4054,6 +4243,7 @@ export function CaixaPanel({
                                 'border-[#2e3540]',
                                 'border-l-4',
                                 'border-l-emerald-500',
+                                sla.borderTopClass,
                                 'hover:border-emerald-400/60',
                                 'p-3.5',
                                 'rounded-xl',
@@ -4067,6 +4257,9 @@ export function CaixaPanel({
                               <div className="flex justify-between items-start">
                                 <div>
                                   <div className="flex gap-1.5 flex-wrap mb-1.5">
+                                    <span className={clsx('px-2', 'py-0.5', 'text-[9px]', 'uppercase', 'tracking-wider', 'font-bold', 'rounded-md', 'border', 'font-mono', 'block', 'w-fit', 'shadow-xs', sla.badgeClass)}>
+                                      {sla.label}
+                                    </span>
                                     <span className={clsx('px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md font-mono block w-fit', contaPedida ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30' : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30')}>{badgeText}</span>
                                     {!contaPedida && order.temItensEmPreparo && (
                                       <span className="px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 rounded-md font-mono block w-fit" title="Outros itens desta mesa ainda estão sendo preparados">
@@ -4087,13 +4280,36 @@ export function CaixaPanel({
                                   <strong className="font-bold text-base text-slate-100 block">{order.identificador || ((order.mesaId && order.mesaId > 0) ? `Consumo Mesa ${order.mesaId}` : 'Consumo Balcão')}</strong>
                                   <span className="font-normal text-xs text-slate-400 block mt-0.5">Atendente: {order.garcomNome || 'Garçom'}</span>
                                 </div>
-                                <div className="text-right shrink-0">
+                                <div className="text-right shrink-0 space-y-1">
+                                  <div className="flex items-center justify-end gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => handleQuickPrintOrder(order, e)}
+                                      className="p-1.5 bg-[#121417] hover:bg-[#2a2f38] text-slate-300 hover:text-emerald-400 rounded-lg border border-[#2a2f38] transition-all cursor-pointer shadow-xs"
+                                      title="Imprimir pré-conta / conferência"
+                                    >
+                                      <Printer size={13} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedKanbanOrder(order);
+                                      }}
+                                      className="p-1.5 bg-[#121417] hover:bg-[#2a2f38] text-slate-300 hover:text-indigo-400 rounded-lg border border-[#2a2f38] transition-all cursor-pointer shadow-xs"
+                                      title="Ver detalhes do pedido"
+                                    >
+                                      <Edit3 size={13} />
+                                    </button>
+                                  </div>
                                   <span className="font-extrabold text-lg text-emerald-400 font-mono block">
                                     R$ {order.itens.reduce((sum: number, it: any) => sum + (it.preco_unit || it.preco || 0), 0).toFixed(2)}
                                   </span>
                                 </div>
                               </div>
-                              <p className={clsx('font-medium text-sm text-slate-200 bg-[#121417] p-2.5 rounded-lg border border-[#2a2f38] leading-relaxed font-sans')}>{itemsStr}</p>
+
+                              {renderCompactItemsList(order.itens, cardId, isExpanded, toggleCardExpansion)}
+
                               <button
                                 type="button"
                                 onClick={async (e) => {
@@ -4134,6 +4350,9 @@ export function CaixaPanel({
 
                         {/* 2. Delivery/Retirada em trânsito (aguardando retorno/pagamento) */}
                         {simulatedOrders.filter(o => o.status === 'transito').map((order) => {
+                          const cardId = `transito-${order.id}`;
+                          const sla = getOrderSlaData(order, nowTimestamp);
+                          const isExpanded = !!expandedCardIds[cardId];
                           const isDeliveryOrder = order.modalidade === 'delivery';
                           const badgeText = isDeliveryOrder
                             ? `DELIVERY — ${order.pago ? 'PAGO / EM ROTA' : 'EM ROTA'}`
@@ -4148,11 +4367,14 @@ export function CaixaPanel({
                             <div 
                               key={`transito-${order.id}`} 
                               onClick={() => openSimulatedOrderDetails(order)}
-                              className={clsx('border', 'border-l-4', 'p-3.5', 'rounded-xl', 'space-y-3', 'transition-all', 'cursor-pointer', 'shadow-sm', 'hover:shadow-md', cardTone)}
+                              className={clsx('border', 'border-l-4', sla.borderTopClass, 'p-3.5', 'rounded-xl', 'space-y-3', 'transition-all', 'cursor-pointer', 'shadow-sm', 'hover:shadow-md', cardTone)}
                             >
                               <div className={clsx('flex', 'justify-between', 'items-start')}>
                                 <div>
                                   <div className="flex flex-wrap gap-1.5 mb-1.5">
+                                    <span className={clsx('px-2', 'py-0.5', 'text-[9px]', 'uppercase', 'tracking-wider', 'font-bold', 'rounded-md', 'border', 'font-mono', 'block', 'w-fit', 'shadow-xs', sla.badgeClass)}>
+                                      {sla.label}
+                                    </span>
                                     <span className={clsx('px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md border font-mono block w-fit', badgeColor)}>{badgeText}</span>
                                     <span className="px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md border border-slate-500/20 bg-slate-500/10 text-slate-300 font-mono">
                                       {order.canal}
@@ -4161,12 +4383,33 @@ export function CaixaPanel({
                                   <strong className={clsx('font-bold', 'text-base', 'text-slate-100', 'block')}>{order.cliente}</strong>
                                   <span className={clsx('font-normal', 'text-xs', 'text-slate-400', 'block', 'mt-0.5')}>{order.telefone}</span>
                                 </div>
-                                <span className={clsx('font-extrabold', 'text-lg', 'text-emerald-400', 'font-mono', 'shrink-0')}>R$ {order.total.toFixed(2)}</span>
+                                <div className="text-right shrink-0 space-y-1">
+                                  <div className="flex items-center justify-end gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => handleQuickPrintOrder(order, e)}
+                                      className="p-1.5 bg-[#121417] hover:bg-[#2a2f38] text-slate-300 hover:text-emerald-400 rounded-lg border border-[#2a2f38] transition-all cursor-pointer shadow-xs"
+                                      title="Imprimir pré-conta / conferência"
+                                    >
+                                      <Printer size={13} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openSimulatedOrderDetails(order);
+                                      }}
+                                      className="p-1.5 bg-[#121417] hover:bg-[#2a2f38] text-slate-300 hover:text-indigo-400 rounded-lg border border-[#2a2f38] transition-all cursor-pointer shadow-xs"
+                                      title="Ver detalhes do pedido"
+                                    >
+                                      <Edit3 size={13} />
+                                    </button>
+                                  </div>
+                                  <span className={clsx('font-extrabold', 'text-lg', 'text-emerald-400', 'font-mono', 'block')}>R$ {order.total.toFixed(2)}</span>
+                                </div>
                               </div>
 
-                              <p className={clsx('font-medium', 'text-sm', 'text-slate-200', 'bg-[#121417]', 'p-2.5', 'rounded-lg', 'border', 'border-[#2a2f38]', 'leading-relaxed', 'font-sans')}>
-                                {order.itens}
-                              </p>
+                              {renderCompactItemsList(order.itens, cardId, isExpanded, toggleCardExpansion)}
 
                               {isDeliveryOrder && order.endereco && (
                                 <span className={clsx('font-normal', 'text-xs', 'text-slate-400', 'flex', 'items-start', 'gap-1', 'block')}>
