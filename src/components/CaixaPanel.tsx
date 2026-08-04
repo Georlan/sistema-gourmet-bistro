@@ -3206,27 +3206,29 @@ export function CaixaPanel({
           <aside className="relative w-72 max-w-[85vw] bg-[#121214] border-r border-[#27272A] flex flex-col justify-between shrink-0 h-full z-10 shadow-2xl overflow-y-auto">
             <div className={clsx('space-y-6', 'pt-5')}>
               {/* Brand header */}
-              <div className={clsx('px-5', 'flex', 'items-center', 'justify-between')}>
-                <div className={clsx('flex', 'items-center', 'gap-2')}>
-                  <div className={clsx('h-7.5', 'w-7.5', 'bg-[#10b981]', 'rounded-xl', 'flex', 'items-center', 'justify-center', 'font-bold', 'text-[#121214]', 'font-serif', 'text-sm')}>K</div>
-                  <div className={clsx('font-serif', 'font-bold', 'text-sm', 'tracking-tight')}>Kôma Caixa</div>
-                </div>
-                <div className="flex items-center gap-2">
+              <div className="px-3.5 py-3 border-b border-slate-800/80 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
                   <button
                     type="button"
                     onClick={() => {
                       setIsOperatorDrawerOpen(true);
                       setIsMobileSidebarOpen(false);
                     }}
-                    className="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                    className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/60 cursor-pointer transition-colors"
                     title="Opções do Caixa / Login"
                   >
                     <SlidersHorizontal size={15} />
                   </button>
+                  <div className="flex items-center gap-2">
+                    <img src="/logo.png" alt="Kôma" className="w-7 h-7 object-contain" />
+                    <div className="font-serif font-bold text-sm tracking-tight text-white">Kôma Caixa</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
                   {turno?.status === 'aberto' ? (
-                    <span className={clsx('h-2', 'w-2', 'rounded-full', 'bg-emerald-500', 'animate-pulse')} title="Caixa Aberto" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse shadow-xs" title="Caixa Aberto" />
                   ) : (
-                    <span className={clsx('h-2', 'w-2', 'rounded-full', 'bg-emerald-600')} title="Caixa Fechado" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-600 shadow-xs" title="Caixa Fechado" />
                   )}
                   <button
                     type="button"
@@ -3441,26 +3443,26 @@ export function CaixaPanel({
       <aside className={clsx('hidden', 'lg:flex', 'w-64', 'bg-[#121214]', 'border-r', 'border-[#27272A]', 'flex-col', 'justify-between', 'shrink-0')}>
         <div className={clsx('space-y-6', 'pt-5')}>
           {/* Brand header */}
-          <div className={clsx('px-5', 'flex', 'items-center', 'justify-between')}>
-            <div className={clsx('flex', 'items-center', 'gap-2')}>
-              <div className={clsx('h-7.5', 'w-7.5', 'bg-[#10b981]', 'rounded-xl', 'flex', 'items-center', 'justify-center', 'font-bold', 'text-[#121214]', 'font-serif', 'text-sm')}>K</div>
-              <div className={clsx('font-serif', 'font-bold', 'text-sm', 'tracking-tight')}>Kôma Caixa</div>
-            </div>
-            <div className="flex items-center gap-2">
+          <div className="px-3.5 py-3 border-b border-slate-800/80 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
               <button
                 type="button"
                 onClick={() => setIsOperatorDrawerOpen(true)}
-                className="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/60 cursor-pointer transition-colors"
                 title="Opções do Caixa / Login"
               >
                 <SlidersHorizontal size={15} />
               </button>
-              {turno?.status === 'aberto' ? (
-                <span className={clsx('h-2', 'w-2', 'rounded-full', 'bg-emerald-500', 'animate-pulse')} title="Caixa Aberto" />
-              ) : (
-                <span className={clsx('h-2', 'w-2', 'rounded-full', 'bg-emerald-600')} title="Caixa Fechado" />
-              )}
+              <div className="flex items-center gap-2">
+                <img src="/logo.png" alt="Kôma" className="w-7 h-7 object-contain" />
+                <div className="font-serif font-bold text-sm tracking-tight text-white">Kôma Caixa</div>
+              </div>
             </div>
+            {turno?.status === 'aberto' ? (
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse shadow-xs" title="Caixa Aberto" />
+            ) : (
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald-600 shadow-xs" title="Caixa Fechado" />
+            )}
           </div>
 
           {/* Quick status bar */}
