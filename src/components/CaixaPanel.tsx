@@ -1866,6 +1866,49 @@ export function CaixaPanel({
 
   const refreshLoyaltyUsers = async () => {
     try {
+      // 1. Tenta buscar da tabela real 'clientes' no Supabase
+      const { data: supaData } = await supabase.from('clientes').select('*');
+      let combined: LoyaltyCustomer[] = [];
+
+      if (supaData && supaData.length > 0) {
+        combined = supaData.map((c: any) => ({
+          id: String(c.id || c.telefone),
+          cliente: c.nome || c.cliente || 'Cliente',
+          telefone: c.telefone || '',
+          saldo_pontos: Number(c.saldo_pontos || 0),
+          saldo_cashback: Number(c.saldo_cashback || 0),
+          historico: c.historico || []
+        }));
+      }
+
+      // 2. Mescla com cache local para resiliência instantânea
+      try {
+        const storedRaw = localStorage.getItem("koma_loyalty_clients_cache");
+        if (storedRaw) {
+          const localList: any[] = JSON.parse(storedRaw);
+          localList.forEach((lc: any) => {
+            const cleanPhone = (lc.telefone || "").replace(/\D/g, "");
+            if (cleanPhone && !combined.some(c => (c.telefone || "").replace(/\D/g, "") === cleanPhone)) {
+              combined.unshift({
+                id: lc.id || `cli-${cleanPhone}`,
+                cliente: lc.cliente || lc.nome || 'Cliente',
+                telefone: cleanPhone,
+                saldo_pontos: 0,
+                saldo_cashback: 0,
+                historico: []
+              });
+            }
+          });
+        }
+      } catch (e) {
+        console.warn("Erro ao ler cache local de clientes:", e);
+      }
+
+      if (combined.length > 0) {
+        setLoyaltyUsers(combined);
+        return;
+      }
+
       const response = await fetch(`${apiBaseUrl}/fidelidade/clientes`, { headers: authHeaders });
       if (!response.ok) return;
       const data = await response.json();
@@ -2308,7 +2351,21 @@ export function CaixaPanel({
       void refreshLoyaltyUsers();
     };
     window.addEventListener('koma_customers_updated', refreshCustomers);
-    return () => window.removeEventListener('koma_customers_updated', refreshCustomers);
+    window.addEventListener('storage', refreshCustomers);
+
+    // Supabase Realtime: sincroniza clientes cadastrados em tempo real
+    const channel = supabase
+      .channel('realtime_clientes_sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'clientes' }, () => {
+        void refreshLoyaltyUsers();
+      })
+      .subscribe();
+
+    return () => {
+      window.removeEventListener('koma_customers_updated', refreshCustomers);
+      window.removeEventListener('storage', refreshCustomers);
+      supabase.removeChannel(channel);
+    };
   }, [apiBaseUrl]);
 
   // Sincronização em tempo real do cardápio via WebSocket / Props

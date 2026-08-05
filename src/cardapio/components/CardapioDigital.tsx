@@ -131,18 +131,10 @@ export default function CardapioDigital({
     setErrorMessage("");
 
     try {
-      // 1. Cadastra/Atualiza o cliente no banco de dados (CRM / Clientes do Caixa)
-      fetch(`${API_BASE_URL}/fidelidade/clientes`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          cliente: finalClienteNome,
-          telefone: normalizedPhone,
-          endereco: deliveryMethod === "delivery" ? normalizedAddress : ""
-        })
-      }).catch(err => console.warn("Registro do cliente no banco:", err));
+      let comandaId = `res-${Date.now()}`;
+      let numeroPedido = Math.floor(1000 + Math.random() * 9000);
 
-      // 2. Salva o pedido no banco de dados
+      // Tenta rota do backend se disponível
       const response = await fetch(`${API_BASE_URL}/cardapio/pedidos`, {
         method: "POST",
         headers: {
@@ -159,20 +151,25 @@ export default function CardapioDigital({
           tipo_pedido: deliveryMethod === "delivery" ? "delivery" : "retirada",
           idempotency_key: idempotencyKeyRef.current
         })
+      }).catch(() => null);
+
+      if (response && response.ok) {
+        const data = await response.json().catch(() => null);
+        if (data?.comanda_id || data?.id) comandaId = String(data.comanda_id || data.id);
+        if (data?.numero_pedido != null) numeroPedido = Number(data.numero_pedido);
+      }
+
+      // Persiste o cliente e o pedido diretamente nas tabelas 'clientes' e 'comandas' do Supabase
+      void syncOrderToSupabase({
+        comandaId: String(comandaId),
+        numeroPedido,
+        clienteNome: finalClienteNome,
+        clienteTelefone: normalizedPhone,
+        tipo: deliveryMethod === "delivery" ? "Delivery" : "Retirada",
+        total: estimatedTotal,
+        restaurantId: targetRestauranteId,
+        itens: cleanedItems
       });
-
-      const data = await response.json().catch(() => null);
-      if (response.status === 401) {
-        onSessionExpired();
-      }
-
-      let comandaId = data?.comanda_id || data?.id;
-      let numeroPedido = data?.numero_pedido;
-
-      if (!response.ok || !comandaId || numeroPedido == null) {
-        comandaId = `res-${Date.now()}`;
-        numeroPedido = Math.floor(1000 + Math.random() * 9000);
-      }
 
       const orderObj = {
         id: String(comandaId),
@@ -190,21 +187,25 @@ export default function CardapioDigital({
         console.warn("Não foi possível salvar pedido ativo no localStorage:", err);
       }
 
-      // 3. Notifica o Caixa do SaaS em tempo real
-      window.dispatchEvent(new Event('koma_customers_updated'));
-      window.dispatchEvent(new Event('koma_orders_updated'));
-
       setCreatedOrder({
         comanda_id: String(comandaId),
         numero_pedido: numeroPedido
       });
     } catch (error) {
-      console.warn("API offline. Registrando pedido em modo resiliente local:", error);
+      console.warn("Registrando pedido em modo resiliente local:", error);
       const localNum = Math.floor(1000 + Math.random() * 9000);
       const localId = `res-${Date.now()}`;
       
-      window.dispatchEvent(new Event('koma_customers_updated'));
-      window.dispatchEvent(new Event('koma_orders_updated'));
+      void syncOrderToSupabase({
+        comandaId: localId,
+        numeroPedido: localNum,
+        clienteNome: finalClienteNome,
+        clienteTelefone: normalizedPhone,
+        tipo: deliveryMethod === "delivery" ? "Delivery" : "Retirada",
+        total: estimatedTotal,
+        restaurantId: targetRestauranteId,
+        itens: cleanedItems
+      });
 
       setCreatedOrder({
         comanda_id: localId,

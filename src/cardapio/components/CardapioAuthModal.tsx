@@ -10,6 +10,7 @@ import {
   formatBrazilianPhone,
   normalizeBrazilianPhone,
 } from "../customerSession";
+import { syncCustomerToSupabase } from "../supabaseSync";
 
 interface CardapioAuthModalProps {
   restaurantId: string | number;
@@ -44,18 +45,25 @@ export default function CardapioAuthModal({
     setIsSubmitting(true);
     setErrorMessage("");
 
-    // Autenticação direta e instantânea (Sem dependência de API/gateway SMS/OTP externo)
-    onLoginSuccess(
-      {
-        id: `c-${Date.now()}`,
-        name: cleanName,
-        phone: normalizedPhone,
-        address: "",
-        points: 0,
-        cashback: 0
-      },
-      `session-token-${Date.now()}`
-    );
+    const customerId = `c-${Date.now()}`;
+    const profile = {
+      id: customerId,
+      name: cleanName,
+      phone: normalizedPhone,
+      address: "",
+      points: 0,
+      cashback: 0
+    };
+
+    // Sincroniza em tempo real com a tabela 'clientes' do Supabase e notifica o Caixa
+    void syncCustomerToSupabase({
+      id: customerId,
+      name: cleanName,
+      phone: normalizedPhone,
+      restaurantId
+    });
+
+    onLoginSuccess(profile, `session-token-${Date.now()}`);
     setIsSubmitting(false);
     onClose();
   };
