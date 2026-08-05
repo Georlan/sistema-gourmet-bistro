@@ -113,7 +113,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
     <button
       id={`mesa-card-${table.id}`}
       onClick={() => onClick(table.id)}
-      className="relative bg-[#16181D] hover:bg-[#1C1E24] border border-[#272A32] hover:border-emerald-500/40 rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between transition-all duration-200 active:scale-[0.97] shadow-lg shadow-black/40 cursor-pointer overflow-hidden min-h-[95px] sm:min-h-[105px] w-full text-left focus:outline-none focus:ring-2 focus:ring-emerald-500"
+      className="relative bg-[#181A20] hover:bg-[#20232B] border border-[#282C37] hover:border-emerald-500/40 rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between transition-all duration-200 active:scale-[0.97] shadow-lg shadow-black/40 cursor-pointer overflow-hidden min-h-[95px] sm:min-h-[105px] w-full text-left focus:outline-none focus:ring-2 focus:ring-emerald-500"
     >
       {/* Accent Bar at top */}
       <div
