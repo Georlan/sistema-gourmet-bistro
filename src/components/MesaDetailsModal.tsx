@@ -241,7 +241,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
             }`}
           >
             <PlusCircle size={14} className="text-[#10b981]" />
-            <span>La Carte (Lançar)</span>
+            <span>Lançar Pedido</span>
             {draftItems.length > 0 && (
               <span className="h-2 w-2 rounded-full bg-rose-900/40 border border-rose-800/50 animate-ping"></span>
             )}

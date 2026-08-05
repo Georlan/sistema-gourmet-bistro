@@ -2304,11 +2304,11 @@ export default function App() {
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-[#27272A]">
                 <h3 className="font-serif text-xl sm:text-2xl font-bold tracking-tight text-white shrink-0">Mesas</h3>
 
-                {/* Filters em Pílulas Horizontais de 1 Linha */}
+                {/* Filters organizados em 4 colunas no mobile (Sem Scroll) */}
                 <div
                   role="group"
                   aria-label="Filtrar mesas por status"
-                  className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 w-full sm:w-auto"
+                  className="grid grid-cols-4 gap-1 sm:flex sm:items-center sm:gap-1.5 w-full sm:w-auto"
                 >
                   {(['todos', 'livres', 'ocupadas', 'prontas'] as const).map((filter) => {
                     const count = {
@@ -2334,9 +2334,9 @@ export default function App() {
                         type="button"
                         onClick={() => setTableFilter(filter)}
                         aria-pressed={tableFilter === filter}
-                        className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer border ${tableFilter === filter
-                          ? 'bg-emerald-500 text-slate-950 border-emerald-400 font-bold shadow-sm'
-                          : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border-slate-700'
+                        className={`px-1.5 sm:px-3 py-1.5 rounded-xl text-[10px] sm:text-xs font-semibold whitespace-nowrap transition-all cursor-pointer text-center border ${tableFilter === filter
+                          ? 'bg-emerald-500 text-black border-emerald-400 font-bold shadow-md shadow-emerald-500/20'
+                          : 'bg-[#18181B] text-zinc-300 hover:bg-zinc-800 border-zinc-800'
                         }`}
                       >
                         {label}

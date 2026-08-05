@@ -149,11 +149,11 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
     <div className="relative h-full">
       {/* 1. VIEW: CART (CARRINHO DE COMPRAS) */}
       {view === 'cart' && (
-        <div className="bg-[#121214] sm:border sm:border-[#27272A] sm:rounded-3xl p-3 sm:p-5 flex flex-col justify-between h-full sm:min-h-[450px] max-w-2xl mx-auto border-0 rounded-none">
-          <div className="flex flex-col h-full justify-between space-y-4">
+        <div className="bg-[#121214] sm:border sm:border-[#27272A] sm:rounded-3xl p-3 sm:p-5 flex flex-col h-full max-w-2xl mx-auto border-0 rounded-none overflow-hidden min-h-0">
+          <div className="flex flex-col h-full justify-between min-h-0">
             
             {/* Cart Header */}
-            <div className="flex items-center justify-between pb-3.5 border-b border-[#27272A]">
+            <div className="flex items-center justify-between pb-3.5 border-b border-[#27272A] shrink-0 mb-3">
               <div className="flex items-center gap-1.5 text-white">
                 <ShoppingCart size={18} className="text-[#10b981]" />
                 <h3 className="font-serif font-bold text-base">Carrinho de Lançamento</h3>
@@ -162,7 +162,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                 <button
                   type="button"
                   onClick={() => setView('menu')}
-                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-emerald-400 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1 border border-slate-700/50 shadow-sm"
+                  className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1 border border-emerald-400 shadow-sm"
                 >
                   <Plus size={13} />
                   <span>Adicionar Itens</span>
@@ -175,7 +175,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
 
             {/* Cart Body */}
             {draftItems.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-24 text-center space-y-4 flex-1">
+              <div className="flex flex-col items-center justify-center py-16 text-center space-y-4 flex-1">
                 <div className="p-4 bg-[#1C1C1F] rounded-full text-[#10b981]/50 border border-[#27272A]">
                   <ShoppingCart size={32} />
                 </div>
@@ -186,13 +186,14 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                 <button
                   type="button"
                   onClick={() => setView('menu')}
-                  className="px-5 py-2.5 bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] text-white rounded-xl text-xs font-bold tracking-wider uppercase transition-colors cursor-pointer"
+                  className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 border border-emerald-400 text-black rounded-xl text-xs font-bold tracking-wider uppercase transition-colors cursor-pointer"
                 >
                   Ver Cardápio
                 </button>
               </div>
             ) : (
-              <div className="flex-1 flex flex-col justify-between space-y-4">
+              <div className="flex-1 flex flex-col justify-between min-h-0 overflow-hidden">
+                <div className="flex-1 overflow-y-auto min-h-0 pr-1 space-y-4">
                 {/* Global table client name config */}
                 <div className="bg-[#1C1C1F] border border-[#27272A] p-4 rounded-2xl space-y-2.5 shadow-sm">
                   <label htmlFor="overall-client-name" className="text-[10px] font-sans font-bold text-gray-300 uppercase tracking-wider block">
@@ -365,8 +366,9 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                     </div>
                   ))}
                 </div>
+              </div>
 
-                {/* Submit Actions */}
+              {/* Submit Actions (Fixado no rodapé) */}
                 <div className="mt-4 pt-4 border-t border-[#27272A] space-y-3.5 shrink-0">
                   
                   {/* Order Type Toggle Selector */}
