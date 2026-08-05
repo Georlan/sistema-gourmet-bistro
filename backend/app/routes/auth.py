@@ -266,13 +266,13 @@ def delete_usuario(
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                "O usuário possui histórico operacional e não pode ser excluído. "
-                "Desative a conta."
-            ),
-        )
+        target = db.query(Usuario).filter(
+            Usuario.id == user_id,
+            Usuario.restaurante_id == current_user.restaurante_id,
+        ).first()
+        if target:
+            target.status = "inativo"
+            db.commit()
     return
 
 

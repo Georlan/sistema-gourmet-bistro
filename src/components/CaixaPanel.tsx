@@ -2904,12 +2904,16 @@ export function CaixaPanel({
         headers: authHeaders
       });
       if (res.ok) {
+        showToast("Funcionário removido/desativado com sucesso!");
         fetchSystemUsers();
       } else {
-        alert("Erro ao deletar usuário.");
+        const errorData = await res.json().catch(() => ({}));
+        const msg = errorData.detail || "Erro ao deletar usuário.";
+        alert(msg);
       }
     } catch (err) {
       console.error(err);
+      alert("Erro ao conectar com o servidor para deletar funcionário.");
     }
   };
 
