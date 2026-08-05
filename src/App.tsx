@@ -2312,10 +2312,10 @@ export default function App() {
                 >
                   {(['todos', 'livres', 'ocupadas', 'prontas'] as const).map((filter) => {
                     const count = {
-                      todos: tables.length,
-                      livres: tables.filter(t => !orders.some(o => o.mesaId === t.id)).length,
-                      ocupadas: tables.filter(t => orders.some(o => o.mesaId === t.id)).length,
-                      prontas: tables.filter(t => {
+                      todos: (salonTables || []).length,
+                      livres: (salonTables || []).filter(t => !orders.some(o => o.mesaId === t.id)).length,
+                      ocupadas: (salonTables || []).filter(t => orders.some(o => o.mesaId === t.id)).length,
+                      prontas: (salonTables || []).filter(t => {
                         const tOrders = orders.filter(o => o.mesaId === t.id);
                         return tOrders.flatMap(o => o.itens).some(i => i.status === 'pronto');
                       }).length
