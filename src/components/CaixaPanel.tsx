@@ -1220,21 +1220,21 @@ export function CaixaPanel({
     if (elapsedMinutes > 25) {
       return {
         minutes: elapsedMinutes,
-        badgeClass: 'bg-rose-500/20 text-rose-400 border-rose-500/40 animate-pulse font-extrabold',
-        borderTopClass: 'border-t-2 border-t-rose-500',
+        badgeClass: 'bg-rose-950/70 text-rose-400/90 border-rose-900/50 font-bold',
+        borderTopClass: 'border-t-2 border-t-rose-800/70',
         label: labelText
       };
     } else if (elapsedMinutes >= 15) {
       return {
         minutes: elapsedMinutes,
-        badgeClass: 'bg-amber-500/15 text-amber-400 border-amber-500/30 font-bold',
-        borderTopClass: 'border-t-2 border-t-amber-500',
+        badgeClass: 'bg-amber-950/60 text-amber-400/90 border-amber-900/40 font-bold',
+        borderTopClass: 'border-t-2 border-t-amber-800/70',
         label: labelText
       };
     } else {
       return {
         minutes: elapsedMinutes,
-        badgeClass: 'bg-slate-500/15 text-slate-300 border-slate-500/25',
+        badgeClass: 'bg-slate-900/60 text-slate-400 border-slate-800/40',
         borderTopClass: '',
         label: labelText
       };
@@ -4387,7 +4387,7 @@ export function CaixaPanel({
                       <span className={clsx('font-bold', 'text-white', 'font-sans', 'block', 'text-sm')}>Mesas em Atendimento</span>
                       <span className="text-xs text-slate-400 block mt-0.5 font-normal">Lançados pelo garçom ou caixa</span>
                     </div>
-                    <span className={clsx('bg-emerald-500/10', 'text-emerald-400', 'font-bold', 'px-2.5', 'py-0.5', 'rounded-full', 'font-mono', 'text-xs', 'border', 'border-emerald-500/20')}>
+                    <span className={clsx('bg-emerald-950/80', 'text-emerald-400/90', 'font-bold', 'px-2.5', 'py-0.5', 'rounded-full', 'font-mono', 'text-xs', 'border', 'border-emerald-900/40')}>
                       {filteredCol1.length}
                     </span>
                   </div>
@@ -4413,7 +4413,7 @@ export function CaixaPanel({
                               onClick={() => setSelectedKanbanOrder(order)}
                               className={clsx(
                                 'bg-[#151720] border border-[#252836] rounded-xl hover:border-emerald-500/60 transition-all p-2.5 sm:p-3 space-y-2 text-left cursor-pointer shadow-md shadow-black/60',
-                                sla.borderTopClass || 'border-t-2 border-t-emerald-500'
+                                sla.borderTopClass || 'border-t-2 border-t-emerald-800/70'
                               )}
                             >
                               {/* LINHA 1 (Top Bar do Card) */}
@@ -4422,11 +4422,11 @@ export function CaixaPanel({
                                   <span className={clsx('px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md border font-mono block w-fit shadow-xs', sla.badgeClass)}>
                                     {sla.label}
                                   </span>
-                                  <span className="px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-md font-mono block w-fit">
+                                  <span className="px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold bg-emerald-950/60 text-emerald-400/90 border border-emerald-900/40 rounded-md font-mono block w-fit">
                                     {order.mesaId && order.mesaId > 0 ? `MESA ${order.mesaId}` : 'BALCÃO'}
                                   </span>
                                   {order.mesaOrigemId && Number(order.mesaOrigemId) !== Number(order.mesaId) && (
-                                    <span className="px-1.5 py-0.5 text-[9px] uppercase tracking-wider font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/25 rounded-md font-sans block w-fit shadow-xs">
+                                    <span className="px-1.5 py-0.5 text-[9px] uppercase tracking-wider font-bold bg-emerald-950/60 text-emerald-300/90 border border-emerald-900/40 rounded-md font-sans block w-fit shadow-xs">
                                       🔗 M{order.mesaOrigemId}
                                     </span>
                                   )}
@@ -4435,7 +4435,7 @@ export function CaixaPanel({
                                   <button
                                     type="button"
                                     onClick={(e) => handleQuickPrintOrder(order, e)}
-                                    className="p-1 bg-[#14151A] hover:bg-slate-700 text-slate-300 hover:text-emerald-400 rounded-md border border-[#232630] transition-all cursor-pointer shadow-xs"
+                                    className="p-1 bg-[#0D0F14] hover:bg-slate-800 text-slate-300 hover:text-emerald-400 rounded-md border border-[#1A1C24] transition-all cursor-pointer shadow-xs"
                                     title="Imprimir pré-conta / conferência"
                                   >
                                     <Printer size={12} />
@@ -4446,12 +4446,12 @@ export function CaixaPanel({
                                       e.stopPropagation();
                                       setSelectedKanbanOrder(order);
                                     }}
-                                    className="p-1 bg-[#14151A] hover:bg-slate-700 text-slate-300 hover:text-emerald-400 rounded-md border border-[#232630] transition-all cursor-pointer shadow-xs"
+                                    className="p-1 bg-[#0D0F14] hover:bg-slate-800 text-slate-300 hover:text-emerald-400 rounded-md border border-[#1A1C24] transition-all cursor-pointer shadow-xs"
                                     title="Ver detalhes do pedido"
                                   >
                                     <Edit3 size={12} />
                                   </button>
-                                  <span className="font-extrabold text-sm sm:text-base text-[#10B981] font-mono block ml-1">
+                                  <span className="font-bold text-sm sm:text-base text-[#059669] font-mono block ml-1">
                                     R$ {totalVal.toFixed(2)}
                                   </span>
                                 </div>
@@ -4491,7 +4491,7 @@ export function CaixaPanel({
                                     setIsLoading(false);
                                   }
                                 }}
-                                className="w-full py-2 px-3 h-8 sm:h-9 bg-[#059669] hover:bg-[#047857] text-white font-bold text-xs sm:text-sm rounded-lg transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm shadow-emerald-900/30"
+                                className="w-full py-2 px-3 h-8 sm:h-9 bg-[#046c4e] hover:bg-[#035238] text-emerald-100 font-bold text-xs sm:text-sm rounded-lg transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm shadow-emerald-950/40 border border-emerald-700/30"
                               >
                                 <Check size={13} />
                                 <span>PRONTO → PAGAMENTO</span>
@@ -4511,7 +4511,7 @@ export function CaixaPanel({
                       <span className={clsx('font-bold', 'text-white', 'font-sans', 'block', 'text-sm')}>Online e Retirada</span>
                       <span className="text-xs text-slate-400 block mt-0.5 font-normal">Pedidos aceitos no sino</span>
                     </div>
-                    <span className={clsx('bg-sky-500/10', 'text-sky-400', 'font-bold', 'px-2.5', 'py-0.5', 'rounded-full', 'font-mono', 'text-xs', 'border', 'border-sky-500/20')}>
+                    <span className={clsx('bg-sky-950/80', 'text-sky-400/90', 'font-bold', 'px-2.5', 'py-0.5', 'rounded-full', 'font-mono', 'text-xs', 'border', 'border-sky-900/40')}>
                       {filteredCol2Simulated.length}
                     </span>
                   </div>
@@ -4531,10 +4531,10 @@ export function CaixaPanel({
                           const isDeliveryOrder = order.modalidade === 'delivery';
                           const badgeText = isDeliveryOrder ? 'DELIVERY — PREPARANDO' : 'RETIRADA — PREPARANDO';
                           const badgeColor = isDeliveryOrder
-                            ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                            : 'bg-sky-500/10 text-sky-400 border border-sky-500/20';
+                            ? 'bg-amber-950/60 text-amber-400/90 border border-amber-900/40'
+                            : 'bg-sky-950/60 text-sky-400/90 border border-sky-900/40';
                           const buttonText = isDeliveryOrder ? 'SAIU PARA ENTREGA' : 'PRONTO PARA RETIRADA';
-                          const topAccentClass = isDeliveryOrder ? 'border-t-2 border-t-amber-500' : 'border-t-2 border-t-sky-500';
+                          const topAccentClass = isDeliveryOrder ? 'border-t-2 border-t-amber-800/70' : 'border-t-2 border-t-sky-800/70';
 
                           return (
                             <div 
@@ -4552,7 +4552,7 @@ export function CaixaPanel({
                                     {sla.label}
                                   </span>
                                   <span className={clsx('px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md font-mono block w-fit', badgeColor)}>{badgeText}</span>
-                                  <span className="px-1.5 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md border border-slate-700/40 bg-[#14151A] text-slate-300 font-mono">
+                                  <span className="px-1.5 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md border border-slate-800/40 bg-[#0D0F14] text-slate-300 font-mono">
                                     {order.canal}
                                   </span>
                                 </div>
@@ -4560,7 +4560,7 @@ export function CaixaPanel({
                                   <button
                                     type="button"
                                     onClick={(e) => handleQuickPrintOrder(order, e)}
-                                    className="p-1 bg-[#14151A] hover:bg-slate-700 text-slate-300 hover:text-emerald-400 rounded-md border border-[#232630] transition-all cursor-pointer shadow-xs"
+                                    className="p-1 bg-[#0D0F14] hover:bg-slate-800 text-slate-300 hover:text-emerald-400 rounded-md border border-[#1A1C24] transition-all cursor-pointer shadow-xs"
                                     title="Imprimir pré-conta / conferência"
                                   >
                                     <Printer size={12} />
@@ -4571,12 +4571,12 @@ export function CaixaPanel({
                                       e.stopPropagation();
                                       openSimulatedOrderDetails(order);
                                     }}
-                                    className="p-1 bg-[#14151A] hover:bg-slate-700 text-slate-300 hover:text-emerald-400 rounded-md border border-[#232630] transition-all cursor-pointer shadow-xs"
+                                    className="p-1 bg-[#0D0F14] hover:bg-slate-800 text-slate-300 hover:text-emerald-400 rounded-md border border-[#1A1C24] transition-all cursor-pointer shadow-xs"
                                     title="Ver detalhes do pedido"
                                   >
                                     <Edit3 size={12} />
                                   </button>
-                                  <span className="font-extrabold text-sm sm:text-base text-[#10B981] font-mono block ml-1">
+                                  <span className="font-bold text-sm sm:text-base text-[#059669] font-mono block ml-1">
                                     R$ {order.total.toFixed(2)}
                                   </span>
                                 </div>
@@ -4592,7 +4592,7 @@ export function CaixaPanel({
 
                               {isDeliveryOrder && order.endereco && (
                                 <span className="font-normal text-xs text-slate-400 flex items-center gap-1 truncate">
-                                  <MapPin size={11} className="shrink-0 text-amber-500" />
+                                  <MapPin size={11} className="shrink-0 text-amber-500/80" />
                                   <span className="truncate">{order.endereco}</span>
                                 </span>
                               )}
@@ -4604,7 +4604,7 @@ export function CaixaPanel({
                                   if (isLoading) return;
                                   handleUpdateDeliveryStatus(order.id, 'transito');
                                 }}
-                                className="w-full py-2 px-3 h-8 sm:h-9 bg-[#059669] hover:bg-[#047857] text-white font-bold text-xs sm:text-sm rounded-lg transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm shadow-emerald-900/20"
+                                className="w-full py-2 px-3 h-8 sm:h-9 bg-[#046c4e] hover:bg-[#035238] text-emerald-100 font-bold text-xs sm:text-sm rounded-lg transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm shadow-emerald-950/40 border border-emerald-700/30"
                               >
                                 <Check size={13} />
                                 <span>{buttonText}</span>
@@ -4624,7 +4624,7 @@ export function CaixaPanel({
                       <span className={clsx('font-bold', 'text-white', 'font-sans', 'block', 'text-sm')}>Pagamento e Finalização</span>
                       <span className="text-xs text-slate-400 block mt-0.5 font-normal">Prontos para receber ou concluir</span>
                     </div>
-                    <span className={clsx('bg-amber-500/10', 'text-amber-400', 'font-bold', 'px-2.5', 'py-0.5', 'rounded-full', 'font-mono', 'text-xs', 'border', 'border-amber-500/20')}>
+                    <span className={clsx('bg-amber-950/80', 'text-amber-400/90', 'font-bold', 'px-2.5', 'py-0.5', 'rounded-full', 'font-mono', 'text-xs', 'border', 'border-amber-900/40')}>
                       {filteredCol2Table.length + filteredCol3Simulated.length}
                     </span>
                   </div>
@@ -4654,7 +4654,7 @@ export function CaixaPanel({
                               onClick={() => setSelectedKanbanOrder(order)}
                               className={clsx(
                                 'bg-[#151720] border border-[#252836] rounded-xl hover:border-emerald-500/60 transition-all p-2.5 sm:p-3 space-y-2 text-left cursor-pointer shadow-md shadow-black/60',
-                                sla.borderTopClass || 'border-t-2 border-t-emerald-500'
+                                sla.borderTopClass || 'border-t-2 border-t-emerald-800/70'
                               )}
                             >
                               {/* LINHA 1 (Top Bar do Card) */}
@@ -4663,13 +4663,13 @@ export function CaixaPanel({
                                   <span className={clsx('px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md border font-mono block w-fit shadow-xs', sla.badgeClass)}>
                                     {sla.label}
                                   </span>
-                                  <span className={clsx('px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md font-mono block w-fit', contaPedida ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20')}>{badgeText}</span>
+                                  <span className={clsx('px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md font-mono block w-fit', contaPedida ? 'bg-amber-950/60 text-amber-400/90 border border-amber-900/40' : 'bg-emerald-950/60 text-emerald-400/90 border border-emerald-900/40')}>{badgeText}</span>
                                 </div>
                                 <div className="flex items-center gap-1 shrink-0">
                                   <button
                                     type="button"
                                     onClick={(e) => handleQuickPrintOrder(order, e)}
-                                    className="p-1 bg-[#14161D] hover:bg-slate-700 text-slate-300 hover:text-emerald-400 rounded-md border border-[#272B38] transition-all cursor-pointer shadow-xs"
+                                    className="p-1 bg-[#0D0F14] hover:bg-slate-800 text-slate-300 hover:text-emerald-400 rounded-md border border-[#1A1C24] transition-all cursor-pointer shadow-xs"
                                     title="Imprimir pré-conta / conferência"
                                   >
                                     <Printer size={12} />
@@ -4680,12 +4680,12 @@ export function CaixaPanel({
                                       e.stopPropagation();
                                       setSelectedKanbanOrder(order);
                                     }}
-                                    className="p-1 bg-[#14161D] hover:bg-slate-700 text-slate-300 hover:text-emerald-400 rounded-md border border-[#272B38] transition-all cursor-pointer shadow-xs"
+                                    className="p-1 bg-[#0D0F14] hover:bg-slate-800 text-slate-300 hover:text-emerald-400 rounded-md border border-[#1A1C24] transition-all cursor-pointer shadow-xs"
                                     title="Ver detalhes do pedido"
                                   >
                                     <Edit3 size={12} />
                                   </button>
-                                  <span className="font-extrabold text-sm sm:text-base text-[#10B981] font-mono block ml-1">
+                                  <span className="font-bold text-sm sm:text-base text-[#059669] font-mono block ml-1">
                                     R$ {totalVal.toFixed(2)}
                                   </span>
                                 </div>
@@ -4728,7 +4728,7 @@ export function CaixaPanel({
                                     Math.max(0, total - Number(checkoutOrder.valorPago || 0)).toFixed(2)
                                   );
                                 }}
-                                className="w-full py-2 px-3 h-8 sm:h-9 bg-[#059669] hover:bg-[#047857] text-white font-bold text-xs sm:text-sm rounded-lg transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm shadow-emerald-900/30"
+                                className="w-full py-2 px-3 h-8 sm:h-9 bg-[#046c4e] hover:bg-[#035238] text-emerald-100 font-bold text-xs sm:text-sm rounded-lg transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm shadow-emerald-950/40 border border-emerald-700/30"
                               >
                                 <Check size={13} /><span>ABRIR PAGAMENTO DA MESA</span>
                               </button>
@@ -4746,9 +4746,9 @@ export function CaixaPanel({
                             ? `DELIVERY — ${order.pago ? 'PAGO / EM ROTA' : 'EM ROTA'}`
                             : `RETIRADA — ${order.pago ? 'PAGO' : 'AGUARDANDO PAGAMENTO'}`;
                           const badgeColor = isDeliveryOrder
-                            ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                            : 'bg-sky-500/10 text-sky-400 border border-sky-500/20';
-                          const topAccentClass = isDeliveryOrder ? 'border-t-2 border-t-amber-500' : 'border-t-2 border-t-sky-500';
+                            ? 'bg-amber-950/60 text-amber-400/90 border border-amber-900/40'
+                            : 'bg-sky-950/60 text-sky-400/90 border border-sky-900/40';
+                          const topAccentClass = isDeliveryOrder ? 'border-t-2 border-t-amber-800/70' : 'border-t-2 border-t-sky-800/70';
 
                           return (
                             <div 
@@ -4765,7 +4765,7 @@ export function CaixaPanel({
                                     {sla.label}
                                   </span>
                                   <span className={clsx('px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md font-mono block w-fit', badgeColor)}>{badgeText}</span>
-                                  <span className="px-1.5 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md border border-slate-700/40 bg-[#14151A] text-slate-300 font-mono">
+                                  <span className="px-1.5 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md border border-slate-800/40 bg-[#0D0F14] text-slate-300 font-mono">
                                     {order.canal}
                                   </span>
                                 </div>
@@ -4773,7 +4773,7 @@ export function CaixaPanel({
                                   <button
                                     type="button"
                                     onClick={(e) => handleQuickPrintOrder(order, e)}
-                                    className="p-1 bg-[#14151A] hover:bg-slate-700 text-slate-300 hover:text-emerald-400 rounded-md border border-[#232630] transition-all cursor-pointer shadow-xs"
+                                    className="p-1 bg-[#0D0F14] hover:bg-slate-800 text-slate-300 hover:text-emerald-400 rounded-md border border-[#1A1C24] transition-all cursor-pointer shadow-xs"
                                     title="Imprimir pré-conta / conferência"
                                   >
                                     <Printer size={12} />
@@ -4784,12 +4784,12 @@ export function CaixaPanel({
                                       e.stopPropagation();
                                       openSimulatedOrderDetails(order);
                                     }}
-                                    className="p-1 bg-[#14151A] hover:bg-slate-700 text-slate-300 hover:text-emerald-400 rounded-md border border-[#232630] transition-all cursor-pointer shadow-xs"
+                                    className="p-1 bg-[#0D0F14] hover:bg-slate-800 text-slate-300 hover:text-emerald-400 rounded-md border border-[#1A1C24] transition-all cursor-pointer shadow-xs"
                                     title="Ver detalhes do pedido"
                                   >
                                     <Edit3 size={12} />
                                   </button>
-                                  <span className="font-extrabold text-sm sm:text-base text-[#10B981] font-mono block ml-1">
+                                  <span className="font-bold text-sm sm:text-base text-[#059669] font-mono block ml-1">
                                     R$ {order.total.toFixed(2)}
                                   </span>
                                 </div>
@@ -4805,7 +4805,7 @@ export function CaixaPanel({
 
                               {isDeliveryOrder && order.endereco && (
                                 <span className="font-normal text-xs text-slate-400 flex items-center gap-1 truncate">
-                                  <MapPin size={11} className="shrink-0 text-amber-500" />
+                                  <MapPin size={11} className="shrink-0 text-amber-500/80" />
                                   <span className="truncate">{order.endereco}</span>
                                 </span>
                               )}
@@ -4839,7 +4839,7 @@ export function CaixaPanel({
                                     handleFinalizarPedido(order.id);
                                   }
                                 }}
-                                className="w-full py-2 px-3 h-8 sm:h-9 bg-[#059669] hover:bg-[#047857] text-white font-bold text-xs sm:text-sm rounded-lg transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm shadow-emerald-900/30"
+                                className="w-full py-2 px-3 h-8 sm:h-9 bg-[#046c4e] hover:bg-[#035238] text-emerald-100 font-bold text-xs sm:text-sm rounded-lg transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm shadow-emerald-950/40 border border-emerald-700/30"
                               >
                                 <Check size={13} /><span>{order.pago ? 'FINALIZAR PEDIDO' : 'RECEBER E FINALIZAR'}</span>
                               </button>
