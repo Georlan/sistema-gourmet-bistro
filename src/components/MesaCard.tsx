@@ -113,78 +113,54 @@ export const MesaCard = React.memo<MesaCardProps>(({
     <button
       id={`mesa-card-${table.id}`}
       onClick={() => onClick(table.id)}
-      className="relative bg-[#181A20] hover:bg-[#20232B] border border-[#282C37] hover:border-emerald-500/40 rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between transition-all duration-200 active:scale-[0.97] shadow-lg shadow-black/40 cursor-pointer overflow-hidden min-h-[95px] sm:min-h-[105px] w-full text-left focus:outline-none focus:ring-2 focus:ring-emerald-500"
+      className={`relative flex flex-col justify-between p-2 sm:p-3 rounded-xl border min-h-[85px] sm:min-h-[95px] ${currentConfig.borderColor} ${currentConfig.bgColor} cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full transition-all active:scale-95`}
     >
-      {/* Accent Bar at top */}
-      <div
-        className={`absolute top-0 left-0 right-0 h-[3px] ${
-          status === 'livre'
-            ? 'bg-emerald-500'
-            : status === 'pronto' || hasPendingPayment
-            ? 'bg-amber-500'
-            : status === 'mesclada'
-            ? 'bg-zinc-600'
-            : 'bg-rose-500'
-        }`}
-      />
-
       {/* Top Section */}
-      <div className="w-full pt-1">
+      <div className="w-full">
         <div className="flex items-start justify-between">
-          <span
-            className={
-              status === 'livre'
-                ? 'text-base sm:text-lg font-black text-white tracking-tight leading-tight'
-                : 'text-xs sm:text-sm font-bold text-slate-300 tracking-tight leading-tight'
-            }
-          >
+          <span className="font-bold text-xs sm:text-sm text-zinc-100 tracking-tight leading-tight">
             {table.nome && table.nome !== `Mesa ${table.id}` ? table.nome : `Mesa ${table.id}`}
             {mergedSources && mergedSources.length > 0 && (
               <span className="text-[10px] font-normal text-zinc-400 ml-1">+{mergedSources.join('+')}</span>
             )}
           </span>
-
-          {status !== 'livre' && status !== 'mesclada' && (
-            <span className="text-sm sm:text-base font-extrabold text-[#10B981] font-mono shrink-0 ml-1">
-              {totalValue > 0 ? `R$${totalValue.toFixed(0)}` : (status === 'entregue' ? '💳' : '+')}
-            </span>
-          )}
         </div>
       </div>
 
       {/* Bottom Section */}
       {status === 'livre' ? (
-        <div className="w-full mt-2 flex items-center justify-between">
-          <span className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider flex items-center gap-1">
-            ● LIVRE
-          </span>
-          {draftCount > 0 && (
-            <span className="flex items-center gap-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded px-1.5 py-0.5 text-[9px] font-bold">
+        <div className="w-full mt-1.5 flex items-center justify-between text-[10px] text-emerald-400 font-bold">
+          <span>LIVRE</span>
+          {draftCount > 0 ? (
+            <span className="flex items-center gap-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded px-1 py-0.5 text-[9px] font-bold">
               <FileText size={9} className="shrink-0" />
               <span>{draftCount}</span>
             </span>
+          ) : (
+            <span className="text-xs font-bold">+</span>
           )}
         </div>
       ) : status === 'mesclada' ? (
-        <div className="w-full mt-2 flex items-center justify-between text-[10px] text-zinc-400 font-sans">
+        <div className="w-full mt-1.5 flex items-center justify-between text-[9px] text-zinc-400 font-sans">
           <div className="flex items-center gap-1">
             <GitMerge size={10} className="text-zinc-500 shrink-0" />
             <span>Mesclada</span>
           </div>
-          <span className="font-mono text-[10px]">M{mergedIntoMesaId}</span>
+          <span className="font-mono text-[9px]">M{mergedIntoMesaId}</span>
         </div>
       ) : (
-        <div className="w-full mt-2 flex items-center justify-between">
-          {/* Timer Pílula */}
-          <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-slate-800/90 text-[10px] font-semibold text-rose-300 border border-rose-500/20">
-            <Clock size={9} className="text-rose-400 shrink-0" />
-            <span className="font-mono font-bold">{elapsed}</span>
+        <div className="w-full mt-1 flex items-center justify-between text-xs text-rose-200 font-bold">
+          {/* Timer */}
+          <div className="flex items-center gap-1">
+            <Clock size={10} className="text-rose-300 shrink-0" />
+            <span className="text-[10px] sm:text-[11px] font-mono font-bold text-rose-200">{elapsed}</span>
           </div>
 
+          {/* Total Value */}
           <div className="flex items-center gap-1">
             {draftCount > 0 && (
               <div
-                className="flex items-center gap-0.5 px-1.5 py-0.5 bg-emerald-500/20 text-emerald-300 rounded border border-emerald-500/30 text-[9px]"
+                className="flex items-center gap-0.5 px-1 py-0.5 bg-emerald-500/20 text-emerald-300 rounded border border-emerald-500/30 text-[9px]"
                 title={`Rascunho: ${draftCount}`}
               >
                 <FileText size={9} className="shrink-0" />
@@ -196,6 +172,9 @@ export const MesaCard = React.memo<MesaCardProps>(({
                 ⚠️
               </span>
             )}
+            <span className="text-xs text-rose-200 font-bold font-mono">
+              {totalValue > 0 ? `R$${totalValue.toFixed(0)}` : status === 'entregue' ? '💳' : '+'}
+            </span>
           </div>
         </div>
       )}
