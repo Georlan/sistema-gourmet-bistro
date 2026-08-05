@@ -16,8 +16,9 @@ export async function syncCustomerToSupabase(profile: {
     const cleanPhone = (profile.phone || "").replace(/\D/g, "");
     if (!cleanPhone) return;
 
+    const customerId = profile.id || `cli-${cleanPhone}`;
     const record = {
-      id: profile.id || `cli-${cleanPhone}`,
+      id: customerId,
       restaurante_id: Number(profile.restaurantId || 1),
       telefone: cleanPhone,
       nome: profile.name.trim(),
@@ -26,12 +27,30 @@ export async function syncCustomerToSupabase(profile: {
       saldo_cashback: 0
     };
 
-    // Tenta gravar na tabela real 'clientes' no Supabase
-    const { error } = await supabase.from("clientes").upsert(record, { onConflict: "telefone" });
-    if (error) {
-      console.warn("Supabase clientes upsert notice:", error.message);
+    // 1. Tenta buscar se o cliente já existe por telefone no Supabase
+    const { data: existing } = await supabase
+      .from("clientes")
+      .select("id")
+      .eq("telefone", cleanPhone)
+      .limit(1);
+
+    if (existing && existing.length > 0) {
+      // Atualiza cliente existente usando o ID primário
+      const { error } = await supabase
+        .from("clientes")
+        .update({
+          nome: record.nome,
+          endereco: record.endereco || undefined
+        })
+        .eq("id", existing[0].id);
+
+      if (error) console.warn("Supabase update clientes notice:", error.message);
+      else console.log("✅ Cliente atualizado com sucesso na tabela 'clientes' do Supabase!");
     } else {
-      console.log("✅ Cliente persistido com sucesso na tabela 'clientes' do Supabase!");
+      // Insere novo cliente usando primary key 'id'
+      const { error } = await supabase.from("clientes").upsert(record, { onConflict: "id" });
+      if (error) console.warn("Supabase insert clientes notice:", error.message);
+      else console.log("✅ Novo cliente persistido com sucesso na tabela 'clientes' do Supabase!");
     }
 
     // Sincroniza localmente para garantir persistência offline-first
@@ -44,7 +63,9 @@ export async function syncCustomerToSupabase(profile: {
         cliente: record.nome,
         telefone: cleanPhone,
         endereco: record.endereco,
+        pontos: 0,
         saldo_pontos: 0,
+        saldoCashback: 0,
         saldo_cashback: 0
       };
       if (idx >= 0) list[idx] = updatedItem;
@@ -93,7 +114,7 @@ export async function syncOrderToSupabase(orderData: {
       itens: orderData.itens || []
     };
 
-    // Grava na tabela real 'comandas' no Supabase
+    // Grava na tabela real 'comandas' no Supabase usando chave primária 'id'
     const { error } = await supabase.from("comandas").upsert(comandaRecord, { onConflict: "id" });
     if (error) {
       console.warn("Supabase comandas upsert notice:", error.message);

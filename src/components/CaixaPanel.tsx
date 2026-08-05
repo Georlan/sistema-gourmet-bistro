@@ -1875,7 +1875,9 @@ export function CaixaPanel({
           id: String(c.id || c.telefone),
           cliente: c.nome || c.cliente || 'Cliente',
           telefone: c.telefone || '',
+          pontos: Number(c.saldo_pontos || 0),
           saldo_pontos: Number(c.saldo_pontos || 0),
+          saldoCashback: Number(c.saldo_cashback || 0),
           saldo_cashback: Number(c.saldo_cashback || 0),
           historico: c.historico || []
         }));
@@ -1893,8 +1895,10 @@ export function CaixaPanel({
                 id: lc.id || `cli-${cleanPhone}`,
                 cliente: lc.cliente || lc.nome || 'Cliente',
                 telefone: cleanPhone,
-                saldo_pontos: 0,
-                saldo_cashback: 0,
+                pontos: Number(lc.pontos || lc.saldo_pontos || 0),
+                saldo_pontos: Number(lc.pontos || lc.saldo_pontos || 0),
+                saldoCashback: Number(lc.saldoCashback || lc.saldo_cashback || 0),
+                saldo_cashback: Number(lc.saldoCashback || lc.saldo_cashback || 0),
                 historico: []
               });
             }
