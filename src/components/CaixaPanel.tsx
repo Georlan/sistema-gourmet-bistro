@@ -2319,26 +2319,111 @@ export function CaixaPanel({
   }, [activeTab, activeSubTab, desempenhoRange]);
 
   useEffect(() => {
-    const refreshCustomers = () => {
+    // 1. Carga inicial dos clientes
+    void refreshLoyaltyUsers();
+
+    // 2. Escuta WebSocket do Supabase Realtime para mudanças na Tabela "clientes" (0 ms)
+    const channel = supabase
+      .channel('realtime_crm_clientes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Escuta INSERT, UPDATE e DELETE
+          schema: 'public',
+          table: 'clientes'
+        },
+        (payload) => {
+          console.log("⚡ Novo evento de cliente recebido via Realtime:", payload);
+          if (payload.eventType === 'INSERT') {
+            const novoCliente = payload.new;
+            setLoyaltyUsers((prevClientes) => {
+              const cleanNewPhone = (novoCliente.telefone || '').replace(/\D/g, '');
+              if (prevClientes.some(c => c.id === novoCliente.id || (c.telefone || '').replace(/\D/g, '') === cleanNewPhone)) {
+                return prevClientes;
+              }
+              const mappedNew: LoyaltyCustomer = {
+                id: String(novoCliente.id || novoCliente.telefone),
+                cliente: novoCliente.nome || novoCliente.cliente || 'Cliente',
+                telefone: novoCliente.telefone || '',
+                pontos: Number(novoCliente.saldo_pontos || 0),
+                saldo_pontos: Number(novoCliente.saldo_pontos || 0),
+                saldoCashback: Number(novoCliente.saldo_cashback || 0),
+                saldo_cashback: Number(novoCliente.saldo_cashback || 0),
+                historico: novoCliente.historico || []
+              };
+              return [mappedNew, ...prevClientes];
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            const updated = payload.new;
+            setLoyaltyUsers((prevClientes) =>
+              prevClientes.map(c => (c.id === updated.id || (c.telefone || '').replace(/\D/g, '') === (updated.telefone || '').replace(/\D/g, '')) ? {
+                id: String(updated.id || updated.telefone),
+                cliente: updated.nome || updated.cliente || 'Cliente',
+                telefone: updated.telefone || '',
+                pontos: Number(updated.saldo_pontos || 0),
+                saldo_pontos: Number(updated.saldo_pontos || 0),
+                saldoCashback: Number(updated.saldo_cashback || 0),
+                saldo_cashback: Number(updated.saldo_cashback || 0),
+                historico: updated.historico || []
+              } : c)
+            );
+          } else {
+            void refreshLoyaltyUsers();
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log("Status da conexão Realtime de Clientes:", status);
+      });
+
+    const handleCustomerEvent = () => {
       void refreshLoyaltyUsers();
     };
-    window.addEventListener('koma_customers_updated', refreshCustomers);
-    window.addEventListener('storage', refreshCustomers);
-
-    // Supabase Realtime: sincroniza clientes cadastrados em tempo real
-    const channel = supabase
-      .channel('realtime_clientes_sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'clientes' }, () => {
-        void refreshLoyaltyUsers();
-      })
-      .subscribe();
+    window.addEventListener('koma_customers_updated', handleCustomerEvent);
+    window.addEventListener('storage', handleCustomerEvent);
 
     return () => {
-      window.removeEventListener('koma_customers_updated', refreshCustomers);
-      window.removeEventListener('storage', refreshCustomers);
+      window.removeEventListener('koma_customers_updated', handleCustomerEvent);
+      window.removeEventListener('storage', handleCustomerEvent);
       supabase.removeChannel(channel);
     };
   }, [apiBaseUrl]);
+
+  // Listener para mensagens nativas de WebSocket / Eventos do sistema Kôma
+  useEffect(() => {
+    const handleWebSocketMessage = (event: MessageEvent) => {
+      try {
+        const message = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (message?.type === 'NEW_CLIENT' || message?.type === 'CLIENTE_CADASTRADO' || message?.type === 'koma_new_client') {
+          const novoCliente = message.data || message.detail;
+          if (novoCliente) {
+            setLoyaltyUsers((prev) => {
+              const cleanPhone = (novoCliente.telefone || '').replace(/\D/g, '');
+              if (prev.some(c => c.id === novoCliente.id || (c.telefone || '').replace(/\D/g, '') === cleanPhone)) {
+                return prev;
+              }
+              const mapped: LoyaltyCustomer = {
+                id: String(novoCliente.id || novoCliente.telefone),
+                cliente: novoCliente.nome || novoCliente.cliente || 'Cliente',
+                telefone: novoCliente.telefone || '',
+                pontos: Number(novoCliente.saldo_pontos || 0),
+                saldo_pontos: Number(novoCliente.saldo_pontos || 0),
+                saldoCashback: Number(novoCliente.saldo_cashback || 0),
+                saldo_cashback: Number(novoCliente.saldo_cashback || 0),
+                historico: []
+              };
+              return [mapped, ...prev];
+            });
+          }
+        }
+      } catch (e) {
+        // Ignora mensagens não-JSON
+      }
+    };
+
+    window.addEventListener('message', handleWebSocketMessage);
+    return () => window.removeEventListener('message', handleWebSocketMessage);
+  }, []);
 
   // Sincronização em tempo real do cardápio via WebSocket / Props
   useEffect(() => {
