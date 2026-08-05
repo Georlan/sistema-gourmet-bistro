@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Lock, Mail, CheckCircle, AlertCircle, ShieldCheck } from 'lucide-react';
 import clsx from 'clsx';
 import { API_BASE_URL } from '../config/api';
+import { saveOperatorSession } from '../utils/authSession';
 
 interface CaixaAtivarPageProps {
   token?: string | null;
@@ -59,13 +60,11 @@ export function CaixaAtivarPage({ token }: CaixaAtivarPageProps) {
         throw new Error(errData.detail || 'Link de ativação inválido ou expirado.');
       }
 
-      const data = await res.json();
       setSucesso(true);
 
-      // Armazenar o token de acesso
+      // Armazenar a sessão do operador com validade de 24 horas
       if (data.access_token) {
-        localStorage.setItem('token', data.access_token);
-        localStorage.setItem('koma_caixa_token', data.access_token);
+        saveOperatorSession(data.access_token, data.usuario || { role: 'operador' });
       }
 
       const userRole = (data.usuario?.role || data.usuario?.cargo || data.garcom?.role || 'garcom').toLowerCase();

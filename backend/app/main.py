@@ -226,19 +226,28 @@ async def run_migrations_on_startup():
 
 ALLOWED_ORIGINS = [
     "https://sistema-gourmet-bistro.pages.dev",
+    "https://sistema-gourmet-bistro-production.up.railway.app",
     "http://localhost:5173",
     "http://localhost:3000",
-    "http://localhost:8000",
-    "http://127.0.0.1:5173",
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_origin_regex=r"https://.*",
+    allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=r"https://.*\.pages\.dev",
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*", "x-koma-customer-token", "X-Koma-Customer-Token"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "Accept",
+        "Origin",
+        "X-Requested-With",
+        "x-koma-customer-token",
+        "X-Koma-Customer-Token",
+        "x-restaurante-id",
+        "X-Restaurante-Id",
+    ],
     expose_headers=["*"],
 )
 

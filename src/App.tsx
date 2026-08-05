@@ -17,9 +17,8 @@ import CardapioPage from './cardapio/CardapioPage';
 import SuperAdminPanel from './super-admin/SuperAdminPanel';
 import { CaixaAtivarPage } from './components/CaixaAtivarPage';
 import { MotoboyPwaPage } from './components/MotoboyPwaPage';
-import { KitchenPanel } from './components/KitchenPanel';
-
 import { API_BASE_URL } from './config/api';
+import { saveOperatorSession, getOperatorSession, clearOperatorSession } from './utils/authSession';
 
 const LOCAL_STORAGE_DRAFTS_KEY = 'koma_drafts_vFinal_v3';
 const LOCAL_STORAGE_SETTINGS_KEY = 'koma_settings_vFinal_v3';
@@ -1149,10 +1148,14 @@ export default function App() {
       const nameKey = portal === 'caixa' ? "koma_caixa_name" : "koma_waiter_name";
       const roleKey = portal === 'caixa' ? "koma_caixa_role" : "koma_user_role";
 
-      localStorage.setItem(tokenKey, data.access_token);
-      localStorage.setItem(idKey, data.usuario.id);
-      localStorage.setItem(nameKey, data.usuario.nome);
-      localStorage.setItem(roleKey, role);
+      if (portal === 'caixa') {
+        saveOperatorSession(data.access_token, { ...data.usuario, role });
+      } else {
+        localStorage.setItem(tokenKey, data.access_token);
+        localStorage.setItem(idKey, data.usuario.id);
+        localStorage.setItem(nameKey, data.usuario.nome);
+        localStorage.setItem(roleKey, role);
+      }
 
       setActiveWaiterId(data.usuario.id);
       setActiveWaiterNome(data.usuario.nome);
