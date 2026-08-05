@@ -32,7 +32,7 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
   return (
     <div className="space-y-5 text-left animate-fade-in">
       {/* Header Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-[#121214]/60 border border-[#27272A] p-4 rounded-3xl">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-[#0E1015] border border-[#1C1F28] p-4 rounded-3xl">
         <div>
           <h3 className="font-serif text-sm font-bold text-white">Movimentações de Caixa (Sangrias e Suprimentos)</h3>
           <p className="text-[10px] text-gray-400">Rastreabilidade completa de retiradas (sangrias) e aportes de troco (suprimentos).</p>
@@ -41,7 +41,7 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
           <button
             type="button"
             onClick={onRefresh}
-            className="p-2 border border-[#27272A] hover:bg-[#1C1C1F] text-gray-400 hover:text-white rounded-xl transition-all cursor-pointer"
+            className="p-2 border border-[#1C1F28] bg-[#0D0F14] hover:bg-[#181A22] text-gray-400 hover:text-white rounded-xl transition-all cursor-pointer"
             title="Atualizar Movimentações"
           >
             <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
@@ -49,7 +49,7 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
           <button
             type="button"
             onClick={onOpenSuprimentoModal}
-            className="px-3.5 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-400 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
+            className="px-3.5 py-2 bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-900/40 text-emerald-300 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
           >
             <Plus size={14} />
             <span>+ Novo Suprimento</span>
@@ -57,7 +57,7 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
           <button
             type="button"
             onClick={onOpenSangriaModal}
-            className="px-3.5 py-2 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-400 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
+            className="px-3.5 py-2 bg-rose-950/60 hover:bg-rose-900/80 border border-rose-900/40 text-rose-300 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
           >
             <Plus size={14} />
             <span>+ Nova Sangria</span>
@@ -66,15 +66,15 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
       </div>
 
       {/* Compact Inline Filter Bar */}
-      <div className="flex flex-wrap items-center gap-3 bg-[#121214]/60 border border-[#27272A] px-3.5 py-2 rounded-2xl text-[10px]">
+      <div className="flex flex-wrap items-center gap-3 bg-[#0E1015] border border-[#1C1F28] px-3.5 py-2 rounded-2xl text-[10px]">
         <div className="flex items-center gap-1.5 text-gray-400 font-bold uppercase tracking-wider shrink-0">
-          <Filter size={11} className="text-emerald-400" />
+          <Filter size={11} className="text-[#059669]" />
           <span>Filtrar:</span>
         </div>
         <select
           value={filterTipo}
           onChange={(e) => setFilterTipo(e.target.value)}
-          className="px-2.5 py-1 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500 cursor-pointer"
+          className="px-2.5 py-1 bg-[#151720] border border-[#252836] rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500 cursor-pointer"
         >
           <option value="todos">Todas as Movimentações</option>
           <option value="suprimento">Apenas Suprimentos (+)</option>
@@ -87,7 +87,7 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
             type="date"
             value={filterDataInicio}
             onChange={(e) => setFilterDataInicio(e.target.value)}
-            className="px-2 py-1 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
+            className="px-2 py-1 bg-[#151720] border border-[#252836] rounded-xl text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
           />
         </div>
 
@@ -97,7 +97,7 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
             type="date"
             value={filterDataFim}
             onChange={(e) => setFilterDataFim(e.target.value)}
-            className="px-2 py-1 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
+            className="px-2 py-1 bg-[#151720] border border-[#252836] rounded-xl text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
           />
         </div>
 
@@ -117,11 +117,11 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
       </div>
 
       {/* Audit Log Table */}
-      <div className="bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 space-y-3">
-        <div className="overflow-x-auto border border-[#27272A]/40 rounded-2xl">
+      <div className="bg-[#0E1015] border border-[#1C1F28] rounded-3xl p-5 space-y-3">
+        <div className="overflow-x-auto border border-[#252836] rounded-2xl">
           <table className="w-full text-left text-[10px]">
             <thead>
-              <tr className="bg-[#1C1C1F] border-b border-[#27272A] text-gray-400 uppercase tracking-wider font-bold">
+              <tr className="bg-[#151720] border-b border-[#252836] text-gray-400 uppercase tracking-wider font-bold">
                 <th className="p-3">Data / Hora</th>
                 <th className="p-3">Tipo</th>
                 <th className="p-3 font-mono">Valor</th>
@@ -130,7 +130,7 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
                 <th className="p-3">Operador</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#27272A]/40">
+            <tbody className="divide-y divide-[#1C1F28]">
               {filteredMovs.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="p-8 text-center text-gray-500 italic">
@@ -141,20 +141,20 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
                 filteredMovs.map((mov) => {
                   const isSuprimento = mov.tipo === 'suprimento';
                   return (
-                    <tr key={mov.id} className="hover:bg-[#1C1C1F]/20 transition-colors">
+                    <tr key={mov.id} className="hover:bg-[#151720]/40 transition-colors">
                       <td className="p-3 text-gray-400 whitespace-nowrap font-mono">
                         {new Date(mov.criado_em).toLocaleDateString('pt-BR')} {new Date(mov.criado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                       </td>
                       <td className="p-3">
                         <span className={clsx(
-                          'px-2.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wider flex items-center gap-1 w-fit',
-                          isSuprimento ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
+                          'px-2.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wider flex items-center gap-1 w-fit border',
+                          isSuprimento ? 'bg-emerald-950/60 text-emerald-400/90 border-emerald-900/40' : 'bg-rose-950/60 text-rose-400/90 border-rose-900/40'
                         )}>
                           {isSuprimento ? <ArrowDownRight size={10} /> : <ArrowUpRight size={10} />}
                           {isSuprimento ? 'Suprimento' : 'Sangria'}
                         </span>
                       </td>
-                      <td className={clsx('p-3 font-mono font-bold text-sm', isSuprimento ? 'text-emerald-400' : 'text-red-400')}>
+                      <td className={clsx('p-3 font-mono font-bold text-sm', isSuprimento ? 'text-[#059669]' : 'text-rose-400/90')}>
                         {isSuprimento ? '+' : '-'} R$ {Number(mov.valor).toFixed(2)}
                       </td>
                       <td className="p-3 font-mono text-gray-300 whitespace-nowrap">

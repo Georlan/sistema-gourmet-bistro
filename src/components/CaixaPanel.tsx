@@ -3926,7 +3926,7 @@ export function CaixaPanel({
                 key={sub.id}
                 onClick={() => setActiveSubTab(sub.id)}
                 className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${isSubActive
-                  ? 'bg-[#10b981] text-[#121214]'
+                  ? 'bg-[#046c4e] text-emerald-100 border border-emerald-700/30'
                   : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
                   }`}
               >
@@ -3944,7 +3944,7 @@ export function CaixaPanel({
               key={sub.id}
               onClick={() => setActiveSubTab(sub.id)}
               className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${activeSubTab === sub.id
-                ? 'bg-[#10b981] text-[#121214]'
+                ? 'bg-[#046c4e] text-emerald-100 border border-emerald-700/30'
                 : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
                 }`}
             >
@@ -3961,7 +3961,7 @@ export function CaixaPanel({
               key={sub.id}
               onClick={() => setActiveSubTab(sub.id)}
               className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${activeSubTab === sub.id
-                ? 'bg-[#10b981] text-[#121214]'
+                ? 'bg-[#046c4e] text-emerald-100 border border-emerald-700/30'
                 : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
                 }`}
             >
@@ -3986,7 +3986,7 @@ export function CaixaPanel({
                 key={sub.id}
                 onClick={() => setActiveSubTab(sub.id)}
                 className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${isSubActive
-                  ? 'bg-[#10b981] text-[#121214]'
+                  ? 'bg-[#046c4e] text-emerald-100 border border-emerald-700/30'
                   : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
                   }`}
               >
@@ -4011,7 +4011,7 @@ export function CaixaPanel({
                 key={sub.id}
                 onClick={() => setActiveSubTab(sub.id)}
                 className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${isSubActive
-                  ? 'bg-[#10b981] text-[#121214]'
+                  ? 'bg-[#046c4e] text-emerald-100 border border-emerald-700/30'
                   : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
                   }`}
               >
@@ -4034,7 +4034,7 @@ export function CaixaPanel({
                 key={sub.id}
                 onClick={() => setActiveSubTab(sub.id)}
                 className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${isSubActive
-                  ? 'bg-[#10b981] text-[#121214]'
+                  ? 'bg-[#046c4e] text-emerald-100 border border-emerald-700/30'
                   : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
                   }`}
               >
@@ -4062,7 +4062,7 @@ export function CaixaPanel({
                 id={`relatorios-subtab-${sub.id}`}
                 onClick={() => setActiveSubTab(sub.id)}
                 className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${isSubActive
-                  ? 'bg-[#10b981] text-[#121214]'
+                  ? 'bg-[#046c4e] text-emerald-100 border border-emerald-700/30'
                   : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
                   }`}
               >
@@ -4086,7 +4086,7 @@ export function CaixaPanel({
                 id={`equipe-subtab-${sub.id}`}
                 onClick={() => setActiveSubTab(sub.id)}
                 className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${isSubActive
-                  ? 'bg-[#10b981] text-[#121214]'
+                  ? 'bg-[#046c4e] text-emerald-100 border border-emerald-700/30'
                   : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]'
                   }`}
               >
