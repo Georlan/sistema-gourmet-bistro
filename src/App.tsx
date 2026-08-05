@@ -2338,8 +2338,8 @@ export default function App() {
                         aria-pressed={isActive}
                         className={`px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer text-center border ${
                           isActive
-                            ? 'bg-[#4a1525] text-white border-rose-900/60 shadow-md'
-                            : 'bg-[#18181B] text-zinc-300 hover:bg-zinc-800 border-zinc-800'
+                            ? 'bg-[#280c12] text-white border-rose-950/80 shadow-md'
+                            : 'bg-[#14161B] text-zinc-300 hover:bg-zinc-800 border-zinc-800'
                         }`}
                       >
                         {label} <span className="opacity-75 text-[10px] font-normal ml-0.5">({count})</span>

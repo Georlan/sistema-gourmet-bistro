@@ -61,48 +61,48 @@ export const MesaCard = React.memo<MesaCardProps>(({
     }
   }
 
-  // Visual classes based on state
+  // Visual classes based on state (Cores aveludadas e mais escuras para conforto visual)
   const statusConfig = {
     livre: {
-      borderColor: 'border-emerald-700/50 hover:border-emerald-500/80 focus:ring-emerald-500',
-      bgColor: 'bg-[#062e1f] hover:bg-[#093e2a]',
-      badgeColor: 'text-emerald-400',
+      borderColor: 'border-emerald-900/40 hover:border-emerald-700/60 focus:ring-emerald-500',
+      bgColor: 'bg-[#041a12] hover:bg-[#072c1e]',
+      badgeColor: 'text-emerald-500',
       label: '',
-      textColor: 'text-emerald-100',
+      textColor: 'text-emerald-200/90',
     },
     ocupada: {
       borderColor: hasPendingPayment 
-        ? 'border-amber-500 focus:ring-amber-500'
-        : 'border-rose-900/60 hover:border-rose-800 focus:ring-rose-500',
+        ? 'border-amber-600/50 focus:ring-amber-500'
+        : 'border-rose-950/80 hover:border-rose-900/80 focus:ring-rose-500',
       bgColor: hasPendingPayment
-        ? 'bg-amber-950/80'
-        : 'bg-[#3f121a]',
+        ? 'bg-[#241505]'
+        : 'bg-[#220a0e] hover:bg-[#2e0e14]',
       badgeColor: hasPendingPayment
         ? 'text-amber-400'
         : 'text-rose-400',
       label: hasPendingPayment ? 'Aprovar Dinheiro' : 'Ocupada',
-      textColor: 'text-rose-200',
+      textColor: 'text-rose-200/90',
     },
     pronto: {
-      borderColor: 'border-amber-500/40 hover:border-amber-500/60 focus:ring-amber-500',
-      bgColor: 'bg-amber-950/85',
+      borderColor: 'border-amber-900/40 hover:border-amber-700/60 focus:ring-amber-500',
+      bgColor: 'bg-[#241505] hover:bg-[#2e1c07]',
       badgeColor: 'text-amber-400',
       label: 'Pronto p/ Servir',
-      textColor: 'text-amber-200',
+      textColor: 'text-amber-200/90',
     },
     entregue: {
-      borderColor: 'border-blue-500/30 hover:border-blue-500/50 focus:ring-blue-500',
-      bgColor: 'bg-blue-950/85',
+      borderColor: 'border-blue-900/40 hover:border-blue-700/60 focus:ring-blue-500',
+      bgColor: 'bg-[#081524] hover:bg-[#0d2138]',
       badgeColor: 'text-blue-300',
       label: 'Aguardando Pgto.',
-      textColor: 'text-blue-200',
+      textColor: 'text-blue-200/90',
     },
     mesclada: {
-      borderColor: 'border-dashed border-zinc-700 focus:ring-zinc-500',
-      bgColor: 'bg-zinc-950/90',
-      badgeColor: 'text-zinc-400',
+      borderColor: 'border-dashed border-zinc-800 focus:ring-zinc-500',
+      bgColor: 'bg-[#0f1013]',
+      badgeColor: 'text-zinc-500',
       label: `Mesclada na Mesa ${mergedIntoMesaId}`,
-      textColor: 'text-zinc-400',
+      textColor: 'text-zinc-500',
     },
   };
 
