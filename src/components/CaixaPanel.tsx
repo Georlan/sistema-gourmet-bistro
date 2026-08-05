@@ -4206,18 +4206,18 @@ export function CaixaPanel({
               <div className="bg-[#121214] border border-[#27272A] p-3 rounded-2xl flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3 sticky top-0 z-20 shadow-md backdrop-blur-md">
                 {/* Search Bar Component */}
                 <div className="relative flex-1 max-w-md">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="🔍 Buscar cliente, mesa (ex: 10), telefone ou item..."
-                    className="w-full pl-9 pr-8 py-1.5 text-xs sm:text-sm bg-slate-800/90 border border-slate-700/80 rounded-lg text-slate-100 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all"
+                    placeholder="Buscar cliente, mesa (ex: 10), telefone ou item..."
+                    className="w-full pl-9 pr-8 py-2 text-xs sm:text-sm bg-[#121316] border border-[#252832] rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-[#059669] focus:ring-1 focus:ring-[#059669] transition-all"
                   />
                   {searchQuery && (
                     <button
                       onClick={() => setSearchQuery('')}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs font-bold cursor-pointer"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white text-xs font-bold bg-zinc-800/80 rounded-full w-4 h-4 flex items-center justify-center cursor-pointer"
                       title="Limpar busca"
                     >
                       ✕
@@ -6850,15 +6850,15 @@ export function CaixaPanel({
 
                 {/* Search */}
                 <div className="relative">
-                  <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 w-4 h-4" />
                   <input
                     value={disponibilidadeSearch}
                     onChange={e => setDisponibilidadeSearch(e.target.value)}
                     placeholder="Pesquisar produto..."
-                    className="w-full pl-9 pr-8 py-2 bg-slate-800/80 border border-slate-700/80 rounded-xl text-slate-100 text-xs sm:text-sm placeholder-slate-400 focus:outline-none focus:border-emerald-500 transition-colors"
+                    className="w-full pl-9 pr-8 py-2 bg-[#121316] border border-[#252832] rounded-xl text-white text-xs sm:text-sm placeholder-zinc-500 focus:outline-none focus:border-[#059669] focus:ring-1 focus:ring-[#059669] transition-all"
                   />
                   {disponibilidadeSearch && (
-                    <button onClick={() => setDisponibilidadeSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer">
+                    <button onClick={() => setDisponibilidadeSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white cursor-pointer">
                       <X size={13} />
                     </button>
                   )}
