@@ -1270,14 +1270,14 @@ export function CaixaPanel({
     }
 
     if (itemList.length === 0) {
-      return <p className="font-medium text-[11px] text-slate-400 italic bg-[#14151A] p-2 rounded-lg border border-[#232630]">Nenhum item adicionado</p>;
+      return <p className="font-medium text-[11px] text-slate-400 italic bg-[#14161D] p-2 rounded-lg border border-[#272B38]">Nenhum item adicionado</p>;
     }
 
     const visibleItems = isExpanded ? itemList : itemList.slice(0, 3);
     const hiddenCount = itemList.length - 3;
 
     return (
-      <div className="space-y-0.5 bg-[#14151A] p-2 rounded-lg border border-[#232630]">
+      <div className="space-y-0.5 bg-[#14161D] p-2 rounded-lg border border-[#272B38]">
         <ul className="space-y-0.5">
           {visibleItems.map((it, idx) => (
             <li key={idx} className="font-medium text-xs text-slate-200 flex items-center justify-between font-sans truncate">
@@ -4412,7 +4412,7 @@ export function CaixaPanel({
                               key={`table-prod-${order.id}`} 
                               onClick={() => setSelectedKanbanOrder(order)}
                               className={clsx(
-                                'bg-[#181A20] border border-[#282C37] rounded-xl hover:border-emerald-500/40 transition-all p-2.5 sm:p-3 space-y-2 text-left cursor-pointer shadow-sm',
+                                'bg-[#1F232B] border border-[#313645] rounded-xl hover:border-emerald-500/60 transition-all p-2.5 sm:p-3 space-y-2 text-left cursor-pointer shadow-md shadow-black/40',
                                 sla.borderTopClass || 'border-t-2 border-t-emerald-500'
                               )}
                             >
@@ -4541,7 +4541,7 @@ export function CaixaPanel({
                               key={order.id} 
                               onClick={() => openSimulatedOrderDetails(order)}
                               className={clsx(
-                                'bg-[#1C1E24] border border-[#2B2F3A] rounded-xl hover:border-emerald-500/40 transition-all p-2.5 sm:p-3 space-y-2 text-left cursor-pointer shadow-sm',
+                                'bg-[#1F232B] border border-[#313645] rounded-xl hover:border-emerald-500/60 transition-all p-2.5 sm:p-3 space-y-2 text-left cursor-pointer shadow-md shadow-black/40',
                                 sla.borderTopClass || topAccentClass
                               )}
                             >
@@ -4653,7 +4653,7 @@ export function CaixaPanel({
                               key={`close-${order.id}`}
                               onClick={() => setSelectedKanbanOrder(order)}
                               className={clsx(
-                                'bg-[#181A20] border border-[#282C37] rounded-xl hover:border-emerald-500/40 transition-all p-2.5 sm:p-3 space-y-2 text-left cursor-pointer shadow-sm',
+                                'bg-[#1F232B] border border-[#313645] rounded-xl hover:border-emerald-500/60 transition-all p-2.5 sm:p-3 space-y-2 text-left cursor-pointer shadow-md shadow-black/40',
                                 sla.borderTopClass || 'border-t-2 border-t-emerald-500'
                               )}
                             >
@@ -4755,7 +4755,7 @@ export function CaixaPanel({
                               key={`transito-${order.id}`} 
                               onClick={() => openSimulatedOrderDetails(order)}
                               className={clsx(
-                                'bg-[#181A20] border border-[#282C37] rounded-xl hover:border-emerald-500/40 transition-all p-2.5 sm:p-3 space-y-2 text-left cursor-pointer shadow-sm',
+                                'bg-[#1F232B] border border-[#313645] rounded-xl hover:border-emerald-500/60 transition-all p-2.5 sm:p-3 space-y-2 text-left cursor-pointer shadow-md shadow-black/40',
                                 sla.borderTopClass || topAccentClass
                               )}
                             >
