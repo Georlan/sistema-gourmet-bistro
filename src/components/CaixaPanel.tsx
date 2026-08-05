@@ -20,6 +20,8 @@ import { CaixaTurnoAtualTab } from './caixa/CaixaTurnoAtualTab';
 import { CaixaMovimentacoesTab } from './caixa/CaixaMovimentacoesTab';
 import { SangriaModal } from './caixa/SangriaModal';
 import { SuprimentoModal } from './caixa/SuprimentoModal';
+import { ManagerPinModal } from './ManagerPinModal';
+import { FechamentoCegoModal } from './FechamentoCegoModal';
 import { CaixaFechamentoTab } from './caixa/CaixaFechamentoTab';
 import { RelatorioFinanceiroTab } from './relatorios/RelatorioFinanceiroTab';
 import { RelatoriosVisaoGeralTab } from './relatorios/RelatoriosVisaoGeralTab';

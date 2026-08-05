@@ -1,0 +1,208 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState } from 'react';
+import { EyeOff, DollarSign, CreditCard, QrCode, CheckCircle, X, ShieldAlert } from 'lucide-react';
+import clsx from 'clsx';
+
+interface FechamentoCegoModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: (declaracao: {
+    dinheiro: number;
+    cartaoCredito: number;
+    cartaoDebito: number;
+    pix: number;
+    observacao: string;
+  }) => Promise<void>;
+}
+
+export function FechamentoCegoModal({
+  isOpen,
+  onClose,
+  onConfirm
+}: FechamentoCegoModalProps) {
+  const [dinheiro, setDinheiro] = useState<string>('');
+  const [cartaoCredito, setCartaoCredito] = useState<string>('');
+  const [cartaoDebito, setCartaoDebito] = useState<string>('');
+  const [pix, setPix] = useState<string>('');
+  const [observacao, setObservacao] = useState<string>('');
+  const [loading, setLoading] = useState<boolean>(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  if (!isOpen) return null;
+
+  const parseValue = (val: string): number => {
+    const clean = val.replace(/[^\d.,]/g, '').replace(',', '.');
+    return parseFloat(clean) || 0;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+
+    const declaracao = {
+      dinheiro: parseValue(dinheiro),
+      cartaoCredito: parseValue(cartaoCredito),
+      cartaoDebito: parseValue(cartaoDebito),
+      pix: parseValue(pix),
+      observacao: observacao.trim()
+    };
+
+    try {
+      setLoading(true);
+      await onConfirm(declaracao);
+      onClose();
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Erro ao processar fechamento cego.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-fade-in">
+      <div className="bg-[#121215] border border-amber-500/30 rounded-2xl w-full max-w-lg p-6 shadow-2xl text-white relative">
+        <button
+          onClick={onClose}
+          disabled={loading}
+          className="absolute top-4 right-4 text-zinc-400 hover:text-white transition-colors disabled:opacity-50"
+        >
+          <X size={20} />
+        </button>
+
+        {/* Cabeçalho */}
+        <div className="flex items-center gap-3 mb-6 pb-4 border-b border-zinc-800">
+          <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+            <EyeOff size={20} />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-zinc-100">Fechamento de Caixa Cego</h3>
+            <p className="text-xs text-zinc-400">Declare os valores físicos contados na gaveta</p>
+          </div>
+        </div>
+
+        {/* Aviso de Regra Cega */}
+        <div className="mb-5 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-300/90 text-xs flex items-start gap-2.5">
+          <ShieldAlert size={16} className="mt-0.5 shrink-0 text-amber-400" />
+          <span>
+            <b>Regra Cega Ativa:</b> Os saldos esperados pelo sistema estão ocultos para evitar contagens induzidas. O relatório de quebra (Sobra/Falta) será gerado para a gerência.
+          </span>
+        </div>
+
+        {errorMsg && (
+          <div className="mb-4 p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-xs">
+            {errorMsg}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Campo Dinheiro */}
+          <div>
+            <label className="block text-xs font-semibold text-zinc-300 mb-1.5 flex items-center gap-2">
+              <DollarSign size={14} className="text-emerald-400" />
+              <span>Contagem Física Dinheiro (R$)</span>
+            </label>
+            <input
+              type="text"
+              placeholder="0,00"
+              value={dinheiro}
+              onChange={e => setDinheiro(e.target.value)}
+              className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-white font-mono text-sm focus:border-amber-500 focus:outline-none"
+              required
+            />
+          </div>
+
+          {/* Campo Cartão de Crédito */}
+          <div>
+            <label className="block text-xs font-semibold text-zinc-300 mb-1.5 flex items-center gap-2">
+              <CreditCard size={14} className="text-blue-400" />
+              <span>Contagem Cartão de Crédito (R$)</span>
+            </label>
+            <input
+              type="text"
+              placeholder="0,00"
+              value={cartaoCredito}
+              onChange={e => setCartaoCredito(e.target.value)}
+              className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-white font-mono text-sm focus:border-amber-500 focus:outline-none"
+              required
+            />
+          </div>
+
+          {/* Campo Cartão de Débito */}
+          <div>
+            <label className="block text-xs font-semibold text-zinc-300 mb-1.5 flex items-center gap-2">
+              <CreditCard size={14} className="text-purple-400" />
+              <span>Contagem Cartão de Débito (R$)</span>
+            </label>
+            <input
+              type="text"
+              placeholder="0,00"
+              value={cartaoDebito}
+              onChange={e => setCartaoDebito(e.target.value)}
+              className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-white font-mono text-sm focus:border-amber-500 focus:outline-none"
+              required
+            />
+          </div>
+
+          {/* Campo Pix */}
+          <div>
+            <label className="block text-xs font-semibold text-zinc-300 mb-1.5 flex items-center gap-2">
+              <QrCode size={14} className="text-teal-400" />
+              <span>Contagem Pix (R$)</span>
+            </label>
+            <input
+              type="text"
+              placeholder="0,00"
+              value={pix}
+              onChange={e => setPix(e.target.value)}
+              className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-white font-mono text-sm focus:border-amber-500 focus:outline-none"
+              required
+            />
+          </div>
+
+          {/* Observação / Justificativa */}
+          <div>
+            <label className="block text-xs font-semibold text-zinc-400 mb-1.5">
+              Observações do Fechamento (Opcional)
+            </label>
+            <textarea
+              rows={2}
+              placeholder="Digite observações sobre o turno ou troco..."
+              value={observacao}
+              onChange={e => setObservacao(e.target.value)}
+              className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-white text-xs focus:border-amber-500 focus:outline-none resize-none"
+            />
+          </div>
+
+          {/* Botões de Ação */}
+          <div className="flex gap-3 pt-3">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={loading}
+              className="flex-1 py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 text-xs font-semibold transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className={clsx(
+                'flex-1 py-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-lg',
+                loading
+                  ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black shadow-amber-500/20'
+              )}
+            >
+              <CheckCircle size={16} />
+              <span>{loading ? 'Processando Fechamento...' : 'Encerrar Caixa Cego'}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
