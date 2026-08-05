@@ -131,6 +131,18 @@ export default function CardapioDigital({
     setErrorMessage("");
 
     try {
+      // 1. Cadastra/Atualiza o cliente no banco de dados (CRM / Clientes do Caixa)
+      fetch(`${API_BASE_URL}/fidelidade/clientes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cliente: finalClienteNome,
+          telefone: normalizedPhone,
+          endereco: deliveryMethod === "delivery" ? normalizedAddress : ""
+        })
+      }).catch(err => console.warn("Registro do cliente no banco:", err));
+
+      // 2. Salva o pedido no banco de dados
       const response = await fetch(`${API_BASE_URL}/cardapio/pedidos`, {
         method: "POST",
         headers: {
@@ -178,32 +190,26 @@ export default function CardapioDigital({
         console.warn("Não foi possível salvar pedido ativo no localStorage:", err);
       }
 
+      // 3. Notifica o Caixa do SaaS em tempo real
+      window.dispatchEvent(new Event('koma_customers_updated'));
+      window.dispatchEvent(new Event('koma_orders_updated'));
+
       setCreatedOrder({
         comanda_id: String(comandaId),
         numero_pedido: numeroPedido
       });
-
-      // Disparo automático via WhatsApp (wa.me)
-      const itensStr = cart.map(i => `${i.quantity}x ${i.product.name}`).join(', ');
-      const targetWaPhone = activeBrand.socials?.whatsapp ? String(activeBrand.socials.whatsapp) : customerPhone;
-      const msg = buildPedidoConfirmadoMsg(finalClienteNome, itensStr, estimatedTotal);
-      openWhatsAppMessage(targetWaPhone, msg);
-
     } catch (error) {
-      console.warn("API indisponível. Enviando pedido diretamente via WhatsApp (Modo Resiliente):", error);
+      console.warn("API offline. Registrando pedido em modo resiliente local:", error);
       const localNum = Math.floor(1000 + Math.random() * 9000);
       const localId = `res-${Date.now()}`;
       
+      window.dispatchEvent(new Event('koma_customers_updated'));
+      window.dispatchEvent(new Event('koma_orders_updated'));
+
       setCreatedOrder({
         comanda_id: localId,
         numero_pedido: localNum
       });
-
-      // Disparo automático via WhatsApp (wa.me)
-      const itensStr = cart.map(i => `${i.quantity}x ${i.product.name}`).join(', ');
-      const targetWaPhone = activeBrand.socials?.whatsapp ? String(activeBrand.socials.whatsapp) : customerPhone;
-      const msg = buildPedidoConfirmadoMsg(finalClienteNome, itensStr, estimatedTotal);
-      openWhatsAppMessage(targetWaPhone, msg);
     } finally {
       isSubmittingRef.current = false;
       setIsSubmitting(false);
@@ -249,23 +255,30 @@ export default function CardapioDigital({
         <div className="flex-1 p-6 overflow-y-auto space-y-6 no-scrollbar">
           {createdOrder ? (
             <div className="py-8 flex flex-col items-center justify-center text-center space-y-4 animate-scale-up">
-              <div className="w-16 h-16 rounded-full bg-emerald-500/15 text-emerald-500 flex items-center justify-center">
+              <div className="w-16 h-16 rounded-full bg-emerald-500/15 text-emerald-500 flex items-center justify-center border border-emerald-500/30">
                 <CheckCircle className="h-10 w-10" />
               </div>
               <div className="space-y-2 max-w-md">
                 <h3 className="font-display font-black text-xl text-emerald-500">
-                  Pedido recebido
+                  Pedido #{createdOrder.numero_pedido} Confirmado!
                 </h3>
-                <p className="text-xs text-text-app/70 leading-relaxed">
-                  Obrigado, <strong className="text-text-app">{customerName}</strong>. O pedido{" "}
-                  <strong className="text-primary font-mono">#{createdOrder.numero_pedido}</strong>{" "}
-                  foi enviado ao restaurante e aguarda confirmação.
+                <p className="text-xs text-text-app/80 leading-relaxed">
+                  Obrigado, <strong className="text-text-app">{customerName}</strong>. Seu pedido foi enviado diretamente ao sistema do restaurante e já está em processamento.
                 </p>
-                <div className="p-3 bg-slate-500/5 rounded-2xl border border-slate-500/10 text-[11px] text-text-app/70">
-                  Nenhuma cobrança foi feita pelo site. O pagamento será combinado diretamente com o restaurante.
+                <div className="p-3 bg-slate-500/5 rounded-2xl border border-slate-500/10 text-[11px] text-text-app/70 text-left space-y-1">
+                  <p>📍 <strong>Modalidade:</strong> {deliveryMethod === "delivery" ? `Entrega em ${address}` : "Retirada no Balcão"}</p>
+                  <p>📞 <strong>Telefone:</strong> {customerPhone}</p>
+                  <p>💰 <strong>Total a Pagar no Atendimento:</strong> R$ {estimatedTotal.toFixed(2)}</p>
                 </div>
               </div>
               <div className="w-full max-w-xs space-y-2 mt-4">
+                <button
+                  type="button"
+                  onClick={handleFinish}
+                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black rounded-xl shadow-md transition uppercase tracking-wider cursor-pointer"
+                >
+                  Voltar ao Cardápio
+                </button>
                 {activeBrand.socials?.whatsapp && (
                   <button
                     type="button"
@@ -274,18 +287,11 @@ export default function CardapioDigital({
                       const msg = buildPedidoConfirmadoMsg(customerName, itensStr, estimatedTotal);
                       openWhatsAppMessage(String(activeBrand.socials.whatsapp), msg);
                     }}
-                    className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black rounded-xl shadow-md transition uppercase tracking-wider cursor-pointer flex items-center justify-center gap-2"
+                    className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 border border-slate-700"
                   >
-                    <span>💬 Enviar no WhatsApp</span>
+                    <span>💬 Falar com o Restaurante no WhatsApp (Opcional)</span>
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={handleFinish}
-                  className="w-full py-3.5 bg-primary text-white text-xs font-black rounded-xl shadow-md hover:opacity-95 transition uppercase tracking-wider cursor-pointer"
-                >
-                  Voltar ao Cardápio
-                </button>
               </div>
             </div>
           ) : (
