@@ -2304,12 +2304,8 @@ export default function App() {
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-[#27272A]">
                 <h3 className="font-serif text-xl sm:text-2xl font-bold tracking-tight text-white shrink-0">Mesas</h3>
 
-                {/* Filters organizados em 4 colunas no mobile (Sem Scroll) */}
-                <div
-                  role="group"
-                  aria-label="Filtrar mesas por status"
-                  className="grid grid-cols-4 gap-1 sm:flex sm:items-center sm:gap-1.5 w-full sm:w-auto"
-                >
+                {/* Barra de Filtros Segmentada (Estilo iOS / Modern SaaS) */}
+                <div className="bg-[#121318] p-1 rounded-2xl border border-[#232630] flex items-center gap-1 w-full max-w-md mx-auto my-2">
                   {(['todos', 'livres', 'ocupadas', 'prontas'] as const).map((filter) => {
                     const count = {
                       todos: (salonTables || []).length,
@@ -2322,24 +2318,27 @@ export default function App() {
                     }[filter];
 
                     const label = {
-                      todos: `Todas (${count})`,
-                      livres: `Livres (${count})`,
-                      ocupadas: `Ocupadas (${count})`,
-                      prontas: `Prontas (${count})`
+                      todos: 'Todas',
+                      livres: 'Livres',
+                      ocupadas: 'Ocupadas',
+                      prontas: 'Prontas'
                     }[filter];
+
+                    const isActive = tableFilter === filter;
 
                     return (
                       <button
                         key={filter}
                         type="button"
                         onClick={() => setTableFilter(filter)}
-                        aria-pressed={tableFilter === filter}
-                        className={`px-1.5 sm:px-3 py-1.5 rounded-xl text-[10px] sm:text-xs font-semibold whitespace-nowrap transition-all cursor-pointer text-center border ${tableFilter === filter
-                          ? 'bg-emerald-500 text-black border-emerald-400 font-bold shadow-md shadow-emerald-500/20'
-                          : 'bg-[#18181B] text-zinc-300 hover:bg-zinc-800 border-zinc-800'
+                        aria-pressed={isActive}
+                        className={`flex-1 py-1.5 px-1.5 sm:px-3 rounded-xl text-xs font-bold transition-all cursor-pointer text-center ${
+                          isActive
+                            ? 'bg-[#059669] text-white shadow-sm font-bold'
+                            : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
                         }`}
                       >
-                        {label}
+                        {label} <span className="opacity-75 text-[10px] font-normal ml-0.5">({count})</span>
                       </button>
                     );
                   })}
@@ -2347,7 +2346,7 @@ export default function App() {
               </div>
 
               {/* Responsive Grid 3 Colunas no Mobile */}
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-3 w-full p-1 sm:p-2">
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2.5 p-3 w-full">
                 {filteredTables.length === 0 ? (
                   <div className={clsx('col-span-full', 'py-10', 'text-center', 'text-gray-500', 'text-sm', 'italic', 'font-sans')}>
                     Nenhuma mesa encontrada neste status.
