@@ -541,6 +541,8 @@ export default function App() {
     }
   }, [portal]);
 
+  const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
+
   useEffect(() => {
     if (!isAuthenticated) return;
     fetchLiveProdutos();
@@ -552,6 +554,27 @@ export default function App() {
     }, 40000); // refresh every 40s if not connected to WS
     return () => clearInterval(interval);
   }, [isAuthenticated, isWsConnected, fetchLiveProdutos, fetchLiveCategorias]);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      fetchLiveProdutos();
+      fetchLiveCategorias();
+      window.dispatchEvent(new Event('koma_orders_updated'));
+      window.dispatchEvent(new Event('koma_customers_updated'));
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [fetchLiveProdutos, fetchLiveCategorias]);
 
   // 2b. Orders loaded from API
   const [orders, setOrders] = useState<Order[]>([]);
@@ -1885,11 +1908,20 @@ export default function App() {
               </div>
             </div>
 
-            {/* Right: Status Badges */}
+            {/* Right: Network Status Badge */}
             <div className="flex items-center gap-2">
-              <div className={clsx('flex', 'items-center', 'gap-1.5', 'px-2.5', 'py-1', 'rounded-full', 'text-[10px]', 'font-semibold', isWsConnected ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20')}>
-                {isWsConnected ? <Wifi size={12} /> : <WifiOff size={12} />}
-                <span className="hidden sm:inline">{isWsConnected ? 'Conectado' : 'Reconectando...'}</span>
+              <div className={clsx(
+                'flex', 'items-center', 'gap-1.5', 'px-2.5', 'py-1', 'rounded-full', 'text-[10px]', 'font-semibold', 'transition-all',
+                !isOnline 
+                  ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' 
+                  : isWsConnected 
+                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                    : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+              )}>
+                {!isOnline ? <WifiOff size={12} /> : isWsConnected ? <Wifi size={12} /> : <RefreshCw size={12} className="animate-spin" />}
+                <span className="hidden sm:inline">
+                  {!isOnline ? 'Offline' : isWsConnected ? 'Online' : 'Reconectando...'}
+                </span>
               </div>
             </div>
 
