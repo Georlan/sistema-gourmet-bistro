@@ -1866,12 +1866,13 @@ export function CaixaPanel({
 
   const refreshLoyaltyUsers = async () => {
     try {
-      // 1. Tenta buscar da tabela real 'clientes' no Supabase
-      const { data: supaData } = await supabase.from('clientes').select('*');
-      let combined: LoyaltyCustomer[] = [];
+      // Busca exclusivamente da tabela real 'clientes' no Supabase
+      const { data: supaData } = await supabase
+        .from('clientes')
+        .select('*');
 
-      if (supaData && supaData.length > 0) {
-        combined = supaData.map((c: any) => ({
+      if (supaData) {
+        const mapped: LoyaltyCustomer[] = supaData.map((c: any) => ({
           id: String(c.id || c.telefone),
           cliente: c.nome || c.cliente || 'Cliente',
           telefone: c.telefone || '',
@@ -1881,44 +1882,11 @@ export function CaixaPanel({
           saldo_cashback: Number(c.saldo_cashback || 0),
           historico: c.historico || []
         }));
-      }
-
-      // 2. Mescla com cache local para resiliência instantânea
-      try {
-        const storedRaw = localStorage.getItem("koma_loyalty_clients_cache");
-        if (storedRaw) {
-          const localList: any[] = JSON.parse(storedRaw);
-          localList.forEach((lc: any) => {
-            const cleanPhone = (lc.telefone || "").replace(/\D/g, "");
-            if (cleanPhone && !combined.some(c => (c.telefone || "").replace(/\D/g, "") === cleanPhone)) {
-              combined.unshift({
-                id: lc.id || `cli-${cleanPhone}`,
-                cliente: lc.cliente || lc.nome || 'Cliente',
-                telefone: cleanPhone,
-                pontos: Number(lc.pontos || lc.saldo_pontos || 0),
-                saldo_pontos: Number(lc.pontos || lc.saldo_pontos || 0),
-                saldoCashback: Number(lc.saldoCashback || lc.saldo_cashback || 0),
-                saldo_cashback: Number(lc.saldoCashback || lc.saldo_cashback || 0),
-                historico: []
-              });
-            }
-          });
-        }
-      } catch (e) {
-        console.warn("Erro ao ler cache local de clientes:", e);
-      }
-
-      if (combined.length > 0) {
-        setLoyaltyUsers(combined);
+        setLoyaltyUsers(mapped);
         return;
       }
-
-      const response = await fetch(`${apiBaseUrl}/fidelidade/clientes`, { headers: authHeaders });
-      if (!response.ok) return;
-      const data = await response.json();
-      if (Array.isArray(data)) setLoyaltyUsers(data);
     } catch (error) {
-      console.error('Error fetching loyalty clients:', error);
+      console.error('Error fetching loyalty clients from Supabase:', error);
     }
   };
 
