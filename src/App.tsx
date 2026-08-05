@@ -1848,7 +1848,7 @@ export default function App() {
 
   if (isManagementRole(activeRole)) {
     return (
-      <div className={`w-full h-screen bg-[#09090B] text-white flex flex-col font-sans overflow-hidden ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''}`}>
+      <div className={`w-full h-screen bg-[#0F1115] text-white flex flex-col font-sans overflow-hidden ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''}`}>
         <MemoizedCaixaPanel
           orders={orders}
           onRefreshOrders={fetchOrdersFromAPI}
@@ -1876,7 +1876,7 @@ export default function App() {
   }
 
   return (
-    <div className={`min-h-screen bg-[#09090B] text-white flex flex-col font-sans ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''}`}>
+    <div className={`min-h-screen bg-[#0F1115] text-white flex flex-col font-sans ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''}`}>
       {/* GLOBAL TOP HEADER */}
       <header className="bg-[#121214] border-b border-[#27272A]/50 text-white shrink-0 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3">
