@@ -10276,19 +10276,19 @@ export function CaixaPanel({
               </div>
 
               {/* 1. SEÇÃO GARÇOM / OPERADOR EM ATENDIMENTO */}
-              <div className="bg-[#121417] border border-[#2a2f38] rounded-2xl p-4 space-y-3.5">
+              <div className="bg-[#0E1015] border border-[#1C1F28] rounded-2xl p-4 space-y-3.5 shadow-md">
                 <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">
                   Garçom / Operador em Atendimento
                 </span>
                 <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-indigo-600 flex items-center justify-center font-bold text-white text-lg shadow-md shrink-0 font-serif">
+                  <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-800 flex items-center justify-center font-bold text-white text-lg shadow-md shrink-0 font-serif border border-emerald-500/30">
                     {(activeWaiterNome || "G").charAt(0).toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">
                     <strong className="font-bold text-base text-slate-100 block truncate">
                       {activeWaiterNome || "Georlan"}
                     </strong>
-                    <span className="text-xs text-emerald-400 font-medium block">
+                    <span className="text-xs text-emerald-400/90 font-medium block">
                       Operador de Caixa / Gerência
                     </span>
                   </div>
@@ -10297,42 +10297,66 @@ export function CaixaPanel({
                 <button
                   type="button"
                   onClick={handleLogoutOperator}
-                  className="w-full py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-2 shadow-md"
+                  className="w-full py-2.5 bg-rose-950/70 hover:bg-rose-900/80 text-rose-200 border border-rose-900/50 font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-2 shadow-sm"
                 >
                   <Lock size={14} />
                   <span>LOGOUT / TROCAR OPERADOR</span>
                 </button>
               </div>
 
-              {/* 2. SEÇÃO STATUS DO SALÃO AO VIVO */}
-              <div className="bg-[#121417] border border-[#2a2f38] rounded-2xl p-4 space-y-3">
-                <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">
-                  Status do Salão ao Vivo
-                </span>
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="bg-[#181a1f] border border-[#2a2f38] p-2.5 rounded-xl text-center">
-                    <span className="text-[9px] text-slate-400 block font-medium">LIVRES</span>
-                    <strong className="text-lg font-bold text-emerald-400 font-mono">
-                      {salonTables.filter(t => t.status === 'livre').length}
-                    </strong>
+              {/* 2. SEÇÃO STATUS DO SALÃO AO VIVO (Real-time synchronization with Garçom & Caixa apps) */}
+              {(() => {
+                const liveOccupiedMesaIds = new Set(
+                  orders
+                    .filter(o => o.mesaId && Number(o.mesaId) > 0 && o.status !== 'fechada' && o.status !== 'cancelado')
+                    .map(o => Number(o.mesaId))
+                );
+                const liveTotalTablesCount = (salonTables && salonTables.length > 0) ? salonTables.length : 30;
+                const liveOccupiedTablesCount = (salonTables && salonTables.length > 0)
+                  ? salonTables.filter(t => {
+                      const tableNum = Number(t.id || t.numero);
+                      return liveOccupiedMesaIds.has(tableNum) || t.status === 'ocupada' || t.status === 'occupied' || t.status === 'fechamento';
+                    }).length
+                  : liveOccupiedMesaIds.size;
+                const liveFreeTablesCount = Math.max(0, liveTotalTablesCount - liveOccupiedTablesCount);
+
+                return (
+                  <div className="bg-[#0E1015] border border-[#1C1F28] rounded-2xl p-4 space-y-3 shadow-md">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">
+                        Status do Salão ao Vivo
+                      </span>
+                      <span className="text-[9px] font-mono text-emerald-400/90 bg-emerald-950/60 border border-emerald-900/40 px-2 py-0.5 rounded-full font-bold uppercase flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                        Tempo Real
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="bg-[#151720] border border-[#252836] p-2.5 rounded-xl text-center shadow-xs">
+                        <span className="text-[9px] text-slate-400 block font-medium">LIVRES</span>
+                        <strong className="text-lg font-bold text-[#059669] font-mono">
+                          {liveFreeTablesCount}
+                        </strong>
+                      </div>
+                      <div className="bg-[#151720] border border-[#252836] p-2.5 rounded-xl text-center shadow-xs">
+                        <span className="text-[9px] text-slate-400 block font-medium">OCUPADAS</span>
+                        <strong className="text-lg font-bold text-amber-400/90 font-mono">
+                          {liveOccupiedTablesCount}
+                        </strong>
+                      </div>
+                      <div className="bg-[#151720] border border-[#252836] p-2.5 rounded-xl text-center shadow-xs">
+                        <span className="text-[9px] text-slate-400 block font-medium">TOTAL</span>
+                        <strong className="text-lg font-bold text-sky-400/90 font-mono">
+                          {liveTotalTablesCount}
+                        </strong>
+                      </div>
+                    </div>
                   </div>
-                  <div className="bg-[#181a1f] border border-[#2a2f38] p-2.5 rounded-xl text-center">
-                    <span className="text-[9px] text-slate-400 block font-medium">OCUPADAS</span>
-                    <strong className="text-lg font-bold text-amber-400 font-mono">
-                      {salonTables.filter(t => t.status === 'ocupada').length}
-                    </strong>
-                  </div>
-                  <div className="bg-[#181a1f] border border-[#2a2f38] p-2.5 rounded-xl text-center">
-                    <span className="text-[9px] text-slate-400 block font-medium">TOTAL</span>
-                    <strong className="text-lg font-bold text-indigo-400 font-mono">
-                      {salonTables.length}
-                    </strong>
-                  </div>
-                </div>
-              </div>
+                );
+              })()}
 
               {/* 3. SEÇÃO ATALHOS DE ATENDIMENTO */}
-              <div className="bg-[#121417] border border-[#2a2f38] rounded-2xl p-4 space-y-2.5">
+              <div className="bg-[#0E1015] border border-[#1C1F28] rounded-2xl p-4 space-y-2.5 shadow-md">
                 <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">
                   Atalhos de Atendimento
                 </span>
@@ -10340,12 +10364,12 @@ export function CaixaPanel({
                   type="button"
                   onClick={() => {
                     if (onRefreshOrders) onRefreshOrders();
-                    showToast("Salão e pedidos sincronizados!", "success");
+                    showToast("Salão e pedidos sincronizados em tempo real!", "success");
                   }}
-                  className="w-full py-2 px-3 bg-[#181a1f] hover:bg-[#252a33] border border-[#2a2f38] text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-between"
+                  className="w-full py-2 px-3 bg-[#151720] hover:bg-[#1E222D] border border-[#252836] text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-between"
                 >
                   <div className="flex items-center gap-2">
-                    <RefreshCw size={14} className="text-emerald-400" />
+                    <RefreshCw size={14} className="text-[#059669]" />
                     <span>Sincronizar Salão e Pedidos</span>
                   </div>
                   <ChevronRight size={14} className="text-slate-500" />
@@ -10357,10 +10381,10 @@ export function CaixaPanel({
                     toggleFullscreen();
                     setIsOperatorDrawerOpen(false);
                   }}
-                  className="w-full py-2 px-3 bg-[#181a1f] hover:bg-[#252a33] border border-[#2a2f38] text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-between"
+                  className="w-full py-2 px-3 bg-[#151720] hover:bg-[#1E222D] border border-[#252836] text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-between"
                 >
                   <div className="flex items-center gap-2">
-                    {isFullscreen ? <Minimize2 size={14} className="text-indigo-400" /> : <Maximize2 size={14} className="text-indigo-400" />}
+                    {isFullscreen ? <Minimize2 size={14} className="text-sky-400/90" /> : <Maximize2 size={14} className="text-sky-400/90" />}
                     <span>{isFullscreen ? "Sair do Modo PDV" : "Modo PDV Imersivo"}</span>
                   </div>
                   <ChevronRight size={14} className="text-slate-500" />
@@ -10368,21 +10392,21 @@ export function CaixaPanel({
               </div>
 
               {/* 4. SEÇÃO EXIBIÇÃO E PREFERÊNCIAS */}
-              <div className="bg-[#121417] border border-[#2a2f38] rounded-2xl p-4 space-y-3">
+              <div className="bg-[#0E1015] border border-[#1C1F28] rounded-2xl p-4 space-y-3 shadow-md">
                 <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">
                   Exibição e Preferências
                 </span>
                 
                 <div className="space-y-1.5">
                   <span className="text-xs text-slate-300 font-medium block">Tamanho da Fonte:</span>
-                  <div className="grid grid-cols-3 gap-1 bg-[#181a1f] p-1 rounded-xl border border-[#2a2f38]">
+                  <div className="grid grid-cols-3 gap-1 bg-[#151720] p-1 rounded-xl border border-[#252836]">
                     {(['padrao', 'grande', 'gigante'] as const).map((sz) => (
                       <button
                         key={sz}
                         type="button"
                         onClick={() => changeFontSize(sz)}
                         className={`py-1 rounded-lg text-xs font-bold uppercase transition-all cursor-pointer ${fontSize === sz
-                          ? 'bg-emerald-600 text-white shadow-xs'
+                          ? 'bg-[#046c4e] text-emerald-100 shadow-xs border border-emerald-700/30'
                           : 'text-slate-400 hover:text-slate-200'
                           }`}
                       >
