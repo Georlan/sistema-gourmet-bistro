@@ -8,6 +8,7 @@ import { AlertCircle, CheckCircle, Info, Send, ShoppingBag, X } from "lucide-rea
 import { BrandConfig } from "../CardapioTypes";
 import { CartItem } from "./CardapioCartDrawer";
 import { API_BASE_URL } from "../../config/api";
+import { openWhatsAppMessage, buildPedidoConfirmadoMsg } from "../../config/whatsappUtils";
 
 interface CreatedOrder {
   comanda_id: string;
@@ -253,13 +254,28 @@ export default function CardapioDigital({
                   Nenhuma cobrança foi feita pelo site. O pagamento será combinado diretamente com o restaurante.
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={handleFinish}
-                className="w-full max-w-xs py-3.5 mt-4 bg-primary text-white text-xs font-black rounded-xl shadow-md hover:opacity-95 transition uppercase tracking-wider cursor-pointer"
-              >
-                Voltar ao Cardápio
-              </button>
+              <div className="w-full max-w-xs space-y-2 mt-4">
+                {activeBrand.socials?.whatsapp && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const itensStr = cart.map(i => `${i.quantity}x ${i.product.name}`).join(', ');
+                      const msg = buildPedidoConfirmadoMsg(customerName, itensStr, estimatedTotal);
+                      openWhatsAppMessage(String(activeBrand.socials.whatsapp), msg);
+                    }}
+                    className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black rounded-xl shadow-md transition uppercase tracking-wider cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <span>💬 Enviar no WhatsApp</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleFinish}
+                  className="w-full py-3.5 bg-primary text-white text-xs font-black rounded-xl shadow-md hover:opacity-95 transition uppercase tracking-wider cursor-pointer"
+                >
+                  Voltar ao Cardápio
+                </button>
+              </div>
             </div>
           ) : (
             <>

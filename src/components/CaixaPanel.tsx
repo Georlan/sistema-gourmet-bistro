@@ -42,6 +42,13 @@ import {
   normalizeSubscriptionPlan
 } from '../config/subscriptionPlans';
 import { ComandaActionsModal } from './ComandaActionsModal';
+import {
+  formatWhatsAppPhone,
+  openWhatsAppMessage,
+  buildPedidoConfirmadoMsg,
+  buildStatusUpdateMsg,
+  buildPixMsg
+} from '../config/whatsappUtils';
 import clsx from 'clsx';
 
 interface CaixaPanelProps {
@@ -586,7 +593,8 @@ export function CaixaPanel({
   const [compreGanheRules, setCompreGanheRules] = useState<{ id: number; titulo: string; descricao: string; ativa: boolean; }[]>([]);
 
   const handleRecuperarCart = (id: number, cliente: string, telefone: string) => {
-    alert(`Simulação de WhatsApp: Mensagem enviada para ${cliente} (${telefone}) convidando para finalizar a compra com desconto!`);
+    const msg = `Olá, ${cliente || 'Cliente'}! Notamos que seu pedido no *Kôma* não foi concluído. 🍔\n\nEstamos à disposição para te ajudar a finalizar seu pedido com o melhor atendimento!`;
+    openWhatsAppMessage(telefone, msg);
     setAbandonedCarts(prev => prev.map(c => c.id === id ? { ...c, status: 'recuperado' } : c));
   };
 
@@ -1487,6 +1495,16 @@ export function CaixaPanel({
       if (res.ok) {
         fetchDeliveryOrders();
         showToast('Status do pedido atualizado!');
+        const targetOrder = (simulatedOrders as any[]).find(o => String(o.id) === String(orderId)) || (deliveryOrders as any[]).find(o => String(o.id) === String(orderId));
+        if (targetOrder && (targetOrder.telefone || targetOrder.delivery_telefone)) {
+          const phone = targetOrder.telefone || targetOrder.delivery_telefone;
+          const nome = targetOrder.cliente || targetOrder.identificador || 'Cliente';
+          const isDelivery = statusNovo === 'transito' || statusNovo === 'saiu_para_entrega' || targetOrder.modalidade === 'delivery';
+          if (['pronto', 'transito', 'saiu_para_entrega'].includes(statusNovo)) {
+            const msg = buildStatusUpdateMsg(nome, isDelivery);
+            openWhatsAppMessage(phone, msg);
+          }
+        }
       } else {
         showToast('Erro ao atualizar status do pedido.', 'error');
       }
@@ -2706,16 +2724,10 @@ export function CaixaPanel({
     }
   };
 
-  // Waiter CRUD actions
   const openWaInvite = (telefone: string, nome: string, token: string) => {
-    let clean = (telefone || '').replace(/\D/g, '');
-    if (!clean.startsWith('55') && (clean.length === 10 || clean.length === 11)) {
-      clean = '55' + clean;
-    }
     const link = `https://sistema-gourmet-bistro.pages.dev/ativar?token=${token}`;
     const msg = `Olá ${nome}! Você foi convidado para trabalhar no Kôma. Clique no link para criar sua senha e ativar sua conta: ${link}`;
-    const waUrl = `https://wa.me/${clean}?text=${encodeURIComponent(msg)}`;
-    window.open(waUrl, '_blank');
+    openWhatsAppMessage(telefone, msg);
   };
 
   const handleAddUserSubmit = async (e: React.FormEvent) => {

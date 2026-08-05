@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Phone, MapPin, CheckCircle2, RefreshCw, Navigation, AlertCircle, ShoppingBag, Truck, ExternalLink } from 'lucide-react';
 import clsx from 'clsx';
 import { API_BASE_URL } from '../config/api';
+import { formatWhatsAppPhone } from '../config/whatsappUtils';
 
 interface EntregaItem {
   id: string;
@@ -176,9 +177,9 @@ export function MotoboyPwaPage() {
           </div>
         ) : (
           entregas.map((entrega) => {
-            const cleanTel = (entrega.delivery_telefone || '').replace(/\D/g, '');
+            const cleanTel = formatWhatsAppPhone(entrega.delivery_telefone);
             const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(entrega.delivery_endereco || '')}`;
-            const waUrl = cleanTel ? `https://wa.me/55${cleanTel}?text=${encodeURIComponent(`Olá ${entrega.cliente_nome}, sou o entregador do KÔMA com o seu pedido #${entrega.numero_pedido || entrega.id}!`)}` : null;
+            const waUrl = cleanTel ? `https://wa.me/${cleanTel}?text=${encodeURIComponent(`Olá ${entrega.cliente_nome}! Sou o entregador do *Kôma* a caminho com seu pedido #${entrega.numero_pedido || entrega.id}! 🎉`)}` : null;
             const telUrl = cleanTel ? `tel:${cleanTel}` : null;
 
             return (
