@@ -238,7 +238,8 @@ app.add_middleware(
     allow_origin_regex=r"https://.*",
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["*", "x-koma-customer-token", "X-Koma-Customer-Token"],
+    expose_headers=["*"],
 )
 
 @app.exception_handler(Exception)

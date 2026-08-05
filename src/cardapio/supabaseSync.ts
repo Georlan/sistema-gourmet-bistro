@@ -24,55 +24,19 @@ export async function syncCustomerToSupabase(profile: {
       nome: profile.name.trim(),
       endereco: profile.address?.trim() || "",
       saldo_pontos: 0,
-      saldo_cashback: 0
+      saldo_cashback: 0,
+      criado_em: new Date().toISOString()
     };
 
-    // 1. Tenta buscar se o cliente já existe por telefone no Supabase
-    const { data: existing } = await supabase
+    // Upsert dinâmico na tabela 'clientes' do Supabase
+    const { data, error } = await supabase
       .from("clientes")
-      .select("id")
-      .eq("telefone", cleanPhone)
-      .limit(1);
+      .upsert([record], { onConflict: "id" });
 
-    if (existing && existing.length > 0) {
-      // Atualiza cliente existente usando o ID primário
-      const { error } = await supabase
-        .from("clientes")
-        .update({
-          nome: record.nome,
-          endereco: record.endereco || undefined
-        })
-        .eq("id", existing[0].id);
-
-      if (error) console.warn("Supabase update clientes notice:", error.message);
-      else console.log("✅ Cliente atualizado com sucesso na tabela 'clientes' do Supabase!");
+    if (error) {
+      console.error("Erro ao salvar cliente no Supabase:", error.message);
     } else {
-      // Insere novo cliente usando primary key 'id'
-      const { error } = await supabase.from("clientes").upsert(record, { onConflict: "id" });
-      if (error) console.warn("Supabase insert clientes notice:", error.message);
-      else console.log("✅ Novo cliente persistido com sucesso na tabela 'clientes' do Supabase!");
-    }
-
-    // Sincroniza localmente para garantir persistência offline-first
-    try {
-      const storedRaw = localStorage.getItem("koma_loyalty_clients_cache");
-      let list: any[] = storedRaw ? JSON.parse(storedRaw) : [];
-      const idx = list.findIndex(c => (c.telefone || "").replace(/\D/g, "") === cleanPhone);
-      const updatedItem = {
-        id: record.id,
-        cliente: record.nome,
-        telefone: cleanPhone,
-        endereco: record.endereco,
-        pontos: 0,
-        saldo_pontos: 0,
-        saldoCashback: 0,
-        saldo_cashback: 0
-      };
-      if (idx >= 0) list[idx] = updatedItem;
-      else list.unshift(updatedItem);
-      localStorage.setItem("koma_loyalty_clients_cache", JSON.stringify(list));
-    } catch (e) {
-      console.warn("Erro ao salvar cache local de clientes:", e);
+      console.log("✅ Cliente salvo dinamicamente no Supabase!", data);
     }
 
     // Dispara evento em tempo real no frontend do Caixa
