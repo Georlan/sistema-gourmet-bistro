@@ -64,50 +64,45 @@ export const MesaCard = React.memo<MesaCardProps>(({
   // Visual classes based on state
   const statusConfig = {
     livre: {
-      borderColor: 'border-emerald-950/60 hover:border-emerald-500/30 focus:ring-emerald-500',
-      bgColor: 'bg-emerald-950/80',
-      badgeColor: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-      label: 'Livre',
-      textColor: 'text-emerald-400',
-      glow: '',
+      borderColor: 'border-slate-800 hover:border-slate-700 focus:ring-emerald-500',
+      bgColor: 'bg-[#1e2229] hover:bg-[#252a34]',
+      badgeColor: 'text-emerald-400',
+      label: '🟢 Livre',
+      textColor: 'text-slate-100',
     },
     ocupada: {
       borderColor: hasPendingPayment 
         ? 'border-amber-500 focus:ring-amber-500'
-        : 'border-rose-950/60 hover:border-rose-500/30 focus:ring-rose-500',
+        : 'border-rose-900/50 hover:border-rose-800 focus:ring-rose-500',
       bgColor: hasPendingPayment
-        ? 'bg-amber-950/70'
-        : 'bg-rose-950/80',
+        ? 'bg-amber-950/80'
+        : 'bg-[#3f121a]',
       badgeColor: hasPendingPayment
-        ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
-        : 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+        ? 'text-amber-400'
+        : 'text-rose-400',
       label: hasPendingPayment ? 'Aprovar Dinheiro' : 'Ocupada',
-      textColor: hasPendingPayment ? 'text-amber-400' : 'text-rose-400',
-      glow: '',
+      textColor: 'text-rose-200',
     },
     pronto: {
-      borderColor: 'border-amber-500/20 hover:border-amber-500/40 focus:ring-amber-500',
-      bgColor: 'bg-amber-950/80',
-      badgeColor: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+      borderColor: 'border-amber-500/40 hover:border-amber-500/60 focus:ring-amber-500',
+      bgColor: 'bg-amber-950/85',
+      badgeColor: 'text-amber-400',
       label: 'Pronto p/ Servir',
-      textColor: 'text-amber-400',
-      glow: '',
+      textColor: 'text-amber-200',
     },
     entregue: {
       borderColor: 'border-blue-500/30 hover:border-blue-500/50 focus:ring-blue-500',
       bgColor: 'bg-blue-950/85',
-      badgeColor: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
+      badgeColor: 'text-blue-300',
       label: 'Aguardando Pgto.',
-      textColor: 'text-blue-300',
-      glow: '',
+      textColor: 'text-blue-200',
     },
     mesclada: {
       borderColor: 'border-dashed border-zinc-700 focus:ring-zinc-500',
       bgColor: 'bg-zinc-950/90',
-      badgeColor: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20',
+      badgeColor: 'text-zinc-400',
       label: `Mesclada na Mesa ${mergedIntoMesaId}`,
       textColor: 'text-zinc-400',
-      glow: '',
     },
   };
 
@@ -118,12 +113,12 @@ export const MesaCard = React.memo<MesaCardProps>(({
     <button
       id={`mesa-card-${table.id}`}
       onClick={() => onClick(table.id)}
-      className={`relative flex flex-col justify-between p-2.5 sm:p-4 rounded-xl border min-h-[100px] sm:min-h-[130px] ${currentConfig.borderColor} ${currentConfig.bgColor} cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full`}
+      className={`relative flex flex-col justify-between p-2 sm:p-3 rounded-xl border min-h-[90px] sm:min-h-[110px] ${currentConfig.borderColor} ${currentConfig.bgColor} cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full transition-all`}
     >
       {/* Top Section */}
       <div className="w-full">
-        <div className="flex items-start justify-between mb-1.5 sm:mb-3">
-          <span className="font-serif text-sm sm:text-lg font-bold text-white tracking-tight leading-tight">
+        <div className="flex items-start justify-between">
+          <span className="font-bold text-xs sm:text-sm text-slate-100 tracking-tight leading-tight">
             {table.nome && table.nome !== `Mesa ${table.id}` ? table.nome : `Mesa ${table.id}`}
             {mergedSources && mergedSources.length > 0 && (
               <span className="text-[10px] font-normal text-zinc-400 ml-1">+{mergedSources.join('+')}</span>
@@ -134,54 +129,52 @@ export const MesaCard = React.memo<MesaCardProps>(({
 
       {/* Bottom Section */}
       {status === 'livre' ? (
-        <div className="w-full mt-3 flex items-center justify-between border-t border-emerald-950/20 pt-2 text-[9px] text-emerald-500/40 uppercase font-sans tracking-widest font-bold">
-          <div className="flex items-center gap-1">
-            <span>Livre</span>
-            {draftCount > 0 && (
-              <span className="flex items-center gap-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded px-1 py-0.5 text-[8px] font-bold">
-                <FileText size={9} className="shrink-0" />
-                <span>{draftCount}</span>
-              </span>
-            )}
-          </div>
-          <span className="text-sm font-normal">+</span>
+        <div className="w-full mt-2 pt-1 border-t border-slate-800/60 flex items-center justify-between">
+          <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
+            🟢 Livre
+          </span>
+          {draftCount > 0 && (
+            <span className="flex items-center gap-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded px-1 py-0.5 text-[8px] font-bold">
+              <FileText size={9} className="shrink-0" />
+              <span>{draftCount}</span>
+            </span>
+          )}
         </div>
       ) : status === 'mesclada' ? (
-        <div className="w-full mt-3 flex items-center justify-between border-t border-[#27272A] pt-2 text-[9px] text-zinc-500 font-sans font-bold uppercase tracking-wider">
+        <div className="w-full mt-2 pt-1 border-t border-zinc-800 flex items-center justify-between text-[9px] text-zinc-400 font-sans">
           <div className="flex items-center gap-1">
             <GitMerge size={10} className="text-zinc-500 shrink-0" />
             <span>Mesclada</span>
           </div>
-          <span className="text-zinc-400 font-mono text-[9px]">M{mergedIntoMesaId}</span>
+          <span className="font-mono text-[9px]">M{mergedIntoMesaId}</span>
         </div>
       ) : (
-        <div className="w-full pt-2 border-t border-[#27272A]">
-          <div className="flex items-center justify-between">
+        <div className="w-full pt-1.5 border-t border-rose-900/40">
+          <div className="flex items-center justify-between text-xs text-rose-200 font-bold">
             {/* Timer */}
             <div className="flex items-center gap-1">
-              <Clock size={10} className="text-emerald-400 shrink-0" />
-              <strong className={`text-[10px] font-mono ${status === 'entregue' ? 'text-blue-300' : 'text-rose-400'}`}>{elapsed}</strong>
+              <Clock size={10} className="text-rose-300 shrink-0" />
+              <span className="text-[11px] font-mono font-bold text-rose-200">{elapsed}</span>
             </div>
 
-            {/* Right side: draft icon + total */}
-            <div className="flex items-center gap-1.5">
+            {/* Total Value */}
+            <div className="flex items-center gap-1">
               {draftCount > 0 && (
                 <div className="flex items-center gap-0.5 px-1 py-0.5 bg-emerald-500/10 text-emerald-400 rounded border border-emerald-500/20 text-[9px]" title={`Rascunho: ${draftCount}`}>
-                  <FileText size={10} className="shrink-0" />
+                  <FileText size={9} className="shrink-0" />
                   <span className="font-bold">{draftCount}</span>
                 </div>
               )}
               {otherWaitersServing.length > 0 && (
-                <span title={`Editando: ${otherWaitersServing.join(', ')}`} className="text-amber-400 text-[11px]">⚠️</span>
+                <span title={`Editando: ${otherWaitersServing.join(', ')}`} className="text-amber-400 text-[10px]">⚠️</span>
               )}
-              <span className={`text-xs sm:text-sm font-bold font-mono ${totalValue > 0 ? 'text-emerald-400' : 'text-[#71717A]'}`}>
+              <span className="text-xs text-rose-200 font-bold font-mono">
                 {totalValue > 0 ? `R$${totalValue.toFixed(0)}` : (status === 'entregue' ? '💳' : '+')}
               </span>
             </div>
           </div>
         </div>
       )}
-
     </button>
   );
 });

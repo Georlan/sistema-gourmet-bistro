@@ -253,13 +253,13 @@ export default function App() {
 
   const fetchTurnoResumo = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/caixa/turno-atual/resumo`, { headers: getAuthHeaders() });
-      if (res.ok) {
-        const data = await res.json();
-        setTurnoResumo(data);
+      const res = await fetch(`${API_BASE_URL}/caixa/turno-atual/resumo`, { headers: getAuthHeaders() }).catch(() => null);
+      if (res && res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data) setTurnoResumo(data);
       }
     } catch (e) {
-      console.error("Erro ao buscar resumo do turno no App:", e);
+      // Ignora silenciosamente erros 403 ou de permissão no modo garçom
     }
   }, [API_BASE_URL, getAuthHeaders]);
 
@@ -2304,18 +2304,28 @@ export default function App() {
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-[#27272A]">
                 <h3 className="font-serif text-xl sm:text-2xl font-bold tracking-tight text-white shrink-0">Mesas</h3>
 
-                {/* Filters */}
+                {/* Filters em Pílulas Horizontais de 1 Linha */}
                 <div
                   role="group"
                   aria-label="Filtrar mesas por status"
-                  className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-1.5 w-full sm:w-auto"
+                  className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 w-full sm:w-auto"
                 >
                   {(['todos', 'livres', 'ocupadas', 'prontas'] as const).map((filter) => {
+                    const count = {
+                      todos: tables.length,
+                      livres: tables.filter(t => !orders.some(o => o.mesaId === t.id)).length,
+                      ocupadas: tables.filter(t => orders.some(o => o.mesaId === t.id)).length,
+                      prontas: tables.filter(t => {
+                        const tOrders = orders.filter(o => o.mesaId === t.id);
+                        return tOrders.flatMap(o => o.itens).some(i => i.status === 'pronto');
+                      }).length
+                    }[filter];
+
                     const label = {
-                      todos: 'Todas',
-                      livres: 'Livres',
-                      ocupadas: 'Ocupadas',
-                      prontas: 'Prontas'
+                      todos: `Todas (${count})`,
+                      livres: `Livres (${count})`,
+                      ocupadas: `Ocupadas (${count})`,
+                      prontas: `Prontas (${count})`
                     }[filter];
 
                     return (
@@ -2324,9 +2334,9 @@ export default function App() {
                         type="button"
                         onClick={() => setTableFilter(filter)}
                         aria-pressed={tableFilter === filter}
-                        className={`w-full sm:w-auto min-h-11 sm:min-h-0 flex items-center justify-center px-3 py-2 text-xs font-semibold rounded-lg cursor-pointer whitespace-nowrap border ${tableFilter === filter
-                          ? 'bg-rose-900/40 border-rose-800/50 text-white'
-                          : 'bg-[#1C1C1F] text-gray-300 border-[#27272A]'
+                        className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer border ${tableFilter === filter
+                          ? 'bg-emerald-500 text-slate-950 border-emerald-400 font-bold shadow-sm'
+                          : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border-slate-700'
                         }`}
                       >
                         {label}
@@ -2336,7 +2346,8 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-4">
+              {/* Responsive Grid 3 Colunas no Mobile */}
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-3 w-full p-1 sm:p-2">
                 {filteredTables.length === 0 ? (
                   <div className={clsx('col-span-full', 'py-10', 'text-center', 'text-gray-500', 'text-sm', 'italic', 'font-sans')}>
                     Nenhuma mesa encontrada neste status.
