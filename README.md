@@ -5,7 +5,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
+[![License: Proprietary](https://img.shields.io/badge/License-Proprietary-red.svg?style=for-the-badge)](LICENSE)
 
 O **KÔMA** é uma plataforma SaaS multi-tenant moderna desenvolvida para a gestão completa de restaurantes, bistrôs, lanchonetes e operações de food service. O sistema integra Frente de Caixa (PDV), Gestão de Mesas e Comandas, Cozinha (KDS), Cardápio Digital Whitelabel com OTP via WhatsApp, Painel de Logística/Delivery com PWA para entregadores e Spooler de Impressão Térmica.
 
@@ -252,11 +252,19 @@ python3 -m py_compile backend/app/services/whatsapp.py
 
 ---
 
-## 📄 Licença
+## 📄 Licença e Propriedade Intelectual
 
-Este projeto está licenciado sob a Licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
+© 2026 **Georlan** — Todos os direitos reservados.
 
-Copyright (c) 2026 **Georlan**
+Este Software é **proprietário e confidencial**. O código-fonte, design, arquitetura e documentação são protegidos por lei. É proibido copiar, distribuir, modificar, sublicenciar, revender ou utilizar este Software para criar produto concorrente sem autorização escrita.
+
+Clientes com **assinatura ativa** recebem permissão limitada, não exclusiva e intransferível para utilizar o serviço pelo período contratado.
+
+**Componentes de terceiros** (React, FastAPI, Supabase SDK, etc.) permanecem sujeitos às suas respectivas licenças, detalhadas em [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+> **Nota histórica:** Versões do projeto disponibilizadas anteriormente a 2026-08-06 sob licença MIT permanecem sujeitas aos termos daquela licença. A licença proprietária aplica-se somente a versões e modificações distribuídas a partir dessa data.
+
+Veja o arquivo [LICENSE](LICENSE) para o texto completo da licença proprietária.
 
 ---
 

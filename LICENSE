@@ -1,21 +1,127 @@
-MIT License
+KÔMA PROPRIETARY SOFTWARE LICENSE
+Copyright (c) 2026 Georlan. Todos os direitos reservados.
 
-Copyright (c) 2026 Georlan
+═══════════════════════════════════════════════════════════════════
+AVISO IMPORTANTE — LEIA ANTES DE USAR, COPIAR OU ACESSAR ESTE SOFTWARE
+═══════════════════════════════════════════════════════════════════
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Este Software, incluindo todo o seu código-fonte, documentação, materiais
+de design, estrutura de banco de dados, lógica de negócio e arquivos
+associados (coletivamente, o "Software"), é propriedade exclusiva de
+Georlan ("Titular") e é protegido pelas leis de direito autoral, segredo
+industrial e tratados internacionais de propriedade intelectual.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+───────────────────────────────────────────────────────────────────
+1. DIREITOS RESERVADOS
+───────────────────────────────────────────────────────────────────
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+Todos os direitos não expressamente concedidos nesta licença são
+reservados ao Titular. É expressamente PROIBIDO, sem autorização prévia
+e escrita do Titular:
+
+  (a) Copiar, reproduzir, modificar ou criar obras derivadas deste Software;
+  (b) Distribuir, sublicenciar, transferir ou disponibilizar o Software a
+      terceiros, por qualquer meio;
+  (c) Vender, alugar, arrendar ou comercializar o Software ou quaisquer
+      direitos sobre ele;
+  (d) Utilizar o Software ou qualquer parte dele para criar produto ou
+      serviço concorrente ao Kôma;
+  (e) Fazer engenharia reversa, descompilar ou desmontar qualquer parte
+      do Software;
+  (f) Remover, alterar ou ocultar avisos de copyright, marcas registradas
+      ou outras notificações proprietárias presentes no Software.
+
+───────────────────────────────────────────────────────────────────
+2. PERMISSÃO LIMITADA AOS CLIENTES LICENCIADOS
+───────────────────────────────────────────────────────────────────
+
+Clientes que mantêm assinatura ativa do serviço Kôma recebem uma licença
+limitada, não exclusiva, intransferível e revogável para:
+
+  (a) Utilizar o serviço Kôma pelo período da assinatura ativa, na forma
+      disponibilizada pelo Titular;
+  (b) Acessar as interfaces do sistema para os fins operacionais descritos
+      nos Termos de Uso do SaaS.
+
+Esta permissão NÃO autoriza o acesso, cópia ou uso do código-fonte do
+Software, sendo restrita ao uso do serviço como plataforma.
+
+───────────────────────────────────────────────────────────────────
+3. SEPARAÇÃO ENTRE LICENÇA DO CÓDIGO E TERMOS DE USO DO SAAS
+───────────────────────────────────────────────────────────────────
+
+Esta licença governa os direitos sobre o código-fonte e é distinta dos
+Termos de Uso do serviço SaaS Kôma. Os Termos de Uso regem a relação
+comercial com os clientes e o uso do serviço na plataforma hospedada.
+Em caso de conflito, esta licença prevalece sobre quaisquer documentos
+não assinados separadamente pelo Titular.
+
+───────────────────────────────────────────────────────────────────
+4. COMPONENTES DE TERCEIROS
+───────────────────────────────────────────────────────────────────
+
+Este Software incorpora componentes de código aberto de terceiros,
+listados em THIRD_PARTY_NOTICES.md. Tais componentes permanecem sujeitos
+às suas licenças originais (MIT, Apache-2.0, BSD, LGPL, etc.), que não
+são afetadas por esta licença proprietária.
+
+O Titular reconhece e cumpre as obrigações impostas por essas licenças
+de terceiros. Os avisos de atribuição exigidos por essas licenças são
+preservados nos arquivos originais e em THIRD_PARTY_NOTICES.md.
+
+───────────────────────────────────────────────────────────────────
+5. VERSÕES ANTERIORES SOB LICENÇA MIT
+───────────────────────────────────────────────────────────────────
+
+Versões do Software anteriormente disponibilizadas sob a licença MIT
+(identificáveis pelos commits anteriores à adoção desta licença, em
+2026-08-06) permanecem sujeitas aos termos da licença MIT aplicáveis
+àquelas versões específicas.
+
+Esta licença proprietária aplica-se EXCLUSIVAMENTE às versões e
+modificações do Software distribuídas a partir de 2026-08-06, data de
+adoção desta licença.
+
+Para acesso a versões históricas sob MIT, consulte o histórico de commits
+do repositório. O Titular não concede, nesta data ou retroativamente,
+quaisquer direitos adicionais sobre as versões anteriores além dos já
+conferidos pela licença MIT.
+
+───────────────────────────────────────────────────────────────────
+6. ISENÇÃO DE GARANTIAS
+───────────────────────────────────────────────────────────────────
+
+O SOFTWARE É FORNECIDO "NO ESTADO EM QUE SE ENCONTRA", SEM GARANTIAS DE
+QUALQUER NATUREZA, EXPRESSAS OU IMPLÍCITAS, INCLUINDO, SEM LIMITAÇÃO,
+GARANTIAS DE COMERCIALIZAÇÃO, ADEQUAÇÃO A UMA FINALIDADE ESPECÍFICA E
+NÃO VIOLAÇÃO. EM NENHUMA HIPÓTESE O TITULAR SERÁ RESPONSÁVEL POR DANOS
+DIRETOS, INDIRETOS, INCIDENTAIS, ESPECIAIS, EXEMPLARES OU CONSEQUENTES
+DECORRENTES DO USO OU IMPOSSIBILIDADE DE USO DO SOFTWARE.
+
+───────────────────────────────────────────────────────────────────
+7. VIGÊNCIA E RESCISÃO
+───────────────────────────────────────────────────────────────────
+
+Esta licença entra em vigor na data de sua adoção (2026-08-06) e permanece
+em vigor indefinidamente. Qualquer violação de seus termos resulta em
+rescisão automática e imediata de todos os direitos concedidos.
+
+───────────────────────────────────────────────────────────────────
+8. LEI APLICÁVEL
+───────────────────────────────────────────────────────────────────
+
+Esta licença é regida pelas leis da República Federativa do Brasil.
+O foro competente para dirimir quaisquer controvérsias é o da comarca
+do domicílio do Titular, com renúncia a qualquer outro.
+
+───────────────────────────────────────────────────────────────────
+
+Para solicitações de licenciamento, parcerias ou autorizações especiais:
+contato via repositório GitHub: github.com/Georlan
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️  AVISO: ESTE REPOSITÓRIO PODE CONTER CÓDIGO SUJEITO TAMBÉM À
+    LICENÇA APACHE-2.0 EM ARQUIVOS INDIVIDUAIS (ver THIRD_PARTY_NOTICES.md
+    e cabeçalhos SPDX nos arquivos). ESSA SITUAÇÃO ESTÁ SOB REVISÃO
+    JURÍDICA E SERÁ REGULARIZADA EM VERSÃO FUTURA.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
