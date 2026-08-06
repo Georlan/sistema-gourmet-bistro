@@ -16,17 +16,6 @@ os.environ.setdefault(
     "jW-j311rF_qj0Fh_77R-2n1B-Q0v4sK9M1S2T3U4V5o=",
 )
 
-import sqlalchemy
-_original_create_engine = sqlalchemy.create_engine
-
-def _test_safe_create_engine(url, *args, **kwargs):
-    url_str = str(url)
-    if "test_authorization.db" in url_str:
-        url = f"sqlite:///{TEST_DB_PATH}"
-    return _original_create_engine(url, *args, **kwargs)
-
-sqlalchemy.create_engine = _test_safe_create_engine
-
 import pytest
 from app.main import app
 from app.database import Base, engine
