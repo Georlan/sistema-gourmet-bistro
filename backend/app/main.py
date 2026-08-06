@@ -396,8 +396,9 @@ app.include_router(print_agents.router)
 app.include_router(cardapio_digital.router)
 app.include_router(relatorios.router)
 app.include_router(super_admin.router, prefix="/api")
-app.include_router(ai.router, prefix="/api")
-app.include_router(whatsapp_webhook.router)
+if settings.KOMA_WHATSAPP_AUTOMATION_ENABLED:
+    app.include_router(whatsapp_webhook.router)
+
 
 
 @app.get("/")

@@ -204,26 +204,21 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
               </div>
 
               {/* Cota WhatsApp */}
-              <div className="bg-[#1C1C1F]/60 border border-[#27272A] p-4 rounded-2xl space-y-2">
+              <div className="bg-[#1C1C1F]/60 border border-[#27272A] p-4 rounded-2xl space-y-2 opacity-75">
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-bold text-gray-300 flex items-center gap-1.5">
-                    <MessageSquare size={16} className="text-sky-400" />
+                    <MessageSquare size={16} className="text-gray-400" />
                     <span>Notificações Automáticas WhatsApp</span>
                   </span>
-                  <span className="font-mono text-gray-400 text-[10px]">
-                    <strong className="text-white">{usageData.whatsappUsados}</strong> / {waQuota} disparos
+                  <span className="font-mono text-amber-400 text-[10px] bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                    Manual via wa.me (Automação em breve)
                   </span>
                 </div>
-                <div className="w-full h-2.5 bg-[#09090B] border border-[#27272A] rounded-full overflow-hidden p-0.5">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ${waPct >= 80 ? 'bg-amber-500' : 'bg-sky-500'}`}
-                    style={{ width: `${waPct}%` }}
-                  />
-                </div>
-                <span className="text-[9px] text-gray-500 block">
-                  {waPct}% das notificações enviadas neste período
+                <span className="text-[9px] text-gray-400 block pt-1">
+                  Neste plano, o envio de notificações e contatos é realizado via links diretos sem custos adicionais.
                 </span>
               </div>
+
             </div>
           </div>
 
