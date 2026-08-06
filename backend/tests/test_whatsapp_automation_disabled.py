@@ -2,6 +2,8 @@ import pytest
 from fastapi.testclient import TestClient
 from app.main import app
 from app.config import settings
+from app.database import engine, Base, SessionLocal, current_restaurante_id
+from app.models import Restaurante, Categoria, Produto
 from app.services import whatsapp as whatsapp_service
 
 client = TestClient(app)
@@ -81,16 +83,80 @@ def test_solicitar_otp_endpoint_returns_503_when_automation_disabled():
 def test_ai_router_chat_waiter_is_registered_and_not_404():
     """Confirma que /api/chat-waiter está registrado no app FastAPI e desativação do WhatsApp não remove a IA."""
     # 1. Inspeção de rotas no OpenAPI do app
-    openapi_paths = app.openapi().get("paths", {})
-    assert "/api/chat-waiter" in openapi_paths, f"A rota /api/chat-waiter deve estar registrada no app. Encontradas: {list(openapi_paths.keys())}"
+    assert "/api/chat-waiter" in app.openapi()["paths"], "A rota /api/chat-waiter deve estar registrada no app OpenAPI."
 
     # 2. Requisição sem corpo retorna erro de validação (422), atestando que a rota existe e não é 404
     response = client.post("/api/chat-waiter", json={})
-    assert response.status_code != 404, "A rota /api/chat-waiter não pode retornar 404."
+    assert response.status_code == 422, f"Esperado status_code 422 sem payload, obtido: {response.status_code}"
 
 
-def test_public_cardapio_digital_config_accessible_without_token():
-    """Confirma que o endpoint público do cardápio digital está acessível sem exigir token de cliente ou login."""
-    response = client.get("/cardapio-digital/config?restaurante_id=1")
-    assert response.status_code not in (401, 403), "O cardápio público não pode exigir autenticação."
-    assert response.status_code in (200, 404)  # 200 com tenant ou 404 se restaurante id=1 nao populado em sqlite limpo, mas sem 401/403
+@pytest.fixture
+def cardapio_publico_setup():
+    """Fixture isolada para popular restaurante, categoria e produto de teste para o cardápio público."""
+    Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    token = current_restaurante_id.set(999)
+    try:
+        rest = db.query(Restaurante).filter(Restaurante.id == 999).first()
+        if not rest:
+            rest = Restaurante(
+                id=999,
+                nome="Bistrô Publico Teste",
+                plano="pro",
+                slug="bistro-publico-teste",
+                subtitulo="Sabor Autêntico",
+                cor_primaria="#10b981",
+                cor_fundo="#121214",
+                endereco="Av. Principal, 999"
+            )
+            db.add(rest)
+            db.flush()
+
+        cat = db.query(Categoria).filter(Categoria.id == "cat-pub-999").first()
+        if not cat:
+            cat = Categoria(
+                id="cat-pub-999",
+                restaurante_id=999,
+                nome="Pratos Principais"
+            )
+            db.add(cat)
+            db.flush()
+
+        prod = db.query(Produto).filter(Produto.id == "prod-pub-999").first()
+        if not prod:
+            prod = Produto(
+                id="prod-pub-999",
+                restaurante_id=999,
+                categoria_id="cat-pub-999",
+                nome="Risoto Gourmet",
+                preco=65.0,
+                descricao="Risoto especial com cogumelos",
+                ativo=True
+            )
+            db.add(prod)
+            db.flush()
+
+        db.commit()
+        yield rest, cat, prod
+    finally:
+        current_restaurante_id.reset(token)
+        db.close()
+
+
+def test_public_cardapio_digital_config_and_catalog_accessible_without_token(cardapio_publico_setup):
+    """Confirma que os endpoints públicos do cardápio digital retornam HTTP 200 com os dados reais criados na fixture sem exigir token."""
+    rest, cat, prod = cardapio_publico_setup
+
+    # 1. Testar GET /api/cardapio-digital/config?restaurante_id=999
+    config_res = client.get(f"/api/cardapio-digital/config?restaurante_id={rest.id}")
+    assert config_res.status_code == 200, f"Endpoint /api/cardapio-digital/config deve retornar 200, obtido {config_res.status_code}"
+    data_config = config_res.json()
+    assert data_config["id"] == rest.id
+    assert data_config["nome"] == rest.nome
+
+    # 2. Testar GET /api/cardapio-digital/public?restaurante_id=999 (categorias e produtos)
+    public_res = client.get(f"/api/cardapio-digital/public?restaurante_id={rest.id}")
+    assert public_res.status_code == 200, f"Endpoint /api/cardapio-digital/public deve retornar 200, obtido {public_res.status_code}"
+    data_public = public_res.json()
+    assert any(c["id"] == cat.id and c["nome"] == cat.nome for c in data_public.get("categorias", []))
+    assert any(p["id"] == prod.id and p["nome"] == prod.nome for p in data_public.get("produtos", []))

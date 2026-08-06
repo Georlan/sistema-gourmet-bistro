@@ -21,6 +21,7 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def setup_cardapio_data():
+    Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     token_var = current_restaurante_id.set(100)
@@ -264,9 +265,8 @@ def test_pedido_digital_sem_otp_nao_se_apropria_de_cadastro():
 
 
 def test_cliente_do_caixa_faz_login_otp_e_pedido_vincula_mesmo_id(monkeypatch):
-    import time
     monkeypatch.setattr(settings, "KOMA_WHATSAPP_AUTOMATION_ENABLED", True)
-    telefone = f"8195{int(time.time() * 1000) % 10000000:07d}"
+    telefone = "81977776666"
     staff_token = create_access_token(
         subject="usr_cardapio_100",
         restaurante_id=100,
@@ -297,7 +297,7 @@ def test_cliente_do_caixa_faz_login_otp_e_pedido_vincula_mesmo_id(monkeypatch):
 
     solicitado = client.post(
         "/cardapio/clientes/otp/solicitar",
-        json={"restaurante_id": 100, "telefone": telefone},
+        json={"restaurante_id": 100, "telefone": "(81) 97777-6666"},
     )
     assert solicitado.status_code == 202
 
@@ -333,7 +333,7 @@ def test_cliente_do_caixa_faz_login_otp_e_pedido_vincula_mesmo_id(monkeypatch):
             "taxa_entrega": 6,
             "forma_pagamento": "na_entrega",
             "tipo_pedido": "delivery",
-            "idempotency_key": f"cliente-otp-vinculo-estavel-{telefone}",
+            "idempotency_key": "cliente-otp-vinculo-estavel",
         },
     )
     assert pedido.status_code == 201

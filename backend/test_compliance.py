@@ -208,8 +208,8 @@ def test_post_loyalty_client_encryption_failure(setup_db):
             "/fidelidade/clientes",
             json={
                 "cliente": "Cliente Teste Erro",
-                "telefone": "81888889999",
-                "saldo_pontos": 50.0,
+                "telefone": "81888887777",
+                "saldo_pontos": 0,
                 "saldo_cashback": 50.0
             },
             headers=admin_headers
@@ -222,7 +222,7 @@ def test_post_loyalty_client_encryption_failure(setup_db):
         db = SessionLocal()
         try:
             assert db.query(Cliente).filter(
-                Cliente.telefone == "81888889999"
+                Cliente.telefone == "81888887777"
             ).count() == 0
         finally:
             db.close()

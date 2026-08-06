@@ -385,7 +385,6 @@ class ProdutoImportItem(BaseModel):
     categoria_id: str
     descricao: Optional[str] = None
     imagem: Optional[str] = None
-    imagens_galeria: Optional[List[str]] = None
     ativo: Optional[bool] = True
 
 class CardapioImportPayload(BaseModel):
