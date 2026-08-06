@@ -21,7 +21,6 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def setup_cardapio_data():
-    Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     token_var = current_restaurante_id.set(100)

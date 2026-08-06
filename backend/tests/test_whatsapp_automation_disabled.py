@@ -160,3 +160,15 @@ def test_public_cardapio_digital_config_and_catalog_accessible_without_token(car
     data_public = public_res.json()
     assert any(c["id"] == cat.id and c["nome"] == cat.nome for c in data_public.get("categorias", []))
     assert any(p["id"] == prod.id and p["nome"] == prod.nome for p in data_public.get("produtos", []))
+
+
+def test_pytest_database_safety_circuit():
+    """Confirma que a suíte executa exclusivamente no banco SQLite isolado .pytest_koma.db e não no bistro.db de dev."""
+    from pathlib import Path
+    from conftest import TEST_DB_PATH
+    from app.database import engine
+
+    assert engine.dialect.name == "sqlite"
+    assert Path(engine.url.database).resolve() == TEST_DB_PATH.resolve()
+    assert Path(engine.url.database).name == ".pytest_koma.db"
+    assert Path("bistro.db").resolve() != Path(engine.url.database).resolve()
