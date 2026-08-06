@@ -39,4 +39,3 @@ Base.metadata.create_all(bind=engine)
 def clear_dependency_overrides():
     Base.metadata.create_all(bind=engine)
     yield
-    app.dependency_overrides.clear()
