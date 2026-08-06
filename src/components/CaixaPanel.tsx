@@ -6874,11 +6874,11 @@ export function CaixaPanel({
                     .sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true, sensitivity: 'base' }));
                   if (prods.length === 0) return null;
                   return (
-                    <div key={catObj.id} className="bg-[#18181b] border border-[#27272a] rounded-2xl overflow-hidden w-full shadow-sm">
-                      <div className="bg-[#141417] px-4 py-3 border-b border-[#27272a] flex justify-between items-center gap-3">
+                    <div key={catObj.id} className="bg-[#141620] border border-[#232736] rounded-2xl overflow-hidden w-full shadow-sm">
+                      <div className="bg-[#10121A] px-4 py-3 border-b border-[#232736] flex justify-between items-center gap-3">
                         <div className="flex items-baseline gap-2">
                           <span className="font-bold text-emerald-400 text-xs sm:text-sm uppercase tracking-wider">{catObj.nome}</span>
-                          <span className="text-xs text-slate-400">({prods.length} {prods.length === 1 ? 'item' : 'itens'})</span>
+                          <span className="text-xs text-zinc-400">({prods.length} {prods.length === 1 ? 'item' : 'itens'})</span>
                         </div>
                         
                         <div className="flex items-center gap-2">
@@ -6901,7 +6901,7 @@ export function CaixaPanel({
                                 }
                               }
                             }}
-                            className="px-2.5 py-1 border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-bold rounded-lg transition-all cursor-pointer uppercase tracking-wider"
+                            className="px-2.5 py-1 border border-rose-900/40 bg-rose-950/40 hover:bg-rose-900/40 text-rose-300 text-xs font-bold rounded-lg transition-all cursor-pointer uppercase tracking-wider"
                           >
                             Pausar Categoria
                           </button>
@@ -6924,7 +6924,7 @@ export function CaixaPanel({
                                 }
                               }
                             }}
-                            className="px-2.5 py-1 border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-bold rounded-lg transition-all cursor-pointer uppercase tracking-wider"
+                            className="px-2.5 py-1 border border-emerald-800/40 bg-emerald-950/40 hover:bg-emerald-900/40 text-emerald-300 text-xs font-bold rounded-lg transition-all cursor-pointer uppercase tracking-wider"
                           >
                             Ativar Categoria
                           </button>
@@ -6941,8 +6941,8 @@ export function CaixaPanel({
                             <div
                               key={prod.id}
                               className={clsx(
-                                'bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 rounded-xl p-3 flex items-center justify-between shadow-sm transition-all gap-3',
-                                !isAtivo && 'opacity-85'
+                                'bg-[#181A24] hover:bg-[#1C202C] border border-[#272B3C] rounded-xl p-3 flex items-center justify-between shadow-sm transition-all gap-3',
+                                !isAtivo && 'opacity-70'
                               )}
                             >
                               <div className="flex items-center gap-2.5 min-w-0 flex-1">
@@ -6955,12 +6955,12 @@ export function CaixaPanel({
                                 )}
                                 <div className="min-w-0 flex-1">
                                   <div className="flex items-center gap-1.5 truncate">
-                                    <span className="text-xs text-slate-400 font-mono shrink-0">{codigoFormatado}</span>
-                                    <span className={clsx('text-sm font-bold truncate', isAtivo ? 'text-slate-100' : 'text-slate-400 line-through')}>
+                                    <span className="text-xs text-zinc-400 font-mono shrink-0">{codigoFormatado}</span>
+                                    <span className={clsx('text-sm font-bold truncate', isAtivo ? 'text-zinc-100' : 'text-zinc-400 line-through')}>
                                       {prod.nome}
                                     </span>
                                   </div>
-                                  <span className="text-xs font-semibold text-emerald-400 mt-0.5 block font-mono">
+                                  <span className="text-xs font-semibold text-emerald-300 mt-0.5 block font-mono">
                                     R$ {prod.preco.toFixed(2)}
                                   </span>
                                 </div>
@@ -6982,8 +6982,8 @@ export function CaixaPanel({
                                 className={clsx(
                                   'px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border shrink-0 flex items-center gap-1.5',
                                   isAtivo
-                                    ? 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border-emerald-500/30'
-                                    : 'bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border-rose-500/30'
+                                    ? 'bg-emerald-950/40 hover:bg-emerald-900/50 text-emerald-300 border-emerald-800/40'
+                                    : 'bg-rose-950/40 hover:bg-rose-900/50 text-rose-300 border-rose-900/40'
                                 )}
                               >
                                 <span>{isAtivo ? '🟢 Disponível' : '🔴 Pausado'}</span>
