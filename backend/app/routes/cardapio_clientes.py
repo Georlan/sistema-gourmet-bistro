@@ -202,7 +202,13 @@ def request_customer_otp(
     request: Request,
     db: Session = Depends(get_db),
 ):
+    if not getattr(settings, "KOMA_WHATSAPP_AUTOMATION_ENABLED", False):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Autenticação por WhatsApp indisponível no momento.",
+        )
     with public_tenant_scope(str(payload.restaurante_id), None, db) as restaurante_id:
+
         now = _utcnow()
         _consume_rate_limit(
             db,

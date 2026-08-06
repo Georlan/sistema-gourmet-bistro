@@ -67,17 +67,23 @@ class Settings:
         "1",  # tenant de homologação atual; definir "" antes de uso comercial
     )
 
-    # Evolution API (WhatsApp)
+    # WhatsApp Automation Toggle (MVP: Default = False)
+    KOMA_WHATSAPP_AUTOMATION_ENABLED: bool = (
+        os.getenv("KOMA_WHATSAPP_AUTOMATION_ENABLED", "false").lower() == "true"
+    )
+
+    # Evolution API (WhatsApp) - Opcional / Reservado para futuro
     EVOLUTION_API_URL: str = os.getenv("EVOLUTION_API_URL", "")
     EVOLUTION_API_KEY: str = os.getenv("EVOLUTION_API_KEY", "")
     EVOLUTION_INSTANCE_NAME: str = os.getenv("EVOLUTION_INSTANCE_NAME", "")
 
-    # Meta Cloud API (WhatsApp Oficial)
-    META_VERIFY_TOKEN: str = os.getenv("META_VERIFY_TOKEN", "1505")
+    # Meta Cloud API (WhatsApp Oficial) - Opcional / Reservado para futuro
+    META_VERIFY_TOKEN: str = os.getenv("META_VERIFY_TOKEN", "")
     META_PHONE_NUMBER_ID: str = os.getenv("META_PHONE_NUMBER_ID", "")
     META_ACCESS_TOKEN: str = os.getenv("META_ACCESS_TOKEN", os.getenv("META_ACESS_TOKEN", ""))
     META_USE_TEMPLATE: bool = os.getenv("META_USE_TEMPLATE", "False").lower() == "true"
     META_OTP_TEMPLATE_NAME: str = os.getenv("META_OTP_TEMPLATE_NAME", "koma_otp")
+
 
 
     # Supabase (Storage & Service Role)

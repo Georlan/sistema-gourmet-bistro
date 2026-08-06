@@ -53,6 +53,10 @@ def enviar_texto_whatsapp(
     contexto: str = "mensagem",
 ) -> bool:
     """Envia texto pela Evolution API e nunca registra telefone ou conteúdo."""
+    if not getattr(settings, "KOMA_WHATSAPP_AUTOMATION_ENABLED", False):
+        logger.debug("[WHATSAPP DESATIVADO] Envio automático ignorado (KOMA_WHATSAPP_AUTOMATION_ENABLED=false).")
+        return False
+
     try:
         evolution_url = settings.EVOLUTION_API_URL.strip()
         evolution_key = settings.EVOLUTION_API_KEY.strip()
@@ -186,8 +190,13 @@ def enviar_otp_whatsapp_meta(telefone: str, nome_restaurante: str, codigo_otp: s
     Envia código OTP por WhatsApp utilizando a Meta Cloud API oficial.
     Retorna True se enviado com sucesso, False se simulado/falha.
     """
+    if not getattr(settings, "KOMA_WHATSAPP_AUTOMATION_ENABLED", False):
+        logger.debug("[WHATSAPP DESATIVADO] Envio de OTP Meta ignorado (KOMA_WHATSAPP_AUTOMATION_ENABLED=false).")
+        return False
+
     import os
     global _META_LAST_ERROR, _META_COUNTRY_RESTRICTION
+
 
     try:
         numero = _normalizar_telefone(telefone)
