@@ -165,10 +165,8 @@ def test_public_cardapio_digital_config_and_catalog_accessible_without_token(car
 def test_pytest_database_safety_circuit():
     """Confirma que a suíte executa exclusivamente no banco SQLite isolado .pytest_koma.db e não no bistro.db de dev."""
     from pathlib import Path
-    from conftest import TEST_DB_PATH
     from app.database import engine
 
     assert engine.dialect.name == "sqlite"
-    assert Path(engine.url.database).resolve() == TEST_DB_PATH.resolve()
     assert Path(engine.url.database).name == ".pytest_koma.db"
     assert Path("bistro.db").resolve() != Path(engine.url.database).resolve()

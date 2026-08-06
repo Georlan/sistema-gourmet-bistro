@@ -38,6 +38,5 @@ Base.metadata.create_all(bind=engine)
 @pytest.fixture(autouse=True)
 def clear_dependency_overrides():
     Base.metadata.create_all(bind=engine)
-    app.dependency_overrides.clear()
     yield
     app.dependency_overrides.clear()
