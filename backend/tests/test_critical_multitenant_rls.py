@@ -171,7 +171,7 @@ def test_public_tenant_scope_switches_and_restores_session_identity():
 
 
 def test_mesmo_telefone_cria_fichas_isoladas_por_restaurante():
-    telefone = "81977776666"
+    telefone = "81988887777"
     db = SessionLocal()
     try:
         for restaurante_id, nome in (

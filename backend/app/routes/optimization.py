@@ -780,6 +780,12 @@ def create_loyalty_client(
         raise
     except Exception:
         db.rollback()
+        try:
+            if 'new_c' in locals() and new_c and getattr(new_c, 'id', None):
+                db.query(Cliente).filter(Cliente.id == new_c.id).delete()
+                db.commit()
+        except Exception:
+            db.rollback()
         logger.exception("Falha ao processar dado sensível criptografado")
         raise HTTPException(
             status_code=500,

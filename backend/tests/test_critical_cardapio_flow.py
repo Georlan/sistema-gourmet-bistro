@@ -1,6 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 from app.main import app
+from app.config import settings
 from app.database import engine, Base, SessionLocal, current_restaurante_id
 from app.models import (
     Restaurante,
@@ -263,7 +264,8 @@ def test_pedido_digital_sem_otp_nao_se_apropria_de_cadastro():
 
 
 def test_cliente_do_caixa_faz_login_otp_e_pedido_vincula_mesmo_id(monkeypatch):
-    telefone = "81977776666"
+    monkeypatch.setattr(settings, "KOMA_WHATSAPP_AUTOMATION_ENABLED", True)
+    telefone = "81955554444"
     staff_token = create_access_token(
         subject="usr_cardapio_100",
         restaurante_id=100,
@@ -294,7 +296,7 @@ def test_cliente_do_caixa_faz_login_otp_e_pedido_vincula_mesmo_id(monkeypatch):
 
     solicitado = client.post(
         "/cardapio/clientes/otp/solicitar",
-        json={"restaurante_id": 100, "telefone": "(81) 97777-6666"},
+        json={"restaurante_id": 100, "telefone": telefone},
     )
     assert solicitado.status_code == 202
 
@@ -392,6 +394,7 @@ def test_cliente_do_caixa_faz_login_otp_e_pedido_vincula_mesmo_id(monkeypatch):
 
 
 def test_otp_nao_persiste_codigo_ou_telefone_e_bloqueia_forca_bruta(monkeypatch):
+    monkeypatch.setattr(settings, "KOMA_WHATSAPP_AUTOMATION_ENABLED", True)
     telefone = "81960000001"
     codigo = "135790"
     monkeypatch.setattr(

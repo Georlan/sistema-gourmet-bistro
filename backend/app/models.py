@@ -1161,7 +1161,7 @@ class NotificacaoWhatsApp(Base):
     __tablename__ = "notificacoes_whatsapp"
 
     id = Column(Integer, primary_key=True, autoincrement=True, index=True)
-    restaurante_id = Column(Integer, ForeignKey("restaurantes.id", ondelete="CASCADE"), default=lambda: current_restaurante_id.get(), nullable=True, index=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id", ondelete="CASCADE"), default=lambda: current_restaurante_id.get() or 1, nullable=False, index=True)
     comanda_id = Column(String(100), nullable=True, index=True)
 
     telefone = Column(String(20), nullable=True)

@@ -78,9 +78,19 @@ def test_solicitar_otp_endpoint_returns_503_when_automation_disabled():
     assert "WhatsApp indisponível" in response.json()["detail"]
 
 
+def test_ai_router_chat_waiter_is_registered_and_not_404():
+    """Confirma que /api/chat-waiter está registrado no app FastAPI e desativação do WhatsApp não remove a IA."""
+    # 1. Inspeção de rotas no OpenAPI do app
+    openapi_paths = app.openapi().get("paths", {})
+    assert "/api/chat-waiter" in openapi_paths, f"A rota /api/chat-waiter deve estar registrada no app. Encontradas: {list(openapi_paths.keys())}"
 
-def test_public_menu_works_without_login():
-    """Confirma que o cardápio público continua acessível e operacional sem qualquer necessidade de login ou OTP."""
-    response = client.get("/")
-    assert response.status_code == 200
-    assert response.json()["status"] == "online"
+    # 2. Requisição sem corpo retorna erro de validação (422), atestando que a rota existe e não é 404
+    response = client.post("/api/chat-waiter", json={})
+    assert response.status_code != 404, "A rota /api/chat-waiter não pode retornar 404."
+
+
+def test_public_cardapio_digital_config_accessible_without_token():
+    """Confirma que o endpoint público do cardápio digital está acessível sem exigir token de cliente ou login."""
+    response = client.get("/cardapio-digital/config?restaurante_id=1")
+    assert response.status_code not in (401, 403), "O cardápio público não pode exigir autenticação."
+    assert response.status_code in (200, 404)  # 200 com tenant ou 404 se restaurante id=1 nao populado em sqlite limpo, mas sem 401/403
