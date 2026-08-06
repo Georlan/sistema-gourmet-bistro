@@ -117,8 +117,11 @@ export function getProductImageUrl(imagePath: string): string {
   ) {
     return imagePath;
   }
-  // Base Supabase URL from environment or fallback
-  const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL || "https://iiowhekvahxiepwcdidm.supabase.co";
+  // Base Supabase URL — read strictly from environment.
+  // If VITE_SUPABASE_URL is not configured, fall back to placeholder image
+  // instead of exposing a hardcoded project URL.
+  const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
+  if (!supabaseUrl) return LOCAL_PRODUCT_PLACEHOLDER;
   return `${supabaseUrl}/storage/v1/object/public/produtos/${imagePath}`;
 }
 
@@ -136,7 +139,9 @@ export function getRestaurantAssetUrl(urlOrPath: string | null | undefined, isLo
   ) {
     return urlOrPath;
   }
-  const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL || "https://iiowhekvahxiepwcdidm.supabase.co";
+  // Base Supabase URL — read strictly from environment.
+  const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
+  if (!supabaseUrl) return isLogo ? LOCAL_LOGO_PLACEHOLDER : LOCAL_BANNER_PLACEHOLDER;
   const cleanPath = urlOrPath.replace(/^\/+/, '');
   return `${supabaseUrl}/storage/v1/object/public/cardapio-assets/${cleanPath}`;
 }
