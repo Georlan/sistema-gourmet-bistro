@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 
 export interface LoginButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "default" | "outline" | "secondary" | "ghost" | "destructive";
+  variant?: "default" | "outline" | "secondary" | "ghost" | "destructive" | "emerald";
   iconType?: "login" | "logout" | "none";
   icon?: React.ReactNode;
 }
@@ -26,7 +26,7 @@ export const LoginButton = React.forwardRef<
       className={cn(
         "group inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-xs font-bold tracking-wide transition-all cursor-pointer focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50 px-4 py-2.5 active:scale-[0.98]",
         variant === "default" &&
-          "bg-white text-zinc-950 hover:bg-zinc-100 border border-zinc-200 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100 dark:border-zinc-200 shadow-sm",
+          "bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:border-rose-500/50 shadow-sm",
         variant === "outline" &&
           "border border-[#27272A] bg-[#121214] text-white hover:bg-[#1C1C1F] hover:border-gray-500",
         variant === "secondary" &&
@@ -34,7 +34,9 @@ export const LoginButton = React.forwardRef<
         variant === "ghost" &&
           "text-gray-300 hover:text-white hover:bg-[#1C1C1F]",
         variant === "destructive" &&
-          "bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30",
+          "bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/40 shadow-sm",
+        variant === "emerald" &&
+          "bg-[#10b981]/15 hover:bg-[#10b981]/25 text-[#10b981] border border-[#10b981]/30 hover:border-[#10b981]/50 shadow-sm",
         className
       )}
       {...props}
