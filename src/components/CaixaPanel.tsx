@@ -52,6 +52,21 @@ import {
   buildPixMsg
 } from '../config/whatsappUtils';
 import clsx from 'clsx';
+import {
+  SidebarProvider,
+  Sidebar,
+  SidebarHeader,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarGroupContent,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarMenuBadge,
+  SidebarFooter
+} from '@/components/ui/sidebar';
+
 
 interface CaixaPanelProps {
   orders: Order[];
@@ -3410,55 +3425,56 @@ export function CaixaPanel({
           {toastData.msg}
         </div>
       )}
-      {isMobileSidebarOpen && (
-        <div className="fixed inset-0 z-50 flex lg:hidden animate-fade-in">
-          <div
-            onClick={() => setIsMobileSidebarOpen(false)}
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm"
-          />
-          <aside className="relative w-72 max-w-[85vw] bg-[#121214] border-r border-[#27272A] flex flex-col justify-between shrink-0 h-full z-10 shadow-2xl overflow-y-auto">
-            <div className={clsx('space-y-6', 'pt-5')}>
-              {/* Brand header */}
-              <div className="px-3.5 py-3 border-b border-slate-800/80 flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsOperatorDrawerOpen(true);
-                      setIsMobileSidebarOpen(false);
-                    }}
-                    className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/60 cursor-pointer transition-colors"
-                    title="Opções do Caixa / Login"
-                  >
-                    <SlidersHorizontal size={15} />
-                  </button>
+      {/* SHADCN SIDEBAR INTEGRATION FOR KÔMA */}
+      <SidebarProvider className="contents">
+        {/* MOBILE SIDEBAR */}
+        {isMobileSidebarOpen && (
+          <div className="fixed inset-0 z-50 flex lg:hidden animate-fade-in">
+            <div
+              onClick={() => setIsMobileSidebarOpen(false)}
+              className="fixed inset-0 bg-black/80 backdrop-blur-sm"
+            />
+            <Sidebar className="relative w-72 max-w-[85vw] bg-[#121214] border-r border-[#27272A] flex flex-col justify-between shrink-0 h-full z-10 shadow-2xl overflow-y-auto">
+              <SidebarHeader className="p-3 border-b border-[#27272A]">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsOperatorDrawerOpen(true);
+                        setIsMobileSidebarOpen(false);
+                      }}
+                      className="p-2 rounded-xl bg-[#1C1C1F] hover:bg-[#27272A] text-slate-200 border border-[#27272A] cursor-pointer transition-colors"
+                      title="Opções do Caixa / Login"
+                    >
+                      <SlidersHorizontal size={15} />
+                    </button>
+                    <div className="flex items-center gap-2">
+                      <img src="/logo.png" alt="Kôma" className="w-7 h-7 object-contain" />
+                      <div className="font-serif font-bold text-sm tracking-tight text-white">Kôma Caixa</div>
+                    </div>
+                  </div>
                   <div className="flex items-center gap-2">
-                    <img src="/logo.png" alt="Kôma" className="w-7 h-7 object-contain" />
-                    <div className="font-serif font-bold text-sm tracking-tight text-white">Kôma Caixa</div>
+                    {turno?.status === 'aberto' ? (
+                      <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse shadow-xs" title="Caixa Aberto" />
+                    ) : (
+                      <span className="h-2.5 w-2.5 rounded-full bg-emerald-600 shadow-xs" title="Caixa Fechado" />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setIsMobileSidebarOpen(false)}
+                      className="p-1 text-gray-400 hover:text-white rounded-lg cursor-pointer"
+                    >
+                      <X size={16} />
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {turno?.status === 'aberto' ? (
-                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse shadow-xs" title="Caixa Aberto" />
-                  ) : (
-                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-600 shadow-xs" title="Caixa Fechado" />
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setIsMobileSidebarOpen(false)}
-                    className="p-1 text-gray-400 hover:text-white rounded-lg cursor-pointer"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-              </div>
 
-              {/* Quick status bar */}
-              <div className="px-3.5">
-                <div className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-2xl', 'p-2.5', 'flex', 'items-center', 'justify-between')}>
+                {/* Status do Turno */}
+                <div className="mt-2 bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-2.5 flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <span className={clsx('text-[9px]', 'uppercase', 'tracking-wider', 'text-gray-400', 'font-bold', 'block')}>Status do Turno</span>
-                    <span className={clsx('font-semibold', 'text-[10px]', 'text-white')}>
+                    <span className="text-[9px] uppercase tracking-wider text-gray-400 font-bold block">Status do Turno</span>
+                    <span className="font-semibold text-[10px] text-white">
                       {turno?.status === 'aberto' ? 'Caixa Aberto' : 'Caixa Fechado'}
                     </span>
                   </div>
@@ -3469,7 +3485,7 @@ export function CaixaPanel({
                         setActiveSubTab('fechamento');
                         setIsMobileSidebarOpen(false);
                       }}
-                      className={clsx('px-2', 'py-1', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'text-[9px]', 'font-bold', 'rounded-lg', 'cursor-pointer', 'transition-all', 'uppercase', 'tracking-wider')}
+                      className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-bold rounded-lg cursor-pointer transition-all uppercase tracking-wider"
                     >
                       Fechar
                     </button>
@@ -3479,16 +3495,15 @@ export function CaixaPanel({
                         setShowAbrirModal(true);
                         setIsMobileSidebarOpen(false);
                       }}
-                      className={clsx('px-2', 'py-1', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'text-[9px]', 'font-bold', 'rounded-lg', 'cursor-pointer', 'transition-all', 'uppercase', 'tracking-wider', 'animate-pulse-subtle')}
+                      className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-bold rounded-lg cursor-pointer transition-all uppercase tracking-wider animate-pulse-subtle"
                     >
                       Abrir
                     </button>
                   )}
                 </div>
-              </div>
+              </SidebarHeader>
 
-              {/* Tabs Navigation */}
-              <nav className={clsx('px-2.5', 'space-y-4', 'overflow-y-auto', 'flex-1', 'max-h-[calc(88vh-230px)]', 'scrollbar-thin', 'scrollbar-thumb-zinc-800', 'text-left')}>
+              <SidebarContent className="p-2.5 space-y-3">
                 {[
                   {
                     category: 'Fluxo Operacional',
@@ -3527,163 +3542,144 @@ export function CaixaPanel({
                     ]
                   }
                 ].map((group, gIdx) => (
-                  <div key={gIdx} className="space-y-1">
-                    <span className={clsx('text-[8px]', 'uppercase', 'tracking-wider', 'text-[#10b981]', 'font-bold', 'px-3.5', 'block', 'mb-1')}>
+                  <SidebarGroup key={gIdx}>
+                    <SidebarGroupLabel className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-400 mb-1">
                       {group.category}
-                    </span>
-                    {group.items.map((tab) => {
-                      const Icon = tab.icon;
-                      const isLocked = (
-                        tab.id === 'cardapio_digital' && !hasOnlineMenu
-                      );
-                      const isActive = (
-                        tab.id === 'cardapio_digital' ? (activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital')
-                        : tab.id === 'permissoes_cargos' ? (activeTab === 'permissoes_cargos' || (activeTab === 'configuracoes' && activeSubTab === 'equipe'))
-                        : tab.id === 'impressao_salao' ? (activeTab === 'impressao_salao' || (activeTab === 'configuracoes' && activeSubTab === 'impressoras'))
-                        : tab.id === 'assinatura_pix' ? (activeTab === 'assinatura_pix' || (activeTab === 'configuracoes' && activeSubTab === 'planos'))
-                        : tab.id === 'relatorios' ? (activeTab === 'relatorios' || activeTab === 'dashboard')
-                        : tab.id === 'assistente_koma' ? (activeTab === 'assistente_koma' || activeTab === 'robo_ia' || (activeTab === 'operacao' && activeSubTab === 'chat_copiloto'))
-                        : activeTab === tab.id
-                      );
-                      return (
-                        <button
-                          key={tab.id}
-                          onClick={() => {
-                            setIsMobileSidebarOpen(false);
-                            if (isLocked) {
-                              setActiveTab('assinatura_pix');
-                              setActiveSubTab('planos');
-                              setPlanNoticeBanner(
-                                currentPlanId === 'pro'
-                                    ? `Ative o ${ONLINE_MENU_ADDON.name} ou migre para o Kôma Premium para utilizar este recurso.`
-                                    : 'O Cardápio Online Kôma está disponível no Kôma Pro como adicional e incluído no Premium.'
-                              );
-                              return;
-                            }
-                            if (tab.id === 'cardapio_digital') {
-                              setActiveTab('cardapio_digital');
-                              setActiveSubTab('cardapio_digital');
-                            } else if (tab.id === 'permissoes_cargos') {
-                              setActiveTab('permissoes_cargos');
-                              if (!['pessoas', 'desempenho'].includes(activeSubTab)) {
-                                setActiveSubTab('pessoas');
-                              }
-                            } else if (tab.id === 'impressao_salao') {
-                              setActiveTab('impressao_salao');
-                              setActiveSubTab('impressoras');
-                            } else if (tab.id === 'assinatura_pix') {
-                              setActiveTab('assinatura_pix');
-                              setActiveSubTab('planos');
-                            } else if (tab.id === 'relatorios') {
-                              setActiveTab('relatorios');
-                              if (!['visao_geral', 'financeiro', 'produtos'].includes(activeSubTab)) {
-                                setActiveSubTab('visao_geral');
-                              }
-                            } else if (tab.id === 'assistente_koma') {
-                              setActiveTab('assistente_koma');
-                              if (!['chat', 'configuracao', 'simulador'].includes(activeSubTab)) {
-                                setActiveSubTab('chat');
-                              }
-                            } else {
-                              handleTabChange(tab.id as any);
-                            }
-                          }}
-                          className={`w-full px-3.5 py-1.5 rounded-xl text-left font-semibold transition-all flex items-center justify-between cursor-pointer group ${isLocked
-                            ? 'text-gray-600 hover:text-gray-400 hover:bg-[#1C1C1F]/30 border border-transparent'
-                            : isActive
-                            ? 'bg-[#10b981]/15 text-[#10b981] border border-[#10b981]/10 font-bold shadow-inner'
-                            : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]/50 border border-transparent'
-                            }`}
-                        >
-                          <div className={clsx('flex', 'items-center', 'gap-3')}>
-                            <Icon size={13} className={isActive ? 'text-[#10b981]' : 'text-gray-500 group-hover:text-white'} />
-                            <span className="text-[10px]">{tab.label}</span>
-                          </div>
-                          {tab.id === 'operacao' && (tableOrdersInProduction.length + simulatedOrders.filter(o => ['pendente', 'analise', 'producao', 'pronto', 'transito'].includes(o.status)).length + tableOrdersReady.length) > 0 && (
-                            <span className={clsx('bg-[#10b981]', 'text-[#121214]', 'text-[7px]', 'font-bold', 'px-1.5', 'py-0.5', 'rounded-full', 'font-mono')}>
-                              {tableOrdersInProduction.length + simulatedOrders.filter(o => ['pendente', 'analise', 'producao', 'pronto', 'transito'].includes(o.status)).length + tableOrdersReady.length}
-                            </span>
-                          )}
-                          {isLocked && (
-                            <span className="text-[7.5px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-1">
-                              <Lock size={9} />
-                              <span>Upgrade</span>
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                ))}
-              </nav>
-            </div>
+                    </SidebarGroupLabel>
+                    <SidebarGroupContent>
+                      <SidebarMenu>
+                        {group.items.map((tab) => {
+                          const Icon = tab.icon;
+                          const isLocked = tab.id === 'cardapio_digital' && !hasOnlineMenu;
+                          const isActive = (
+                            tab.id === 'cardapio_digital' ? (activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital')
+                            : tab.id === 'permissoes_cargos' ? (activeTab === 'permissoes_cargos' || (activeTab === 'configuracoes' && activeSubTab === 'equipe'))
+                            : tab.id === 'impressao_salao' ? (activeTab === 'impressao_salao' || (activeTab === 'configuracoes' && activeSubTab === 'impressoras'))
+                            : tab.id === 'assinatura_pix' ? (activeTab === 'assinatura_pix' || (activeTab === 'configuracoes' && activeSubTab === 'planos'))
+                            : tab.id === 'relatorios' ? (activeTab === 'relatorios' || activeTab === 'dashboard')
+                            : tab.id === 'assistente_koma' ? (activeTab === 'assistente_koma' || activeTab === 'robo_ia' || (activeTab === 'operacao' && activeSubTab === 'chat_copiloto'))
+                            : activeTab === tab.id
+                          );
+                          const orderCount = tab.id === 'operacao' ? (tableOrdersInProduction.length + simulatedOrders.filter(o => ['pendente', 'analise', 'producao', 'pronto', 'transito'].includes(o.status)).length + tableOrdersReady.length) : 0;
 
-            {/* Footer info */}
-            <div className={clsx('p-4', 'border-t', 'border-[#27272A]', 'space-y-2', 'bg-[#18181B]/40')}>
-              <div className="space-y-1">
-                <span className={clsx('text-[8px]', 'text-gray-500', 'uppercase', 'tracking-widest', 'block', 'font-bold')}>Acessibilidade / Fonte</span>
-                <div className={clsx('grid', 'grid-cols-3', 'gap-0.5', 'bg-[#09090B]', 'p-0.5', 'rounded-lg', 'border', 'border-[#27272A]')}>
-                  {(['padrao', 'grande', 'gigante'] as const).map((sz) => (
-                    <button
-                      key={sz}
-                      type="button"
-                      onClick={() => changeFontSize(sz)}
-                      className={`py-0.5 rounded text-[8px] font-bold uppercase transition-all cursor-pointer ${fontSize === sz
-                        ? 'bg-[#10b981] text-[#121214]'
-                        : 'text-gray-400 hover:text-white'
-                        }`}
-                    >
-                      {sz === 'padrao' ? 'Pad' : sz === 'grande' ? 'Grd' : 'Ggt'}
-                    </button>
-                  ))}
+                          return (
+                            <SidebarMenuItem key={tab.id}>
+                              <SidebarMenuButton
+                                isActive={isActive}
+                                onClick={() => {
+                                  setIsMobileSidebarOpen(false);
+                                  if (isLocked) {
+                                    setActiveTab('assinatura_pix');
+                                    setActiveSubTab('planos');
+                                    setPlanNoticeBanner(
+                                      currentPlanId === 'pro'
+                                          ? `Ative o ${ONLINE_MENU_ADDON.name} ou migre para o Kôma Premium para utilizar este recurso.`
+                                          : 'O Cardápio Online Kôma está disponível no Kôma Pro como adicional e incluído no Premium.'
+                                    );
+                                    return;
+                                  }
+                                  if (tab.id === 'cardapio_digital') {
+                                    setActiveTab('cardapio_digital');
+                                    setActiveSubTab('cardapio_digital');
+                                  } else if (tab.id === 'permissoes_cargos') {
+                                    setActiveTab('permissoes_cargos');
+                                    if (!['pessoas', 'desempenho'].includes(activeSubTab)) setActiveSubTab('pessoas');
+                                  } else if (tab.id === 'impressao_salao') {
+                                    setActiveTab('impressao_salao');
+                                    setActiveSubTab('impressoras');
+                                  } else if (tab.id === 'assinatura_pix') {
+                                    setActiveTab('assinatura_pix');
+                                    setActiveSubTab('planos');
+                                  } else if (tab.id === 'relatorios') {
+                                    setActiveTab('relatorios');
+                                    if (!['visao_geral', 'financeiro', 'produtos'].includes(activeSubTab)) setActiveSubTab('visao_geral');
+                                  } else if (tab.id === 'assistente_koma') {
+                                    setActiveTab('assistente_koma');
+                                    if (!['chat', 'configuracao', 'simulador'].includes(activeSubTab)) setActiveSubTab('chat');
+                                  } else {
+                                    handleTabChange(tab.id as any);
+                                  }
+                                }}
+                              >
+                                <Icon size={14} className={isActive ? 'text-[#10b981]' : 'text-gray-500 group-hover/button:text-white'} />
+                                <span className="text-[11px]">{tab.label}</span>
+                                {orderCount > 0 && <SidebarMenuBadge>{orderCount}</SidebarMenuBadge>}
+                                {isLocked && (
+                                  <span className="ml-auto text-[7.5px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-1">
+                                    <Lock size={9} />
+                                    <span>Upgrade</span>
+                                  </span>
+                                )}
+                              </SidebarMenuButton>
+                            </SidebarMenuItem>
+                          );
+                        })}
+                      </SidebarMenu>
+                    </SidebarGroupContent>
+                  </SidebarGroup>
+                ))}
+              </SidebarContent>
+
+              <SidebarFooter className="p-3 border-t border-[#27272A] bg-[#18181B]/40 space-y-2">
+                <div className="space-y-1">
+                  <span className="text-[8px] text-gray-500 uppercase tracking-widest block font-bold">Acessibilidade / Fonte</span>
+                  <div className="grid grid-cols-3 gap-0.5 bg-[#09090B] p-0.5 rounded-lg border border-[#27272A]">
+                    {(['padrao', 'grande', 'gigante'] as const).map((sz) => (
+                      <button
+                        key={sz}
+                        type="button"
+                        onClick={() => changeFontSize(sz)}
+                        className={`py-0.5 rounded text-[8px] font-bold uppercase transition-all cursor-pointer ${fontSize === sz ? 'bg-[#10b981] text-[#121214]' : 'text-gray-400 hover:text-white'}`}
+                      >
+                        {sz === 'padrao' ? 'Pad' : sz === 'grande' ? 'Grd' : 'Ggt'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="border-t border-[#27272A]/50 pt-2 space-y-1">
+                  <span className="text-[9px] text-gray-500 uppercase tracking-widest block">Operador ativo</span>
+                  <span className="font-bold text-white block truncate text-xs">{activeWaiterNome}</span>
+                  <span className="text-[9px] text-[#10b981] flex items-center gap-1 mt-1 font-mono">
+                    <span className="h-1.5 w-1.5 bg-emerald-500 rounded-full animate-ping" />
+                    Sincronização Online
+                  </span>
+                </div>
+              </SidebarFooter>
+            </Sidebar>
+          </div>
+        )}
+
+        {/* DESKTOP SIDEBAR - SHADCN COMPOSABLE ARCHITECTURE */}
+        <Sidebar className="hidden lg:flex w-64 bg-[#121214] border-r border-[#27272A] flex-col justify-between shrink-0">
+          <SidebarHeader className="p-3.5 border-b border-[#27272A] space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsOperatorDrawerOpen(true)}
+                  className="p-2 rounded-xl bg-[#1C1C1F] hover:bg-[#27272A] text-slate-200 border border-[#27272A] cursor-pointer transition-colors"
+                  title="Opções do Caixa / Login"
+                >
+                  <SlidersHorizontal size={15} />
+                </button>
+                <div className="flex items-center gap-2">
+                  <img src="/logo.png" alt="Kôma" className="w-7 h-7 object-contain" />
+                  <div className="font-serif font-bold text-sm tracking-tight text-white">Kôma Caixa</div>
                 </div>
               </div>
-
-              <div className={clsx('border-t', 'border-[#27272A]/50', 'pt-2', 'space-y-1')}>
-                <span className={clsx('text-[9px]', 'text-gray-500', 'uppercase', 'tracking-widest', 'block')}>Operador ativo</span>
-                <span className={clsx('font-bold', 'text-white', 'block', 'truncate')}>{activeWaiterNome}</span>
-                <span className={clsx('text-[9px]', 'text-[#10b981]', 'flex', 'items-center', 'gap-1', 'mt-1', 'font-mono')}>
-                  <span className={clsx('h-1', 'w-1', 'bg-emerald-500', 'rounded-full', 'animate-ping')} />
-                  Sincronização Online
-                </span>
-              </div>
+              {turno?.status === 'aberto' ? (
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse shadow-xs" title="Caixa Aberto" />
+              ) : (
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-600 shadow-xs" title="Caixa Fechado" />
+              )}
             </div>
-          </aside>
-        </div>
-      )}
 
-      {/* DESKTOP SIDEBAR - ANOTA AI / KOMA THEME */}
-      <aside className={clsx('hidden', 'lg:flex', 'w-64', 'bg-[#121214]', 'border-r', 'border-[#27272A]', 'flex-col', 'justify-between', 'shrink-0')}>
-        <div className={clsx('space-y-6', 'pt-5')}>
-          {/* Brand header */}
-          <div className="px-3.5 py-3 border-b border-slate-800/80 flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <button
-                type="button"
-                onClick={() => setIsOperatorDrawerOpen(true)}
-                className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/60 cursor-pointer transition-colors"
-                title="Opções do Caixa / Login"
-              >
-                <SlidersHorizontal size={15} />
-              </button>
-              <div className="flex items-center gap-2">
-                <img src="/logo.png" alt="Kôma" className="w-7 h-7 object-contain" />
-                <div className="font-serif font-bold text-sm tracking-tight text-white">Kôma Caixa</div>
-              </div>
-            </div>
-            {turno?.status === 'aberto' ? (
-              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse shadow-xs" title="Caixa Aberto" />
-            ) : (
-              <span className="h-2.5 w-2.5 rounded-full bg-emerald-600 shadow-xs" title="Caixa Fechado" />
-            )}
-          </div>
-
-          {/* Quick status bar */}
-          <div className="px-3.5">
-            <div className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-2xl', 'p-2.5', 'flex', 'items-center', 'justify-between')}>
+            {/* Quick status bar */}
+            <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-2.5 flex items-center justify-between">
               <div className="space-y-0.5">
-                <span className={clsx('text-[9px]', 'uppercase', 'tracking-wider', 'text-gray-400', 'font-bold', 'block')}>Status do Turno</span>
-                <span className={clsx('font-semibold', 'text-[10px]', 'text-white')}>
+                <span className="text-[9px] uppercase tracking-wider text-gray-400 font-bold block">Status do Turno</span>
+                <span className="font-semibold text-[10px] text-white">
                   {turno?.status === 'aberto' ? 'Caixa Aberto' : 'Caixa Fechado'}
                 </span>
               </div>
@@ -3693,23 +3689,23 @@ export function CaixaPanel({
                     setActiveTab('financeiro');
                     setActiveSubTab('fechamento');
                   }}
-                  className={clsx('px-2', 'py-1', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'text-[9px]', 'font-bold', 'rounded-lg', 'cursor-pointer', 'transition-all', 'uppercase', 'tracking-wider')}
+                  className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-bold rounded-lg cursor-pointer transition-all uppercase tracking-wider"
                 >
                   Fechar
                 </button>
               ) : (
                 <button
                   onClick={() => setShowAbrirModal(true)}
-                  className={clsx('px-2', 'py-1', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'text-[9px]', 'font-bold', 'rounded-lg', 'cursor-pointer', 'transition-all', 'uppercase', 'tracking-wider', 'animate-pulse-subtle')}
+                  className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-bold rounded-lg cursor-pointer transition-all uppercase tracking-wider animate-pulse-subtle"
                 >
                   Abrir
                 </button>
               )}
             </div>
-          </div>
+          </SidebarHeader>
 
-          {/* Tabs Navigation */}
-          <nav className={clsx('px-2.5', 'space-y-4', 'overflow-y-auto', 'flex-1', 'max-h-[calc(88vh-230px)]', 'scrollbar-thin', 'scrollbar-thumb-zinc-800', 'text-left')}>
+          {/* Sidebar Content */}
+          <SidebarContent className="p-2.5 space-y-3">
             {[
               {
                 category: 'Fluxo Operacional',
@@ -3748,123 +3744,108 @@ export function CaixaPanel({
                 ]
               }
             ].map((group, gIdx) => (
-              <div key={gIdx} className="space-y-1">
-                <span className={clsx('text-[8px]', 'uppercase', 'tracking-wider', 'text-[#10b981]', 'font-bold', 'px-3.5', 'block', 'mb-1')}>
+              <SidebarGroup key={gIdx}>
+                <SidebarGroupLabel className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-400 mb-1">
                   {group.category}
-                </span>
-                {group.items.map((tab) => {
-                  const Icon = tab.icon;
-                  const isLocked = (
-                    tab.id === 'cardapio_digital' && !hasOnlineMenu
-                  );
-                  const isActive = (
-                    tab.id === 'cardapio_digital' ? (activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital')
-                    : tab.id === 'permissoes_cargos' ? (activeTab === 'permissoes_cargos' || (activeTab === 'configuracoes' && activeSubTab === 'equipe'))
-                    : tab.id === 'impressao_salao' ? (activeTab === 'impressao_salao' || (activeTab === 'configuracoes' && activeSubTab === 'impressoras'))
-                    : tab.id === 'assinatura_pix' ? (activeTab === 'assinatura_pix' || (activeTab === 'configuracoes' && activeSubTab === 'planos'))
-                    : tab.id === 'relatorios' ? (activeTab === 'relatorios' || activeTab === 'dashboard')
-                    : tab.id === 'assistente_koma' ? (activeTab === 'assistente_koma' || activeTab === 'robo_ia' || (activeTab === 'operacao' && activeSubTab === 'chat_copiloto'))
-                    : activeTab === tab.id
-                  );
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => {
-                        if (isLocked) {
-                          setActiveTab('assinatura_pix');
-                          setActiveSubTab('planos');
-                          showToast(
-                            currentPlanId === 'pro'
-                                ? `Ative o ${ONLINE_MENU_ADDON.name} ou migre para o Kôma Premium.`
-                                : 'O cardápio online está disponível no Kôma Pro como adicional e incluído no Premium.',
-                            'info'
-                          );
-                          return;
-                        }
-                        if (tab.id === 'cardapio_digital') {
-                          setActiveTab('cardapio_digital');
-                          setActiveSubTab('cardapio_digital');
-                        } else if (tab.id === 'permissoes_cargos') {
-                          setActiveTab('permissoes_cargos');
-                          if (!['pessoas', 'desempenho'].includes(activeSubTab)) {
-                            setActiveSubTab('pessoas');
-                          }
-                        } else if (tab.id === 'impressao_salao') {
-                          setActiveTab('impressao_salao');
-                          setActiveSubTab('impressoras');
-                        } else if (tab.id === 'assinatura_pix') {
-                          setActiveTab('assinatura_pix');
-                          setActiveSubTab('planos');
-                        } else if (tab.id === 'relatorios') {
-                          setActiveTab('relatorios');
-                          if (!['visao_geral', 'financeiro', 'produtos'].includes(activeSubTab)) {
-                            setActiveSubTab('visao_geral');
-                          }
-                        } else if (tab.id === 'assistente_koma') {
-                          setActiveTab('assistente_koma');
-                          if (!['chat', 'configuracao', 'simulador'].includes(activeSubTab)) {
-                            setActiveSubTab('chat');
-                          }
-                        } else {
-                          handleTabChange(tab.id as any);
-                        }
-                      }}
-                      className={`w-full px-3.5 py-1.5 rounded-xl text-left font-semibold transition-all flex items-center justify-between cursor-pointer group ${isLocked
-                        ? 'text-gray-600 hover:text-gray-400 hover:bg-[#1C1C1F]/30 border border-transparent'
-                        : isActive
-                        ? 'bg-[#10b981]/15 text-[#10b981] border border-[#10b981]/10 font-bold shadow-inner'
-                        : 'text-gray-400 hover:text-white hover:bg-[#1C1C1F]/50 border border-transparent'
-                        }`}
-                    >
-                      <div className={clsx('flex', 'items-center', 'gap-3')}>
-                        <Icon size={13} className={isActive ? 'text-[#10b981]' : 'text-gray-500 group-hover:text-white'} />
-                        <span className="text-[10px]">{tab.label}</span>
-                      </div>
-                      {tab.id === 'operacao' && (tableOrdersInProduction.length + simulatedOrders.filter(o => ['pendente', 'analise', 'producao', 'pronto', 'transito'].includes(o.status)).length + tableOrdersReady.length) > 0 && (
-                        <span className={clsx('bg-[#10b981]', 'text-[#121214]', 'text-[7px]', 'font-bold', 'px-1.5', 'py-0.5', 'rounded-full', 'font-mono')}>
-                          {tableOrdersInProduction.length + simulatedOrders.filter(o => ['pendente', 'analise', 'producao', 'pronto', 'transito'].includes(o.status)).length + tableOrdersReady.length}
-                        </span>
-                      )}
-                      {isLocked && <Lock size={10} className="text-amber-500/70" />}
-                    </button>
-                  );
-                })}
-              </div>
+                </SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {group.items.map((tab) => {
+                      const Icon = tab.icon;
+                      const isLocked = tab.id === 'cardapio_digital' && !hasOnlineMenu;
+                      const isActive = (
+                        tab.id === 'cardapio_digital' ? (activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital')
+                        : tab.id === 'permissoes_cargos' ? (activeTab === 'permissoes_cargos' || (activeTab === 'configuracoes' && activeSubTab === 'equipe'))
+                        : tab.id === 'impressao_salao' ? (activeTab === 'impressao_salao' || (activeTab === 'configuracoes' && activeSubTab === 'impressoras'))
+                        : tab.id === 'assinatura_pix' ? (activeTab === 'assinatura_pix' || (activeTab === 'configuracoes' && activeSubTab === 'planos'))
+                        : tab.id === 'relatorios' ? (activeTab === 'relatorios' || activeTab === 'dashboard')
+                        : tab.id === 'assistente_koma' ? (activeTab === 'assistente_koma' || activeTab === 'robo_ia' || (activeTab === 'operacao' && activeSubTab === 'chat_copiloto'))
+                        : activeTab === tab.id
+                      );
+                      const orderCount = tab.id === 'operacao' ? (tableOrdersInProduction.length + simulatedOrders.filter(o => ['pendente', 'analise', 'producao', 'pronto', 'transito'].includes(o.status)).length + tableOrdersReady.length) : 0;
+
+                      return (
+                        <SidebarMenuItem key={tab.id}>
+                          <SidebarMenuButton
+                            isActive={isActive}
+                            onClick={() => {
+                              if (isLocked) {
+                                setActiveTab('assinatura_pix');
+                                setActiveSubTab('planos');
+                                showToast(
+                                  currentPlanId === 'pro'
+                                      ? `Ative o ${ONLINE_MENU_ADDON.name} ou migre para o Kôma Premium.`
+                                      : 'O cardápio online está disponível no Kôma Pro como adicional e incluído no Premium.',
+                                  'info'
+                                );
+                                return;
+                              }
+                              if (tab.id === 'cardapio_digital') {
+                                setActiveTab('cardapio_digital');
+                                setActiveSubTab('cardapio_digital');
+                              } else if (tab.id === 'permissoes_cargos') {
+                                setActiveTab('permissoes_cargos');
+                                if (!['pessoas', 'desempenho'].includes(activeSubTab)) setActiveSubTab('pessoas');
+                              } else if (tab.id === 'impressao_salao') {
+                                setActiveTab('impressao_salao');
+                                setActiveSubTab('impressoras');
+                              } else if (tab.id === 'assinatura_pix') {
+                                setActiveTab('assinatura_pix');
+                                setActiveSubTab('planos');
+                              } else if (tab.id === 'relatorios') {
+                                setActiveTab('relatorios');
+                                if (!['visao_geral', 'financeiro', 'produtos'].includes(activeSubTab)) setActiveSubTab('visao_geral');
+                              } else if (tab.id === 'assistente_koma') {
+                                setActiveTab('assistente_koma');
+                                if (!['chat', 'configuracao', 'simulador'].includes(activeSubTab)) setActiveSubTab('chat');
+                              } else {
+                                handleTabChange(tab.id as any);
+                              }
+                            }}
+                          >
+                            <Icon size={14} className={isActive ? 'text-[#10b981]' : 'text-gray-500 group-hover/button:text-white'} />
+                            <span className="text-[11px]">{tab.label}</span>
+                            {orderCount > 0 && <SidebarMenuBadge>{orderCount}</SidebarMenuBadge>}
+                            {isLocked && <Lock size={10} className="ml-auto text-amber-500/70" />}
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      );
+                    })}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
             ))}
-          </nav>
-        </div>
+          </SidebarContent>
 
-        {/* Footer info */}
-        <div className={clsx('p-4', 'border-t', 'border-[#27272A]', 'space-y-2', 'bg-[#18181B]/40')}>
-          <div className="space-y-1">
-            <span className={clsx('text-[8px]', 'text-gray-500', 'uppercase', 'tracking-widest', 'block', 'font-bold')}>Acessibilidade / Fonte</span>
-            <div className={clsx('grid', 'grid-cols-3', 'gap-0.5', 'bg-[#09090B]', 'p-0.5', 'rounded-lg', 'border', 'border-[#27272A]')}>
-              {(['padrao', 'grande', 'gigante'] as const).map((sz) => (
-                <button
-                  key={sz}
-                  type="button"
-                  onClick={() => changeFontSize(sz)}
-                  className={`py-0.5 rounded text-[8px] font-bold uppercase transition-all cursor-pointer ${fontSize === sz
-                    ? 'bg-[#10b981] text-[#121214]'
-                    : 'text-gray-400 hover:text-white'
-                    }`}
-                >
-                  {sz === 'padrao' ? 'Pad' : sz === 'grande' ? 'Grd' : 'Ggt'}
-                </button>
-              ))}
+          {/* Sidebar Footer */}
+          <SidebarFooter className="p-3 border-t border-[#27272A] bg-[#18181B]/40 space-y-2">
+            <div className="space-y-1">
+              <span className="text-[8px] text-gray-500 uppercase tracking-widest block font-bold">Acessibilidade / Fonte</span>
+              <div className="grid grid-cols-3 gap-0.5 bg-[#09090B] p-0.5 rounded-lg border border-[#27272A]">
+                {(['padrao', 'grande', 'gigante'] as const).map((sz) => (
+                  <button
+                    key={sz}
+                    type="button"
+                    onClick={() => changeFontSize(sz)}
+                    className={`py-0.5 rounded text-[8px] font-bold uppercase transition-all cursor-pointer ${fontSize === sz ? 'bg-[#10b981] text-[#121214]' : 'text-gray-400 hover:text-white'}`}
+                  >
+                    {sz === 'padrao' ? 'Pad' : sz === 'grande' ? 'Grd' : 'Ggt'}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
 
-          <div className={clsx('border-t', 'border-[#27272A]/50', 'pt-2', 'space-y-1')}>
-            <span className={clsx('text-[9px]', 'text-gray-500', 'uppercase', 'tracking-widest', 'block')}>Operador ativo</span>
-            <span className={clsx('font-bold', 'text-white', 'block', 'truncate')}>{activeWaiterNome}</span>
-            <span className={clsx('text-[9px]', 'text-[#10b981]', 'flex', 'items-center', 'gap-1', 'mt-1', 'font-mono')}>
-              <span className={clsx('h-1', 'w-1', 'bg-emerald-500', 'rounded-full', 'animate-ping')} />
-              Sincronização Online
-            </span>
-          </div>
-        </div>
-      </aside>
+            <div className="border-t border-[#27272A]/50 pt-2 space-y-1">
+              <span className="text-[9px] text-gray-500 uppercase tracking-widest block">Operador ativo</span>
+              <span className="font-bold text-white block truncate text-xs">{activeWaiterNome}</span>
+              <span className="text-[9px] text-[#10b981] flex items-center gap-1 mt-1 font-mono">
+                <span className="h-1.5 w-1.5 bg-emerald-500 rounded-full animate-ping" />
+                Sincronização Online
+              </span>
+            </div>
+          </SidebarFooter>
+        </Sidebar>
+      </SidebarProvider>
 
       {/* CONTENT AREA */}
       <main className={clsx('flex-1', 'bg-[#09090B]', 'flex', 'flex-col', 'overflow-hidden', 'w-full')}>
