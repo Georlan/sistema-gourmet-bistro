@@ -1,11 +1,54 @@
+import os
+import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 import jwt
-from ..config import settings
+from ..config import settings, normalize_cors_origin
 from ..websocket_manager import manager
 
 router = APIRouter(
     tags=["WebSocket"]
 )
+
+async def validate_websocket_origin(websocket: WebSocket) -> bool:
+    """
+    Valida a origem da conexão WebSocket contra a allowlist configurada.
+    - Origem presente e autorizada: aceita.
+    - Origem presente e não autorizada: encerra com WS_1008_POLICY_VIOLATION.
+    - Origem ausente: em produção, encerra com WS_1008_POLICY_VIOLATION por padrão.
+      Em ambiente de desenvolvimento/teste ou com WEBSOCKET_ALLOW_MISSING_ORIGIN=true, autoriza.
+    Registra apenas a origem sanitizada (nunca tokens, query params ou dados de usuário).
+    """
+    raw_origin = websocket.headers.get("origin") or websocket.headers.get("Origin")
+    allowed_origins = settings.get_cors_allowed_origins()
+    
+    if raw_origin:
+        try:
+            clean_origin = normalize_cors_origin(raw_origin)
+        except RuntimeError:
+            logging.getLogger("koma.websocket").warning(
+                "[WEBSOCKET BLOQUEADO] Cabeçalho Origin malformado."
+            )
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return False
+
+        if clean_origin not in allowed_origins:
+            logging.getLogger("koma.websocket").warning(
+                f"[WEBSOCKET BLOQUEADO] Origem não autorizada: {clean_origin}"
+            )
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return False
+        return True
+    else:
+        # Origem ausente
+        env = os.getenv("ENVIRONMENT", "production").lower()
+        if env in ("development", "test") or settings.WEBSOCKET_ALLOW_MISSING_ORIGIN:
+            return True
+            
+        logging.getLogger("koma.websocket").warning(
+            "[WEBSOCKET BLOQUEADO] Conexão sem cabeçalho Origin rejeitada em produção."
+        )
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return False
 
 @router.websocket("/ws/cliente")
 async def websocket_cliente_endpoint(
@@ -17,6 +60,9 @@ async def websocket_cliente_endpoint(
     Aceita restaurante_id como int ou slug string. Exige restaurante_id válido.
     Registra conexão com client_type="client" para receber apenas eventos públicos.
     """
+    if not await validate_websocket_origin(websocket):
+        return
+
     if not restaurante_id:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
@@ -47,6 +93,9 @@ async def websocket_endpoint(
     garcom_id: str,
     token: str = None,
 ):
+    if not await validate_websocket_origin(websocket):
+        return
+
     # Token obrigatório: sem token, fechar a conexão imediatamente
     if not token:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
