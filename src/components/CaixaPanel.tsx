@@ -10235,24 +10235,24 @@ export function CaixaPanel({
             className="fixed inset-0 bg-black/80 backdrop-blur-sm transition-opacity cursor-pointer"
           />
 
-          {/* Drawer Lateral */}
-          <div className="relative w-80 max-w-[85vw] h-full bg-[#181a1f] border-r border-[#2a2f38] shadow-2xl flex flex-col justify-between z-10 overflow-y-auto p-5 text-slate-100 font-sans">
-            <div className="space-y-6">
+          {/* Drawer Lateral - Modernized Shadcn Dark Theme */}
+          <div className="relative w-80 max-w-[85vw] h-full bg-[#121214] border-r border-[#27272A] shadow-2xl flex flex-col justify-between z-10 overflow-y-auto p-5 text-white font-sans">
+            <div className="space-y-5">
               {/* Header do Drawer */}
-              <div className="flex items-center justify-between border-b border-[#2a2f38] pb-4">
+              <div className="flex items-center justify-between border-b border-[#27272A] pb-4">
                 <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-400">
+                  <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
                     <SlidersHorizontal size={18} />
                   </div>
                   <div>
-                    <h3 className="font-bold text-base text-slate-100">Opções do Caixa</h3>
-                    <span className="text-xs text-slate-400 block">Sessão e Preferências</span>
+                    <h3 className="font-bold text-base text-white font-serif">Opções do Caixa</h3>
+                    <span className="text-xs text-gray-400 block">Sessão e Preferências</span>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setIsOperatorDrawerOpen(false)}
-                  className="p-1.5 text-slate-400 hover:text-white bg-[#121417] hover:bg-[#2a2f38] border border-[#2a2f38] rounded-lg cursor-pointer transition-all"
+                  className="p-1.5 text-gray-400 hover:text-white bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] rounded-xl cursor-pointer transition-all"
                   title="Fechar Menu"
                 >
                   <X size={16} />
@@ -10260,8 +10260,8 @@ export function CaixaPanel({
               </div>
 
               {/* 1. SEÇÃO GARÇOM / OPERADOR EM ATENDIMENTO */}
-              <div className="bg-[#0E1015] border border-[#1C1F28] rounded-2xl p-4 space-y-3.5 shadow-md">
-                <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">
+              <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-4 space-y-3.5 shadow-md">
+                <span className="text-[9px] uppercase tracking-wider text-gray-400 font-extrabold block">
                   Garçom / Operador em Atendimento
                 </span>
                 <div className="flex items-center gap-3">
@@ -10269,10 +10269,10 @@ export function CaixaPanel({
                     {(activeWaiterNome || "G").charAt(0).toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <strong className="font-bold text-base text-slate-100 block truncate">
+                    <strong className="font-bold text-base text-white block truncate">
                       {activeWaiterNome || "Georlan"}
                     </strong>
-                    <span className="text-xs text-emerald-400/90 font-medium block">
+                    <span className="text-xs text-emerald-400 font-medium block">
                       Operador de Caixa / Gerência
                     </span>
                   </div>
@@ -10281,14 +10281,14 @@ export function CaixaPanel({
                 <button
                   type="button"
                   onClick={handleLogoutOperator}
-                  className="w-full py-2.5 bg-rose-950/70 hover:bg-rose-900/80 text-rose-200 border border-rose-900/50 font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-2 shadow-sm"
+                  className="w-full py-2.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-2 shadow-sm"
                 >
-                  <Lock size={14} />
+                  <Lock size={14} className="text-rose-400" />
                   <span>LOGOUT / TROCAR OPERADOR</span>
                 </button>
               </div>
 
-              {/* 2. SEÇÃO STATUS DO SALÃO AO VIVO (Real-time synchronization with Garçom & Caixa apps) */}
+              {/* 2. SEÇÃO STATUS DO SALÃO AO VIVO */}
               {(() => {
                 const liveOccupiedMesaIds = new Set(
                   orders
@@ -10305,32 +10305,32 @@ export function CaixaPanel({
                 const liveFreeTablesCount = Math.max(0, liveTotalTablesCount - liveOccupiedTablesCount);
 
                 return (
-                  <div className="bg-[#0E1015] border border-[#1C1F28] rounded-2xl p-4 space-y-3 shadow-md">
+                  <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-4 space-y-3 shadow-md">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">
+                      <span className="text-[9px] uppercase tracking-wider text-gray-400 font-extrabold block">
                         Status do Salão ao Vivo
                       </span>
-                      <span className="text-[9px] font-mono text-emerald-400/90 bg-emerald-950/60 border border-emerald-900/40 px-2 py-0.5 rounded-full font-bold uppercase flex items-center gap-1">
+                      <span className="text-[9px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold uppercase flex items-center gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
                         Tempo Real
                       </span>
                     </div>
                     <div className="grid grid-cols-3 gap-2">
-                      <div className="bg-[#151720] border border-[#252836] p-2.5 rounded-xl text-center shadow-xs">
-                        <span className="text-[9px] text-slate-400 block font-medium">LIVRES</span>
-                        <strong className="text-lg font-bold text-[#059669] font-mono">
+                      <div className="bg-[#121214] border border-[#27272A] p-2.5 rounded-xl text-center shadow-xs">
+                        <span className="text-[9px] text-gray-400 block font-medium">LIVRES</span>
+                        <strong className="text-lg font-bold text-emerald-400 font-mono">
                           {liveFreeTablesCount}
                         </strong>
                       </div>
-                      <div className="bg-[#151720] border border-[#252836] p-2.5 rounded-xl text-center shadow-xs">
-                        <span className="text-[9px] text-slate-400 block font-medium">OCUPADAS</span>
-                        <strong className="text-lg font-bold text-amber-400/90 font-mono">
+                      <div className="bg-[#121214] border border-[#27272A] p-2.5 rounded-xl text-center shadow-xs">
+                        <span className="text-[9px] text-gray-400 block font-medium">OCUPADAS</span>
+                        <strong className="text-lg font-bold text-amber-400 font-mono">
                           {liveOccupiedTablesCount}
                         </strong>
                       </div>
-                      <div className="bg-[#151720] border border-[#252836] p-2.5 rounded-xl text-center shadow-xs">
-                        <span className="text-[9px] text-slate-400 block font-medium">TOTAL</span>
-                        <strong className="text-lg font-bold text-sky-400/90 font-mono">
+                      <div className="bg-[#121214] border border-[#27272A] p-2.5 rounded-xl text-center shadow-xs">
+                        <span className="text-[9px] text-gray-400 block font-medium">TOTAL</span>
+                        <strong className="text-lg font-bold text-sky-400 font-mono">
                           {liveTotalTablesCount}
                         </strong>
                       </div>
@@ -10340,8 +10340,8 @@ export function CaixaPanel({
               })()}
 
               {/* 3. SEÇÃO ATALHOS DE ATENDIMENTO */}
-              <div className="bg-[#0E1015] border border-[#1C1F28] rounded-2xl p-4 space-y-2.5 shadow-md">
-                <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">
+              <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-4 space-y-2.5 shadow-md">
+                <span className="text-[9px] uppercase tracking-wider text-gray-400 font-extrabold block">
                   Atalhos de Atendimento
                 </span>
                 <button
@@ -10350,13 +10350,13 @@ export function CaixaPanel({
                     if (onRefreshOrders) onRefreshOrders();
                     showToast("Salão e pedidos sincronizados em tempo real!", "success");
                   }}
-                  className="w-full py-2 px-3 bg-[#151720] hover:bg-[#1E222D] border border-[#252836] text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-between"
+                  className="w-full py-2.5 px-3 bg-[#121214] hover:bg-[#27272A]/50 border border-[#27272A] text-gray-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-between group"
                 >
                   <div className="flex items-center gap-2">
-                    <RefreshCw size={14} className="text-[#059669]" />
+                    <RefreshCw size={14} className="text-emerald-400 group-hover:rotate-180 transition-transform duration-500" />
                     <span>Sincronizar Salão e Pedidos</span>
                   </div>
-                  <ChevronRight size={14} className="text-slate-500" />
+                  <ChevronRight size={14} className="text-gray-500 group-hover:text-white" />
                 </button>
 
                 <button
@@ -10365,33 +10365,33 @@ export function CaixaPanel({
                     toggleFullscreen();
                     setIsOperatorDrawerOpen(false);
                   }}
-                  className="w-full py-2 px-3 bg-[#151720] hover:bg-[#1E222D] border border-[#252836] text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-between"
+                  className="w-full py-2.5 px-3 bg-[#121214] hover:bg-[#27272A]/50 border border-[#27272A] text-gray-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-between group"
                 >
                   <div className="flex items-center gap-2">
-                    {isFullscreen ? <Minimize2 size={14} className="text-sky-400/90" /> : <Maximize2 size={14} className="text-sky-400/90" />}
+                    {isFullscreen ? <Minimize2 size={14} className="text-sky-400" /> : <Maximize2 size={14} className="text-sky-400" />}
                     <span>{isFullscreen ? "Sair do Modo PDV" : "Modo PDV Imersivo"}</span>
                   </div>
-                  <ChevronRight size={14} className="text-slate-500" />
+                  <ChevronRight size={14} className="text-gray-500 group-hover:text-white" />
                 </button>
               </div>
 
               {/* 4. SEÇÃO EXIBIÇÃO E PREFERÊNCIAS */}
-              <div className="bg-[#0E1015] border border-[#1C1F28] rounded-2xl p-4 space-y-3 shadow-md">
-                <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">
+              <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-4 space-y-3 shadow-md">
+                <span className="text-[9px] uppercase tracking-wider text-gray-400 font-extrabold block">
                   Exibição e Preferências
                 </span>
                 
                 <div className="space-y-1.5">
-                  <span className="text-xs text-slate-300 font-medium block">Tamanho da Fonte:</span>
-                  <div className="grid grid-cols-3 gap-1 bg-[#151720] p-1 rounded-xl border border-[#252836]">
+                  <span className="text-xs text-gray-300 font-medium block">Tamanho da Fonte:</span>
+                  <div className="grid grid-cols-3 gap-1 bg-[#121214] p-1 rounded-xl border border-[#27272A]">
                     {(['padrao', 'grande', 'gigante'] as const).map((sz) => (
                       <button
                         key={sz}
                         type="button"
                         onClick={() => changeFontSize(sz)}
                         className={`py-1 rounded-lg text-xs font-bold uppercase transition-all cursor-pointer ${fontSize === sz
-                          ? 'bg-[#046c4e] text-emerald-100 shadow-xs border border-emerald-700/30'
-                          : 'text-slate-400 hover:text-slate-200'
+                          ? 'bg-emerald-500 text-zinc-950 shadow-md font-extrabold'
+                          : 'text-gray-400 hover:text-white'
                           }`}
                       >
                         {sz === 'padrao' ? 'Padrão' : sz === 'grande' ? 'Grande' : 'Gigante'}
@@ -10403,11 +10403,11 @@ export function CaixaPanel({
             </div>
 
             {/* RODAPÉ */}
-            <div className="pt-6 border-t border-[#2a2f38] text-center space-y-1">
-              <span className="text-xs font-bold text-slate-400 block font-mono">
+            <div className="pt-5 border-t border-[#27272A] text-center space-y-1">
+              <span className="text-xs font-bold text-gray-400 block font-mono">
                 Kôma v3.5 • Dark Engine
               </span>
-              <span className="text-[10px] text-slate-500 block">
+              <span className="text-[10px] text-gray-500 block">
                 Sistema PDV Gourmet Multi-Tenant
               </span>
             </div>
