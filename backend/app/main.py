@@ -224,38 +224,47 @@ async def run_migrations_on_startup():
         if migration_engine is not None:
             migration_engine.dispose()
 
-ALLOWED_ORIGINS = [
-    "https://sistema-gourmet-bistro.pages.dev",
-    "https://sistema-gourmet-bistro-production.up.railway.app",
-    "http://localhost:5173",
-    "http://localhost:3000",
-]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_origin_regex=r"https://.*\.pages\.dev",
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_origins=settings.get_cors_allowed_origins(),
+    allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=[
         "Authorization",
         "Content-Type",
         "Accept",
         "Origin",
         "X-Requested-With",
-        "x-koma-customer-token",
         "X-Koma-Customer-Token",
-        "x-restaurante-id",
-        "X-Restaurante-Id",
+        "X-Tenant-ID",
+        "X-Restaurante-ID",
     ],
-    expose_headers=["*"],
+    expose_headers=[],
 )
+
+@app.middleware("http")
+async def add_security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+    
+    # Headers HTTP de Segurança Fundamentais
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["X-Frame-Options"] = "DENY"
+    
+    # HSTS em produção ou requisições HTTPS (omitido em localhost / dev HTTP)
+    env = os.getenv("ENVIRONMENT", "development").lower()
+    is_https = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
+    is_localhost = request.url.hostname in ("localhost", "127.0.0.1")
+    
+    if (env == "production" or is_https) and not is_localhost:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        
+    return response
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     import traceback
-    origin = request.headers.get("Origin", "")
-    cors_origin = origin if origin else "*"
     print(f"[GLOBAL UNHANDLED ERROR] {request.method} {request.url.path}:\n{traceback.format_exc()}")
     
     is_dev = os.getenv("ENVIRONMENT") == "development"
@@ -266,41 +275,17 @@ async def global_exception_handler(request: Request, exc: Exception):
     return JSONResponse(
         status_code=500,
         content=body,
-        headers={
-            "Access-Control-Allow-Origin": cors_origin,
-            "Access-Control-Allow-Credentials": "true",
-            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Tenant-ID, Accept, Origin",
-        }
     )
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
-    origin = request.headers.get("Origin", "")
-    cors_origin = origin if origin else "*"
     return JSONResponse(
         status_code=exc.status_code,
         content={"detail": exc.detail},
-        headers={
-            "Access-Control-Allow-Origin": cors_origin,
-            "Access-Control-Allow-Credentials": "true",
-            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Tenant-ID, Accept, Origin",
-        }
     )
 
 @app.middleware("http")
 async def add_sentry_context_and_tenant(request: Request, call_next):
-    from fastapi.responses import JSONResponse
-    origin = request.headers.get("Origin", "*")
-    cors_headers = {
-        "Access-Control-Allow-Origin": origin if origin != "*" else "*",
-        "Access-Control-Allow-Credentials": "true",
-        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-        "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Tenant-ID, Accept, Origin",
-    }
-    if request.method == "OPTIONS":
-        return JSONResponse(status_code=200, content={"status": "ok"}, headers=cors_headers)
     tenant_id = request.headers.get("X-Tenant-ID", "default")
     restaurante_id: int | None = None
     
@@ -347,21 +332,18 @@ async def add_sentry_context_and_tenant(request: Request, call_next):
                 return JSONResponse(
                     status_code=401,
                     content={"detail": f"Token de autenticação inválido ou expirado: {str(e)}"},
-                    headers=cors_headers
                 )
             except Exception:
                 from fastapi.responses import JSONResponse
                 return JSONResponse(
                     status_code=401,
                     content={"detail": "Falha na validação do token de autenticação."},
-                    headers=cors_headers
                 )
         else:
             from fastapi.responses import JSONResponse
             return JSONResponse(
                 status_code=401,
                 content={"detail": "Cabeçalho de autorização mal-formatado. Formato esperado: 'Bearer <token>'."},
-                headers=cors_headers
             )
 
     sentry_sdk.set_tag("tenant_id", tenant_id)
@@ -371,11 +353,6 @@ async def add_sentry_context_and_tenant(request: Request, call_next):
     tenant_context = current_restaurante_id.set(restaurante_id)
     try:
         response = await call_next(request)
-        if origin and origin != "*":
-            response.headers["Access-Control-Allow-Origin"] = origin
-            response.headers["Access-Control-Allow-Credentials"] = "true"
-            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-            response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, X-Tenant-ID, Accept, Origin"
         return response
     finally:
         # Garante a limpeza do contexto após o término da requisição

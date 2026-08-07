@@ -49,6 +49,41 @@ class Settings:
         os.getenv("CUSTOMER_OTP_MAX_IP_REQUESTS", "20")
     )
     
+    # CORS Configuration
+    CORS_ALLOWED_ORIGINS: str = os.getenv("CORS_ALLOWED_ORIGINS", "")
+    CORS_ALLOW_CREDENTIALS: bool = (
+        os.getenv("CORS_ALLOW_CREDENTIALS", "false").lower() == "true"
+    )
+
+    def get_cors_allowed_origins(self) -> list[str]:
+        """
+        Retorna a lista normalizada e estrita de origens permitidas para CORS.
+        Em ambiente de desenvolvimento ou teste, se a variável não estiver definida,
+        inclui origens locais padrão. Em produção, autoriza estritamente as origens da lista.
+        """
+        raw_origins = [o.strip() for o in self.CORS_ALLOWED_ORIGINS.split(",") if o.strip()]
+        
+        normalized: list[str] = []
+        for origin in raw_origins:
+            clean_origin = origin.rstrip("/")
+            if clean_origin and clean_origin not in normalized:
+                normalized.append(clean_origin)
+                
+        env = os.getenv("ENVIRONMENT", "development").lower()
+        if not normalized and env in ("development", "test"):
+            local_defaults = [
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+                "http://localhost:3000",
+                "http://127.0.0.1:3000",
+                "https://sistema-gourmet-bistro.pages.dev",
+            ]
+            for loc in local_defaults:
+                if loc not in normalized:
+                    normalized.append(loc)
+                    
+        return normalized
+    
     # ENCRYPTION_KEY environment check
     ENCRYPTION_KEY: str = os.getenv("ENCRYPTION_KEY", "")
     if not ENCRYPTION_KEY:
