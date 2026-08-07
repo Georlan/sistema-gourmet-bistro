@@ -6,6 +6,7 @@ def normalize_cors_origin(raw: str) -> str:
     """
     Normaliza e valida uma origem CORS individual usando urlsplit.
     Exige esquema (http/https) e hostname válidos sem caminhos, consultas, fragmentos ou credenciais.
+    Normaliza portas padrão (443 para https, 80 para http) omitindo o sufixo.
     Lança RuntimeError seguro caso a configuração seja inválida.
     """
     raw_str = raw.strip()
@@ -36,10 +37,20 @@ def normalize_cors_origin(raw: str) -> str:
     if parts.fragment:
         raise RuntimeError("Configuração de CORS inválida: origens não podem conter fragmentos (#).")
 
-    if parts.port is not None:
-        if not (1 <= parts.port <= 65535):
+    try:
+        port = parts.port
+    except ValueError as e:
+        raise RuntimeError("Configuração de CORS inválida: porta incorreta ou fora do intervalo.") from e
+
+    if port is not None:
+        if not (1 <= port <= 65535):
             raise RuntimeError("Configuração de CORS inválida: porta fora do intervalo válido.")
-        port_suffix = f":{parts.port}"
+        
+        # Omitir portas padrão na normalização
+        if (scheme == "https" and port == 443) or (scheme == "http" and port == 80):
+            port_suffix = ""
+        else:
+            port_suffix = f":{port}"
     else:
         port_suffix = ""
 

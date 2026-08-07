@@ -225,6 +225,19 @@ async def run_migrations_on_startup():
             migration_engine.dispose()
 
 @app.middleware("http")
+async def handle_unhandled_exceptions_middleware(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except Exception as exc:
+        import traceback
+        print(f"[UNHANDLED ROUTE EXCEPTION] {request.method} {request.url.path}:\n{traceback.format_exc()}")
+        is_dev = os.getenv("ENVIRONMENT", "production").lower() == "development"
+        body = {"detail": "Erro interno do servidor."}
+        if is_dev:
+            body["error"] = str(exc)
+        return JSONResponse(status_code=500, content=body)
+
+@app.middleware("http")
 async def add_sentry_context_and_tenant(request: Request, call_next):
     tenant_id = request.headers.get("X-Tenant-ID", "default")
     restaurante_id: int | None = None
