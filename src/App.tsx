@@ -1896,10 +1896,8 @@ export default function App() {
                 <SlidersHorizontal size={18} />
               </button>
 
-              <div className="flex items-center gap-2">
-                <div className="h-9 w-9 bg-[#121214] rounded-xl flex items-center justify-center border border-[#27272A] shrink-0 overflow-hidden">
-                  <img src={logoImg} alt="Kôma Logo" className="h-7 w-7 object-contain" />
-                </div>
+              <div className="flex items-center gap-2.5">
+                <img src={logoImg} alt="Kôma Logo" className="h-8 w-8 object-contain shrink-0" />
                 <div>
                   <h1 className="font-serif text-base sm:text-lg font-bold tracking-tight text-white leading-tight">
                     {restaurantName}
@@ -1947,11 +1945,9 @@ export default function App() {
 
               {/* Header inside drawer */}
               <div className={clsx('flex', 'items-center', 'justify-between', 'pb-4', 'border-b', 'border-[#27272A]')}>
-                <div className={clsx('flex', 'items-center', 'gap-2')}>
-                  <div className={clsx('h-8', 'w-8', 'bg-[#121214]', 'rounded-lg', 'flex', 'items-center', 'justify-center', 'border', 'border-[#27272A]', 'shadow-sm', 'shrink-0', 'overflow-hidden')}>
-                    <img src={logoImg} alt="Kôma Logo" className={clsx('h-6', 'w-6', 'object-contain')} />
-                  </div>
-                  <span className={clsx('font-serif', 'font-bold', 'text-base', 'text-[#FAF7F2]')}>{restaurantName}</span>
+                <div className={clsx('flex', 'items-center', 'gap-2.5')}>
+                  <img src={logoImg} alt="Kôma Logo" className={clsx('h-7', 'w-7', 'object-contain', 'shrink-0')} />
+                  <span className={clsx('font-serif', 'font-bold', 'text-base', 'text-[#FAF7F2]', 'leading-none')}>{restaurantName}</span>
                 </div>
                 <button
                   id="close-sidebar-btn"

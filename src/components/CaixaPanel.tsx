@@ -3451,11 +3451,9 @@ export function CaixaPanel({
                     >
                       <SlidersHorizontal size={15} />
                     </button>
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-xl bg-[#121214] border border-[#27272A] flex items-center justify-center overflow-hidden shrink-0">
-                        <img src={logoImg} alt="Kôma" className="w-6 h-6 object-contain" />
-                      </div>
-                      <div className="font-serif font-bold text-sm tracking-tight text-white">Kôma Caixa</div>
+                    <div className="flex items-center gap-2.5">
+                      <img src={logoImg} alt="Kôma" className="w-7 h-7 object-contain shrink-0" />
+                      <span className="font-serif font-bold text-sm tracking-tight text-white leading-none">Kôma Caixa</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -3667,11 +3665,9 @@ export function CaixaPanel({
                 >
                   <SlidersHorizontal size={15} />
                 </button>
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-[#121214] border border-[#27272A] flex items-center justify-center overflow-hidden shrink-0">
-                    <img src={logoImg} alt="Kôma" className="w-6 h-6 object-contain" />
-                  </div>
-                  <div className="font-serif font-bold text-sm tracking-tight text-white">Kôma Caixa</div>
+                <div className="flex items-center gap-2.5">
+                  <img src={logoImg} alt="Kôma" className="w-7 h-7 object-contain shrink-0" />
+                  <span className="font-serif font-bold text-sm tracking-tight text-white leading-none">Kôma Caixa</span>
                 </div>
               </div>
               {turno?.status === 'aberto' ? (
