@@ -3,7 +3,7 @@ import { motion, useInView } from 'motion/react';
 
 export function ProductShowcase() {
   const sectionRef = useRef<HTMLElement>(null);
-  const isInView = useInView(sectionRef, { once: true, amount: 0.2 });
+  const isInView = useInView(sectionRef, { once: true, amount: 0.15 });
 
   return (
     <section
@@ -12,6 +12,7 @@ export function ProductShowcase() {
       id="produto"
       aria-label="Produto"
     >
+      {/* Asymmetrical 30% text / 70% product header */}
       <div className="koma-showcase-header">
         <motion.h2
           className="koma-showcase-title"
@@ -31,41 +32,41 @@ export function ProductShowcase() {
           <div className="koma-showcase-item">
             <span className="koma-showcase-item-num">01 / MESAS</span>
             <p className="koma-showcase-item-desc">
-              Visão da operação em tempo real. Cada mesa atualizada a cada pedido lançado.
+              Visão da operação em tempo real. Cada mesa atualizada instantaneamente a cada pedido.
             </p>
           </div>
           <div className="koma-showcase-item">
             <span className="koma-showcase-item-num">02 / PEDIDOS</span>
             <p className="koma-showcase-item-desc">
-              Lançado uma vez pelo garçom ou QR Code. A cozinha e o caixa acompanham instantaneamente.
+              Lançado no garçom ou QR Code. Produção e caixa acompanham no mesmo fluxo.
             </p>
           </div>
         </motion.div>
       </div>
 
-      {/* Massive Product Display (88-92% Viewport Width) with Pure Text Annotations */}
+      {/* Massive Full-Bleed Product Display (90-95% Viewport Width) */}
       <motion.div
         className="koma-showcase-display"
         initial={{ opacity: 0, y: 50, scale: 0.98 }}
         animate={isInView ? { opacity: 1, y: 0, scale: 1 } : {}}
         transition={{ duration: 1, delay: 0.3 }}
       >
-        {/* Discrete Annotations WITHOUT card backgrounds/shadows/glass */}
-        <div className="koma-annotation" style={{ top: '-22px', left: '12%' }}>
+        {/* Pure Text Annotations (NO cards, NO backgrounds) */}
+        <div className="koma-annotation" style={{ top: '-24px', left: '10%' }}>
           <div className="koma-annotation-dot" />
           <div className="koma-annotation-line" />
           <span className="koma-annotation-text">01 ── MAPA DE MESAS EM TEMPO REAL</span>
         </div>
 
-        <div className="koma-annotation" style={{ top: '-22px', right: '12%' }}>
+        <div className="koma-annotation" style={{ top: '-24px', right: '10%' }}>
           <div className="koma-annotation-dot" />
           <div className="koma-annotation-line" />
-          <span className="koma-annotation-text">02 ── STATUS DE ATENDIMENTO</span>
+          <span className="koma-annotation-text">02 ── STATUS DA OPERAÇÃO</span>
         </div>
 
         {/* Real KÔMA Full Interface View */}
         <div className="koma-showcase-frame">
-          <div style={{ background: '#141622', padding: '12px 20px', borderBottom: '1px solid #222538', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ background: '#141622', padding: '14px 22px', borderBottom: '1px solid #222538', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontFamily: 'Space Grotesk', fontSize: '0.85rem', fontWeight: 700, color: '#fff' }}>
               <span style={{ color: '#00b894' }}>KÔMA GESTÃO</span>
               <span style={{ color: '#666' }}>|</span>
@@ -78,7 +79,7 @@ export function ProductShowcase() {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px', padding: '18px', background: '#0b0c12', minHeight: '400px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', padding: '20px', background: '#0b0c12', minHeight: '440px' }}>
             {[
               { num: '01', val: 'R$ 184,50', status: 'occupied', waiter: 'Carlos', time: '38 min' },
               { num: '02', val: 'Livre', status: 'free', waiter: '-', time: '-' },
@@ -100,8 +101,8 @@ export function ProductShowcase() {
                   padding: '14px',
                   display: 'flex',
                   flexDirection: 'column',
-                  justifyContent: 'space-between',
-                  minHeight: '100px'
+                  justify: 'space-between',
+                  minHeight: '110px'
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

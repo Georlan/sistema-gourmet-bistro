@@ -17,18 +17,17 @@ export function Hero() {
     offset: ['start start', 'end start'],
   });
 
-  // Desktop micro-parallax mouse state
+  // Micro-parallax cursor state (desktop only)
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
-    // Only on desktop & non-reduced motion
     const handleMouseMove = (e: MouseEvent) => {
       if (window.innerWidth > 1024) {
         const cx = window.innerWidth / 2;
         const cy = window.innerHeight / 2;
         setMousePos({
-          x: ((e.clientX - cx) / cx) * 5, // max 5px
-          y: ((e.clientY - cy) / cy) * 5,
+          x: ((e.clientX - cx) / cx) * 6, // max 6px
+          y: ((e.clientY - cy) / cy) * 6,
         });
       }
     };
@@ -37,19 +36,17 @@ export function Hero() {
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, []);
 
-  const deviceRotateY = useTransform(scrollYProgress, [0, 1], [-6, 0]);
-  const deviceY = useTransform(scrollYProgress, [0, 1], [0, -40]);
+  const deviceRotateY = useTransform(scrollYProgress, [0, 1], [-8, -2]);
+  const deviceY = useTransform(scrollYProgress, [0, 1], [0, -35]);
 
   return (
     <section ref={sectionRef} className="koma-hero" aria-label="Hero">
-      {/* Background Graphic Layer: 1-2% Opacity Arc Layer */}
-      <div className="koma-hero-bg-layer" aria-hidden="true">
-        <div className="koma-hero-bg-arc" />
-        <div className="koma-hero-bg-diagonal" />
-      </div>
+      {/* Layer 1: Split Plane of Color (Right Solid Dark Green Plane) */}
+      <div className="koma-hero-color-plane" aria-hidden="true" />
 
+      {/* Layer 2 & 3: Asymmetrical Grid (35-40% Copy / 60-65% Visual Dominance) */}
       <div className="koma-hero-grid">
-        {/* Main headline & Copy */}
+        {/* Layer 2: Copy + Headline */}
         <motion.div
           className="koma-hero-content"
           initial={{ opacity: 0, y: 24 }}
@@ -60,7 +57,7 @@ export function Hero() {
             <span className="koma-hero-line koma-hero-line--sm">O</span>
             <span className="koma-hero-line koma-hero-line--xl">RESTAURANTE</span>
 
-            {/* The KÔMA Signature Green Bar with scaleX entrance animation */}
+            {/* Signature Green Line Axis crossing planes */}
             <div className="koma-hero-bar-wrap">
               <motion.span
                 className="koma-hero-bar"
@@ -74,7 +71,6 @@ export function Hero() {
             <span className="koma-hero-line koma-hero-line--lg">NÃO PARA.</span>
           </h1>
 
-          {/* Option B Copy Direction */}
           <motion.p
             className="koma-hero-sub"
             initial={{ opacity: 0, y: 20 }}
@@ -82,7 +78,7 @@ export function Hero() {
             transition={{ duration: 0.7, delay: 0.45 }}
           >
             <span className="koma-hero-sub-bold">Seu sistema também não.</span>
-            O pedido entra. A operação acompanha.
+            Do salão à cozinha, tudo no mesmo fluxo.
           </motion.p>
 
           <motion.div
@@ -97,19 +93,20 @@ export function Hero() {
           </motion.div>
         </motion.div>
 
-        {/* Real Product Protagonist - 10-20% Scale Increase & Invasion Overlap */}
+        {/* Layer 3: Massive Product Object - Physical Presence with Intentional Viewport Crop */}
         <div className="koma-hero-device-container">
           <motion.div
             className="koma-hero-device-frame"
             style={{
+              rotateZ: 3, // Discrete 3° rotation
               rotateY: deviceRotateY,
               y: deviceY,
               x: mousePos.x,
-              rotateX: mousePos.y * 0.3,
+              rotateX: mousePos.y * 0.25,
             }}
-            initial={{ opacity: 0, x: 40 }}
+            initial={{ opacity: 0, x: 60 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.9, delay: 0.35, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ duration: 0.9, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
           >
             <DeviceFrame />
           </motion.div>

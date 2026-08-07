@@ -3,10 +3,10 @@ import { motion, useInView } from 'motion/react';
 
 function RealMonitorScreen() {
   return (
-    <div style={{ background: '#0d0e15', width: '100%', aspectRatio: '16 / 10', borderRadius: '10px', overflow: 'hidden', border: '2px solid #222538', boxShadow: '0 25px 60px rgba(0,0,0,0.3)', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ background: '#0d0e15', width: '100%', aspectRatio: '16 / 10', borderRadius: '10px', overflow: 'hidden', border: '2px solid #222538', boxShadow: '0 30px 80px rgba(0,0,0,0.35)', display: 'flex', flexDirection: 'column' }}>
       <div style={{ height: '36px', background: '#141622', borderBottom: '1px solid #222538', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px' }}>
         <span style={{ fontFamily: 'Space Grotesk', fontSize: '0.8rem', fontWeight: 700, color: '#fff' }}>KÔMA PDV — CAIXA BALCÃO #01</span>
-        <span style={{ background: 'rgba(0,184,148,0.15)', color: '#00b894', fontSize: '0.65rem', padding: '3px 8px', borderRadius: '4px', fontWeight: 600 }}>OPERACIONAL</span>
+        <span style={{ background: 'rgba(0,184,148,0.15)', color: '#00b894', fontSize: '0.65rem', padding: '3px 8px', borderRadius: '4px', fontWeight: 700 }}>OPERACIONAL</span>
       </div>
       <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 300px', gap: '12px', padding: '14px', background: '#0b0c12' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
@@ -32,7 +32,7 @@ function RealMonitorScreen() {
 
 function RealTabletScreen() {
   return (
-    <div style={{ background: '#0d0e15', width: '100%', aspectRatio: '4 / 3', borderRadius: '10px', overflow: 'hidden', border: '2px solid #222538', boxShadow: '0 20px 50px rgba(0,0,0,0.25)', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ background: '#0d0e15', width: '100%', aspectRatio: '4 / 3', borderRadius: '10px', overflow: 'hidden', border: '2px solid #222538', boxShadow: '0 25px 60px rgba(0,0,0,0.3)', display: 'flex', flexDirection: 'column' }}>
       <div style={{ height: '32px', background: '#141622', borderBottom: '1px solid #222538', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 12px' }}>
         <span style={{ fontFamily: 'Space Grotesk', fontSize: '0.75rem', fontWeight: 700, color: '#fff' }}>GARÇOM APP</span>
         <span style={{ color: '#00b894', fontSize: '0.65rem', fontWeight: 600 }}>MESA 04</span>
@@ -51,7 +51,7 @@ function RealTabletScreen() {
 
 function RealPhoneScreen() {
   return (
-    <div style={{ background: '#0d0e15', width: '100%', aspectRatio: '9 / 16', borderRadius: '14px', overflow: 'hidden', border: '2px solid #222538', boxShadow: '0 15px 40px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ background: '#0d0e15', width: '100%', aspectRatio: '9 / 16', borderRadius: '14px', overflow: 'hidden', border: '2px solid #222538', boxShadow: '0 20px 50px rgba(0,0,0,0.25)', display: 'flex', flexDirection: 'column' }}>
       <div style={{ height: '28px', background: '#141622', borderBottom: '1px solid #222538', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: 700, color: '#00b894' }}>
         CARDÁPIO QR CODE
       </div>
@@ -66,7 +66,7 @@ function RealPhoneScreen() {
 
 export function Ecosystem() {
   const ref = useRef<HTMLElement>(null);
-  const isInView = useInView(ref, { once: true, amount: 0.2 });
+  const isInView = useInView(ref, { once: true, amount: 0.15 });
 
   return (
     <section ref={ref} className="koma-ecosystem-section" aria-label="Ecossistema">
@@ -83,32 +83,32 @@ export function Ecosystem() {
         </p>
       </motion.div>
 
-      {/* BRUTALLY INCREASED DEVICES COMPOSITION */}
+      {/* Nixon-inspired Physical Object Composition (Full Bleed Right Edge Crop) */}
       <div className="koma-eco-stage">
-        {/* Monitor (720px) */}
+        {/* Dominant Monitor Object (780px) */}
         <motion.div
           className="koma-eco-monitor"
-          initial={{ opacity: 0, y: 50 }}
-          animate={isInView ? { opacity: 1, y: 0 } : {}}
+          initial={{ opacity: 0, x: 60 }}
+          animate={isInView ? { opacity: 1, x: 0 } : {}}
           transition={{ duration: 1, delay: 0.1 }}
         >
           <RealMonitorScreen />
         </motion.div>
 
-        {/* Tablet (380px) */}
+        {/* Overlapping Tablet Object (420px) */}
         <motion.div
           className="koma-eco-tablet"
-          initial={{ opacity: 0, y: 70 }}
+          initial={{ opacity: 0, y: 50 }}
           animate={isInView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 1, delay: 0.25 }}
         >
           <RealTabletScreen />
         </motion.div>
 
-        {/* Phone (220px) */}
+        {/* Foreground Smartphone Object (240px) */}
         <motion.div
           className="koma-eco-phone"
-          initial={{ opacity: 0, y: 90 }}
+          initial={{ opacity: 0, y: 70 }}
           animate={isInView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 1, delay: 0.4 }}
         >
@@ -116,12 +116,12 @@ export function Ecosystem() {
         </motion.div>
       </div>
 
-      {/* Editorial Labels directly in composition (NO cards/boxes) */}
+      {/* Pure Editorial Labels directly in composition (NO cards/boxes) */}
       <div className="koma-eco-labels-grid">
         <div className="koma-eco-label-item">
           <span className="koma-eco-label-num">01 / CAIXA</span>
           <h3 className="koma-eco-label-name">OPERAÇÃO NO BALCÃO</h3>
-          <p className="koma-eco-label-desc">Abertura, fechamento, sangrias, relatórios e emissão fiscal sem complicações.</p>
+          <p className="koma-eco-label-desc">Abertura, fechamento, sangrias e emissão fiscal sem complicações.</p>
         </div>
 
         <div className="koma-eco-label-item">
@@ -133,7 +133,7 @@ export function Ecosystem() {
         <div className="koma-eco-label-item">
           <span className="koma-eco-label-num">03 / CARDÁPIO</span>
           <h3 className="koma-eco-label-name">AUTONOMIA QR CODE</h3>
-          <p className="koma-eco-label-desc">Cardápio digital direto na mesa para consulta e pedidos sem fila de espera.</p>
+          <p className="koma-eco-label-desc">Cardápio digital na mesa para consulta e pedidos sem fila de espera.</p>
         </div>
       </div>
     </section>
