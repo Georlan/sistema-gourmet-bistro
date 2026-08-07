@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { motion, useScroll, useTransform } from 'motion/react';
-import { DeviceFrame } from '../components/DeviceFrame';
+import { TabletFrame } from '../product/TabletFrame';
 
 const HERO_STRIP_ITEMS = [
   { num: '01', name: 'PDV BALCÃO' },
@@ -17,7 +17,6 @@ export function Hero() {
     offset: ['start start', 'end start'],
   });
 
-  // Micro-parallax cursor state (desktop only)
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
@@ -26,7 +25,7 @@ export function Hero() {
         const cx = window.innerWidth / 2;
         const cy = window.innerHeight / 2;
         setMousePos({
-          x: ((e.clientX - cx) / cx) * 6, // max 6px
+          x: ((e.clientX - cx) / cx) * 6,
           y: ((e.clientY - cy) / cy) * 6,
         });
       }
@@ -41,10 +40,10 @@ export function Hero() {
 
   return (
     <section ref={sectionRef} className="koma-hero" aria-label="Hero">
-      {/* Layer 1: Split Plane of Color (Right Solid Dark Green Plane) */}
+      {/* Layer 1: Dark Green Solid Color Plane Right Side */}
       <div className="koma-hero-color-plane" aria-hidden="true" />
 
-      {/* Layer 2 & 3: Asymmetrical Grid (35-40% Copy / 60-65% Visual Dominance) */}
+      {/* Layer 2 & 3: Asymmetrical 35-40% Copy / 60-65% Visual Dominance Grid */}
       <div className="koma-hero-grid">
         {/* Layer 2: Copy + Headline */}
         <motion.div
@@ -57,7 +56,7 @@ export function Hero() {
             <span className="koma-hero-line koma-hero-line--sm">O</span>
             <span className="koma-hero-line koma-hero-line--xl">RESTAURANTE</span>
 
-            {/* Signature Green Line Axis crossing planes */}
+            {/* Signature Green Line Axis passing behind product */}
             <div className="koma-hero-bar-wrap">
               <motion.span
                 className="koma-hero-bar"
@@ -93,12 +92,12 @@ export function Hero() {
           </motion.div>
         </motion.div>
 
-        {/* Layer 3: Massive Product Object - Physical Presence with Intentional Viewport Crop */}
+        {/* Layer 3: Massive Physical Tablet Product Object (15-25% Larger, 60-65% Visual Dominance, Bleeds Out Right Edge) */}
         <div className="koma-hero-device-container">
           <motion.div
             className="koma-hero-device-frame"
             style={{
-              rotateZ: 3, // Discrete 3° rotation
+              rotateZ: 3,
               rotateY: deviceRotateY,
               y: deviceY,
               x: mousePos.x,
@@ -108,7 +107,7 @@ export function Hero() {
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.9, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
           >
-            <DeviceFrame />
+            <TabletFrame view="mesas" />
           </motion.div>
         </div>
       </div>

@@ -4,6 +4,7 @@ import { Header } from './sections/Header';
 import { Hero } from './sections/Hero';
 import { ProductShowcase } from './sections/ProductShowcase';
 import { OperationFlow } from './sections/OperationFlow';
+import { CardapioScene } from './sections/CardapioScene';
 import { ImpactMoment } from './sections/ImpactMoment';
 import { Ecosystem } from './sections/Ecosystem';
 import { FinalCTA } from './sections/FinalCTA';
@@ -39,6 +40,7 @@ export default function LandingPage() {
         <Hero />
         <ProductShowcase />
         <OperationFlow />
+        <CardapioScene />
         <ImpactMoment />
         <Ecosystem />
         <FinalCTA />
