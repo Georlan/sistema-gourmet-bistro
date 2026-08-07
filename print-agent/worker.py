@@ -5,10 +5,12 @@ Gerencia a execução em loop (polling + heartbeat) com resiliência e idempotê
 
 import time
 import logging
+import threading
 from config import AgentConfig
 from api_client import KomaApiClient
 from journal import PrintJournal
 from adapters import get_adapter
+from wss_client import WssWakeupClient
 
 log = logging.getLogger("print-agent.worker")
 
@@ -103,13 +105,17 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
     journal = PrintJournal(db_path="journal.db")
     adapter = get_adapter(config.adapter, output_dir=config.output_dir)
 
+    wake_event = threading.Event()
+    wss_client = WssWakeupClient(config.api_url, config.agent_token, wake_event)
+    wss_client.start()
+
     print("=========================================================")
     print("      KÔMA PRINT AGENT — DAEMON MULTIPLATAFORMA          ")
     print("=========================================================")
     print(f"API Backend: {config.api_url}")
     print(f"Agent ID:    {config.agent_id}")
     print(f"Adaptador:   {adapter.__class__.__name__}")
-    print(f"Polling:     {config.poll_interval_seconds}s")
+    print(f"Polling:     {config.poll_interval_seconds}s (com WSS Outbound Push)")
     print(f"Lote:        até {config.claim_batch_size} trabalho(s)")
     print("=========================================================")
 
@@ -431,4 +437,5 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
             break
 
         if should_wait:
-            time.sleep(config.poll_interval_seconds)
+            wake_event.wait(timeout=config.poll_interval_seconds)
+            wake_event.clear()
