@@ -81,13 +81,7 @@ export const LOCAL_PRODUCT_PLACEHOLDER = "data:image/svg+xml;utf8," + encodeURIC
 </svg>
 `);
 
-export const LOCAL_LOGO_PLACEHOLDER = "data:image/svg+xml;utf8," + encodeURIComponent(`
-<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200" fill="none">
-  <rect width="200" height="200" rx="100" fill="#18181B"/>
-  <circle cx="100" cy="100" r="70" stroke="#27272A" stroke-width="4"/>
-  <text x="100" y="115" text-anchor="middle" fill="#10B981" font-family="system-ui, sans-serif" font-size="46" font-weight="900">K</text>
-</svg>
-`);
+export const LOCAL_LOGO_PLACEHOLDER = "/logo.png";
 
 export const LOCAL_BANNER_PLACEHOLDER = "data:image/svg+xml;utf8," + encodeURIComponent(`
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 1200 400" fill="none">

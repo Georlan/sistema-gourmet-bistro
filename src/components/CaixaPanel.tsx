@@ -3451,7 +3451,9 @@ export function CaixaPanel({
                       <SlidersHorizontal size={15} />
                     </button>
                     <div className="flex items-center gap-2">
-                      <img src="/logo.png" alt="Kôma" className="w-7 h-7 object-contain" />
+                      <div className="w-8 h-8 rounded-xl bg-[#121214] border border-[#27272A] flex items-center justify-center overflow-hidden shrink-0">
+                        <img src="/logo.png" alt="Kôma" className="w-6 h-6 object-contain" />
+                      </div>
                       <div className="font-serif font-bold text-sm tracking-tight text-white">Kôma Caixa</div>
                     </div>
                   </div>
@@ -3665,7 +3667,9 @@ export function CaixaPanel({
                   <SlidersHorizontal size={15} />
                 </button>
                 <div className="flex items-center gap-2">
-                  <img src="/logo.png" alt="Kôma" className="w-7 h-7 object-contain" />
+                  <div className="w-8 h-8 rounded-xl bg-[#121214] border border-[#27272A] flex items-center justify-center overflow-hidden shrink-0">
+                    <img src="/logo.png" alt="Kôma" className="w-6 h-6 object-contain" />
+                  </div>
                   <div className="font-serif font-bold text-sm tracking-tight text-white">Kôma Caixa</div>
                 </div>
               </div>
