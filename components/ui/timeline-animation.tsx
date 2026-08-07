@@ -2,7 +2,7 @@ import * as React from "react";
 import { motion, Variants } from "motion/react";
 
 interface TimelineContentProps extends React.HTMLAttributes<HTMLElement> {
-  as?: "div" | "h2" | "p" | "span" | "section" | "header" | "footer";
+  as?: "div" | "h1" | "h2" | "h3" | "h4" | "p" | "span" | "section" | "header" | "footer";
   animationNum?: number;
   timelineRef?: React.RefObject<HTMLElement | null>;
   customVariants?: Variants;

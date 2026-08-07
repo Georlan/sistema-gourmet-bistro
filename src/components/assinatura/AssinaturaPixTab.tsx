@@ -1,5 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import clsx from 'clsx';
+import NumberFlow from '@number-flow/react';
+import { motion } from 'motion/react';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { TimelineContent } from '@/components/ui/timeline-animation';
 import {
   CreditCard,
   QrCode,
@@ -11,12 +15,16 @@ import {
   ArrowUpRight,
   ShieldCheck,
   Check,
+  CheckCheck,
   X,
   AlertTriangle,
   Info,
   ChevronDown,
   ChevronUp,
-  Layers
+  Layers,
+  Briefcase,
+  Database,
+  Server
 } from 'lucide-react';
 import {
   SUBSCRIPTION_PLANS,
@@ -39,6 +47,55 @@ interface AssinaturaPixTabProps {
   bannerNotice?: string | null;
 }
 
+const PricingSwitch = ({ isYearly, onSwitch }: { isYearly: boolean; onSwitch: (yearly: boolean) => void }) => {
+  return (
+    <div className="flex justify-center my-3">
+      <div className="relative z-10 mx-auto flex w-fit rounded-full bg-[#121214] border border-[#27272A] p-1">
+        <button
+          type="button"
+          onClick={() => onSwitch(false)}
+          className={`relative z-10 w-fit sm:h-10 h-9 rounded-full sm:px-5 px-3 sm:py-1 py-0.5 text-xs font-bold transition-colors cursor-pointer ${
+            !isYearly ? "text-zinc-950" : "text-gray-400 hover:text-white"
+          }`}
+        >
+          {!isYearly && (
+            <motion.span
+              layoutId="switch_koma"
+              className="absolute top-0 left-0 sm:h-10 h-9 w-full rounded-full bg-emerald-500 shadow-md shadow-emerald-950/50"
+              transition={{ type: "spring", stiffness: 500, damping: 30 }}
+            />
+          )}
+          <span className="relative">Mensal</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => onSwitch(true)}
+          className={`relative z-10 w-fit sm:h-10 h-9 flex-shrink-0 rounded-full sm:px-5 px-3 sm:py-1 py-0.5 text-xs font-bold transition-colors cursor-pointer ${
+            isYearly ? "text-zinc-950" : "text-gray-400 hover:text-white"
+          }`}
+        >
+          {isYearly && (
+            <motion.span
+              layoutId="switch_koma"
+              className="absolute top-0 left-0 sm:h-10 h-9 w-full rounded-full bg-emerald-500 shadow-md shadow-emerald-950/50"
+              transition={{ type: "spring", stiffness: 500, damping: 30 }}
+            />
+          )}
+          <span className="relative flex items-center gap-1.5">
+            Anual
+            <span className={`rounded-full px-2 py-0.5 text-[9px] font-extrabold transition-colors ${
+              isYearly ? "bg-zinc-950/30 text-zinc-950" : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+            }`}>
+              Economize 20%
+            </span>
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+};
+
 export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
   currentPlanId,
   hasPrinting,
@@ -53,17 +110,17 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
   const [activeSubTab, setActiveSubTab] = useState<'meu_plano' | 'pagamentos' | 'planos_upgrade'>('meu_plano');
   const [selectedPlanId, setSelectedPlanId] = useState<SubscriptionPlanId>(currentPlanId);
   const [isAccordionOpen, setIsAccordionOpen] = useState(false);
+  const [isYearly, setIsYearly] = useState(false);
 
+  const pricingRef = useRef<HTMLDivElement>(null);
   const currentPlan = getSubscriptionPlan(currentPlanId);
 
-  // Se houver aviso de redirecionamento por recurso bloqueado, abre automaticamente a aba de planos
   useEffect(() => {
     if (bannerNotice) {
       setActiveSubTab('planos_upgrade');
     }
   }, [bannerNotice]);
 
-  // Mock de uso de cotas do mês
   const [usageData] = useState({
     iaRespostasUsadas: 410,
     whatsappUsados: 440
@@ -77,12 +134,36 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
 
   const isHighUsage = iaPct >= 80 || waPct >= 80;
 
-  // Agrupamento da matriz comparativa por categoria para evitar repetição de texto por célula
   const groupedMatrix = PLAN_COMPARISON_MATRIX.reduce((acc, row) => {
     if (!acc[row.category]) acc[row.category] = [];
     acc[row.category].push(row);
     return acc;
   }, {} as Record<string, FeatureComparisonRow[]>);
+
+  const revealVariants = {
+    visible: (i: number) => ({
+      y: 0,
+      opacity: 1,
+      filter: "blur(0px)",
+      transition: {
+        delay: i * 0.15,
+        duration: 0.4,
+      },
+    }),
+    hidden: {
+      filter: "blur(6px)",
+      y: -15,
+      opacity: 0,
+    },
+  };
+
+  // Preço anual com ~20% de desconto por mês
+  const getPlanDisplayPrice = (monthlyPrice: number) => {
+    if (isYearly) {
+      return Math.round(monthlyPrice * 0.8);
+    }
+    return monthlyPrice;
+  };
 
   return (
     <div className="space-y-6 text-left animate-fade-in pb-12">
@@ -154,7 +235,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
       {/* 2. SUB-ABA 1: MEU PLANO & CONSUMO DO MÊS */}
       {activeSubTab === 'meu_plano' && (
         <div className="space-y-6 animate-fade-in">
-          {/* BLOCO DE CONSUMO DO MÊS (DESTAQUE NO TOPO DA ABA) */}
+          {/* BLOCO DE CONSUMO DO MÊS */}
           <div className="bg-[#121214]/80 border border-[#27272A] p-5 rounded-3xl space-y-4 shadow-xl">
             <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
               <div className="flex items-center gap-2">
@@ -218,7 +299,6 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                   Neste plano, o envio de notificações e contatos é realizado via links diretos sem custos adicionais.
                 </span>
               </div>
-
             </div>
           </div>
 
@@ -269,7 +349,6 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
               </span>
             </div>
 
-            {/* BOTÃO PRINCIPAL DE ACESSO AOS PLANOS */}
             <div className="pt-2">
               <button
                 type="button"
@@ -356,95 +435,156 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
         </div>
       )}
 
-      {/* 4. SUB-ABA 3: PLANOS & UPGRADE */}
+      {/* 4. SUB-ABA 3: PLANOS & UPGRADE (NOVO LAYOUT ANIMADO COM NUMBERFLOW E SHADCN) */}
       {activeSubTab === 'planos_upgrade' && (
-        <div className="space-y-6 animate-fade-in">
-          {/* CARDS DOS 3 PLANOS */}
-          <div id="koma-plans-grid" className="space-y-4">
-            <div className="border-b border-[#27272A] pb-3 text-left">
-              <h4 className="font-serif font-bold text-base text-white">Planos Kôma</h4>
-              <p className="text-xs text-gray-400 mt-0.5">
-                Escolha o plano ideal para a escala da sua operação. Preços e limites ajustáveis sem fidelidade.
-              </p>
-            </div>
+        <div className="space-y-6 animate-fade-in" ref={pricingRef}>
+          {/* TOPO COM ANIMAÇÃO TIMELINE */}
+          <div id="koma-plans-grid" className="text-center max-w-2xl mx-auto space-y-2">
+            <TimelineContent
+              as="h3"
+              animationNum={0}
+              timelineRef={pricingRef}
+              customVariants={revealVariants}
+              className="text-2xl sm:text-3xl font-serif font-bold text-white"
+            >
+              Planos que escalam com o seu{" "}
+              <TimelineContent
+                as="span"
+                animationNum={1}
+                timelineRef={pricingRef}
+                customVariants={revealVariants}
+                className="border border-dashed border-emerald-500 px-2 py-0.5 rounded-xl bg-emerald-500/10 text-emerald-400 inline-block"
+              >
+                restaurante
+              </TimelineContent>
+            </TimelineContent>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-stretch">
-              {SUBSCRIPTION_PLANS.map((plan) => {
-                const isCurrent = currentPlanId === plan.id;
-                const isSelected = selectedPlanId === plan.id;
-                const isRecommended = plan.recommended;
+            <TimelineContent
+              as="p"
+              animationNum={2}
+              timelineRef={pricingRef}
+              customVariants={revealVariants}
+              className="text-xs text-gray-400"
+            >
+              Escolha a estrutura ideal para a sua operação. Preços flexíveis sem fidelidade.
+            </TimelineContent>
 
-                return (
-                  <div
-                    key={plan.id}
+            {/* CHAVEADOR ANIMADO DE PERÍODO (MENSAL / ANUAL) */}
+            <TimelineContent
+              as="div"
+              animationNum={3}
+              timelineRef={pricingRef}
+              customVariants={revealVariants}
+            >
+              <PricingSwitch isYearly={isYearly} onSwitch={setIsYearly} />
+            </TimelineContent>
+          </div>
+
+          {/* GRID DE CARDS COM SHADCN E NUMBERFLOW */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-stretch max-w-7xl mx-auto py-2">
+            {SUBSCRIPTION_PLANS.map((plan, index) => {
+              const isCurrent = currentPlanId === plan.id;
+              const isSelected = selectedPlanId === plan.id;
+              const isPopular = plan.recommended;
+
+              const displayPrice = getPlanDisplayPrice(plan.price);
+
+              return (
+                <TimelineContent
+                  key={plan.id}
+                  as="div"
+                  animationNum={4 + index}
+                  timelineRef={pricingRef}
+                  customVariants={revealVariants}
+                  className="flex flex-col"
+                >
+                  <Card
                     onClick={() => setSelectedPlanId(plan.id)}
                     className={clsx(
-                      'relative rounded-3xl p-5 border transition-all cursor-pointer flex flex-col justify-between space-y-4',
-                      isRecommended
-                        ? 'bg-gradient-to-b from-[#1C1C1F] to-[#121214] border-emerald-500/80 shadow-xl shadow-emerald-950/30 md:scale-[1.03] z-10'
+                      'relative h-full flex flex-col justify-between transition-all duration-300 cursor-pointer rounded-3xl border text-left',
+                      isPopular
+                        ? 'bg-gradient-to-b from-[#1C1C1F] to-[#121214] border-emerald-500 shadow-xl shadow-emerald-950/40 ring-1 ring-emerald-500/50 md:scale-[1.03] z-10'
                         : isSelected
                         ? 'bg-[#1C1C1F] border-emerald-500/40 shadow-md'
-                        : 'bg-[#121214]/80 border-[#27272A] hover:border-gray-600'
+                        : 'bg-[#121214]/90 border-[#27272A] hover:border-gray-600'
                     )}
                   >
-                    {/* Ribbon Recomendado */}
-                    {isRecommended && (
+                    {/* Badge Mais Popular */}
+                    {isPopular && (
                       <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-emerald-500 text-zinc-950 text-[9px] font-extrabold uppercase tracking-widest shadow-md flex items-center gap-1">
                         <Sparkles size={11} />
                         <span>Mais Popular</span>
                       </div>
                     )}
 
-                    <div className="space-y-3">
-                      <div className="border-b border-[#27272A] pb-3">
-                        <div className="flex justify-between items-start gap-2">
-                          <h5 className="font-bold text-sm text-white">{plan.name}</h5>
-                          <span className="font-mono font-bold text-emerald-400 text-base">
-                            R$ {plan.price}<span className="text-[10px] text-gray-400">/mês</span>
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-gray-400 mt-1 leading-snug">{plan.tagline}</p>
+                    <CardHeader className="p-5 pb-3">
+                      <div className="flex justify-between items-start">
+                        <h4 className="text-xl font-bold text-white mb-1 font-serif">
+                          {plan.name}
+                        </h4>
+                      </div>
+                      <p className="text-xs text-gray-400 min-h-[32px]">{plan.tagline}</p>
+
+                      <div className="flex items-baseline mt-4 pt-2 border-t border-[#27272A]">
+                        <span className="text-3xl font-bold font-mono text-emerald-400">
+                          R${" "}
+                          <NumberFlow
+                            value={displayPrice}
+                            className="text-3xl font-bold font-mono text-emerald-400"
+                          />
+                        </span>
+                        <span className="text-gray-400 text-xs ml-1 font-mono">
+                          /{isYearly ? "mês (anual)" : "mês"}
+                        </span>
+                      </div>
+                    </CardHeader>
+
+                    <CardContent className="p-5 pt-2 flex-grow flex flex-col justify-between space-y-4">
+                      {/* Botão de Ação do Card */}
+                      <div className="pt-1">
+                        {isCurrent ? (
+                          <div className="w-full py-2.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold rounded-xl text-[10px] uppercase tracking-wider text-center flex items-center justify-center gap-1.5 shadow">
+                            <ShieldCheck size={14} />
+                            <span>Plano Atual</span>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled
+                            title="A contratação será liberada em breve."
+                            className={clsx(
+                              'w-full py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all',
+                              isPopular
+                                ? 'bg-emerald-500 text-zinc-950 shadow-lg shadow-emerald-950/40 hover:bg-emerald-400 cursor-not-allowed opacity-85'
+                                : 'bg-[#1C1C1F] text-gray-400 border border-[#27272A] cursor-not-allowed'
+                            )}
+                          >
+                            <span>Contratação em breve</span>
+                          </button>
+                        )}
                       </div>
 
-                      {/* Apenas os 3-4 destaques principais no card (sem redundância exaustiva) */}
-                      <div className="space-y-2 text-[10px]">
-                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Principais destaques:</span>
-                        <ul className="space-y-1.5 text-gray-300">
-                          {plan.features.slice(0, 4).map((feat, idx) => (
-                            <li key={idx} className="flex items-start gap-2">
-                              <Check size={13} className="text-emerald-400 shrink-0 mt-0.5" />
-                              <span>{feat}</span>
+                      {/* Lista de Recursos com Ícone CheckCheck */}
+                      <div className="space-y-3 pt-2">
+                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">
+                          Recursos Inclusos:
+                        </span>
+                        <ul className="space-y-2 font-medium text-xs">
+                          {plan.features.map((feature, featureIndex) => (
+                            <li key={featureIndex} className="flex items-start">
+                              <span className="h-5 w-5 bg-emerald-500/10 border border-emerald-500/30 rounded-full grid place-content-center mt-0.5 mr-2.5 shrink-0">
+                                <CheckCheck className="h-3 w-3 text-emerald-400" />
+                              </span>
+                              <span className="text-xs text-gray-300 leading-snug">{feature}</span>
                             </li>
                           ))}
                         </ul>
                       </div>
-                    </div>
-
-                    {/* CTA de Ação Explícito */}
-                    <div className="pt-2">
-                      {isCurrent ? (
-                        <div className="w-full py-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold rounded-xl text-[10px] uppercase tracking-wider text-center flex items-center justify-center gap-1.5">
-                          <ShieldCheck size={14} />
-                          <span>Plano Atual</span>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled
-                          title="A contratação será liberada quando a cobrança estiver integrada."
-                          className={clsx(
-                            'w-full py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5',
-                            'bg-zinc-900 text-zinc-500 border border-[#27272A] cursor-not-allowed'
-                          )}
-                        >
-                          <span>Contratação em breve</span>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                    </CardContent>
+                  </Card>
+                </TimelineContent>
+              );
+            })}
           </div>
 
           {/* CARD DO ADDON "CARDÁPIO ONLINE KÔMA" */}
@@ -512,7 +652,6 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                     <tbody className="divide-y divide-[#27272A]/40 text-gray-200">
                       {Object.entries(groupedMatrix).map(([category, rows]) => (
                         <React.Fragment key={category}>
-                          {/* Cabeçalho de Categoria Agrupado (Sem Repetição de Texto por Célula) */}
                           <tr className="bg-[#1C1C1F]/90 text-emerald-400 font-bold text-[9px] uppercase tracking-wider border-y border-[#27272A]">
                             <td colSpan={4} className="p-2.5 pl-3.5 font-sans">
                               {category}
@@ -525,7 +664,6 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                                 {row.feature}
                               </td>
 
-                              {/* Pocket */}
                               <td className="p-3.5 text-center">
                                 {typeof row.pocket === 'boolean' ? (
                                   row.pocket ? (
@@ -538,7 +676,6 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                                 )}
                               </td>
 
-                              {/* Pro */}
                               <td className="p-3.5 text-center bg-emerald-500/5">
                                 {typeof row.pro === 'boolean' ? (
                                   row.pro ? (
@@ -551,7 +688,6 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                                 )}
                               </td>
 
-                              {/* Premium */}
                               <td className="p-3.5 text-center">
                                 {typeof row.premium === 'boolean' ? (
                                   row.premium ? (
