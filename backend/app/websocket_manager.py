@@ -153,8 +153,8 @@ async def notify_print_agent_jobs_available(restaurante_id: int) -> None:
 def trigger_print_agent_wakeup(restaurante_id: int) -> None:
     """
     Helper síncrono para agendar a notificação WSS de wake up do agente de impressão após o commit.
-    Thread-safe: utiliza run_coroutine_threadsafe se chamado fora do event loop principal.
-    Executa de forma segura sem reverter transações em caso de erro no broadcast.
+    Thread-safe: utiliza create_task se já no event loop ASGI ou run_coroutine_threadsafe se em thread.
+    NUNCA usa asyncio.run() fallback (se não houver main_loop ativo, o polling 0.5s assume como fallback).
     """
     import asyncio
     if not isinstance(restaurante_id, int) or isinstance(restaurante_id, bool) or restaurante_id <= 0:
@@ -170,6 +170,8 @@ def trigger_print_agent_wakeup(restaurante_id: int) -> None:
                     manager.main_loop
                 )
             else:
-                asyncio.run(notify_print_agent_jobs_available(restaurante_id))
+                logger.debug(
+                    "Agendamento WSS ignorado (nenhum event loop ativo). Polling assumirá o fallback."
+                )
     except Exception as err:
         logger.warning(f"Falha ao agendar wake up WSS do agente: {err}")

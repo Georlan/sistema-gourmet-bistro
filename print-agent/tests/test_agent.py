@@ -846,3 +846,167 @@ def test_worker_does_not_claim_jobs_without_physical_printer(temp_dir):
         client.claim_jobs.assert_not_called()
         adapter.print_ticket.assert_not_called()
         sleep_mock.assert_not_called()
+
+
+def test_worker_processes_real_mocked_print_job_success(temp_dir):
+    """1. Claim retorna job + print_ticket True: print_ticket chamado, journal atualizado, complete_jobs chamado."""
+    config = AgentConfig(
+        api_url="http://localhost:8000",
+        agent_token="test-token-1",
+        adapter="file",
+        output_dir=temp_dir,
+        poll_interval_seconds=0.01,
+    )
+    job = {
+        "id": "job-success-100",
+        "idempotency_key": "ikey-success-100",
+        "document_type": "producao",
+        "destination": "COZINHA",
+        "payload_text": "1x HAMBÚRGUER TRADICIONAL",
+        "queue_latency_ms": 15,
+    }
+
+    db_path = os.path.join(temp_dir, "test_proc.db")
+    journal = PrintJournal(db_path=db_path)
+
+    with patch("worker.KomaApiClient") as ClientClass, \
+         patch("worker.PrintJournal", return_value=journal), \
+         patch("worker.get_adapter") as get_adapter_mock, \
+         patch("worker.WssWakeupClient") as WssClass:
+        
+        client = ClientClass.return_value
+        client.heartbeat.return_value = {"command": None}
+        client.claim_jobs.return_value = [job]
+        client.complete_jobs.return_value = {"job-success-100"}
+
+        adapter = get_adapter_mock.return_value
+        adapter.requires_physical_printer = False
+        adapter.get_diagnostics.return_value = {"printers": []}
+        adapter.print_ticket.return_value = True
+
+        run_agent_loop(config, max_loops=1)
+
+        adapter.print_ticket.assert_called_once_with(
+            "1x HAMBÚRGUER TRADICIONAL",
+            "Padrão",
+            "PRODUCAO"
+        )
+        assert journal.is_printed("job-success-100", "ikey-success-100") is True
+        client.complete_jobs.assert_called_once()
+        assert client.complete_jobs.call_args[0][0] == [{"job_id": "job-success-100", "printer_name": "Padrão"}]
+
+
+def test_worker_processes_real_mocked_print_job_failure(temp_dir):
+    """2. print_ticket False: fail_job chamado no cliente."""
+    config = AgentConfig(
+        api_url="http://localhost:8000",
+        agent_token="test-token-2",
+        adapter="file",
+        output_dir=temp_dir,
+        poll_interval_seconds=0.01,
+    )
+    job = {
+        "id": "job-fail-200",
+        "idempotency_key": "ikey-fail-200",
+        "document_type": "producao",
+        "destination": "COZINHA",
+        "payload_text": "1x PIZZA CALABRESA",
+    }
+
+    db_path = os.path.join(temp_dir, "test_fail.db")
+    journal = PrintJournal(db_path=db_path)
+
+    with patch("worker.KomaApiClient") as ClientClass, \
+         patch("worker.PrintJournal", return_value=journal), \
+         patch("worker.get_adapter") as get_adapter_mock, \
+         patch("worker.WssWakeupClient"):
+
+        client = ClientClass.return_value
+        client.heartbeat.return_value = {"command": None}
+        client.claim_jobs.return_value = [job]
+        client.release_jobs.return_value = []
+
+        adapter = get_adapter_mock.return_value
+        adapter.requires_physical_printer = False
+        adapter.get_diagnostics.return_value = {"printers": []}
+        adapter.print_ticket.return_value = False
+
+        run_agent_loop(config, max_loops=1)
+
+        adapter.print_ticket.assert_called_once()
+        client.fail_job.assert_called_once()
+        assert client.fail_job.call_args[0][0] == "job-fail-200"
+
+
+def test_worker_mid_batch_failure_releases_unprocessed_jobs(temp_dir):
+    """3. Falha no meio do lote: jobs não processados retornam via release_jobs."""
+    config = AgentConfig(
+        api_url="http://localhost:8000",
+        agent_token="test-token-3",
+        adapter="file",
+        output_dir=temp_dir,
+        poll_interval_seconds=0.01,
+        claim_batch_size=3,
+    )
+    job1 = {"id": "j1", "idempotency_key": "k1", "payload_text": "Item 1"}
+    job2 = {"id": "j2", "idempotency_key": "k2", "payload_text": "Item 2"}
+    job3 = {"id": "j3", "idempotency_key": "k3", "payload_text": "Item 3"}
+
+    db_path = os.path.join(temp_dir, "test_batch_fail.db")
+    journal = PrintJournal(db_path=db_path)
+
+    with patch("worker.KomaApiClient") as ClientClass, \
+         patch("worker.PrintJournal", return_value=journal), \
+         patch("worker.get_adapter") as get_adapter_mock, \
+         patch("worker.WssWakeupClient"):
+
+        client = ClientClass.return_value
+        client.heartbeat.return_value = {"command": None}
+        client.claim_jobs.return_value = [job1, job2, job3]
+        client.complete_jobs.return_value = {"j1"}
+        client.release_jobs.return_value = ["j3"]
+
+        adapter = get_adapter_mock.return_value
+        adapter.requires_physical_printer = False
+        adapter.get_diagnostics.return_value = {"printers": []}
+        adapter.print_ticket.side_effect = [True, False]
+
+        run_agent_loop(config, max_loops=1)
+
+        assert adapter.print_ticket.call_count == 2
+        client.fail_job.assert_called_once_with("j2", error_msg="Falha no adaptador de impressão 'MagicMock'")
+        client.release_jobs.assert_called_once_with(["j3"])
+
+
+def test_worker_preventive_idempotency_skip_reprint(temp_dir):
+    """4. Job já no journal: print_ticket NÃO é chamado novamente."""
+    config = AgentConfig(
+        api_url="http://localhost:8000",
+        agent_token="test-token-4",
+        adapter="file",
+        output_dir=temp_dir,
+        poll_interval_seconds=0.01,
+    )
+    job = {"id": "j-dup-10", "idempotency_key": "k-dup-10", "payload_text": "Item Re-enviado"}
+
+    db_path = os.path.join(temp_dir, "test_idemp.db")
+    journal = PrintJournal(db_path=db_path)
+    journal.record_print_success("j-dup-10", "k-dup-10", "Padrão", confirmed=True)
+
+    with patch("worker.KomaApiClient") as ClientClass, \
+         patch("worker.PrintJournal", return_value=journal), \
+         patch("worker.get_adapter") as get_adapter_mock, \
+         patch("worker.WssWakeupClient"):
+
+        client = ClientClass.return_value
+        client.heartbeat.return_value = {"command": None}
+        client.claim_jobs.return_value = [job]
+        client.complete_jobs.return_value = {"j-dup-10"}
+
+        adapter = get_adapter_mock.return_value
+        adapter.requires_physical_printer = False
+
+        run_agent_loop(config, max_loops=1)
+
+        adapter.print_ticket.assert_not_called()
+        client.complete_jobs.assert_called_once_with([{"job_id": "j-dup-10", "printer_name": "Padrão"}])

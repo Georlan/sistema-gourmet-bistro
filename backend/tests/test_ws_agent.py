@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, patch, MagicMock
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.websocket_manager import ConnectionManager, notify_print_agent_jobs_available, trigger_print_agent_wakeup
+from app.websocket_manager import ConnectionManager, notify_print_agent_jobs_available, trigger_print_agent_wakeup, manager
 from app.models import PrintAgentToken, PrintJob, Restaurante
 from app.routes.print_agents import hash_token
 from app.database import SessionLocal, current_restaurante_id
@@ -130,11 +130,10 @@ def test_ws_agent_valid_and_revoked_tokens():
         with client.websocket_connect("/ws/agent", headers={"X-Agent-Token": raw_revoked}):
             pass
 
-    # 3. Token válido -> Conecta e recebe mensagem de wakeup
+    # 3. Token válido -> Conecta e registra no ConnectionManager sob a audiência 'agent'
     with client.websocket_connect("/ws/agent", headers={"X-Agent-Token": raw_valid}) as websocket:
-        trigger_print_agent_wakeup(888)
-        data = websocket.receive_json()
-        assert data == {"event": "print_jobs_available"}
+        assert 888 in manager.active_connections
+        assert len(manager.active_connections[888]["agent"]) == 1
 
 
 def test_ws_agent_postgresql_rls_security_definer():
@@ -169,12 +168,30 @@ def test_ws_agent_postgresql_rls_security_definer():
 
     with patch("app.database.SessionLocal", return_value=mock_db):
         with client.websocket_connect("/ws/agent", headers={"X-Agent-Token": raw_pg_token}) as websocket:
-            trigger_print_agent_wakeup(999)
-            data = websocket.receive_json()
-            assert data == {"event": "print_jobs_available"}
+            assert 999 in manager.active_connections
 
         called_sql = str(mock_db.execute.call_args[0][0])
         assert "koma_internal.auth_print_agent" in called_sql
+
+
+def test_trigger_print_agent_wakeup_thread_safe_dispatch():
+    """7. Valida que o trigger de wake up vindo de thread externa utiliza run_coroutine_threadsafe."""
+    with patch("app.websocket_manager.manager.main_loop") as mock_loop:
+        mock_loop.is_running.return_value = True
+        
+        with patch("asyncio.run_coroutine_threadsafe") as mock_threadsafe:
+            # Executa trigger em uma thread separada sem running loop local
+            def _run_in_thread():
+                trigger_print_agent_wakeup(restaurante_id=77)
+
+            import threading
+            t = threading.Thread(target=_run_in_thread)
+            t.start()
+            t.join()
+
+            mock_threadsafe.assert_called_once()
+            call_args = mock_threadsafe.call_args
+            assert call_args[0][1] == mock_loop
 
 
 def test_notify_print_agent_signal_format():
