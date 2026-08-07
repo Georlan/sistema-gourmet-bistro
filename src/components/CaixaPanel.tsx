@@ -3503,7 +3503,7 @@ export function CaixaPanel({
                 </div>
               </SidebarHeader>
 
-              <SidebarContent className="p-2.5 space-y-3">
+              <SidebarContent className="p-2 space-y-1">
                 {[
                   {
                     category: 'Fluxo Operacional',
@@ -3543,7 +3543,7 @@ export function CaixaPanel({
                   }
                 ].map((group, gIdx) => (
                   <SidebarGroup key={gIdx}>
-                    <SidebarGroupLabel className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-400 mb-1">
+                    <SidebarGroupLabel className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-400">
                       {group.category}
                     </SidebarGroupLabel>
                     <SidebarGroupContent>
@@ -3705,7 +3705,7 @@ export function CaixaPanel({
           </SidebarHeader>
 
           {/* Sidebar Content */}
-          <SidebarContent className="p-2.5 space-y-3">
+          <SidebarContent className="p-2 space-y-1">
             {[
               {
                 category: 'Fluxo Operacional',
@@ -3745,7 +3745,7 @@ export function CaixaPanel({
               }
             ].map((group, gIdx) => (
               <SidebarGroup key={gIdx}>
-                <SidebarGroupLabel className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-400 mb-1">
+                <SidebarGroupLabel className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-400">
                   {group.category}
                 </SidebarGroupLabel>
                 <SidebarGroupContent>

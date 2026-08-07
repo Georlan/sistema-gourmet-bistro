@@ -322,7 +322,7 @@ export const SidebarHeader = React.forwardRef<
     <div
       ref={ref}
       data-sidebar="header"
-      className={cn("flex flex-col gap-2 p-3 border-b border-[#27272A]", className)}
+      className={cn("flex flex-col gap-1.5 p-2.5 border-b border-[#27272A]", className)}
       {...props}
     />
   );
@@ -337,7 +337,7 @@ export const SidebarFooter = React.forwardRef<
     <div
       ref={ref}
       data-sidebar="footer"
-      className={cn("flex flex-col gap-2 p-3 border-t border-[#27272A] bg-[#18181B]/40", className)}
+      className={cn("flex flex-col gap-1.5 p-2 border-t border-[#27272A] bg-[#18181B]/40", className)}
       {...props}
     />
   );
@@ -353,7 +353,7 @@ export const SidebarContent = React.forwardRef<
       ref={ref}
       data-sidebar="content"
       className={cn(
-        "flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-2.5 scrollbar-thin scrollbar-thumb-zinc-800",
+        "flex min-h-0 flex-1 flex-col gap-1.5 overflow-auto p-2 scrollbar-thin scrollbar-thumb-zinc-800",
         className
       )}
       {...props}
@@ -370,7 +370,7 @@ export const SidebarGroup = React.forwardRef<
     <div
       ref={ref}
       data-sidebar="group"
-      className={cn("relative flex w-full min-w-0 flex-col space-y-1", className)}
+      className={cn("relative flex w-full min-w-0 flex-col space-y-0.5", className)}
       {...props}
     />
   );
@@ -386,7 +386,7 @@ export const SidebarGroupLabel = React.forwardRef<
       ref={ref}
       data-sidebar="group-label"
       className={cn(
-        "duration-200 flex h-7 shrink-0 items-center rounded-md px-2 text-[9px] font-extrabold uppercase tracking-wider text-emerald-400 select-none",
+        "duration-200 flex h-5 shrink-0 items-center rounded-md px-2 text-[9px] font-extrabold uppercase tracking-wider text-emerald-400 select-none py-0.5 mt-1",
         "group-data-[collapsible=icon]:hidden",
         className
       )}
@@ -403,7 +403,7 @@ export const SidebarGroupContent = React.forwardRef<
   <div
     ref={ref}
     data-sidebar="group-content"
-    className={cn("w-full text-xs space-y-1", className)}
+    className={cn("w-full text-xs space-y-0.5", className)}
     {...props}
   />
 ));
@@ -416,7 +416,7 @@ export const SidebarMenu = React.forwardRef<
   <ul
     ref={ref}
     data-sidebar="menu"
-    className={cn("flex w-full min-w-0 flex-col gap-1 list-none p-0 m-0", className)}
+    className={cn("flex w-full min-w-0 flex-col gap-0.5 list-none p-0 m-0", className)}
     {...props}
   />
 ));
@@ -448,7 +448,7 @@ export const SidebarMenuButton = React.forwardRef<
       data-sidebar="menu-button"
       data-active={isActive}
       className={cn(
-        "peer/menu-button flex w-full items-center gap-3 overflow-hidden rounded-xl p-2.5 text-left text-xs font-semibold outline-none transition-all cursor-pointer group/button",
+        "peer/menu-button flex w-full items-center gap-2.5 overflow-hidden rounded-lg py-1.5 px-2.5 text-left text-xs font-semibold outline-none transition-all cursor-pointer group/button",
         isActive
           ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 font-bold shadow-inner"
           : "text-gray-400 hover:bg-[#1C1C1F]/60 hover:text-white border border-transparent",
