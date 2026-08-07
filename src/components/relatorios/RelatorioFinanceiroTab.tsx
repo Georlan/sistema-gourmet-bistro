@@ -1,10 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, TrendingUp, Filter, RefreshCw, BarChart3, AlertCircle } from 'lucide-react';
+import { DollarSign, TrendingUp, Filter, RefreshCw, BarChart3, AlertCircle, PieChart as PieIcon } from 'lucide-react';
+import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 
 interface RelatorioFinanceiroTabProps {
   apiBaseUrl: string;
   authHeaders: Record<string, string>;
 }
+
+const CustomChartTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0];
+    return (
+      <div className="bg-[#1C1C1F] border border-[#27272A] p-3 rounded-2xl shadow-xl text-left font-sans space-y-1">
+        <p className="text-[10px] font-bold text-gray-400">{data.name}</p>
+        <p className="text-xs font-bold font-mono text-emerald-400">
+          R$ {typeof data.value === 'number' ? data.value.toFixed(2) : data.value}
+        </p>
+      </div>
+    );
+  }
+  return null;
+};
 
 export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
   apiBaseUrl,
@@ -34,7 +50,7 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
       setStats(data);
     } catch (err: any) {
       console.error(err);
-      setErrorMsg('Falha ao conectar ao servidor para carregar o DRE.');
+      setErrorMsg('Falha ao conectar ao servidor para carregar o relatório financeiro.');
     } finally {
       setIsLoading(false);
     }
@@ -49,13 +65,30 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
   const ticketMedio = stats?.ticket_medio ?? null;
   const faturamentoHoje = stats?.faturamento_hoje ?? null;
 
+  const bk = stats?.breakdown_pagamentos || {};
+  const din = Number(bk.dinheiro || 0);
+  const pix = Number(bk.pix || 0);
+  const car = Number(bk.cartao || 0);
+
+  const paymentChartData = [
+    { name: 'Pix', value: pix, color: '#10b981' },
+    { name: 'Cartão', value: car, color: '#0ea5e9' },
+    { name: 'Dinheiro', value: din, color: '#f59e0b' }
+  ].filter(item => item.value > 0);
+
+  const paymentBarData = [
+    { name: 'Pix', valor: pix, fill: '#10b981' },
+    { name: 'Cartão', valor: car, fill: '#0ea5e9' },
+    { name: 'Dinheiro', valor: din, fill: '#f59e0b' }
+  ];
+
   return (
     <div className="space-y-5 text-left animate-fade-in">
       {/* Header Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-[#121214]/60 border border-[#27272A] p-4 rounded-3xl">
         <div>
-          <h3 className="font-serif text-sm font-bold text-white">Demonstrativo DRE & Relatório Financeiro</h3>
-          <p className="text-[10px] text-gray-400">Análise de resultado operacional, faturamento e vendas com dados reais do tenant.</p>
+          <h3 className="font-serif text-sm font-bold text-white">Resumo Financeiro & Recebimentos</h3>
+          <p className="text-[10px] text-gray-400">Análise do faturamento total e distribuição por meio de pagamento do seu restaurante.</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 bg-[#1C1C1F] border border-[#27272A] px-2.5 py-1 rounded-xl">
@@ -74,7 +107,7 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
             type="button"
             onClick={fetchFinanceiroData}
             className="p-2 border border-[#27272A] hover:bg-[#1C1C1F] text-gray-400 hover:text-white rounded-xl transition-all cursor-pointer"
-            title="Atualizar DRE"
+            title="Atualizar Financeiro"
           >
             <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
           </button>
@@ -91,7 +124,7 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="bg-[#121214]/80 border border-[#27272A] p-4 rounded-2xl space-y-1">
-          <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400 block">Faturamento Bruto</span>
+          <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400 block">Faturamento Total</span>
           <strong className="text-base font-mono font-bold text-emerald-400 block">
             {faturamentoBruto !== null ? `R$ ${Number(faturamentoBruto).toFixed(2)}` : 'Dados indisponíveis'}
           </strong>
@@ -123,7 +156,77 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
         </div>
       </div>
 
-      {/* Real Sales & Payment Breakdown */}
+      {/* Gráfico de Meios de Pagamento */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 space-y-4">
+          <div className="border-b border-[#27272A] pb-2 flex items-center justify-between">
+            <h4 className="font-serif text-sm font-bold text-white flex items-center gap-2">
+              <PieIcon size={16} className="text-emerald-400" />
+              <span>Vendas por Meio de Pagamento</span>
+            </h4>
+            <span className="text-[9px] text-gray-400 font-mono">Últimos {periodoDias} dias</span>
+          </div>
+
+          <div className="h-56 w-full pt-1">
+            {paymentChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={paymentChartData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={80}
+                    paddingAngle={4}
+                    dataKey="value"
+                  >
+                    {paymentChartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} stroke="#121214" strokeWidth={2} />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<CustomChartTooltip />} />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-xs text-gray-500">Sem dados de pagamento no período</div>
+            )}
+          </div>
+
+          <div className="flex justify-center items-center gap-4 text-xs font-medium">
+            <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /><span>Pix</span></div>
+            <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-sky-500 inline-block" /><span>Cartão</span></div>
+            <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" /><span>Dinheiro</span></div>
+          </div>
+        </div>
+
+        <div className="bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 space-y-4">
+          <div className="border-b border-[#27272A] pb-2 flex items-center justify-between">
+            <h4 className="font-serif text-sm font-bold text-white flex items-center gap-2">
+              <BarChart3 size={16} className="text-sky-400" />
+              <span>Comparativo dos Meios de Recebimento</span>
+            </h4>
+            <span className="text-[9px] text-gray-400 font-mono">Em R$</span>
+          </div>
+
+          <div className="h-56 w-full pt-1">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={paymentBarData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#27272A" vertical={false} />
+                <XAxis dataKey="name" stroke="#71717A" fontSize={11} tickLine={false} axisLine={false} />
+                <YAxis stroke="#71717A" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${v}`} />
+                <Tooltip content={<CustomChartTooltip />} />
+                <Bar dataKey="valor" radius={[6, 6, 0, 0]}>
+                  {paymentBarData.map((entry, index) => (
+                    <Cell key={`bar-${index}`} fill={entry.fill} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* Real Sales & Payment Breakdown Table */}
       <div className="bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 space-y-4 text-left">
         <div className="border-b border-[#27272A] pb-2 flex items-center justify-between">
           <h4 className="font-serif text-sm font-bold text-white flex items-center gap-2">
@@ -152,10 +255,6 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
               </tr>
               {(() => {
                 const total = Number(faturamentoBruto || 0);
-                const bk = stats?.breakdown_pagamentos || {};
-                const din = Number(bk.dinheiro || 0);
-                const pix = Number(bk.pix || 0);
-                const car = Number(bk.cartao || 0);
                 return (
                   <>
                     <tr>

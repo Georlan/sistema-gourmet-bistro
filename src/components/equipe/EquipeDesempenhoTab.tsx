@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import clsx from 'clsx';
-import { Award, Calendar as CalendarIcon, Download, ShoppingBag, DollarSign, Percent, Filter } from 'lucide-react';
+import { Award, Calendar as CalendarIcon, Download, ShoppingBag, DollarSign, Percent, Filter, BarChart2 } from 'lucide-react';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { PeriodoCalendarioModal } from '../relatorios/PeriodoCalendarioModal';
 
 interface EquipeDesempenhoTabProps {
@@ -40,6 +41,22 @@ const ROLE_LABEL: Record<string, string> = {
   gerente: 'Gerente',
   admin: 'Administrador',
   cozinha: 'Cozinha',
+};
+
+const CustomChartTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-[#1C1C1F] border border-[#27272A] p-3 rounded-2xl shadow-xl text-left font-sans space-y-1 z-50">
+        <p className="text-[10px] font-bold text-white">{label}</p>
+        {payload.map((entry: any, index: number) => (
+          <p key={index} className="text-xs font-bold font-mono" style={{ color: entry.color }}>
+            {entry.name}: {entry.dataKey === 'faturamento' ? `R$ ${entry.value.toFixed(2)}` : `${entry.value} comandas`}
+          </p>
+        ))}
+      </div>
+    );
+  }
+  return null;
 };
 
 export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
@@ -123,6 +140,12 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
 
   const cargoLabel = CARGO_OPTIONS.find(o => o.value === cargo)?.label ?? 'Todos os cargos';
 
+  const teamChartData = membros.slice(0, 8).map((m) => ({
+    name: m.nome.split(' ')[0],
+    faturamento: m.faturamento,
+    pedidos: m.pedidos_atendidos,
+  }));
+
   return (
     <div className={clsx('space-y-6', 'text-left', 'animate-fade-in')}>
       {/* Top Header Bar */}
@@ -149,9 +172,9 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
               onChange={e => setCargo(e.target.value)}
               className="bg-transparent text-white text-[10px] font-bold cursor-pointer outline-none pr-1"
             >
-              {CARGO_OPTIONS.map(opt => (
-                <option key={opt.value} value={opt.value} className="bg-[#1C1C1F]">
-                  {opt.label}
+              {CARGO_OPTIONS.map(o => (
+                <option key={o.value} value={o.value} className="bg-[#121214] text-white">
+                  {o.label}
                 </option>
               ))}
             </select>
@@ -219,6 +242,49 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
           </div>
         )}
       </div>
+
+      {/* Team Charts */}
+      {teamChartData.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div className="bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-4">
+            <div className="flex items-center gap-2 border-b border-[#27272A] pb-3">
+              <BarChart2 size={16} className="text-[#10b981]" />
+              <span className="font-serif font-bold text-sm text-white">Faturamento Gerado por Atendente</span>
+            </div>
+
+            <div className="h-60 w-full pt-1">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={teamChartData} margin={{ top: 10, right: 10, left: -15, bottom: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#27272A" vertical={false} />
+                  <XAxis dataKey="name" stroke="#71717A" fontSize={10} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#71717A" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${v}`} />
+                  <Tooltip content={<CustomChartTooltip />} />
+                  <Bar dataKey="faturamento" name="Faturamento (R$)" fill="#10b981" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div className="bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-4">
+            <div className="flex items-center gap-2 border-b border-[#27272A] pb-3">
+              <BarChart2 size={16} className="text-sky-400" />
+              <span className="font-serif font-bold text-sm text-white">Volume de Atendimentos por Garçom</span>
+            </div>
+
+            <div className="h-60 w-full pt-1">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={teamChartData} margin={{ top: 10, right: 10, left: -15, bottom: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#27272A" vertical={false} />
+                  <XAxis dataKey="name" stroke="#71717A" fontSize={10} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#71717A" fontSize={10} tickLine={false} axisLine={false} />
+                  <Tooltip content={<CustomChartTooltip />} />
+                  <Bar dataKey="pedidos" name="Atendimentos" fill="#0ea5e9" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Team Performance Table */}
       <div className="bg-[#121214] border border-[#27272A] rounded-3xl overflow-hidden p-5 space-y-4">

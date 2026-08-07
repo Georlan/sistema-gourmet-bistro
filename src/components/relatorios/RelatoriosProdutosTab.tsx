@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import clsx from 'clsx';
-import { Package, Search, Calendar as CalendarIcon, Download, Filter } from 'lucide-react';
+import { Package, Search, Calendar as CalendarIcon, Download, Filter, BarChart2 } from 'lucide-react';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { PeriodoCalendarioModal } from './PeriodoCalendarioModal';
 
 interface RelatoriosProdutosTabProps {
@@ -18,6 +19,22 @@ export interface ProdutoRelatorioItem {
   faturamento_total: number;
   ticket_medio_item: number;
 }
+
+const CustomChartTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-[#1C1C1F] border border-[#27272A] p-3 rounded-2xl shadow-xl text-left font-sans space-y-1 z-50">
+        <p className="text-[10px] font-bold text-white">{label}</p>
+        {payload.map((entry: any, index: number) => (
+          <p key={index} className="text-xs font-bold font-mono" style={{ color: entry.color }}>
+            {entry.name}: {entry.dataKey === 'faturamento' ? `R$ ${entry.value.toFixed(2)}` : `${entry.value} un.`}
+          </p>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
 
 export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
   apiBaseUrl,
@@ -110,6 +127,12 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
     document.body.removeChild(link);
   };
 
+  const topProdutosChartData = produtos.slice(0, 7).map((p) => ({
+    name: p.produto_nome.length > 18 ? `${p.produto_nome.slice(0, 16)}...` : p.produto_nome,
+    quantidade: p.quantidade_vendida,
+    faturamento: p.faturamento_total,
+  }));
+
   return (
     <div className={clsx('space-y-5', 'text-left', 'animate-fade-in')}>
       {/* Top Bar */}
@@ -152,8 +175,8 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
             <span className="font-bold text-lg">!</span>
           </div>
           <div className="space-y-1">
-            <h3 className="text-white font-bold text-sm">Não foi possível carregar os dados</h3>
-            <p className="text-gray-400 text-xs">Ocorreu uma falha ao comunicar com o servidor. Por favor, tente novamente.</p>
+            <h3 className="text-white font-bold text-sm">Não foi possível carregar o relatório de produtos</h3>
+            <p className="text-gray-400 text-xs">Por favor, tente novamente.</p>
           </div>
           <button
             onClick={() => fetchProdutosReport()}
@@ -161,6 +184,49 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
           >
             Tentar novamente
           </button>
+        </div>
+      )}
+
+      {/* Gráficos Visuais dos Mais Vendidos */}
+      {topProdutosChartData.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div className="bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-4">
+            <div className="flex items-center gap-2 border-b border-[#27272A] pb-3">
+              <BarChart2 size={16} className="text-[#10b981]" />
+              <span className="font-serif font-bold text-sm text-white">Top Produtos por Unidades Vendidas</span>
+            </div>
+
+            <div className="h-60 w-full pt-1">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={topProdutosChartData} margin={{ top: 10, right: 10, left: -15, bottom: 25 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#27272A" vertical={false} />
+                  <XAxis dataKey="name" stroke="#71717A" fontSize={9} interval={0} angle={-25} textAnchor="end" />
+                  <YAxis stroke="#71717A" fontSize={10} tickLine={false} axisLine={false} />
+                  <Tooltip content={<CustomChartTooltip />} />
+                  <Bar dataKey="quantidade" name="Unidades Vendidas" fill="#10b981" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div className="bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-4">
+            <div className="flex items-center gap-2 border-b border-[#27272A] pb-3">
+              <BarChart2 size={16} className="text-sky-400" />
+              <span className="font-serif font-bold text-sm text-white">Top Produtos por Faturamento (R$)</span>
+            </div>
+
+            <div className="h-60 w-full pt-1">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={topProdutosChartData} margin={{ top: 10, right: 10, left: -15, bottom: 25 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#27272A" vertical={false} />
+                  <XAxis dataKey="name" stroke="#71717A" fontSize={9} interval={0} angle={-25} textAnchor="end" />
+                  <YAxis stroke="#71717A" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${v}`} />
+                  <Tooltip content={<CustomChartTooltip />} />
+                  <Bar dataKey="faturamento" name="Faturamento (R$)" fill="#0ea5e9" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
         </div>
       )}
 

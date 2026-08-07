@@ -10,8 +10,20 @@ import {
   Eye,
   Clock,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  BarChart2
 } from 'lucide-react';
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip
+} from 'recharts';
 import { PeriodoCalendarioModal } from './PeriodoCalendarioModal';
 import { VendasDetalhesDrawer, VendaDetalheItem } from './VendasDetalhesDrawer';
 
@@ -20,6 +32,22 @@ interface RelatoriosVisaoGeralTabProps {
   authHeaders: Record<string, string>;
   showToast: (msg: string) => void;
 }
+
+const CustomChartTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-[#1C1C1F] border border-[#27272A] p-3 rounded-2xl shadow-xl text-left font-sans space-y-1 z-50">
+        <p className="text-[10px] font-bold text-gray-400">{label}</p>
+        {payload.map((entry: any, index: number) => (
+          <p key={index} className="text-xs font-bold font-mono" style={{ color: entry.color }}>
+            {entry.name}: {typeof entry.value === 'number' && (entry.name.toLowerCase().includes('faturam') || entry.name.toLowerCase().includes('total')) ? `R$ ${entry.value.toFixed(2)}` : entry.value}
+          </p>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
 
 export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = ({
   apiBaseUrl,
@@ -152,6 +180,21 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
     document.body.removeChild(link);
   };
 
+  // Process data for charts
+  const vendasPorDiaChartData = (data?.vendas_por_dia || []).map((item: any) => ({
+    data: item.data ? item.data.split('-').slice(1).reverse().join('/') : '',
+    faturamento: item.total || 0,
+    pedidos: item.quantidade_pedidos || 0,
+  }));
+
+  const horariosPicoChartData = (data?.horarios_pico || [])
+    .filter((h: any) => h.total_pedidos > 0)
+    .map((h: any) => ({
+      hora: h.hora,
+      pedidos: h.total_pedidos,
+      faturamento: h.faturamento || 0,
+    }));
+
   return (
     <div className={clsx('space-y-6', 'text-left', 'animate-fade-in')}>
       {/* Top Header Bar */}
@@ -164,7 +207,6 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
         </div>
 
         <div className="flex items-center gap-2.5">
-          {/* Botão Ver Vendas */}
           <button
             type="button"
             onClick={() => {
@@ -177,7 +219,6 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
             Ver Vendas
           </button>
 
-          {/* Seletor de Período */}
           <button
             type="button"
             onClick={() => setShowCalendarModal(true)}
@@ -187,7 +228,6 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
             Alterar Período
           </button>
 
-          {/* Exportar CSV */}
           <button
             type="button"
             onClick={handleExportCsv}
@@ -221,7 +261,6 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
 
       {/* Main Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Faturamento */}
         <div className="bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-2">
           <div className="flex justify-between items-center text-gray-400">
             <span className="text-[9px] font-bold uppercase tracking-wider">Faturamento Total</span>
@@ -248,7 +287,6 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
           )}
         </div>
 
-        {/* Total Pedidos */}
         <div className="bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-2">
           <div className="flex justify-between items-center text-gray-400">
             <span className="text-[9px] font-bold uppercase tracking-wider">Total de Pedidos</span>
@@ -275,7 +313,6 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
           )}
         </div>
 
-        {/* Ticket Médio */}
         <div className="bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-2">
           <div className="flex justify-between items-center text-gray-400">
             <span className="text-[9px] font-bold uppercase tracking-wider">Ticket Médio</span>
@@ -289,7 +326,6 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
           <span className="text-[9px] text-gray-500 block">Média por comanda finalizada</span>
         </div>
 
-        {/* Clientes Ativos (Renderizado apenas se houver dados de clientes cadastrados) */}
         {(data?.clientes_ativos || 0) > 0 && (
           <div className="bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-2">
             <div className="flex justify-between items-center text-gray-400">
@@ -370,7 +406,6 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
           </div>
         ) : (
           <>
-            {/* Meta Progress Bar */}
             <div className="space-y-2">
               <div className="flex justify-between items-center text-[10px] font-mono">
                 <span className="text-gray-400">
@@ -392,7 +427,6 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
               </div>
             </div>
 
-            {/* Projeção e Ritmo */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-[10px]">
               <div className="bg-[#1C1C1F]/60 border border-[#27272A]/60 p-3 rounded-2xl space-y-1">
                 <span className="text-gray-400 text-[8px] font-bold uppercase tracking-wider block">Valor Restante</span>
@@ -417,15 +451,72 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
         )}
       </div>
 
-      {/* Grid: Pedidos por dia (Plano Bistrô: NO delivery) & Horários de Pico */}
+      {/* Visão Gráfica: Evolução Diária & Horários de Pico */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* Vendas por Dia */}
         <div className="bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-4">
-          <div className="flex justify-between items-center border-b border-[#27272A] pb-2">
-            <span className="font-serif font-bold text-sm text-white">Pedidos por Dia</span>
+          <div className="flex justify-between items-center border-b border-[#27272A] pb-3">
+            <div className="flex items-center gap-2">
+              <TrendingUp size={16} className="text-[#10b981]" />
+              <span className="font-serif font-bold text-sm text-white">Evolução Diária do Faturamento</span>
+            </div>
+            <span className="text-[10px] text-gray-400 font-mono">Tendência do Período</span>
           </div>
 
-          <div className="overflow-x-auto max-h-64 border border-[#27272A]/40 rounded-2xl">
+          <div className="h-64 w-full pt-2">
+            {vendasPorDiaChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={vendasPorDiaChartData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="emeraldGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#27272A" vertical={false} />
+                  <XAxis dataKey="data" stroke="#71717A" fontSize={10} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#71717A" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${v}`} />
+                  <Tooltip content={<CustomChartTooltip />} />
+                  <Area type="monotone" dataKey="faturamento" name="Faturamento (R$)" stroke="#10b981" strokeWidth={2.5} fillOpacity={1} fill="url(#emeraldGradient)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-xs text-gray-500">Sem dados no período</div>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-4">
+          <div className="flex items-center gap-2 border-b border-[#27272A] pb-3">
+            <Clock size={16} className="text-sky-400" />
+            <span className="font-serif font-bold text-sm text-white">Horários de Pico do Salão</span>
+          </div>
+
+          <div className="h-64 w-full pt-2">
+            {horariosPicoChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={horariosPicoChartData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#27272A" vertical={false} />
+                  <XAxis dataKey="hora" stroke="#71717A" fontSize={10} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#71717A" fontSize={10} tickLine={false} axisLine={false} />
+                  <Tooltip content={<CustomChartTooltip />} />
+                  <Bar dataKey="pedidos" name="Pedidos Atendidos" fill="#0ea5e9" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-xs text-gray-500">Nenhum pedido registrado nos horários</div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Tabelas Detalhadas */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-4">
+          <div className="flex justify-between items-center border-b border-[#27272A] pb-2">
+            <span className="font-serif font-bold text-sm text-white">Detalhamento dos Pedidos por Dia</span>
+          </div>
+
+          <div className="overflow-x-auto max-h-56 border border-[#27272A]/40 rounded-2xl">
             <table className="w-full text-left text-[10px]">
               <thead className="bg-[#1C1C1F] border-b border-[#27272A] text-gray-400 uppercase tracking-wider font-bold sticky top-0">
                 <tr>
@@ -449,14 +540,13 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
           </div>
         </div>
 
-        {/* Horários de Pico */}
         <div className="bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-4">
           <div className="flex items-center gap-2 border-b border-[#27272A] pb-2">
             <Clock size={16} className="text-[#10b981]" />
-            <span className="font-serif font-bold text-sm text-white">Horários de Pico do Salão</span>
+            <span className="font-serif font-bold text-sm text-white">Detalhamento por Faixa Horária</span>
           </div>
 
-          <div className="overflow-x-auto max-h-64 border border-[#27272A]/40 rounded-2xl">
+          <div className="overflow-x-auto max-h-56 border border-[#27272A]/40 rounded-2xl">
             <table className="w-full text-left text-[10px]">
               <thead className="bg-[#1C1C1F] border-b border-[#27272A] text-gray-400 uppercase tracking-wider font-bold sticky top-0">
                 <tr>
@@ -483,7 +573,6 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
         </div>
       </div>
 
-      {/* Modals & Drawers */}
       {showCalendarModal && (
         <PeriodoCalendarioModal
           onClose={() => setShowCalendarModal(false)}
