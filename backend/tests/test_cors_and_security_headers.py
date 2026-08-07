@@ -1,16 +1,19 @@
 """
 Suíte de Testes Automatizados para CORS Estrito e Headers HTTP de Segurança.
-Valida isolamento de origens, tratamento de exceções 401/500 sem vazamento,
-normalização via urlsplit, HSTS por ambiente, CSP restritiva e política de WebSockets.
+Valida isolamento de origens, resposta 500 real sem exceções não capturadas pelo cliente,
+normalização estrita de portas via urlsplit, CSP com portas do agente de impressão e Supabase WSS,
+e códigos de fechamento 1008 para WebSockets.
 """
 import os
 import jwt
 import pytest
 from fastapi.testclient import TestClient
+from fastapi.websockets import WebSocketDisconnect
 from app.main import app
 from app.config import settings, normalize_cors_origin
 
 client = TestClient(app)
+error_client = TestClient(app, raise_server_exceptions=False)
 
 OFFICIAL_ORIGIN = "https://sistema-gourmet-bistro.pages.dev"
 MALICIOUS_ORIGIN = "https://evil.example"
@@ -202,22 +205,28 @@ def test_auth_401_negative_restaurante_id_in_token():
 
 
 def test_real_500_error_wrapping():
-    """Erro 500 real da aplicação deve ser envolto por CORS e headers de segurança."""
-    # 1. Com Origem Maliciosa
-    resp_malicious = client.get("/api/test-trigger-500-controlled", headers={"Origin": MALICIOUS_ORIGIN})
+    """Erro 500 real da aplicação usando cliente com raise_server_exceptions=False."""
+    # 1. Com Origem Maliciosa -> Retorna EXATAMENTE 500 sem CORS
+    resp_malicious = error_client.get("/api/test-trigger-500-controlled", headers={"Origin": MALICIOUS_ORIGIN})
     assert resp_malicious.status_code == 500
     assert "access-control-allow-origin" not in resp_malicious.headers
     assert resp_malicious.headers.get("x-content-type-options") == "nosniff"
+    assert resp_malicious.headers.get("referrer-policy") == "strict-origin-when-cross-origin"
+    assert "camera=()" in resp_malicious.headers.get("permissions-policy", "")
+    assert resp_malicious.headers.get("x-frame-options") == "DENY"
 
-    # 2. Com Origem Oficial
-    resp_official = client.get("/api/test-trigger-500-controlled", headers={"Origin": OFFICIAL_ORIGIN})
+    # 2. Com Origem Oficial -> Retorna EXATAMENTE 500 com CORS oficial
+    resp_official = error_client.get("/api/test-trigger-500-controlled", headers={"Origin": OFFICIAL_ORIGIN})
     assert resp_official.status_code == 500
     assert resp_official.headers.get("access-control-allow-origin") == OFFICIAL_ORIGIN
     assert resp_official.headers.get("x-content-type-options") == "nosniff"
+    assert resp_official.headers.get("referrer-policy") == "strict-origin-when-cross-origin"
+    assert "camera=()" in resp_official.headers.get("permissions-policy", "")
+    assert resp_official.headers.get("x-frame-options") == "DENY"
 
 
 def test_strict_origin_normalization_urlsplit():
-    """Valida rejeição estrita via urllib.parse.urlsplit para origens malformadas."""
+    """Valida rejeição estrita via urllib.parse.urlsplit para origens malformadas e portas inválidas."""
     invalid_origins = [
         "https://app.example.com/path",
         "https://app.example.com?x=1",
@@ -229,13 +238,21 @@ def test_strict_origin_normalization_urlsplit():
         "ftp://app.example.com",
         "app.example.com",
         "texto-arbitrario-sem-protocolo",
+        "https://example.com:abc",
+        "https://example.com:0",
+        "https://example.com:65536",
+        "https://example.com:99999",
     ]
     for orig in invalid_origins:
         with pytest.raises(RuntimeError):
             normalize_cors_origin(orig)
 
-    # Válidas com barra final removida
-    assert normalize_cors_origin("https://app.example.com/") == "https://app.example.com"
+    # Normalização de portas padrão (443 para https, 80 para http)
+    assert normalize_cors_origin("https://example.com:443") == "https://example.com"
+    assert normalize_cors_origin("http://example.com:80") == "http://example.com"
+
+    # Preservação de portas não padrão válidas
+    assert normalize_cors_origin("https://example.com:8443") == "https://example.com:8443"
     assert normalize_cors_origin("http://localhost:5173") == "http://localhost:5173"
 
 
@@ -271,8 +288,8 @@ def test_hsts_strict_conditions(monkeypatch):
     assert "strict-transport-security" not in resp_localhost.headers
 
 
-def test_csp_strict_assertions():
-    """Valida o conteúdo estrito do arquivo public/_headers."""
+def test_csp_strict_assertions_and_print_agent():
+    """Valida o conteúdo estrito do arquivo public/_headers (CSP, agente de impressão e Supabase WSS)."""
     headers_file = os.path.join(os.path.dirname(__file__), "..", "..", "public", "_headers")
     assert os.path.exists(headers_file)
     with open(headers_file, "r", encoding="utf-8") as f:
@@ -283,10 +300,27 @@ def test_csp_strict_assertions():
     assert "img-src 'self' data: blob: https://iiowhekvahxiepwcdidm.supabase.co;" in content
     assert "https://*.supabase.co" not in content
     assert "wss://*.railway.app" not in content
+    assert "wss://*.supabase.co" not in content
+
+    # Supabase Realtime WSS exato
+    assert "wss://iiowhekvahxiepwcdidm.supabase.co" in content
+
+    # Validação das portas exatas do agente de impressão 17654-17664
+    connect_src = content.split("connect-src")[1].split(";")[0]
+    for port in range(17654, 17665):
+        assert f"http://127.0.0.1:{port}" in connect_src
+
+    # Portas fora do intervalo NÃO estão autorizadas
+    assert "http://127.0.0.1:17653" not in connect_src
+    assert "http://127.0.0.1:17665" not in connect_src
+
+    # Ausência de wildcards de portas
+    assert "127.0.0.1:*" not in connect_src
+    assert "localhost:*" not in connect_src
 
 
 def test_websocket_origin_policy(monkeypatch):
-    """Testa a política de origens para conexões WebSocket."""
+    """Testa a política de origens para conexões WebSocket exigindo código de encerramento 1008."""
     monkeypatch.setenv("ENVIRONMENT", "production")
     monkeypatch.setattr(settings, "CORS_ALLOWED_ORIGINS", OFFICIAL_ORIGIN)
 
@@ -295,19 +329,31 @@ def test_websocket_origin_policy(monkeypatch):
         assert ws is not None
 
     # 2. Origem maliciosa encerrada com status 1008
-    with pytest.raises(Exception):
-        client.websocket_connect("/ws/cliente?restaurante_id=1", headers={"Origin": MALICIOUS_ORIGIN})
+    with pytest.raises(WebSocketDisconnect) as exc_info_malicious:
+        with client.websocket_connect("/ws/cliente?restaurante_id=1", headers={"Origin": MALICIOUS_ORIGIN}) as ws:
+            pass
+    assert exc_info_malicious.value.code == 1008
 
     # 3. Origem .pages.dev de terceiro encerrada com status 1008
-    with pytest.raises(Exception):
-        client.websocket_connect("/ws/cliente?restaurante_id=1", headers={"Origin": PAGES_DEV_HACKER})
+    with pytest.raises(WebSocketDisconnect) as exc_info_hacker:
+        with client.websocket_connect("/ws/cliente?restaurante_id=1", headers={"Origin": PAGES_DEV_HACKER}) as ws:
+            pass
+    assert exc_info_hacker.value.code == 1008
 
-    # 4. Origem ausente em produção bloqueada
+    # 4. Origem malformada encerrada com status 1008
+    with pytest.raises(WebSocketDisconnect) as exc_info_malformed:
+        with client.websocket_connect("/ws/cliente?restaurante_id=1", headers={"Origin": "https://example.com/path"}) as ws:
+            pass
+    assert exc_info_malformed.value.code == 1008
+
+    # 5. Origem ausente em produção encerrada com status 1008
     monkeypatch.setattr(settings, "WEBSOCKET_ALLOW_MISSING_ORIGIN", False)
-    with pytest.raises(Exception):
-        client.websocket_connect("/ws/cliente?restaurante_id=1")
+    with pytest.raises(WebSocketDisconnect) as exc_info_missing:
+        with client.websocket_connect("/ws/cliente?restaurante_id=1") as ws:
+            pass
+    assert exc_info_missing.value.code == 1008
 
-    # 5. Origem ausente em ambiente de teste permitida
+    # 6. Origem ausente em ambiente de teste permitida
     monkeypatch.setenv("ENVIRONMENT", "test")
     with client.websocket_connect("/ws/cliente?restaurante_id=1") as ws_test:
         assert ws_test is not None
