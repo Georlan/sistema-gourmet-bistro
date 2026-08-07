@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { ProductScreen } from './ProductScreen';
 
 interface DesktopFrameProps {
@@ -8,8 +8,26 @@ interface DesktopFrameProps {
 }
 
 export function DesktopFrame({ view = 'mesas', className = '', style }: DesktopFrameProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(0.6);
+
+  useEffect(() => {
+    const updateScale = () => {
+      if (containerRef.current) {
+        const width = containerRef.current.clientWidth;
+        setScale(width / 1280);
+      }
+    };
+
+    updateScale();
+    const observer = new ResizeObserver(updateScale);
+    if (containerRef.current) observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <div
+      ref={containerRef}
       style={{
         width: '100%',
         background: '#1a1a24',
@@ -21,6 +39,7 @@ export function DesktopFrame({ view = 'mesas', className = '', style }: DesktopF
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
+        ['--koma-preview-scale' as any]: scale,
         ...style
       }}
       className={className}

@@ -12,6 +12,7 @@ import { TABLES, WAITERS, RESTAURANT_CONFIG, PRODUCTS } from './data';
 import { getTableTotal } from './domain';
 import { supabase } from './cardapio/SupabaseClient';
 import { MesaCard } from './components/MesaCard';
+import { MesasView } from './components/mesas/MesasView';
 import { MesaDetailsModal } from './components/MesaDetailsModal';
 import { CaixaPanel, MemoizedCaixaPanel } from './components/CaixaPanel';
 import clsx from 'clsx';
@@ -2307,108 +2308,18 @@ export default function App() {
           />
         ) : (
           /* VIEW 2: SALÃO (WAITERS OR CASHIER DASHBOARD) */
-          <div className="space-y-6">
-
-            {/* Table layout grid */}
-            <div className="space-y-3">
-              {/* Title + Filters Row */}
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-[#27272A]">
-                <h3 className="font-serif text-xl sm:text-2xl font-bold tracking-tight text-white shrink-0">Mesas</h3>
-
-                {/* Botões Originais de Filtro (Todas, Livres, Ocupadas, Prontas) */}
-                <div
-                  role="group"
-                  aria-label="Filtrar mesas por status"
-                  className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full sm:w-auto"
-                >
-                  {(['todos', 'livres', 'ocupadas', 'prontas'] as const).map((filter) => {
-                    const count = {
-                      todos: (salonTables || []).length,
-                      livres: (salonTables || []).filter(t => !orders.some(o => o.mesaId === t.id)).length,
-                      ocupadas: (salonTables || []).filter(t => orders.some(o => o.mesaId === t.id)).length,
-                      prontas: (salonTables || []).filter(t => {
-                        const tOrders = orders.filter(o => o.mesaId === t.id);
-                        return tOrders.flatMap(o => o.itens).some(i => i.status === 'pronto');
-                      }).length
-                    }[filter];
-
-                    const label = {
-                      todos: `Todas`,
-                      livres: `Livres`,
-                      ocupadas: `Ocupadas`,
-                      prontas: `Prontas`
-                    }[filter];
-
-                    const isActive = tableFilter === filter;
-
-                    return (
-                      <button
-                        key={filter}
-                        type="button"
-                        onClick={() => setTableFilter(filter)}
-                        aria-pressed={isActive}
-                        className={`px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer text-center border ${
-                          isActive
-                            ? 'bg-[#280c12] text-white border-rose-950/80 shadow-md'
-                            : 'bg-[#14161B] text-zinc-300 hover:bg-zinc-800 border-zinc-800'
-                        }`}
-                      >
-                        {label} <span className="opacity-75 text-[10px] font-normal ml-0.5">({count})</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Responsive Grid 3 Colunas no Mobile */}
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 w-full p-2">
-                {filteredTables.length === 0 ? (
-                  <div className={clsx('col-span-full', 'py-10', 'text-center', 'text-gray-500', 'text-sm', 'italic', 'font-sans')}>
-                    Nenhuma mesa encontrada neste status.
-                  </div>
-                ) : (
-                  filteredTables.map((table) => {
-                    const tableOrders = orders.filter(o => o.mesaId === table.id);
-                    const waiterDrafts = getDraftItems(table.id);
-                    const draftQtyCount = waiterDrafts.reduce((sum, item) => sum + (item.quantidade || 1), 0);
-
-                    // Concurrency: Waiters other than active editing drafts on this table (synced via WebSockets)
-                    const otherWaitersServing = Object.keys(activeDrafts[table.id] || {})
-                      .filter(gId => gId !== activeWaiterId)
-                      .map(gId => activeDrafts[table.id][gId].garcomNome);
-
-                    const tableComandas = orders.filter(o => o.mesaId === table.id);
-                    const hasPendingPayment = pagamentosPendentes.some(pag =>
-                      tableComandas.some(o => o.id === pag.comanda_id)
-                    );
-
-                    const mergedSources = tableComandas
-                      .map(o => o.mesaOrigemId)
-                      .filter((id): id is number => id !== null && id !== undefined && id !== table.id);
-                    
-                    const mergedIntoMesaId = orders.find(o => o.mesaOrigemId === table.id)?.mesaId || null;
-
-                    return (
-                      <MesaCard
-                        key={table.id}
-                        table={table}
-                        orders={tableOrders}
-                        draftCount={draftQtyCount}
-                        otherWaitersServing={otherWaitersServing}
-                        currentTime={tableOrders.length > 0 ? currentTime : 0}
-                        activeWaiterId={activeWaiterId}
-                        onClick={handleTableClick}
-                        hasPendingPayment={hasPendingPayment}
-                        mergedSources={mergedSources}
-                        mergedIntoMesaId={mergedIntoMesaId}
-                      />
-                    );
-                  })
-                )}
-              </div>
-            </div>
-
-          </div>
+          <MesasView
+            salonTables={salonTables}
+            orders={orders}
+            draftItemsMap={draftItems}
+            activeDrafts={activeDrafts}
+            pagamentosPendentes={pagamentosPendentes}
+            activeWaiterId={activeWaiterId}
+            currentTime={currentTime}
+            onTableClick={handleTableClick}
+            tableFilter={tableFilter}
+            onFilterChange={setTableFilter}
+          />
         )}
 
       </main>

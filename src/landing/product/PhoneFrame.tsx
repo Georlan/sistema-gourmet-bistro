@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { ProductScreen } from './ProductScreen';
 
 interface PhoneFrameProps {
@@ -7,8 +7,27 @@ interface PhoneFrameProps {
 }
 
 export function PhoneFrame({ className = '', style }: PhoneFrameProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(0.4);
+
+  useEffect(() => {
+    const updateScale = () => {
+      if (containerRef.current) {
+        const width = containerRef.current.clientWidth;
+        // Mobile viewport width ~ 430px
+        setScale(width / 430);
+      }
+    };
+
+    updateScale();
+    const observer = new ResizeObserver(updateScale);
+    if (containerRef.current) observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <div
+      ref={containerRef}
       style={{
         width: '100%',
         aspectRatio: '9 / 19',
@@ -21,6 +40,7 @@ export function PhoneFrame({ className = '', style }: PhoneFrameProps) {
         flexDirection: 'column',
         position: 'relative',
         overflow: 'hidden',
+        ['--koma-preview-scale' as any]: scale,
         ...style
       }}
       className={className}
@@ -31,7 +51,7 @@ export function PhoneFrame({ className = '', style }: PhoneFrameProps) {
 
       {/* Screen */}
       <div style={{ flex: 1, borderRadius: '14px', overflow: 'hidden' }}>
-        <ProductScreen view="cardapio" />
+        <ProductScreen view="cardapio" scaleLogicalWidth={430} />
       </div>
     </div>
   );
