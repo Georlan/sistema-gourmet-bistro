@@ -60,6 +60,7 @@ export function CaixaAtivarPage({ token }: CaixaAtivarPageProps) {
         throw new Error(errData.detail || 'Link de ativação inválido ou expirado.');
       }
 
+      const data = await res.json().catch(() => ({}));
       setSucesso(true);
 
       // Armazenar a sessão do operador com validade de 24 horas

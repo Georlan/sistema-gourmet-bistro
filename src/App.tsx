@@ -17,6 +17,7 @@ import CardapioPage from './cardapio/CardapioPage';
 import SuperAdminPanel from './super-admin/SuperAdminPanel';
 import { CaixaAtivarPage } from './components/CaixaAtivarPage';
 import { MotoboyPwaPage } from './components/MotoboyPwaPage';
+import { KitchenPanel } from './components/KitchenPanel';
 import { API_BASE_URL } from './config/api';
 import { saveOperatorSession, getOperatorSession, clearOperatorSession } from './utils/authSession';
 

@@ -9,6 +9,7 @@ import { BrandConfig } from "../CardapioTypes";
 import { CartItem } from "./CardapioCartDrawer";
 import { API_BASE_URL } from "../../config/api";
 import { openWhatsAppMessage, buildPedidoConfirmadoMsg } from "../../config/whatsappUtils";
+import { syncOrderToSupabase } from "../supabaseSync";
 
 interface CreatedOrder {
   comanda_id: string;
@@ -280,13 +281,13 @@ export default function CardapioDigital({
                 >
                   Voltar ao Cardápio
                 </button>
-                {activeBrand.socials?.whatsapp && (
+                {activeBrand.phone && (
                   <button
                     type="button"
                     onClick={() => {
                       const itensStr = cart.map(i => `${i.quantity}x ${i.product.name}`).join(', ');
                       const msg = buildPedidoConfirmadoMsg(customerName, itensStr, estimatedTotal);
-                      openWhatsAppMessage(String(activeBrand.socials.whatsapp), msg);
+                      openWhatsAppMessage(String(activeBrand.phone), msg);
                     }}
                     className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 border border-slate-700"
                   >

@@ -142,6 +142,9 @@ interface LoyaltyCustomer {
   endereco?: string;
   pontos: number;
   saldoCashback: number;
+  saldo_pontos?: number;
+  saldo_cashback?: number;
+  historico?: any[];
 }
 
 const aplicarMascaraTelefoneInput = (valor: string) => {
@@ -1497,7 +1500,7 @@ export function CaixaPanel({
       if (res.ok) {
         fetchDeliveryOrders();
         showToast('Status do pedido atualizado!');
-        const targetOrder = (simulatedOrders as any[]).find(o => String(o.id) === String(orderId)) || (deliveryOrders as any[]).find(o => String(o.id) === String(orderId));
+        const targetOrder = (simulatedOrders as any[]).find(o => String(o.id) === String(orderId));
         if (targetOrder && (targetOrder.telefone || targetOrder.delivery_telefone)) {
           const phone = targetOrder.telefone || targetOrder.delivery_telefone;
           const nome = targetOrder.cliente || targetOrder.identificador || 'Cliente';

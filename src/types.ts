@@ -56,6 +56,8 @@ export interface Order {
   mesaTransferidaDe?: number | null;
   isGrouped?: boolean;
   originalOrders?: any[];
+  created_at?: string;
+  status?: string;
 }
 
 export interface TableDraft {
@@ -68,6 +70,8 @@ export interface Table {
   id: number;
   capacidade: number;
   nome?: string;
+  numero?: number;
+  status?: string;
 }
 
 export interface Waiter {
