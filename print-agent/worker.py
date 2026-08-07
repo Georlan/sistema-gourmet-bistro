@@ -132,10 +132,9 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
     }
     last_command_id = ""
     last_command_result = None
-    loop_count = 0
-
-    while True:
-        should_wait = True
+    try:
+        while True:
+            should_wait = True
         try:
             now = time.time()
             diagnostics_changed = False
@@ -439,3 +438,6 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
         if should_wait:
             wake_event.wait(timeout=config.poll_interval_seconds)
             wake_event.clear()
+    finally:
+        log.info("[DAEMON] Finalizando conexões WSS do agente...")
+        wss_client.stop()

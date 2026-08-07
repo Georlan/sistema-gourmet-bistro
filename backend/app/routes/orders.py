@@ -281,6 +281,8 @@ def print_in_background(
             db.add(job)
             db.commit()
             print(f"[PRINT JOB ENQUEUED] Job ID {job.id} enfileirado para o Kôma Print Agent!")
+            from ..websocket_manager import trigger_print_agent_wakeup
+            trigger_print_agent_wakeup(restaurante_id)
         finally:
             if db is not None:
                 db.close()

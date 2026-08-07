@@ -630,24 +630,28 @@ def get_current_agent(
         )
 
     computed_hash = hash_token(raw_token.strip())
-    if db.get_bind().dialect.name == "postgresql":
-        identity = db.execute(
-            text(
-                "SELECT id, restaurante_id "
-                "FROM koma_internal.auth_print_agent(:token_hash)"
-            ),
-            {"token_hash": computed_hash},
-        ).mappings().first()
-    else:
-        candidate = db.query(PrintAgentToken).filter(
-            PrintAgentToken.token_hash == computed_hash,
-            PrintAgentToken.ativo == True,
-        ).first()
-        identity = (
-            {"id": candidate.id, "restaurante_id": candidate.restaurante_id}
-            if candidate
-            else None
-        )
+    tenant_reset = current_restaurante_id.set(None)
+    try:
+        if db.get_bind().dialect.name == "postgresql":
+            identity = db.execute(
+                text(
+                    "SELECT id, restaurante_id "
+                    "FROM koma_internal.auth_print_agent(:token_hash)"
+                ),
+                {"token_hash": computed_hash},
+            ).mappings().first()
+        else:
+            candidate = db.query(PrintAgentToken).filter(
+                PrintAgentToken.token_hash == computed_hash,
+                PrintAgentToken.ativo == True,
+            ).first()
+            identity = (
+                {"id": candidate.id, "restaurante_id": candidate.restaurante_id}
+                if candidate
+                else None
+            )
+    finally:
+        current_restaurante_id.reset(tenant_reset)
 
     if not identity:
         raise HTTPException(
@@ -1215,6 +1219,8 @@ def inject_print_job(
     db.add(job)
     db.commit()
     db.refresh(job)
+    from ..websocket_manager import trigger_print_agent_wakeup
+    trigger_print_agent_wakeup(rest_id)
     _schedule_print_monitor_refresh(background_tasks, rest_id)
 
     return {
@@ -1766,6 +1772,8 @@ def request_reprint(
 
     db.add(reprint_job)
     db.commit()
+    from ..websocket_manager import trigger_print_agent_wakeup
+    trigger_print_agent_wakeup(rest_id)
     _schedule_print_monitor_refresh(background_tasks, rest_id)
 
     return {

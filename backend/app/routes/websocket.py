@@ -151,3 +151,67 @@ async def websocket_endpoint(
         }, restaurante_id_val, target_audience="internal")
     except Exception:
         manager.disconnect(websocket, restaurante_id_val)
+
+
+@router.websocket("/ws/agent")
+async def websocket_agent_endpoint(
+    websocket: WebSocket
+):
+    """
+    WebSocket dedicado para Kôma Print Agents nativos.
+    Autenticação por máquina via X-Agent-Token ou Authorization: Bearer <token>.
+    Isolamento estrito de tenant (restaurante_id).
+    Registra conexão com client_type="agent".
+    """
+    import hashlib
+    from ..database import SessionLocal
+    from ..models import PrintAgentToken
+
+    # Extrair token do cabeçalho X-Agent-Token ou Authorization
+    raw_token = websocket.headers.get("x-agent-token") or websocket.headers.get("X-Agent-Token")
+    if not raw_token:
+        auth_header = websocket.headers.get("authorization") or websocket.headers.get("Authorization")
+        if auth_header:
+            parts = auth_header.split()
+            if len(parts) == 2 and parts[0].lower() == "bearer":
+                raw_token = parts[1]
+
+    if not raw_token:
+        logging.getLogger("koma.websocket").warning(
+            "[WEBSOCKET AGENTE REJEITADO] Token de agente ausente nos cabeçalhos."
+        )
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    computed_hash = hashlib.sha256(raw_token.strip().encode("utf-8")).hexdigest()
+
+    # Validar token no banco de dados
+    db = SessionLocal()
+    try:
+        agent = db.query(PrintAgentToken).filter(
+            PrintAgentToken.token_hash == computed_hash,
+            PrintAgentToken.ativo == True
+        ).first()
+
+        if not agent or not agent.restaurante_id:
+            logging.getLogger("koma.websocket").warning(
+                "[WEBSOCKET AGENTE REJEITADO] Token de agente inválido ou revogado."
+            )
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+
+        restaurante_id_val = int(agent.restaurante_id)
+    finally:
+        db.close()
+
+    # Registra conexão nativa do agente com client_type="agent"
+    await manager.connect(websocket, restaurante_id_val, client_type="agent")
+
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket, restaurante_id_val)
+    except Exception:
+        manager.disconnect(websocket, restaurante_id_val)
+

@@ -37,7 +37,7 @@ class WssWakeupClient:
         ws_url = api_url.replace("http://", "ws://").replace("https://", "wss://")
         if not ws_url.endswith("/"):
             ws_url += "/"
-        self.ws_endpoint = f"{ws_url}api/ws/agent"
+        self.ws_endpoint = f"{ws_url}ws/agent"
 
     def start(self) -> None:
         """Inicia a thread de escuta WSS em segundo plano."""

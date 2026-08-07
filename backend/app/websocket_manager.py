@@ -35,7 +35,7 @@ class ConnectionManager:
         await websocket.accept()
 
         if restaurante_id not in self.active_connections:
-            self.active_connections[restaurante_id] = {"internal": [], "client": []}
+            self.active_connections[restaurante_id] = {"internal": [], "client": [], "agent": []}
 
         if client_type not in self.active_connections[restaurante_id]:
             self.active_connections[restaurante_id][client_type] = []
@@ -71,7 +71,8 @@ class ConnectionManager:
         target_audience:
           - "internal": apenas app de garçom, caixa, KDS (padrão para operações internas).
           - "client": apenas clientes do cardápio público.
-          - "all": todas as conexões (internas e públicas).
+          - "agent": apenas agentes de impressão nativos do restaurante.
+          - "all": todas as conexões (internas, públicas e agentes).
           - None: determina automaticamente (eventos em PUBLIC_CLIENT_EVENTS -> "all", outros -> "internal").
         """
         if restaurante_id is None:
@@ -106,6 +107,8 @@ class ConnectionManager:
             sockets_to_send = list(ctype_dict.get("internal", []))
         elif target_audience == "client":
             sockets_to_send = list(ctype_dict.get("client", []))
+        elif target_audience == "agent":
+            sockets_to_send = list(ctype_dict.get("agent", []))
         elif target_audience == "all":
             for sockets in ctype_dict.values():
                 sockets_to_send.extend(sockets)
@@ -118,5 +121,43 @@ class ConnectionManager:
             except Exception:
                 self.disconnect(connection, restaurante_id)
 
+
 # Singleton instance of the connection manager
 manager = ConnectionManager()
+
+
+async def notify_print_agent_jobs_available(restaurante_id: int) -> None:
+    """
+    Dispara notificação WSS em segundo plano para os agentes de impressão do restaurante.
+    IMPORTANTE: Deve ser chamada APÓS o commit da transação no banco de dados.
+    Payload seguro: {"event": "print_jobs_available"} (sem texto/dados do cupom).
+    """
+    if not isinstance(restaurante_id, int) or isinstance(restaurante_id, bool) or restaurante_id <= 0:
+        return
+    try:
+        await manager.broadcast(
+            {"event": "print_jobs_available"},
+            restaurante_id=restaurante_id,
+            target_audience="agent"
+        )
+    except Exception as err:
+        logger.warning(f"Falha ao enviar notificação WSS de impressão para agente: {err}")
+
+
+def trigger_print_agent_wakeup(restaurante_id: int) -> None:
+    """
+    Helper síncrono para agendar a notificação WSS de wake up do agente de impressão após o commit.
+    Executa de forma segura sem reverter transações em caso de erro no broadcast.
+    """
+    import asyncio
+    if not isinstance(restaurante_id, int) or isinstance(restaurante_id, bool) or restaurante_id <= 0:
+        return
+    try:
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(notify_print_agent_jobs_available(restaurante_id))
+        except RuntimeError:
+            asyncio.run(notify_print_agent_jobs_available(restaurante_id))
+    except Exception as err:
+        logger.warning(f"Falha ao agendar wake up WSS do agente: {err}")
+

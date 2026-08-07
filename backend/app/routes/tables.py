@@ -270,6 +270,8 @@ def imprimir_recibo_mesa(
         db.add(job)
         db.commit()
         print(f"[PRINT JOB ENQUEUED] Job de fechamento ID {job.id} enfileirado para o Kôma Agent!")
+        from ..websocket_manager import trigger_print_agent_wakeup
+        trigger_print_agent_wakeup(rest_id)
     except Exception as print_err:
         raise HTTPException(
             status_code=500,
