@@ -15,8 +15,9 @@ PUBLIC_CLIENT_EVENTS = {
 class ConnectionManager:
     def __init__(self) -> None:
         # Keeps track of active WebSocket connections grouped by restaurante_id and client_type
-        # Structure: { restaurante_id: { "internal": [WebSocket...], "client": [WebSocket...] } }
+        # Structure: { restaurante_id: { "internal": [WebSocket...], "client": [WebSocket...], "agent": [WebSocket...] } }
         self.active_connections: dict[int, dict[str, list[WebSocket]]] = {}
+        self.main_loop = None
 
     async def connect(
         self,
@@ -31,6 +32,11 @@ class ConnectionManager:
             except Exception:
                 pass
             return
+
+        try:
+            self.main_loop = asyncio.get_running_loop()
+        except Exception:
+            pass
 
         await websocket.accept()
 
@@ -147,6 +153,7 @@ async def notify_print_agent_jobs_available(restaurante_id: int) -> None:
 def trigger_print_agent_wakeup(restaurante_id: int) -> None:
     """
     Helper síncrono para agendar a notificação WSS de wake up do agente de impressão após o commit.
+    Thread-safe: utiliza run_coroutine_threadsafe se chamado fora do event loop principal.
     Executa de forma segura sem reverter transações em caso de erro no broadcast.
     """
     import asyncio
@@ -157,7 +164,12 @@ def trigger_print_agent_wakeup(restaurante_id: int) -> None:
             loop = asyncio.get_running_loop()
             loop.create_task(notify_print_agent_jobs_available(restaurante_id))
         except RuntimeError:
-            asyncio.run(notify_print_agent_jobs_available(restaurante_id))
+            if manager.main_loop and manager.main_loop.is_running():
+                asyncio.run_coroutine_threadsafe(
+                    notify_print_agent_jobs_available(restaurante_id),
+                    manager.main_loop
+                )
+            else:
+                asyncio.run(notify_print_agent_jobs_available(restaurante_id))
     except Exception as err:
         logger.warning(f"Falha ao agendar wake up WSS do agente: {err}")
-

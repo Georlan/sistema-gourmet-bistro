@@ -893,6 +893,8 @@ def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_ta
             novo_lancamento.dispensado_impressao = True
 
         db.commit()
+        from ..websocket_manager import trigger_print_agent_wakeup
+        trigger_print_agent_wakeup(comanda.restaurante_id)
     except HTTPException:
         db.rollback()
         raise

@@ -4,6 +4,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 import jwt
 from ..config import settings, normalize_cors_origin
 from ..websocket_manager import manager
+from ..database import current_restaurante_id
 
 router = APIRouter(
     tags=["WebSocket"]
@@ -50,6 +51,7 @@ async def validate_websocket_origin(websocket: WebSocket) -> bool:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return False
 
+
 @router.websocket("/ws/cliente")
 async def websocket_cliente_endpoint(
     websocket: WebSocket,
@@ -78,6 +80,83 @@ async def websocket_cliente_endpoint(
         return
 
     await manager.connect(websocket, restaurante_id_val, client_type="client")
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket, restaurante_id_val)
+    except Exception:
+        manager.disconnect(websocket, restaurante_id_val)
+
+
+@router.websocket("/ws/agent")
+async def websocket_agent_endpoint(
+    websocket: WebSocket
+):
+    """
+    WebSocket dedicado para Kôma Print Agents nativos.
+    Autenticação por máquina via X-Agent-Token ou Authorization: Bearer <token>.
+    Isolamento estrito de tenant (restaurante_id).
+    Registra conexão com client_type="agent".
+    """
+    import hashlib
+    from ..database import SessionLocal
+    from ..models import PrintAgentToken
+
+    # Extrair token do cabeçalho X-Agent-Token ou Authorization
+    raw_token = websocket.headers.get("x-agent-token") or websocket.headers.get("X-Agent-Token")
+    if not raw_token:
+        auth_header = websocket.headers.get("authorization") or websocket.headers.get("Authorization")
+        if auth_header:
+            parts = auth_header.split()
+            if len(parts) == 2 and parts[0].lower() == "bearer":
+                raw_token = parts[1]
+
+    if not raw_token:
+        logging.getLogger("koma.websocket").warning(
+            "[WEBSOCKET AGENTE REJEITADO] Token de agente ausente nos cabeçalhos."
+        )
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    computed_hash = hashlib.sha256(raw_token.strip().encode("utf-8")).hexdigest()
+
+    # Validar token no banco de dados com suporte a PostgreSQL RLS (koma_internal.auth_print_agent)
+    db = SessionLocal()
+    tenant_reset = current_restaurante_id.set(None)
+    try:
+        from sqlalchemy import text
+        if db.get_bind().dialect.name == "postgresql":
+            identity = db.execute(
+                text("SELECT id, restaurante_id FROM koma_internal.auth_print_agent(:token_hash)"),
+                {"token_hash": computed_hash},
+            ).mappings().first()
+        else:
+            candidate = db.query(PrintAgentToken).filter(
+                PrintAgentToken.token_hash == computed_hash,
+                PrintAgentToken.ativo == True,
+            ).first()
+            identity = (
+                {"id": candidate.id, "restaurante_id": candidate.restaurante_id}
+                if candidate
+                else None
+            )
+
+        if not identity or not identity.get("restaurante_id"):
+            logging.getLogger("koma.websocket").warning(
+                "[WEBSOCKET AGENTE REJEITADO] Token de agente inválido ou revogado."
+            )
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+
+        restaurante_id_val = int(identity["restaurante_id"])
+    finally:
+        current_restaurante_id.reset(tenant_reset)
+        db.close()
+
+    # Registra conexão nativa do agente com client_type="agent"
+    await manager.connect(websocket, restaurante_id_val, client_type="agent")
+
     try:
         while True:
             await websocket.receive_text()
@@ -151,67 +230,3 @@ async def websocket_endpoint(
         }, restaurante_id_val, target_audience="internal")
     except Exception:
         manager.disconnect(websocket, restaurante_id_val)
-
-
-@router.websocket("/ws/agent")
-async def websocket_agent_endpoint(
-    websocket: WebSocket
-):
-    """
-    WebSocket dedicado para Kôma Print Agents nativos.
-    Autenticação por máquina via X-Agent-Token ou Authorization: Bearer <token>.
-    Isolamento estrito de tenant (restaurante_id).
-    Registra conexão com client_type="agent".
-    """
-    import hashlib
-    from ..database import SessionLocal
-    from ..models import PrintAgentToken
-
-    # Extrair token do cabeçalho X-Agent-Token ou Authorization
-    raw_token = websocket.headers.get("x-agent-token") or websocket.headers.get("X-Agent-Token")
-    if not raw_token:
-        auth_header = websocket.headers.get("authorization") or websocket.headers.get("Authorization")
-        if auth_header:
-            parts = auth_header.split()
-            if len(parts) == 2 and parts[0].lower() == "bearer":
-                raw_token = parts[1]
-
-    if not raw_token:
-        logging.getLogger("koma.websocket").warning(
-            "[WEBSOCKET AGENTE REJEITADO] Token de agente ausente nos cabeçalhos."
-        )
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-        return
-
-    computed_hash = hashlib.sha256(raw_token.strip().encode("utf-8")).hexdigest()
-
-    # Validar token no banco de dados
-    db = SessionLocal()
-    try:
-        agent = db.query(PrintAgentToken).filter(
-            PrintAgentToken.token_hash == computed_hash,
-            PrintAgentToken.ativo == True
-        ).first()
-
-        if not agent or not agent.restaurante_id:
-            logging.getLogger("koma.websocket").warning(
-                "[WEBSOCKET AGENTE REJEITADO] Token de agente inválido ou revogado."
-            )
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-            return
-
-        restaurante_id_val = int(agent.restaurante_id)
-    finally:
-        db.close()
-
-    # Registra conexão nativa do agente com client_type="agent"
-    await manager.connect(websocket, restaurante_id_val, client_type="agent")
-
-    try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        manager.disconnect(websocket, restaurante_id_val)
-    except Exception:
-        manager.disconnect(websocket, restaurante_id_val)
-
