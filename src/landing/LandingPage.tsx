@@ -4,6 +4,7 @@ import { Header } from './sections/Header';
 import { Hero } from './sections/Hero';
 import { ProductShowcase } from './sections/ProductShowcase';
 import { OperationFlow } from './sections/OperationFlow';
+import { ImpactMoment } from './sections/ImpactMoment';
 import { Ecosystem } from './sections/Ecosystem';
 import { FinalCTA } from './sections/FinalCTA';
 
@@ -22,7 +23,7 @@ export default function LandingPage() {
       el.setAttribute('content', content);
     };
 
-    setMeta('description', 'KÔMA centraliza a operação do seu restaurante: PDV, mesas, cozinha, cardápio digital, delivery e impressão térmica em um único sistema.');
+    setMeta('description', 'KÔMA centraliza a operação do seu restaurante: PDV, mesas, cozinha, cardápio digital, delivery e impressão automática em um único sistema.');
     setMeta('theme-color', '#0a0a0a');
     setMeta('og:title', 'KÔMA — Sistema de gestão para restaurantes', true);
     setMeta('og:description', 'PDV, mesas, cozinha, cardápio digital, delivery e impressão em um único sistema.', true);
@@ -38,6 +39,7 @@ export default function LandingPage() {
         <Hero />
         <ProductShowcase />
         <OperationFlow />
+        <ImpactMoment />
         <Ecosystem />
         <FinalCTA />
       </main>
