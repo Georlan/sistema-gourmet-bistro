@@ -1,6 +1,8 @@
+import os
+import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 import jwt
-from ..config import settings
+from ..config import settings, normalize_cors_origin
 from ..websocket_manager import manager
 
 router = APIRouter(
@@ -10,20 +12,43 @@ router = APIRouter(
 async def validate_websocket_origin(websocket: WebSocket) -> bool:
     """
     Valida a origem da conexão WebSocket contra a allowlist configurada.
-    Se a origem estiver presente e não for autorizada, encerra com WS_1008_POLICY_VIOLATION.
+    - Origem presente e autorizada: aceita.
+    - Origem presente e não autorizada: encerra com WS_1008_POLICY_VIOLATION.
+    - Origem ausente: em produção, encerra com WS_1008_POLICY_VIOLATION por padrão.
+      Em ambiente de desenvolvimento/teste ou com WEBSOCKET_ALLOW_MISSING_ORIGIN=true, autoriza.
+    Registra apenas a origem sanitizada (nunca tokens, query params ou dados de usuário).
     """
     raw_origin = websocket.headers.get("origin") or websocket.headers.get("Origin")
+    allowed_origins = settings.get_cors_allowed_origins()
+    
     if raw_origin:
-        clean_origin = raw_origin.rstrip("/")
-        allowed = settings.get_cors_allowed_origins()
-        if clean_origin not in allowed:
-            import logging
+        try:
+            clean_origin = normalize_cors_origin(raw_origin)
+        except RuntimeError:
+            logging.getLogger("koma.websocket").warning(
+                "[WEBSOCKET BLOQUEADO] Cabeçalho Origin malformado."
+            )
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return False
+
+        if clean_origin not in allowed_origins:
             logging.getLogger("koma.websocket").warning(
                 f"[WEBSOCKET BLOQUEADO] Origem não autorizada: {clean_origin}"
             )
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return False
-    return True
+        return True
+    else:
+        # Origem ausente
+        env = os.getenv("ENVIRONMENT", "production").lower()
+        if env in ("development", "test") or settings.WEBSOCKET_ALLOW_MISSING_ORIGIN:
+            return True
+            
+        logging.getLogger("koma.websocket").warning(
+            "[WEBSOCKET BLOQUEADO] Conexão sem cabeçalho Origin rejeitada em produção."
+        )
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return False
 
 @router.websocket("/ws/cliente")
 async def websocket_cliente_endpoint(
