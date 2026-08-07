@@ -1,6 +1,7 @@
 import { CardapioAssetUploader } from './CardapioAssetUploader';
 import { supabase } from '../cardapio/SupabaseClient';
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import logoImg from '../assets/logo.png';
 import { LoginButton } from '../../components/shadcnblocks/login-button';
 import {
   DollarSign, ArrowUpRight, ArrowDownRight, Lock, Unlock, Users,
@@ -3452,7 +3453,7 @@ export function CaixaPanel({
                     </button>
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-xl bg-[#121214] border border-[#27272A] flex items-center justify-center overflow-hidden shrink-0">
-                        <img src="/logo.png" alt="Kôma" className="w-6 h-6 object-contain" />
+                        <img src={logoImg} alt="Kôma" className="w-6 h-6 object-contain" />
                       </div>
                       <div className="font-serif font-bold text-sm tracking-tight text-white">Kôma Caixa</div>
                     </div>
@@ -3668,7 +3669,7 @@ export function CaixaPanel({
                 </button>
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-xl bg-[#121214] border border-[#27272A] flex items-center justify-center overflow-hidden shrink-0">
-                    <img src="/logo.png" alt="Kôma" className="w-6 h-6 object-contain" />
+                    <img src={logoImg} alt="Kôma" className="w-6 h-6 object-contain" />
                   </div>
                   <div className="font-serif font-bold text-sm tracking-tight text-white">Kôma Caixa</div>
                 </div>

@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import logoImg from './assets/logo.png';
 import { LoginButton } from '../components/shadcnblocks/login-button';
 import { Menu, X, User, Wifi, WifiOff, SlidersHorizontal, ArrowDownRight, ArrowUpRight, RefreshCw, Bell, Printer, TrendingUp, Utensils, CheckCircle2, UserCheck, UserX, ShoppingBag } from 'lucide-react';
 import { Table, Order, DraftItem, AppSettings, AppRole, Product } from './types';
@@ -1788,7 +1789,7 @@ export default function App() {
           <div className="text-center space-y-3 mb-7">
             <div className="flex justify-center">
               <div className="h-20 w-20 bg-[#121214] border border-[#27272A] rounded-2xl flex items-center justify-center shadow-lg shrink-0 overflow-hidden">
-                <img src="/logo.png" alt="Kôma Logo" className="h-16 w-16 object-contain" />
+                <img src={logoImg} alt="Kôma Logo" className="h-16 w-16 object-contain" />
               </div>
             </div>
             <p className="text-[10px] text-emerald-400 uppercase tracking-widest font-sans font-bold bg-emerald-500/10 px-3 py-1 rounded-full w-fit mx-auto border border-emerald-500/15">
@@ -1897,7 +1898,7 @@ export default function App() {
 
               <div className="flex items-center gap-2">
                 <div className="h-9 w-9 bg-[#121214] rounded-xl flex items-center justify-center border border-[#27272A] shrink-0 overflow-hidden">
-                  <img src="/logo.png" alt="Kôma Logo" className="h-7 w-7 object-contain" />
+                  <img src={logoImg} alt="Kôma Logo" className="h-7 w-7 object-contain" />
                 </div>
                 <div>
                   <h1 className="font-serif text-base sm:text-lg font-bold tracking-tight text-white leading-tight">
@@ -1948,7 +1949,7 @@ export default function App() {
               <div className={clsx('flex', 'items-center', 'justify-between', 'pb-4', 'border-b', 'border-[#27272A]')}>
                 <div className={clsx('flex', 'items-center', 'gap-2')}>
                   <div className={clsx('h-8', 'w-8', 'bg-[#121214]', 'rounded-lg', 'flex', 'items-center', 'justify-center', 'border', 'border-[#27272A]', 'shadow-sm', 'shrink-0', 'overflow-hidden')}>
-                    <img src="/logo.png" alt="Kôma Logo" className={clsx('h-6', 'w-6', 'object-contain')} />
+                    <img src={logoImg} alt="Kôma Logo" className={clsx('h-6', 'w-6', 'object-contain')} />
                   </div>
                   <span className={clsx('font-serif', 'font-bold', 'text-base', 'text-[#FAF7F2]')}>{restaurantName}</span>
                 </div>

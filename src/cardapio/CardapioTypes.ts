@@ -81,7 +81,9 @@ export const LOCAL_PRODUCT_PLACEHOLDER = "data:image/svg+xml;utf8," + encodeURIC
 </svg>
 `);
 
-export const LOCAL_LOGO_PLACEHOLDER = "/logo.png";
+import logoImg from '../assets/logo.png';
+
+export const LOCAL_LOGO_PLACEHOLDER = logoImg;
 
 export const LOCAL_BANNER_PLACEHOLDER = "data:image/svg+xml;utf8," + encodeURIComponent(`
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 1200 400" fill="none">
