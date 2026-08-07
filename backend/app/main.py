@@ -239,6 +239,9 @@ async def handle_unhandled_exceptions_middleware(request: Request, call_next):
 
 @app.middleware("http")
 async def add_sentry_context_and_tenant(request: Request, call_next):
+    if request.method == "OPTIONS":
+        return await call_next(request)
+
     tenant_id = request.headers.get("X-Tenant-ID", "default")
     restaurante_id: int | None = None
     
@@ -299,14 +302,15 @@ async def add_sentry_context_and_tenant(request: Request, call_next):
     sentry_sdk.set_tag("tenant_id", tenant_id)
     sentry_sdk.set_tag("restaurante_id", str(restaurante_id) if restaurante_id is not None else "")
 
-    # Define a variável de contexto do tenant de forma segura para esta requisição
-    tenant_context = current_restaurante_id.set(restaurante_id)
-    try:
-        response = await call_next(request)
-        return response
-    finally:
-        # Garante a limpeza do contexto após o término da requisição
-        current_restaurante_id.reset(tenant_context)
+    if restaurante_id is not None:
+        tenant_context = current_restaurante_id.set(restaurante_id)
+        try:
+            response = await call_next(request)
+            return response
+        finally:
+            current_restaurante_id.reset(tenant_context)
+    else:
+        return await call_next(request)
 
 @app.middleware("http")
 async def add_security_headers_middleware(request: Request, call_next):
