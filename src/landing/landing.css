@@ -1,18 +1,18 @@
 /* ============================================================
    KÔMA LANDING PAGE — DESIGN SYSTEM
-   Scoped under .koma-landing to isolate from operational app.
-   Colors derived from brand: Green #00b894, Black #0a0a0a
+   Scoped under .koma-landing.
+   Branding: Green #00b894, Black #0a0a0a, White #ffffff, Off-white #f8f9fa
    Typography: Montserrat 900 (monumental), Inter (body), Space Grotesk (accent)
    ============================================================ */
 
-/* --- Custom Properties --- */
 .koma-landing {
   --koma-black: #0a0a0a;
   --koma-green: #00b894;
   --koma-green-dark: #00866b;
   --koma-white: #ffffff;
+  --koma-offwhite: #f8f9fa;
   --koma-graphite: #1a1a1a;
-  --koma-gray: #666666;
+  --koma-gray: #777777;
   --koma-card: #121420;
   --koma-display: 'Montserrat', sans-serif;
   --koma-body: 'Inter', sans-serif;
@@ -38,61 +38,50 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 clamp(1.5rem, 4vw, 4rem);
+  padding: 0 clamp(1.5rem, 5vw, 6rem);
   height: 72px;
   background: transparent;
   transition: background-color 0.3s ease, backdrop-filter 0.3s ease;
 }
 
 .koma-header--scrolled {
-  background-color: rgba(10, 10, 10, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-}
-
-.koma-header-logo {
-  display: flex;
-  align-items: center;
-  text-decoration: none;
+  background-color: rgba(10, 10, 10, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .koma-header-logo img {
-  height: 36px;
+  height: 38px;
   width: auto;
 }
 
 .koma-header-nav {
   display: flex;
   align-items: center;
-  gap: 2rem;
+  gap: 2.5rem;
 }
 
 .koma-header-link {
-  font-family: var(--koma-body);
-  font-size: 0.875rem;
-  font-weight: 500;
+  font-family: var(--koma-accent);
+  font-size: 0.8125rem;
+  font-weight: 600;
   color: rgba(255, 255, 255, 0.7);
   text-decoration: none;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   transition: color 0.2s ease;
 }
 
 .koma-header-link:hover {
-  color: var(--koma-white);
+  color: var(--koma-green);
 }
 
-.koma-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-/* --- Hamburger (mobile only) --- */
 .koma-hamburger {
   display: none;
   flex-direction: column;
   justify-content: space-between;
-  width: 24px;
+  width: 26px;
   height: 18px;
   border: none;
   background: none;
@@ -107,22 +96,12 @@
   height: 2px;
   background: var(--koma-white);
   transition: transform 0.3s ease, opacity 0.3s ease;
-  transform-origin: center;
 }
 
-.koma-hamburger--open span:nth-child(1) {
-  transform: rotate(45deg) translate(5.5px, 5.5px);
-}
+.koma-hamburger--open span:nth-child(1) { transform: rotate(45deg) translate(5px, 5px); }
+.koma-hamburger--open span:nth-child(2) { opacity: 0; }
+.koma-hamburger--open span:nth-child(3) { transform: rotate(-45deg) translate(6px, -6px); }
 
-.koma-hamburger--open span:nth-child(2) {
-  opacity: 0;
-}
-
-.koma-hamburger--open span:nth-child(3) {
-  transform: rotate(-45deg) translate(5.5px, -5.5px);
-}
-
-/* --- Mobile Menu --- */
 .koma-mobile-menu {
   position: fixed;
   inset: 0;
@@ -150,213 +129,261 @@
 
 .koma-mobile-menu a {
   font-family: var(--koma-display);
-  font-size: 1.5rem;
-  font-weight: 700;
+  font-size: 1.75rem;
+  font-weight: 900;
   color: var(--koma-white);
   text-decoration: none;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
-/* --- Hero --- */
+/* --- Hero Section --- */
 .koma-hero {
   position: relative;
-  min-height: 100svh;
-  min-height: 100vh; /* fallback */
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  padding: 100px clamp(1.5rem, 5vw, 6rem) clamp(2rem, 4vw, 4rem);
+  justify-content: space-between;
+  padding: 100px clamp(1.5rem, 5vw, 6rem) clamp(2rem, 4vw, 3rem);
   overflow: hidden;
   background-color: var(--koma-black);
 }
 
+.koma-hero-main {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  gap: clamp(2rem, 4vw, 5rem);
+  margin-top: auto;
+  margin-bottom: auto;
+}
+
 .koma-hero-content {
   position: relative;
-  z-index: 2;
+  z-index: 5;
 }
 
 .koma-hero-headline {
-  position: relative;
   display: flex;
   flex-direction: column;
   margin: 0;
-  padding: 0;
 }
 
 .koma-hero-line {
   display: block;
   font-family: var(--koma-display);
   font-weight: 900;
-  line-height: 0.88;
+  line-height: 0.86;
   letter-spacing: -0.04em;
   text-transform: uppercase;
   color: var(--koma-white);
 }
 
-.koma-hero-line--sm {
-  font-size: clamp(2rem, 6vw, 7rem);
-  margin-bottom: clamp(0.25rem, 0.5vw, 0.5rem);
-}
+.koma-hero-line--sm { font-size: clamp(2rem, 5vw, 6rem); margin-bottom: 0.2rem; }
+.koma-hero-line--xl { font-size: clamp(3.5rem, 9.5vw, 11rem); }
+.koma-hero-line--lg { font-size: clamp(2.8rem, 7.5vw, 9rem); }
 
-.koma-hero-line--xl {
-  font-size: clamp(3rem, 13vw, 15rem);
-}
-
-.koma-hero-line--lg {
-  font-size: clamp(2.5rem, 10vw, 12rem);
-}
-
-/* Green Bar — the KÔMA signature */
 .koma-hero-bar {
   display: block;
   width: 100%;
-  height: clamp(6px, 1vw, 14px);
+  height: clamp(8px, 1.2vw, 16px);
   background-color: var(--koma-green);
-  margin: clamp(0.5rem, 1.5vw, 1.5rem) 0;
-}
-
-/* Standalone bar (used in other contexts) */
-.koma-bar {
-  width: 100%;
-  height: clamp(4px, 0.6vw, 8px);
-  background-color: var(--koma-green);
+  margin: clamp(0.75rem, 1.5vw, 1.75rem) 0;
 }
 
 .koma-hero-sub {
   font-family: var(--koma-body);
-  font-size: clamp(0.875rem, 1.2vw, 1.125rem);
-  color: var(--koma-gray);
-  margin-top: clamp(1.5rem, 3vw, 3rem);
-  max-width: 36ch;
-  line-height: 1.6;
-  margin-bottom: 0;
+  font-size: clamp(1rem, 1.4vw, 1.25rem);
+  color: rgba(255, 255, 255, 0.7);
+  margin-top: clamp(1.5rem, 2.5vw, 2.5rem);
+  max-width: 38ch;
+  line-height: 1.5;
 }
 
 .koma-hero-cta {
-  margin-top: clamp(1rem, 2vw, 2rem);
+  margin-top: clamp(1.5rem, 2.5vw, 2.5rem);
+}
+
+/* Hero Device — MASSIVE PROTAGONIST */
+.koma-hero-device-wrap {
   position: relative;
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
   z-index: 4;
+  perspective: 1200px;
 }
 
-/* Hero Device */
 .koma-hero-device {
-  position: absolute;
-  right: clamp(3rem, 10vw, 12rem);
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 3;
-  will-change: transform, opacity;
-  perspective: 1000px;
+  width: clamp(340px, 44vw, 580px);
+  transform-style: preserve-3d;
+  will-change: transform;
 }
 
-/* Hero Background Geometry */
-.koma-hero-geometry {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  overflow: hidden;
+/* --- Editorial Feature Strip (Hero Bottom) --- */
+.koma-hero-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: clamp(1.25rem, 2vw, 2rem);
+  margin-top: clamp(2rem, 4vw, 4rem);
+  gap: 1rem;
 }
 
-.koma-hero-circle {
-  position: absolute;
-  right: -10vw;
-  bottom: -15vh;
-  width: 55vw;
-  height: 55vw;
-  border: 1px solid rgba(0, 184, 148, 0.05);
-  border-radius: 50%;
+.koma-hero-strip-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
 }
 
-.koma-hero-diagonal {
-  position: absolute;
-  left: 15%;
-  top: 10%;
-  width: 1px;
-  height: 120%;
-  background: rgba(0, 184, 148, 0.03);
-  transform: rotate(35deg);
-  transform-origin: top left;
+.koma-hero-strip-num {
+  font-family: var(--koma-accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--koma-green);
 }
 
-/* --- Device Tablet --- */
-.koma-device-tablet {
-  width: clamp(200px, 28vw, 380px);
-  aspect-ratio: 3 / 4;
-  border-radius: 16px;
+.koma-hero-strip-name {
+  font-family: var(--koma-accent);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* --- Real KÔMA Tablet Frame Component --- */
+.koma-real-tablet {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 18px;
   background: var(--koma-graphite);
-  border: 2px solid #2a2a2a;
-  padding: 12px;
-  box-shadow: 0 40px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.03);
+  border: 3px solid #2a2b32;
+  padding: 10px;
+  box-shadow: -20px 30px 70px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 
-.koma-device-screen {
+.koma-real-screen {
   width: 100%;
   height: 100%;
-  background: #090a0f;
-  border-radius: 8px;
+  background: #0d0e15;
+  border-radius: 10px;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.koma-real-app-header {
+  height: 38px;
+  background: #141622;
+  border-bottom: 1px solid #1f2234;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+}
+
+.koma-real-app-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--koma-accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--koma-white);
+}
+
+.koma-real-app-badge {
+  background: rgba(0, 184, 148, 0.15);
+  color: var(--koma-green);
+  font-size: 0.65rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.koma-real-app-body {
+  flex: 1;
   display: flex;
 }
 
-.koma-device-sidebar {
-  width: 28px;
-  background: var(--koma-card);
+.koma-real-sidebar {
+  width: 44px;
+  background: #11121c;
+  border-right: 1px solid #1f2234;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding-top: 14px;
-  gap: 8px;
-  flex-shrink: 0;
+  padding-top: 12px;
+  gap: 14px;
 }
 
-.koma-device-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: #333;
+.koma-real-sidebar-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  color: #666;
 }
 
-.koma-device-dot--active {
+.koma-real-sidebar-icon--active {
   background: var(--koma-green);
+  color: var(--koma-black);
+  font-weight: bold;
 }
 
-.koma-device-main {
+.koma-real-grid {
   flex: 1;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding: 10px;
+  background: #0b0c12;
+}
+
+.koma-real-mesa {
+  border-radius: 6px;
+  background: #141622;
+  border: 1px solid #222538;
   padding: 8px;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  justify-content: space-between;
 }
 
-.koma-device-topbar {
-  height: 10px;
-  background: var(--koma-card);
-  border-radius: 3px;
-  margin-bottom: 4px;
+.koma-real-mesa--occupied {
+  border-color: rgba(0, 184, 148, 0.5);
+  background: rgba(0, 184, 148, 0.08);
 }
 
-.koma-device-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 4px;
-  flex: 1;
+.koma-real-mesa--waiting {
+  border-color: rgba(245, 158, 11, 0.5);
+  background: rgba(245, 158, 11, 0.08);
 }
 
-.koma-device-card {
-  border-radius: 3px;
-  background: var(--koma-card);
+.koma-real-mesa-num {
+  font-family: var(--koma-accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--koma-white);
 }
 
-.koma-device-card--active {
-  background: var(--koma-green);
-  opacity: 0.8;
+.koma-real-mesa-val {
+  font-family: var(--koma-body);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--koma-green);
 }
 
-.koma-device-card--occupied {
-  background: #f59e0b;
-  opacity: 0.65;
+.koma-real-mesa-status {
+  font-size: 0.55rem;
+  text-transform: uppercase;
+  color: #888;
+  letter-spacing: 0.04em;
 }
 
 /* --- Buttons --- */
@@ -364,10 +391,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.875rem 2.5rem;
-  font-family: var(--koma-body);
+  padding: 1rem 2.75rem;
+  font-family: var(--koma-accent);
   font-size: 0.8125rem;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   text-decoration: none;
@@ -377,634 +404,408 @@
   transition: background-color 0.2s ease, transform 0.15s ease;
 }
 
-.koma-btn:active {
-  transform: scale(0.98);
-}
+.koma-btn:active { transform: scale(0.98); }
+.koma-btn--primary { background-color: var(--koma-green); color: var(--koma-black); }
+.koma-btn--primary:hover { background-color: var(--koma-green-dark); }
+.koma-btn--dark { background-color: var(--koma-black); color: var(--koma-white); }
+.koma-btn--dark:hover { background-color: var(--koma-graphite); }
+.koma-btn--sm { padding: 0.625rem 1.5rem; font-size: 0.75rem; }
 
-.koma-btn:focus-visible {
-  outline: 2px solid var(--koma-green);
-  outline-offset: 4px;
-}
-
-.koma-btn--primary {
-  background-color: var(--koma-green);
-  color: var(--koma-black);
-}
-
-.koma-btn--primary:hover {
-  background-color: var(--koma-green-dark);
-}
-
-.koma-btn--dark {
-  background-color: var(--koma-black);
-  color: var(--koma-white);
-}
-
-.koma-btn--dark:hover {
-  background-color: var(--koma-graphite);
-}
-
-.koma-btn--sm {
-  padding: 0.625rem 1.5rem;
-  font-size: 0.75rem;
-}
-
-.koma-btn--outline {
-  background: transparent;
-  border: 1px solid var(--koma-green);
-  color: var(--koma-green);
-}
-
-.koma-btn--outline:hover {
-  background: rgba(0, 184, 148, 0.1);
-}
-
-/* --- Sections Base --- */
-.koma-section {
-  position: relative;
-  padding: clamp(5rem, 12vw, 12rem) clamp(1.5rem, 5vw, 6rem);
-  overflow: hidden;
-}
-
-.koma-section--white {
+/* --- Section 2: Product Showcase (WHITE BACKGROUND) --- */
+.koma-section-white {
   background-color: var(--koma-white);
   color: var(--koma-black);
+  padding: clamp(5rem, 10vw, 10rem) clamp(1.5rem, 5vw, 6rem);
+  position: relative;
 }
 
-.koma-section--green {
-  background-color: var(--koma-green);
+.koma-showcase-header {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: flex-end;
+  gap: 3rem;
+  margin-bottom: clamp(3rem, 6vw, 6rem);
+}
+
+.koma-showcase-title {
+  font-family: var(--koma-display);
+  font-size: clamp(2.5rem, 7.5vw, 6.5rem);
+  font-weight: 900;
+  line-height: 0.88;
+  letter-spacing: -0.04em;
+  text-transform: uppercase;
+  margin: 0;
   color: var(--koma-black);
 }
 
-.koma-section--dark {
-  background-color: var(--koma-black);
-  color: var(--koma-white);
+.koma-showcase-editorial {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
 }
 
-.koma-section-title {
-  font-family: var(--koma-display);
-  font-size: clamp(2rem, 6vw, 5.5rem);
-  font-weight: 900;
-  line-height: 0.92;
-  letter-spacing: -0.03em;
-  text-transform: uppercase;
-  margin: 0 0 clamp(1rem, 3vw, 2.5rem) 0;
+.koma-showcase-item {
+  border-left: 2px solid var(--koma-black);
+  padding-left: 1.25rem;
 }
 
-.koma-section-sub {
+.koma-showcase-item-num {
+  font-family: var(--koma-accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--koma-green-dark);
+  letter-spacing: 0.08em;
+}
+
+.koma-showcase-item-desc {
   font-family: var(--koma-body);
-  font-size: clamp(0.875rem, 1.2vw, 1.125rem);
-  line-height: 1.6;
-  max-width: 48ch;
-  opacity: 0.65;
-  margin: 0;
+  font-size: 0.9375rem;
+  color: #444;
+  margin-top: 0.25rem;
+  line-height: 1.5;
 }
 
-/* --- Product Showcase --- */
-.koma-showcase-screen {
-  width: clamp(70vw, 85vw, 95vw);
-  margin: clamp(2.5rem, 6vw, 5rem) auto 0;
+/* Showcase Screen - MASSIVE REAL UI DISPLAY */
+.koma-showcase-display {
+  position: relative;
+  width: clamp(85vw, 92vw, 1300px);
+  margin: 0 auto;
+}
+
+.koma-showcase-frame {
+  width: 100%;
+  background: #0d0e15;
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 40px 90px rgba(0, 0, 0, 0.25);
+  border: 1px solid #1a1c28;
 }
 
-.koma-showcase-interface {
-  background: #090a0f;
-  aspect-ratio: 16 / 10;
-  display: flex;
-  flex-direction: column;
-}
-
-.koma-showcase-topbar {
-  height: clamp(24px, 3vw, 40px);
-  background: var(--koma-card);
+/* Annotations directly pointing to interface */
+.koma-annotation {
+  position: absolute;
+  z-index: 10;
   display: flex;
   align-items: center;
-  padding: 0 clamp(8px, 1.5vw, 16px);
-  gap: clamp(6px, 1vw, 12px);
+  gap: 10px;
 }
 
-.koma-showcase-logo-placeholder {
-  width: clamp(16px, 2vw, 24px);
-  height: clamp(16px, 2vw, 24px);
+.koma-annotation-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
   background: var(--koma-green);
-  border-radius: 4px;
-  opacity: 0.7;
+  box-shadow: 0 0 0 4px rgba(0, 184, 148, 0.3);
 }
 
-.koma-showcase-nav-items {
-  display: flex;
-  gap: clamp(4px, 0.8vw, 10px);
-}
-
-.koma-showcase-nav-item {
-  width: clamp(30px, 4vw, 50px);
-  height: clamp(6px, 0.8vw, 10px);
-  background: #2a2a2a;
-  border-radius: 3px;
-}
-
-.koma-showcase-nav-item--active {
+.koma-annotation-line {
+  height: 1px;
+  width: 40px;
   background: var(--koma-green);
-  opacity: 0.6;
 }
 
-.koma-showcase-body {
-  flex: 1;
-  display: flex;
+.koma-annotation-label {
+  font-family: var(--koma-accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: var(--koma-black);
+  color: var(--koma-white);
+  padding: 6px 12px;
+  border-radius: 2px;
 }
 
-.koma-showcase-sidebar-lg {
-  width: clamp(40px, 5vw, 70px);
-  background: var(--koma-card);
-  display: flex;
-  flex-direction: column;
-  padding: clamp(8px, 1.5vw, 16px) 0;
-  gap: clamp(4px, 0.6vw, 8px);
-  align-items: center;
-}
-
-.koma-showcase-sidebar-item {
-  width: 60%;
-  height: clamp(6px, 0.8vw, 10px);
-  background: #2a2a2a;
-  border-radius: 3px;
-}
-
-.koma-showcase-sidebar-item--active {
-  background: var(--koma-green);
-  opacity: 0.5;
-}
-
-.koma-showcase-grid-lg {
-  flex: 1;
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: clamp(3px, 0.5vw, 8px);
-  padding: clamp(8px, 1.5vw, 16px);
-}
-
-.koma-showcase-card {
-  border-radius: 4px;
-  background: var(--koma-card);
-  min-height: clamp(20px, 3vw, 50px);
-}
-
-.koma-showcase-card--active {
-  background: var(--koma-green);
-  opacity: 0.7;
-}
-
-.koma-showcase-card--occupied {
-  background: #f59e0b;
-  opacity: 0.5;
-}
-
-/* --- Operation Flow --- */
-.koma-flow {
-  height: 300vh;
+/* --- Section 3: Operation Flow (STICKY SCENE) --- */
+.koma-flow-section {
+  height: 350vh;
   position: relative;
+  background-color: var(--koma-black);
 }
 
 .koma-flow-sticky {
   position: sticky;
   top: 0;
-  height: 100svh;
-  height: 100vh; /* fallback */
+  height: 100vh;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background: var(--koma-black);
+  justify-content: space-between;
+  padding: 80px clamp(1.5rem, 5vw, 6rem) clamp(2rem, 4vw, 4rem);
   overflow: hidden;
-  padding: 0 clamp(1.5rem, 5vw, 6rem);
 }
 
-.koma-flow-title {
+/* Massive Dynamic Word background */
+.koma-flow-giant-word {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   font-family: var(--koma-display);
-  font-size: clamp(1.5rem, 4vw, 3.5rem);
+  font-size: clamp(5rem, 18vw, 22rem);
   font-weight: 900;
+  letter-spacing: -0.05em;
   text-transform: uppercase;
-  text-align: center;
-  letter-spacing: -0.02em;
-  line-height: 1;
-  margin: 0 0 clamp(2rem, 5vw, 4rem) 0;
-  color: var(--koma-white);
+  color: rgba(255, 255, 255, 0.03);
+  white-space: nowrap;
+  user-select: none;
+  pointer-events: none;
+  z-index: 1;
 }
 
-.koma-flow-line {
+.koma-flow-main-headline {
   position: relative;
-  width: clamp(280px, 70vw, 900px);
-  height: 3px;
-  background: #1a1a1a;
+  z-index: 5;
+  font-family: var(--koma-display);
+  font-size: clamp(2rem, 5vw, 4.5rem);
+  font-weight: 900;
+  line-height: 0.9;
+  letter-spacing: -0.03em;
+  text-transform: uppercase;
+  color: var(--koma-white);
+  margin: 0;
 }
 
-.koma-flow-line-fill {
+/* Timeline & Stage Container */
+.koma-flow-center {
+  position: relative;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  align-items: center;
+  gap: clamp(2rem, 5vw, 6rem);
+  margin: auto 0;
+}
+
+/* Stage Copy (Pure Editorial - NO cards) */
+.koma-flow-editorial-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.koma-flow-editorial-tag {
+  font-family: var(--koma-accent);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--koma-green);
+  text-transform: uppercase;
+}
+
+.koma-flow-editorial-heading {
+  font-family: var(--koma-display);
+  font-size: clamp(1.75rem, 4vw, 3.5rem);
+  font-weight: 900;
+  line-height: 0.95;
+  text-transform: uppercase;
+  color: var(--koma-white);
+  margin: 0;
+}
+
+.koma-flow-editorial-body {
+  font-family: var(--koma-body);
+  font-size: clamp(0.9375rem, 1.2vw, 1.125rem);
+  color: rgba(255, 255, 255, 0.7);
+  max-width: 36ch;
+  margin: 0;
+}
+
+/* Real Stage UI View */
+.koma-flow-ui-stage {
+  width: 100%;
+  background: #10121b;
+  border: 1px solid #1e2132;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5);
+}
+
+/* Timeline Track at bottom of sticky scene */
+.koma-flow-timeline-bar {
+  position: relative;
+  z-index: 5;
+  width: 100%;
+  height: 4px;
+  background: #1a1d2c;
+}
+
+.koma-flow-timeline-progress {
+  height: 100%;
+  background: var(--koma-green);
   position: absolute;
   left: 0;
   top: 0;
-  height: 100%;
-  background: var(--koma-green);
 }
 
-.koma-flow-dot {
-  position: absolute;
-  top: 50%;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--koma-green);
-  transform: translate(-50%, -50%);
-  box-shadow: 0 0 0 4px rgba(0, 184, 148, 0.2);
-}
-
-.koma-flow-marker {
-  position: absolute;
-  top: 50%;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #2a2a2a;
-  transform: translate(-50%, -50%);
-}
-
-.koma-flow-stages {
+.koma-flow-timeline-stages {
   display: flex;
   justify-content: space-between;
-  width: clamp(280px, 70vw, 900px);
-  margin-top: clamp(1.25rem, 3vw, 2rem);
+  margin-top: 1rem;
 }
 
-.koma-flow-stage {
-  text-align: center;
-  will-change: opacity, transform;
-}
-
-.koma-flow-stage-label {
+.koma-flow-timeline-step {
   font-family: var(--koma-accent);
-  font-size: clamp(0.625rem, 1vw, 0.875rem);
-  font-weight: 600;
-  letter-spacing: 0.1em;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.3);
+  transition: color 0.3s ease;
+}
+
+.koma-flow-timeline-step--active {
   color: var(--koma-green);
 }
 
-.koma-flow-pattern {
-  position: absolute;
-  inset: 0;
-  font-family: var(--koma-display);
-  font-size: clamp(3rem, 6vw, 7rem);
-  font-weight: 900;
-  color: var(--koma-white);
-  opacity: 0.02;
-  line-height: 1.3;
-  user-select: none;
-  pointer-events: none;
-  white-space: nowrap;
-  overflow: hidden;
-  transform: rotate(-5deg) scale(1.3);
-  transform-origin: center center;
+/* --- Section 4: Ecosystem (OFF-WHITE / WHITE CONTRAST) --- */
+.koma-ecosystem-section {
+  background-color: var(--koma-offwhite);
+  color: var(--koma-black);
+  padding: clamp(6rem, 12vw, 12rem) clamp(1.5rem, 5vw, 6rem);
 }
 
-/* --- Ecosystem --- */
-.koma-ecosystem-devices {
+.koma-eco-title {
+  font-family: var(--koma-display);
+  font-size: clamp(2.5rem, 7.5vw, 6.5rem);
+  font-weight: 900;
+  line-height: 0.88;
+  letter-spacing: -0.04em;
+  text-transform: uppercase;
+  margin: 0 0 1rem 0;
+  color: var(--koma-black);
+}
+
+.koma-eco-subtitle {
+  font-family: var(--koma-body);
+  font-size: clamp(1rem, 1.4vw, 1.25rem);
+  color: #555;
+  max-width: 44ch;
+  margin: 0 0 clamp(4rem, 8vw, 7rem) 0;
+}
+
+/* BRUTALLY INCREASED DEVICES COMPOSITION */
+.koma-eco-stage {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  gap: clamp(1rem, 3vw, 3rem);
-  margin-top: clamp(3rem, 8vw, 7rem);
   position: relative;
+  gap: clamp(1rem, 3vw, 3rem);
 }
 
-.koma-ecosystem-monitor,
-.koma-ecosystem-tablet,
-.koma-ecosystem-phone {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
+.koma-eco-monitor {
+  width: clamp(380px, 50vw, 750px);
+  z-index: 1;
 }
 
-.koma-eco-device {
-  border-radius: 12px;
-  background: var(--koma-graphite);
-  border: 2px solid #2a2a2a;
-  padding: 8px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+.koma-eco-tablet {
+  width: clamp(220px, 28vw, 400px);
+  z-index: 2;
+  margin-left: -5vw;
 }
 
-.koma-eco-device--monitor {
-  width: clamp(260px, 36vw, 440px);
+.koma-eco-phone {
+  width: clamp(140px, 16vw, 220px);
+  z-index: 3;
+  margin-left: -4vw;
 }
 
-.koma-eco-device--tablet {
-  width: clamp(140px, 18vw, 240px);
-}
-
-.koma-eco-device--phone {
-  width: clamp(80px, 10vw, 130px);
-}
-
-.koma-eco-screen {
-  background: #090a0f;
-  border-radius: 6px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.koma-eco-screen--monitor {
-  aspect-ratio: 16 / 10;
-}
-
-.koma-eco-screen--tablet {
-  aspect-ratio: 3 / 4;
-}
-
-.koma-eco-screen--phone {
-  aspect-ratio: 9 / 16;
-}
-
-.koma-eco-topbar {
-  height: clamp(6px, 1vw, 12px);
-  background: var(--koma-card);
-  margin: 4px 4px 2px;
-  border-radius: 2px;
-}
-
-.koma-eco-grid {
+/* Editorial Labels below devices (NO CARDS/BOXES) */
+.koma-eco-labels-grid {
   display: grid;
-  gap: 2px;
-  padding: 4px;
-  flex: 1;
-}
-
-.koma-eco-grid--wide {
-  grid-template-columns: repeat(4, 1fr);
-}
-
-.koma-eco-grid--medium {
   grid-template-columns: repeat(3, 1fr);
+  gap: 3rem;
+  margin-top: clamp(4rem, 8vw, 7rem);
 }
 
-.koma-eco-card {
-  background: var(--koma-card);
-  border-radius: 2px;
+.koma-eco-label-item {
+  border-top: 2px solid var(--koma-black);
+  padding-top: 1.25rem;
 }
 
-.koma-eco-card--green {
-  background: var(--koma-green);
-  opacity: 0.7;
-}
-
-.koma-eco-card--amber {
-  background: #f59e0b;
-  opacity: 0.5;
-}
-
-.koma-eco-list {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 4px;
-  flex: 1;
-}
-
-.koma-eco-list-item {
-  background: var(--koma-card);
-  border-radius: 2px;
-  height: clamp(12px, 2vw, 20px);
-}
-
-.koma-eco-label {
+.koma-eco-label-num {
   font-family: var(--koma-accent);
-  font-size: clamp(0.625rem, 0.9vw, 0.8125rem);
-  font-weight: 600;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--koma-green-dark);
   letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--koma-gray);
 }
 
-/* --- CTA Final --- */
-.koma-cta-final {
-  min-height: 80svh;
-  min-height: 80vh;
+.koma-eco-label-name {
+  font-family: var(--koma-display);
+  font-size: 1.25rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  margin: 0.25rem 0;
+  color: var(--koma-black);
+}
+
+.koma-eco-label-desc {
+  font-family: var(--koma-body);
+  font-size: 0.875rem;
+  color: #555;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* --- Section 5: Final CTA (MONUMENTAL GREEN) --- */
+.koma-cta-section {
+  min-height: 85vh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
   background-color: var(--koma-green);
-  padding: clamp(4rem, 10vw, 10rem) clamp(1.5rem, 5vw, 6rem);
-  gap: clamp(1.5rem, 3vw, 3rem);
+  color: var(--koma-black);
+  padding: clamp(5rem, 10vw, 10rem) clamp(1.5rem, 5vw, 6rem);
 }
 
-.koma-cta-logo {
-  height: clamp(48px, 6vw, 80px);
-  width: auto;
-  margin-top: clamp(2rem, 4vw, 4rem);
-  opacity: 0.3;
+.koma-cta-title {
+  font-family: var(--koma-display);
+  font-size: clamp(3rem, 10vw, 9rem);
+  font-weight: 900;
+  line-height: 0.86;
+  letter-spacing: -0.04em;
+  text-transform: uppercase;
+  margin: 0 0 2rem 0;
+  color: var(--koma-black);
 }
 
-/* --- Footer --- */
+.koma-cta-sub {
+  font-family: var(--koma-body);
+  font-size: clamp(1.125rem, 1.8vw, 1.5rem);
+  font-weight: 500;
+  max-width: 36ch;
+  margin: 0 0 3rem 0;
+  color: rgba(10, 10, 10, 0.8);
+}
+
 .koma-footer {
-  padding: 2rem clamp(1.5rem, 5vw, 6rem);
+  padding: 2.5rem clamp(1.5rem, 5vw, 6rem);
   background: var(--koma-black);
   border-top: 1px solid var(--koma-graphite);
   display: flex;
   justify-content: space-between;
   align-items: center;
+  font-family: var(--koma-accent);
   font-size: 0.75rem;
-  color: var(--koma-gray);
+  color: rgba(255, 255, 255, 0.5);
 }
 
 /* --- Responsive --- */
 @media (max-width: 1024px) {
-  .koma-hero-device {
-    right: clamp(1rem, 4vw, 4rem);
-  }
-
-  .koma-device-tablet {
-    width: clamp(160px, 24vw, 280px);
-  }
+  .koma-hero-main { grid-template-columns: 1fr; }
+  .koma-hero-device-wrap { justify-content: center; margin-top: 2rem; }
+  .koma-showcase-header { grid-template-columns: 1fr; gap: 1.5rem; }
+  .koma-flow-center { grid-template-columns: 1fr; }
+  .koma-eco-labels-grid { grid-template-columns: 1fr; gap: 2rem; }
 }
 
 @media (max-width: 768px) {
-  .koma-header-nav,
-  .koma-header-actions {
-    display: none;
-  }
-
-  .koma-hamburger {
-    display: flex;
-  }
-
-  .koma-hero {
-    justify-content: flex-start;
-    padding-top: 120px;
-    padding-bottom: 2rem;
-  }
-
-  .koma-hero-device {
-    position: relative;
-    right: auto;
-    top: auto;
-    transform: none;
-    display: flex;
-    justify-content: flex-end;
-    margin-top: clamp(1.5rem, 4vw, 3rem);
-    padding-right: clamp(1rem, 4vw, 2rem);
-  }
-
-  .koma-device-tablet {
-    width: clamp(160px, 50vw, 220px);
-  }
-
-  .koma-hero-line--xl {
-    font-size: clamp(2.5rem, 15vw, 5rem);
-  }
-
-  .koma-hero-line--lg {
-    font-size: clamp(2rem, 12vw, 4rem);
-  }
-
-  .koma-hero-line--sm {
-    font-size: clamp(1.5rem, 8vw, 3rem);
-  }
-
-  .koma-flow-line {
-    width: 3px;
-    height: clamp(200px, 50vh, 400px);
-  }
-
-  .koma-flow-line-fill {
-    width: 100%;
-    height: 0;
-    top: 0;
-    left: 0;
-  }
-
-  .koma-flow-dot {
-    left: 50%;
-    top: 0;
-    transform: translate(-50%, -50%);
-  }
-
-  .koma-flow-marker {
-    left: 50%;
-    top: auto;
-    transform: translate(-50%, -50%);
-  }
-
-  .koma-flow-stages {
-    flex-direction: column;
-    width: auto;
-    gap: clamp(2rem, 5vw, 3rem);
-    margin-top: 0;
-    margin-left: clamp(2rem, 5vw, 3rem);
-  }
-
-  .koma-flow-stage {
-    text-align: left;
-  }
-
-  .koma-ecosystem-devices {
-    flex-direction: column;
-    align-items: center;
-    gap: 2rem;
-  }
-
-  .koma-eco-device--monitor {
-    width: clamp(250px, 80vw, 360px);
-  }
-
-  .koma-eco-device--tablet {
-    width: clamp(180px, 55vw, 260px);
-  }
-
-  .koma-eco-device--phone {
-    width: clamp(100px, 35vw, 150px);
-  }
-
-  .koma-showcase-screen {
-    width: 95vw;
-  }
-
-  .koma-showcase-grid-lg {
-    grid-template-columns: repeat(3, 1fr);
-  }
-
-  .koma-footer {
-    flex-direction: column;
-    gap: 0.5rem;
-    text-align: center;
-  }
-}
-
-@media (max-width: 480px) {
-  .koma-hero {
-    padding-left: 1rem;
-    padding-right: 1rem;
-  }
-
-  .koma-section {
-    padding-left: 1rem;
-    padding-right: 1rem;
-  }
-
-  .koma-flow-sticky {
-    padding-left: 1rem;
-    padding-right: 1rem;
-  }
-}
-
-/* --- Reduced Motion --- */
-@media (prefers-reduced-motion: reduce) {
-  .koma-landing,
-  .koma-landing * {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-  }
-
-  .koma-hero-device {
-    transform: translateY(-50%) !important;
-  }
-
-  .koma-flow-dot {
-    transition: none !important;
-  }
-
-  .koma-hero-content {
-    transform: none !important;
-  }
-}
-
-/* --- Focus States --- */
-.koma-landing a:focus-visible,
-.koma-landing button:focus-visible {
-  outline: 2px solid var(--koma-green);
-  outline-offset: 4px;
-}
-
-/* --- Print --- */
-@media print {
-  .koma-hero-device,
-  .koma-hero-geometry,
-  .koma-flow-pattern,
-  .koma-hamburger,
-  .koma-mobile-menu {
-    display: none !important;
-  }
-
-  .koma-header {
-    position: static;
-    background: white;
-  }
-
-  .koma-section--dark,
-  .koma-flow-sticky {
-    background: white;
-    color: black;
-  }
+  .koma-header-nav { display: none; }
+  .koma-hamburger { display: flex; }
+  .koma-hero-strip { flex-direction: column; align-items: flex-start; gap: 0.75rem; }
+  .koma-eco-stage { flex-direction: column; align-items: center; }
+  .koma-eco-tablet, .koma-eco-phone { margin-left: 0; }
+  .koma-footer { flex-direction: column; gap: 1rem; text-align: center; }
 }
