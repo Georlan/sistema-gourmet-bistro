@@ -33,7 +33,7 @@ jobs:
 
       - name: Build Kôma Hardware Print Agent EXE
         run: |
-          pyinstaller --onefile --noconsole --name KomaHardwareService print-agent/main.py
+          pyinstaller --onefile --noconsole --distpath build/hardware --name KomaHardwareService print-agent/main.py
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -52,4 +52,4 @@ jobs:
             dist/
             src-tauri/target/release/bundle/nsis/*.exe
             src-tauri/target/release/bundle/msi/*.msi
-            dist/KomaHardwareService.exe
+            build/hardware/KomaHardwareService.exe
