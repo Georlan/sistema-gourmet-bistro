@@ -214,7 +214,7 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
                 <CartesianGrid strokeDasharray="3 3" stroke="#27272A" vertical={false} />
                 <XAxis dataKey="name" stroke="#71717A" fontSize={11} tickLine={false} axisLine={false} />
                 <YAxis stroke="#71717A" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${v}`} />
-                <Tooltip content={<CustomChartTooltip />} />
+                <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }} />
                 <Bar dataKey="valor" radius={[6, 6, 0, 0]}>
                   {paymentBarData.map((entry, index) => (
                     <Cell key={`bar-${index}`} fill={entry.fill} />

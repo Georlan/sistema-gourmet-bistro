@@ -202,7 +202,7 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
                   <CartesianGrid strokeDasharray="3 3" stroke="#27272A" vertical={false} />
                   <XAxis dataKey="name" stroke="#71717A" fontSize={9} interval={0} angle={-25} textAnchor="end" />
                   <YAxis stroke="#71717A" fontSize={10} tickLine={false} axisLine={false} />
-                  <Tooltip content={<CustomChartTooltip />} />
+                  <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }} />
                   <Bar dataKey="quantidade" name="Unidades Vendidas" fill="#10b981" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -221,7 +221,7 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
                   <CartesianGrid strokeDasharray="3 3" stroke="#27272A" vertical={false} />
                   <XAxis dataKey="name" stroke="#71717A" fontSize={9} interval={0} angle={-25} textAnchor="end" />
                   <YAxis stroke="#71717A" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${v}`} />
-                  <Tooltip content={<CustomChartTooltip />} />
+                  <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }} />
                   <Bar dataKey="faturamento" name="Faturamento (R$)" fill="#0ea5e9" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
