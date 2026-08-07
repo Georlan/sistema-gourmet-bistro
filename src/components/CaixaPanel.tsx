@@ -34,6 +34,9 @@ import { CategoriaModal } from './cardapio/CategoriaModal';
 import { AssistenteConfigTab } from './assistente/AssistenteConfigTab';
 import { AssistenteSimuladorTab } from './assistente/AssistenteSimuladorTab';
 import { AssinaturaPixTab } from './assinatura/AssinaturaPixTab';
+import { CardapioDigitalWhitelabelTab } from './whitelabel/CardapioDigitalWhitelabelTab';
+import { ClientesFidelidadeTab } from './clientes/ClientesFidelidadeTab';
+import { DeliveryMotoboysTab } from './delivery/DeliveryMotoboysTab';
 import { PRODUCTS, CATEGORIES } from '../data';
 import { getProductPresets, obterNomeCategoria, smartSearchMatch } from '../domain';
 import { API } from '../config/caixaService';
@@ -7329,67 +7332,25 @@ export function CaixaPanel({
 
           {/* CRM CLIENTES — REAL DATA */}
           {activeTab === 'clientes' && ['clientes', 'crm', 'banco_clientes', 'fidelidade', 'programa_fidelidade'].includes(activeSubTab) && (
-            <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'text-left', 'animate-fade-in', 'max-w-3xl')}>
-              <div className="flex justify-between items-center border-b border-[#27272A] pb-2">
-                <span className={clsx('font-serif', 'font-bold', 'text-gray-300')}>CRM — Cadastro de Clientes</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNewCrmNome('');
-                    setNewCrmTelefone('');
-                    setNewCrmSaldo('0');
-                    setShowNewCrmModal(true);
-                  }}
-                  className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm"
-                >
-                  + Novo Cliente
-                </button>
-              </div>
-              <div className={clsx('overflow-hidden', 'border', 'border-[#27272A]/40', 'rounded-2xl')}>
-                <table className={clsx('w-full', 'text-left', 'text-[10px]')}>
-                  <thead>
-                    <tr className={clsx('bg-[#1C1C1F]', 'border-b', 'border-[#27272A]', 'text-gray-400', 'uppercase', 'tracking-wider', 'font-bold')}>
-                      <th className="p-3.5">WhatsApp</th>
-                      <th className="p-3.5">Nome</th>
-                      <th className={clsx('p-3.5', 'font-mono')}>Saldo</th>
-                      <th className={clsx('p-3.5', 'text-right')}>Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody className={clsx('divide-y', 'divide-[#27272A]/40')}>
-                    {loyaltyUsers.map((user) => (
-                      <tr key={user.id} className={clsx('hover:bg-[#1C1C1F]/20', 'transition-colors')}>
-                        <td className={clsx('p-3.5', 'font-mono', 'text-gray-300')}>{formatarTelefoneTabela(user.telefone)}</td>
-                        <td className={clsx('p-3.5', 'font-bold', 'text-white')}>{user.cliente}</td>
-                        <td className={clsx('p-3.5', 'font-mono', 'text-emerald-400')}>
-                          {fidelidadeConfig.tipo_recompensa === 'PONTOS' ? `${user.pontos} pts` : `R$ ${user.saldoCashback.toFixed(2)}`}
-                        </td>
-                        <td className={clsx('p-3.5', 'text-right')}>
-                          <button
-                            onClick={() => {
-                              setEditingCrmUser(user);
-                              setCrmFormNome(user.cliente);
-                              setCrmFormTelefone(aplicarMascaraTelefoneInput(user.telefone));
-                              setCrmFormPontos(user.pontos || 0);
-                              setCrmFormCashback(user.saldoCashback || 0);
-                            }}
-                            className="px-2.5 py-1 border border-zinc-800 hover:border-zinc-700 bg-zinc-900/50 hover:bg-zinc-800 text-gray-300 hover:text-white rounded-lg transition-all cursor-pointer font-bold"
-                          >
-                            Editar
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                    {loyaltyUsers.length === 0 && (
-                      <tr>
-                        <td colSpan={4} className="p-8 text-center text-gray-500">
-                          Nenhum cliente cadastrado. O primeiro cadastro feito aqui, no balcão ou no cardápio aparecerá automaticamente.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <ClientesFidelidadeTab
+              loyaltyUsers={loyaltyUsers}
+              fidelidadeConfig={fidelidadeConfig}
+              formatarTelefoneTabela={formatarTelefoneTabela}
+              aplicarMascaraTelefoneInput={aplicarMascaraTelefoneInput}
+              onOpenNewModal={() => {
+                setNewCrmNome('');
+                setNewCrmTelefone('');
+                setNewCrmSaldo('0');
+                setShowNewCrmModal(true);
+              }}
+              onOpenEditModal={(user) => {
+                setEditingCrmUser(user);
+                setCrmFormNome(user.cliente);
+                setCrmFormTelefone(aplicarMascaraTelefoneInput(user.telefone));
+                setCrmFormPontos(user.pontos || 0);
+                setCrmFormCashback(user.saldoCashback || 0);
+              }}
+            />
           )}
 
           {/* CHAT CO-PILOTO (demonstração) */}
@@ -7631,331 +7592,50 @@ export function CaixaPanel({
 
           {/* VIEW: FRETISTAS & LOGÍSTICA */}
           {activeSubTab === 'entregadores' && (
-            <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5', 'animate-fade-in', 'text-left')}>
-
-              {/* Painel de Entregas (Colunas da Esquerda) */}
-              <div className={clsx('lg:col-span-2', 'bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-5', 'flex', 'flex-col', 'overflow-hidden')}>
-                <div className={clsx('border-b', 'border-[#27272A]', 'pb-3', 'shrink-0')}>
-                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'text-sm')}>Controle de Despacho e Entregas</span>
-                  <span className={clsx('text-[9px]', 'text-gray-500', 'block')}>Gerencie o fluxo de saída e entrega de pedidos de Delivery.</span>
-                </div>
-
-                {/* Pedidos Pendentes de Envio */}
-                <div className={clsx('space-y-3', 'flex-1', 'overflow-y-auto')}>
-                  <span className={clsx('text-[10px]', 'font-bold', 'text-[#10b981]', 'uppercase', 'tracking-wider', 'block')}>Pedidos para Despachar</span>
-
-                  {simulatedOrders.filter(o => o.status === 'producao' || o.status === 'analise').length === 0 ? (
-                    <div className={clsx('py-8', 'text-center', 'text-gray-500', 'text-xs', 'italic', 'bg-[#1C1C1F]/20', 'border', 'border-[#27272A]/40', 'rounded-2xl')}>
-                      Não há pedidos prontos ou em produção aguardando despacho no momento.
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {simulatedOrders.filter(o => o.status === 'producao' || o.status === 'analise').map((order) => {
-                        const motoboyId = selectedMotoboys[order.id] || '';
-                        return (
-                          <div key={order.id} className={clsx('p-4', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'sm:flex-row', 'justify-between', 'gap-3', 'text-xs')}>
-                            <div className={clsx('space-y-1.5', 'flex-1')}>
-                              <div className={clsx('flex', 'items-center', 'gap-2')}>
-                                <span className={clsx('font-bold', 'text-white', 'text-[11px]')}>Pedido {order.id}</span>
-                                <span className={clsx('bg-[#10b981]/15', 'text-[#10b981]', 'text-[8px]', 'font-bold', 'px-1.5', 'py-0.5', 'rounded', 'border', 'border-[#10b981]/20', 'uppercase')}>
-                                  {order.canal}
-                                </span>
-                              </div>
-                              <span className={clsx('text-gray-300', 'font-bold', 'block')}>{order.cliente} • {order.telefone}</span>
-                              <span className={clsx('text-gray-400', 'text-[10px]', 'block', 'leading-relaxed')}>{order.endereco}</span>
-                              <span className={clsx('text-[9px]', 'text-gray-500', 'block', 'font-mono')}>Itens: {order.itens}</span>
-                            </div>
-
-                            <div className={clsx('flex', 'flex-col', 'sm:items-end', 'justify-between', 'gap-2', 'shrink-0')}>
-                              <span className={clsx('font-mono', 'font-bold', 'text-emerald-400', 'text-[11px]')}>R$ {order.total.toFixed(2)}</span>
-
-                              <div className={clsx('flex', 'items-center', 'gap-2')}>
-                                <select
-                                  value={motoboyId}
-                                  onChange={(e) => setSelectedMotoboys(prev => ({ ...prev, [order.id]: e.target.value }))}
-                                  className={clsx('py-1.5', 'px-2', 'bg-[#121214]', 'border', 'border-[#27272A]', 'text-white', 'rounded-xl', 'text-[10px]', 'focus:outline-none', 'focus:border-[#10b981]')}
-                                >
-                                  <option value="">Selecione o Entregador...</option>
-                                  {motoboys.filter(m => m.ativo).map(m => (
-                                    <option key={m.id} value={m.id}>{m.nome}</option>
-                                  ))}
-                                </select>
-                                <button
-                                  type="button"
-                                  disabled={!motoboyId}
-                                  onClick={() => handleDespacharPedido(order.id, parseInt(motoboyId))}
-                                  className={clsx('py-1.5', 'px-3', 'bg-emerald-600', 'hover:bg-emerald-500', 'disabled:opacity-50', 'text-white', 'font-bold', 'rounded-xl', 'text-[10px]', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
-                                >
-                                  Despachar
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={!motoboyId}
-                                  onClick={() => handleDespacharWhatsApp(order, motoboyId)}
-                                  className={clsx('py-1.5', 'px-2.5', 'bg-[#10b981]/20', 'hover:bg-[#10b981]/30', 'border', 'border-[#10b981]/40', 'disabled:opacity-40', 'text-emerald-300', 'font-bold', 'rounded-xl', 'text-[10px]', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer', 'flex', 'items-center', 'gap-1')}
-                                  title="Despachar pedido e enviar link PWA pelo WhatsApp do Motoboy"
-                                >
-                                  💬 WhatsApp
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={!motoboyId}
-                                  onClick={() => handleRevogarAcessoMotoboy(motoboyId)}
-                                  className={clsx('py-1.5', 'px-2.5', 'bg-rose-500/20', 'hover:bg-rose-500/30', 'border', 'border-rose-500/40', 'disabled:opacity-40', 'text-rose-300', 'font-bold', 'rounded-xl', 'text-[10px]', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer', 'flex', 'items-center', 'gap-1')}
-                                  title="Revogar todos os links ativos do entregador selecionado"
-                                >
-                                  🚫 Revogar
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* Pedidos Em Trânsito */}
-                  <span className={clsx('text-[10px]', 'font-bold', 'text-[#10b981]', 'uppercase', 'tracking-wider', 'block', 'pt-4')}>Em Trânsito (Entregas Ativas)</span>
-
-                  {simulatedOrders.filter(o => o.status === 'pronto').length === 0 ? (
-                    <div className={clsx('py-8', 'text-center', 'text-gray-500', 'text-xs', 'italic', 'bg-[#1C1C1F]/20', 'border', 'border-[#27272A]/40', 'rounded-2xl')}>
-                      Nenhum pedido em trânsito no momento.
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {simulatedOrders.filter(o => o.status === 'pronto').map((order) => {
-                        return (
-                          <div key={order.id} className={clsx('p-4', 'bg-[#1C1C1F]/40', 'border', 'border-[#27272A]/40', 'rounded-2xl', 'flex', 'flex-col', 'sm:flex-row', 'justify-between', 'gap-3', 'text-xs')}>
-                            <div className={clsx('space-y-1', 'flex-1')}>
-                              <div className={clsx('flex', 'items-center', 'gap-2')}>
-                                <span className={clsx('font-bold', 'text-white', 'text-[11px]')}>Pedido {order.id}</span>
-                                <span className={clsx('bg-emerald-500/10', 'text-emerald-400', 'text-[8px]', 'font-bold', 'px-1.5', 'py-0.5', 'rounded', 'border', 'border-emerald-500/20', 'uppercase', 'tracking-wider')}>
-                                  Em Trânsito
-                                </span>
-                              </div>
-                              <span className={clsx('text-gray-300', 'font-bold', 'block')}>{order.cliente} • {order.telefone}</span>
-                              <span className={clsx('text-gray-400', 'text-[10px]', 'block', 'leading-relaxed')}>{order.endereco}</span>
-                            </div>
-
-                            <div className={clsx('flex', 'flex-col', 'sm:items-end', 'justify-between', 'gap-2', 'shrink-0')}>
-                              <span className={clsx('font-mono', 'font-bold', 'text-emerald-400', 'text-[11px]')}>R$ {order.total.toFixed(2)}</span>
-
-                              <button
-                                type="button"
-                                onClick={() => handleFinalizarPedido(order.id)}
-                                className={clsx('py-1.5', 'px-3', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'font-bold', 'rounded-xl', 'text-[10px]', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
-                              >
-                                Concluir Entrega
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Gerenciamento de Fretistas (Coluna da Direita) */}
-              <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'flex', 'flex-col', 'justify-between', 'overflow-hidden')}>
-                <div className={clsx('space-y-4', 'flex-1', 'flex', 'flex-col', 'overflow-hidden')}>
-                  <div className={clsx('border-b', 'border-[#27272A]', 'pb-3', 'shrink-0')}>
-                    <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'text-sm')}>Fretistas Cadastrados</span>
-                    <span className={clsx('text-[9px]', 'text-gray-500', 'block')}>Lista de motoboys e entregadores de plantão.</span>
-                  </div>
-
-                  <div className={clsx('flex-1', 'overflow-y-auto', 'space-y-2.5')}>
-                    {motoboys.length === 0 ? (
-                      <span className={clsx('text-xs', 'text-gray-500', 'italic')}>Nenhum fretista cadastrado.</span>
-                    ) : (
-                      motoboys.map((m) => (
-                        <div key={m.id} className={clsx('p-3', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'flex', 'items-center', 'justify-between', 'gap-2')}>
-                          <div className="text-xs">
-                            <span className={clsx('font-bold', 'text-white', 'block')}>{m.nome}</span>
-                            <span className={clsx('text-[10px]', 'text-gray-400', 'block', 'font-mono')}>{m.telefone}</span>
-                          </div>
-                          <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ${m.ativo ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                            }`}>
-                            {m.ativo ? 'Ativo' : 'Inativo'}
-                          </span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                {/* Cadastro de novo Motoboy */}
-                <form onSubmit={handleCadastrarMotoboy} className={clsx('pt-4', 'border-t', 'border-[#27272A]', 'space-y-3', 'shrink-0')}>
-                  <span className={clsx('text-[10px]', 'font-bold', 'text-[#10b981]', 'uppercase', 'tracking-wider', 'block')}>Novo Fretista</span>
-
-                  <input
-                    type="text"
-                    required
-                    placeholder="Nome do Entregador"
-                    value={novoMotoboyNome}
-                    onChange={(e) => setNewMotoboyNome(e.target.value)}
-                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-xs', 'focus:outline-none', 'focus:border-[#10b981]')}
-                  />
-                  <input
-                    type="text"
-                    required
-                    placeholder="Telefone (ex: 81 99999-8888)"
-                    value={novoMotoboyTelefone}
-                    onChange={(e) => setNewMotoboyTelefone(e.target.value)}
-                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-xs', 'font-mono', 'focus:outline-none', 'focus:border-[#10b981]')}
-                  />
-                  <button
-                    type="submit"
-                    className={clsx('w-full', 'py-2', 'bg-emerald-600', 'hover:bg-[#9d2b3c]', 'text-white', 'font-bold', 'rounded-xl', 'text-[10px]', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
-                  >
-                    Adicionar Fretista
-                  </button>
-                </form>
-              </div>
-
-            </div>
+            <DeliveryMotoboysTab
+              simulatedOrders={simulatedOrders}
+              motoboys={motoboys}
+              selectedMotoboys={selectedMotoboys}
+              setSelectedMotoboys={setSelectedMotoboys}
+              handleDespacharPedido={handleDespacharPedido}
+              handleDespacharWhatsApp={handleDespacharWhatsApp}
+              handleRevogarAcessoMotoboy={handleRevogarAcessoMotoboy}
+              handleFinalizarPedido={handleFinalizarPedido}
+              novoMotoboyNome={novoMotoboyNome}
+              setNewMotoboyNome={setNewMotoboyNome}
+              novoMotoboyTelefone={novoMotoboyTelefone}
+              setNewMotoboyTelefone={setNewMotoboyTelefone}
+              handleCadastrarMotoboy={handleCadastrarMotoboy}
+            />
           )}
 
           {/* CONFIGURAÇÃO CARDÁPIO DIGITAL WHITELABEL */}
-          {(activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital') && !hasOnlineMenu && (
-            <div className="bg-[#121214] border border-amber-500/20 rounded-3xl p-8 text-center max-w-xl mx-auto space-y-3">
-              <Lock size={24} className="text-amber-400 mx-auto" />
-              <h3 className="text-white font-bold">Cardápio online não incluído neste plano</h3>
-              <p className="text-[10px] text-gray-400">
-                No Kôma Pro, ele pode ser contratado por R$ {ONLINE_MENU_ADDON.price}/mês. No Kôma Premium, link, QR Code e gaveta de aceite já estão incluídos.
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTab('assinatura_pix');
-                  setActiveSubTab('planos');
-                }}
-                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold uppercase cursor-pointer"
-              >
-                Ver opções
-              </button>
-            </div>
-          )}
-
-          {(activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital') && hasOnlineMenu && (
-            <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-6', 'text-left', 'max-w-2xl', 'mx-auto', 'space-y-6', 'animate-fade-in')}>
-              <div className={clsx('border-b', 'border-[#27272A]', 'pb-3')}>
-                <span className={clsx('font-serif', 'font-bold', 'text-base', 'text-white', 'block')}>Configurações do Cardápio Digital</span>
-                <span className={clsx('text-[10px]', 'text-gray-400', 'block', 'mt-1')}>Personalize a identidade visual e comportamento do cardápio digital do cliente (Whitelabel).</span>
-              </div>
-
-              <div className="space-y-4">
-                {/* Status Override */}
-                <div className="space-y-1.5">
-                  <label className={clsx('text-[10px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Status de Funcionamento:</label>
-                  <select
-                    value={cardapioStatusOverride}
-                    onChange={(e) => setCardapioStatusOverride(e.target.value)}
-                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-xs', 'focus:outline-none', 'focus:border-[#10b981]')}
-                  >
-                    <option value="Automático">Automático (Segue horários de funcionamento)</option>
-                    <option value="Forçado Aberto">Forçado Aberto (Sempre aberto para pedidos)</option>
-                    <option value="Forçado Fechado">Forçado Fechado (Sempre fechado/indisponível)</option>
-                  </select>
-                </div>
-
-                {/* Cores */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className={clsx('text-[10px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Cor Primária (Tema):</label>
-                    <div className="flex gap-2">
-                      <input
-                        type="color"
-                        value={cardapioCorPrimaria}
-                        onChange={(e) => setCardapioCorPrimaria(e.target.value)}
-                        className="w-10 h-10 p-0 border border-[#27272A] rounded-xl bg-transparent cursor-pointer"
-                      />
-                      <input
-                        type="text"
-                        value={cardapioCorPrimaria}
-                        onChange={(e) => setCardapioCorPrimaria(e.target.value)}
-                        className={clsx('flex-1', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-xs', 'font-mono')}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className={clsx('text-[10px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Cor de Fundo:</label>
-                    <div className="flex gap-2">
-                      <input
-                        type="color"
-                        value={cardapioCorFundo}
-                        onChange={(e) => setCardapioCorFundo(e.target.value)}
-                        className="w-10 h-10 p-0 border border-[#27272A] rounded-xl bg-transparent cursor-pointer"
-                      />
-                      <input
-                        type="text"
-                        value={cardapioCorFundo}
-                        onChange={(e) => setCardapioCorFundo(e.target.value)}
-                        className={clsx('flex-1', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-xs', 'font-mono')}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Upload de Logo e Banner para Supabase Storage via Endpoints Backend */}
-                <div className="space-y-4">
-                  <CardapioAssetUploader
-                    label="Logotipo do Restaurante"
-                    type="logo"
-                    currentUrl={cardapioLogoUrl}
-                    apiBaseUrl={apiBaseUrl}
-                    authHeaders={authHeaders}
-                    onSuccess={(newUrl) => setCardapioLogoUrl(newUrl || '')}
-                  />
-
-                  <CardapioAssetUploader
-                    label="Banner Promocional / Capa"
-                    type="banner"
-                    currentUrl={cardapioBannerUrl}
-                    apiBaseUrl={apiBaseUrl}
-                    authHeaders={authHeaders}
-                    onSuccess={(newUrl) => setCardapioBannerUrl(newUrl || '')}
-                  />
-                </div>
-
-                {/* Sobre Nós */}
-                <div className="space-y-1.5">
-                  <label className={clsx('text-[10px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Sobre Nós:</label>
-                  <textarea
-                    value={cardapioSobreNos}
-                    onChange={(e) => setCardapioSobreNos(e.target.value)}
-                    rows={3}
-                    placeholder="Breve história ou descrição do restaurante..."
-                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-xs', 'focus:outline-none', 'focus:border-[#10b981]')}
-                  />
-                </div>
-
-                {/* Endereço */}
-                <div className="space-y-1.5">
-                  <label className={clsx('text-[10px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Endereço Físico:</label>
-                  <input
-                    type="text"
-                    value={cardapioEndereco}
-                    onChange={(e) => setCardapioEndereco(e.target.value)}
-                    placeholder="Rua Exemplo, 123 - Centro"
-                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-xs', 'focus:outline-none', 'focus:border-[#10b981]')}
-                  />
-                </div>
-              </div>
-
-              {/* Botão de salvar */}
-              <div className={clsx('pt-4', 'border-t', 'border-[#27272A]', 'flex', 'justify-end')}>
-                <button
-                  type="button"
-                  disabled={isSavingCardapioConfig}
-                  onClick={saveCardapioConfig}
-                  className={clsx('px-5', 'py-2.5', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'font-bold', 'rounded-xl', 'text-[9px]', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-lg', 'disabled:opacity-50')}
-                >
-                  {isSavingCardapioConfig ? 'Salvando...' : 'Salvar Configurações Whitelabel'}
-                </button>
-              </div>
-            </div>
+          {(activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital') && (
+            <CardapioDigitalWhitelabelTab
+              hasOnlineMenu={hasOnlineMenu}
+              cardapioStatusOverride={cardapioStatusOverride}
+              setCardapioStatusOverride={setCardapioStatusOverride}
+              cardapioCorPrimaria={cardapioCorPrimaria}
+              setCardapioCorPrimaria={setCardapioCorPrimaria}
+              cardapioCorFundo={cardapioCorFundo}
+              setCardapioCorFundo={setCardapioCorFundo}
+              cardapioLogoUrl={cardapioLogoUrl}
+              setCardapioLogoUrl={setCardapioLogoUrl}
+              cardapioBannerUrl={cardapioBannerUrl}
+              setCardapioBannerUrl={setCardapioBannerUrl}
+              cardapioSobreNos={cardapioSobreNos}
+              setCardapioSobreNos={setCardapioSobreNos}
+              cardapioEndereco={cardapioEndereco}
+              setCardapioEndereco={setCardapioEndereco}
+              isSavingCardapioConfig={isSavingCardapioConfig}
+              saveCardapioConfig={saveCardapioConfig}
+              apiBaseUrl={apiBaseUrl}
+              authHeaders={authHeaders}
+              onNavigatePlans={() => {
+                setActiveTab('assinatura_pix');
+                setActiveSubTab('planos');
+              }}
+            />
           )}
 
         </div>
