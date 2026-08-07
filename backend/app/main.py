@@ -224,66 +224,6 @@ async def run_migrations_on_startup():
         if migration_engine is not None:
             migration_engine.dispose()
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.get_cors_allowed_origins(),
-    allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=[
-        "Authorization",
-        "Content-Type",
-        "Accept",
-        "Origin",
-        "X-Requested-With",
-        "X-Koma-Customer-Token",
-        "X-Tenant-ID",
-        "X-Restaurante-ID",
-    ],
-    expose_headers=[],
-)
-
-@app.middleware("http")
-async def add_security_headers_middleware(request: Request, call_next):
-    response = await call_next(request)
-    
-    # Headers HTTP de Segurança Fundamentais
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-    response.headers["X-Frame-Options"] = "DENY"
-    
-    # HSTS em produção ou requisições HTTPS (omitido em localhost / dev HTTP)
-    env = os.getenv("ENVIRONMENT", "development").lower()
-    is_https = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
-    is_localhost = request.url.hostname in ("localhost", "127.0.0.1")
-    
-    if (env == "production" or is_https) and not is_localhost:
-        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-        
-    return response
-
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    import traceback
-    print(f"[GLOBAL UNHANDLED ERROR] {request.method} {request.url.path}:\n{traceback.format_exc()}")
-    
-    is_dev = os.getenv("ENVIRONMENT") == "development"
-    body = {"detail": "Erro interno do servidor."}
-    if is_dev:
-        body["error"] = str(exc)
-
-    return JSONResponse(
-        status_code=500,
-        content=body,
-    )
-
-@app.exception_handler(HTTPException)
-async def http_exception_handler(request: Request, exc: HTTPException):
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={"detail": exc.detail},
-    )
-
 @app.middleware("http")
 async def add_sentry_context_and_tenant(request: Request, call_next):
     tenant_id = request.headers.get("X-Tenant-ID", "default")
@@ -307,7 +247,6 @@ async def add_sentry_context_and_tenant(request: Request, call_next):
                     return JSONResponse(
                         status_code=401,
                         content={"detail": "Identificação do restaurante inválida ou ausente no token."},
-                        headers=cors_headers
                     )
 
                 try:
@@ -316,14 +255,12 @@ async def add_sentry_context_and_tenant(request: Request, call_next):
                     return JSONResponse(
                         status_code=401,
                         content={"detail": "Identificação do restaurante inválida ou ausente no token."},
-                        headers=cors_headers
                     )
 
                 if parsed_rid < 0 or (parsed_rid == 0 and role != "superadmin"):
                     return JSONResponse(
                         status_code=401,
                         content={"detail": "Identificação do restaurante inválida ou ausente no token."},
-                        headers=cors_headers
                     )
 
                 restaurante_id = parsed_rid
@@ -357,6 +294,69 @@ async def add_sentry_context_and_tenant(request: Request, call_next):
     finally:
         # Garante a limpeza do contexto após o término da requisição
         current_restaurante_id.reset(tenant_context)
+
+@app.middleware("http")
+async def add_security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+    
+    # Headers HTTP de Segurança Fundamentais
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["X-Frame-Options"] = "DENY"
+    
+    # HSTS em produção quando a requisição original for HTTPS e não for localhost.
+    # O backend depende do proxy confiável (Railway/Cloudflare) para repassar X-Forwarded-Proto.
+    env = os.getenv("ENVIRONMENT", "production").lower()
+    is_https = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
+    hostname = request.url.hostname or ""
+    is_localhost = hostname in ("localhost", "127.0.0.1")
+    
+    if env == "production" and is_https and not is_localhost:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        
+    return response
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    import traceback
+    print(f"[GLOBAL UNHANDLED ERROR] {request.method} {request.url.path}:\n{traceback.format_exc()}")
+    
+    is_dev = os.getenv("ENVIRONMENT") == "development"
+    body = {"detail": "Erro interno do servidor."}
+    if is_dev:
+        body["error"] = str(exc)
+
+    return JSONResponse(
+        status_code=500,
+        content=body,
+    )
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+    )
+
+# CORSMiddleware é adicionado por último para ser a camada externa (wrap de todas as respostas HTTP)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.get_cors_allowed_origins(),
+    allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "Accept",
+        "Origin",
+        "X-Requested-With",
+        "X-Koma-Customer-Token",
+        "X-Tenant-ID",
+        "X-Restaurante-ID",
+    ],
+    expose_headers=[],
+)
 
 # Register routers
 app.include_router(auth.router)

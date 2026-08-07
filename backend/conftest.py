@@ -32,10 +32,10 @@ if resolved_database != TEST_DB_PATH.resolve():
         f"Banco inseguro para testes: {resolved_database}"
     )
 
-Base.metadata.create_all(bind=engine)
+Base.metadata.create_all(bind=engine, checkfirst=True)
 
 
 @pytest.fixture(autouse=True)
 def clear_dependency_overrides():
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=engine, checkfirst=True)
     yield
