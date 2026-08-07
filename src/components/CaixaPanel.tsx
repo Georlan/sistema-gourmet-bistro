@@ -1,6 +1,7 @@
 import { CardapioAssetUploader } from './CardapioAssetUploader';
 import { supabase } from '../cardapio/SupabaseClient';
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { LoginButton } from '../../components/shadcnblocks/login-button';
 import {
   DollarSign, ArrowUpRight, ArrowDownRight, Lock, Unlock, Users,
   Receipt, ShoppingCart, Percent, CreditCard, Check, AlertTriangle,
@@ -10278,14 +10279,14 @@ export function CaixaPanel({
                   </div>
                 </div>
 
-                <button
-                  type="button"
+                <LoginButton
+                  variant="default"
+                  iconType="logout"
                   onClick={handleLogoutOperator}
-                  className="w-full py-2.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-2 shadow-sm"
+                  className="w-full font-bold uppercase tracking-wider text-xs py-2.5"
                 >
-                  <Lock size={14} className="text-rose-400" />
-                  <span>LOGOUT / TROCAR OPERADOR</span>
-                </button>
+                  LOGOUT / TROCAR OPERADOR
+                </LoginButton>
               </div>
 
               {/* 2. SEÇÃO STATUS DO SALÃO AO VIVO */}

@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { LoginButton } from '../components/shadcnblocks/login-button';
 import { Menu, X, User, Wifi, WifiOff, SlidersHorizontal, ArrowDownRight, ArrowUpRight, RefreshCw, Bell, Printer, TrendingUp, Utensils, CheckCircle2, UserCheck, UserX, ShoppingBag } from 'lucide-react';
 import { Table, Order, DraftItem, AppSettings, AppRole, Product } from './types';
 import { TABLES, WAITERS, RESTAURANT_CONFIG, PRODUCTS } from './data';
@@ -2014,12 +2015,14 @@ export default function App() {
                           <span className={clsx('w-2 h-2 rounded-full animate-pulse', waiterAvailable ? 'bg-emerald-400' : 'bg-amber-400')} />
                         </button>
 
-                        <button
+                        <LoginButton
+                          variant="default"
+                          iconType="logout"
                           onClick={handleLogout}
-                          className="w-full py-2 bg-red-950/15 hover:bg-red-950/30 text-rose-400 hover:text-rose-300 border border-red-900/40 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                          className="w-full font-bold uppercase tracking-wider text-xs py-2.5"
                         >
-                          Logout / Sair
-                        </button>
+                          LOGOUT / SAIR
+                        </LoginButton>
                       </div>
                     </div>
 
@@ -2092,12 +2095,14 @@ export default function App() {
                           </div>
                         </div>
 
-                        <button
+                        <LoginButton
+                          variant="default"
+                          iconType="logout"
                           onClick={handleLogout}
-                          className="w-full py-2.5 bg-red-950/10 hover:bg-red-950/20 text-rose-400 hover:text-rose-300 border border-red-900/35 hover:border-red-900/50 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2"
+                          className="w-full font-bold uppercase tracking-wider text-xs py-2.5"
                         >
-                          Logout / Sair
-                        </button>
+                          LOGOUT / SAIR
+                        </LoginButton>
                       </div>
                     </div>
 
