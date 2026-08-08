@@ -2311,7 +2311,7 @@ export default function App() {
           <MesasView
             salonTables={salonTables}
             orders={orders}
-            draftItemsMap={draftItems}
+            draftItemsMap={drafts}
             activeDrafts={activeDrafts}
             pagamentosPendentes={pagamentosPendentes}
             activeWaiterId={activeWaiterId}

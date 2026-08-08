@@ -152,117 +152,169 @@
   text-transform: uppercase;
 }
 
-/* --- Hero Section (AUTHORIAL CAMPAIGN EDITORIAL SCENE) --- */
+/* --- Hero Section: editorial product stage --- */
 .koma-hero {
   position: relative;
-  min-height: 100vh;
+  min-height: 100svh;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 95px clamp(1.5rem, 5vw, 6rem) clamp(1.5rem, 3vw, 2.5rem);
+  padding: 104px clamp(1.5rem, 5vw, 6rem) clamp(1.25rem, 2.5vw, 2rem);
   overflow: hidden;
-  background-color: var(--koma-black);
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 73% 42%, rgba(0, 184, 148, 0.16), transparent 32%),
+    radial-gradient(circle at 72% 46%, #06241b 0%, #07110e 28%, #070807 62%, #050505 100%);
 }
 
-/* Background Atmosphere & Vignette Layer */
 .koma-hero::before {
   content: '';
   position: absolute;
   inset: 0;
-  background: 
-    radial-gradient(ellipse at 75% 45%, rgba(0, 184, 148, 0.08) 0%, transparent 65%),
-    radial-gradient(circle at 10% 10%, rgba(10, 10, 10, 0.95) 0%, rgba(4, 4, 4, 1) 100%);
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.64) 0%, rgba(0, 0, 0, 0.08) 56%, rgba(0, 0, 0, 0.32) 100%);
   pointer-events: none;
   z-index: 0;
 }
 
-/* Subtle Vignette Edge Overlay */
 .koma-hero::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse at center, transparent 50%, rgba(0, 0, 0, 0.5) 100%);
-  pointer-events: none;
-  z-index: 2;
-}
-
-/* Layer 1: Dark KÔMA Green Architectural Stage Plane */
-.koma-hero-color-plane {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 56vw;
-  height: 100%;
-  background: linear-gradient(145deg, #05261c 0%, #031610 100%);
-  clip-path: polygon(14% 0, 100% 0, 100% 100%, 0% 100%);
-  border-left: 1px solid rgba(0, 184, 148, 0.25);
-  box-shadow: -30px 0 80px rgba(0, 0, 0, 0.7);
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.34), transparent 18%, transparent 80%, rgba(0, 0, 0, 0.72)),
+    radial-gradient(ellipse at center, transparent 48%, rgba(0, 0, 0, 0.34) 100%);
   pointer-events: none;
   z-index: 1;
 }
 
-/* Layer 2: Asymmetrical Grid (38% Copy / 62% Visual Dominance) */
+.koma-hero-grid-plane {
+  position: absolute;
+  width: min(76vw, 1080px);
+  aspect-ratio: 1.45;
+  top: 16%;
+  right: -11%;
+  background-image:
+    linear-gradient(rgba(0, 184, 148, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 184, 148, 0.1) 1px, transparent 1px);
+  background-size: 54px 54px;
+  mask-image: radial-gradient(ellipse at center, #000 0%, rgba(0, 0, 0, 0.76) 42%, transparent 74%);
+  -webkit-mask-image: radial-gradient(ellipse at center, #000 0%, rgba(0, 0, 0, 0.76) 42%, transparent 74%);
+  transform: perspective(900px) rotateX(67deg) rotateZ(-8deg);
+  transform-origin: center;
+  opacity: 0.54;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.koma-hero-orbit {
+  position: absolute;
+  border: 1px solid rgba(0, 184, 148, 0.13);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.koma-hero-orbit--one {
+  width: min(64vw, 960px);
+  aspect-ratio: 1;
+  right: -7vw;
+  top: -25%;
+}
+
+.koma-hero-orbit--two {
+  width: min(42vw, 640px);
+  aspect-ratio: 1;
+  right: 4vw;
+  top: -9%;
+  border-color: rgba(255, 255, 255, 0.055);
+}
+
 .koma-hero-grid {
   position: relative;
-  z-index: 5;
+  z-index: 3;
   display: grid;
-  grid-template-columns: 0.82fr 1.18fr;
+  grid-template-columns: minmax(390px, 0.88fr) minmax(520px, 1.12fr);
+  gap: clamp(1rem, 2.5vw, 3.5rem);
   align-items: center;
-  margin-top: auto;
-  margin-bottom: auto;
+  max-width: 1720px;
+  min-height: min(690px, 72vh);
+  margin: auto;
   width: 100%;
 }
 
 .koma-hero-content {
   position: relative;
-  z-index: 6;
+  z-index: 5;
+  max-width: 760px;
+}
+
+.koma-hero-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: clamp(1.35rem, 2vw, 2rem);
+  font-family: var(--koma-accent);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  line-height: 1;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.koma-hero-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--koma-green);
+  box-shadow: 0 0 0 5px rgba(0, 184, 148, 0.1), 0 0 18px rgba(0, 184, 148, 0.7);
 }
 
 .koma-hero-headline {
   display: flex;
   flex-direction: column;
   margin: 0;
+  max-width: 9ch;
 }
 
 .koma-hero-line {
   display: block;
   font-family: var(--koma-display);
   font-weight: 900;
-  line-height: 0.85;
-  letter-spacing: -0.045em;
+  font-size: clamp(4rem, 7.1vw, 8.9rem);
+  line-height: 0.86;
+  letter-spacing: -0.062em;
   text-transform: uppercase;
   color: var(--koma-white);
-  text-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  text-wrap: balance;
+  text-shadow: 0 12px 36px rgba(0, 0, 0, 0.32);
 }
 
-.koma-hero-line--sm { font-size: clamp(2rem, 5.2vw, 6.2rem); margin-bottom: 0.2rem; }
-.koma-hero-line--xl { font-size: clamp(3.8rem, 11.5vw, 14rem); }
-.koma-hero-line--lg { font-size: clamp(2.8rem, 8.8vw, 11rem); }
-
-/* The KÔMA Signature Green Line Axis crossing across planes */
-.koma-hero-bar-wrap {
+.koma-hero-line--accent {
   position: relative;
-  width: 140%;
-  margin: clamp(0.75rem, 1.5vw, 1.75rem) 0;
-  z-index: 6;
+  color: var(--koma-green);
+  width: max-content;
+  max-width: 100%;
 }
 
-.koma-hero-bar {
-  display: block;
-  width: 100%;
-  height: clamp(10px, 1.3vw, 18px);
-  background-color: var(--koma-green);
-  box-shadow: 0 0 20px rgba(0, 184, 148, 0.25);
-  transform-origin: left center;
+.koma-hero-line--accent::after {
+  content: '';
+  position: absolute;
+  left: 0.05em;
+  right: -0.04em;
+  bottom: -0.1em;
+  height: 0.055em;
+  background: linear-gradient(90deg, var(--koma-green), rgba(0, 184, 148, 0));
+  box-shadow: 0 0 22px rgba(0, 184, 148, 0.35);
 }
 
 .koma-hero-sub {
   font-family: var(--koma-body);
-  font-size: clamp(1rem, 1.35vw, 1.25rem);
-  color: rgba(255, 255, 255, 0.8);
-  margin-top: clamp(1.25rem, 2vw, 2.25rem);
-  max-width: 42ch;
-  line-height: 1.55;
+  font-size: clamp(1rem, 1.2vw, 1.18rem);
+  color: rgba(255, 255, 255, 0.64);
+  margin-top: clamp(1.8rem, 2.5vw, 2.65rem);
+  max-width: 49ch;
+  line-height: 1.65;
 }
 
 .koma-hero-sub-bold {
@@ -276,7 +328,7 @@
   display: flex;
   align-items: center;
   gap: 2.5rem;
-  margin-top: clamp(1.75rem, 2.5vw, 2.5rem);
+  margin-top: clamp(1.65rem, 2.3vw, 2.35rem);
   flex-wrap: wrap;
 }
 
@@ -294,6 +346,27 @@
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
+}
+
+.koma-hero-proof {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin-top: clamp(1.55rem, 2vw, 2.1rem);
+  font-family: var(--koma-accent);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.koma-hero-proof i {
+  display: block;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--koma-green);
 }
 
 .koma-hero-whatsapp-link:hover {
@@ -335,21 +408,108 @@
 .koma-btn--dark:hover { background-color: var(--koma-graphite); }
 .koma-btn--sm { padding: 0.625rem 1.5rem; font-size: 0.75rem; }
 
-/* Layer 3: Massive Product Object Stage */
 .koma-hero-device-container {
   position: relative;
   width: 100%;
-  z-index: 7;
+  min-width: 0;
+  z-index: 4;
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
   align-items: center;
+  perspective: 1500px;
 }
 
 .koma-hero-device-frame {
-  width: clamp(520px, 62vw, 880px); /* MASSIVE ESCALE: 60-65% visual dominance */
-  margin-right: -8vw; /* Intentional right-edge viewport cropping */
-  transform-style: preserve-3d;
-  will-change: transform;
+  width: min(100%, 860px);
+}
+
+.koma-hero-device-kicker {
+  position: absolute;
+  top: 1%;
+  left: 3%;
+  right: 1%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--koma-accent);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.koma-hero-float-card {
+  position: absolute;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  color: var(--koma-white);
+  background: rgba(14, 20, 18, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.koma-hero-float-card--top {
+  top: 8%;
+  right: -1%;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: 14px;
+}
+
+.koma-hero-float-card--top div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.koma-hero-float-card strong {
+  font-family: var(--koma-accent);
+  font-size: 0.7rem;
+  letter-spacing: 0.02em;
+}
+
+.koma-hero-float-card small {
+  font-size: 0.58rem;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.koma-hero-float-icon {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  color: var(--koma-black);
+  background: var(--koma-green);
+  font-weight: 900;
+}
+
+.koma-hero-float-card--bottom {
+  left: 0;
+  bottom: 6%;
+  gap: 0.55rem;
+  padding: 0.75rem 0.95rem;
+  border-radius: 999px;
+  font-family: var(--koma-accent);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.koma-hero-float-card--bottom b {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.koma-hero-flow-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--koma-green);
+  box-shadow: 0 0 12px rgba(0, 184, 148, 0.8);
 }
 
 /* Numerated Bottom Module Strip */
@@ -361,8 +521,107 @@
   justify-content: space-between;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   padding-top: clamp(1.25rem, 2vw, 1.75rem);
-  margin-top: clamp(1.5rem, 3vw, 3rem);
+  margin-top: clamp(1rem, 2vw, 1.75rem);
   gap: 1rem;
+}
+
+/* --- Hero product: physical tablet with a real React screen --- */
+.koma-hero-tablet-wrap {
+  --tablet-rotate-x: 1.5deg;
+  --tablet-rotate-y: -3deg;
+  --tablet-glare-x: 62%;
+  --tablet-glare-y: 28%;
+  position: relative;
+  width: 100%;
+  padding: clamp(2.8rem, 5vw, 4.5rem) 1.2rem clamp(2.3rem, 4vw, 3.5rem);
+  cursor: default;
+  perspective: 1500px;
+}
+
+.koma-hero-tablet-wrap::before {
+  content: '';
+  position: absolute;
+  left: 10%;
+  right: 6%;
+  bottom: 1.5%;
+  height: 27%;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.76);
+  filter: blur(34px);
+  transform: rotate(-2deg);
+  pointer-events: none;
+}
+
+.koma-physical-tablet {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  padding: clamp(8px, 1vw, 12px);
+  border-radius: clamp(17px, 2vw, 25px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: linear-gradient(145deg, #252a31 0%, #0d1015 42%, #1a1e24 100%);
+  box-shadow:
+    0 75px 120px rgba(0, 0, 0, 0.72),
+    0 24px 42px rgba(0, 0, 0, 0.62),
+    0 0 0 2px rgba(0, 184, 148, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  transform: rotateX(var(--tablet-rotate-x)) rotateY(var(--tablet-rotate-y)) rotateZ(1.2deg);
+  transform-style: preserve-3d;
+  transition: transform 180ms ease-out, box-shadow 300ms ease;
+  will-change: transform;
+}
+
+.koma-hero-tablet-wrap:hover .koma-physical-tablet {
+  box-shadow:
+    0 86px 140px rgba(0, 0, 0, 0.78),
+    0 28px 50px rgba(0, 0, 0, 0.66),
+    0 0 52px rgba(0, 184, 148, 0.11),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.koma-physical-screen {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: clamp(10px, 1.2vw, 15px);
+  border: 1px solid rgba(0, 0, 0, 0.9);
+  background: #090a0f;
+  box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.8);
+}
+
+.koma-tablet-glare {
+  position: absolute;
+  z-index: 3;
+  inset: clamp(8px, 1vw, 12px);
+  border-radius: clamp(10px, 1.2vw, 15px);
+  background: radial-gradient(circle at var(--tablet-glare-x) var(--tablet-glare-y), rgba(255, 255, 255, 0.13), rgba(0, 184, 148, 0.035) 34%, transparent 65%);
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+.koma-tablet-camera {
+  position: absolute;
+  z-index: 5;
+  top: 50%;
+  left: 4px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #030405;
+  box-shadow: inset 0 0 0 1px rgba(33, 80, 72, 0.6);
+  transform: translateY(-50%);
+}
+
+.koma-tablet-button {
+  position: absolute;
+  top: 22%;
+  right: -3px;
+  width: 3px;
+  height: 13%;
+  border-radius: 0 3px 3px 0;
+  background: #272c31;
 }
 
 .koma-hero-strip-item {
@@ -984,11 +1243,48 @@
 }
 
 /* --- Responsive & Media Queries --- */
-@media (max-width: 1024px) {
-  .koma-hero-color-plane { width: 100vw; opacity: 0.5; }
-  .koma-hero-grid { grid-template-columns: 1fr; }
-  .koma-hero-device-container { margin-left: 0; margin-top: 2rem; justify-content: center; }
-  .koma-hero-device-frame { margin-right: 0; width: 85vw; }
+@media (max-width: 1180px) {
+  .koma-hero {
+    padding-left: clamp(1.5rem, 4vw, 3.5rem);
+    padding-right: clamp(1.5rem, 4vw, 3.5rem);
+  }
+  .koma-hero-grid {
+    grid-template-columns: minmax(340px, 0.86fr) minmax(440px, 1.14fr);
+    gap: 0.5rem;
+  }
+  .koma-hero-line { font-size: clamp(3.7rem, 7.2vw, 6.5rem); }
+  .koma-hero-float-card--top { right: -0.5rem; }
+}
+
+@media (max-width: 900px) {
+  .koma-hero {
+    min-height: auto;
+    padding-top: 104px;
+  }
+  .koma-hero-grid {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+    min-height: 0;
+  }
+  .koma-hero-content { max-width: 680px; }
+  .koma-hero-headline { max-width: 8.8ch; }
+  .koma-hero-line { font-size: clamp(4.2rem, 12vw, 7rem); }
+  .koma-hero-sub { max-width: 55ch; }
+  .koma-hero-device-container {
+    width: min(100%, 800px);
+    margin: -0.75rem auto 0;
+  }
+  .koma-hero-grid-plane {
+    width: 120vw;
+    top: 43%;
+    right: -34%;
+  }
+  .koma-hero-orbit--one {
+    width: 110vw;
+    top: 36%;
+    right: -42%;
+  }
+  .koma-hero-device-kicker { top: 3%; }
   .koma-showcase-header { grid-template-columns: 1fr; gap: 1.5rem; }
   .koma-flow-center { grid-template-columns: 1fr; }
   .koma-eco-grid-container { grid-template-columns: 1fr; gap: 3rem; }
@@ -996,9 +1292,69 @@
 }
 
 @media (max-width: 768px) {
+  .koma-header {
+    height: 68px;
+    padding-inline: 1.25rem;
+  }
+  .koma-header-logo img { height: 36px; }
   .koma-header-nav { display: none; }
+  .koma-header-actions { display: none; }
   .koma-hamburger { display: flex; }
-  .koma-hero-strip { flex-direction: column; align-items: flex-start; gap: 0.75rem; }
+  .koma-hero {
+    padding: 86px 1.25rem 1.2rem;
+  }
+  .koma-hero-eyebrow {
+    margin-bottom: 1.15rem;
+    font-size: 0.6rem;
+  }
+  .koma-hero-line {
+    font-size: clamp(3.5rem, 17vw, 6rem);
+    line-height: 0.88;
+  }
+  .koma-hero-sub {
+    margin-top: 1.5rem;
+    font-size: 0.95rem;
+    line-height: 1.55;
+  }
+  .koma-hero-cta-group {
+    align-items: stretch;
+    gap: 0.7rem;
+    margin-top: 1.35rem;
+  }
+  .koma-hero-cta-group .koma-btn { flex: 1 1 100%; }
+  .koma-hero-whatsapp-link { justify-content: center; }
+  .koma-hero-proof {
+    gap: 0.55rem;
+    font-size: 0.54rem;
+    white-space: nowrap;
+  }
+  .koma-hero-device-container { margin-top: 0; }
+  .koma-hero-tablet-wrap {
+    padding: 2.7rem 0.15rem 2.25rem;
+    perspective: none;
+  }
+  .koma-physical-tablet {
+    transform: rotateZ(0.6deg);
+    will-change: auto;
+  }
+  .koma-hero-device-kicker {
+    left: 1%;
+    right: 1%;
+    font-size: 0.52rem;
+  }
+  .koma-hero-float-card { display: none; }
+  .koma-hero-strip {
+    width: calc(100% + 2.5rem);
+    margin-left: -1.25rem;
+    padding: 1rem 1.25rem 0;
+    justify-content: flex-start;
+    gap: 1.4rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .koma-hero-strip::-webkit-scrollbar { display: none; }
+  .koma-hero-strip-item { flex: 0 0 auto; }
+  .koma-hero-strip-name { font-size: 0.62rem; }
   .koma-eco-cluster-stage {
     min-height: auto;
     flex-direction: column;
@@ -1029,8 +1385,17 @@
   .koma-footer { flex-direction: column; gap: 1rem; text-align: center; }
 }
 
+@media (max-width: 430px) {
+  .koma-hero-line { font-size: clamp(3.2rem, 16.5vw, 4.45rem); }
+  .koma-hero-proof span:nth-of-type(2) { display: none; }
+  .koma-hero-proof i:nth-of-type(2) { display: none; }
+  .koma-hero-tablet-wrap { padding-top: 2.35rem; }
+  .koma-hero-strip { margin-top: 0.25rem; }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .koma-hero-bar { transform: none !important; }
+  .koma-hero-live-dot { box-shadow: none; }
   .koma-hero-device-frame { transform: none !important; }
+  .koma-physical-tablet { transform: none !important; transition: none; }
   .koma-eco-device-laptop, .koma-eco-device-tablet, .koma-eco-device-phone { transform: none !important; }
 }

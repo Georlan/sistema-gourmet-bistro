@@ -7,6 +7,6 @@ interface TabletFrameProps {
   style?: React.CSSProperties;
 }
 
-export function TabletFrame({ className = '', style }: TabletFrameProps) {
-  return <HeroTabletScene className={className} style={style} />;
+export function TabletFrame({ view = 'mesas', className = '', style }: TabletFrameProps) {
+  return <HeroTabletScene view={view} className={className} style={style} />;
 }
