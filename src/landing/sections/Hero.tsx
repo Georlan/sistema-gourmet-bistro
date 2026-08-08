@@ -16,9 +16,7 @@ export function Hero() {
 
   return (
     <section ref={sectionRef} className="koma-hero" aria-label="Hero">
-      <div className="koma-hero-grid-plane" aria-hidden="true" />
-      <div className="koma-hero-orbit koma-hero-orbit--one" aria-hidden="true" />
-      <div className="koma-hero-orbit koma-hero-orbit--two" aria-hidden="true" />
+      <div className="koma-hero-color-plane" aria-hidden="true" />
 
       <div className="koma-hero-grid">
         <motion.div
@@ -27,14 +25,18 @@ export function Hero() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
         >
-          <div className="koma-hero-eyebrow">
-            <span className="koma-hero-live-dot" aria-hidden="true" />
-            <span>Sistema operacional para restaurantes</span>
-          </div>
-
           <h1 className="koma-hero-headline" aria-label="O restaurante não para">
-            <span className="koma-hero-line">O restaurante</span>
-            <span className="koma-hero-line koma-hero-line--accent">não para.</span>
+            <span className="koma-hero-line koma-hero-line--sm">O</span>
+            <span className="koma-hero-line koma-hero-line--xl">RESTAURANTE</span>
+            <span className="koma-hero-bar-wrap" aria-hidden="true">
+              <motion.span
+                className="koma-hero-bar"
+                initial={{ scaleX: 0 }}
+                animate={{ scaleX: 1 }}
+                transition={{ duration: 0.75, delay: 0.22, ease: [0.16, 1, 0.3, 1] }}
+              />
+            </span>
+            <span className="koma-hero-line koma-hero-line--lg koma-hero-line--accent">NÃO PARA.</span>
           </h1>
 
           <motion.p
@@ -44,7 +46,7 @@ export function Hero() {
             transition={{ duration: 0.7, delay: 0.45 }}
           >
             <span className="koma-hero-sub-bold">Seu sistema também não.</span>
-            Salão, pedidos, cozinha e caixa trabalhando no mesmo ritmo — em uma operação que você enxerga por inteiro.
+            Salão, pedidos, cozinha e caixa no mesmo fluxo.
           </motion.p>
 
           <motion.div
@@ -65,49 +67,10 @@ export function Hero() {
               Falar com um especialista <span aria-hidden="true">↗</span>
             </a>
           </motion.div>
-
-          <motion.div
-            className="koma-hero-proof"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.72 }}
-            aria-label="Diferenciais do Kôma"
-          >
-            <span>Uma operação</span>
-            <i aria-hidden="true" />
-            <span>Qualquer tela</span>
-            <i aria-hidden="true" />
-            <span>Em tempo real</span>
-          </motion.div>
         </motion.div>
 
         <div className="koma-hero-device-container">
-          <div className="koma-hero-device-kicker" aria-hidden="true">
-            <span>KÔMA / operação ao vivo</span>
-            <span>01 — 05</span>
-          </div>
           <HeroTabletScene className="koma-hero-device-frame" />
-          <motion.div
-            className="koma-hero-float-card koma-hero-float-card--top"
-            initial={{ opacity: 0, x: 18 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.65, delay: 0.7 }}
-          >
-            <span className="koma-hero-float-icon" aria-hidden="true">↗</span>
-            <div>
-              <strong>Salão em tempo real</strong>
-              <small>Mesas e pedidos sincronizados</small>
-            </div>
-          </motion.div>
-          <motion.div
-            className="koma-hero-float-card koma-hero-float-card--bottom"
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.65, delay: 0.82 }}
-          >
-            <span className="koma-hero-flow-dot" aria-hidden="true" />
-            <span>Pedido</span><b aria-hidden="true">→</b><span>Cozinha</span><b aria-hidden="true">→</b><span>Caixa</span>
-          </motion.div>
         </div>
       </div>
 
