@@ -79,7 +79,7 @@ export function OperationFlow() {
         </div>
 
         <div className="koma-flow-content" id="koma-flow-panel" role="tabpanel">
-          <AnimatePresence mode="wait">
+          <AnimatePresence mode="sync">
             <motion.div
               className="koma-flow-copy"
               key={`${active.id}-copy`}
@@ -94,7 +94,7 @@ export function OperationFlow() {
             </motion.div>
           </AnimatePresence>
 
-          <AnimatePresence mode="wait">
+          <AnimatePresence mode="sync">
             <motion.div
               className="koma-flow-ticket"
               key={`${active.id}-ticket`}
