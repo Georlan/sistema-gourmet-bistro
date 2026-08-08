@@ -838,13 +838,23 @@
 .koma-eco-functional-list {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.25rem;
   margin-top: 1rem;
 }
 
 .koma-eco-func-item {
-  border-left: 2px solid var(--koma-black);
-  padding-left: 1.25rem;
+  border-left: 3px solid rgba(10, 10, 10, 0.15);
+  padding: 0.5rem 0 0.5rem 1.25rem;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+  border-radius: 0 6px 6px 0;
+}
+
+.koma-eco-func-item:hover,
+.koma-eco-func-item--active {
+  border-left-color: var(--koma-green);
+  padding-left: 1.5rem;
+  background: rgba(0, 184, 148, 0.05);
 }
 
 .koma-eco-func-num {
@@ -876,7 +886,7 @@
 .koma-eco-cluster-stage {
   position: relative;
   width: 100%;
-  min-height: clamp(380px, 44vw, 580px);
+  min-height: clamp(380px, 44vw, 560px);
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -886,38 +896,46 @@
 .koma-eco-stage-bg-surface {
   position: absolute;
   inset: -10%;
-  background: radial-gradient(circle at 60% 50%, rgba(0, 184, 148, 0.08) 0%, transparent 70%);
+  background: radial-gradient(circle at 65% 50%, rgba(0, 184, 148, 0.09) 0%, transparent 70%);
   pointer-events: none;
   z-index: 0;
 }
 
-/* LEVEL 1: Back Laptop Protagonist */
+/* LEVEL 1: Back Laptop Protagonist (rotateY -5deg, rotateX 2deg) */
 .koma-eco-device-laptop {
   position: relative;
-  width: clamp(480px, 44vw, 720px);
+  width: clamp(460px, 42vw, 700px);
   z-index: 1;
+  filter: drop-shadow(0 35px 75px rgba(0, 0, 0, 0.25));
+  cursor: pointer;
 }
 
-/* LEVEL 2: Middle Tablet (Overlapping Laptop Lower Right) */
+/* LEVEL 2: Middle Tablet (70-75% Scale of Laptop, rotateY -9deg) */
 .koma-eco-device-tablet {
   position: absolute;
-  right: 12%;
-  bottom: -10px;
-  width: clamp(250px, 23vw, 360px);
+  right: 14%;
+  bottom: -5px;
+  width: clamp(210px, 18vw, 300px);
   z-index: 2;
-  filter: drop-shadow(0 25px 50px rgba(0, 0, 0, 0.22));
-  transform-style: preserve-3d;
-}
-
-/* LEVEL 3: Foreground Phone (Overlapping Tablet Front Right) */
-.koma-eco-device-phone {
-  position: absolute;
-  right: 1%;
-  bottom: -35px;
-  width: clamp(140px, 13vw, 200px);
-  z-index: 3;
   filter: drop-shadow(0 30px 60px rgba(0, 0, 0, 0.28));
   transform-style: preserve-3d;
+  cursor: pointer;
+}
+
+/* LEVEL 3: Foreground Phone (rotateY -6deg) */
+.koma-eco-device-phone {
+  position: absolute;
+  right: 2%;
+  bottom: -30px;
+  width: clamp(125px, 11vw, 175px);
+  z-index: 3;
+  filter: drop-shadow(0 35px 70px rgba(0, 0, 0, 0.35));
+  transform-style: preserve-3d;
+  cursor: pointer;
+}
+
+.koma-eco-device--hovered {
+  filter: drop-shadow(0 45px 95px rgba(0, 0, 0, 0.38)) brightness(1.03) !important;
 }
 
 /* --- Section 6: Final CTA --- */
