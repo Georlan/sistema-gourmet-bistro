@@ -1,29 +1,20 @@
-import React, { useRef, useEffect, useState, useMemo } from 'react';
-import { motion, useReducedMotion, useScroll, useTransform } from 'motion/react';
+import React, { useRef, useEffect, useState } from 'react';
 import { ProductScreen } from './ProductScreen';
 
 interface HeroTabletSceneProps {
-  overlaySrc?: string;
   className?: string;
   style?: React.CSSProperties;
 }
 
-export function HeroTabletScene({
-  overlaySrc = '/landing/devices/tablet-hero-overlay.png',
-  className = '',
-  style,
-}: HeroTabletSceneProps) {
-  const reduceMotion = useReducedMotion();
+export function HeroTabletScene({ className = '', style }: HeroTabletSceneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(0.36);
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [scale, setScale] = useState(0.45);
 
-  // Responsive scale calculation for 1280px logical screen
+  // Calculate dynamic scale for 1280px logical real screen
   useEffect(() => {
     const updateScale = () => {
       if (containerRef.current) {
-        // Calculate viewport width relative to container
-        const screenDiv = containerRef.current.querySelector('.hero-tablet-screen');
+        const screenDiv = containerRef.current.querySelector('.koma-physical-screen');
         if (screenDiv) {
           const width = screenDiv.clientWidth;
           setScale(width / 1280);
@@ -37,103 +28,79 @@ export function HeroTabletScene({
     return () => observer.disconnect();
   }, []);
 
-  // Subtle Mouse Parallax (4px to 8px max displacement, 1 to 2 deg max tilt)
-  useEffect(() => {
-    if (reduceMotion) return;
-
-    const handleMouseMove = (e: MouseEvent) => {
-      if (window.innerWidth > 1024) {
-        const cx = window.innerWidth / 2;
-        const cy = window.innerHeight / 2;
-        setMousePos({
-          x: ((e.clientX - cx) / cx) * 6, // max 6px
-          y: ((e.clientY - cy) / cy) * 6,
-        });
-      }
-    };
-
-    window.addEventListener('mousemove', handleMouseMove, { passive: true });
-    return () => window.removeEventListener('mousemove', handleMouseMove);
-  }, [reduceMotion]);
-
-  // Motion Configuration
-  const motionProps = useMemo(() => {
-    if (reduceMotion) {
-      return {
-        initial: { opacity: 0, y: 24 },
-        animate: { opacity: 1, y: 0 },
-        transition: { duration: 0.55, ease: [0.22, 1, 0.36, 1] },
-      };
-    }
-
-    return {
-      initial: { opacity: 0, y: 35, rotateZ: -2, rotateY: -6 },
-      animate: { opacity: 1, y: 0, rotateZ: -3, rotateY: -3 },
-      transition: { duration: 0.85, ease: [0.22, 1, 0.36, 1], delay: 0.25 },
-    };
-  }, [reduceMotion]);
-
   return (
-    <motion.div
+    <div
       ref={containerRef}
-      {...motionProps}
-      className={`hero-tablet-scene relative select-none ${className}`}
+      className={`koma-hero-tablet-wrap ${className}`}
       style={{
-        width: 'clamp(360px, 46vw, 720px)',
-        aspectRatio: '1.33 / 1',
-        transformOrigin: 'center center',
-        transform: `translate3d(${mousePos.x}px, ${mousePos.y}px, 0)`,
-        pointerEvents: 'none',
+        perspective: '1400px',
+        width: 'clamp(540px, 44vw, 760px)',
+        marginRight: '-8vw',
         ...style,
       }}
     >
-      {/* 1. Ambient Shadow Layer */}
+      {/* Whole Physical Tablet Container transformed in 3D as a single object */}
       <div
-        className="hero-tablet-shadow absolute inset-0 rounded-[40px]"
+        className="koma-physical-tablet"
         style={{
-          filter: 'blur(35px)',
-          transform: 'translate(28px, 40px) scale(0.9)',
-          background: 'rgba(0, 0, 0, 0.65)',
-          zIndex: 0,
-        }}
-        aria-hidden="true"
-      />
-
-      {/* 2. Real KÔMA Screen Viewport (Positioned within transparent window of tablet) */}
-      <div
-        className="hero-tablet-screen absolute overflow-hidden"
-        style={{
-          top: '12%',
-          left: '10.5%',
-          width: '79%',
-          height: '74%',
-          zIndex: 1,
-          borderRadius: '8px',
-          background: '#090a0f',
-          boxShadow: 'inset 0 0 20px rgba(0, 0, 0, 0.8)',
+          transform: 'rotateY(-8deg) rotateX(2deg) rotateZ(2deg)',
+          transformStyle: 'preserve-3d',
+          position: 'relative',
+          width: '100%',
+          aspectRatio: '4 / 3',
+          background: '#12141d',
+          borderRadius: '22px',
+          padding: '12px',
+          border: '3px solid #282a3c',
+          boxShadow: `
+            0 45px 110px rgba(0, 0, 0, 0.75),
+            0 15px 35px rgba(0, 0, 0, 0.5),
+            inset 0 0 0 1px rgba(255, 255, 255, 0.08)
+          `,
         }}
       >
+        {/* Ambient Glow / Edge Highlight */}
         <div
+          aria-hidden="true"
           style={{
-            width: 1280,
-            height: 800,
-            transform: `scale(${scale})`,
-            transformOrigin: 'top left',
+            position: 'absolute',
+            inset: -1,
+            borderRadius: '23px',
+            background: 'linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 40%, rgba(0,184,148,0.1) 100%)',
+            pointerEvents: 'none',
+            zIndex: 3,
+          }}
+        />
+
+        {/* Physical Tablet Screen Viewport */}
+        <div
+          className="koma-physical-screen"
+          style={{
+            width: '100%',
+            height: '100%',
+            background: '#090a0f',
+            borderRadius: '12px',
+            overflow: 'hidden',
+            position: 'relative',
+            border: '1px solid #1e202d',
+            zIndex: 1,
           }}
         >
-          {/* Real KÔMA Component (MesasView with real model data) */}
-          <ProductScreen view="mesas" scaleLogicalWidth={1280} />
+          {/* Real KÔMA UI Viewport scaled uniformly */}
+          <div
+            style={{
+              width: '1280px',
+              height: '800px',
+              transform: `scale(${scale})`,
+              transformOrigin: 'top left',
+              pointerEvents: 'none',
+              userSelect: 'none',
+            }}
+          >
+            <ProductScreen view="mesas" scaleLogicalWidth={1280} />
+          </div>
         </div>
       </div>
-
-      {/* 3. Physical Tablet PNG Overlay Frame (Above the screen) */}
-      <img
-        src={overlaySrc}
-        alt="KÔMA Tablet Frame"
-        aria-hidden="true"
-        className="hero-tablet-overlay absolute inset-0 h-full w-full object-contain pointer-events-none select-none"
-        style={{ zIndex: 2 }}
-      />
-    </motion.div>
+    </div>
   );
 }
