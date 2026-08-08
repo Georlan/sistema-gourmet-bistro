@@ -1382,3 +1382,500 @@
   .koma-physical-tablet { transform: none !important; transition: none; }
   .koma-eco-device-laptop, .koma-eco-device-tablet, .koma-eco-device-phone { transform: none !important; }
 }
+
+/* ============================================================
+   COMMERCIAL NARRATIVE BASELINE — v4
+   The rules below intentionally supersede the legacy section
+   experiments while preserving the approved hero composition.
+   ============================================================ */
+
+.koma-landing {
+  --koma-line-dark: rgba(255, 255, 255, 0.12);
+  --koma-line-light: rgba(10, 10, 10, 0.14);
+  --koma-muted-dark: rgba(255, 255, 255, 0.66);
+  --koma-muted-light: #565b61;
+  --koma-section-x: clamp(1.25rem, 5vw, 6rem);
+  --koma-section-y: clamp(5.5rem, 10vw, 10rem);
+}
+
+.koma-landing main > section {
+  scroll-margin-top: 76px;
+}
+
+.koma-btn--outline,
+.koma-btn--outline-dark {
+  background: transparent;
+  border: 1px solid currentColor;
+}
+
+.koma-btn--outline { color: var(--koma-white); }
+.koma-btn--outline-dark { color: var(--koma-black); }
+.koma-btn--outline-dark:hover {
+  color: var(--koma-white);
+  background: var(--koma-black);
+  box-shadow: none;
+}
+
+.koma-section-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(16rem, 0.55fr);
+  column-gap: clamp(2rem, 8vw, 9rem);
+  align-items: end;
+  max-width: 1480px;
+  margin: 0 auto clamp(3.25rem, 6vw, 6rem);
+}
+
+.koma-section-heading > span,
+.koma-section-kicker {
+  grid-column: 1 / -1;
+  display: block;
+  margin-bottom: 1rem;
+  font-family: var(--koma-accent);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.koma-section-heading h2 {
+  margin: 0;
+  font-family: var(--koma-display);
+  font-size: clamp(3rem, 7.5vw, 7.5rem);
+  font-weight: 900;
+  letter-spacing: -0.055em;
+  line-height: 0.83;
+  text-transform: uppercase;
+}
+
+.koma-section-heading > p {
+  max-width: 35ch;
+  margin: 0;
+  font-size: clamp(1rem, 1.35vw, 1.25rem);
+  line-height: 1.55;
+}
+
+.koma-section-heading--dark > span { color: var(--koma-green); }
+.koma-section-heading--dark h2 { color: var(--koma-white); }
+.koma-section-heading--dark > p { color: var(--koma-muted-dark); }
+.koma-section-heading--light > span { color: var(--koma-green-dark); }
+.koma-section-heading--light h2 { color: var(--koma-black); }
+.koma-section-heading--light > p { color: var(--koma-muted-light); }
+
+/* Fast value orientation */
+.koma-value-strip {
+  padding: clamp(4rem, 7vw, 6.5rem) var(--koma-section-x);
+  color: var(--koma-black);
+  background: var(--koma-offwhite);
+  border-bottom: 1px solid var(--koma-line-light);
+}
+
+.koma-value-intro {
+  max-width: 1480px;
+  margin: 0 auto 1.75rem;
+  font-family: var(--koma-accent);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+}
+
+.koma-value-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  max-width: 1480px;
+  margin: 0 auto;
+  border-top: 1px solid var(--koma-line-light);
+}
+
+.koma-value-item {
+  min-height: 230px;
+  padding: 1.75rem clamp(1.25rem, 2.5vw, 2.75rem) 1rem 0;
+  border-right: 1px solid var(--koma-line-light);
+}
+
+.koma-value-item + .koma-value-item { padding-left: clamp(1.25rem, 2.5vw, 2.75rem); }
+.koma-value-item:last-child { border-right: 0; }
+.koma-value-item > span {
+  font-family: var(--koma-accent);
+  color: var(--koma-green-dark);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+.koma-value-item h2 {
+  max-width: 13ch;
+  margin: 2.75rem 0 0.85rem;
+  font-family: var(--koma-display);
+  font-size: clamp(1.5rem, 2.25vw, 2.35rem);
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+}
+.koma-value-item p {
+  max-width: 31ch;
+  margin: 0;
+  color: var(--koma-muted-light);
+  font-size: 0.93rem;
+  line-height: 1.55;
+}
+
+/* Impact transition */
+.koma-impact-section {
+  min-height: min(880px, 92svh);
+  align-items: flex-start;
+  padding: var(--koma-section-y) var(--koma-section-x);
+  background: var(--koma-green);
+}
+.koma-impact-eyebrow {
+  margin-bottom: auto;
+  font-family: var(--koma-accent);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+}
+.koma-impact-title {
+  margin-top: clamp(4rem, 10vw, 9rem);
+  font-size: clamp(4rem, 12.4vw, 12rem);
+}
+.koma-impact-copy {
+  align-self: flex-end;
+  max-width: 38ch;
+  margin: 2rem 0 0;
+  font-size: clamp(1rem, 1.4vw, 1.3rem);
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+/* One-order narrative */
+.koma-flow-section {
+  height: auto;
+  padding: var(--koma-section-y) var(--koma-section-x);
+  background: #080a09;
+}
+.koma-flow-layout { max-width: 1480px; margin: 0 auto; }
+.koma-flow-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  margin-bottom: clamp(2.5rem, 5vw, 4.5rem);
+  border-top: 1px solid var(--koma-line-dark);
+  border-bottom: 1px solid var(--koma-line-dark);
+}
+.koma-flow-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 1.25rem 1rem;
+  color: rgba(255, 255, 255, 0.42);
+  background: transparent;
+  border: 0;
+  border-right: 1px solid var(--koma-line-dark);
+  cursor: pointer;
+  text-align: left;
+  transition: color 180ms ease, background 180ms ease;
+}
+.koma-flow-tab:last-child { border-right: 0; }
+.koma-flow-tab:hover { color: var(--koma-white); }
+.koma-flow-tab:focus-visible { outline: 2px solid var(--koma-green); outline-offset: -2px; }
+.koma-flow-tab--active { color: var(--koma-black); background: var(--koma-green); }
+.koma-flow-tab span { font-family: var(--koma-accent); font-size: 0.7rem; }
+.koma-flow-tab strong { font-family: var(--koma-accent); font-size: 0.75rem; letter-spacing: 0.09em; }
+
+.koma-flow-content {
+  display: grid;
+  grid-template-columns: minmax(0, 0.75fr) minmax(28rem, 1.1fr);
+  gap: clamp(3rem, 9vw, 10rem);
+  align-items: center;
+  min-height: 520px;
+}
+.koma-flow-copy > span {
+  color: var(--koma-green);
+  font-family: var(--koma-accent);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+}
+.koma-flow-copy h3 {
+  max-width: 12ch;
+  margin: 1rem 0 1.5rem;
+  color: var(--koma-white);
+  font-family: var(--koma-display);
+  font-size: clamp(2.4rem, 5vw, 5.4rem);
+  line-height: 0.9;
+  letter-spacing: -0.05em;
+}
+.koma-flow-copy p {
+  max-width: 39ch;
+  margin: 0;
+  color: var(--koma-muted-dark);
+  font-size: 1.05rem;
+  line-height: 1.65;
+}
+.koma-flow-ticket {
+  position: relative;
+  width: 100%;
+  padding: clamp(1.5rem, 3vw, 2.75rem);
+  color: var(--koma-white);
+  background:
+    linear-gradient(145deg, rgba(0, 184, 148, 0.07), transparent 40%),
+    #101411;
+  border: 1px solid rgba(0, 184, 148, 0.28);
+  border-radius: 18px;
+  box-shadow: 0 45px 100px rgba(0, 0, 0, 0.42);
+  overflow: hidden;
+}
+.koma-flow-ticket::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 25%, rgba(255,255,255,0.035) 45%, transparent 65%);
+  pointer-events: none;
+}
+.koma-flow-ticket-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--koma-line-dark);
+}
+.koma-flow-ticket-top div { display: flex; flex-direction: column; gap: 0.35rem; }
+.koma-flow-ticket-top small { color: rgba(255,255,255,0.5); font-size: 0.65rem; letter-spacing: 0.1em; }
+.koma-flow-ticket-top strong { font-family: var(--koma-display); font-size: clamp(1.4rem, 2.3vw, 2.2rem); }
+.koma-flow-ticket-top > span {
+  flex: 0 0 auto;
+  padding: 0.55rem 0.75rem;
+  color: var(--koma-green);
+  border: 1px solid rgba(0, 184, 148, 0.35);
+  font-family: var(--koma-accent);
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+.koma-flow-ticket-list { padding: 1.25rem 0; }
+.koma-flow-ticket-list div {
+  display: grid;
+  grid-template-columns: 2rem 1fr;
+  gap: 1rem;
+  align-items: center;
+  padding: 1rem 0;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.koma-flow-ticket-list span { color: var(--koma-green); font-family: var(--koma-accent); font-size: 0.72rem; }
+.koma-flow-ticket-list p { margin: 0; font-size: clamp(0.9rem, 1.2vw, 1.05rem); font-weight: 650; }
+.koma-flow-ticket-action { display: flex; align-items: center; gap: 0.75rem; padding-top: 0.75rem; }
+.koma-flow-ticket-action i { width: 0.65rem; height: 0.65rem; border-radius: 50%; background: var(--koma-green); box-shadow: 0 0 18px rgba(0,184,148,0.75); }
+.koma-flow-ticket-action strong { font-family: var(--koma-accent); font-size: 0.72rem; letter-spacing: 0.08em; }
+
+/* Three connected surfaces */
+.koma-ecosystem-section {
+  padding: var(--koma-section-y) var(--koma-section-x);
+  background: #f3f4f2;
+}
+.koma-eco-grid-container { max-width: 1480px; }
+.koma-eco-tag { color: var(--koma-green-dark); }
+.koma-eco-title { font-size: clamp(3rem, 6.8vw, 7rem); }
+.koma-eco-func-item { border-radius: 0; }
+.koma-eco-cluster-stage { min-height: clamp(420px, 48vw, 650px); }
+
+/* Customer-facing menu */
+.koma-cardapio-section {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(18rem, 0.7fr);
+  gap: clamp(3rem, 10vw, 12rem);
+  align-items: center;
+  min-height: 900px;
+  padding: var(--koma-section-y) max(var(--koma-section-x), calc((100vw - 1480px) / 2));
+  color: var(--koma-white);
+  background:
+    radial-gradient(circle at 75% 45%, rgba(0, 184, 148, 0.13), transparent 34%),
+    #080a09;
+  overflow: hidden;
+}
+.koma-cardapio-copy { position: relative; z-index: 2; }
+.koma-cardapio-copy > .koma-section-kicker { color: var(--koma-green); }
+.koma-cardapio-copy > h2 {
+  margin: 0 0 1.5rem;
+  font-family: var(--koma-display);
+  font-size: clamp(3.4rem, 7.7vw, 8rem);
+  line-height: 0.84;
+  letter-spacing: -0.06em;
+}
+.koma-cardapio-lead {
+  max-width: 42ch;
+  margin: 0 0 3rem;
+  color: var(--koma-muted-dark);
+  font-size: clamp(1rem, 1.4vw, 1.25rem);
+  line-height: 1.6;
+}
+.koma-cardapio-points { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--koma-line-dark); }
+.koma-cardapio-points > div { padding: 1.25rem 1.25rem 0 0; }
+.koma-cardapio-points span { display: block; margin-bottom: 1.8rem; color: var(--koma-green); font-family: var(--koma-accent); font-size: 0.7rem; }
+.koma-cardapio-points strong { display: block; font-family: var(--koma-accent); font-size: 0.72rem; letter-spacing: 0.08em; }
+.koma-cardapio-points p { margin: 0.45rem 0 0; color: rgba(255,255,255,0.5); font-size: 0.78rem; line-height: 1.5; }
+.koma-cardapio-device { position: relative; width: min(100%, 350px); margin: 0 auto; filter: drop-shadow(0 50px 90px rgba(0,0,0,0.6)); }
+.koma-cardapio-device::before {
+  content: '';
+  position: absolute;
+  inset: 7% -28%;
+  border: 1px solid rgba(0,184,148,0.25);
+  border-radius: 50%;
+  transform: rotate(-8deg);
+}
+.koma-cardapio-orbit {
+  position: absolute;
+  top: 12%;
+  right: -55%;
+  color: rgba(0,184,148,0.55);
+  font-family: var(--koma-accent);
+  font-size: 0.62rem;
+  letter-spacing: 0.18em;
+  writing-mode: vertical-rl;
+}
+
+/* Management inventory */
+.koma-management-section {
+  padding: var(--koma-section-y) var(--koma-section-x);
+  color: var(--koma-black);
+  background: var(--koma-offwhite);
+}
+.koma-management-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  max-width: 1480px;
+  margin: 0 auto;
+  border: 1px solid var(--koma-line-light);
+}
+.koma-management-card {
+  min-height: 560px;
+  display: flex;
+  flex-direction: column;
+  padding: clamp(1.5rem, 3.2vw, 3.25rem);
+  border-right: 1px solid var(--koma-line-light);
+  transition: background 220ms ease, color 220ms ease;
+}
+.koma-management-card:last-child { border-right: 0; }
+.koma-management-card:hover { color: var(--koma-white); background: var(--koma-black); }
+.koma-management-card-top { display: flex; justify-content: space-between; font-family: var(--koma-accent); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.1em; }
+.koma-management-card-top span { color: var(--koma-green-dark); }
+.koma-management-card:hover .koma-management-card-top span { color: var(--koma-green); }
+.koma-management-card h3 { max-width: 11ch; margin: 5rem 0 1.25rem; font-family: var(--koma-display); font-size: clamp(2rem, 3.5vw, 3.7rem); line-height: 0.9; letter-spacing: -0.045em; }
+.koma-management-card > p { max-width: 34ch; margin: 0; color: var(--koma-muted-light); line-height: 1.6; }
+.koma-management-card:hover > p { color: rgba(255,255,255,0.65); }
+.koma-management-card ul { list-style: none; padding: 0; margin: auto 0 0; }
+.koma-management-card li { padding: 0.85rem 0; border-top: 1px solid currentColor; font-family: var(--koma-accent); font-size: 0.73rem; font-weight: 700; letter-spacing: 0.04em; }
+
+/* Operational trust */
+.koma-reliability-section {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(24rem, 0.7fr);
+  gap: clamp(4rem, 10vw, 12rem);
+  padding: var(--koma-section-y) var(--koma-section-x);
+  color: var(--koma-white);
+  background: var(--koma-green-plane);
+}
+.koma-reliability-title-wrap > span { color: var(--koma-green); font-family: var(--koma-accent); font-size: 0.72rem; font-weight: 800; letter-spacing: 0.12em; }
+.koma-reliability-title-wrap h2 { margin: clamp(4rem, 9vw, 8rem) 0 0; font-family: var(--koma-display); font-size: clamp(3.3rem, 7.5vw, 8rem); line-height: 0.84; letter-spacing: -0.06em; }
+.koma-reliability-list { border-top: 1px solid var(--koma-line-dark); }
+.koma-reliability-list article { display: grid; grid-template-columns: 2.5rem 1fr; gap: 1rem; padding: 1.7rem 0; border-bottom: 1px solid var(--koma-line-dark); }
+.koma-reliability-list article > span { color: var(--koma-green); font-family: var(--koma-accent); font-size: 0.7rem; }
+.koma-reliability-list h3 { margin: 0 0 0.55rem; font-family: var(--koma-display); font-size: 1.2rem; letter-spacing: -0.02em; }
+.koma-reliability-list p { max-width: 40ch; margin: 0; color: var(--koma-muted-dark); font-size: 0.9rem; line-height: 1.55; }
+
+/* Plans */
+.koma-plans-section {
+  padding: var(--koma-section-y) var(--koma-section-x);
+  color: var(--koma-black);
+  background: #eceeea;
+}
+.koma-plans-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; max-width: 1480px; margin: 0 auto; align-items: stretch; }
+.koma-plan-card { display: flex; flex-direction: column; min-height: 650px; padding: clamp(1.5rem, 2.8vw, 2.75rem); background: var(--koma-offwhite); border: 1px solid var(--koma-line-light); }
+.koma-plan-card--featured { color: var(--koma-white); background: var(--koma-black); border-color: var(--koma-black); transform: translateY(-1.25rem); }
+.koma-plan-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.koma-plan-card-heading span, .koma-plan-card-heading small { color: var(--koma-green-dark); font-family: var(--koma-accent); font-size: 0.65rem; font-weight: 800; letter-spacing: 0.1em; }
+.koma-plan-card--featured .koma-plan-card-heading span, .koma-plan-card--featured .koma-plan-card-heading small { color: var(--koma-green); }
+.koma-plan-card-heading h3 { margin: 0.5rem 0 0; font-family: var(--koma-display); font-size: clamp(2.5rem, 4.2vw, 4.5rem); line-height: 0.9; text-transform: uppercase; }
+.koma-plan-tagline { min-height: 4.5rem; max-width: 34ch; margin: 1.5rem 0; color: var(--koma-muted-light); line-height: 1.5; }
+.koma-plan-card--featured .koma-plan-tagline { color: var(--koma-muted-dark); }
+.koma-plan-price { display: flex; align-items: baseline; gap: 0.35rem; padding: 1.5rem 0; border-block: 1px solid currentColor; }
+.koma-plan-price > span { align-self: flex-start; margin-top: 0.5rem; font-family: var(--koma-accent); font-size: 0.7rem; }
+.koma-plan-price strong { font-family: var(--koma-display); font-size: clamp(4.5rem, 7vw, 7rem); line-height: 0.8; letter-spacing: -0.06em; }
+.koma-plan-price small { color: var(--koma-muted-light); }
+.koma-plan-card--featured .koma-plan-price small { color: var(--koma-muted-dark); }
+.koma-plan-card ul { list-style: none; padding: 0; margin: 1.5rem 0 2rem; }
+.koma-plan-card li { position: relative; padding: 0.7rem 0 0.7rem 1.35rem; font-size: 0.88rem; line-height: 1.4; }
+.koma-plan-card li::before { content: '↗'; position: absolute; left: 0; color: var(--koma-green-dark); font-weight: 900; }
+.koma-plan-card--featured li::before { color: var(--koma-green); }
+.koma-plan-card .koma-btn { width: 100%; margin-top: auto; }
+.koma-plans-note { max-width: 1480px; margin: 1.5rem auto 0; color: #666; font-size: 0.75rem; }
+
+/* Conversion */
+.koma-cta-section {
+  min-height: 92svh;
+  padding: var(--koma-section-y) var(--koma-section-x);
+  background: var(--koma-green);
+  color: var(--koma-black);
+}
+.koma-cta-kicker { margin-bottom: clamp(4rem, 8vw, 8rem); font-family: var(--koma-accent); font-size: 0.72rem; font-weight: 800; letter-spacing: 0.12em; }
+.koma-cta-title { color: var(--koma-black); font-size: clamp(3.5rem, 10.5vw, 10.5rem); }
+.koma-cta-title em { color: transparent; -webkit-text-stroke: 2px var(--koma-black); font-style: normal; }
+.koma-cta-sub { color: rgba(10,10,10,0.72); line-height: 1.55; }
+.koma-cta-actions { display: flex; flex-direction: column; align-items: center; gap: 0.9rem; }
+.koma-cta-actions > span { font-family: var(--koma-accent); font-size: 0.63rem; font-weight: 800; letter-spacing: 0.1em; }
+.koma-footer { min-height: 110px; gap: 2rem; }
+.koma-footer img { width: auto; height: 38px; }
+.koma-footer nav { display: flex; gap: 1.5rem; }
+.koma-footer nav a { color: rgba(255,255,255,0.55); text-decoration: none; text-transform: uppercase; }
+.koma-footer nav a:hover { color: var(--koma-green); }
+
+@media (max-width: 1080px) {
+  .koma-section-heading { grid-template-columns: 1fr; gap: 1.5rem; }
+  .koma-flow-content { grid-template-columns: minmax(0, 0.75fr) minmax(24rem, 1fr); gap: 3rem; }
+  .koma-cardapio-section { grid-template-columns: 1fr 0.6fr; gap: 3rem; }
+  .koma-cardapio-points { grid-template-columns: 1fr; }
+  .koma-cardapio-points > div { display: grid; grid-template-columns: 2rem 11rem 1fr; gap: 1rem; align-items: start; padding: 1rem 0; border-top: 1px solid var(--koma-line-dark); }
+  .koma-cardapio-points span, .koma-cardapio-points p { margin: 0; }
+  .koma-management-card { min-height: 520px; }
+  .koma-reliability-section { grid-template-columns: 1fr; }
+  .koma-reliability-title-wrap h2 { margin-top: 4rem; }
+}
+
+@media (max-width: 768px) {
+  .koma-value-grid, .koma-management-grid, .koma-plans-grid { grid-template-columns: 1fr; }
+  .koma-value-item { min-height: 0; padding: 1.5rem 0 2rem !important; border-right: 0; border-bottom: 1px solid var(--koma-line-light); }
+  .koma-value-item:last-child { border-bottom: 0; }
+  .koma-value-item h2 { margin-top: 1.5rem; }
+  .koma-impact-section { min-height: 72svh; }
+  .koma-impact-copy { align-self: flex-start; }
+  .koma-flow-tabs { display: flex; overflow-x: auto; scrollbar-width: none; }
+  .koma-flow-tabs::-webkit-scrollbar { display: none; }
+  .koma-flow-tab { flex: 0 0 42%; }
+  .koma-flow-content { grid-template-columns: 1fr; min-height: 0; gap: 2.5rem; }
+  .koma-flow-copy h3 { font-size: clamp(2.5rem, 13vw, 4.5rem); }
+  .koma-flow-ticket-top { flex-direction: column; }
+  .koma-cardapio-section { grid-template-columns: 1fr; min-height: 0; }
+  .koma-cardapio-points > div { grid-template-columns: 2rem 1fr; }
+  .koma-cardapio-points p { grid-column: 2; }
+  .koma-cardapio-device { width: min(76vw, 320px); margin-top: 2rem; }
+  .koma-management-card { min-height: 470px; border-right: 0; border-bottom: 1px solid var(--koma-line-light); }
+  .koma-management-card:last-child { border-bottom: 0; }
+  .koma-management-card h3 { margin-top: 3.5rem; }
+  .koma-reliability-section { grid-template-columns: 1fr; }
+  .koma-plan-card { min-height: 610px; }
+  .koma-plan-card--featured { transform: none; }
+  .koma-cta-title em { -webkit-text-stroke-width: 1px; }
+  .koma-footer nav { flex-wrap: wrap; justify-content: center; }
+}
+
+@media (max-width: 430px) {
+  .koma-section-heading h2 { font-size: clamp(2.8rem, 14vw, 4rem); }
+  .koma-impact-title { font-size: clamp(3.5rem, 18vw, 5.5rem); }
+  .koma-flow-tab { flex-basis: 52%; }
+  .koma-flow-ticket { border-radius: 10px; }
+  .koma-cardapio-copy > h2 { font-size: clamp(3rem, 15vw, 4.5rem); }
+  .koma-reliability-title-wrap h2 { font-size: clamp(3rem, 14vw, 4.5rem); }
+  .koma-plan-price strong { font-size: 5rem; }
+  .koma-footer { padding-block: 2rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .koma-management-card,
+  .koma-flow-tab,
+  .koma-btn { transition: none !important; }
+}
