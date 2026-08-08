@@ -1,6 +1,6 @@
-import React, { useRef, useState, useEffect } from 'react';
-import { motion, useScroll, useTransform } from 'motion/react';
-import { TabletFrame } from '../product/TabletFrame';
+import React, { useRef } from 'react';
+import { motion } from 'motion/react';
+import { HeroTabletScene } from '../product/HeroTabletScene';
 
 const HERO_STRIP_ITEMS = [
   { num: '01', name: 'PDV BALCÃO' },
@@ -12,31 +12,6 @@ const HERO_STRIP_ITEMS = [
 
 export function Hero() {
   const sectionRef = useRef<HTMLElement>(null);
-  const { scrollYProgress } = useScroll({
-    target: sectionRef,
-    offset: ['start start', 'end start'],
-  });
-
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (window.innerWidth > 1024) {
-        const cx = window.innerWidth / 2;
-        const cy = window.innerHeight / 2;
-        setMousePos({
-          x: ((e.clientX - cx) / cx) * 6,
-          y: ((e.clientY - cy) / cy) * 6,
-        });
-      }
-    };
-
-    window.addEventListener('mousemove', handleMouseMove, { passive: true });
-    return () => window.removeEventListener('mousemove', handleMouseMove);
-  }, []);
-
-  const deviceRotateY = useTransform(scrollYProgress, [0, 1], [-8, -2]);
-  const deviceY = useTransform(scrollYProgress, [0, 1], [0, -35]);
 
   return (
     <section ref={sectionRef} className="koma-hero" aria-label="Hero">
@@ -92,23 +67,9 @@ export function Hero() {
           </motion.div>
         </motion.div>
 
-        {/* Layer 3: Massive Physical Tablet Product Object (15-25% Larger, 60-65% Visual Dominance, Bleeds Out Right Edge) */}
+        {/* Layer 3: Physical Tablet Product Object with Real PNG Overlay Frame */}
         <div className="koma-hero-device-container">
-          <motion.div
-            className="koma-hero-device-frame"
-            style={{
-              rotateZ: 3,
-              rotateY: deviceRotateY,
-              y: deviceY,
-              x: mousePos.x,
-              rotateX: mousePos.y * 0.25,
-            }}
-            initial={{ opacity: 0, x: 60 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.9, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
-          >
-            <TabletFrame view="mesas" />
-          </motion.div>
+          <HeroTabletScene />
         </div>
       </div>
 
