@@ -780,6 +780,82 @@
   letter-spacing: 0.04em;
 }
 
+/* --- Generated 3D phone shell with a live React display --- */
+.koma-phone-3d {
+  --phone-light-x: 38%;
+  --phone-light-y: 22%;
+  --phone-tilt-x: 0deg;
+  --phone-tilt-y: 0deg;
+  position: relative;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  perspective: 1100px;
+  transform-style: preserve-3d;
+  isolation: isolate;
+}
+
+.koma-phone-3d-stage {
+  position: absolute;
+  inset: 0;
+  transform: rotateX(var(--phone-tilt-x)) rotateY(var(--phone-tilt-y));
+  transform-style: preserve-3d;
+  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: transform;
+}
+
+.koma-phone-3d-screen,
+.koma-phone-3d-glare {
+  position: absolute;
+  left: 29.4%;
+  top: 7.1%;
+  width: 52.2%;
+  height: 82.2%;
+  clip-path: polygon(0 0, 77% 0, 100% 98%, 13.5% 100%);
+  border-radius: 12% 12% 9% 10%;
+}
+
+.koma-phone-3d-screen {
+  z-index: 1;
+  overflow: hidden;
+  background: #090a0f;
+  transform: translateZ(-1px);
+}
+
+.koma-phone-3d-screen-content {
+  position: absolute;
+  inset: -1.5% -5% -1.5% -4%;
+  overflow: hidden;
+  transform: perspective(900px) rotateY(-4.5deg) rotateZ(-0.9deg) scale(1.04);
+  transform-origin: 50% 50%;
+  background: #090a0f;
+}
+
+.koma-phone-3d-shell {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  filter: drop-shadow(0 42px 38px rgba(0, 0, 0, 0.38));
+}
+
+.koma-phone-3d-glare {
+  z-index: 4;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at var(--phone-light-x) var(--phone-light-y), rgba(255, 255, 255, 0.24), transparent 24%),
+    linear-gradient(118deg, rgba(255, 255, 255, 0.14), transparent 24% 72%, rgba(0, 184, 148, 0.09));
+  mix-blend-mode: screen;
+  opacity: 0.46;
+  transform: translateZ(2px);
+  transition: opacity 180ms ease;
+}
+
+.koma-phone-3d:hover .koma-phone-3d-glare { opacity: 0.72; }
+
 /* --- Section 2: Product Showcase (EDITORIAL WHITE BACKGROUND) --- */
 .koma-section-white {
   background-color: var(--koma-white);
