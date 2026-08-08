@@ -8,11 +8,11 @@ interface HeroTabletSceneProps {
 
 export function HeroTabletScene({ className = '', style }: HeroTabletSceneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(0.45);
+  const [scale, setScale] = useState(0.48);
   const [isHovered, setIsHovered] = useState(false);
   const [hoverState, setHoverState] = useState({
-    rotateY: -8,
-    rotateX: 2,
+    rotateY: -10,
+    rotateX: 3,
     glareX: 50,
     glareY: 50,
   });
@@ -41,8 +41,8 @@ export function HeroTabletScene({ className = '', style }: HeroTabletSceneProps)
     const px = (e.clientX - rect.left) / rect.width;  // 0 to 1
     const py = (e.clientY - rect.top) / rect.height; // 0 to 1
 
-    // Map rotateY between -12deg and -2deg
-    const rotateY = -12 + px * 10;
+    // Map rotateY between -13deg and -3deg (aligned with diagonal)
+    const rotateY = -13 + px * 10;
     // Map rotateX between +5deg and -2deg
     const rotateX = 5 - py * 7;
 
@@ -58,19 +58,19 @@ export function HeroTabletScene({ className = '', style }: HeroTabletSceneProps)
   const handleMouseLeave = () => {
     setIsHovered(false);
     setHoverState({
-      rotateY: -8,
-      rotateX: 2,
+      rotateY: -10,
+      rotateX: 3,
       glareX: 50,
       glareY: 50,
     });
   };
 
   // Dynamic CSS variables and styles based on state
-  const currentRotateY = isHovered ? hoverState.rotateY : -8;
-  const currentRotateX = isHovered ? hoverState.rotateX : 2;
-  const currentRotateZ = 2;
+  const currentRotateY = isHovered ? hoverState.rotateY : -10;
+  const currentRotateX = isHovered ? hoverState.rotateX : 3;
+  const currentRotateZ = 2.5;
   const currentScale = isHovered ? 1.025 : 1;
-  const currentTranslateY = isHovered ? -4 : 0;
+  const currentTranslateY = isHovered ? -5 : 0;
   const currentBrightness = isHovered ? 1.04 : 1;
 
   return (
@@ -82,8 +82,8 @@ export function HeroTabletScene({ className = '', style }: HeroTabletSceneProps)
       onMouseLeave={handleMouseLeave}
       style={{
         perspective: '1400px',
-        width: 'clamp(540px, 44vw, 760px)',
-        marginRight: '-8vw',
+        width: 'clamp(620px, 48vw, 840px)', // ~10-15% larger scale
+        marginRight: '-2.5vw', // Brought 10-15% more into viewport
         cursor: 'pointer',
         ...style,
       }}
@@ -106,14 +106,14 @@ export function HeroTabletScene({ className = '', style }: HeroTabletSceneProps)
           border: '3px solid #282a3c',
           boxShadow: isHovered
             ? `
-              0 60px 130px rgba(0, 0, 0, 0.85),
-              0 25px 45px rgba(0, 0, 0, 0.6),
-              0 0 30px rgba(0, 184, 148, 0.12),
+              0 70px 150px rgba(0, 0, 0, 0.9),
+              0 30px 50px rgba(0, 0, 0, 0.7),
+              0 0 35px rgba(0, 184, 148, 0.15),
               inset 0 0 0 1px rgba(255, 255, 255, 0.15)
             `
             : `
-              0 45px 110px rgba(0, 0, 0, 0.75),
-              0 15px 35px rgba(0, 0, 0, 0.5),
+              0 55px 125px rgba(0, 0, 0, 0.82),
+              0 20px 40px rgba(0, 0, 0, 0.6),
               inset 0 0 0 1px rgba(255, 255, 255, 0.08)
             `,
           filter: `brightness(${currentBrightness})`,
