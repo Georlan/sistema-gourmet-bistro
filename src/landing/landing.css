@@ -379,16 +379,17 @@
 
 .koma-hero-device-container {
   position: absolute;
-  top: 8%;
-  right: -40vw;
-  width: 58vw;
-  z-index: 4;
+  top: 7%;
+  right: -45.5vw;
+  width: 60vw;
+  z-index: 5;
   display: flex;
   justify-content: center;
   align-items: center;
   perspective: 1500px;
-  transform: rotate(-1.6deg);
+  transform: rotate(7deg);
   transform-origin: center;
+  will-change: transform;
 }
 
 .koma-hero-device-frame {
@@ -503,6 +504,7 @@
   --tablet-rotate-y: -3deg;
   --tablet-glare-x: 62%;
   --tablet-glare-y: 28%;
+  --tablet-rotate-z: 1.2deg;
   position: relative;
   width: 100%;
   padding: clamp(2.8rem, 5vw, 4.5rem) 1.2rem clamp(2.3rem, 4vw, 3.5rem);
@@ -537,7 +539,7 @@
     0 24px 42px rgba(0, 0, 0, 0.62),
     0 0 0 2px rgba(0, 184, 148, 0.05),
     inset 0 1px 0 rgba(255, 255, 255, 0.18);
-  transform: rotateX(var(--tablet-rotate-x)) rotateY(var(--tablet-rotate-y)) rotateZ(1.2deg);
+  transform: rotateX(var(--tablet-rotate-x)) rotateY(var(--tablet-rotate-y)) rotateZ(var(--tablet-rotate-z));
   transform-style: preserve-3d;
   transition: transform 180ms ease-out, box-shadow 300ms ease;
   will-change: transform;
@@ -547,8 +549,12 @@
   box-shadow:
     0 86px 140px rgba(0, 0, 0, 0.78),
     0 28px 50px rgba(0, 0, 0, 0.66),
-    0 0 52px rgba(0, 184, 148, 0.11),
+    0 0 62px rgba(0, 184, 148, 0.24),
     inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.koma-hero-device-container .koma-hero-tablet-wrap {
+  --tablet-rotate-z: 0deg;
 }
 
 .koma-physical-screen {
@@ -568,10 +574,14 @@
   z-index: 3;
   inset: clamp(8px, 1vw, 12px);
   border-radius: clamp(10px, 1.2vw, 15px);
-  background: radial-gradient(circle at var(--tablet-glare-x) var(--tablet-glare-y), rgba(255, 255, 255, 0.13), rgba(0, 184, 148, 0.035) 34%, transparent 65%);
+  background: radial-gradient(circle at var(--tablet-glare-x) var(--tablet-glare-y), rgba(255, 255, 255, 0.2), rgba(0, 184, 148, 0.07) 34%, transparent 66%);
   mix-blend-mode: screen;
+  opacity: 0.76;
+  transition: opacity 180ms ease;
   pointer-events: none;
 }
+
+.koma-hero-tablet-wrap:hover .koma-tablet-glare { opacity: 1; }
 
 .koma-tablet-camera {
   position: absolute;
@@ -1223,7 +1233,7 @@
   .koma-hero-line--sm { font-size: clamp(2.8rem, 5vw, 4.8rem); }
   .koma-hero-line--xl { font-size: clamp(4.7rem, 10.2vw, 7.5rem); }
   .koma-hero-line--lg { font-size: clamp(4.4rem, 8.5vw, 6.8rem); }
-  .koma-hero-device-container { right: -42vw; width: 60vw; }
+  .koma-hero-device-container { right: -47vw; width: 62vw; }
 }
 
 @media (max-width: 900px) {

@@ -70,7 +70,7 @@ export function Hero() {
         </motion.div>
 
         <div className="koma-hero-device-container">
-          <HeroTabletScene className="koma-hero-device-frame" />
+          <HeroTabletScene interaction="hero" className="koma-hero-device-frame" />
         </div>
       </div>
 

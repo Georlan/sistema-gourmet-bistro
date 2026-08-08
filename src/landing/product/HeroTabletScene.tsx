@@ -3,11 +3,12 @@ import { ProductScreen } from './ProductScreen';
 
 interface HeroTabletSceneProps {
   view?: 'mesas' | 'pdv' | 'kds' | 'cardapio' | 'delivery';
+  interaction?: 'standard' | 'hero';
   className?: string;
   style?: React.CSSProperties;
 }
 
-export function HeroTabletScene({ view = 'mesas', className = '', style }: HeroTabletSceneProps) {
+export function HeroTabletScene({ view = 'mesas', interaction = 'standard', className = '', style }: HeroTabletSceneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0.48);
   const animationFrameRef = useRef<number | null>(null);
@@ -45,12 +46,14 @@ export function HeroTabletScene({ view = 'mesas', className = '', style }: HeroT
       const rect = element.getBoundingClientRect();
       const x = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
       const y = Math.min(1, Math.max(0, (clientY - rect.top) / rect.height));
-      element.style.setProperty('--tablet-rotate-y', `${-5 + x * 7}deg`);
-      element.style.setProperty('--tablet-rotate-x', `${3 - y * 5}deg`);
+      const rotateY = interaction === 'hero' ? -9 + x * 14 : -5 + x * 7;
+      const rotateX = interaction === 'hero' ? 5 - y * 8 : 3 - y * 5;
+      element.style.setProperty('--tablet-rotate-y', `${rotateY}deg`);
+      element.style.setProperty('--tablet-rotate-x', `${rotateX}deg`);
       element.style.setProperty('--tablet-glare-x', `${Math.round(x * 100)}%`);
       element.style.setProperty('--tablet-glare-y', `${Math.round(y * 100)}%`);
     });
-  }, []);
+  }, [interaction]);
 
   const handlePointerLeave = useCallback(() => {
     const element = containerRef.current;
