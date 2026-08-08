@@ -1,7 +1,7 @@
 import React from 'react';
 import { MesasView } from '../../components/mesas/MesasView';
 import { KitchenPanel } from '../../components/KitchenPanel';
-import CardapioPage from '../../cardapio/CardapioPage';
+import { CardapioDemoView } from './CardapioDemoView';
 import { getMarketingDemoData } from './MarketingDemoProvider';
 
 interface ProductScreenProps {
@@ -23,7 +23,7 @@ export function ProductScreen({ view = 'mesas', scaleLogicalWidth = 1280 }: Prod
           />
         );
       case 'cardapio':
-        return <CardapioPage />;
+        return <CardapioDemoView />;
       case 'mesas':
       default:
         return (

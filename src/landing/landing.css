@@ -780,23 +780,44 @@
   margin: 0;
 }
 
-/* --- Section 5: Ecosystem (OFF-WHITE CONTRAST & 3-LEVEL DEVICE COMPOSITION) --- */
+/* --- Section 5: Ecosystem (EDITORIAL CAMPAIGN SCENE & 3-DEVICE CLUSTER) --- */
 .koma-ecosystem-section {
-  background-color: #f6f7f9;
+  background-color: #f4f5f8;
   color: var(--koma-black);
-  padding: clamp(5.5rem, 10vw, 10rem) clamp(1.5rem, 5vw, 6rem);
+  padding: clamp(5rem, 9vw, 9rem) clamp(1.5rem, 5vw, 6rem);
   overflow: hidden;
   position: relative;
 }
 
-.koma-eco-header {
+.koma-eco-grid-container {
+  display: grid;
+  grid-template-columns: 0.85fr 1.15fr;
+  gap: clamp(2rem, 4vw, 5rem);
+  align-items: center;
+  max-width: 1500px;
+  margin: 0 auto;
+}
+
+.koma-eco-editorial-col {
   position: relative;
   z-index: 5;
+  display: flex;
+  flex-direction: column;
+}
+
+.koma-eco-tag {
+  font-family: var(--koma-accent);
+  font-size: 0.8125rem;
+  font-weight: 800;
+  color: var(--koma-green-dark);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 0.75rem;
 }
 
 .koma-eco-title {
   font-family: var(--koma-display);
-  font-size: clamp(2.5rem, 7.5vw, 6.2rem);
+  font-size: clamp(2.2rem, 5.5vw, 5.2rem);
   font-weight: 900;
   line-height: 0.88;
   letter-spacing: -0.045em;
@@ -807,69 +828,26 @@
 
 .koma-eco-subtitle {
   font-family: var(--koma-body);
-  font-size: clamp(1rem, 1.35vw, 1.2rem);
-  color: #555;
-  max-width: 44ch;
-  margin: 0 0 clamp(3.5rem, 6vw, 5.5rem) 0;
+  font-size: clamp(1rem, 1.3vw, 1.2rem);
+  color: #4b5563;
+  max-width: 42ch;
+  margin: 0 0 2rem 0;
   line-height: 1.55;
 }
 
-/* 3-Level Overlapping Devices Stage */
-.koma-eco-stage {
-  position: relative;
-  width: 100%;
-  min-height: clamp(380px, 46vw, 620px);
+.koma-eco-functional-list {
   display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  margin-top: clamp(2rem, 4vw, 4rem);
-  perspective: 1200px;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-top: 1rem;
 }
 
-/* LEVEL 1: Frontal Laptop Protagonist (Main Back) */
-.koma-eco-level-laptop {
-  position: relative;
-  width: clamp(540px, 52vw, 840px);
-  z-index: 1;
-  margin-left: 2vw;
+.koma-eco-func-item {
+  border-left: 2px solid var(--koma-black);
+  padding-left: 1.25rem;
 }
 
-/* LEVEL 2: Physical Tablet (Middle Overlap Right) */
-.koma-eco-level-tablet {
-  position: absolute;
-  right: 18%;
-  bottom: -20px;
-  width: clamp(270px, 25vw, 390px);
-  z-index: 2;
-  filter: drop-shadow(0 30px 60px rgba(0, 0, 0, 0.25));
-  transform-style: preserve-3d;
-}
-
-/* LEVEL 3: Smartphone (Foreground Right) */
-.koma-eco-level-phone {
-  position: absolute;
-  right: 6%;
-  bottom: -40px;
-  width: clamp(150px, 14vw, 220px);
-  z-index: 3;
-  filter: drop-shadow(0 35px 70px rgba(0, 0, 0, 0.32));
-  transform-style: preserve-3d;
-}
-
-/* Pure Editorial Labels directly in composition (NO cards/boxes) */
-.koma-eco-labels-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 3rem;
-  margin-top: clamp(4rem, 8vw, 7rem);
-}
-
-.koma-eco-label-item {
-  border-top: 2px solid var(--koma-black);
-  padding-top: 1.25rem;
-}
-
-.koma-eco-label-num {
+.koma-eco-func-num {
   font-family: var(--koma-accent);
   font-size: 0.75rem;
   font-weight: 800;
@@ -877,21 +855,69 @@
   letter-spacing: 0.08em;
 }
 
-.koma-eco-label-name {
+.koma-eco-func-title {
   font-family: var(--koma-display);
-  font-size: 1.25rem;
+  font-size: 1.125rem;
   font-weight: 900;
   text-transform: uppercase;
-  margin: 0.25rem 0;
+  margin: 0.2rem 0 0.1rem 0;
   color: var(--koma-black);
 }
 
-.koma-eco-label-desc {
+.koma-eco-func-desc {
   font-family: var(--koma-body);
   font-size: 0.875rem;
-  color: #555;
+  color: #6b7280;
   line-height: 1.5;
   margin: 0;
+}
+
+/* Device Cluster Stage (Right Column) */
+.koma-eco-cluster-stage {
+  position: relative;
+  width: 100%;
+  min-height: clamp(380px, 44vw, 580px);
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  perspective: 1200px;
+}
+
+.koma-eco-stage-bg-surface {
+  position: absolute;
+  inset: -10%;
+  background: radial-gradient(circle at 60% 50%, rgba(0, 184, 148, 0.08) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* LEVEL 1: Back Laptop Protagonist */
+.koma-eco-device-laptop {
+  position: relative;
+  width: clamp(480px, 44vw, 720px);
+  z-index: 1;
+}
+
+/* LEVEL 2: Middle Tablet (Overlapping Laptop Lower Right) */
+.koma-eco-device-tablet {
+  position: absolute;
+  right: 12%;
+  bottom: -10px;
+  width: clamp(250px, 23vw, 360px);
+  z-index: 2;
+  filter: drop-shadow(0 25px 50px rgba(0, 0, 0, 0.22));
+  transform-style: preserve-3d;
+}
+
+/* LEVEL 3: Foreground Phone (Overlapping Tablet Front Right) */
+.koma-eco-device-phone {
+  position: absolute;
+  right: 1%;
+  bottom: -35px;
+  width: clamp(140px, 13vw, 200px);
+  z-index: 3;
+  filter: drop-shadow(0 30px 60px rgba(0, 0, 0, 0.28));
+  transform-style: preserve-3d;
 }
 
 /* --- Section 6: Final CTA --- */
@@ -947,27 +973,26 @@
   .koma-hero-device-frame { margin-right: 0; width: 85vw; }
   .koma-showcase-header { grid-template-columns: 1fr; gap: 1.5rem; }
   .koma-flow-center { grid-template-columns: 1fr; }
-  .koma-eco-labels-grid { grid-template-columns: 1fr; gap: 2rem; }
+  .koma-eco-grid-container { grid-template-columns: 1fr; gap: 3rem; }
+  .koma-eco-cluster-stage { margin-top: 2rem; justify-content: center; }
 }
 
 @media (max-width: 768px) {
   .koma-header-nav { display: none; }
   .koma-hamburger { display: flex; }
   .koma-hero-strip { flex-direction: column; align-items: flex-start; gap: 0.75rem; }
-  .koma-eco-stage {
+  .koma-eco-cluster-stage {
     min-height: auto;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    margin-right: 0;
-    gap: 0;
     perspective: none;
+    margin-top: 2rem;
   }
-  .koma-eco-level-laptop {
+  .koma-eco-device-laptop {
     width: 92vw;
-    margin-left: 0;
   }
-  .koma-eco-level-tablet {
+  .koma-eco-device-tablet {
     position: relative;
     right: auto;
     bottom: auto;
@@ -975,7 +1000,7 @@
     transform: none !important;
     margin-top: -12vw;
   }
-  .koma-eco-level-phone {
+  .koma-eco-device-phone {
     position: relative;
     right: auto;
     bottom: auto;
@@ -989,5 +1014,5 @@
 @media (prefers-reduced-motion: reduce) {
   .koma-hero-bar { transform: none !important; }
   .koma-hero-device-frame { transform: none !important; }
-  .koma-eco-level-laptop, .koma-eco-level-tablet, .koma-eco-level-phone { transform: none !important; }
+  .koma-eco-device-laptop, .koma-eco-device-tablet, .koma-eco-device-phone { transform: none !important; }
 }

@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState } from 'react';
 import { motion, useInView } from 'motion/react';
 import { FrontalLaptopFrame } from '../product/FrontalLaptopFrame';
 import { TabletFrame } from '../product/TabletFrame';
@@ -25,89 +25,97 @@ export function Ecosystem() {
 
   return (
     <section ref={sectionRef} className="koma-ecosystem-section" aria-label="Ecossistema">
-      {/* Title & Copy */}
-      <motion.div
-        className="koma-eco-header"
-        initial={{ opacity: 0, y: 30 }}
-        animate={isInView ? { opacity: 1, y: 0 } : {}}
-        transition={{ duration: 0.8 }}
-      >
-        <h2 className="koma-eco-title">
-          TUDO ONDE<br />PRECISA ESTAR.
-        </h2>
-        <p className="koma-eco-subtitle">
-          KÔMA conecta operação, atendimento e experiência em uma única base.
-        </p>
-      </motion.div>
-
-      {/* 3-Level Overlapping Devices Composition */}
-      <div
-        ref={stageRef}
-        className="koma-eco-stage"
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
-      >
-        {/* LEVEL 1 (Back / Main Protagonist): Frontal Laptop */}
+      <div className="koma-eco-grid-container">
+        {/* Left Column: Editorial Headline, Tag & Functional Labels */}
         <motion.div
-          className="koma-eco-level-laptop"
-          initial={{ opacity: 0, y: 40 }}
-          animate={isInView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.9, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-          style={{
-            transform: `perspective(1200px) rotateY(${mousePos.x * 4}deg) rotateX(${-mousePos.y * 3}deg)`,
-            transition: 'transform 0.2s ease-out',
-          }}
+          className="koma-eco-editorial-col"
+          initial={{ opacity: 0, x: -30 }}
+          animate={isInView ? { opacity: 1, x: 0 } : {}}
+          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
         >
-          <FrontalLaptopFrame view="pdv" />
+          <span className="koma-eco-tag">04 / ECOSSISTEMA</span>
+
+          <h2 className="koma-eco-title">
+            UMA OPERAÇÃO.<br />
+            EM QUALQUER TELA.
+          </h2>
+
+          <p className="koma-eco-subtitle">
+            Caixa, salão e cliente conectados pelo KÔMA em uma única base operacional.
+          </p>
+
+          <div className="koma-eco-functional-list">
+            <div className="koma-eco-func-item">
+              <span className="koma-eco-func-num">01 / CAIXA</span>
+              <h3 className="koma-eco-func-title">NÚCLEO OPERACIONAL</h3>
+              <p className="koma-eco-func-desc">Abertura de caixa, gestão financeira e controle central.</p>
+            </div>
+
+            <div className="koma-eco-func-item">
+              <span className="koma-eco-func-num">02 / SALÃO</span>
+              <h3 className="koma-eco-func-title">OPERAÇÃO EM MESAS</h3>
+              <p className="koma-eco-func-desc">Atendimento ágil do garçom e mapa de mesas em tempo real.</p>
+            </div>
+
+            <div className="koma-eco-func-item">
+              <span className="koma-eco-func-num">03 / CARDÁPIO</span>
+              <h3 className="koma-eco-func-title">EXPERIÊNCIA MÓVEL</h3>
+              <p className="koma-eco-func-desc">Cardápio QR Code direto no celular do cliente para pedidos sem fila.</p>
+            </div>
+          </div>
         </motion.div>
 
-        {/* LEVEL 2 (Middle): Physical Tablet */}
-        <motion.div
-          className="koma-eco-level-tablet"
-          initial={{ opacity: 0, y: 55, x: 20 }}
-          animate={isInView ? { opacity: 1, y: 0, x: 0 } : {}}
-          transition={{ duration: 0.9, delay: 0.25, ease: [0.16, 1, 0.3, 1] }}
-          style={{
-            transform: `perspective(1000px) rotateY(-12deg) rotateX(4deg) translate3d(${mousePos.x * 14}px, ${mousePos.y * 10}px, 0px)`,
-            transition: 'transform 0.2s ease-out',
-          }}
+        {/* Right Column: Cohesive 3-Device Cluster Scene with Parallax */}
+        <div
+          ref={stageRef}
+          className="koma-eco-cluster-stage"
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
         >
-          <TabletFrame view="mesas" />
-        </motion.div>
+          {/* Background Ambient Surface Shape */}
+          <div className="koma-eco-stage-bg-surface" aria-hidden="true" />
 
-        {/* LEVEL 3 (Front / Foreground): Smartphone */}
-        <motion.div
-          className="koma-eco-level-phone"
-          initial={{ opacity: 0, y: 70, x: 30 }}
-          animate={isInView ? { opacity: 1, y: 0, x: 0 } : {}}
-          transition={{ duration: 0.9, delay: 0.4, ease: [0.16, 1, 0.3, 1] }}
-          style={{
-            transform: `perspective(800px) rotateY(-8deg) rotateX(3deg) translate3d(${mousePos.x * 24}px, ${mousePos.y * 16}px, 0px)`,
-            transition: 'transform 0.2s ease-out',
-          }}
-        >
-          <PhoneFrame />
-        </motion.div>
-      </div>
+          {/* LEVEL 1: Dominant Frontal Laptop (Caixa / PDV) */}
+          <motion.div
+            className="koma-eco-device-laptop"
+            initial={{ opacity: 0, y: 40 }}
+            animate={isInView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.9, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
+            style={{
+              transform: `perspective(1200px) rotateY(${-3 + mousePos.x * 3}deg) rotateX(${1 - mousePos.y * 2}deg) translate3d(${mousePos.x * 3}px, ${mousePos.y * 3}px, 0px)`,
+              transition: 'transform 0.2s ease-out',
+            }}
+          >
+            <FrontalLaptopFrame view="pdv" />
+          </motion.div>
 
-      {/* Pure Editorial Labels Grid */}
-      <div className="koma-eco-labels-grid">
-        <div className="koma-eco-label-item">
-          <span className="koma-eco-label-num">01 / BALCÃO</span>
-          <h3 className="koma-eco-label-name">OPERAÇÃO NO CAIXA</h3>
-          <p className="koma-eco-label-desc">Abertura, fechamento, sangrias e emissão fiscal sem complicações.</p>
-        </div>
+          {/* LEVEL 2: Tablet (Salão / Mesas) overlapping lower right corner of Laptop */}
+          <motion.div
+            className="koma-eco-device-tablet"
+            initial={{ opacity: 0, y: 55, x: 30 }}
+            animate={isInView ? { opacity: 1, y: 0, x: 0 } : {}}
+            transition={{ duration: 0.9, delay: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            style={{
+              transform: `perspective(1000px) rotateY(${-7 + mousePos.x * 4}deg) rotateZ(2deg) translate3d(${mousePos.x * 6}px, ${mousePos.y * 5}px, 0px)`,
+              transition: 'transform 0.2s ease-out',
+            }}
+          >
+            <TabletFrame view="mesas" />
+          </motion.div>
 
-        <div className="koma-eco-label-item">
-          <span className="koma-eco-label-num">02 / MÓVEL</span>
-          <h3 className="koma-eco-label-name">GESTÃO DE MESAS</h3>
-          <p className="koma-eco-label-desc">Controle em tempo real de ocupação, comanda e atendimento no salão.</p>
-        </div>
-
-        <div className="koma-eco-label-item">
-          <span className="koma-eco-label-num">03 / CLIENTE</span>
-          <h3 className="koma-eco-label-name">CARDÁPIO QR CODE</h3>
-          <p className="koma-eco-label-desc">Cardápio digital na mesa para consulta e pedidos sem fila de espera.</p>
+          {/* LEVEL 3: Smartphone (Cardápio Mobile) overlapping front right corner of Tablet */}
+          <motion.div
+            className="koma-eco-device-phone"
+            initial={{ opacity: 0, y: 70, x: 40 }}
+            animate={isInView ? { opacity: 1, y: 0, x: 0 } : {}}
+            transition={{ duration: 0.9, delay: 0.4, ease: [0.16, 1, 0.3, 1] }}
+            style={{
+              transform: `perspective(800px) rotateY(${-4 + mousePos.x * 5}deg) rotateZ(-2deg) translate3d(${mousePos.x * 10}px, ${mousePos.y * 8}px, 0px)`,
+              transition: 'transform 0.2s ease-out',
+            }}
+          >
+            <PhoneFrame />
+          </motion.div>
         </div>
       </div>
     </section>
