@@ -273,7 +273,7 @@
   position: relative;
   z-index: 8;
   display: block;
-  width: 100%;
+  width: 73%;
   margin: clamp(0.28rem, 0.55vw, 0.6rem) 0 clamp(0.9rem, 1.15vw, 1.25rem);
 }
 
@@ -1266,6 +1266,7 @@
   .koma-hero-line--xl { font-size: clamp(4.4rem, 13.7vw, 7.3rem); }
   .koma-hero-line--lg { font-size: clamp(4rem, 12vw, 6.4rem); }
   .koma-hero-title-axis { width: 100%; }
+  .koma-hero-bar-wrap { width: 73%; }
   .koma-hero-sub { max-width: 55ch; }
   .koma-hero-device-container {
     position: relative;
