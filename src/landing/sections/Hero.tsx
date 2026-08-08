@@ -27,14 +27,16 @@ export function Hero() {
         >
           <h1 className="koma-hero-headline" aria-label="O restaurante não para">
             <span className="koma-hero-line koma-hero-line--sm">O</span>
-            <span className="koma-hero-line koma-hero-line--xl">RESTAURANTE</span>
-            <span className="koma-hero-bar-wrap" aria-hidden="true">
-              <motion.span
-                className="koma-hero-bar"
-                initial={{ scaleX: 0 }}
-                animate={{ scaleX: 1 }}
-                transition={{ duration: 0.75, delay: 0.22, ease: [0.16, 1, 0.3, 1] }}
-              />
+            <span className="koma-hero-title-axis">
+              <span className="koma-hero-line koma-hero-line--xl">RESTAURANTE</span>
+              <span className="koma-hero-bar-wrap" aria-hidden="true">
+                <motion.span
+                  className="koma-hero-bar"
+                  initial={{ scaleX: 0 }}
+                  animate={{ scaleX: 1 }}
+                  transition={{ duration: 0.75, delay: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                />
+              </span>
             </span>
             <span className="koma-hero-line koma-hero-line--lg koma-hero-line--accent">NÃO PARA.</span>
           </h1>

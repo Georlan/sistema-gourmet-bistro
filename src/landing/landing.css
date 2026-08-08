@@ -227,8 +227,10 @@
   display: block;
   font-family: var(--koma-display);
   font-weight: 900;
-  line-height: 0.82;
-  letter-spacing: -0.055em;
+  line-height: 0.84;
+  letter-spacing: -0.045em;
+  font-kerning: normal;
+  font-feature-settings: 'kern' 1;
   text-transform: uppercase;
   color: var(--koma-white);
   text-shadow: 0 12px 36px rgba(0, 0, 0, 0.38);
@@ -243,30 +245,42 @@
 .koma-hero-line--xl {
   width: max-content;
   font-size: clamp(5rem, 10.4vw, 12.4rem);
+  letter-spacing: -0.052em;
 }
 
 .koma-hero-line--lg {
   width: max-content;
   font-size: clamp(4.8rem, 8.4vw, 10.2rem);
+  letter-spacing: -0.042em;
 }
 
 .koma-hero-line--accent {
   position: relative;
   color: var(--koma-green);
+  padding-top: 0.07em;
+  line-height: 0.88;
+  overflow: visible;
+}
+
+.koma-hero-title-axis {
+  display: flex;
+  flex-direction: column;
+  width: max-content;
+  max-width: 100%;
 }
 
 .koma-hero-bar-wrap {
   position: relative;
   z-index: 8;
   display: block;
-  width: calc(100vw - clamp(3rem, 10vw, 12rem));
-  margin: clamp(0.72rem, 1.1vw, 1.2rem) 0 clamp(0.55rem, 0.9vw, 0.95rem);
+  width: 100%;
+  margin: clamp(0.28rem, 0.55vw, 0.6rem) 0 clamp(0.9rem, 1.15vw, 1.25rem);
 }
 
 .koma-hero-bar {
   display: block;
   width: 100%;
-  height: clamp(9px, 1vw, 15px);
+  height: clamp(8px, 0.85vw, 13px);
   background: var(--koma-green);
   box-shadow: 0 0 24px rgba(0, 184, 148, 0.32);
   transform-origin: left center;
@@ -1251,7 +1265,7 @@
   .koma-hero-line--sm { font-size: clamp(2.8rem, 8vw, 4.2rem); }
   .koma-hero-line--xl { font-size: clamp(4.4rem, 13.7vw, 7.3rem); }
   .koma-hero-line--lg { font-size: clamp(4rem, 12vw, 6.4rem); }
-  .koma-hero-bar-wrap { width: 100%; }
+  .koma-hero-title-axis { width: 100%; }
   .koma-hero-sub { max-width: 55ch; }
   .koma-hero-device-container {
     position: relative;
@@ -1289,7 +1303,7 @@
   .koma-hero-line--sm { font-size: clamp(2.3rem, 10vw, 3.2rem); }
   .koma-hero-line--xl { font-size: clamp(3.55rem, 16.4vw, 5.7rem); }
   .koma-hero-line--lg { font-size: clamp(3.3rem, 15vw, 5.2rem); }
-  .koma-hero-bar-wrap { margin-block: 0.6rem 0.5rem; }
+  .koma-hero-bar-wrap { margin-block: 0.3rem 0.85rem; }
   .koma-hero-sub {
     margin-top: 1.5rem;
     font-size: 0.95rem;
