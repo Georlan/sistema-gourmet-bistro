@@ -9,6 +9,13 @@ interface HeroTabletSceneProps {
 export function HeroTabletScene({ className = '', style }: HeroTabletSceneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0.45);
+  const [isHovered, setIsHovered] = useState(false);
+  const [hoverState, setHoverState] = useState({
+    rotateY: -8,
+    rotateX: 2,
+    glareX: 50,
+    glareY: 50,
+  });
 
   // Calculate dynamic scale for 1280px logical real screen
   useEffect(() => {
@@ -28,14 +35,56 @@ export function HeroTabletScene({ className = '', style }: HeroTabletSceneProps)
     return () => observer.disconnect();
   }, []);
 
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const px = (e.clientX - rect.left) / rect.width;  // 0 to 1
+    const py = (e.clientY - rect.top) / rect.height; // 0 to 1
+
+    // Map rotateY between -12deg and -2deg
+    const rotateY = -12 + px * 10;
+    // Map rotateX between +5deg and -2deg
+    const rotateX = 5 - py * 7;
+
+    setHoverState({
+      rotateY,
+      rotateX,
+      glareX: Math.round(px * 100),
+      glareY: Math.round(py * 100),
+    });
+  };
+
+  const handleMouseEnter = () => setIsHovered(true);
+  const handleMouseLeave = () => {
+    setIsHovered(false);
+    setHoverState({
+      rotateY: -8,
+      rotateX: 2,
+      glareX: 50,
+      glareY: 50,
+    });
+  };
+
+  // Dynamic CSS variables and styles based on state
+  const currentRotateY = isHovered ? hoverState.rotateY : -8;
+  const currentRotateX = isHovered ? hoverState.rotateX : 2;
+  const currentRotateZ = 2;
+  const currentScale = isHovered ? 1.025 : 1;
+  const currentTranslateY = isHovered ? -4 : 0;
+  const currentBrightness = isHovered ? 1.04 : 1;
+
   return (
     <div
       ref={containerRef}
       className={`koma-hero-tablet-wrap ${className}`}
+      onMouseMove={handleMouseMove}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       style={{
         perspective: '1400px',
         width: 'clamp(540px, 44vw, 760px)',
         marginRight: '-8vw',
+        cursor: 'pointer',
         ...style,
       }}
     >
@@ -43,8 +92,11 @@ export function HeroTabletScene({ className = '', style }: HeroTabletSceneProps)
       <div
         className="koma-physical-tablet"
         style={{
-          transform: 'rotateY(-8deg) rotateX(2deg) rotateZ(2deg)',
+          transform: `translateY(${currentTranslateY}px) scale(${currentScale}) rotateY(${currentRotateY}deg) rotateX(${currentRotateX}deg) rotateZ(${currentRotateZ}deg)`,
           transformStyle: 'preserve-3d',
+          transition: isHovered
+            ? 'transform 0.15s ease-out, filter 0.25s ease, box-shadow 0.25s ease'
+            : 'transform 0.55s cubic-bezier(0.22, 1, 0.36, 1), filter 0.55s ease, box-shadow 0.55s ease',
           position: 'relative',
           width: '100%',
           aspectRatio: '4 / 3',
@@ -52,21 +104,32 @@ export function HeroTabletScene({ className = '', style }: HeroTabletSceneProps)
           borderRadius: '22px',
           padding: '12px',
           border: '3px solid #282a3c',
-          boxShadow: `
-            0 45px 110px rgba(0, 0, 0, 0.75),
-            0 15px 35px rgba(0, 0, 0, 0.5),
-            inset 0 0 0 1px rgba(255, 255, 255, 0.08)
-          `,
+          boxShadow: isHovered
+            ? `
+              0 60px 130px rgba(0, 0, 0, 0.85),
+              0 25px 45px rgba(0, 0, 0, 0.6),
+              0 0 30px rgba(0, 184, 148, 0.12),
+              inset 0 0 0 1px rgba(255, 255, 255, 0.15)
+            `
+            : `
+              0 45px 110px rgba(0, 0, 0, 0.75),
+              0 15px 35px rgba(0, 0, 0, 0.5),
+              inset 0 0 0 1px rgba(255, 255, 255, 0.08)
+            `,
+          filter: `brightness(${currentBrightness})`,
         }}
       >
-        {/* Ambient Glow / Edge Highlight */}
+        {/* Dynamic Light Glare / Reflection following cursor */}
         <div
           aria-hidden="true"
           style={{
             position: 'absolute',
             inset: -1,
             borderRadius: '23px',
-            background: 'linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 40%, rgba(0,184,148,0.1) 100%)',
+            background: isHovered
+              ? `radial-gradient(circle at ${hoverState.glareX}% ${hoverState.glareY}%, rgba(255,255,255,0.18) 0%, rgba(0,184,148,0.1) 40%, rgba(255,255,255,0) 80%)`
+              : 'linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 40%, rgba(0,184,148,0.1) 100%)',
+            transition: 'background 0.2s ease',
             pointerEvents: 'none',
             zIndex: 3,
           }}
