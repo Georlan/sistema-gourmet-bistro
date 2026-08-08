@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
+import { motion } from 'motion/react';
 
 const FLOW_STAGES = [
   {
@@ -79,51 +79,45 @@ export function OperationFlow() {
         </div>
 
         <div className="koma-flow-content" id="koma-flow-panel" role="tabpanel">
-          <AnimatePresence mode="sync">
-            <motion.div
-              className="koma-flow-copy"
-              key={`${active.id}-copy`}
-              initial={{ opacity: 0, y: 18 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-              transition={{ duration: 0.28 }}
-            >
-              <span>{active.num} / {active.short}</span>
-              <h3>{active.title}</h3>
-              <p>{active.description}</p>
-            </motion.div>
-          </AnimatePresence>
+          <motion.div
+            className="koma-flow-copy"
+            key={`${active.id}-copy`}
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.22 }}
+          >
+            <span>{active.num} / {active.short}</span>
+            <h3>{active.title}</h3>
+            <p>{active.description}</p>
+          </motion.div>
 
-          <AnimatePresence mode="sync">
-            <motion.div
-              className="koma-flow-ticket"
-              key={`${active.id}-ticket`}
-              initial={{ opacity: 0, x: 24, scale: 0.98 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: -18, scale: 0.98 }}
-              transition={{ duration: 0.32 }}
-            >
-              <div className="koma-flow-ticket-top">
-                <div>
-                  <small>{active.context}</small>
-                  <strong>PEDIDO #0412</strong>
+          <motion.div
+            className="koma-flow-ticket"
+            key={`${active.id}-ticket`}
+            initial={{ opacity: 0, x: 18, scale: 0.99 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            transition={{ duration: 0.24 }}
+          >
+            <div className="koma-flow-ticket-top">
+              <div>
+                <small>{active.context}</small>
+                <strong>PEDIDO #0412</strong>
+              </div>
+              <span>{active.status}</span>
+            </div>
+            <div className="koma-flow-ticket-list">
+              {active.items.map((item, index) => (
+                <div key={item}>
+                  <span>0{index + 1}</span>
+                  <p>{item}</p>
                 </div>
-                <span>{active.status}</span>
-              </div>
-              <div className="koma-flow-ticket-list">
-                {active.items.map((item, index) => (
-                  <div key={item}>
-                    <span>0{index + 1}</span>
-                    <p>{item}</p>
-                  </div>
-                ))}
-              </div>
-              <div className="koma-flow-ticket-action">
-                <i aria-hidden="true" />
-                <strong>{active.action}</strong>
-              </div>
-            </motion.div>
-          </AnimatePresence>
+              ))}
+            </div>
+            <div className="koma-flow-ticket-action">
+              <i aria-hidden="true" />
+              <strong>{active.action}</strong>
+            </div>
+          </motion.div>
         </div>
       </div>
     </section>
