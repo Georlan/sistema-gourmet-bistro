@@ -1327,7 +1327,7 @@
   position: absolute;
   right: 1%;
   bottom: -18px;
-  width: clamp(460px, 35vw, 600px);
+  width: clamp(520px, 42vw, 680px);
   z-index: 2;
   filter: drop-shadow(0 30px 60px rgba(0, 0, 0, 0.28));
   transform-style: preserve-3d;
