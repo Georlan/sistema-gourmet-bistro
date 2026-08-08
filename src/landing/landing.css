@@ -780,20 +780,26 @@
   margin: 0;
 }
 
-/* --- Section 5: Ecosystem (OFF-WHITE CONTRAST & MASSIVE OBJECT COMPOSITION) --- */
+/* --- Section 5: Ecosystem (OFF-WHITE CONTRAST & 3-LEVEL DEVICE COMPOSITION) --- */
 .koma-ecosystem-section {
-  background-color: var(--koma-offwhite);
+  background-color: #f6f7f9;
   color: var(--koma-black);
-  padding: clamp(6rem, 12vw, 12rem) clamp(1.5rem, 5vw, 6rem);
+  padding: clamp(5.5rem, 10vw, 10rem) clamp(1.5rem, 5vw, 6rem);
   overflow: hidden;
+  position: relative;
+}
+
+.koma-eco-header {
+  position: relative;
+  z-index: 5;
 }
 
 .koma-eco-title {
   font-family: var(--koma-display);
-  font-size: clamp(2.5rem, 7.5vw, 6.5rem);
+  font-size: clamp(2.5rem, 7.5vw, 6.2rem);
   font-weight: 900;
   line-height: 0.88;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.045em;
   text-transform: uppercase;
   margin: 0 0 1rem 0;
   color: var(--koma-black);
@@ -801,35 +807,53 @@
 
 .koma-eco-subtitle {
   font-family: var(--koma-body);
-  font-size: clamp(1rem, 1.4vw, 1.25rem);
+  font-size: clamp(1rem, 1.35vw, 1.2rem);
   color: #555;
   max-width: 44ch;
-  margin: 0 0 clamp(4rem, 8vw, 7rem) 0;
+  margin: 0 0 clamp(3.5rem, 6vw, 5.5rem) 0;
+  line-height: 1.55;
 }
 
+/* 3-Level Overlapping Devices Stage */
 .koma-eco-stage {
-  display: flex;
-  align-items: flex-end;
-  justify-content: flex-end;
   position: relative;
-  margin-right: -6vw; /* Right viewport crop */
+  width: 100%;
+  min-height: clamp(380px, 46vw, 620px);
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin-top: clamp(2rem, 4vw, 4rem);
+  perspective: 1200px;
 }
 
-.koma-eco-monitor {
-  width: clamp(440px, 56vw, 820px); /* Dominant Monitor Object */
+/* LEVEL 1: Frontal Laptop Protagonist (Main Back) */
+.koma-eco-level-laptop {
+  position: relative;
+  width: clamp(540px, 52vw, 840px);
   z-index: 1;
+  margin-left: 2vw;
 }
 
-.koma-eco-tablet {
-  width: clamp(260px, 32vw, 440px); /* Overlapping Tablet */
+/* LEVEL 2: Physical Tablet (Middle Overlap Right) */
+.koma-eco-level-tablet {
+  position: absolute;
+  right: 18%;
+  bottom: -20px;
+  width: clamp(270px, 25vw, 390px);
   z-index: 2;
-  margin-left: -8vw;
+  filter: drop-shadow(0 30px 60px rgba(0, 0, 0, 0.25));
+  transform-style: preserve-3d;
 }
 
-.koma-eco-phone {
-  width: clamp(160px, 19vw, 250px); /* Foreground Smartphone */
+/* LEVEL 3: Smartphone (Foreground Right) */
+.koma-eco-level-phone {
+  position: absolute;
+  right: 6%;
+  bottom: -40px;
+  width: clamp(150px, 14vw, 220px);
   z-index: 3;
-  margin-left: -6vw;
+  filter: drop-shadow(0 35px 70px rgba(0, 0, 0, 0.32));
+  transform-style: preserve-3d;
 }
 
 /* Pure Editorial Labels directly in composition (NO cards/boxes) */
@@ -930,12 +954,40 @@
   .koma-header-nav { display: none; }
   .koma-hamburger { display: flex; }
   .koma-hero-strip { flex-direction: column; align-items: flex-start; gap: 0.75rem; }
-  .koma-eco-stage { flex-direction: column; align-items: center; margin-right: 0; }
-  .koma-eco-tablet, .koma-eco-phone { margin-left: 0; }
+  .koma-eco-stage {
+    min-height: auto;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin-right: 0;
+    gap: 0;
+    perspective: none;
+  }
+  .koma-eco-level-laptop {
+    width: 92vw;
+    margin-left: 0;
+  }
+  .koma-eco-level-tablet {
+    position: relative;
+    right: auto;
+    bottom: auto;
+    width: 68vw;
+    transform: none !important;
+    margin-top: -12vw;
+  }
+  .koma-eco-level-phone {
+    position: relative;
+    right: auto;
+    bottom: auto;
+    width: 44vw;
+    transform: none !important;
+    margin-top: -14vw;
+  }
   .koma-footer { flex-direction: column; gap: 1rem; text-align: center; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .koma-hero-bar { transform: none !important; }
   .koma-hero-device-frame { transform: none !important; }
+  .koma-eco-level-laptop, .koma-eco-level-tablet, .koma-eco-level-phone { transform: none !important; }
 }
