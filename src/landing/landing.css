@@ -1102,18 +1102,28 @@
 }
 
 .koma-eco-func-item {
+  width: 100%;
+  color: inherit;
+  background: transparent;
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
   border-left: 3px solid rgba(10, 10, 10, 0.15);
   padding: 0.5rem 0 0.5rem 1.25rem;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   cursor: pointer;
+  font: inherit;
+  text-align: left;
   border-radius: 0 6px 6px 0;
 }
 
 .koma-eco-func-item:hover,
-.koma-eco-func-item--active {
+.koma-eco-func-item--active,
+.koma-eco-func-item:focus-visible {
   border-left-color: var(--koma-green);
   padding-left: 1.5rem;
   background: rgba(0, 184, 148, 0.05);
+  outline: none;
 }
 
 .koma-eco-func-num {
@@ -1169,12 +1179,12 @@
   cursor: pointer;
 }
 
-/* LEVEL 2: Middle Tablet (70-75% Scale of Laptop, rotateY -9deg) */
+/* LEVEL 2: Middle Tablet, deliberately readable beside the laptop */
 .koma-eco-device-tablet {
   position: absolute;
-  right: 14%;
-  bottom: -5px;
-  width: clamp(210px, 18vw, 300px);
+  right: 7%;
+  bottom: -24px;
+  width: clamp(320px, 27vw, 440px);
   z-index: 2;
   filter: drop-shadow(0 30px 60px rgba(0, 0, 0, 0.28));
   transform-style: preserve-3d;
@@ -1184,9 +1194,9 @@
 /* LEVEL 3: Foreground Phone (rotateY -6deg) */
 .koma-eco-device-phone {
   position: absolute;
-  right: 2%;
-  bottom: -30px;
-  width: clamp(125px, 11vw, 175px);
+  right: -1%;
+  bottom: -52px;
+  width: clamp(128px, 10vw, 168px);
   z-index: 3;
   filter: drop-shadow(0 35px 70px rgba(0, 0, 0, 0.35));
   transform-style: preserve-3d;

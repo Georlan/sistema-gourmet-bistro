@@ -49,35 +49,50 @@ export function Ecosystem() {
           </p>
 
           <div className="koma-eco-functional-list">
-            <div
+            <button
+              type="button"
               className={`koma-eco-func-item ${activeDevice === 'laptop' ? 'koma-eco-func-item--active' : ''}`}
               onMouseEnter={() => setActiveDevice('laptop')}
               onMouseLeave={() => setActiveDevice(null)}
+              onFocus={() => setActiveDevice('laptop')}
+              onBlur={() => setActiveDevice(null)}
+              onClick={() => setActiveDevice('laptop')}
+              aria-pressed={activeDevice === 'laptop'}
             >
               <span className="koma-eco-func-num">01 / CAIXA</span>
               <h3 className="koma-eco-func-title">NÚCLEO OPERACIONAL</h3>
               <p className="koma-eco-func-desc">Abertura de caixa, gestão financeira e controle central.</p>
-            </div>
+            </button>
 
-            <div
+            <button
+              type="button"
               className={`koma-eco-func-item ${activeDevice === 'tablet' ? 'koma-eco-func-item--active' : ''}`}
               onMouseEnter={() => setActiveDevice('tablet')}
               onMouseLeave={() => setActiveDevice(null)}
+              onFocus={() => setActiveDevice('tablet')}
+              onBlur={() => setActiveDevice(null)}
+              onClick={() => setActiveDevice('tablet')}
+              aria-pressed={activeDevice === 'tablet'}
             >
               <span className="koma-eco-func-num">02 / SALÃO</span>
               <h3 className="koma-eco-func-title">OPERAÇÃO EM MESAS</h3>
               <p className="koma-eco-func-desc">Atendimento ágil do garçom e mapa de mesas em tempo real.</p>
-            </div>
+            </button>
 
-            <div
+            <button
+              type="button"
               className={`koma-eco-func-item ${activeDevice === 'phone' ? 'koma-eco-func-item--active' : ''}`}
               onMouseEnter={() => setActiveDevice('phone')}
               onMouseLeave={() => setActiveDevice(null)}
+              onFocus={() => setActiveDevice('phone')}
+              onBlur={() => setActiveDevice(null)}
+              onClick={() => setActiveDevice('phone')}
+              aria-pressed={activeDevice === 'phone'}
             >
               <span className="koma-eco-func-num">03 / CARDÁPIO</span>
               <h3 className="koma-eco-func-title">EXPERIÊNCIA MÓVEL</h3>
               <p className="koma-eco-func-desc">Cardápio QR Code direto no celular do cliente para pedidos sem fila.</p>
-            </div>
+            </button>
           </div>
         </motion.div>
 
@@ -107,15 +122,15 @@ export function Ecosystem() {
             animate={isInView ? { opacity: 1, y: 0 } : {}}
             transition={{ duration: 0.9, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
             style={{
-              transform: `perspective(1200px) rotateY(${-5 + mousePos.x * 3}deg) rotateX(${2 - mousePos.y * 2}deg) rotateZ(-0.5deg) translate3d(${mousePos.x * 4}px, ${mousePos.y * 4 + (activeDevice === 'laptop' ? -6 : 0)}px, 0px) scale(${activeDevice === 'laptop' ? 1.01 : 1})`,
+              transform: `perspective(1200px) rotateY(${-5 + mousePos.x * 3}deg) rotateX(${2 - mousePos.y * 2}deg) rotateZ(-0.5deg) translate3d(${mousePos.x * 4}px, ${mousePos.y * 4 + (activeDevice === 'laptop' ? -4 : 0)}px, 0px) scale(${activeDevice === 'laptop' ? 1.005 : 1})`,
               transition: 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), filter 0.25s ease',
-              zIndex: activeDevice === 'laptop' ? 4 : 1,
+              zIndex: 1,
             }}
           >
             <FrontalLaptopFrame view="pdv" />
           </motion.div>
 
-          {/* LEVEL 2: Tablet (Salão / Mesas) - 70-75% scale of Laptop */}
+          {/* LEVEL 2: Tablet (Salão / Mesas) - fixed in front of the laptop */}
           <motion.div
             className={`koma-eco-device-tablet ${activeDevice === 'tablet' ? 'koma-eco-device--hovered' : ''}`}
             onMouseEnter={() => setActiveDevice('tablet')}
@@ -126,7 +141,7 @@ export function Ecosystem() {
             style={{
               transform: `perspective(1000px) rotateY(${-9 + mousePos.x * 4}deg) rotateX(${3 - mousePos.y * 2.5}deg) rotateZ(2deg) translate3d(${mousePos.x * 7}px, ${mousePos.y * 6 + (activeDevice === 'tablet' ? -8 : 0)}px, 0px) scale(${activeDevice === 'tablet' ? 1.015 : 1})`,
               transition: 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), filter 0.25s ease',
-              zIndex: activeDevice === 'tablet' ? 4 : 2,
+              zIndex: 2,
             }}
           >
             <TabletFrame view="mesas" />
@@ -143,7 +158,7 @@ export function Ecosystem() {
             style={{
               transform: `perspective(800px) rotateY(${-6 + mousePos.x * 5}deg) rotateX(${2 - mousePos.y * 3}deg) rotateZ(-1.5deg) translate3d(${mousePos.x * 10}px, ${mousePos.y * 8 + (activeDevice === 'phone' ? -10 : 0)}px, 0px) scale(${activeDevice === 'phone' ? 1.02 : 1})`,
               transition: 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), filter 0.25s ease',
-              zIndex: activeDevice === 'phone' ? 4 : 3,
+              zIndex: 3,
             }}
           >
             <PhoneFrame />
