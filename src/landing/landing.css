@@ -213,6 +213,7 @@
   position: relative;
   z-index: 6;
   width: 100%;
+  pointer-events: none;
 }
 
 .koma-hero-headline {
@@ -293,6 +294,9 @@
   gap: 2.5rem;
   margin-top: clamp(1.45rem, 2vw, 2rem);
   flex-wrap: wrap;
+  width: max-content;
+  max-width: 100%;
+  pointer-events: auto;
 }
 
 .koma-hero-whatsapp-link {
@@ -380,7 +384,7 @@
 .koma-hero-device-container {
   position: absolute;
   top: 7%;
-  right: -45.5vw;
+  right: -49vw;
   width: 60vw;
   z-index: 5;
   display: flex;
@@ -1233,7 +1237,7 @@
   .koma-hero-line--sm { font-size: clamp(2.8rem, 5vw, 4.8rem); }
   .koma-hero-line--xl { font-size: clamp(4.7rem, 10.2vw, 7.5rem); }
   .koma-hero-line--lg { font-size: clamp(4.4rem, 8.5vw, 6.8rem); }
-  .koma-hero-device-container { right: -47vw; width: 62vw; }
+  .koma-hero-device-container { right: -51vw; width: 62vw; }
 }
 
 @media (max-width: 900px) {
