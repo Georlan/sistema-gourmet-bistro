@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { motion } from 'motion/react';
-import { HeroTabletScene } from '../product/HeroTabletScene';
+import logoImg from '../../assets/logo-koma.png';
+import { TabletFrame } from '../product/TabletFrame';
 import { KOMA_LANDING_CONFIG } from '../config/landingConfig';
 
 const HERO_STRIP_ITEMS = [
@@ -69,10 +70,20 @@ export function Hero() {
               Falar com um especialista <span aria-hidden="true">↗</span>
             </a>
           </motion.div>
+
+          <motion.div
+            className="koma-hero-brand-signature"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.7, delay: 0.72 }}
+          >
+            <img src={logoImg} alt="" aria-hidden="true" />
+            <span>Se você está com fome, <strong>Kôma</strong></span>
+          </motion.div>
         </motion.div>
 
         <div className="koma-hero-device-container">
-          <HeroTabletScene interaction="hero" className="koma-hero-device-frame" />
+          <TabletFrame view="mesas" className="koma-hero-device-frame" />
         </div>
       </div>
 

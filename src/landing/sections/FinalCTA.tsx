@@ -11,6 +11,10 @@ export function FinalCTA() {
         aria-label="Solicitar demonstração"
       >
         <span className="koma-cta-kicker">PRONTO PARA VER NA SUA OPERAÇÃO?</span>
+        <div className="koma-cta-brand-signature">
+          <img src={logoImg} alt="" aria-hidden="true" />
+          <span>Se você está com fome, <strong>Kôma</strong></span>
+        </div>
         <h2 className="koma-cta-title">
           SEU RESTAURANTE.<br /><em>UM SÓ FLUXO.</em>
         </h2>
@@ -33,7 +37,10 @@ export function FinalCTA() {
       </section>
 
       <footer className="koma-footer" role="contentinfo">
-        <a href="/landing" aria-label="Kôma — início"><img src={logoImg} alt="" /></a>
+        <a href="/landing" aria-label="Kôma — início" className="koma-footer-brand">
+          <img src={logoImg} alt="" />
+          <span>Se você está com fome, Kôma</span>
+        </a>
         <span>© {new Date().getFullYear()} KÔMA. TODOS OS DIREITOS RESERVADOS.</span>
         <nav aria-label="Navegação do rodapé">
           <a href="#como-funciona">Como funciona</a>

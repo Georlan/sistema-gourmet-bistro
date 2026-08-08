@@ -56,6 +56,7 @@ export default function LandingPage() {
       operatingSystem: 'Web',
       inLanguage: 'pt-BR',
       description: 'Sistema de gestão para restaurantes com PDV, gestão de mesas, KDS, caixa e cardápio digital.',
+      slogan: 'Se você está com fome, Kôma',
       offers: {
         '@type': 'AggregateOffer',
         lowPrice: '79',

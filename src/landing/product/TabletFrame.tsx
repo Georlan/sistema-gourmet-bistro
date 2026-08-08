@@ -1,6 +1,14 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import tabletShell from '../../assets/koma-tablet-shell-3d.png';
 import { ProductScreen } from './ProductScreen';
+import { usePerspectiveTransform, type NormalizedPoint } from './usePerspectiveTransform';
+
+const TABLET_SCREEN_POINTS: readonly NormalizedPoint[] = [
+  [0.228, 0.141],
+  [0.8164, 0.1533],
+  [0.7585, 0.8594],
+  [0.166, 0.7705],
+];
 
 interface TabletFrameProps {
   view?: 'mesas' | 'pdv' | 'kds' | 'cardapio' | 'delivery';
@@ -10,20 +18,8 @@ interface TabletFrameProps {
 
 export function TabletFrame({ view = 'mesas', className = '', style }: TabletFrameProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const screenRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<number | null>(null);
-  const [scale, setScale] = useState(0.36);
-
-  useEffect(() => {
-    const updateScale = () => {
-      if (screenRef.current) setScale(screenRef.current.clientWidth / 1280);
-    };
-
-    updateScale();
-    const observer = new ResizeObserver(updateScale);
-    if (screenRef.current) observer.observe(screenRef.current);
-    return () => observer.disconnect();
-  }, []);
+  const screenTransform = usePerspectiveTransform(containerRef, 1280, 800, TABLET_SCREEN_POINTS);
 
   useEffect(() => () => {
     if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
@@ -65,11 +61,7 @@ export function TabletFrame({ view = 'mesas', className = '', style }: TabletFra
       aria-hidden="true"
     >
       <div className="koma-tablet-3d-stage">
-        <div
-          ref={screenRef}
-          className="koma-tablet-3d-screen"
-          style={{ ['--koma-preview-scale' as string]: scale } as React.CSSProperties}
-        >
+        <div className="koma-tablet-3d-screen" style={{ transform: screenTransform ?? undefined }}>
           <ProductScreen view={view} scaleLogicalWidth={1280} />
         </div>
 

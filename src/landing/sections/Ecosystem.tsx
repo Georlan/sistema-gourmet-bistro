@@ -103,6 +103,10 @@ export function Ecosystem() {
           onMouseMove={handleMouseMove}
           onMouseLeave={handleMouseLeave}
         >
+          <div className="koma-eco-stage-index" aria-hidden="true">
+            <span>KÔMA / ECOSSISTEMA</span>
+            <span>03 SUPERFÍCIES · 01 OPERAÇÃO</span>
+          </div>
           {/* Background Ambient Parallax Surface */}
           <div
             className="koma-eco-stage-bg-surface"
