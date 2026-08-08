@@ -140,7 +140,7 @@
   text-transform: uppercase;
 }
 
-/* --- Hero Section (FULL-BLEED MONUMENTAL COMPOSITION) --- */
+/* --- Hero Section (AUTHORIAL CAMPAIGN EDITORIAL SCENE) --- */
 .koma-hero {
   position: relative;
   min-height: 100vh;
@@ -152,25 +152,48 @@
   background-color: var(--koma-black);
 }
 
-/* Layer 1: Split Planes of Color (Pure Black Left / Dark KÔMA Green Plane Right) */
+/* Background Atmosphere & Vignette Layer */
+.koma-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: 
+    radial-gradient(ellipse at 75% 45%, rgba(0, 184, 148, 0.08) 0%, transparent 65%),
+    radial-gradient(circle at 10% 10%, rgba(10, 10, 10, 0.95) 0%, rgba(4, 4, 4, 1) 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Subtle Vignette Edge Overlay */
+.koma-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 50%, rgba(0, 0, 0, 0.5) 100%);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Layer 1: Dark KÔMA Green Architectural Stage Plane */
 .koma-hero-color-plane {
   position: absolute;
   top: 0;
   right: 0;
-  width: 52vw;
+  width: 55vw;
   height: 100%;
-  background: var(--koma-green-plane);
-  border-left: 1px solid rgba(0, 184, 148, 0.15);
+  background: linear-gradient(145deg, #05231a 0%, #03140f 100%);
+  clip-path: polygon(12% 0, 100% 0, 100% 100%, 0% 100%);
+  border-left: 1px solid rgba(0, 184, 148, 0.2);
   pointer-events: none;
   z-index: 1;
 }
 
-/* Layer 2: Headline, Signature Green Line, Copy, CTA (35-40% width) */
+/* Layer 2: Asymmetrical Grid (38% Copy / 62% Visual Dominance) */
 .koma-hero-grid {
   position: relative;
   z-index: 5;
   display: grid;
-  grid-template-columns: 0.85fr 1.15fr; /* 42% copy / 58% visual */
+  grid-template-columns: 0.82fr 1.18fr;
   align-items: center;
   margin-top: auto;
   margin-bottom: auto;
@@ -192,20 +215,21 @@
   display: block;
   font-family: var(--koma-display);
   font-weight: 900;
-  line-height: 0.86;
-  letter-spacing: -0.04em;
+  line-height: 0.85;
+  letter-spacing: -0.045em;
   text-transform: uppercase;
   color: var(--koma-white);
+  text-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
 }
 
-.koma-hero-line--sm { font-size: clamp(2rem, 5vw, 6rem); margin-bottom: 0.2rem; }
-.koma-hero-line--xl { font-size: clamp(3.8rem, 11vw, 13.5rem); }
-.koma-hero-line--lg { font-size: clamp(2.8rem, 8.5vw, 10.5rem); }
+.koma-hero-line--sm { font-size: clamp(2rem, 5.2vw, 6.2rem); margin-bottom: 0.2rem; }
+.koma-hero-line--xl { font-size: clamp(3.8rem, 11.5vw, 14rem); }
+.koma-hero-line--lg { font-size: clamp(2.8rem, 8.8vw, 11rem); }
 
 /* The KÔMA Signature Green Line Axis crossing across planes */
 .koma-hero-bar-wrap {
   position: relative;
-  width: 135%; /* Extends across headline and towards the right plane */
+  width: 140%;
   margin: clamp(0.75rem, 1.5vw, 1.75rem) 0;
   z-index: 6;
 }
@@ -213,36 +237,33 @@
 .koma-hero-bar {
   display: block;
   width: 100%;
-  height: clamp(8px, 1.2vw, 16px);
+  height: clamp(10px, 1.3vw, 18px);
   background-color: var(--koma-green);
+  box-shadow: 0 0 20px rgba(0, 184, 148, 0.25);
   transform-origin: left center;
 }
 
 .koma-hero-sub {
   font-family: var(--koma-body);
   font-size: clamp(1rem, 1.35vw, 1.25rem);
-  color: rgba(255, 255, 255, 0.75);
+  color: rgba(255, 255, 255, 0.8);
   margin-top: clamp(1.25rem, 2vw, 2.25rem);
-  max-width: 40ch;
-  line-height: 1.5;
+  max-width: 42ch;
+  line-height: 1.55;
 }
 
 .koma-hero-sub-bold {
   font-weight: 700;
   color: var(--koma-white);
   display: block;
-  margin-bottom: 0.2rem;
-}
-
-.koma-hero-cta {
-  margin-top: clamp(1.5rem, 2.2vw, 2.2rem);
+  margin-bottom: 0.25rem;
 }
 
 .koma-hero-cta-group {
   display: flex;
   align-items: center;
   gap: 1.75rem;
-  margin-top: clamp(1.5rem, 2.2vw, 2.2rem);
+  margin-top: clamp(1.75rem, 2.5vw, 2.5rem);
   flex-wrap: wrap;
 }
 
@@ -252,17 +273,22 @@
   font-weight: 700;
   color: rgba(255, 255, 255, 0.85);
   text-decoration: none;
-  letter-spacing: 0.05em;
-  transition: color 0.25s ease, transform 0.15s ease;
+  letter-spacing: 0.06em;
+  padding: 0.75rem 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.03);
+  transition: all 0.25s ease;
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.5rem 0;
+  gap: 0.4rem;
 }
 
 .koma-hero-whatsapp-link:hover {
   color: var(--koma-green);
-  transform: translateX(3px);
+  border-color: rgba(0, 184, 148, 0.4);
+  background: rgba(0, 184, 148, 0.05);
+  transform: translateY(-2px);
 }
 
 .koma-header-link--whatsapp {
@@ -282,10 +308,10 @@
   letter-spacing: 0.1em;
   text-transform: uppercase;
   text-decoration: none;
-  border: none;
+  border: 1px solid rgba(0, 184, 148, 0.4);
   border-radius: 2px;
   cursor: pointer;
-  transition: background-color 0.25s ease, color 0.25s ease, transform 0.15s ease;
+  transition: background-color 0.25s ease, color 0.25s ease, transform 0.15s ease, border-color 0.25s ease;
 }
 
 .koma-btn:hover {
@@ -294,18 +320,19 @@
 
 .koma-btn:active { transform: translateY(0) scale(0.98); }
 .koma-btn--primary { background-color: var(--koma-green); color: var(--koma-black); }
-.koma-btn--primary:hover { background-color: var(--koma-white); color: var(--koma-black); }
+.koma-btn--primary:hover { background-color: var(--koma-white); color: var(--koma-black); border-color: var(--koma-white); }
 .koma-btn--dark { background-color: var(--koma-black); color: var(--koma-white); }
 .koma-btn--dark:hover { background-color: var(--koma-graphite); }
 .koma-btn--sm { padding: 0.625rem 1.5rem; font-size: 0.75rem; }
 
-/* Layer 3: Massive Product Object - Bleeds Out Edge, Overlaps Planes */
+/* Layer 3: Massive Product Object Stage */
 .koma-hero-device-container {
   position: relative;
   width: 100%;
   z-index: 7;
   display: flex;
   justify-content: flex-end;
+  align-items: center;
 }
 
 .koma-hero-device-frame {
