@@ -81,6 +81,18 @@
   color: var(--koma-green);
 }
 
+.koma-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 2.25rem;
+}
+
+.koma-header-link--whatsapp {
+  margin-right: 0.25rem;
+  color: var(--koma-green);
+  font-weight: 700;
+}
+
 .koma-hamburger {
   display: none;
   flex-direction: column;
