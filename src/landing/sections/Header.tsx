@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import logoImg from '../../assets/logo-koma.png';
+import { KOMA_LANDING_CONFIG } from '../config/landingConfig';
 
 export function Header() {
   const [scrolled, setScrolled] = useState(false);
@@ -40,7 +41,15 @@ export function Header() {
         </nav>
 
         <div className="koma-header-actions">
-          <a href="#demonstracao" className="koma-btn koma-btn--primary koma-btn--sm">
+          <a
+            href={KOMA_LANDING_CONFIG.whatsappUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="koma-header-link koma-header-link--whatsapp"
+          >
+            Falar no WhatsApp ↗
+          </a>
+          <a href={KOMA_LANDING_CONFIG.demoAnchor} className="koma-btn koma-btn--primary koma-btn--sm">
             Solicitar demonstração
           </a>
         </div>
@@ -65,11 +74,21 @@ export function Header() {
           <a href="#produto" onClick={() => setMenuOpen(false)}>Produto</a>
           <a href="#solucoes" onClick={() => setMenuOpen(false)}>Soluções</a>
           <a
-            href="#demonstracao"
+            href={KOMA_LANDING_CONFIG.demoAnchor}
             className="koma-btn koma-btn--primary"
             onClick={() => setMenuOpen(false)}
           >
             Solicitar demonstração
+          </a>
+          <a
+            href={KOMA_LANDING_CONFIG.whatsappUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="koma-btn koma-btn--outline"
+            onClick={() => setMenuOpen(false)}
+            style={{ marginTop: '0.5rem' }}
+          >
+            Falar no WhatsApp ↗
           </a>
         </nav>
       </div>

@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { motion } from 'motion/react';
 import { HeroTabletScene } from '../product/HeroTabletScene';
+import { KOMA_LANDING_CONFIG } from '../config/landingConfig';
 
 const HERO_STRIP_ITEMS = [
   { num: '01', name: 'PDV BALCÃO' },
@@ -56,18 +57,26 @@ export function Hero() {
           </motion.p>
 
           <motion.div
-            className="koma-hero-cta"
+            className="koma-hero-cta-group"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.55 }}
           >
-            <a href="#demonstracao" className="koma-btn koma-btn--primary">
+            <a href={KOMA_LANDING_CONFIG.demoAnchor} className="koma-btn koma-btn--primary">
               Solicitar demonstração
+            </a>
+            <a
+              href={KOMA_LANDING_CONFIG.whatsappUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="koma-hero-whatsapp-link"
+            >
+              Falar no WhatsApp ↗
             </a>
           </motion.div>
         </motion.div>
 
-        {/* Layer 3: Physical Tablet Product Object with Real PNG Overlay Frame */}
+        {/* Layer 3: Physical React/CSS Tablet Product Object with Real KÔMA Screen */}
         <div className="koma-hero-device-container">
           <HeroTabletScene />
         </div>

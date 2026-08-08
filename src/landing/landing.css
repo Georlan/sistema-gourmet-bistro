@@ -238,6 +238,38 @@
   margin-top: clamp(1.5rem, 2.2vw, 2.2rem);
 }
 
+.koma-hero-cta-group {
+  display: flex;
+  align-items: center;
+  gap: 1.75rem;
+  margin-top: clamp(1.5rem, 2.2vw, 2.2rem);
+  flex-wrap: wrap;
+}
+
+.koma-hero-whatsapp-link {
+  font-family: var(--koma-accent);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.85);
+  text-decoration: none;
+  letter-spacing: 0.05em;
+  transition: color 0.25s ease, transform 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 0;
+}
+
+.koma-hero-whatsapp-link:hover {
+  color: var(--koma-green);
+  transform: translateX(3px);
+}
+
+.koma-header-link--whatsapp {
+  color: var(--koma-green);
+  font-weight: 600;
+}
+
 /* Single CTA with clean hover & 2px micro-shift (NO GLOW) */
 .koma-btn {
   display: inline-flex;
