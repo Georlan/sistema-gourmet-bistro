@@ -2678,7 +2678,7 @@
 /* Value to live-control narrative bridge */
 .koma-value-impact-bridge {
   position: relative;
-  height: clamp(440px, 36vw, 590px);
+  height: clamp(330px, 28vw, 410px);
   color: var(--koma-black);
   background: var(--koma-offwhite);
   overflow: hidden;
@@ -2694,7 +2694,7 @@
     linear-gradient(90deg, rgba(10, 10, 10, 0.04) 1px, transparent 1px),
     var(--koma-green);
   background-size: clamp(54px, 6vw, 92px) clamp(54px, 6vw, 92px);
-  clip-path: polygon(0 76%, 100% 20%, 100% 100%, 0 100%);
+  clip-path: polygon(45% 100%, 100% 8%, 100% 100%);
 }
 
 .koma-value-impact-line {
@@ -2702,8 +2702,8 @@
   inset: 0;
   z-index: -1;
   background: var(--koma-green-dark);
-  clip-path: polygon(0 75.6%, 100% 19.6%, 100% 20.15%, 0 76.15%);
-  transform-origin: left center;
+  clip-path: polygon(44.7% 100%, 100% 7.1%, 100% 8.1%, 45.3% 100%);
+  transform-origin: right center;
 }
 
 .koma-value-impact-inner {
@@ -2715,141 +2715,125 @@
 
 .koma-value-impact-copy {
   position: absolute;
-  top: clamp(2rem, 5vw, 4.5rem);
-  left: 0;
   z-index: 2;
-  max-width: min(64vw, 820px);
 }
 
-.koma-value-impact-copy > span {
+.koma-value-impact-copy span {
   display: block;
-  margin-bottom: 1rem;
-  color: var(--koma-green-dark);
   font-family: var(--koma-accent);
-  font-size: 0.66rem;
+  font-size: clamp(0.57rem, 0.65vw, 0.68rem);
   font-weight: 900;
   letter-spacing: 0.13em;
 }
 
-.koma-value-impact-copy h2 {
+.koma-value-impact-copy--problem {
+  top: 50%;
+  left: 0;
+  width: min(49vw, 720px);
+  transform: translateY(-50%);
+}
+
+.koma-value-impact-copy--problem span {
+  margin-bottom: 0.85rem;
+  color: var(--koma-green-dark);
+}
+
+.koma-value-impact-copy--problem h2 {
   margin: 0;
   font-family: var(--koma-display);
-  font-size: clamp(3.3rem, 6.2vw, 7rem);
+  font-size: clamp(2.65rem, 4.25vw, 5rem);
   font-weight: 900;
-  line-height: 0.84;
-  letter-spacing: -0.055em;
+  line-height: 0.88;
+  letter-spacing: -0.05em;
   text-transform: uppercase;
 }
 
-.koma-value-impact-copy h2 strong {
+.koma-value-impact-copy--answer {
+  top: 50%;
+  right: 0;
+  width: min(35vw, 520px);
+  transform: translateY(-48%);
+}
+
+.koma-value-impact-copy--answer span {
+  margin-bottom: 0.75rem;
+  color: rgba(10, 10, 10, 0.62);
+}
+
+.koma-value-impact-copy--answer p,
+.koma-value-impact-copy--answer strong {
+  margin: 0;
+  font-family: var(--koma-display);
+  font-size: clamp(2.35rem, 3.65vw, 4.25rem);
+  font-weight: 900;
+  line-height: 0.88;
+  letter-spacing: -0.05em;
+  text-transform: uppercase;
+}
+
+.koma-value-impact-copy--answer strong {
   display: block;
-  margin-top: 0.14em;
-  margin-left: clamp(2.5rem, 9vw, 9rem);
-  color: var(--koma-green-dark);
-  font: inherit;
+  color: var(--koma-black);
 }
 
-.koma-value-impact-copy p {
-  max-width: 42ch;
-  margin: 1.35rem 0 0;
-  color: rgba(10, 10, 10, 0.66);
-  font-size: clamp(0.88rem, 1.1vw, 1rem);
-  font-weight: 600;
-  line-height: 1.55;
-}
-
-.koma-value-impact-ticket {
+.koma-value-impact-route {
   position: absolute;
-  top: 42%;
-  right: 2%;
+  right: 0;
+  bottom: clamp(1.35rem, 2vw, 2rem);
   z-index: 3;
-  width: clamp(280px, 28vw, 420px);
-  padding: clamp(1.15rem, 2vw, 1.7rem);
-  color: var(--koma-white);
-  background:
-    linear-gradient(140deg, rgba(0, 184, 148, 0.14), transparent 46%),
-    #080c0a;
-  border: 1px solid rgba(255, 255, 255, 0.13);
-  box-shadow: 0 30px 80px rgba(5, 30, 23, 0.3);
-  transform-origin: center;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  width: min(52vw, 760px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.koma-value-impact-ticket::before {
+.koma-value-impact-route::before {
   content: '';
   position: absolute;
-  inset: 7px;
-  border: 1px solid rgba(255, 255, 255, 0.045);
-  pointer-events: none;
-}
-
-.koma-value-impact-ticket-top,
-.koma-value-impact-ticket-status {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.8rem;
-  font-family: var(--koma-accent);
-  font-size: 0.59rem;
-  font-weight: 900;
-  letter-spacing: 0.1em;
-}
-
-.koma-value-impact-ticket-top { color: var(--koma-green); }
-.koma-value-impact-ticket-top i {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--koma-green);
-  box-shadow: 0 0 0 4px rgba(0, 184, 148, 0.1), 0 0 16px rgba(0, 184, 148, 0.75);
-  animation: koma-live-pulse 1.8s ease-in-out infinite;
-}
-
-.koma-value-impact-ticket > strong {
-  position: relative;
-  z-index: 1;
-  display: block;
-  margin: 1.25rem 0 1rem;
-  font-family: var(--koma-display);
-  font-size: clamp(3rem, 5vw, 5.4rem);
-  line-height: 0.8;
-  letter-spacing: -0.05em;
-}
-
-.koma-value-impact-ticket-status {
-  padding-block: 0.9rem;
-  color: rgba(255, 255, 255, 0.58);
-  border-block: 1px solid rgba(255, 255, 255, 0.11);
-}
-.koma-value-impact-ticket-status b { color: #ff8f87; }
-.koma-value-impact-ticket > small {
-  position: relative;
-  z-index: 1;
-  display: block;
-  margin-top: 1rem;
-  color: rgba(255, 255, 255, 0.48);
-  font-family: var(--koma-accent);
-  font-size: 0.56rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-}
-
-.koma-value-impact-index {
-  position: absolute;
+  top: 5px;
+  right: 0;
   left: 0;
-  bottom: 7%;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  gap: 0.7rem;
-  color: var(--koma-black);
-  font-family: var(--koma-display);
-  font-size: 1.5rem;
+  height: 1px;
+  background: rgba(10, 10, 10, 0.26);
 }
-.koma-value-impact-index span { opacity: 0.42; }
-.koma-value-impact-index strong { font: inherit; }
-.koma-value-impact-index i { width: clamp(2rem, 5vw, 5rem); height: 1px; background: currentColor; }
+
+.koma-value-impact-route li {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  padding-top: 1rem;
+  color: rgba(10, 10, 10, 0.58);
+  font-family: var(--koma-accent);
+  font-size: clamp(0.5rem, 0.58vw, 0.62rem);
+  font-weight: 900;
+  letter-spacing: 0.09em;
+  text-align: center;
+}
+
+.koma-value-impact-route li i {
+  position: absolute;
+  top: 1px;
+  left: 50%;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--koma-black);
+  transform: translateX(-50%);
+}
+
+.koma-value-impact-route .is-destination {
+  color: var(--koma-black);
+}
+
+.koma-value-impact-route .is-destination i {
+  width: 11px;
+  height: 11px;
+  top: 0;
+  box-shadow: 0 0 0 5px rgba(10, 10, 10, 0.1);
+}
 
 /* Impact transition */
 .koma-impact-section {
@@ -3530,15 +3514,16 @@
   .koma-value-outcomes { grid-template-columns: 1fr; }
   .koma-value-outcomes > article { min-height: 0; padding: 1.4rem 0; border-right: 0; border-bottom: 1px solid var(--koma-line-light); }
   .koma-value-action { min-height: 0; padding: 1.25rem; }
-  .koma-value-impact-bridge { height: 620px; }
-  .koma-value-impact-green { clip-path: polygon(0 50%, 100% 38%, 100% 100%, 0 100%); }
-  .koma-value-impact-line { clip-path: polygon(0 49.7%, 100% 37.7%, 100% 38.3%, 0 50.3%); }
-  .koma-value-impact-copy { top: 3rem; max-width: 100%; }
-  .koma-value-impact-copy h2 { font-size: clamp(2.9rem, 12vw, 5.2rem); line-height: 0.87; }
-  .koma-value-impact-copy h2 strong { margin-left: 0; color: var(--koma-green-dark); }
-  .koma-value-impact-copy p { max-width: 34ch; margin-top: 1rem; }
-  .koma-value-impact-ticket { top: auto; right: 0; bottom: 3.25rem; width: min(100%, 390px); }
-  .koma-value-impact-index { display: none; }
+  .koma-value-impact-bridge { height: 470px; }
+  .koma-value-impact-green { clip-path: polygon(0 68%, 100% 38%, 100% 100%, 0 100%); }
+  .koma-value-impact-line { clip-path: polygon(0 67.6%, 100% 37.6%, 100% 38.4%, 0 68.4%); transform-origin: left center; }
+  .koma-value-impact-copy--problem { top: 2.75rem; width: 100%; transform: none; }
+  .koma-value-impact-copy--problem h2 { max-width: 12ch; font-size: clamp(2.7rem, 9vw, 4.5rem); }
+  .koma-value-impact-copy--answer { top: auto; right: auto; bottom: 4.9rem; left: 0; width: 100%; transform: none; }
+  .koma-value-impact-copy--answer span { margin-bottom: 0.45rem; }
+  .koma-value-impact-copy--answer p,
+  .koma-value-impact-copy--answer strong { font-size: clamp(2.35rem, 8vw, 3.7rem); }
+  .koma-value-impact-route { bottom: 1.25rem; width: 100%; }
   .koma-impact-section { min-height: 0; padding-block: 4.5rem 3rem; }
   .koma-impact-topline > span:last-child { display: none; }
   .koma-impact-layout { grid-template-columns: 1fr; gap: 2.75rem; margin-block: 3rem; }
@@ -3577,16 +3562,15 @@
   .koma-value-lane-head > span { padding: 0.5rem 0.6rem; font-size: 0.58rem; }
   .koma-value-lane-head strong { font-size: 2.7rem; }
   .koma-value-versus { width: 3rem; height: 3rem; }
-  .koma-value-impact-bridge { height: 590px; }
+  .koma-value-impact-bridge { height: 440px; }
   .koma-value-impact-inner { width: calc(100% - 2.5rem); }
-  .koma-value-impact-copy { top: 2.5rem; }
-  .koma-value-impact-copy > span { margin-bottom: 0.75rem; font-size: 0.58rem; }
-  .koma-value-impact-copy h2 { font-size: clamp(2.65rem, 13vw, 3.55rem); }
-  .koma-value-impact-copy p { max-width: 31ch; font-size: 0.82rem; }
-  .koma-value-impact-ticket { bottom: 2rem; padding: 1.1rem; }
-  .koma-value-impact-ticket > strong { margin-block: 1rem 0.8rem; font-size: 3.2rem; }
-  .koma-value-impact-ticket-status { gap: 0.45rem; font-size: 0.52rem; }
-  .koma-value-impact-ticket > small { font-size: 0.5rem; line-height: 1.4; }
+  .koma-value-impact-copy--problem { top: 2.25rem; }
+  .koma-value-impact-copy--problem span { margin-bottom: 0.65rem; font-size: 0.54rem; }
+  .koma-value-impact-copy--problem h2 { max-width: 11ch; font-size: clamp(2.45rem, 12vw, 3.35rem); }
+  .koma-value-impact-copy--answer { bottom: 5.2rem; }
+  .koma-value-impact-copy--answer p,
+  .koma-value-impact-copy--answer strong { font-size: clamp(2.15rem, 10vw, 2.9rem); }
+  .koma-value-impact-route li { font-size: 0.45rem; letter-spacing: 0.05em; }
   .koma-impact-console { padding: 1.1rem; }
   .koma-impact-console-head { grid-template-columns: 34px 1fr auto; }
   .koma-impact-console-head img { width: 34px; height: 34px; }

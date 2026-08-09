@@ -83,8 +83,8 @@ export function ImpactMoment() {
           >
             <div>
               <span>PRECISA DE ATENÇÃO</span>
-              <strong>PEDIDO #0412 EM PREPARO</strong>
-              <p>Acima do tempo esperado</p>
+              <strong>MESA 12 SEM ATUALIZAÇÃO</strong>
+              <p>Atendimento acima do tempo esperado</p>
             </div>
             <b>18 MIN</b>
           </motion.div>
