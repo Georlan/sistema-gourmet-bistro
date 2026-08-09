@@ -32,6 +32,54 @@
   line-height: 1.5;
 }
 
+/* Compact angular transitions keep the editorial identity without repeating copy. */
+.koma-angle-divider {
+  position: relative;
+  z-index: 2;
+  height: clamp(4.5rem, 7vw, 7rem);
+  margin-block: -1px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.koma-angle-divider::before,
+.koma-angle-divider::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateZ(0);
+}
+
+.koma-angle-divider--dark-light { background: var(--koma-offwhite); }
+.koma-angle-divider--dark-light::before {
+  background: #080a09;
+  clip-path: polygon(0 0, 100% 0, 100% 8%, 0 88%);
+}
+.koma-angle-divider--dark-light::after {
+  background: var(--koma-green);
+  clip-path: polygon(0 86%, 100% 6%, 100% 10%, 0 90%);
+}
+
+.koma-angle-divider--light-dark { background: #080a09; }
+.koma-angle-divider--light-dark::before {
+  background: var(--koma-offwhite);
+  clip-path: polygon(0 0, 100% 0, 100% 86%, 0 12%);
+}
+.koma-angle-divider--light-dark::after {
+  background: var(--koma-green);
+  clip-path: polygon(0 10%, 100% 84%, 100% 88%, 0 14%);
+}
+
+.koma-angle-divider--dark-green { background: var(--koma-green); }
+.koma-angle-divider--dark-green::before {
+  background: #080a09;
+  clip-path: polygon(0 0, 100% 0, 100% 12%, 0 90%);
+}
+.koma-angle-divider--dark-green::after {
+  background: var(--koma-green-dark);
+  clip-path: polygon(0 88%, 100% 10%, 100% 14%, 0 92%);
+}
+
 /* --- Header --- */
 .koma-header {
   position: fixed;
