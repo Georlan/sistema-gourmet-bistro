@@ -14,7 +14,7 @@ import { FinalCTA } from './sections/FinalCTA';
 
 export default function LandingPage() {
   useEffect(() => {
-    document.title = 'KÔMA | Sistema de gestão para restaurantes';
+    document.title = 'KÔMA | Sistema para restaurantes, PDV, mesas e cozinha';
 
     const setMeta = (nameOrProp: string, content: string, isProperty = false) => {
       const attr = isProperty ? 'property' : 'name';
@@ -27,15 +27,18 @@ export default function LandingPage() {
       el.setAttribute('content', content);
     };
 
-    setMeta('description', 'Sistema de gestão para restaurantes com PDV, mesas, comandas, KDS, caixa, cardápio digital por QR Code e impressão automática no mesmo fluxo.');
+    setMeta('description', 'Sistema para restaurantes com PDV, gestão de mesas, comandas, KDS, caixa, cardápio digital e impressão automática. Conheça o Kôma.');
     setMeta('robots', 'index, follow, max-image-preview:large');
     setMeta('theme-color', '#0a0a0a');
-    setMeta('og:title', 'KÔMA | Sistema de gestão para restaurantes', true);
-    setMeta('og:description', 'Do pedido ao fechamento: salão, cozinha e caixa trabalhando no mesmo fluxo.', true);
+    setMeta('og:title', 'KÔMA | Sistema para restaurantes, PDV, mesas e cozinha', true);
+    setMeta('og:description', 'Pedidos, salão, cozinha, impressão e caixa conectados no mesmo sistema para restaurantes.', true);
     setMeta('og:type', 'website', true);
     setMeta('og:url', 'https://sistema-gourmet-bistro.pages.dev/landing', true);
     setMeta('og:locale', 'pt_BR', true);
+    setMeta('og:site_name', 'KÔMA', true);
     setMeta('twitter:card', 'summary_large_image');
+    setMeta('twitter:title', 'KÔMA | Sistema para restaurantes, PDV, mesas e cozinha');
+    setMeta('twitter:description', 'Pedidos, salão, cozinha, impressão e caixa conectados no mesmo sistema para restaurantes.');
 
     let canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
     if (!canonical) {
@@ -54,9 +57,17 @@ export default function LandingPage() {
       name: 'KÔMA',
       applicationCategory: 'BusinessApplication',
       operatingSystem: 'Web',
+      url: 'https://sistema-gourmet-bistro.pages.dev/landing',
       inLanguage: 'pt-BR',
       description: 'Sistema de gestão para restaurantes com PDV, gestão de mesas, KDS, caixa e cardápio digital.',
       slogan: 'Se você está com fome, Kôma',
+      featureList: [
+        'PDV e frente de caixa',
+        'Gestão de mesas e comandas',
+        'KDS para cozinha',
+        'Cardápio digital por QR Code',
+        'Impressão automática de pedidos',
+      ],
       offers: {
         '@type': 'AggregateOffer',
         lowPrice: '79',
