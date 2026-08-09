@@ -8,8 +8,8 @@ export function OrderTransition() {
     offset: ['start end', 'end start'],
   });
 
-  const ticketX = useTransform(scrollYProgress, [0.12, 0.82], ['0vw', '43vw']);
-  const ticketY = useTransform(scrollYProgress, [0.12, 0.82], [0, 176]);
+  const ticketX = useTransform(scrollYProgress, [0.12, 0.82], ['0vw', '31vw']);
+  const ticketY = useTransform(scrollYProgress, [0.12, 0.82], [0, 130]);
   const ticketRotate = useTransform(scrollYProgress, [0.12, 0.82], [-2, 3]);
   const manualOpacity = useTransform(scrollYProgress, [0.12, 0.48], [1, 0.16]);
   const connectedOpacity = useTransform(scrollYProgress, [0.42, 0.72], [0.18, 1]);

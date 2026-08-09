@@ -3301,7 +3301,7 @@
   .koma-management-card,
   .koma-flow-tab,
   .koma-btn { transition: none !important; }
-  .koma-order-ticket { transform: translate(38vw, 150px) rotate(2deg) !important; }
+  .koma-order-ticket { transform: translate(27vw, 110px) rotate(2deg) !important; }
   .koma-order-manual { opacity: 0.3 !important; }
   .koma-order-connected { opacity: 1 !important; transform: none !important; }
 }
