@@ -439,9 +439,14 @@
 
 /* CTA with a restrained interactive glow */
 .koma-btn {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 0.65rem;
+  min-height: 52px;
   padding: 1.125rem 3.25rem;
   font-family: var(--koma-accent);
   font-size: 0.8125rem;
@@ -450,13 +455,31 @@
   text-transform: uppercase;
   text-decoration: none;
   border: 1px solid rgba(0, 184, 148, 0.4);
-  border-radius: 2px;
+  border-radius: 4px;
   cursor: pointer;
-  transition: background-color 0.25s ease, color 0.25s ease, transform 0.18s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+  transition: background-color 220ms ease, color 220ms ease, transform 180ms ease, border-color 220ms ease, box-shadow 220ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.koma-btn::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 18%, rgba(255, 255, 255, 0.22) 48%, transparent 78%);
+  transform: translateX(-115%);
+  transition: transform 520ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .koma-btn:hover {
   transform: translateY(-2px);
+}
+
+.koma-btn:hover::after { transform: translateX(115%); }
+
+.koma-btn:focus-visible {
+  outline: 3px solid rgba(255, 255, 255, 0.92);
+  outline-offset: 4px;
 }
 
 .koma-btn:active { transform: translateY(0) scale(0.98); }
@@ -467,9 +490,9 @@
   border-color: #55f0cf;
   box-shadow: 0 0 0 1px rgba(0, 184, 148, 0.18), 0 10px 34px rgba(0, 184, 148, 0.34);
 }
-.koma-btn--dark { background-color: var(--koma-black); color: var(--koma-white); }
-.koma-btn--dark:hover { background-color: var(--koma-graphite); }
-.koma-btn--sm { padding: 0.625rem 1.5rem; font-size: 0.75rem; }
+.koma-btn--dark { background-color: var(--koma-black); color: var(--koma-white); border-color: rgba(10, 10, 10, 0.92); }
+.koma-btn--dark:hover { background-color: #151817; border-color: rgba(255, 255, 255, 0.2); box-shadow: 0 14px 38px rgba(5, 30, 23, 0.24); }
+.koma-btn--sm { min-height: 42px; padding: 0.625rem 1.5rem; font-size: 0.75rem; }
 
 .koma-hero-device-container {
   position: absolute;
@@ -2703,7 +2726,16 @@
 }
 .koma-impact-title {
   margin: 0;
-  font-size: clamp(4rem, 8.1vw, 8.5rem);
+  font-size: clamp(4rem, 7.7vw, 8.25rem);
+  line-height: 0.92;
+  text-wrap: balance;
+}
+.koma-impact-title span {
+  display: block;
+  padding-block: 0.025em;
+}
+.koma-impact-title span:last-child {
+  padding-top: 0.09em;
 }
 .koma-impact-copy {
   max-width: 42ch;
@@ -2713,12 +2745,14 @@
   font-weight: 600;
   line-height: 1.55;
 }
-.koma-impact-cta { margin-top: 2rem; }
+.koma-impact-cta { min-width: min(100%, 24rem); margin-top: 2rem; }
 .koma-impact-cta-note {
   display: block;
   margin-top: 0.75rem;
   color: rgba(10, 10, 10, 0.7);
-  font-size: 0.76rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.45;
 }
 .koma-impact-console {
   position: relative;
@@ -2839,14 +2873,21 @@
   border-bottom: 1px solid rgba(10, 10, 10, 0.24);
 }
 .koma-impact-proof span {
-  padding: 1.1rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.85rem;
+  min-height: 64px;
+  padding: 1rem 1.25rem;
   border-right: 1px solid rgba(10, 10, 10, 0.24);
   font-family: var(--koma-accent);
-  font-size: 0.67rem;
-  font-weight: 900;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-align: center;
+  transition: background-color 180ms ease, color 180ms ease;
 }
+.koma-impact-proof span:hover { background: rgba(10, 10, 10, 0.08); }
+.koma-impact-proof b { color: rgba(10, 10, 10, 0.5); font-size: 0.62rem; }
+.koma-impact-proof strong { font-size: 0.68rem; font-weight: 900; }
 .koma-impact-proof span:last-child { border-right: 0; }
 
 @keyframes koma-order-pulse {
@@ -3223,8 +3264,21 @@
 .koma-cta-title { color: var(--koma-black); font-size: clamp(3.5rem, 10.5vw, 10.5rem); }
 .koma-cta-title em { color: transparent; -webkit-text-stroke: 2px var(--koma-black); font-style: normal; }
 .koma-cta-sub { color: rgba(10,10,10,0.72); line-height: 1.55; }
-.koma-cta-actions { display: flex; flex-direction: column; align-items: center; gap: 0.9rem; }
-.koma-cta-actions > span { font-family: var(--koma-accent); font-size: 0.63rem; font-weight: 800; letter-spacing: 0.1em; }
+.koma-cta-actions { display: flex; flex-direction: column; align-items: center; gap: 1rem; }
+.koma-cta-actions > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: rgba(10, 10, 10, 0.72);
+  font-family: var(--koma-accent);
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-decoration: none;
+  transition: color 180ms ease, transform 180ms ease;
+}
+.koma-cta-actions > a:hover { color: var(--koma-black); transform: translateX(3px); }
+.koma-cta-actions .koma-whatsapp-icon { width: 1rem; height: 1rem; }
 .koma-footer { min-height: 110px; gap: 2rem; }
 .koma-footer img { width: auto; height: 38px; }
 .koma-footer nav { display: flex; gap: 1.5rem; }
@@ -3303,12 +3357,13 @@
   .koma-impact-section { min-height: 0; padding-block: 4.5rem 3rem; }
   .koma-impact-topline > span:last-child { display: none; }
   .koma-impact-layout { grid-template-columns: 1fr; gap: 2.75rem; margin-block: 3rem; }
-  .koma-impact-title { font-size: clamp(3.8rem, 16vw, 6.4rem); }
+  .koma-impact-title { max-width: 8ch; font-size: clamp(3.8rem, 16vw, 6.4rem); line-height: 0.94; }
   .koma-impact-copy { margin-top: 1.25rem; }
   .koma-impact-cta { width: 100%; }
-  .koma-impact-proof { grid-template-columns: 1fr; }
-  .koma-impact-proof span { border-right: 0; border-bottom: 1px solid rgba(10, 10, 10, 0.2); text-align: left; }
-  .koma-impact-proof span:last-child { border-bottom: 0; }
+  .koma-impact-proof { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+  .koma-impact-proof::-webkit-scrollbar { display: none; }
+  .koma-impact-proof span { flex: 0 0 min(78vw, 19rem); justify-content: flex-start; border-right: 1px solid rgba(10, 10, 10, 0.2); scroll-snap-align: start; text-align: left; }
+  .koma-impact-proof span:last-child { border-right: 0; }
   .koma-flow-tabs { display: flex; overflow-x: auto; scrollbar-width: none; }
   .koma-flow-tabs::-webkit-scrollbar { display: none; }
   .koma-flow-tab { flex: 0 0 42%; }
@@ -3359,6 +3414,7 @@
   .koma-management-card,
   .koma-flow-tab,
   .koma-btn { transition: none !important; }
+  .koma-btn::after { display: none; }
   .koma-order-ticket { transform: translate(27vw, 110px) rotate(2deg) !important; }
   .koma-order-manual { opacity: 0.3 !important; }
   .koma-order-connected { opacity: 1 !important; transform: none !important; }

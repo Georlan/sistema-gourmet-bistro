@@ -87,8 +87,8 @@ export function LeadCaptureModal({ open, onClose }: LeadCaptureModalProps) {
       >
         <div className="koma-lead-dialog-head">
           <div>
-            <span>DEMONSTRAÇÃO PERSONALIZADA</span>
-            <h2 id={titleId}>VEJA O KÔMA NA SUA OPERAÇÃO.</h2>
+            <span>CADASTRO INICIAL</span>
+            <h2 id={titleId}>COMECE COM O KÔMA.</h2>
           </div>
           <button type="button" className="koma-lead-close" onClick={onClose} aria-label="Fechar">
             ×
@@ -96,7 +96,7 @@ export function LeadCaptureModal({ open, onClose }: LeadCaptureModalProps) {
         </div>
 
         <p className="koma-lead-intro">
-          Conte o essencial. O WhatsApp abrirá com sua solicitação pronta para enviar.
+          Conte o essencial sobre seu restaurante. O WhatsApp abrirá com seu cadastro pronto para revisar e enviar.
         </p>
 
         <form className="koma-lead-form" onSubmit={handleSubmit}>
@@ -177,7 +177,7 @@ export function LeadCaptureModal({ open, onClose }: LeadCaptureModalProps) {
 
           <button type="submit" className="koma-btn koma-btn--primary koma-lead-submit">
             <WhatsAppIcon />
-            CONTINUAR PELO WHATSAPP
+            ENVIAR CADASTRO PELO WHATSAPP
           </button>
           <small>Você revisa a mensagem antes de enviar. Nenhum dado é enviado automaticamente.</small>
         </form>

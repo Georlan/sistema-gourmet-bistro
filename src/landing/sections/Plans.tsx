@@ -52,8 +52,8 @@ export function Plans() {
             <ul>
               {LANDING_PLAN_FEATURES[plan.id].map((feature) => <li key={feature}>{feature}</li>)}
             </ul>
-            <a href={KOMA_LANDING_CONFIG.demoAnchor} className={`koma-btn ${plan.recommended ? 'koma-btn--primary' : 'koma-btn--outline-dark'}`}>
-              Conhecer o {plan.name}
+            <a href={KOMA_LANDING_CONFIG.signupAnchor} className={`koma-btn ${plan.recommended ? 'koma-btn--primary' : 'koma-btn--outline-dark'}`}>
+              Escolher o {plan.name}
             </a>
           </article>
         ))}

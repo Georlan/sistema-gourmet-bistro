@@ -130,7 +130,7 @@ export function Hero() {
             transition={{ duration: 0.7, delay: 0.55 }}
           >
             <button type="button" className="koma-btn koma-btn--primary" onClick={() => setLeadModalOpen(true)}>
-              Quero ver o Kôma funcionando
+              Quero começar com o Kôma
             </button>
             <a
               href={KOMA_LANDING_CONFIG.whatsappUrl}
@@ -149,7 +149,7 @@ export function Hero() {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.6, delay: 0.66 }}
           >
-            Demonstração rápida e sem compromisso.
+            Cadastro inicial pelo WhatsApp. Leva menos de 1 minuto.
           </motion.p>
 
           <motion.div

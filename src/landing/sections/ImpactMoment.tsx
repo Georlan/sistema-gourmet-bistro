@@ -29,16 +29,17 @@ export function ImpactMoment() {
           transition={{ duration: 0.58 }}
         >
           <h2 className="koma-impact-title" id="impact-title">
-            SE ALGO ATRASAR.<br />
-            VOCÊ VÊ.
+            <span>SE ALGO</span>
+            <span>ATRASAR.</span>
+            <span>VOCÊ VÊ.</span>
           </h2>
           <p className="koma-impact-copy">
             Acompanhe mesas, pedidos e produção em uma única visão. O Kôma destaca o que precisa da sua atenção antes que o cliente reclame.
           </p>
           <button type="button" className="koma-btn koma-btn--dark koma-impact-cta" onClick={() => setLeadModalOpen(true)}>
-            QUERO VER NO MEU RESTAURANTE
+            QUERO COMEÇAR COM O KÔMA
           </button>
-          <small className="koma-impact-cta-note">Demonstração rápida e sem compromisso.</small>
+          <small className="koma-impact-cta-note">Cadastro inicial pelo WhatsApp. Você revisa tudo antes de enviar.</small>
         </motion.div>
 
         <motion.div
@@ -96,9 +97,9 @@ export function ImpactMoment() {
       </div>
 
       <div className="koma-impact-proof" aria-label="Benefícios da visão do turno">
-        <span>ATRASOS VISÍVEIS</span>
-        <span>PRIORIDADES CLARAS</span>
-        <span>MENOS SURPRESAS NO TURNO</span>
+        <span><b>01</b><strong>ATRASOS VISÍVEIS</strong></span>
+        <span><b>02</b><strong>PRIORIDADES CLARAS</strong></span>
+        <span><b>03</b><strong>MENOS SURPRESAS NO TURNO</strong></span>
       </div>
 
       <LeadCaptureModal open={leadModalOpen} onClose={() => setLeadModalOpen(false)} />
