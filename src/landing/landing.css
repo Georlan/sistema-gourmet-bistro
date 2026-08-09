@@ -2711,6 +2711,13 @@
   font-weight: 600;
   line-height: 1.55;
 }
+.koma-impact-cta { margin-top: 2rem; }
+.koma-impact-cta-note {
+  display: block;
+  margin-top: 0.75rem;
+  color: rgba(10, 10, 10, 0.58);
+  font-size: 0.72rem;
+}
 .koma-impact-console {
   position: relative;
   width: 100%;
@@ -2752,18 +2759,59 @@
 .koma-impact-console-head span { color: rgba(255, 255, 255, 0.48); }
 .koma-impact-console-head strong { font-family: var(--koma-accent); font-size: 0.76rem; letter-spacing: 0.04em; }
 .koma-impact-console-head b { color: var(--koma-green); }
+.koma-impact-metrics {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+.koma-impact-metric {
+  min-width: 0;
+  padding: 1.35rem 1rem 1.25rem 0;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+.koma-impact-metric:not(:first-child) { padding-left: 1rem; }
+.koma-impact-metric:last-child { border-right: 0; }
+.koma-impact-metric strong {
+  display: block;
+  margin-bottom: 0.45rem;
+  color: var(--koma-white);
+  font-family: var(--koma-display);
+  font-size: clamp(2rem, 3.6vw, 3.5rem);
+  line-height: 0.9;
+}
+.koma-impact-metric span {
+  display: block;
+  color: rgba(255, 255, 255, 0.5);
+  font-family: var(--koma-accent);
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1.35;
+}
+.koma-impact-metric--attention strong,
+.koma-impact-metric--attention span { color: #ff8f87; }
 .koma-impact-signals { position: relative; z-index: 1; padding: 0.75rem 0; }
 .koma-impact-signals > div {
   display: grid;
-  grid-template-columns: 4.6rem 1fr auto;
+  grid-template-columns: 7.4rem 1fr auto;
   gap: 1rem;
   align-items: center;
   min-height: 62px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
-.koma-impact-signals time { color: rgba(255, 255, 255, 0.4); font-family: var(--koma-accent); font-size: 0.64rem; }
+.koma-impact-signals span { color: rgba(255, 255, 255, 0.42); font-family: var(--koma-accent); font-size: 0.58rem; font-weight: 800; letter-spacing: 0.06em; }
 .koma-impact-signals p { margin: 0; font-family: var(--koma-accent); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.035em; }
-.koma-impact-signals span { color: var(--koma-green); font-family: var(--koma-accent); font-size: 0.62rem; font-weight: 900; }
+.koma-impact-signals strong { color: var(--koma-green); font-family: var(--koma-accent); font-size: 0.62rem; font-weight: 900; }
+.koma-impact-signals > .koma-impact-signal--attention {
+  margin-inline: -0.65rem;
+  padding-inline: 0.65rem;
+  border-bottom-color: rgba(255, 143, 135, 0.22);
+  background: rgba(255, 143, 135, 0.07);
+}
+.koma-impact-signal--attention span,
+.koma-impact-signal--attention strong { color: #ff8f87; }
 .koma-impact-console-foot {
   position: relative;
   z-index: 1;
@@ -3252,6 +3300,7 @@
   .koma-impact-layout { grid-template-columns: 1fr; gap: 2.75rem; margin-block: 3rem; }
   .koma-impact-title { font-size: clamp(3.8rem, 16vw, 6.4rem); }
   .koma-impact-copy { margin-top: 1.25rem; }
+  .koma-impact-cta { width: 100%; }
   .koma-impact-proof { grid-template-columns: 1fr; }
   .koma-impact-proof span { border-right: 0; border-bottom: 1px solid rgba(10, 10, 10, 0.2); text-align: left; }
   .koma-impact-proof span:last-child { border-bottom: 0; }
@@ -3286,7 +3335,11 @@
   .koma-impact-console { padding: 1.1rem; }
   .koma-impact-console-head { grid-template-columns: 34px 1fr auto; }
   .koma-impact-console-head img { width: 34px; height: 34px; }
-  .koma-impact-signals > div { grid-template-columns: 3.7rem 1fr auto; gap: 0.55rem; }
+  .koma-impact-metric { padding: 1rem 0.55rem 1rem 0; }
+  .koma-impact-metric:not(:first-child) { padding-left: 0.55rem; }
+  .koma-impact-metric span { font-size: 0.47rem; }
+  .koma-impact-signals > div { grid-template-columns: 5.4rem 1fr auto; gap: 0.55rem; }
+  .koma-impact-signals span { font-size: 0.5rem; }
   .koma-impact-signals p { font-size: 0.64rem; }
   .koma-impact-console-foot { align-items: flex-start; flex-direction: column; }
   .koma-flow-tab { flex-basis: 52%; }
