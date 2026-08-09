@@ -9,7 +9,7 @@ const RELIABILITY_ITEMS = [
 
 export function Reliability() {
   return (
-    <section className="koma-reliability-section" aria-labelledby="reliability-title">
+    <section id="impressao" className="koma-reliability-section" aria-labelledby="reliability-title">
       <div className="koma-reliability-title-wrap">
         <span>06 / FEITO PARA A OPERAÇÃO REAL</span>
         <h2 id="reliability-title">QUANDO O MOVIMENTO<br />AUMENTA, O FLUXO<br />CONTINUA.</h2>

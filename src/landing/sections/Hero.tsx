@@ -6,11 +6,36 @@ import { KOMA_LANDING_CONFIG } from '../config/landingConfig';
 import { LeadCaptureModal } from '../components/LeadCaptureModal';
 
 const HERO_STRIP_ITEMS = [
-  { num: '01', name: 'PDV BALCÃO' },
-  { num: '02', name: 'GESTÃO DE MESAS' },
-  { num: '03', name: 'KDS COZINHA' },
-  { num: '04', name: 'CARDÁPIO QR' },
-  { num: '05', name: 'IMPRESSÃO AUTOMÁTICA' },
+  {
+    num: '01',
+    name: 'PEDIDO ENTRA UMA VEZ',
+    detail: 'Retirada, delivery, garçom e cardápio no mesmo fluxo.',
+    href: '#como-funciona',
+  },
+  {
+    num: '02',
+    name: 'MESAS ATUALIZADAS AO VIVO',
+    detail: 'Status e consumo visíveis para todo o salão.',
+    href: '#gestao',
+  },
+  {
+    num: '03',
+    name: 'COZINHA RECEBE NA HORA',
+    detail: 'Itens e observações chegam sem novo repasse.',
+    href: '#como-funciona',
+  },
+  {
+    num: '04',
+    name: 'CLIENTE PEDE PELO CELULAR',
+    detail: 'Cardápio digital conectado à operação.',
+    href: '#cardapio-digital',
+  },
+  {
+    num: '05',
+    name: 'COMANDA SAI AUTOMATICAMENTE',
+    detail: 'A impressão acompanha o pedido certo.',
+    href: '#impressao',
+  },
 ];
 
 const HERO_LIVE_STEPS = [
@@ -160,10 +185,19 @@ export function Hero() {
         transition={{ duration: 0.7, delay: 0.65 }}
       >
         {HERO_STRIP_ITEMS.map((item) => (
-          <div key={item.num} className="koma-hero-strip-item" role="listitem">
+          <a
+            key={item.num}
+            className="koma-hero-strip-item"
+            href={item.href}
+            role="listitem"
+            aria-label={`${item.name}. ${item.detail}`}
+          >
             <span className="koma-hero-strip-num">{item.num}</span>
-            <span className="koma-hero-strip-name">{item.name}</span>
-          </div>
+            <span className="koma-hero-strip-copy">
+              <strong className="koma-hero-strip-name">{item.name}</strong>
+              <small className="koma-hero-strip-detail">{item.detail}</small>
+            </span>
+          </a>
         ))}
       </motion.div>
 
