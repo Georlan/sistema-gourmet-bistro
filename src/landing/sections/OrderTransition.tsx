@@ -16,15 +16,15 @@ export function OrderTransition() {
   const connectedY = useTransform(scrollYProgress, [0.42, 0.72], [18, 0]);
 
   return (
-    <section ref={sectionRef} className="koma-order-transition" aria-label="Quatro intervenções manuais se tornam um registro conectado">
+    <section ref={sectionRef} className="koma-order-transition" aria-label="Quatro passos manuais se tornam um pedido acompanhado por todo o restaurante">
       <div className="koma-order-transition-dark" aria-hidden="true" />
       <div className="koma-order-transition-line" aria-hidden="true" />
 
       <div className="koma-order-transition-inner">
         <motion.div className="koma-order-manual" style={{ opacity: manualOpacity }}>
           <small>ANTES</small>
-          <strong>4 INTERVENÇÕES</strong>
-          <span>anotar</span><span>repassar</span><span>conferir</span><span>somar</span>
+          <strong>4 PASSOS MANUAIS</strong>
+          <span>anota o pedido</span><span>leva à cozinha</span><span>confere se está pronto</span><span>fecha a conta</span>
         </motion.div>
 
         <motion.div
@@ -42,15 +42,15 @@ export function OrderTransition() {
           style={{ opacity: connectedOpacity, y: connectedY }}
         >
           <small>COM KÔMA</small>
-          <strong>1 REGISTRO CONECTADO</strong>
-          <p>O pedido segue do atendimento ao caixa sem precisar ser reconstruído.</p>
+          <strong>1 PEDIDO ATUALIZA TUDO</strong>
+          <p>O pedido entra uma vez e aparece no salão, na cozinha e no caixa.</p>
         </motion.div>
 
         <div className="koma-order-transition-caption">
           <span>4</span>
           <i aria-hidden="true" />
           <span>1</span>
-          <strong>A MESMA INFORMAÇÃO. MENOS CAMINHO.</strong>
+          <strong>O MESMO PEDIDO.</strong>
         </div>
       </div>
     </section>

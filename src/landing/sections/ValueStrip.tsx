@@ -36,7 +36,7 @@ export function ValueStrip() {
         <p className="koma-value-intro">01 / MENOS RETRABALHO</p>
         <h2 id="value-title">UM PEDIDO.<br /><span>75% MENOS ETAPAS.</span></h2>
         <p>
-          Neste fluxo, quatro intervenções manuais viram um único registro. O restaurante ganha agilidade sem perder o controle.
+          Quatro passos viram um único passo. O restaurante ganha agilidade sem perder o controle.
         </p>
       </motion.header>
 
