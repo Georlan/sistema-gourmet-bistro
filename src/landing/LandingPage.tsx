@@ -11,6 +11,7 @@ import { Management } from './sections/Management';
 import { Reliability } from './sections/Reliability';
 import { Plans } from './sections/Plans';
 import { FinalCTA } from './sections/FinalCTA';
+import { OrderTransition } from './sections/OrderTransition';
 
 export default function LandingPage() {
   useEffect(() => {
@@ -88,6 +89,7 @@ export default function LandingPage() {
       <Header />
       <main>
         <Hero />
+        <OrderTransition />
         <ValueStrip />
         <ImpactMoment />
         <OperationFlow />

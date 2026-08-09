@@ -2142,6 +2142,192 @@
 .koma-section-heading--light > p { color: var(--koma-muted-light); }
 
 /* Operational comparison */
+.koma-order-transition {
+  position: relative;
+  height: clamp(340px, 46vw, 560px);
+  color: var(--koma-white);
+  background: var(--koma-offwhite);
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.koma-order-transition-dark {
+  position: absolute;
+  z-index: -3;
+  inset: 0;
+  background:
+    linear-gradient(102deg, rgba(0, 184, 148, 0.035), transparent 48%),
+    var(--koma-black);
+  clip-path: polygon(0 0, 100% 0, 100% 25%, 0 82%);
+}
+
+.koma-order-transition-line {
+  position: absolute;
+  z-index: -1;
+  left: -3%;
+  top: 49%;
+  width: 108%;
+  height: 3px;
+  background: linear-gradient(90deg, transparent 2%, var(--koma-green) 12%, var(--koma-green) 82%, transparent 98%);
+  box-shadow: 0 0 18px rgba(0, 184, 148, 0.28);
+  transform: rotate(-15.8deg);
+  transform-origin: center;
+}
+
+.koma-order-transition-inner {
+  position: relative;
+  width: min(100% - (2 * var(--koma-section-x)), 1480px);
+  height: 100%;
+  margin-inline: auto;
+}
+
+.koma-order-manual,
+.koma-order-connected {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  font-family: var(--koma-accent);
+  text-transform: uppercase;
+}
+
+.koma-order-manual {
+  top: 16%;
+  left: 0;
+  grid-template-columns: repeat(4, auto);
+  gap: 0.65rem 1rem;
+}
+
+.koma-order-manual small,
+.koma-order-connected small {
+  grid-column: 1 / -1;
+  color: var(--koma-green);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+
+.koma-order-manual strong,
+.koma-order-connected strong {
+  grid-column: 1 / -1;
+  font-size: clamp(1.05rem, 1.6vw, 1.45rem);
+  letter-spacing: 0.03em;
+}
+
+.koma-order-manual span {
+  position: relative;
+  padding-left: 0.75rem;
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 0.56rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.koma-order-manual span::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  transform: translateY(-50%);
+}
+
+.koma-order-ticket {
+  position: absolute;
+  z-index: 4;
+  top: 24%;
+  left: 18%;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  width: clamp(145px, 14vw, 210px);
+  min-height: 92px;
+  padding: 1rem 1.05rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(10, 18, 15, 0.94);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.38), inset 0 0 0 1px rgba(0, 184, 148, 0.06);
+  font-family: var(--koma-accent);
+  will-change: transform;
+}
+
+.koma-order-ticket span {
+  grid-column: 1 / -1;
+  color: var(--koma-green);
+  font-size: 0.57rem;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+}
+
+.koma-order-ticket strong {
+  font-family: var(--koma-display);
+  font-size: clamp(2rem, 3vw, 3rem);
+  line-height: 0.9;
+}
+
+.koma-order-ticket i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--koma-green);
+  box-shadow: 0 0 12px rgba(0, 184, 148, 0.72);
+}
+
+.koma-order-connected {
+  right: 0;
+  bottom: 17%;
+  width: min(31rem, 38%);
+  gap: 0.45rem;
+  color: var(--koma-black);
+}
+
+.koma-order-connected small { color: var(--koma-green-dark); }
+.koma-order-connected strong { font-size: clamp(1.4rem, 2.4vw, 2.45rem); }
+.koma-order-connected p {
+  max-width: 38ch;
+  margin: 0.15rem 0 0;
+  color: var(--koma-muted-light);
+  font-family: var(--koma-body);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  text-transform: none;
+}
+
+.koma-order-transition-caption {
+  position: absolute;
+  left: 0;
+  bottom: 8%;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  color: var(--koma-black);
+  font-family: var(--koma-accent);
+}
+
+.koma-order-transition-caption span {
+  color: var(--koma-green-dark);
+  font-family: var(--koma-display);
+  font-size: 2rem;
+  font-weight: 900;
+}
+
+.koma-order-transition-caption i {
+  width: clamp(2rem, 4vw, 4rem);
+  height: 1px;
+  background: var(--koma-green-dark);
+}
+
+.koma-order-transition-caption strong {
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+}
+
+.koma-order-transition + .koma-value-strip {
+  padding-top: clamp(3.5rem, 5vw, 5rem);
+  border-top: 0;
+}
+
 .koma-value-strip {
   position: relative;
   padding: clamp(5rem, 8vw, 8rem) var(--koma-section-x) clamp(4rem, 7vw, 6.5rem);
@@ -3012,6 +3198,43 @@
 
 @media (max-width: 768px) {
   .koma-management-grid, .koma-plans-grid { grid-template-columns: 1fr; }
+  .koma-order-transition { height: 310px; }
+  .koma-order-transition-dark { clip-path: polygon(0 0, 100% 0, 100% 32%, 0 67%); }
+  .koma-order-transition-line { top: 48%; transform: rotate(-11deg); }
+  .koma-order-transition-inner { width: calc(100% - 2.5rem); }
+  .koma-order-manual {
+    top: 11%;
+    grid-template-columns: repeat(2, auto);
+    gap: 0.35rem 0.9rem;
+  }
+  .koma-order-manual strong { font-size: 0.9rem; }
+  .koma-order-manual span { font-size: 0.48rem; }
+  .koma-order-ticket {
+    top: 34%;
+    left: 50%;
+    width: 135px;
+    min-height: 78px;
+    padding: 0.8rem;
+    transform: translateX(-50%) rotate(1deg) !important;
+  }
+  .koma-order-ticket strong { font-size: 2rem; }
+  .koma-order-connected {
+    right: 0;
+    bottom: 10%;
+    width: 68%;
+    transform: none !important;
+    opacity: 1 !important;
+  }
+  .koma-order-connected strong { font-size: 1rem; }
+  .koma-order-connected p { display: none; }
+  .koma-order-transition-caption {
+    left: 0;
+    bottom: 9%;
+    gap: 0.4rem;
+  }
+  .koma-order-transition-caption span { font-size: 1.4rem; }
+  .koma-order-transition-caption i { width: 1.25rem; }
+  .koma-order-transition-caption strong { display: none; }
   .koma-value-strip { padding-block: 4.5rem 3rem; }
   .koma-value-header { grid-template-columns: 1fr; gap: 1.5rem; align-items: start; margin-bottom: 2.75rem; }
   .koma-value-header h2 { grid-column: 1; font-size: clamp(3.2rem, 14vw, 5.6rem); }
@@ -3078,4 +3301,11 @@
   .koma-management-card,
   .koma-flow-tab,
   .koma-btn { transition: none !important; }
+  .koma-order-ticket { transform: translate(38vw, 150px) rotate(2deg) !important; }
+  .koma-order-manual { opacity: 0.3 !important; }
+  .koma-order-connected { opacity: 1 !important; transform: none !important; }
+}
+
+@media (max-width: 768px) and (prefers-reduced-motion: reduce) {
+  .koma-order-ticket { transform: translateX(-50%) rotate(1deg) !important; }
 }
