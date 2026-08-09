@@ -279,13 +279,13 @@
 
 .koma-hero-line--xl {
   width: max-content;
-  font-size: clamp(5rem, 10.4vw, 12.4rem);
+  font-size: clamp(5rem, 9.8vw, 11.7rem);
   letter-spacing: -0.052em;
 }
 
 .koma-hero-line--lg {
   width: max-content;
-  font-size: clamp(4.8rem, 8.4vw, 10.2rem);
+  font-size: clamp(4.8rem, 7.9vw, 9.6rem);
   letter-spacing: -0.042em;
 }
 
@@ -3213,11 +3213,11 @@
 }
 
 .koma-capabilities-heading h2 {
-  max-width: 9ch;
+  max-width: 11ch;
   margin: 0;
   color: var(--koma-white);
   font-family: var(--koma-display);
-  font-size: clamp(3.8rem, 7vw, 7.6rem);
+  font-size: clamp(3.65rem, 6.4vw, 7.1rem);
   font-weight: 900;
   line-height: 0.86;
   letter-spacing: -0.055em;
@@ -3305,12 +3305,71 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: clamp(3rem, 7vw, 6.5rem);
+  margin-bottom: clamp(1.25rem, 2vw, 2rem);
   font-family: var(--koma-accent);
   font-size: 0.67rem;
   font-weight: 900;
   letter-spacing: 0.12em;
 }
+
+.koma-capability-preview {
+  min-height: 88px;
+  margin-bottom: clamp(2rem, 4vw, 3.5rem);
+  padding: 0.9rem 1rem;
+  border: 1px solid currentColor;
+  background: rgba(0, 0, 0, 0.08);
+  font-family: var(--koma-accent);
+  font-size: 0.58rem;
+  font-style: normal;
+  letter-spacing: 0.08em;
+  opacity: 0.78;
+}
+
+.koma-capability-card--dark .koma-capability-preview {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.koma-capability-preview span,
+.koma-capability-preview div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.koma-capability-preview strong,
+.koma-capability-preview b,
+.koma-capability-preview em {
+  font-style: normal;
+}
+
+.koma-capability-preview--menu > span,
+.koma-capability-preview--customer > span { color: rgba(10, 10, 10, 0.58); }
+.koma-capability-preview--menu > strong,
+.koma-capability-preview--customer > strong {
+  display: block;
+  margin: 0.35rem 0 0.75rem;
+  font-size: 0.86rem;
+}
+.koma-capability-preview--menu div,
+.koma-capability-preview--customer div { justify-content: flex-start; flex-wrap: wrap; }
+.koma-capability-preview--menu b,
+.koma-capability-preview--customer b { padding: 0.3rem 0.45rem; border: 1px solid rgba(10, 10, 10, 0.2); }
+
+.koma-capability-preview--payment > span { padding-bottom: 0.7rem; border-bottom: 1px solid rgba(255, 255, 255, 0.13); }
+.koma-capability-preview--payment > span strong { font-size: 0.82rem; color: var(--koma-white); }
+.koma-capability-preview--payment div { margin-top: 0.75rem; }
+.koma-capability-preview--payment b { display: grid; gap: 0.25rem; color: rgba(255, 255, 255, 0.5); }
+.koma-capability-preview--payment em { color: var(--koma-green); }
+
+.koma-capability-preview--print { display: grid; gap: 0.65rem; }
+.koma-capability-preview--print span { padding-bottom: 0.6rem; border-bottom: 1px solid rgba(255, 255, 255, 0.13); }
+.koma-capability-preview--print span:last-child { padding-bottom: 0; border-bottom: 0; }
+.koma-capability-preview--print em { color: rgba(255, 255, 255, 0.5); }
+.koma-capability-preview--print strong { color: var(--koma-green); }
+
+.koma-capability-preview--customer { background: rgba(0, 184, 148, 0.07); }
 
 .koma-capability-card-top > div {
   width: 46px;
@@ -3765,7 +3824,7 @@
   .koma-capabilities-heading { grid-template-columns: 1fr; gap: 2rem; align-items: start; }
   .koma-capabilities-heading h2 { max-width: 10ch; font-size: clamp(3.4rem, 12vw, 6rem); }
   .koma-capabilities-intro > p { max-width: 44ch; }
-  .koma-capabilities-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .koma-capabilities-grid { grid-template-columns: 1fr; }
   .koma-capability-card,
   .koma-capability-card--cardapio,
   .koma-capability-card--clientes,
@@ -3831,7 +3890,8 @@
   .koma-capability-card--clientes,
   .koma-capability-card--pagamento,
   .koma-capability-card--impressao { min-height: 400px; }
-  .koma-capability-card-top { margin-bottom: 2.5rem; }
+  .koma-capability-card-top { margin-bottom: 1.25rem; }
+  .koma-capability-preview { margin-bottom: 2rem; }
   .koma-capability-card h3 { font-size: clamp(2.35rem, 12vw, 3.25rem); }
   .koma-flow-tab { flex-basis: 52%; }
   .koma-flow-ticket { border-radius: 10px; }

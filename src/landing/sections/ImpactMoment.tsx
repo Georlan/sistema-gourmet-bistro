@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { motion } from 'motion/react';
 import logoOnGreen from '../../assets/logo-koma-on-green.png';
-import { LeadCaptureModal } from '../components/LeadCaptureModal';
 
 const TURN_METRICS = [
   { value: '12', label: 'MESAS EM ATENDIMENTO' },
@@ -10,13 +9,11 @@ const TURN_METRICS = [
 ];
 
 export function ImpactMoment() {
-  const [leadModalOpen, setLeadModalOpen] = useState(false);
-
   return (
     <section className="koma-impact-section" aria-labelledby="impact-title">
       <div className="koma-impact-grid" aria-hidden="true" />
       <div className="koma-impact-topline">
-        <span className="koma-impact-eyebrow">02 / CONTROLE DO TURNO</span>
+        <span className="koma-impact-eyebrow">03 / CONTROLE DO TURNO</span>
         <span>ATUALIZAÇÃO EM TEMPO REAL</span>
       </div>
 
@@ -36,10 +33,6 @@ export function ImpactMoment() {
           <p className="koma-impact-copy">
             Acompanhe mesas, pedidos e produção em uma única visão. O Kôma destaca o que precisa da sua atenção antes que o cliente reclame.
           </p>
-          <button type="button" className="koma-btn koma-btn--dark koma-impact-cta" onClick={() => setLeadModalOpen(true)}>
-            QUERO COMEÇAR COM O KÔMA
-          </button>
-          <small className="koma-impact-cta-note">Cadastro inicial pelo WhatsApp. Você revisa tudo antes de enviar.</small>
         </motion.div>
 
         <motion.div
@@ -101,8 +94,6 @@ export function ImpactMoment() {
         <span><b>02</b><strong>PRIORIDADES CLARAS</strong></span>
         <span><b>03</b><strong>MENOS SURPRESAS NO TURNO</strong></span>
       </div>
-
-      <LeadCaptureModal open={leadModalOpen} onClose={() => setLeadModalOpen(false)} />
     </section>
   );
 }

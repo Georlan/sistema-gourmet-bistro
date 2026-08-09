@@ -36,7 +36,7 @@ export function ValueStrip() {
         <p className="koma-value-intro">01 / MENOS RETRABALHO</p>
         <h2 id="value-title">UM PEDIDO.<br /><span>75% MENOS ETAPAS.</span></h2>
         <p>
-          Quatro passos viram um único passo. O restaurante ganha agilidade sem perder o controle.
+          Neste exemplo, quatro passos viram um único passo. O restaurante ganha agilidade sem perder o controle.
         </p>
       </motion.header>
 
@@ -84,7 +84,7 @@ export function ValueStrip() {
           <div className="koma-value-lane-head">
             <div>
               <small>COM KÔMA</small>
-              <strong>PEDIDO #0412</strong>
+              <strong>PEDIDO REGISTRADO</strong>
             </div>
             <span>1 REGISTRO</span>
           </div>

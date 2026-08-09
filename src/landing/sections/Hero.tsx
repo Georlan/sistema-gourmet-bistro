@@ -87,7 +87,7 @@ export function Hero() {
             SISTEMA DE GESTÃO PARA RESTAURANTES, BARES E LANCHONETES
           </motion.p>
 
-          <h1 className="koma-hero-headline" aria-label="O restaurante não para. Seu sistema também não.">
+          <h1 className="koma-hero-headline" aria-label="O restaurante não para. O Kôma acompanha o ritmo.">
             <span className="koma-hero-line koma-hero-line--sm">O</span>
             <span className="koma-hero-title-axis">
               <span className="koma-hero-line koma-hero-line--xl">RESTAURANTE</span>
@@ -130,7 +130,7 @@ export function Hero() {
             transition={{ duration: 0.7, delay: 0.55 }}
           >
             <button type="button" className="koma-btn koma-btn--primary" onClick={() => setLeadModalOpen(true)}>
-              Quero começar com o Kôma
+              Começar com o Kôma
             </button>
             <a
               href={KOMA_LANDING_CONFIG.whatsappUrl}
