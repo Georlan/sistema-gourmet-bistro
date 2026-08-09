@@ -2,6 +2,7 @@ import React from 'react';
 import logoOnDark from '../../assets/logo-koma-on-dark.png';
 import logoOnGreen from '../../assets/logo-koma-on-green.png';
 import { KOMA_LANDING_CONFIG } from '../config/landingConfig';
+import { WhatsAppIcon } from '../components/WhatsAppIcon';
 
 export function FinalCTA() {
   return (
@@ -31,6 +32,7 @@ export function FinalCTA() {
             rel="noopener noreferrer"
             className="koma-btn koma-btn--dark"
           >
+            <WhatsAppIcon />
             Falar com um especialista
           </a>
           <span>RESPOSTA DIRETA PELO WHATSAPP</span>

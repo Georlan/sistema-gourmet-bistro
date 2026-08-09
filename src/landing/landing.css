@@ -91,7 +91,19 @@
   margin-right: 0.25rem;
   color: var(--koma-green);
   font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
 }
+
+.koma-whatsapp-icon {
+  display: block;
+  flex: 0 0 auto;
+  width: 1.08rem;
+  height: 1.08rem;
+}
+
+.koma-btn .koma-whatsapp-icon { width: 1.12rem; height: 1.12rem; }
 
 .koma-hamburger {
   display: none;

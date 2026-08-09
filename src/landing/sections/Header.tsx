@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import logoImg from '../../assets/logo-koma-on-dark.png';
 import { KOMA_LANDING_CONFIG } from '../config/landingConfig';
+import { WhatsAppIcon } from '../components/WhatsAppIcon';
 
 export function Header() {
   const [scrolled, setScrolled] = useState(false);
@@ -48,6 +49,7 @@ export function Header() {
             rel="noopener noreferrer"
             className="koma-header-link koma-header-link--whatsapp"
           >
+            <WhatsAppIcon />
             Falar no WhatsApp
           </a>
           <a href={KOMA_LANDING_CONFIG.demoAnchor} className="koma-btn koma-btn--primary koma-btn--sm">
@@ -90,6 +92,7 @@ export function Header() {
             onClick={() => setMenuOpen(false)}
             style={{ marginTop: '0.5rem' }}
           >
+            <WhatsAppIcon />
             Falar no WhatsApp
           </a>
         </nav>

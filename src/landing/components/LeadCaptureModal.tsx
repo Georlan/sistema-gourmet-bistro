@@ -1,5 +1,6 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { KOMA_LANDING_CONFIG } from '../config/landingConfig';
+import { WhatsAppIcon } from './WhatsAppIcon';
 
 interface LeadCaptureModalProps {
   open: boolean;
@@ -175,6 +176,7 @@ export function LeadCaptureModal({ open, onClose }: LeadCaptureModalProps) {
           </div>
 
           <button type="submit" className="koma-btn koma-btn--primary koma-lead-submit">
+            <WhatsAppIcon />
             CONTINUAR PELO WHATSAPP
           </button>
           <small>Você revisa a mensagem antes de enviar. Nenhum dado é enviado automaticamente.</small>

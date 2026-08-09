@@ -4,6 +4,7 @@ import logoImg from '../../assets/logo-koma-on-dark.png';
 import { TabletFrame } from '../product/TabletFrame';
 import { KOMA_LANDING_CONFIG } from '../config/landingConfig';
 import { LeadCaptureModal } from '../components/LeadCaptureModal';
+import { WhatsAppIcon } from '../components/WhatsAppIcon';
 
 const HERO_STRIP_ITEMS = [
   {
@@ -137,6 +138,7 @@ export function Hero() {
               rel="noopener noreferrer"
               className="koma-hero-whatsapp-link"
             >
+              <WhatsAppIcon />
               Falar direto no WhatsApp
             </a>
           </motion.div>
