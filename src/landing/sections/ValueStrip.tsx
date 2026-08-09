@@ -3,10 +3,10 @@ import { motion } from 'motion/react';
 import { LeadCaptureModal } from '../components/LeadCaptureModal';
 
 const FRAGMENTED_STEPS = [
-  { num: '01', title: 'ANOTA', text: 'Papel, mensagem ou memória.' },
-  { num: '02', title: 'REPASSA', text: 'Alguém avisa a cozinha.' },
-  { num: '03', title: 'CONFIRMA', text: 'O salão pergunta o status.' },
-  { num: '04', title: 'RELANÇA', text: 'O caixa refaz o histórico.' },
+  { num: '01', title: 'ANOTA NO PAPEL', text: 'Itens e observações ficam na comanda.' },
+  { num: '02', title: 'LEVA À COZINHA', text: 'O pedido depende de um repasse.' },
+  { num: '03', title: 'PERGUNTA O STATUS', text: 'O garçom precisa conferir pessoalmente.' },
+  { num: '04', title: 'SOMA NO CAIXA', text: 'O consumo é conferido novamente.' },
 ];
 
 const KOMA_STEPS = [
@@ -51,9 +51,9 @@ export function ValueStrip() {
           <div className="koma-value-lane-head">
             <div>
               <small>SEM SISTEMA</small>
-              <strong>#0412</strong>
+              <strong>MESA 04</strong>
             </div>
-            <span>4 ETAPAS MANUAIS</span>
+            <span>4 AÇÕES MANUAIS</span>
           </div>
 
           <div className="koma-value-route">
@@ -68,7 +68,7 @@ export function ValueStrip() {
 
           <div className="koma-value-lane-foot">
             <small>RESULTADO</small>
-            <strong>O MESMO PEDIDO PASSA POR VÁRIAS PESSOAS.</strong>
+            <strong>SEM UM REGISTRO ÚNICO, O PEDIDO DEPENDE DE PAPEL E REPASSE.</strong>
           </div>
         </motion.article>
 
@@ -84,7 +84,7 @@ export function ValueStrip() {
           <div className="koma-value-lane-head">
             <div>
               <small>COM KÔMA</small>
-              <strong>#0412</strong>
+              <strong>PEDIDO #0412</strong>
             </div>
             <span>1 REGISTRO</span>
           </div>
