@@ -2669,9 +2669,11 @@
   inset: 0;
   z-index: -1;
   background-image:
-    linear-gradient(rgba(10, 10, 10, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(10, 10, 10, 0.07) 1px, transparent 1px);
-  background-size: clamp(54px, 6vw, 92px) clamp(54px, 6vw, 92px);
+    radial-gradient(circle at 75% 52%, rgba(0, 55, 44, 0.22), transparent 34%),
+    linear-gradient(rgba(10, 10, 10, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(10, 10, 10, 0.045) 1px, transparent 1px);
+  background-size: auto, clamp(54px, 6vw, 92px) clamp(54px, 6vw, 92px), clamp(54px, 6vw, 92px) clamp(54px, 6vw, 92px);
+  background-repeat: no-repeat, repeat, repeat;
   mask-image: linear-gradient(90deg, transparent, black 16%, black 84%, transparent);
 }
 .koma-impact-topline {
@@ -2688,8 +2690,8 @@
 }
 .koma-impact-layout {
   display: grid;
-  grid-template-columns: minmax(0, 0.92fr) minmax(28rem, 0.68fr);
-  gap: clamp(3rem, 9vw, 11rem);
+  grid-template-columns: minmax(0, 0.82fr) minmax(30rem, 0.78fr);
+  gap: clamp(3rem, 7vw, 9rem);
   align-items: center;
   width: 100%;
   max-width: 1480px;
@@ -2701,7 +2703,7 @@
 }
 .koma-impact-title {
   margin: 0;
-  font-size: clamp(4rem, 8.9vw, 9.2rem);
+  font-size: clamp(4rem, 8.1vw, 8.5rem);
 }
 .koma-impact-copy {
   max-width: 42ch;
@@ -2715,8 +2717,8 @@
 .koma-impact-cta-note {
   display: block;
   margin-top: 0.75rem;
-  color: rgba(10, 10, 10, 0.58);
-  font-size: 0.72rem;
+  color: rgba(10, 10, 10, 0.7);
+  font-size: 0.76rem;
 }
 .koma-impact-console {
   position: relative;
@@ -2749,15 +2751,14 @@
 .koma-impact-console-head img { width: 42px; height: 42px; object-fit: contain; }
 .koma-impact-console-head div { display: flex; flex-direction: column; gap: 0.2rem; }
 .koma-impact-console-head span,
-.koma-impact-console-head b,
-.koma-impact-console-foot {
+.koma-impact-console-head b {
   font-family: var(--koma-accent);
   font-size: 0.62rem;
   font-weight: 800;
   letter-spacing: 0.09em;
 }
 .koma-impact-console-head span { color: rgba(255, 255, 255, 0.48); }
-.koma-impact-console-head strong { font-family: var(--koma-accent); font-size: 0.76rem; letter-spacing: 0.04em; }
+.koma-impact-console-head strong { font-family: var(--koma-accent); font-size: 0.84rem; letter-spacing: 0.04em; }
 .koma-impact-console-head b { color: var(--koma-green); }
 .koma-impact-metrics {
   position: relative;
@@ -2785,45 +2786,49 @@
   display: block;
   color: rgba(255, 255, 255, 0.5);
   font-family: var(--koma-accent);
-  font-size: 0.55rem;
+  font-size: 0.64rem;
   font-weight: 800;
   letter-spacing: 0.08em;
   line-height: 1.35;
 }
 .koma-impact-metric--attention strong,
 .koma-impact-metric--attention span { color: #ff8f87; }
-.koma-impact-signals { position: relative; z-index: 1; padding: 0.75rem 0; }
-.koma-impact-signals > div {
-  display: grid;
-  grid-template-columns: 7.4rem 1fr auto;
-  gap: 1rem;
-  align-items: center;
-  min-height: 62px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-.koma-impact-signals span { color: rgba(255, 255, 255, 0.42); font-family: var(--koma-accent); font-size: 0.58rem; font-weight: 800; letter-spacing: 0.06em; }
-.koma-impact-signals p { margin: 0; font-family: var(--koma-accent); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.035em; }
-.koma-impact-signals strong { color: var(--koma-green); font-family: var(--koma-accent); font-size: 0.62rem; font-weight: 900; }
-.koma-impact-signals > .koma-impact-signal--attention {
-  margin-inline: -0.65rem;
-  padding-inline: 0.65rem;
-  border-bottom-color: rgba(255, 143, 135, 0.22);
-  background: rgba(255, 143, 135, 0.07);
-}
-.koma-impact-signal--attention span,
-.koma-impact-signal--attention strong { color: #ff8f87; }
-.koma-impact-console-foot {
+.koma-impact-alert {
   position: relative;
   z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding-top: 1rem;
+  gap: 1.5rem;
+  margin-top: 1.25rem;
+  padding: 1.25rem;
+  border: 1px solid rgba(255, 143, 135, 0.32);
+  background: rgba(255, 143, 135, 0.08);
 }
-.koma-impact-console-foot span { display: flex; align-items: center; gap: 0.55rem; color: rgba(255, 255, 255, 0.55); }
-.koma-impact-console-foot i { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--koma-green); box-shadow: 0 0 14px rgba(0, 184, 148, 0.9); }
-.koma-impact-console-foot strong { color: var(--koma-green); }
+.koma-impact-alert > div { display: grid; gap: 0.3rem; }
+.koma-impact-alert span,
+.koma-impact-alert p,
+.koma-impact-normal {
+  font-family: var(--koma-accent);
+  font-weight: 800;
+  letter-spacing: 0.07em;
+}
+.koma-impact-alert span { color: #ff8f87; font-size: 0.64rem; }
+.koma-impact-alert strong { font-family: var(--koma-accent); font-size: 0.9rem; letter-spacing: 0.03em; }
+.koma-impact-alert p { margin: 0; color: rgba(255, 255, 255, 0.48); font-size: 0.62rem; }
+.koma-impact-alert b { flex: 0 0 auto; color: #ff8f87; font-family: var(--koma-display); font-size: clamp(1.8rem, 3vw, 2.7rem); }
+.koma-impact-normal {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding-top: 1.15rem;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.61rem;
+  line-height: 1.45;
+}
+.koma-impact-normal i { flex: 0 0 auto; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--koma-green); box-shadow: 0 0 14px rgba(0, 184, 148, 0.9); }
 .koma-impact-proof {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -3337,11 +3342,11 @@
   .koma-impact-console-head img { width: 34px; height: 34px; }
   .koma-impact-metric { padding: 1rem 0.55rem 1rem 0; }
   .koma-impact-metric:not(:first-child) { padding-left: 0.55rem; }
-  .koma-impact-metric span { font-size: 0.47rem; }
-  .koma-impact-signals > div { grid-template-columns: 5.4rem 1fr auto; gap: 0.55rem; }
-  .koma-impact-signals span { font-size: 0.5rem; }
-  .koma-impact-signals p { font-size: 0.64rem; }
-  .koma-impact-console-foot { align-items: flex-start; flex-direction: column; }
+  .koma-impact-metric span { font-size: 0.54rem; }
+  .koma-impact-alert { align-items: flex-end; padding: 1rem; }
+  .koma-impact-alert strong { font-size: 0.76rem; }
+  .koma-impact-alert b { font-size: 1.8rem; }
+  .koma-impact-normal { font-size: 0.54rem; }
   .koma-flow-tab { flex-basis: 52%; }
   .koma-flow-ticket { border-radius: 10px; }
   .koma-cardapio-copy > h2 { font-size: clamp(3rem, 15vw, 4.5rem); }
