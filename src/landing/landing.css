@@ -2708,14 +2708,20 @@
 
 .koma-value-impact-inner {
   position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(280px, 0.72fr);
+  align-items: center;
+  gap: clamp(3rem, 9vw, 10rem);
   width: min(100% - (2 * var(--koma-section-x)), 1480px);
   height: 100%;
   margin: 0 auto;
+  padding: clamp(2rem, 3vw, 3rem) 0 clamp(4.2rem, 5vw, 5rem);
 }
 
 .koma-value-impact-copy {
-  position: absolute;
+  position: relative;
   z-index: 2;
+  min-width: 0;
 }
 
 .koma-value-impact-copy span {
@@ -2727,10 +2733,7 @@
 }
 
 .koma-value-impact-copy--problem {
-  top: 50%;
-  left: 0;
-  width: min(49vw, 720px);
-  transform: translateY(-50%);
+  width: 100%;
 }
 
 .koma-value-impact-copy--problem span {
@@ -2739,6 +2742,7 @@
 }
 
 .koma-value-impact-copy--problem h2 {
+  max-width: 13ch;
   margin: 0;
   font-family: var(--koma-display);
   font-size: clamp(2.65rem, 4.25vw, 5rem);
@@ -2749,10 +2753,9 @@
 }
 
 .koma-value-impact-copy--answer {
-  top: 50%;
-  right: 0;
-  width: min(35vw, 520px);
-  transform: translateY(-48%);
+  width: 100%;
+  align-self: center;
+  justify-self: end;
 }
 
 .koma-value-impact-copy--answer span {
@@ -3517,9 +3520,16 @@
   .koma-value-impact-bridge { height: 470px; }
   .koma-value-impact-green { clip-path: polygon(0 68%, 100% 38%, 100% 100%, 0 100%); }
   .koma-value-impact-line { clip-path: polygon(0 67.6%, 100% 37.6%, 100% 38.4%, 0 68.4%); transform-origin: left center; }
-  .koma-value-impact-copy--problem { top: 2.75rem; width: 100%; transform: none; }
+  .koma-value-impact-inner {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    align-content: space-between;
+    gap: 1.5rem;
+    padding-block: 2.75rem 4.8rem;
+  }
+  .koma-value-impact-copy--problem { width: 100%; }
   .koma-value-impact-copy--problem h2 { max-width: 12ch; font-size: clamp(2.7rem, 9vw, 4.5rem); }
-  .koma-value-impact-copy--answer { top: auto; right: auto; bottom: 4.9rem; left: 0; width: 100%; transform: none; }
+  .koma-value-impact-copy--answer { width: min(100%, 32rem); justify-self: end; }
   .koma-value-impact-copy--answer span { margin-bottom: 0.45rem; }
   .koma-value-impact-copy--answer p,
   .koma-value-impact-copy--answer strong { font-size: clamp(2.35rem, 8vw, 3.7rem); }
@@ -3563,8 +3573,11 @@
   .koma-value-lane-head strong { font-size: 2.7rem; }
   .koma-value-versus { width: 3rem; height: 3rem; }
   .koma-value-impact-bridge { height: 440px; }
-  .koma-value-impact-inner { width: calc(100% - 2.5rem); }
-  .koma-value-impact-copy--problem { top: 2.25rem; }
+  .koma-value-impact-inner {
+    width: calc(100% - 2.5rem);
+    gap: 1.25rem;
+    padding-block: 2.25rem 4.8rem;
+  }
   .koma-value-impact-copy--problem span { margin-bottom: 0.65rem; font-size: 0.54rem; }
   .koma-value-impact-copy--problem h2 { max-width: 11ch; font-size: clamp(2.45rem, 12vw, 3.35rem); }
   .koma-value-impact-copy--answer { bottom: 5.2rem; }
