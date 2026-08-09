@@ -1953,11 +1953,11 @@
 
   .koma-eco-sticky-stage {
     position: sticky;
-    top: 0;
-    min-height: 100svh;
+    top: 78px;
+    min-height: calc(100svh - 78px);
     display: flex;
     align-items: center;
-    padding: 92px var(--koma-section-x) 28px;
+    padding: 18px var(--koma-section-x) 24px;
   }
 
   .koma-eco-grid-container {
@@ -2019,7 +2019,11 @@
 }
 
 @media (min-width: 1100px) and (max-height: 760px) and (hover: hover) {
-  .koma-eco-sticky-stage { padding-top: 78px; }
+  .koma-eco-sticky-stage {
+    top: 70px;
+    min-height: calc(100svh - 70px);
+    padding-top: 12px;
+  }
   .koma-eco-title { font-size: clamp(2.8rem, 5vw, 5.2rem); }
   .koma-eco-subtitle { margin-bottom: 1rem; }
   .koma-eco-func-desc { display: none; }
