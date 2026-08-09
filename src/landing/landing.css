@@ -1329,6 +1329,10 @@
 /* Device Cluster Stage (Right Column) */
 .koma-eco-cluster-stage {
   position: relative;
+  --eco-shift-x: 0px;
+  --eco-shift-y: 0px;
+  --eco-rotate-x: 0deg;
+  --eco-rotate-y: 0deg;
   width: 100%;
   min-height: clamp(380px, 44vw, 560px);
   display: flex;
@@ -1385,6 +1389,8 @@
   background: radial-gradient(circle at 65% 50%, rgba(0, 184, 148, 0.09) 0%, transparent 70%);
   pointer-events: none;
   z-index: 0;
+  transform: translate3d(var(--eco-shift-x), var(--eco-shift-y), 0);
+  transition: transform 220ms ease-out;
 }
 
 /* LEVEL 1: Back Laptop Protagonist (rotateY -5deg, rotateX 2deg) */
@@ -1930,11 +1936,95 @@
   padding: var(--koma-section-y) var(--koma-section-x);
   background: #f3f4f2;
 }
+.koma-eco-sticky-stage { position: relative; }
 .koma-eco-grid-container { max-width: 1480px; }
 .koma-eco-tag { color: var(--koma-green-dark); }
 .koma-eco-title { font-size: clamp(3rem, 6.8vw, 7rem); }
 .koma-eco-func-item { border-radius: 0; }
 .koma-eco-cluster-stage { min-height: clamp(420px, 48vw, 650px); }
+.koma-eco-scroll-cue { display: none; }
+
+@media (min-width: 1100px) and (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .koma-ecosystem-section {
+    min-height: 320svh;
+    padding: 0;
+    overflow: clip;
+  }
+
+  .koma-eco-sticky-stage {
+    position: sticky;
+    top: 0;
+    min-height: 100svh;
+    display: flex;
+    align-items: center;
+    padding: 92px var(--koma-section-x) 28px;
+  }
+
+  .koma-eco-grid-container {
+    width: 100%;
+    grid-template-columns: minmax(25rem, 0.82fr) minmax(36rem, 1.18fr);
+    gap: clamp(2rem, 4vw, 5rem);
+  }
+
+  .koma-eco-title {
+    font-size: clamp(3.2rem, 5.6vw, 6.35rem);
+  }
+
+  .koma-eco-functional-list {
+    gap: 0.7rem;
+    margin-top: 0.5rem;
+  }
+
+  .koma-eco-func-item {
+    opacity: 0.38;
+    transform: translateX(0);
+    transition: opacity 260ms ease, transform 460ms cubic-bezier(0.16, 1, 0.3, 1), padding 260ms ease, background 260ms ease, border-color 260ms ease;
+  }
+
+  .koma-eco-func-item--active,
+  .koma-eco-func-item:hover,
+  .koma-eco-func-item:focus-visible {
+    opacity: 1;
+    transform: translateX(0.35rem);
+  }
+
+  .koma-eco-cluster-stage {
+    min-height: min(68svh, 650px);
+  }
+
+  .koma-eco-scroll-cue {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 1.35rem;
+    color: rgba(10, 10, 10, 0.45);
+    font-family: var(--koma-accent);
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+  }
+
+  .koma-eco-scroll-cue span {
+    width: 2.4rem;
+    height: 1px;
+    background: var(--koma-green-dark);
+    transform-origin: left;
+    animation: koma-eco-cue 1.8s ease-in-out infinite;
+  }
+}
+
+@keyframes koma-eco-cue {
+  0%, 100% { transform: scaleX(0.35); opacity: 0.45; }
+  50% { transform: scaleX(1); opacity: 1; }
+}
+
+@media (min-width: 1100px) and (max-height: 760px) and (hover: hover) {
+  .koma-eco-sticky-stage { padding-top: 78px; }
+  .koma-eco-title { font-size: clamp(2.8rem, 5vw, 5.2rem); }
+  .koma-eco-subtitle { margin-bottom: 1rem; }
+  .koma-eco-func-desc { display: none; }
+  .koma-eco-cluster-stage { min-height: 72svh; }
+}
 
 /* Customer-facing menu */
 .koma-cardapio-section {
