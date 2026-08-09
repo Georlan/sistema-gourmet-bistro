@@ -12,6 +12,7 @@ import { Reliability } from './sections/Reliability';
 import { Plans } from './sections/Plans';
 import { FinalCTA } from './sections/FinalCTA';
 import { OrderTransition } from './sections/OrderTransition';
+import { ValueImpactBridge } from './sections/ValueImpactBridge';
 
 export default function LandingPage() {
   useEffect(() => {
@@ -91,6 +92,7 @@ export default function LandingPage() {
         <Hero />
         <OrderTransition />
         <ValueStrip />
+        <ValueImpactBridge />
         <ImpactMoment />
         <OperationFlow />
         <Ecosystem />

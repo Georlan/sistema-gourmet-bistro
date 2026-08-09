@@ -116,7 +116,7 @@ export function ValueStrip() {
         <div className="koma-value-action">
           <p>Veja quanto trabalho o Kôma pode retirar da sua rotina.</p>
           <button type="button" className="koma-btn koma-btn--primary" onClick={() => setLeadModalOpen(true)}>
-            VER O KÔMA FUNCIONANDO
+            QUERO COMEÇAR COM O KÔMA
           </button>
         </div>
       </div>
