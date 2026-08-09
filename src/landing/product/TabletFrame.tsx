@@ -29,16 +29,17 @@ export function TabletFrame({ view = 'mesas', className = '', style }: TabletFra
     const element = containerRef.current;
     if (!element || event.pointerType === 'touch') return;
 
-    const rect = element.getBoundingClientRect();
-    const x = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
-    const y = Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height));
+    const target = event.currentTarget;
+    const lightX = Math.min(1, Math.max(0, event.nativeEvent.offsetX / target.offsetWidth));
+    const lightY = Math.min(1, Math.max(0, event.nativeEvent.offsetY / target.offsetHeight));
 
     if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
     frameRef.current = requestAnimationFrame(() => {
-      element.style.setProperty('--tablet-shell-light-x', `${x * 100}%`);
-      element.style.setProperty('--tablet-shell-light-y', `${y * 100}%`);
-      element.style.setProperty('--tablet-shell-tilt-x', `${(0.5 - y) * 2.2}deg`);
-      element.style.setProperty('--tablet-shell-tilt-y', `${(x - 0.5) * 2.2}deg`);
+      element.style.setProperty('--tablet-shell-light-x', `${lightX * 100}%`);
+      element.style.setProperty('--tablet-shell-light-y', `${lightY * 100}%`);
+      element.style.setProperty('--tablet-shell-light-opacity', '1');
+      element.style.setProperty('--tablet-shell-tilt-x', `${(0.5 - lightY) * 0.8}deg`);
+      element.style.setProperty('--tablet-shell-tilt-y', `${(lightX - 0.5) * 0.8}deg`);
     });
   }, []);
 
@@ -47,6 +48,7 @@ export function TabletFrame({ view = 'mesas', className = '', style }: TabletFra
     if (!element) return;
     element.style.setProperty('--tablet-shell-light-x', '68%');
     element.style.setProperty('--tablet-shell-light-y', '20%');
+    element.style.setProperty('--tablet-shell-light-opacity', '0');
     element.style.setProperty('--tablet-shell-tilt-x', '0deg');
     element.style.setProperty('--tablet-shell-tilt-y', '0deg');
   }, []);
@@ -56,8 +58,6 @@ export function TabletFrame({ view = 'mesas', className = '', style }: TabletFra
       ref={containerRef}
       className={`koma-tablet-3d ${className}`}
       style={style}
-      onPointerMove={updatePointerLight}
-      onPointerLeave={resetPointerLight}
       aria-hidden="true"
     >
       <div className="koma-tablet-3d-stage">
@@ -73,7 +73,11 @@ export function TabletFrame({ view = 'mesas', className = '', style }: TabletFra
           decoding="async"
         />
 
-        <div className="koma-tablet-3d-glare" />
+        <div
+          className="koma-tablet-3d-glare"
+          onPointerMove={updatePointerLight}
+          onPointerLeave={resetPointerLight}
+        />
       </div>
     </div>
   );

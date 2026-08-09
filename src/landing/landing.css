@@ -482,7 +482,7 @@
   position: absolute;
   z-index: 8;
   left: 1.5%;
-  bottom: 8%;
+  bottom: 17%;
   display: grid;
   min-width: 220px;
   padding: 0.9rem 1rem 0.95rem;
@@ -1165,6 +1165,7 @@
 .koma-tablet-3d {
   --tablet-shell-light-x: 68%;
   --tablet-shell-light-y: 20%;
+  --tablet-shell-light-opacity: 0;
   --tablet-shell-tilt-x: 0deg;
   --tablet-shell-tilt-y: 0deg;
   position: relative;
@@ -1221,17 +1222,18 @@
 
 .koma-tablet-3d-glare {
   z-index: 4;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at var(--tablet-shell-light-x) var(--tablet-shell-light-y), rgba(255, 255, 255, 0.22), transparent 24%),
-    linear-gradient(118deg, rgba(255, 255, 255, 0.12), transparent 28% 72%, rgba(0, 184, 148, 0.08));
+  pointer-events: auto;
+  background: radial-gradient(
+    circle at var(--tablet-shell-light-x) var(--tablet-shell-light-y),
+    rgba(255, 255, 255, 0.13) 0,
+    rgba(255, 255, 255, 0.055) 8%,
+    transparent 20%
+  );
   mix-blend-mode: screen;
-  opacity: 0.38;
+  opacity: var(--tablet-shell-light-opacity);
   transform: translateZ(2px);
   transition: opacity 180ms ease;
 }
-
-.koma-tablet-3d:hover .koma-tablet-3d-glare { opacity: 0.68; }
 
 /* --- Section 2: Product Showcase (EDITORIAL WHITE BACKGROUND) --- */
 .koma-section-white {
