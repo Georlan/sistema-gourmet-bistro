@@ -2,25 +2,23 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { LeadCaptureModal } from '../components/LeadCaptureModal';
 
-const VALUES = [
-  {
-    num: '01',
-    label: 'REGISTRA',
-    title: 'BALCÃO, GARÇOM OU QR CODE',
-    text: 'O pedido entra por qualquer canal e passa a ter uma única fonte.',
-  },
-  {
-    num: '02',
-    label: 'DISTRIBUI',
-    title: 'COZINHA E SALÃO RECEBEM O MESMO PEDIDO',
-    text: 'Itens, observações e status seguem juntos sem depender de repasse verbal.',
-  },
-  {
-    num: '03',
-    label: 'FECHA',
-    title: 'O CAIXA RECEBE O HISTÓRICO COMPLETO',
-    text: 'Consumo e movimentações permanecem ligados à mesa até o pagamento.',
-  },
+const FRAGMENTED_STEPS = [
+  { num: '01', title: 'ANOTA', text: 'O pedido nasce em um canal.' },
+  { num: '02', title: 'REPASSA', text: 'Alguém precisa informar a cozinha.' },
+  { num: '03', title: 'CONFIRMA', text: 'O salão pergunta se está pronto.' },
+  { num: '04', title: 'RECONFERE', text: 'O caixa reconstrói o histórico.' },
+];
+
+const KOMA_STEPS = [
+  { num: '01', title: 'REGISTRA', text: 'Balcão, garçom ou QR Code.' },
+  { num: '02', title: 'SINCRONIZA', text: 'Salão, cozinha e caixa veem o status.' },
+  { num: '03', title: 'FECHA', text: 'O histórico acompanha o pagamento.' },
+];
+
+const OUTCOMES = [
+  { num: '01', label: 'UMA FONTE', text: 'Itens e observações permanecem no mesmo pedido.' },
+  { num: '02', label: 'STATUS VISÍVEL', text: 'Cada área sabe o que aconteceu e o que vem agora.' },
+  { num: '03', label: 'HISTÓRICO COMPLETO', text: 'A informação chega ao caixa sem ser reconstruída.' },
 ];
 
 export function ValueStrip() {
@@ -28,88 +26,99 @@ export function ValueStrip() {
 
   return (
     <section className="koma-value-strip" aria-labelledby="value-title">
-      <div className="koma-value-heading">
-        <motion.div
-          className="koma-value-copy"
-          initial={{ opacity: 0, y: 22 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, amount: 0.45 }}
-          transition={{ duration: 0.55 }}
-        >
-          <p className="koma-value-intro">01 / O CUSTO DA INFORMAÇÃO PERDIDA</p>
-          <h2 id="value-title">UM PEDIDO NÃO DEVERIA SER REPETIDO.</h2>
-          <p className="koma-value-lead">
-            Quando salão, cozinha e caixa trabalham com informações diferentes, pedidos se perdem, mesas esperam e o fechamento exige conferência manual.
-          </p>
+      <motion.header
+        className="koma-value-header"
+        initial={{ opacity: 0, y: 22 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.55 }}
+        transition={{ duration: 0.55 }}
+      >
+        <p className="koma-value-intro">01 / DOIS JEITOS DE OPERAR</p>
+        <h2 id="value-title">O MESMO PEDIDO.<br /><span>DOIS RESULTADOS.</span></h2>
+        <p>
+          O custo aparece quando a informação precisa ser repetida. Veja como o Kôma reduz etapas e mantém toda a operação acompanhando o mesmo pedido.
+        </p>
+      </motion.header>
 
-          <div className="koma-value-cta">
-            <button type="button" className="koma-btn koma-btn--primary" onClick={() => setLeadModalOpen(true)}>
-              VER ESSE FLUXO FUNCIONANDO
-            </button>
-            <small>Demonstração aplicada à rotina do seu restaurante.</small>
-          </div>
-        </motion.div>
-
-        <motion.aside
-          className="koma-value-order"
-          aria-label="Exemplo do retrabalho causado por informações separadas"
-          initial={{ opacity: 0, x: 28, rotate: 1.5 }}
-          whileInView={{ opacity: 1, x: 0, rotate: -1 }}
-          viewport={{ once: true, amount: 0.5 }}
-          transition={{ duration: 0.62, delay: 0.08 }}
+      <div className="koma-value-comparison" aria-label="Comparação entre uma operação fragmentada e uma operação com Kôma">
+        <motion.article
+          className="koma-value-lane koma-value-lane--fragmented"
+          initial={{ opacity: 0, x: -28 }}
+          whileInView={{ opacity: 1, x: 0 }}
+          viewport={{ once: true, amount: 0.35 }}
+          transition={{ duration: 0.6 }}
         >
-          <div className="koma-value-order-head">
+          <div className="koma-value-lane-head">
             <div>
-              <span>INFORMAÇÕES SEPARADAS</span>
+              <small>OPERAÇÃO FRAGMENTADA</small>
               <strong>#0412</strong>
             </div>
-            <b>RISCO</b>
+            <span>4 REPASSES</span>
           </div>
-          <div className="koma-value-order-meta">
-            <span>MESA 04</span>
-            <span>PEDIDO ABERTO</span>
-            <span>SEM FONTE ÚNICA</span>
+
+          <div className="koma-value-route">
+            {FRAGMENTED_STEPS.map((step) => (
+              <div className="koma-value-route-step" key={step.num}>
+                <i aria-hidden="true" />
+                <span>{step.num}</span>
+                <p><strong>{step.title}</strong><small>{step.text}</small></p>
+              </div>
+            ))}
           </div>
-          <div className="koma-value-problem-list">
+
+          <div className="koma-value-lane-foot">
+            <small>RESULTADO</small>
+            <strong>MAIS DEPENDÊNCIA DE MEMÓRIA E CONFERÊNCIA.</strong>
+          </div>
+        </motion.article>
+
+        <div className="koma-value-versus" aria-hidden="true"><span>VS</span></div>
+
+        <motion.article
+          className="koma-value-lane koma-value-lane--koma"
+          initial={{ opacity: 0, x: 28 }}
+          whileInView={{ opacity: 1, x: 0 }}
+          viewport={{ once: true, amount: 0.35 }}
+          transition={{ duration: 0.6, delay: 0.08 }}
+        >
+          <div className="koma-value-lane-head">
             <div>
-              <span>01</span>
-              <p><strong>PEDIDO REPASSADO</strong><small>O garçom precisa repetir os itens.</small></p>
+              <small>OPERAÇÃO COM KÔMA</small>
+              <strong>#0412</strong>
             </div>
-            <div>
-              <span>02</span>
-              <p><strong>COZINHA CONFIRMA</strong><small>A produção interrompe para tirar dúvidas.</small></p>
-            </div>
-            <div>
-              <span>03</span>
-              <p><strong>CAIXA RECONFERE</strong><small>O fechamento depende de revisão manual.</small></p>
-            </div>
+            <span>1 REGISTRO</span>
           </div>
-          <div className="koma-value-resolution">
-            <span>COM KÔMA</span>
-            <strong>UM REGISTRO ATUALIZA A OPERAÇÃO.</strong>
-            <p>Cozinha, salão e caixa acompanham o mesmo pedido até o pagamento.</p>
+
+          <div className="koma-value-route">
+            {KOMA_STEPS.map((step) => (
+              <div className="koma-value-route-step" key={step.num}>
+                <i aria-hidden="true" />
+                <span>{step.num}</span>
+                <p><strong>{step.title}</strong><small>{step.text}</small></p>
+              </div>
+            ))}
           </div>
-        </motion.aside>
+
+          <div className="koma-value-lane-foot">
+            <small>RESULTADO</small>
+            <strong>MENOS RETRABALHO. MAIS CAPACIDADE PARA ATENDER.</strong>
+          </div>
+        </motion.article>
       </div>
 
-      <div className="koma-value-grid" aria-label="Caminho do pedido">
-        {VALUES.map((value) => (
-          <motion.article
-            className="koma-value-item"
-            key={value.num}
-            initial={{ opacity: 0, y: 18 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.45 }}
-            transition={{ duration: 0.45, delay: Number(value.num) * 0.06 }}
-          >
-            <div className="koma-value-item-top">
-              <span>{value.num}</span>
-              <small>{value.label}</small>
-            </div>
-            <h2>{value.title}</h2>
-            <p>{value.text}</p>
-          </motion.article>
+      <div className="koma-value-outcomes">
+        {OUTCOMES.map((outcome) => (
+          <article key={outcome.num}>
+            <span>{outcome.num}</span>
+            <div><strong>{outcome.label}</strong><p>{outcome.text}</p></div>
+          </article>
         ))}
+        <div className="koma-value-action">
+          <p>Veja essa diferença aplicada à rotina do seu restaurante.</p>
+          <button type="button" className="koma-btn koma-btn--primary" onClick={() => setLeadModalOpen(true)}>
+            VER O KÔMA FUNCIONANDO
+          </button>
+        </div>
       </div>
 
       <LeadCaptureModal open={leadModalOpen} onClose={() => setLeadModalOpen(false)} />
