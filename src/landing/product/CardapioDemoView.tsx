@@ -1,5 +1,5 @@
 import React from 'react';
-import logoKoma from '../../assets/logo-koma.png';
+import logoKoma from '../../assets/logo-koma-on-dark.png';
 
 export function CardapioDemoView() {
   const categories = ['Destacados', 'Burgers', 'Acompanhamentos', 'Bebidas'];

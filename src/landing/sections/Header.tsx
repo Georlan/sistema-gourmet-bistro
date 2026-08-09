@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import logoImg from '../../assets/logo-koma.png';
+import logoImg from '../../assets/logo-koma-on-dark.png';
 import { KOMA_LANDING_CONFIG } from '../config/landingConfig';
 
 export function Header() {

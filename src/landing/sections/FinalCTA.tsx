@@ -1,5 +1,6 @@
 import React from 'react';
-import logoImg from '../../assets/logo-koma.png';
+import logoOnDark from '../../assets/logo-koma-on-dark.png';
+import logoOnGreen from '../../assets/logo-koma-on-green.png';
 import { KOMA_LANDING_CONFIG } from '../config/landingConfig';
 
 export function FinalCTA() {
@@ -12,7 +13,7 @@ export function FinalCTA() {
       >
         <span className="koma-cta-kicker">PRONTO PARA VER NA SUA OPERAÇÃO?</span>
         <div className="koma-cta-brand-signature">
-          <img src={logoImg} alt="" aria-hidden="true" />
+          <img src={logoOnGreen} alt="" aria-hidden="true" />
           <span>Se você está com fome, <strong>Kôma</strong></span>
         </div>
         <h2 className="koma-cta-title">
@@ -38,7 +39,7 @@ export function FinalCTA() {
 
       <footer className="koma-footer" role="contentinfo">
         <a href="/landing" aria-label="Kôma — início" className="koma-footer-brand">
-          <img src={logoImg} alt="" />
+          <img src={logoOnDark} alt="" />
           <span>Se você está com fome, Kôma</span>
         </a>
         <span>© {new Date().getFullYear()} KÔMA. TODOS OS DIREITOS RESERVADOS.</span>

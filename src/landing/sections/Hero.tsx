@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { motion } from 'motion/react';
-import logoImg from '../../assets/logo-koma.png';
+import logoImg from '../../assets/logo-koma-on-dark.png';
 import { TabletFrame } from '../product/TabletFrame';
 import { KOMA_LANDING_CONFIG } from '../config/landingConfig';
 

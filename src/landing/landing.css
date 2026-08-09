@@ -1451,8 +1451,7 @@
 .koma-cta-brand-signature img {
   width: clamp(58px, 6vw, 86px);
   height: clamp(58px, 6vw, 86px);
-  object-fit: cover;
-  background: var(--koma-black);
+  object-fit: contain;
 }
 
 .koma-cta-brand-signature strong { font-weight: 900; }
