@@ -2256,7 +2256,7 @@
   padding-bottom: 1.25rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
-.koma-value-lane-head div { display: flex; flex-direction: column; gap: 0.35rem; }
+.koma-value-lane-head div { display: flex; flex-direction: column; align-items: flex-start; gap: 0.75rem; }
 .koma-value-lane-head small,
 .koma-value-lane-head > span,
 .koma-value-lane-foot small {
@@ -2265,8 +2265,23 @@
   font-weight: 800;
   letter-spacing: 0.11em;
 }
-.koma-value-lane-head small { color: rgba(255, 255, 255, 0.48); }
-.koma-value-lane--koma .koma-value-lane-head small { color: var(--koma-green); }
+.koma-value-lane-head small {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0.4rem 0.65rem;
+  border: 1px solid rgba(240, 150, 156, 0.38);
+  background: rgba(142, 53, 61, 0.22);
+  color: #f3b0b5;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+}
+.koma-value-lane--koma .koma-value-lane-head small {
+  border-color: rgba(0, 210, 169, 0.48);
+  background: var(--koma-green);
+  color: #031b16;
+  box-shadow: 0 0 22px rgba(0, 184, 148, 0.14);
+}
 .koma-value-lane-head strong { font-family: var(--koma-display); font-size: clamp(2.4rem, 4vw, 4.2rem); line-height: 0.9; }
 .koma-value-lane-head > span {
   padding: 0.65rem 0.8rem;

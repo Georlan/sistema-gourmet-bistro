@@ -68,7 +68,7 @@ export function ValueStrip() {
 
           <div className="koma-value-lane-foot">
             <small>RESULTADO</small>
-            <strong>SEM UM REGISTRO ÚNICO, O PEDIDO DEPENDE DE PAPEL E REPASSE.</strong>
+            <strong>SEM UM REGISTRO ÚNICO, O PEDIDO EXIGE REPASSE E CONFERÊNCIA MANUAL.</strong>
           </div>
         </motion.article>
 
