@@ -141,8 +141,8 @@ export function Hero() {
           <motion.div
             key={activeStep.label}
             className="koma-hero-live-status"
-            initial={{ opacity: 0, x: 12 }}
-            animate={{ opacity: 1, x: 0 }}
+            initial={{ opacity: 0, x: 12, rotate: 7 }}
+            animate={{ opacity: 1, x: 0, rotate: 7 }}
             transition={{ duration: 0.42 }}
           >
             <span><i aria-hidden="true" /> OPERAÇÃO AO VIVO</span>
