@@ -23,7 +23,7 @@ export function CardapioScene() {
         <span className="koma-section-kicker">04 / EXPERIÊNCIA DO CLIENTE</span>
         <h2 id="cardapio-title">O CARDÁPIO<br />TAMBÉM OPERA.</h2>
         <p className="koma-cardapio-lead">
-          Uma experiência móvel com a identidade do restaurante — conectada ao mesmo fluxo do salão e da cozinha.
+          Uma experiência móvel com a identidade do restaurante, conectada ao mesmo fluxo do salão e da cozinha.
         </p>
 
         <div className="koma-cardapio-points">
@@ -43,7 +43,7 @@ export function CardapioScene() {
         animate={isInView ? { opacity: 1, y: 0, rotate: -2 } : {}}
         transition={{ duration: 0.85, delay: 0.12 }}
       >
-        <div className="koma-cardapio-orbit" aria-hidden="true">CARDÁPIO · QR CODE · PEDIDO ·</div>
+        <div className="koma-cardapio-orbit" aria-hidden="true">CARDÁPIO / QR CODE / PEDIDO</div>
         <PhoneFrame />
       </motion.div>
     </section>

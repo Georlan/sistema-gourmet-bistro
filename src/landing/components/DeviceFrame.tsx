@@ -18,19 +18,19 @@ export function DeviceFrame() {
         {/* Real Header */}
         <div className="koma-real-app-header">
           <div className="koma-real-app-title">
-            <span style={{ color: '#00b894' }}>❖</span> KÔMA SALÃO
+            KÔMA SALÃO
           </div>
-          <span className="koma-real-app-badge">● OPERAÇÃO ATIVA</span>
+          <span className="koma-real-app-badge">OPERAÇÃO ATIVA</span>
         </div>
 
         {/* Real App Body */}
         <div className="koma-real-app-body">
           {/* Real Sidebar */}
           <div className="koma-real-sidebar">
-            <div className="koma-real-sidebar-icon koma-real-sidebar-icon--active">⊞</div>
-            <div className="koma-real-sidebar-icon">🍳</div>
-            <div className="koma-real-sidebar-icon">💳</div>
-            <div className="koma-real-sidebar-icon">🛵</div>
+            <div className="koma-real-sidebar-icon koma-real-sidebar-icon--active">M</div>
+            <div className="koma-real-sidebar-icon">K</div>
+            <div className="koma-real-sidebar-icon">C</div>
+            <div className="koma-real-sidebar-icon">D</div>
           </div>
 
           {/* Real Table Grid */}

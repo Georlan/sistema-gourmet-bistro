@@ -182,7 +182,7 @@ export function Ecosystem() {
         >
           <div className="koma-eco-stage-index" aria-hidden="true">
             <span>KÔMA / ECOSSISTEMA</span>
-            <span>03 SUPERFÍCIES · 01 OPERAÇÃO</span>
+            <span>03 SUPERFÍCIES / 01 OPERAÇÃO</span>
           </div>
           {/* Background Ambient Parallax Surface */}
           <div

@@ -1,5 +1,5 @@
 /* ============================================================
-   KÔMA LANDING PAGE — NIXON-INSPIRED FULL-BLEED ART DIRECTION v3
+   KÔMA LANDING PAGE
    Principles:
    - O PRODUTO NÃO PRECISA CABER NO LAYOUT. O LAYOUT É CONSTRUÍDO AO REDOR DO PRODUTO.
    - 35-40% Copy / 60-65% Visual Dominance
@@ -1964,7 +1964,7 @@
 }
 
 /* ============================================================
-   COMMERCIAL NARRATIVE BASELINE — v4
+   COMMERCIAL NARRATIVE BASELINE v4
    The rules below intentionally supersede the legacy section
    experiments while preserving the approved hero composition.
    ============================================================ */
@@ -2700,7 +2700,15 @@
 .koma-plan-card--featured .koma-plan-price small { color: var(--koma-muted-dark); }
 .koma-plan-card ul { list-style: none; padding: 0; margin: 1.5rem 0 2rem; }
 .koma-plan-card li { position: relative; padding: 0.7rem 0 0.7rem 1.35rem; font-size: 0.88rem; line-height: 1.4; }
-.koma-plan-card li::before { content: '↗'; position: absolute; left: 0; color: var(--koma-green-dark); font-weight: 900; }
+.koma-plan-card li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.58em;
+  width: 0.4rem;
+  height: 2px;
+  background: var(--koma-green-dark);
+}
 .koma-plan-card--featured li::before { color: var(--koma-green); }
 .koma-plan-card .koma-btn { width: 100%; margin-top: auto; }
 .koma-plans-note { max-width: 1480px; margin: 1.5rem auto 0; color: #666; font-size: 0.75rem; }

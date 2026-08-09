@@ -14,7 +14,7 @@ import { FinalCTA } from './sections/FinalCTA';
 
 export default function LandingPage() {
   useEffect(() => {
-    document.title = 'KÔMA — Sistema de gestão para restaurantes';
+    document.title = 'KÔMA | Sistema de gestão para restaurantes';
 
     const setMeta = (nameOrProp: string, content: string, isProperty = false) => {
       const attr = isProperty ? 'property' : 'name';
@@ -30,7 +30,7 @@ export default function LandingPage() {
     setMeta('description', 'Sistema de gestão para restaurantes com PDV, mesas, comandas, KDS, caixa, cardápio digital por QR Code e impressão automática no mesmo fluxo.');
     setMeta('robots', 'index, follow, max-image-preview:large');
     setMeta('theme-color', '#0a0a0a');
-    setMeta('og:title', 'KÔMA — Sistema de gestão para restaurantes', true);
+    setMeta('og:title', 'KÔMA | Sistema de gestão para restaurantes', true);
     setMeta('og:description', 'Do pedido ao fechamento: salão, cozinha e caixa trabalhando no mesmo fluxo.', true);
     setMeta('og:type', 'website', true);
     setMeta('og:url', 'https://sistema-gourmet-bistro.pages.dev/landing', true);

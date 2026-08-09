@@ -54,13 +54,13 @@ export function ProductShowcase() {
         <div className="koma-annotation" style={{ top: '-24px', left: '10%' }}>
           <div className="koma-annotation-dot" />
           <div className="koma-annotation-line" />
-          <span className="koma-annotation-text">01 ── MAPA DE MESAS EM TEMPO REAL</span>
+          <span className="koma-annotation-text">01 / MAPA DE MESAS EM TEMPO REAL</span>
         </div>
 
         <div className="koma-annotation" style={{ top: '-24px', right: '10%' }}>
           <div className="koma-annotation-dot" />
           <div className="koma-annotation-line" />
-          <span className="koma-annotation-text">02 ── STATUS DA OPERAÇÃO</span>
+          <span className="koma-annotation-text">02 / STATUS DA OPERAÇÃO</span>
         </div>
 
         <DesktopFrame view="mesas" />

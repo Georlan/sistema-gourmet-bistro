@@ -83,7 +83,7 @@ export function Hero() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.45 }}
           >
-            Do pedido ao fechamento, mesas, salão, cozinha, impressão e caixa trabalham com a mesma informação — em tempo real.
+            Do pedido ao fechamento, mesas, salão, cozinha, impressão e caixa trabalham com a mesma informação em tempo real.
           </motion.p>
 
           <motion.ul
@@ -112,7 +112,7 @@ export function Hero() {
               rel="noopener noreferrer"
               className="koma-hero-whatsapp-link"
             >
-              Falar direto no WhatsApp <span aria-hidden="true">↗</span>
+              Falar direto no WhatsApp
             </a>
           </motion.div>
 

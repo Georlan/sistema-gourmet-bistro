@@ -175,7 +175,7 @@ export function LeadCaptureModal({ open, onClose }: LeadCaptureModalProps) {
           </div>
 
           <button type="submit" className="koma-btn koma-btn--primary koma-lead-submit">
-            CONTINUAR PELO WHATSAPP <span aria-hidden="true">↗</span>
+            CONTINUAR PELO WHATSAPP
           </button>
           <small>Você revisa a mensagem antes de enviar. Nenhum dado é enviado automaticamente.</small>
         </form>

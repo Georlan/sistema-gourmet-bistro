@@ -31,7 +31,7 @@ export function Header() {
         className={`koma-header ${scrolled ? 'koma-header--scrolled' : ''}`}
         role="banner"
       >
-        <a href="/landing" className="koma-header-logo" aria-label="KÔMA — Início">
+        <a href="/landing" className="koma-header-logo" aria-label="KÔMA, início">
           <img src={logoImg} alt="KÔMA" />
         </a>
 
@@ -48,7 +48,7 @@ export function Header() {
             rel="noopener noreferrer"
             className="koma-header-link koma-header-link--whatsapp"
           >
-            Falar no WhatsApp ↗
+            Falar no WhatsApp
           </a>
           <a href={KOMA_LANDING_CONFIG.demoAnchor} className="koma-btn koma-btn--primary koma-btn--sm">
             Solicitar demonstração
@@ -90,7 +90,7 @@ export function Header() {
             onClick={() => setMenuOpen(false)}
             style={{ marginTop: '0.5rem' }}
           >
-            Falar no WhatsApp ↗
+            Falar no WhatsApp
           </a>
         </nav>
       </div>

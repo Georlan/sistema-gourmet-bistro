@@ -15,7 +15,7 @@ export function ImpactMoment() {
       <div className="koma-impact-grid" aria-hidden="true" />
       <div className="koma-impact-topline">
         <span className="koma-impact-eyebrow">02 / RESPOSTA IMEDIATA</span>
-        <span>PEDIDO #0412 · MESA 04</span>
+        <span>PEDIDO #0412 / MESA 04</span>
       </div>
 
       <div className="koma-impact-layout">

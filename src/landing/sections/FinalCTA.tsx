@@ -31,14 +31,14 @@ export function FinalCTA() {
             rel="noopener noreferrer"
             className="koma-btn koma-btn--dark"
           >
-            Falar com um especialista ↗
+            Falar com um especialista
           </a>
           <span>RESPOSTA DIRETA PELO WHATSAPP</span>
         </div>
       </section>
 
       <footer className="koma-footer" role="contentinfo">
-        <a href="/landing" aria-label="Kôma — início" className="koma-footer-brand">
+        <a href="/landing" aria-label="Kôma, início" className="koma-footer-brand">
           <img src={logoOnDark} alt="" />
           <span>Se você está com fome, Kôma</span>
         </a>

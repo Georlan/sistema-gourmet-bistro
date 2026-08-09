@@ -9,8 +9,8 @@ const FLOW_STAGES = [
     title: 'O PEDIDO NASCE UMA VEZ.',
     description: 'Garçom, balcão ou cliente registram o pedido. A partir daí, toda a equipe acompanha a mesma informação.',
     status: 'NOVO PEDIDO',
-    context: 'MESA 04 · SALÃO',
-    items: ['2× Kôma Smash Bacon', '1× Batata rústica', '1× Suco de laranja'],
+    context: 'MESA 04 / SALÃO',
+    items: ['2 Kôma Smash Bacon', '1 Batata rústica', '1 Suco de laranja'],
     action: 'ENVIADO À PRODUÇÃO',
   },
   {
@@ -20,8 +20,8 @@ const FLOW_STAGES = [
     title: 'A PRODUÇÃO RECEBE NA HORA.',
     description: 'O KDS organiza a fila e mantém observações e itens visíveis para quem está preparando.',
     status: 'EM PREPARO',
-    context: 'KDS · PEDIDO #0412',
-    items: ['2× Smash · 1 sem picles', '1× Batata · molho à parte', 'Bebida liberada'],
+    context: 'KDS / PEDIDO #0412',
+    items: ['2 Smash, 1 sem picles', '1 Batata, molho à parte', 'Bebida liberada'],
     action: '04:12 DE PREPARO',
   },
   {
@@ -31,7 +31,7 @@ const FLOW_STAGES = [
     title: 'O SALÃO SABE O QUE ESTÁ PRONTO.',
     description: 'O status volta para a operação sem o garçom precisar perguntar à cozinha ou repetir o pedido.',
     status: 'PRONTO PARA SERVIR',
-    context: 'MESA 04 · 3 PESSOAS',
+    context: 'MESA 04 / 3 PESSOAS',
     items: ['Pedido principal pronto', 'Bebidas entregues', 'Mesa aberta há 38 min'],
     action: 'CHAMAR GARÇOM',
   },
@@ -42,9 +42,9 @@ const FLOW_STAGES = [
     title: 'A CONTA FECHA COM O HISTÓRICO INTEIRO.',
     description: 'Consumo, pagamentos e movimentações chegam organizados ao fechamento da mesa e do turno.',
     status: 'CONTA SOLICITADA',
-    context: 'FECHAMENTO · MESA 04',
+    context: 'FECHAMENTO / MESA 04',
     items: ['Subtotal do consumo', 'Taxa de serviço configurada', 'Pagamento registrado'],
-    action: 'TOTAL · R$ 184,50',
+    action: 'TOTAL R$ 184,50',
   },
 ] as const;
 

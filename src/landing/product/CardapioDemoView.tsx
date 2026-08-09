@@ -55,7 +55,7 @@ export function CardapioDemoView() {
           <img src={logoKoma} alt="KÔMA" style={{ height: '24px', width: 'auto' }} />
           <div>
             <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>KÔMA BISTRO</div>
-            <div style={{ fontSize: '0.65rem', color: '#00b894', fontWeight: 600 }}>Mesa 04 • Atendimento Aberto</div>
+            <div style={{ fontSize: '0.65rem', color: '#00b894', fontWeight: 600 }}>Mesa 04 / Atendimento aberto</div>
           </div>
         </div>
         <div style={{ background: 'rgba(0, 184, 148, 0.15)', color: '#00b894', fontSize: '0.65rem', fontWeight: 700, padding: '4px 8px', borderRadius: '4px' }}>
@@ -112,7 +112,7 @@ export function CardapioDemoView() {
           >
             {item.badge && (
               <span style={{ fontSize: '0.55rem', fontWeight: 800, color: '#00b894', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                ★ {item.badge}
+                {item.badge}
               </span>
             )}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
