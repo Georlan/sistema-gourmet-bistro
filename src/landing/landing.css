@@ -3962,3 +3962,230 @@
 @media (max-width: 768px) and (prefers-reduced-motion: reduce) {
   .koma-order-ticket { transform: translateX(-50%) rotate(1deg) !important; }
 }
+
+/* ============================================================
+   MOBILE COMPOSITION PASS
+   Desktop rules remain untouched. On small screens the same
+   visual language is recomposed instead of being merely cropped.
+   ============================================================ */
+@media (max-width: 768px) {
+  .koma-landing {
+    --koma-section-x: clamp(1rem, 4.8vw, 1.5rem);
+    --koma-section-y: clamp(3.75rem, 14vw, 5.25rem);
+    width: 100%;
+    overflow-x: clip;
+  }
+
+  .koma-header {
+    height: 64px;
+    padding-inline: var(--koma-section-x);
+    background: rgba(8, 10, 9, 0.96);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+
+  .koma-header-logo img { height: 34px; }
+  .koma-hamburger { width: 30px; height: 22px; }
+  .koma-hamburger span { height: 2px; }
+  .koma-mobile-menu nav { gap: 1.75rem; padding-inline: 1.25rem; }
+  .koma-mobile-menu a { font-size: clamp(1.55rem, 8vw, 2.25rem); text-align: center; }
+
+  .koma-hero {
+    min-height: auto;
+    padding: 88px var(--koma-section-x) 1rem;
+  }
+
+  .koma-hero-grid { width: 100%; }
+  .koma-hero-content { width: 100%; }
+  .koma-hero-eyebrow {
+    width: min(100%, 31rem);
+    max-width: none;
+    gap: 0.65rem;
+    margin-bottom: 1.35rem;
+    font-size: clamp(0.56rem, 2.55vw, 0.68rem);
+    letter-spacing: 0.115em;
+    line-height: 1.45;
+  }
+
+  .koma-hero-eyebrow::before { width: clamp(1.65rem, 8vw, 2.5rem); }
+  .koma-hero-headline,
+  .koma-hero-title-axis { width: 100%; max-width: 100%; }
+  .koma-hero-line { letter-spacing: -0.052em; }
+  .koma-hero-line--sm {
+    width: max-content;
+    font-size: clamp(2.35rem, 12vw, 3.4rem);
+  }
+  .koma-hero-line--xl {
+    width: 100%;
+    font-size: clamp(2.9rem, 12.6vw, 5.2rem);
+    white-space: nowrap;
+  }
+  .koma-hero-line--lg {
+    width: 100%;
+    font-size: clamp(3rem, 13.5vw, 5.45rem);
+    white-space: nowrap;
+  }
+  .koma-hero-bar-wrap { width: 100%; margin-block: 0.38rem 0.8rem; }
+  .koma-hero-bar { height: clamp(6px, 1.8vw, 9px); }
+  .koma-hero-sub {
+    max-width: 36rem;
+    margin-top: 1.35rem;
+    font-size: clamp(0.96rem, 4.2vw, 1.08rem);
+    line-height: 1.58;
+  }
+  .koma-hero-benefits {
+    width: 100%;
+    gap: 0.65rem;
+    font-size: clamp(0.64rem, 2.75vw, 0.75rem);
+    letter-spacing: 0.065em;
+  }
+  .koma-hero-benefits li { gap: 0.58rem; }
+  .koma-hero-cta-group { width: 100%; gap: 0.45rem; }
+  .koma-hero-cta-group .koma-btn { width: 100%; min-height: 54px; padding: 1rem; }
+  .koma-hero-whatsapp-link { width: 100%; min-height: 44px; }
+  .koma-hero-cta-note { margin-top: 0.45rem; font-size: 0.7rem; line-height: 1.45; }
+  .koma-hero-brand-signature { margin-top: 1.4rem; font-size: 0.68rem; }
+  .koma-hero-brand-signature img { width: 29px; height: 29px; }
+
+  .koma-hero-device-container {
+    width: 116%;
+    margin: 1rem 0 -0.25rem -8%;
+  }
+  .koma-hero-live-status { left: 7%; bottom: 8%; transform: none; }
+  .koma-hero-strip {
+    width: calc(100% + (2 * var(--koma-section-x)));
+    margin-left: calc(-1 * var(--koma-section-x));
+    padding-inline: var(--koma-section-x);
+    scroll-padding-inline: var(--koma-section-x);
+  }
+
+  .koma-angle-divider { height: clamp(2.6rem, 11vw, 3.6rem); }
+
+  .koma-value-strip {
+    padding: 3.25rem var(--koma-section-x) 2.75rem;
+  }
+  .koma-value-strip::after { width: 34vw; height: 4px; }
+  .koma-value-header { gap: 1.25rem; margin-bottom: 2.25rem; }
+  .koma-value-intro { font-size: 0.64rem; line-height: 1.4; }
+  .koma-value-header h2 {
+    max-width: 100%;
+    margin-top: 0.75rem;
+    font-size: clamp(2.75rem, 12.2vw, 5.2rem);
+    line-height: 0.9;
+    text-wrap: balance;
+  }
+  .koma-value-header > p:last-child {
+    max-width: 34rem;
+    font-size: clamp(0.95rem, 4.1vw, 1.08rem);
+    line-height: 1.55;
+  }
+  .koma-value-comparison { width: 100%; box-shadow: 0 22px 54px rgba(10, 10, 10, 0.16); }
+  .koma-value-lane { min-height: 0; padding: 1.25rem; }
+  .koma-value-lane-head { gap: 0.75rem; padding-bottom: 1rem; }
+  .koma-value-lane-head div { gap: 0.6rem; }
+  .koma-value-lane-head strong { font-size: clamp(2.15rem, 10.5vw, 3.3rem); }
+  .koma-value-lane-head > span { max-width: 8.5rem; text-align: center; line-height: 1.35; }
+  .koma-value-route { padding-block: 0.65rem; }
+  .koma-value-route-step {
+    grid-template-columns: 0.8rem 1.65rem minmax(0, 1fr);
+    min-height: 62px;
+    gap: 0.55rem;
+    padding: 0.68rem 0;
+  }
+  .koma-value-route-step:not(:last-child)::before { left: 4px; top: 1.45rem; bottom: -0.8rem; }
+  .koma-value-route-step strong { font-size: 0.7rem; line-height: 1.35; }
+  .koma-value-route-step small { font-size: 0.78rem; }
+  .koma-value-lane-foot { padding-top: 1rem; }
+  .koma-value-lane-foot strong { font-size: 0.76rem; }
+  .koma-value-versus { display: none; }
+  .koma-value-outcomes { margin-top: 2rem; }
+  .koma-value-outcomes > article {
+    grid-template-columns: 4rem minmax(0, 1fr);
+    gap: 1rem;
+    min-height: 0;
+    padding: 1.05rem 0.25rem;
+  }
+  .koma-value-outcomes > article > span { font-size: clamp(2.8rem, 14vw, 4rem); text-align: center; }
+  .koma-value-outcomes article p { margin-top: 0.35rem; font-size: 0.8rem; }
+  .koma-value-action { gap: 1rem; padding: 1.15rem; }
+  .koma-value-action .koma-btn { min-height: 52px; }
+
+  .koma-capabilities-section { padding: 4rem var(--koma-section-x); }
+  .koma-capabilities-heading { gap: 1.5rem; margin-bottom: 2.25rem; }
+  .koma-capabilities-heading h2 {
+    max-width: 100%;
+    font-size: clamp(2.8rem, 11.6vw, 5.2rem);
+    line-height: 0.9;
+    text-wrap: balance;
+  }
+  .koma-capabilities-intro > p { font-size: 0.98rem; line-height: 1.55; }
+  .koma-capabilities-cta { width: 100%; min-height: 54px; }
+  .koma-capabilities-grid { width: 100%; }
+  .koma-capability-card,
+  .koma-capability-card--cardapio,
+  .koma-capability-card--clientes,
+  .koma-capability-card--pagamento,
+  .koma-capability-card--impressao {
+    min-height: 0;
+    padding: 1.25rem;
+  }
+  .koma-capability-preview { min-height: 76px; margin-bottom: 1.6rem; }
+  .koma-capability-card h3 {
+    max-width: 100%;
+    font-size: clamp(2.15rem, 10.5vw, 3.4rem);
+    line-height: 0.91;
+  }
+  .koma-capability-card-copy > p { margin-top: 1rem; font-size: 0.86rem; }
+  .koma-capability-card ul { margin-top: 1.15rem; }
+  .koma-capability-result { margin-top: 1.4rem; }
+
+  .koma-impact-section { padding-inline: var(--koma-section-x); }
+  .koma-impact-title { max-width: 100%; font-size: clamp(3rem, 13.5vw, 5.8rem); line-height: 0.9; }
+  .koma-impact-console { width: 100%; }
+  .koma-impact-proof { width: 100%; }
+
+  .koma-eco-title,
+  .koma-cardapio-copy > h2,
+  .koma-reliability-title-wrap h2,
+  .koma-cta-title {
+    max-width: 100%;
+    overflow-wrap: normal;
+    word-break: normal;
+  }
+  .koma-eco-title { font-size: clamp(2.75rem, 12vw, 5rem); }
+  .koma-cardapio-section { padding-inline: var(--koma-section-x); }
+  .koma-cardapio-copy > h2 { font-size: clamp(2.8rem, 13vw, 5rem); }
+  .koma-cardapio-points { grid-template-columns: 1fr; }
+  .koma-management-section,
+  .koma-reliability-section,
+  .koma-plans-section,
+  .koma-cta-section { padding-inline: var(--koma-section-x); }
+  .koma-management-card { padding: 1.35rem; min-height: 420px; }
+  .koma-plan-card { min-height: 0; padding: 1.35rem; }
+  .koma-plan-tagline { min-height: 0; }
+  .koma-plan-price strong { font-size: clamp(4rem, 19vw, 5.5rem); }
+  .koma-footer { padding-inline: var(--koma-section-x); }
+}
+
+@media (max-width: 430px) {
+  .koma-hero { padding-top: 84px; }
+  .koma-hero-line--sm { font-size: clamp(2.2rem, 11.5vw, 2.9rem); }
+  .koma-hero-line--xl { font-size: clamp(2.7rem, 12.15vw, 3.3rem); }
+  .koma-hero-line--lg { font-size: clamp(2.8rem, 13.1vw, 3.55rem); }
+  .koma-hero-device-container { width: 124%; margin-left: -12%; }
+  .koma-hero-live-status { min-width: 170px; transform: scale(0.92); transform-origin: left bottom; }
+  .koma-hero-strip-item { flex-basis: min(82vw, 290px); }
+
+  .koma-value-header h2 { font-size: clamp(2.7rem, 12vw, 3.55rem); }
+  .koma-value-lane-head small { font-size: 0.62rem; }
+  .koma-value-lane-head strong { font-size: clamp(2rem, 10vw, 2.75rem); }
+  .koma-value-lane-head > span { max-width: 7.3rem; padding: 0.48rem 0.55rem; font-size: 0.52rem; }
+  .koma-value-outcomes > article { grid-template-columns: 3.6rem minmax(0, 1fr); }
+
+  .koma-capabilities-heading h2 { font-size: clamp(2.65rem, 11.2vw, 3.35rem); }
+  .koma-capability-card h3 { font-size: clamp(2rem, 9.8vw, 2.85rem); }
+  .koma-capability-preview { padding: 0.75rem; }
+  .koma-capability-preview--menu div,
+  .koma-capability-preview--customer div { gap: 0.35rem; }
+}
