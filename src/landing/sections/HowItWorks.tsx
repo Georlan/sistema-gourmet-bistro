@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
+import React from 'react';
+import { motion } from 'motion/react';
 import { FrontalLaptopFrame } from '../product/FrontalLaptopFrame';
 import { TabletFrame } from '../product/TabletFrame';
 import { PhoneFrame } from '../product/PhoneFrame';
@@ -10,17 +10,19 @@ const PILLARS = [
     num: '01',
     label: 'CAIXA',
     title: 'VENDA E FECHAMENTO NO MESMO LUGAR.',
-    description: 'Registre pedidos, acompanhe comandas, receba pagamentos e feche o turno com o histórico da operação.',
-    points: ['PDV E COMANDAS', 'PAGAMENTOS', 'FECHAMENTO DE TURNO'],
+    description: 'Registre pedidos, acompanhe comandas e feche o turno com o histórico da operação. Pagamentos parciais e o saldo da mesa permanecem visíveis até o fechamento.',
+    points: ['PDV E COMANDAS', 'PAGAMENTO PARCIAL', 'FECHAMENTO DE TURNO'],
+    outcome: 'MENOS CONTA REFEITA. MAIS CONTROLE NO CAIXA.',
     device: 'laptop',
   },
   {
     id: 'salao',
     num: '02',
-    label: 'SALÃO',
-    title: 'A EQUIPE SABE QUAL MESA PRECISA DELA.',
-    description: 'O garçom lança o pedido e acompanha status, consumo e atendimento sem voltar ao caixa para conferir.',
-    points: ['MESAS AO VIVO', 'APP DO GARÇOM', 'STATUS DO PEDIDO'],
+    label: 'SALÃO E PRODUÇÃO',
+    title: 'O PEDIDO SAI DA MESA E CHEGA CLARO À COZINHA.',
+    description: 'O garçom lança uma vez. Mesas, produção e impressão recebem itens, quantidades e observações sem um novo repasse manual.',
+    points: ['MESAS AO VIVO', 'KDS E IMPRESSÃO', 'STATUS DO PEDIDO'],
+    outcome: 'A EQUIPE ACOMPANHA. A COZINHA PRODUZ.',
     device: 'tablet',
   },
   {
@@ -28,8 +30,9 @@ const PILLARS = [
     num: '03',
     label: 'CARDÁPIO',
     title: 'O CLIENTE PEDE PELO PRÓPRIO CELULAR.',
-    description: 'O QR Code abre um cardápio conectado ao cadastro e ao fluxo de pedidos do restaurante.',
-    points: ['QR CODE', 'ADICIONAIS E OBSERVAÇÕES', 'PEDIDO CONECTADO'],
+    description: 'O QR Code abre um cardápio conectado à mesma base do caixa. Preço, disponibilidade, adicionais e observações seguem para o pedido sem cadastro repetido.',
+    points: ['QR CODE', 'CARDÁPIO CENTRALIZADO', 'PEDIDO CONECTADO'],
+    outcome: 'MUDE UMA VEZ. ATUALIZE A OPERAÇÃO.',
     device: 'phone',
   },
 ] as const;
@@ -43,66 +46,51 @@ function PillarDevice({ pillar }: { pillar: Pillar }) {
 }
 
 export function HowItWorks() {
-  const [activeId, setActiveId] = useState<Pillar['id']>('caixa');
-  const activePillar = PILLARS.find((pillar) => pillar.id === activeId) ?? PILLARS[0];
-
   return (
-    <section className="koma-flow-section koma-how-section" id="como-funciona" aria-labelledby="how-title">
+    <section className="koma-flow-section koma-scroll-flow" id="como-funciona" aria-labelledby="how-title">
       <div className="koma-section-heading koma-section-heading--dark">
         <span>03 / COMO FUNCIONA</span>
         <h2 id="how-title">TRÊS PONTOS.<br />UM SÓ FLUXO.</h2>
-        <p>Caixa, salão e cardápio compartilham a mesma operação. Escolha um pilar para ver como cada tela participa.</p>
+        <p>Continue rolando. Caixa, salão, produção e cardápio aparecem na ordem em que participam da operação.</p>
       </div>
 
-      <div className="koma-flow-layout">
-        <div className="koma-flow-tabs koma-how-tabs" role="tablist" aria-label="Pilares do Kôma">
-          {PILLARS.map((pillar) => (
-            <button
-              key={pillar.id}
-              type="button"
-              role="tab"
-              aria-selected={pillar.id === activePillar.id}
-              className={`koma-flow-tab ${pillar.id === activePillar.id ? 'koma-flow-tab--active' : ''}`}
-              onClick={() => setActiveId(pillar.id)}
-            >
-              <span>{pillar.num}</span>
-              <strong>{pillar.label}</strong>
-            </button>
-          ))}
-        </div>
-
-        <div className="koma-flow-content koma-how-content">
-          <AnimatePresence mode="wait">
+      <div className="koma-scroll-modules">
+        {PILLARS.map((pillar, index) => (
+          <motion.article
+            key={pillar.id}
+            className={`koma-scroll-module koma-scroll-module--${pillar.device}`}
+            initial={{ opacity: 0.42, y: 34 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.32 }}
+            transition={{ duration: 0.62, ease: [0.16, 1, 0.3, 1] }}
+          >
             <motion.div
-              key={`${activePillar.id}-copy`}
-              className="koma-flow-copy"
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.3 }}
+              className="koma-scroll-module-copy"
+              initial={{ opacity: 0, x: index % 2 === 0 ? -24 : 24 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true, amount: 0.45 }}
+              transition={{ duration: 0.55, delay: 0.08 }}
             >
-              <span>{activePillar.num} / {activePillar.label}</span>
-              <h3>{activePillar.title}</h3>
-              <p>{activePillar.description}</p>
-              <ul className="koma-how-points">
-                {activePillar.points.map((point) => <li key={point}>{point}</li>)}
+              <span>{pillar.num} / {pillar.label}</span>
+              <h3>{pillar.title}</h3>
+              <p>{pillar.description}</p>
+              <ul>
+                {pillar.points.map((point) => <li key={point}>{point}</li>)}
               </ul>
+              <strong className="koma-scroll-module-outcome">{pillar.outcome}</strong>
             </motion.div>
-          </AnimatePresence>
 
-          <AnimatePresence mode="wait">
             <motion.div
-              key={`${activePillar.id}-device`}
-              className={`koma-how-device koma-how-device--${activePillar.device}`}
-              initial={{ opacity: 0, y: 20, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -12, scale: 0.985 }}
-              transition={{ duration: 0.38 }}
+              className="koma-scroll-module-device"
+              initial={{ opacity: 0, y: 28, scale: 0.97 }}
+              whileInView={{ opacity: 1, y: 0, scale: 1 }}
+              viewport={{ once: true, amount: 0.28 }}
+              transition={{ duration: 0.68, delay: 0.12, ease: [0.16, 1, 0.3, 1] }}
             >
-              <PillarDevice pillar={activePillar} />
+              <PillarDevice pillar={pillar} />
             </motion.div>
-          </AnimatePresence>
-        </div>
+          </motion.article>
+        ))}
       </div>
     </section>
   );

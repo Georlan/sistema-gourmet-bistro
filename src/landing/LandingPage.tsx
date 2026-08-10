@@ -5,14 +5,9 @@ import { Hero } from './sections/Hero';
 import { ValueStrip } from './sections/ValueStrip';
 import { SocialProof } from './sections/SocialProof';
 import { HowItWorks } from './sections/HowItWorks';
-import { OperationFlow } from './sections/OperationFlow';
 import { FAQ } from './sections/FAQ';
 import { Plans } from './sections/Plans';
 import { FinalCTA } from './sections/FinalCTA';
-
-function AngleDivider({ variant }: { variant: 'dark-light' | 'light-dark' | 'dark-green' }) {
-  return <div className={`koma-angle-divider koma-angle-divider--${variant}`} aria-hidden="true" />;
-}
 
 export default function LandingPage() {
   useEffect(() => {
@@ -90,13 +85,9 @@ export default function LandingPage() {
       <Header />
       <main>
         <Hero />
-        <AngleDivider variant="dark-light" />
         <ValueStrip />
         <SocialProof />
-        <AngleDivider variant="light-dark" />
         <HowItWorks />
-        <OperationFlow />
-        <AngleDivider variant="dark-light" />
         <FAQ />
         <Plans />
         <FinalCTA />
