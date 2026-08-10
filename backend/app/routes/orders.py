@@ -181,6 +181,7 @@ def enqueue_print_job_in_session(
     document_type: str = "producao",
     source_type: str = "pedido",
     source_id: str = "",
+    idempotency_key: Optional[str] = None,
 ) -> Optional[Any]:
     """
     Enfileira um PrintJob na mesma sessão do banco de dados para garantir atomicidade transacional com a criação do pedido.
@@ -207,7 +208,14 @@ def enqueue_print_job_in_session(
 
         doc_type_clean = "entrega" if "delivery" in p_upper or "motoboy" in p_upper else document_type.lower()
         ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d%H%M%S%f")
-        ikey = f"{doc_type_clean}:{source_type}:{source_id}:{printer_name}:{ts}"
+        ikey = idempotency_key or f"{doc_type_clean}:{source_type}:{source_id}:{printer_name}:{ts}"
+
+        existing_job = db.query(PrintJob).filter(
+            PrintJob.restaurante_id == restaurante_id,
+            PrintJob.idempotency_key == ikey,
+        ).first()
+        if existing_job:
+            return existing_job
 
         job = PrintJob(
             restaurante_id=restaurante_id,
@@ -224,6 +232,81 @@ def enqueue_print_job_in_session(
     except Exception as e:
         logger.error(f"[PRINT JOB TX ERROR] Falha ao adicionar PrintJob na sessão: {e}")
         return None
+
+
+def enqueue_initial_production_for_order(
+    db: Session,
+    comanda: Comanda,
+) -> list[Any]:
+    """Enfileira a primeira via de produção de uma comanda aceita.
+
+    A chave é estável por pedido e destino. Como a aceitação bloqueia a linha
+    da comanda e o banco possui uma restrição única para a chave, repetir a
+    mesma requisição nunca cria uma segunda impressão física.
+    """
+    from ..domain.printing import PrintDocumentService
+    from ..domain.printing.models import OrderPrintData, PrintItem as DomainPrintItem
+
+    active_items = [
+        item for item in comanda.itens
+        if item.status != "cancelado" and item.produto is not None
+    ]
+    if not active_items:
+        return []
+
+    print_preferences = _get_print_preferences(db, comanda.restaurante_id)
+    print_items = [
+        DomainPrintItem(
+            codigo=str(getattr(item.produto, "codigo", None) or item.produto.id),
+            nome=item.produto.nome,
+            quantidade=1,
+            preco_unit=float(item.preco_unit or 0),
+            observacao=item.observacao or "",
+            cliente_nome=item.cliente_nome or "Consumo Geral",
+            destino_impressao=(
+                item.produto.categoria.destino_impressao
+                if item.produto.categoria
+                else "COZINHA"
+            ),
+        )
+        for item in active_items
+    ]
+    documents = PrintDocumentService.generate_production(OrderPrintData(
+        restaurante_nome=print_preferences["restaurant_name"],
+        numero_pedido=str(comanda.numero_pedido or ""),
+        mesa=str(comanda.mesa_id) if comanda.mesa_id else "BALCAO",
+        tipo_pedido=comanda.tipo,
+        garcom_nome=(
+            comanda.criada_por.nome if comanda.criada_por else "CAIXA"
+        ),
+        horario=datetime.datetime.now().strftime("%H:%M"),
+        itens=print_items,
+    )) or {}
+
+    jobs = []
+    for destination, ticket_text in documents.items():
+        destination_key = str(destination).strip().lower()
+        job = enqueue_print_job_in_session(
+            db,
+            restaurante_id=comanda.restaurante_id,
+            printer_name=str(destination),
+            ticket_text=ticket_text,
+            document_type="producao",
+            source_type="pedido",
+            source_id=comanda.id,
+            idempotency_key=(
+                f"aceite:pedido:{comanda.id}:producao:{destination_key}"
+            ),
+        )
+        if job is not None:
+            jobs.append(job)
+
+    if jobs:
+        printed_at = datetime.datetime.now(datetime.timezone.utc)
+        for item in active_items:
+            item.impresso_em = printed_at
+
+    return jobs
 
 
 def print_in_background(
@@ -1578,6 +1661,9 @@ def atualizar_status_delivery(
 
     status_anterior = comanda.delivery_status
     comanda.delivery_status = status_normalizado
+    if status_normalizado == "producao" and status_anterior != "producao":
+        enqueue_initial_production_for_order(db, comanda)
+
     if status_normalizado == "recusado":
         for item in comanda.itens:
             if item.status != "cancelado":

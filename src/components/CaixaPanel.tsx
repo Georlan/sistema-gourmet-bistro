@@ -1269,22 +1269,22 @@ export function CaixaPanel({
     if (elapsedMinutes > 25) {
       return {
         minutes: elapsedMinutes,
-        badgeClass: 'bg-rose-950/70 text-rose-400/90 border-rose-900/50 font-bold',
-        borderTopClass: 'border-t-2 border-t-rose-800/70',
+        badgeClass: 'orders-card__time is-late',
+        borderTopClass: 'is-late',
         label: labelText
       };
     } else if (elapsedMinutes >= 15) {
       return {
         minutes: elapsedMinutes,
-        badgeClass: 'bg-amber-950/60 text-amber-400/90 border-amber-900/40 font-bold',
-        borderTopClass: 'border-t-2 border-t-amber-800/70',
+        badgeClass: 'orders-card__time is-attention',
+        borderTopClass: 'is-attention',
         label: labelText
       };
     } else {
       return {
         minutes: elapsedMinutes,
-        badgeClass: 'bg-slate-900/60 text-slate-400 border-slate-800/40',
-        borderTopClass: '',
+        badgeClass: 'orders-card__time is-normal',
+        borderTopClass: 'is-normal',
         label: labelText
       };
     }
@@ -4181,7 +4181,7 @@ export function CaixaPanel({
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
                     <span>Novos pedidos</span>
                     {deliveryOrders.filter(o => o.status === 'pendente').length > 0 && (
-                      <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[8px] font-bold text-black animate-bounce">
+                      <span className="orders-new-orders__count">
                         {deliveryOrders.filter(o => o.status === 'pendente').length}
                       </span>
                     )}
@@ -4226,19 +4226,14 @@ export function CaixaPanel({
                         </div>
                       ) : (
                         deliveryOrders.filter(o => o.status === 'pendente').map((order) => (
-                          <div key={order.id} className="bg-[#1C1C1F] border border-amber-500/20 hover:border-amber-500/40 p-4 rounded-xl space-y-3 transition-all">
+                          <div key={order.id} className="orders-pending-card p-4 rounded-xl space-y-3">
                             <div className="flex justify-between items-start">
                               <div>
                                 <div className="flex flex-wrap gap-1 mb-1">
-                                  <span className={clsx(
-                                    'px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold rounded border font-mono',
-                                    order.modalidade === 'delivery'
-                                      ? 'bg-orange-500/15 text-orange-300 border-orange-500/25'
-                                      : 'bg-violet-500/15 text-violet-300 border-violet-500/25'
-                                  )}>
+                                  <span className="orders-card__chip is-primary">
                                     {order.modalidade === 'delivery' ? 'Delivery' : 'Retirada'}
                                   </span>
-                                  <span className="px-1.5 py-0.5 text-[8px] uppercase tracking-wider font-bold bg-slate-500/10 text-slate-300 border border-slate-500/20 rounded font-mono">
+                                  <span className="orders-card__chip is-muted">
                                     {order.canal}
                                   </span>
                                 </div>
@@ -4246,7 +4241,7 @@ export function CaixaPanel({
                                 <span className="text-[10px] text-gray-400 block">{order.telefone}</span>
                               </div>
                               <div className="text-right">
-                                <span className="font-bold text-amber-400 font-mono text-sm block">R$ {order.total.toFixed(2)}</span>
+                                <span className="orders-card__price">R$ {order.total.toFixed(2)}</span>
                                 <span className="text-[9px] text-gray-500">{order.criadoEm}</span>
                                 {order.numeroPedido && <span className="text-[8px] text-gray-600 font-mono block">#{order.numeroPedido}</span>}
                               </div>
@@ -4258,7 +4253,7 @@ export function CaixaPanel({
 
                             {order.endereco && (
                               <span className="text-[10px] text-gray-400 flex items-start gap-1">
-                                <MapPin size={11} className="shrink-0 text-rose-500 mt-0.5" />
+                                <MapPin size={11} className="shrink-0 text-emerald-300/80 mt-0.5" />
                                 <span>{order.endereco}</span>
                               </span>
                             )}
@@ -4271,7 +4266,7 @@ export function CaixaPanel({
                                   // Close drawer if no more pending
                                   if (deliveryOrders.filter(o => o.status === 'pendente').length <= 1) setIsDrawerOpen(false);
                                 }}
-                                className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[10px] transition-all cursor-pointer uppercase tracking-wider"
+                                className="orders-pending-card__accept"
                               >
                                 ✓ Aceitar
                               </button>
@@ -4281,7 +4276,7 @@ export function CaixaPanel({
                                   await handleRecusarPedido(order.id);
                                   if (deliveryOrders.filter(o => o.status === 'pendente').length <= 1) setIsDrawerOpen(false);
                                 }}
-                                className="px-4 py-2 bg-rose-900/30 border border-rose-900/30 hover:bg-rose-800/40 text-rose-400 hover:text-white rounded-lg font-bold text-[10px] transition-all cursor-pointer"
+                                className="orders-pending-card__reject"
                               >
                                 Recusar
                               </button>
@@ -4309,7 +4304,7 @@ export function CaixaPanel({
                       <span className={clsx('font-bold', 'text-white', 'font-sans', 'block', 'text-sm')}>Mesas em Atendimento</span>
                       <span className="text-xs text-gray-400 block mt-0.5 font-normal">Lançados pelo garçom ou caixa</span>
                     </div>
-                    <span className={clsx('bg-emerald-600/15', 'text-[#10b981]', 'font-bold', 'px-2.5', 'py-0.5', 'rounded-full', 'font-mono', 'text-xs', 'border', 'border-emerald-500/20')}>
+                    <span className="orders-column__count">
                       {filteredCol1.length}
                     </span>
                   </div>
@@ -4334,21 +4329,21 @@ export function CaixaPanel({
                               key={`table-prod-${order.id}`} 
                               onClick={() => setSelectedKanbanOrder(order)}
                               className={clsx(
-                                'orders-card bg-[#18181B] hover:bg-[#1C1C1F] border border-[#27272A] rounded-xl hover:border-[#10b981]/50 transition-colors p-2.5 sm:p-3 space-y-2 text-left cursor-pointer shadow-sm',
-                                sla.borderTopClass || 'border-t-2 border-t-emerald-800/70'
+                                'orders-card orders-card--salon rounded-xl p-2.5 sm:p-3 space-y-2 text-left cursor-pointer',
+                                sla.borderTopClass
                               )}
                             >
                               {/* LINHA 1 (Top Bar do Card) */}
                               <div className="flex justify-between items-center gap-2">
                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className={clsx('px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md border font-mono block w-fit shadow-xs', sla.badgeClass)}>
+                                  <span className={clsx('orders-card__chip', sla.badgeClass)}>
                                     {sla.label}
                                   </span>
-                                  <span className="px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold bg-emerald-600/15 text-[#10b981] border border-emerald-500/20 rounded-md font-mono block w-fit">
+                                  <span className="orders-card__chip is-primary">
                                     {order.mesaId && order.mesaId > 0 ? `MESA ${order.mesaId}` : 'BALCÃO'}
                                   </span>
                                   {order.mesaOrigemId && Number(order.mesaOrigemId) !== Number(order.mesaId) && (
-                                    <span className="px-1.5 py-0.5 text-[9px] uppercase tracking-wider font-bold bg-emerald-600/15 text-[#10b981] border border-emerald-500/20 rounded-md font-sans block w-fit shadow-xs">
+                                    <span className="orders-card__chip is-muted">
                                       🔗 M{order.mesaOrigemId}
                                     </span>
                                   )}
@@ -4357,7 +4352,7 @@ export function CaixaPanel({
                                   <button
                                     type="button"
                                     onClick={(e) => handleQuickPrintOrder(order, e)}
-                                    className="p-1 bg-[#1C1C1F] hover:bg-[#27272A] text-gray-300 hover:text-[#10b981] rounded-md border border-[#27272A] transition-colors cursor-pointer shadow-xs"
+                                    className="orders-card__icon"
                                     title="Imprimir pré-conta / conferência"
                                   >
                                     <Printer size={12} />
@@ -4368,23 +4363,23 @@ export function CaixaPanel({
                                       e.stopPropagation();
                                       setSelectedKanbanOrder(order);
                                     }}
-                                    className="p-1 bg-[#1C1C1F] hover:bg-[#27272A] text-gray-300 hover:text-[#10b981] rounded-md border border-[#27272A] transition-colors cursor-pointer shadow-xs"
+                                    className="orders-card__icon"
                                     title="Ver detalhes do pedido"
                                   >
                                     <Edit3 size={12} />
                                   </button>
-                                  <span className="font-bold text-sm sm:text-base text-[#10b981] font-mono block ml-1">
+                                  <span className="orders-card__price">
                                     R$ {totalVal.toFixed(2)}
                                   </span>
                                 </div>
                               </div>
 
                               {/* LINHA 2 (Sub-header) */}
-                              <div className="flex items-center justify-between text-xs text-gray-400">
-                                <strong className="font-bold text-white text-xs sm:text-sm truncate">
+                              <div className="orders-card__meta">
+                                <strong className="orders-card__title">
                                   {(order as any).identificador || (order.mesaId && order.mesaId > 0 ? `Consumo Mesa ${order.mesaId}` : 'Consumo Balcão')}
                                 </strong>
-                                <span className="shrink-0 text-xs text-gray-400">Atendente: {order.garcomNome || 'Garçom'}</span>
+                                <span className="shrink-0">{order.garcomNome || 'Garçom'}</span>
                               </div>
 
                               {renderCompactItemsList(order.itens, cardId, isExpanded, toggleCardExpansion)}
@@ -4416,7 +4411,7 @@ export function CaixaPanel({
                                 className="orders-card__action w-full py-2 px-3 h-8 sm:h-9 font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5"
                               >
                                 <Check size={13} />
-                                <span>PRONTO → PAGAMENTO</span>
+                                <span>Pronto para pagamento</span>
                               </button>
                             </div>
                           );
@@ -4434,7 +4429,7 @@ export function CaixaPanel({
                       <span className={clsx('font-bold', 'text-white', 'font-sans', 'block', 'text-sm')}>Online e Retirada</span>
                       <span className="text-xs text-gray-400 block mt-0.5 font-normal">Pedidos aceitos no sino</span>
                     </div>
-                    <span className={clsx('bg-sky-600/15', 'text-sky-400', 'font-bold', 'px-2.5', 'py-0.5', 'rounded-full', 'font-mono', 'text-xs', 'border', 'border-sky-500/20')}>
+                    <span className="orders-column__count">
                       {filteredDigitalProduction.length}
                     </span>
                   </div>
@@ -4442,7 +4437,7 @@ export function CaixaPanel({
                   <div className="orders-column__body p-2.5 sm:p-3 flex-1 overflow-y-auto space-y-2.5">
                     {filteredDigitalProduction.length === 0 ? (
                       <div className="orders-empty-state py-16 text-center text-gray-400 text-xs space-y-1">
-                        <Globe size={20} className="mx-auto opacity-40 mb-2 text-sky-400" />
+                        <Globe size={20} className="mx-auto opacity-40 mb-2 text-emerald-300" />
                         <p>{searchQuery ? "Nenhum pedido encontrado para a busca" : "Nenhum pedido online em preparo"}</p>
                       </div>
                     ) : (
@@ -4453,29 +4448,25 @@ export function CaixaPanel({
                           const isExpanded = !!expandedCardIds[cardId];
                           const isDeliveryOrder = order.modalidade === 'delivery';
                           const badgeText = isDeliveryOrder ? 'DELIVERY — PREPARANDO' : 'RETIRADA — PREPARANDO';
-                          const badgeColor = isDeliveryOrder
-                            ? 'bg-amber-600/15 text-amber-400 border border-amber-500/20'
-                            : 'bg-sky-600/15 text-sky-400 border border-sky-500/20';
                           const buttonText = isDeliveryOrder ? 'SAIU PARA ENTREGA' : 'PRONTO PARA RETIRADA';
-                          const topAccentClass = isDeliveryOrder ? 'border-t-2 border-t-amber-800/70' : 'border-t-2 border-t-sky-800/70';
 
                           return (
                             <div 
                               key={order.id} 
                               onClick={() => openDeliveryOrderDetails(order)}
                               className={clsx(
-                                'orders-card bg-[#18181B] hover:bg-[#1C1C1F] border border-[#27272A] rounded-xl hover:border-[#10b981]/50 transition-colors p-2.5 sm:p-3 space-y-2 text-left cursor-pointer shadow-sm',
-                                sla.borderTopClass || topAccentClass
+                                'orders-card orders-card--digital rounded-xl p-2.5 sm:p-3 space-y-2 text-left cursor-pointer',
+                                sla.borderTopClass
                               )}
                             >
                               {/* LINHA 1 (Top Bar do Card) */}
                               <div className="flex justify-between items-center gap-2">
                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className={clsx('px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md border font-mono block w-fit shadow-xs', sla.badgeClass)}>
+                                  <span className={clsx('orders-card__chip', sla.badgeClass)}>
                                     {sla.label}
                                   </span>
-                                  <span className={clsx('px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md font-mono block w-fit', badgeColor)}>{badgeText}</span>
-                                  <span className="px-1.5 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md border border-[#27272A] bg-[#1C1C1F] text-gray-300 font-mono">
+                                  <span className="orders-card__chip is-primary">{badgeText}</span>
+                                  <span className="orders-card__chip is-muted">
                                     {order.canal}
                                   </span>
                                 </div>
@@ -4483,7 +4474,7 @@ export function CaixaPanel({
                                   <button
                                     type="button"
                                     onClick={(e) => handleQuickPrintOrder(order, e)}
-                                    className="p-1 bg-[#1C1C1F] hover:bg-[#27272A] text-gray-300 hover:text-[#10b981] rounded-md border border-[#27272A] transition-colors cursor-pointer shadow-xs"
+                                    className="orders-card__icon"
                                     title="Imprimir pré-conta / conferência"
                                   >
                                     <Printer size={12} />
@@ -4494,28 +4485,28 @@ export function CaixaPanel({
                                       e.stopPropagation();
                                       openDeliveryOrderDetails(order);
                                     }}
-                                    className="p-1 bg-[#1C1C1F] hover:bg-[#27272A] text-gray-300 hover:text-[#10b981] rounded-md border border-[#27272A] transition-colors cursor-pointer shadow-xs"
+                                    className="orders-card__icon"
                                     title="Ver detalhes do pedido"
                                   >
                                     <Edit3 size={12} />
                                   </button>
-                                  <span className="font-bold text-sm sm:text-base text-[#10b981] font-mono block ml-1">
+                                  <span className="orders-card__price">
                                     R$ {order.total.toFixed(2)}
                                   </span>
                                 </div>
                               </div>
 
                               {/* LINHA 2 (Sub-header) */}
-                              <div className="flex items-center justify-between text-xs text-gray-400">
-                                <strong className="font-bold text-white text-xs sm:text-sm truncate">{order.cliente}</strong>
-                                <span className="shrink-0 text-xs text-gray-400">{order.telefone}</span>
+                              <div className="orders-card__meta">
+                                <strong className="orders-card__title">{order.cliente}</strong>
+                                <span className="shrink-0">{order.telefone}</span>
                               </div>
 
                               {renderCompactItemsList(order.itens, cardId, isExpanded, toggleCardExpansion)}
 
                               {isDeliveryOrder && order.endereco && (
                                 <span className="font-normal text-xs text-gray-400 flex items-center gap-1 truncate">
-                                  <MapPin size={11} className="shrink-0 text-amber-500/80" />
+                                  <MapPin size={11} className="shrink-0 text-emerald-300/80" />
                                   <span className="truncate">{order.endereco}</span>
                                 </span>
                               )}
@@ -4530,7 +4521,7 @@ export function CaixaPanel({
                                 className="orders-card__action w-full py-2 px-3 h-8 sm:h-9 font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5"
                               >
                                 <Check size={13} />
-                                <span>{buttonText}</span>
+                                <span>{buttonText === 'SAIU PARA ENTREGA' ? 'Saiu para entrega' : 'Pronto para retirada'}</span>
                               </button>
                             </div>
                           );
@@ -4548,7 +4539,7 @@ export function CaixaPanel({
                       <span className={clsx('font-bold', 'text-white', 'font-sans', 'block', 'text-sm')}>Pagamento e Finalização</span>
                       <span className="text-xs text-gray-400 block mt-0.5 font-normal">Prontos para receber ou concluir</span>
                     </div>
-                    <span className={clsx('bg-amber-600/15', 'text-amber-400', 'font-bold', 'px-2.5', 'py-0.5', 'rounded-full', 'font-mono', 'text-xs', 'border', 'border-amber-500/20')}>
+                    <span className="orders-column__count">
                       {filteredCol2Table.length + filteredDeliveryFinalization.length}
                     </span>
                   </div>
@@ -4556,7 +4547,7 @@ export function CaixaPanel({
                   <div className="orders-column__body p-2.5 sm:p-3 flex-1 overflow-y-auto space-y-2.5">
                     {filteredCol2Table.length === 0 && filteredDeliveryFinalization.length === 0 ? (
                       <div className="orders-empty-state py-16 text-center text-gray-400 text-xs space-y-1">
-                        <Check size={20} className="mx-auto opacity-40 mb-2 text-amber-400" />
+                        <Check size={20} className="mx-auto opacity-40 mb-2 text-emerald-300" />
                         <p>{searchQuery ? "Nenhum pedido encontrado para a busca" : "Nenhum pedido aguardando finalização"}</p>
                       </div>
                     ) : (
@@ -4577,23 +4568,23 @@ export function CaixaPanel({
                               key={`close-${order.id}`}
                               onClick={() => setSelectedKanbanOrder(order)}
                               className={clsx(
-                                'orders-card bg-[#18181B] hover:bg-[#1C1C1F] border border-[#27272A] rounded-xl hover:border-[#10b981]/50 transition-colors p-2.5 sm:p-3 space-y-2 text-left cursor-pointer shadow-sm',
-                                sla.borderTopClass || 'border-t-2 border-t-emerald-800/70'
+                                'orders-card orders-card--closing rounded-xl p-2.5 sm:p-3 space-y-2 text-left cursor-pointer',
+                                sla.borderTopClass
                               )}
                             >
                               {/* LINHA 1 (Top Bar do Card) */}
                               <div className="flex justify-between items-center gap-2">
                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className={clsx('px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md border font-mono block w-fit shadow-xs', sla.badgeClass)}>
+                                  <span className={clsx('orders-card__chip', sla.badgeClass)}>
                                     {sla.label}
                                   </span>
-                                  <span className={clsx('px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md font-mono block w-fit', contaPedida ? 'bg-amber-600/15 text-amber-400 border border-amber-500/20' : 'bg-emerald-600/15 text-[#10b981] border border-emerald-500/20')}>{badgeText}</span>
+                                  <span className={clsx('orders-card__chip', contaPedida ? 'is-attention' : 'is-primary')}>{badgeText}</span>
                                 </div>
                                 <div className="flex items-center gap-1 shrink-0">
                                   <button
                                     type="button"
                                     onClick={(e) => handleQuickPrintOrder(order, e)}
-                                    className="p-1 bg-[#1C1C1F] hover:bg-[#27272A] text-gray-300 hover:text-[#10b981] rounded-md border border-[#27272A] transition-colors cursor-pointer shadow-xs"
+                                    className="orders-card__icon"
                                     title="Imprimir pré-conta / conferência"
                                   >
                                     <Printer size={12} />
@@ -4604,23 +4595,23 @@ export function CaixaPanel({
                                       e.stopPropagation();
                                       setSelectedKanbanOrder(order);
                                     }}
-                                    className="p-1 bg-[#1C1C1F] hover:bg-[#27272A] text-gray-300 hover:text-[#10b981] rounded-md border border-[#27272A] transition-colors cursor-pointer shadow-xs"
+                                    className="orders-card__icon"
                                     title="Ver detalhes do pedido"
                                   >
                                     <Edit3 size={12} />
                                   </button>
-                                  <span className="font-bold text-sm sm:text-base text-[#10b981] font-mono block ml-1">
+                                  <span className="orders-card__price">
                                     R$ {totalVal.toFixed(2)}
                                   </span>
                                 </div>
                               </div>
 
                               {/* LINHA 2 (Sub-header) */}
-                              <div className="flex items-center justify-between text-xs text-gray-400">
-                                <strong className="font-bold text-white text-xs sm:text-sm truncate">
+                              <div className="orders-card__meta">
+                                <strong className="orders-card__title">
                                   {order.identificador || ((order.mesaId && order.mesaId > 0) ? `Consumo Mesa ${order.mesaId}` : 'Consumo Balcão')}
                                 </strong>
-                                <span className="shrink-0 text-xs text-gray-400">Atendente: {order.garcomNome || 'Garçom'}</span>
+                                <span className="shrink-0">{order.garcomNome || 'Garçom'}</span>
                               </div>
 
                               {renderCompactItemsList(order.itens, cardId, isExpanded, toggleCardExpansion)}
@@ -4654,7 +4645,7 @@ export function CaixaPanel({
                                 }}
                                 className="orders-card__action w-full py-2 px-3 h-8 sm:h-9 font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5"
                               >
-                                <Check size={13} /><span>ABRIR PAGAMENTO DA MESA</span>
+                                <Check size={13} /><span>Abrir pagamento</span>
                               </button>
                             </div>
                           );
@@ -4669,27 +4660,23 @@ export function CaixaPanel({
                           const badgeText = isDeliveryOrder
                             ? `DELIVERY — ${order.pago ? 'PAGO / EM ROTA' : 'EM ROTA'}`
                             : `RETIRADA — ${order.pago ? 'PAGO' : 'AGUARDANDO PAGAMENTO'}`;
-                          const badgeColor = isDeliveryOrder
-                            ? 'bg-amber-600/15 text-amber-400 border border-amber-500/20'
-                            : 'bg-sky-600/15 text-sky-400 border border-sky-500/20';
-                          const topAccentClass = isDeliveryOrder ? 'border-t-2 border-t-amber-800/70' : 'border-t-2 border-t-sky-800/70';
 
                           return (
                             <div 
                               key={`transito-${order.id}`} 
                               onClick={() => openDeliveryOrderDetails(order)}
                               className={clsx(
-                                'orders-card bg-[#18181B] hover:bg-[#1C1C1F] border border-[#27272A] rounded-xl hover:border-[#10b981]/50 transition-colors p-2.5 sm:p-3 space-y-2 text-left cursor-pointer shadow-sm',
-                                sla.borderTopClass || topAccentClass
+                                'orders-card orders-card--closing rounded-xl p-2.5 sm:p-3 space-y-2 text-left cursor-pointer',
+                                sla.borderTopClass
                               )}
                             >
                               <div className="flex justify-between items-center gap-2">
                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className={clsx('px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md border font-mono block w-fit shadow-xs', sla.badgeClass)}>
+                                  <span className={clsx('orders-card__chip', sla.badgeClass)}>
                                     {sla.label}
                                   </span>
-                                  <span className={clsx('px-2 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md font-mono block w-fit', badgeColor)}>{badgeText}</span>
-                                  <span className="px-1.5 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-md border border-[#27272A] bg-[#1C1C1F] text-gray-300 font-mono">
+                                  <span className="orders-card__chip is-primary">{badgeText}</span>
+                                  <span className="orders-card__chip is-muted">
                                     {order.canal}
                                   </span>
                                 </div>
@@ -4697,7 +4684,7 @@ export function CaixaPanel({
                                   <button
                                     type="button"
                                     onClick={(e) => handleQuickPrintOrder(order, e)}
-                                    className="p-1 bg-[#1C1C1F] hover:bg-[#27272A] text-gray-300 hover:text-[#10b981] rounded-md border border-[#27272A] transition-colors cursor-pointer shadow-xs"
+                                    className="orders-card__icon"
                                     title="Imprimir pré-conta / conferência"
                                   >
                                     <Printer size={12} />
@@ -4708,28 +4695,28 @@ export function CaixaPanel({
                                       e.stopPropagation();
                                       openDeliveryOrderDetails(order);
                                     }}
-                                    className="p-1 bg-[#1C1C1F] hover:bg-[#27272A] text-gray-300 hover:text-[#10b981] rounded-md border border-[#27272A] transition-colors cursor-pointer shadow-xs"
+                                    className="orders-card__icon"
                                     title="Ver detalhes do pedido"
                                   >
                                     <Edit3 size={12} />
                                   </button>
-                                  <span className="font-bold text-sm sm:text-base text-[#10b981] font-mono block ml-1">
+                                  <span className="orders-card__price">
                                     R$ {order.total.toFixed(2)}
                                   </span>
                                 </div>
                               </div>
 
                               {/* LINHA 2 (Sub-header) */}
-                              <div className="flex items-center justify-between text-xs text-gray-400">
-                                <strong className="font-bold text-white text-xs sm:text-sm truncate">{order.cliente}</strong>
-                                <span className="shrink-0 text-xs text-gray-400">{order.telefone}</span>
+                              <div className="orders-card__meta">
+                                <strong className="orders-card__title">{order.cliente}</strong>
+                                <span className="shrink-0">{order.telefone}</span>
                               </div>
 
                               {renderCompactItemsList(order.itens, cardId, isExpanded, toggleCardExpansion)}
 
                               {isDeliveryOrder && order.endereco && (
                                 <span className="font-normal text-xs text-gray-400 flex items-center gap-1 truncate">
-                                  <MapPin size={11} className="shrink-0 text-amber-500/80" />
+                                  <MapPin size={11} className="shrink-0 text-emerald-300/80" />
                                   <span className="truncate">{order.endereco}</span>
                                 </span>
                               )}
@@ -4765,7 +4752,7 @@ export function CaixaPanel({
                                 }}
                                 className="orders-card__action w-full py-2 px-3 h-8 sm:h-9 font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5"
                               >
-                                <Check size={13} /><span>{order.pago ? 'FINALIZAR PEDIDO' : 'RECEBER E FINALIZAR'}</span>
+                                <Check size={13} /><span>{order.pago ? 'Finalizar pedido' : 'Receber e finalizar'}</span>
                               </button>
                             </div>
                           );
@@ -8847,7 +8834,7 @@ export function CaixaPanel({
           onClick={(e) => { if (e.target === e.currentTarget) setSelectedKanbanOrder(null); }}
           className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 cursor-pointer"
         >
-          <div className="w-full max-w-md bg-[#121214] border border-[#27272A] rounded-3xl p-5 space-y-3 text-left shadow-2xl relative animate-scale-in">
+          <div className="orders-detail-modal w-full max-w-md rounded-3xl p-5 space-y-3 text-left relative animate-scale-in">
             {/* Header */}
             <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
               <div>
@@ -8901,7 +8888,7 @@ export function CaixaPanel({
                   <div key={idx} className="flex justify-between items-start bg-[#1C1C1F]/40 p-2.5 rounded-xl border border-[#27272A]/40 text-xs">
                     <div>
                       <strong className="text-white">{item.nome || item.produto?.nome}</strong>
-                      {item.observacao && <span className="block text-[10px] text-amber-500/90 mt-0.5">Obs: {item.observacao}</span>}
+                      {item.observacao && <span className="block text-[10px] text-emerald-200/70 mt-0.5">Obs: {item.observacao}</span>}
                       {item.cliente_nome && item.cliente_nome !== 'Consumo Geral' && <span className="block text-[9px] text-gray-400 mt-0.5">Para: {item.cliente_nome}</span>}
                     </div>
                     <span className="text-[10px] font-mono bg-[#27272A] text-gray-300 px-1.5 py-0.5 rounded capitalize">{item.status}</span>
@@ -8932,10 +8919,10 @@ export function CaixaPanel({
                       showToast("Erro ao solicitar reimpressão.", 'error');
                     }
                   }}
-                  className="w-full py-2.5 bg-rose-950/40 hover:bg-rose-900/20 text-rose-400 font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-rose-900/50 shadow-lg"
+                  className="orders-detail-modal__reprint"
                 >
                   <Printer size={13} />
-                  <span>Reimprimir na Cozinha</span>
+                  <span>Reimprimir cozinha</span>
                 </button>
 
                 {selectedKanbanOrder.mesaId && selectedKanbanOrder.mesaId > 0 && (

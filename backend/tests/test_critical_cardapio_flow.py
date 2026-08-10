@@ -762,6 +762,83 @@ def test_caixa_pode_recusar_pedido_antes_da_producao():
         db.close()
 
 
+def test_primeiro_aceite_online_imprime_uma_unica_vez():
+    created = client.post(
+        "/cardapio/pedidos",
+        json={
+            "restaurante_id": 100,
+            "itens": [
+                {
+                    "produto_id": "prod-cardapio-test",
+                    "quantidade": 1,
+                    "observacao": "Sem cebola",
+                }
+            ],
+            "cliente_nome": "Cliente aceite",
+            "cliente_telefone": "81999990012",
+            "endereco_entrega": "",
+            "taxa_entrega": 0,
+            "forma_pagamento": "na_entrega",
+            "tipo_pedido": "retirada",
+        },
+    )
+    assert created.status_code == 201
+    comanda_id = created.json()["comanda_id"]
+
+    db = SessionLocal()
+    try:
+        assert db.query(PrintJob).filter(
+            PrintJob.restaurante_id == 100,
+            PrintJob.source_id == comanda_id,
+        ).count() == 0
+    finally:
+        db.close()
+
+    token = create_access_token(
+        subject="usr_cardapio_100",
+        restaurante_id=100,
+        role="admin",
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+    endpoint = f"/comandas/{comanda_id}/delivery/status?status_novo=producao"
+
+    accepted = client.put(endpoint, headers=headers)
+    assert accepted.status_code == 200
+    assert accepted.json()["delivery_status"] == "producao"
+
+    db = SessionLocal()
+    try:
+        first_jobs = db.query(PrintJob).filter(
+            PrintJob.restaurante_id == 100,
+            PrintJob.source_type == "pedido",
+            PrintJob.source_id == comanda_id,
+        ).all()
+        assert len(first_jobs) == 1
+        assert first_jobs[0].status == "pending"
+        assert first_jobs[0].idempotency_key == (
+            f"aceite:pedido:{comanda_id}:producao:cozinha"
+        )
+        first_job_id = first_jobs[0].id
+        comanda = db.query(Comanda).filter(Comanda.id == comanda_id).one()
+        assert all(item.impresso_em is not None for item in comanda.itens)
+    finally:
+        db.close()
+
+    repeated = client.put(endpoint, headers=headers)
+    assert repeated.status_code == 200
+
+    db = SessionLocal()
+    try:
+        repeated_jobs = db.query(PrintJob).filter(
+            PrintJob.restaurante_id == 100,
+            PrintJob.source_type == "pedido",
+            PrintJob.source_id == comanda_id,
+        ).all()
+        assert [job.id for job in repeated_jobs] == [first_job_id]
+    finally:
+        db.close()
+
+
 def test_koma_pocket_nao_enfileira_impressao_automatica(monkeypatch):
     from app.config import settings
 
