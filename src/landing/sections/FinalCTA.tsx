@@ -21,11 +21,11 @@ export function FinalCTA() {
           <span>Se você está com fome, <strong>Kôma</strong></span>
         </div>
         <h2 className="koma-cta-title">
-          CONTE SUA OPERAÇÃO.<br /><em>NÓS MOSTRAMOS O ENCAIXE.</em>
+          VEJA O KÔMA<br /><em>EM AÇÃO.</em>
         </h2>
 
         <p className="koma-cta-sub">
-          O formulário leva menos de um minuto e já abre a conversa no WhatsApp com as informações do seu restaurante.
+          Leva menos de um minuto pelo WhatsApp.
         </p>
 
         <div className="koma-cta-actions">

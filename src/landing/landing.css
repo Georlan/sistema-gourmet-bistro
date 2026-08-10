@@ -5055,3 +5055,40 @@
     background-size: 44px 44px, auto;
   }
 }
+
+/* Compact closing: one message, one next step. */
+.koma-cta-section {
+  min-height: 0;
+  padding-block: clamp(3.5rem, 5.5vw, 5.5rem);
+}
+
+.koma-cta-kicker {
+  margin-bottom: 1.25rem;
+}
+
+.koma-cta-brand-signature {
+  margin-bottom: clamp(1.25rem, 2vw, 2rem);
+}
+
+.koma-cta-title {
+  max-width: 9ch;
+  margin-bottom: 1.25rem;
+  font-size: clamp(3.25rem, 6.2vw, 6.5rem);
+  line-height: 0.84;
+}
+
+.koma-cta-sub {
+  margin-bottom: 1.75rem;
+  font-size: clamp(1rem, 1.25vw, 1.15rem);
+}
+
+@media (max-width: 768px) {
+  .koma-cta-section {
+    padding-block: 3.5rem;
+  }
+
+  .koma-cta-title {
+    max-width: 9ch;
+    font-size: clamp(2.8rem, 13vw, 4.25rem);
+  }
+}
