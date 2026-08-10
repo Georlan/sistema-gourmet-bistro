@@ -2124,6 +2124,393 @@
   .koma-hero-strip { margin-top: 0.25rem; }
 }
 
+/* --- Ecosystem conversion grid: all capabilities visible, no scroll lock --- */
+.koma-ecosystem-section {
+  min-height: 0;
+  padding: clamp(6rem, 10vw, 10rem) var(--koma-section-x);
+  overflow: hidden;
+  color: var(--koma-black);
+  background:
+    linear-gradient(135deg, rgba(0, 184, 148, 0.055) 0 1px, transparent 1px 100%),
+    #f3f4f2;
+  background-size: 72px 72px, auto;
+}
+
+.koma-ecosystem-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: -4vw;
+  width: 34vw;
+  height: 5px;
+  background: var(--koma-green);
+  transform: skewX(-28deg);
+  transform-origin: right;
+}
+
+.koma-eco-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(20rem, 0.65fr);
+  gap: clamp(3rem, 8vw, 9rem);
+  align-items: end;
+  max-width: 1480px;
+  margin: 0 auto clamp(3rem, 6vw, 5rem);
+}
+
+.koma-eco-heading > div:first-child { min-width: 0; }
+
+.koma-eco-title {
+  max-width: 13ch;
+  margin: 0;
+  font-family: var(--koma-display);
+  font-size: clamp(3.7rem, 7vw, 7.7rem);
+  font-weight: 900;
+  line-height: 0.84;
+  letter-spacing: -0.052em;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+
+.koma-eco-title em {
+  color: var(--koma-green-dark);
+  font-style: normal;
+}
+
+.koma-eco-intro {
+  display: grid;
+  gap: 1.5rem;
+  padding-bottom: 0.3rem;
+}
+
+.koma-eco-intro p {
+  max-width: 36ch;
+  margin: 0;
+  color: #525b68;
+  font-size: clamp(1rem, 1.3vw, 1.2rem);
+  line-height: 1.55;
+}
+
+.koma-eco-intro button,
+.koma-eco-conversion button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 58px;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--koma-black);
+  border-radius: 0;
+  color: var(--koma-white);
+  background: var(--koma-black);
+  font-family: var(--koma-accent);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 220ms ease, background 220ms ease, transform 220ms ease, box-shadow 220ms ease;
+}
+
+.koma-eco-intro button { width: min(100%, 340px); }
+.koma-eco-intro button svg,
+.koma-eco-conversion button svg { width: 19px; height: 19px; transition: transform 220ms ease; }
+.koma-eco-intro button:hover,
+.koma-eco-intro button:focus-visible,
+.koma-eco-conversion button:hover,
+.koma-eco-conversion button:focus-visible {
+  color: var(--koma-black);
+  background: var(--koma-green);
+  box-shadow: 0 14px 34px rgba(0, 184, 148, 0.18);
+  transform: translateY(-2px);
+  outline: none;
+}
+.koma-eco-intro button:hover svg,
+.koma-eco-intro button:focus-visible svg,
+.koma-eco-conversion button:hover svg,
+.koma-eco-conversion button:focus-visible svg { transform: translate(2px, -2px); }
+
+.koma-eco-bento {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 1px;
+  max-width: 1480px;
+  margin: 0 auto;
+  border: 1px solid rgba(10, 10, 10, 0.14);
+  background: rgba(10, 10, 10, 0.14);
+  box-shadow: 0 30px 80px rgba(10, 10, 10, 0.12);
+}
+
+.koma-eco-card {
+  position: relative;
+  display: flex;
+  min-height: 590px;
+  padding: clamp(1.4rem, 2.7vw, 2.6rem);
+  overflow: hidden;
+  flex-direction: column;
+  background: #fbfbfa;
+  isolation: isolate;
+}
+
+.koma-eco-card::after {
+  content: '';
+  position: absolute;
+  right: -7rem;
+  bottom: -8rem;
+  z-index: -1;
+  width: 18rem;
+  aspect-ratio: 1;
+  border: 1px solid rgba(0, 184, 148, 0.14);
+  border-radius: 50%;
+  transition: transform 520ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.koma-eco-card:hover::after { transform: scale(1.15); }
+.koma-eco-card--channels,
+.koma-eco-card--sync { grid-column: span 7; }
+.koma-eco-card--tables,
+.koma-eco-card--kitchen { grid-column: span 5; }
+.koma-eco-card--kitchen { background: #121513; color: var(--koma-white); }
+.koma-eco-card--sync { background: var(--koma-green); }
+
+.koma-eco-card-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 1.2rem;
+  border-bottom: 1px solid currentColor;
+  color: var(--koma-green-dark);
+  font-family: var(--koma-accent);
+  font-size: 0.64rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+}
+
+.koma-eco-card--kitchen .koma-eco-card-topline { color: var(--koma-green); border-bottom-color: rgba(255, 255, 255, 0.16); }
+.koma-eco-card--sync .koma-eco-card-topline { color: var(--koma-black); border-bottom-color: rgba(10, 10, 10, 0.22); }
+.koma-eco-card-topline svg { width: 22px; height: 22px; stroke-width: 1.65; }
+
+.koma-eco-card-copy { margin-top: auto; }
+.koma-eco-card-copy h3 {
+  max-width: 13ch;
+  margin: 0;
+  font-family: var(--koma-display);
+  font-size: clamp(2.4rem, 4vw, 4.8rem);
+  font-weight: 900;
+  line-height: 0.9;
+  letter-spacing: -0.045em;
+  text-transform: uppercase;
+}
+.koma-eco-card-copy p {
+  max-width: 49ch;
+  margin: 1rem 0 0;
+  color: #5b6470;
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+.koma-eco-card--kitchen .koma-eco-card-copy p { color: rgba(255, 255, 255, 0.62); }
+.koma-eco-card--sync .koma-eco-card-copy p { color: rgba(10, 10, 10, 0.68); }
+
+.koma-eco-result {
+  display: block;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(10, 10, 10, 0.15);
+  color: var(--koma-green-dark);
+  font-family: var(--koma-accent);
+  font-size: 0.63rem;
+  line-height: 1.45;
+  letter-spacing: 0.08em;
+}
+.koma-eco-card--kitchen .koma-eco-result { color: var(--koma-green); border-color: rgba(255, 255, 255, 0.16); }
+.koma-eco-card--sync .koma-eco-result { color: var(--koma-black); border-color: rgba(10, 10, 10, 0.2); }
+
+.koma-eco-channel-flow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 9rem;
+  gap: 1rem;
+  align-items: center;
+  margin: clamp(2rem, 4vw, 3.4rem) 0 2.5rem;
+}
+.koma-eco-channel-source { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem; }
+.koma-eco-channel-source span {
+  padding: 0.72rem;
+  border: 1px solid rgba(10, 10, 10, 0.15);
+  color: #3e4743;
+  font-family: var(--koma-accent);
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-align: center;
+  text-transform: uppercase;
+}
+.koma-eco-channel-core {
+  position: relative;
+  display: grid;
+  aspect-ratio: 1;
+  place-content: center;
+  border-radius: 50%;
+  color: var(--koma-black);
+  background: var(--koma-green);
+  text-align: center;
+  box-shadow: 0 18px 45px rgba(0, 184, 148, 0.22);
+}
+.koma-eco-channel-core::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 100%;
+  width: 1rem;
+  height: 1px;
+  background: var(--koma-green-dark);
+}
+.koma-eco-channel-core small { font-family: var(--koma-accent); font-size: 0.48rem; letter-spacing: 0.08em; }
+.koma-eco-channel-core strong { font-family: var(--koma-display); font-size: 1.55rem; line-height: 1; }
+.koma-eco-channel-core i { width: 7px; height: 7px; margin: 0.45rem auto 0; border-radius: 50%; background: var(--koma-black); }
+
+.koma-eco-table-preview {
+  margin: clamp(2rem, 4vw, 3.4rem) 0 2.5rem;
+  padding: 1rem;
+  color: var(--koma-white);
+  background: #0b0e0c;
+  box-shadow: 0 18px 40px rgba(10, 10, 10, 0.16);
+}
+.koma-eco-table-preview-head { display: flex; justify-content: space-between; padding-bottom: 0.75rem; font-family: var(--koma-accent); font-size: 0.56rem; letter-spacing: 0.08em; }
+.koma-eco-table-preview-head span { color: var(--koma-green); }
+.koma-eco-table-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; }
+.koma-eco-table-grid > span { display: grid; gap: 0.75rem; min-height: 74px; padding: 0.65rem; border: 1px solid rgba(255,255,255,0.08); background: #10281f; }
+.koma-eco-table-grid b { font-size: 0.66rem; }
+.koma-eco-table-grid small { align-self: end; color: var(--koma-green); font-family: var(--koma-accent); font-size: 0.48rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.koma-eco-table-grid .is-busy { background: #2a2114; }
+.koma-eco-table-grid .is-alert { background: #35181d; }
+.koma-eco-table-grid .is-alert small { color: #ff8989; }
+.koma-eco-table-grid .is-ready { background: #0a3a31; }
+
+.koma-eco-kds-preview {
+  display: grid;
+  gap: 0.45rem;
+  margin: clamp(2rem, 4vw, 3.4rem) 0 2.5rem;
+}
+.koma-eco-kds-preview > div {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.25rem 1rem;
+  padding: 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  background: rgba(255, 255, 255, 0.035);
+}
+.koma-eco-kds-preview small { grid-column: 1 / -1; color: var(--koma-green); font-family: var(--koma-accent); font-size: 0.48rem; font-weight: 900; letter-spacing: 0.08em; }
+.koma-eco-kds-preview strong { font-size: 0.8rem; }
+.koma-eco-kds-preview span { color: rgba(255,255,255,0.55); font-family: var(--koma-accent); font-size: 0.58rem; }
+.koma-eco-kds-preview .is-priority { border-color: rgba(255, 114, 114, 0.48); background: rgba(124, 31, 42, 0.24); }
+.koma-eco-kds-preview .is-priority small,
+.koma-eco-kds-preview .is-priority span { color: #ff8f8f; }
+
+.koma-eco-sync-preview {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(11rem, 0.8fr);
+  gap: 1rem;
+  align-items: stretch;
+  margin: clamp(2rem, 4vw, 3.4rem) 0 2.5rem;
+}
+.koma-eco-sync-item,
+.koma-eco-sync-destinations { border: 1px solid rgba(10, 10, 10, 0.28); }
+.koma-eco-sync-item { display: grid; align-content: center; gap: 0.55rem; min-height: 145px; padding: 1rem; }
+.koma-eco-sync-item span { font-family: var(--koma-accent); font-size: 0.5rem; font-weight: 900; letter-spacing: 0.08em; }
+.koma-eco-sync-item strong { font-family: var(--koma-display); font-size: clamp(1.5rem, 2.4vw, 2.7rem); line-height: 0.95; }
+.koma-eco-sync-item small { color: rgba(10, 10, 10, 0.62); }
+.koma-eco-sync-destinations { display: grid; grid-template-columns: 1fr 1fr; }
+.koma-eco-sync-destinations span { display: grid; place-content: center; gap: 0.35rem; min-height: 70px; border-right: 1px solid rgba(10, 10, 10, 0.16); border-bottom: 1px solid rgba(10, 10, 10, 0.16); font-family: var(--koma-accent); font-size: 0.48rem; font-weight: 900; letter-spacing: 0.05em; text-align: center; text-transform: uppercase; }
+.koma-eco-sync-destinations span:nth-child(2n) { border-right: 0; }
+.koma-eco-sync-destinations span:nth-last-child(-n + 2) { border-bottom: 0; }
+.koma-eco-sync-destinations svg { width: 18px; height: 18px; margin: 0 auto; stroke-width: 1.8; }
+
+.koma-eco-conversion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+  max-width: 1480px;
+  margin: clamp(2.5rem, 5vw, 4.5rem) auto 0;
+  padding: clamp(1.5rem, 3vw, 2.5rem);
+  color: var(--koma-white);
+  background:
+    linear-gradient(112deg, transparent 0 58%, rgba(0, 184, 148, 0.12) 58% 100%),
+    var(--koma-black);
+}
+.koma-eco-conversion div { display: grid; gap: 0.45rem; }
+.koma-eco-conversion span { color: var(--koma-green); font-family: var(--koma-accent); font-size: 0.62rem; font-weight: 900; letter-spacing: 0.1em; }
+.koma-eco-conversion strong { font-family: var(--koma-display); font-size: clamp(1.8rem, 3.4vw, 3.8rem); line-height: 0.9; letter-spacing: -0.035em; }
+.koma-eco-conversion button { flex: 0 0 min(100%, 330px); color: var(--koma-black); background: var(--koma-green); border-color: var(--koma-green); }
+.koma-eco-conversion button:hover,
+.koma-eco-conversion button:focus-visible { color: var(--koma-white); background: transparent; }
+
+@media (min-width: 1100px) and (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .koma-ecosystem-section {
+    min-height: 0;
+    padding: clamp(6rem, 10vw, 10rem) var(--koma-section-x);
+    overflow: hidden;
+  }
+}
+
+@media (max-width: 980px) {
+  .koma-eco-heading { grid-template-columns: 1fr; gap: 1.75rem; align-items: start; }
+  .koma-eco-intro { grid-template-columns: minmax(0, 1fr) minmax(15rem, 0.65fr); align-items: center; }
+  .koma-eco-intro p { max-width: 45ch; }
+  .koma-eco-card--channels,
+  .koma-eco-card--sync,
+  .koma-eco-card--tables,
+  .koma-eco-card--kitchen { grid-column: span 6; }
+  .koma-eco-card { min-height: 560px; }
+}
+
+@media (max-width: 768px) {
+  .koma-ecosystem-section {
+    padding: 4.5rem var(--koma-section-x);
+    background-size: 44px 44px, auto;
+  }
+  .koma-ecosystem-section::before { width: 38vw; height: 4px; }
+  .koma-eco-heading { margin-bottom: 2.2rem; }
+  .koma-eco-title { max-width: 100%; font-size: clamp(2.75rem, 11.8vw, 4.6rem); line-height: 0.88; }
+  .koma-eco-title br { display: none; }
+  .koma-eco-intro { grid-template-columns: 1fr; gap: 1.15rem; }
+  .koma-eco-intro button { width: 100%; }
+  .koma-eco-bento { grid-template-columns: 1fr; box-shadow: 0 20px 50px rgba(10, 10, 10, 0.12); }
+  .koma-eco-card--channels,
+  .koma-eco-card--sync,
+  .koma-eco-card--tables,
+  .koma-eco-card--kitchen { grid-column: 1; }
+  .koma-eco-card { min-height: 0; padding: 1.25rem; }
+  .koma-eco-card-topline { padding-bottom: 0.9rem; }
+  .koma-eco-channel-flow,
+  .koma-eco-table-preview,
+  .koma-eco-kds-preview,
+  .koma-eco-sync-preview { margin: 1.5rem 0 2rem; }
+  .koma-eco-card-copy { margin-top: 0; }
+  .koma-eco-card-copy h3 { max-width: 100%; font-size: clamp(2.2rem, 10.6vw, 3.25rem); }
+  .koma-eco-card-copy p { font-size: 0.86rem; }
+  .koma-eco-result { margin-top: 1.2rem; }
+  .koma-eco-channel-flow { grid-template-columns: minmax(0, 1fr) 6.5rem; }
+  .koma-eco-channel-source { gap: 0.35rem; }
+  .koma-eco-channel-source span { padding: 0.55rem 0.35rem; font-size: 0.48rem; }
+  .koma-eco-channel-core strong { font-size: 1.15rem; }
+  .koma-eco-table-grid > span { min-height: 66px; }
+  .koma-eco-sync-preview { grid-template-columns: 1fr; }
+  .koma-eco-sync-item { min-height: 110px; }
+  .koma-eco-sync-destinations span { min-height: 60px; }
+  .koma-eco-conversion { display: grid; padding: 1.25rem; }
+  .koma-eco-conversion button { width: 100%; }
+}
+
+@media (max-width: 430px) {
+  .koma-eco-title { font-size: clamp(2.55rem, 11.2vw, 3.15rem); }
+  .koma-eco-tag { font-size: 0.65rem; }
+  .koma-eco-card-copy h3 { font-size: clamp(2rem, 9.7vw, 2.7rem); }
+  .koma-eco-channel-flow { grid-template-columns: 1fr; }
+  .koma-eco-channel-core { width: 6.3rem; margin: 0 auto; }
+  .koma-eco-channel-core::before { display: none; }
+  .koma-eco-conversion strong { font-size: 1.95rem; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .koma-hero-bar { transform: none !important; }
   .koma-hero-strip::before { animation: none; opacity: 0; }
@@ -4188,4 +4575,31 @@
   .koma-capability-preview { padding: 0.75rem; }
   .koma-capability-preview--menu div,
   .koma-capability-preview--customer div { gap: 0.35rem; }
+}
+
+/* Final ecosystem reset: this section follows the document flow at every width. */
+.koma-ecosystem-section {
+  min-height: 0;
+  padding: clamp(6rem, 10vw, 10rem) var(--koma-section-x);
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, rgba(0, 184, 148, 0.055) 0 1px, transparent 1px 100%),
+    #f3f4f2;
+  background-size: 72px 72px, auto;
+}
+
+@media (min-width: 1100px) {
+  .koma-ecosystem-section {
+    min-height: 0;
+    padding: clamp(6rem, 10vw, 10rem) var(--koma-section-x);
+    overflow: hidden;
+  }
+}
+
+@media (max-width: 768px) {
+  .koma-ecosystem-section {
+    min-height: 0;
+    padding: 4.5rem var(--koma-section-x);
+    background-size: 44px 44px, auto;
+  }
 }
