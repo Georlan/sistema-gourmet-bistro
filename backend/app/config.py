@@ -147,10 +147,7 @@ class Settings:
         raise RuntimeError("A variável de ambiente 'ENCRYPTION_KEY' é obrigatória e não foi configurada.")
 
     # Hardware/Printer
-    PRINTER_NAME: str = os.getenv("PRINTER_NAME", "Generic / Text Only")
-    SIMULATE_PRINTER: bool = os.getenv("SIMULATE_PRINTER", "True").lower() == "true"
     PRINTER_WIDTH: int = int(os.getenv("PRINTER_WIDTH", "40"))
-    PRINT_JOBS_DIR: str = os.getenv("PRINT_JOBS_DIR", "./print_jobs")
 
     KOMA_TEST_PREMIUM_RESTAURANTE_IDS: str = os.getenv(
         "KOMA_TEST_PREMIUM_RESTAURANTE_IDS",

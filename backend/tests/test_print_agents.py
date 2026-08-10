@@ -1093,6 +1093,112 @@ def test_print_monitor_shows_only_the_latest_20_jobs_from_today():
     }
 
 
+def test_print_monitor_keeps_recovery_queue_separate_from_history():
+    now = datetime.datetime.now(datetime.timezone.utc)
+    tenant_token = current_restaurante_id.set(2)
+    try:
+        db = TestingSessionLocal()
+        try:
+            db.add_all([
+                PrintJob(
+                    id="job-recovery-pending",
+                    restaurante_id=2,
+                    document_type="producao",
+                    destination="COZINHA",
+                    source_type="pedido",
+                    source_id="pending",
+                    payload_text="PENDENTE",
+                    status="pending",
+                    idempotency_key="recovery:pending",
+                    created_at=now - datetime.timedelta(hours=4),
+                ),
+                PrintJob(
+                    id="job-recovery-failed",
+                    restaurante_id=2,
+                    document_type="producao",
+                    destination="COZINHA",
+                    source_type="pedido",
+                    source_id="failed",
+                    payload_text="FALHOU",
+                    status="failed",
+                    attempts=3,
+                    idempotency_key="recovery:failed",
+                    created_at=now - datetime.timedelta(hours=3),
+                ),
+            ])
+            db.commit()
+        finally:
+            db.close()
+    finally:
+        current_restaurante_id.reset(tenant_token)
+
+    response = TestClient(app).get(
+        "/api/print-agents/monitor",
+        headers=jwt_headers("2", 2, "admin"),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["queue_limit"] == 50
+    queue_ids = [job["id"] for job in payload["queue_jobs"]]
+    assert "job-recovery-pending" in queue_ids
+    assert "job-recovery-failed" in queue_ids
+    assert "job-recovery-pending" not in {
+        job["id"] for job in payload["history_jobs"]
+    }
+
+
+def test_retry_batch_reuses_failed_job_without_creating_duplicate():
+    tenant_token = current_restaurante_id.set(2)
+    try:
+        db = TestingSessionLocal()
+        try:
+            db.add(
+                PrintJob(
+                    id="job-retry-original",
+                    restaurante_id=2,
+                    document_type="producao",
+                    destination="COZINHA",
+                    source_type="pedido",
+                    source_id="retry",
+                    payload_text="CUPOM REAL",
+                    status="failed",
+                    attempts=3,
+                    agent_id="agent-box-2",
+                    idempotency_key="retry:original",
+                )
+            )
+            db.commit()
+        finally:
+            db.close()
+    finally:
+        current_restaurante_id.reset(tenant_token)
+
+    response = TestClient(app).post(
+        "/api/print-agents/jobs/retry-batch",
+        headers=jwt_headers("2", 2, "admin"),
+        json={"job_ids": ["job-retry-original"]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["retried_job_ids"] == ["job-retry-original"]
+    tenant_token = current_restaurante_id.set(2)
+    try:
+        db = TestingSessionLocal()
+        try:
+            job = db.query(PrintJob).filter_by(id="job-retry-original").one()
+            assert job.status == "pending"
+            assert job.attempts == 0
+            assert job.agent_id is None
+            assert db.query(PrintJob).filter_by(
+                idempotency_key="retry:original"
+            ).count() == 1
+        finally:
+            db.close()
+    finally:
+        current_restaurante_id.reset(tenant_token)
+
+
 def test_history_maintenance_compacts_old_payloads_but_keeps_queue():
     now = datetime.datetime.now(datetime.timezone.utc)
     tenant_token = current_restaurante_id.set(2)

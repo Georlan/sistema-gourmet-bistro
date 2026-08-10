@@ -235,29 +235,6 @@ def delete_observacao(
     return
 
 
-# ─── PRINT QUEUE STATUS (Admin) ───────────────────────────────────────────────
-@router.get("/print-queue/status")
-def get_print_queue_status(
-    current_user: Usuario = Depends(require_permission("impressao:administrar"))
-):
-    """Retorna status da fila de impressão (jobs pendentes e com falha)."""
-    from ..printer_service import printer_service
-    return printer_service.get_queue_status()
-
-@router.post("/print-queue/retry")
-def retry_print_queue(
-    current_user: Usuario = Depends(require_permission("impressao:administrar"))
-):
-    """Tenta reimprimir todos os jobs com falha. Chame quando a impressora voltar."""
-    from ..printer_service import printer_service
-    result = printer_service.retry_failed_jobs()
-    return {
-        "status": "ok",
-        **result,
-        "message": f"{result['success']} de {result['retried']} jobs reimpressos."
-    }
-
-
 # ─── PRODUCTS ENDPOINTS ───────────────────────────────────────────────────────
 
 

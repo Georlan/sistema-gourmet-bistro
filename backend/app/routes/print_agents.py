@@ -39,6 +39,7 @@ AGENT_ONLINE_THRESHOLD_SECONDS = 90
 PRINTER_DIAGNOSTICS_FRESH_SECONDS = 90
 PRINT_DELAY_THRESHOLD_SECONDS = 120
 PRINT_HISTORY_VISIBLE_LIMIT = 20
+PRINT_QUEUE_VISIBLE_LIMIT = 50
 AGENT_COMMAND_TIMEOUT_SECONDS = 45
 UNRESOLVED_JOB_STATUSES = ("pending", "claimed", "printing")
 TERMINAL_JOB_STATUSES = ("printed", "failed", "cancelled")
@@ -54,6 +55,10 @@ def _positive_int_env(name: str, default: int) -> int:
 PRINT_JOB_TOMBSTONE_DAYS = _positive_int_env(
     "KOMA_PRINT_DEDUP_RETENTION_DAYS",
     7,
+)
+PRINT_JOB_TOMBSTONE_LIMIT = _positive_int_env(
+    "KOMA_PRINT_DEDUP_MAX_TOMBSTONES",
+    1000,
 )
 try:
     PRINT_HISTORY_TIMEZONE = ZoneInfo(
@@ -198,14 +203,41 @@ def _run_print_history_maintenance(
             )
             .delete(synchronize_session=False)
         )
+        retained_tombstone_ids = [
+            row[0]
+            for row in (
+                db.query(PrintJob.id)
+                .filter(
+                    PrintJob.restaurante_id == restaurante_id,
+                    PrintJob.status.in_(TERMINAL_JOB_STATUSES),
+                    PrintJob.payload_text == "",
+                )
+                .order_by(PrintJob.created_at.desc(), PrintJob.id.desc())
+                .limit(PRINT_JOB_TOMBSTONE_LIMIT)
+                .all()
+            )
+        ]
+        overflow_deleted = 0
+        if retained_tombstone_ids:
+            overflow_deleted = (
+                db.query(PrintJob)
+                .filter(
+                    PrintJob.restaurante_id == restaurante_id,
+                    PrintJob.status.in_(TERMINAL_JOB_STATUSES),
+                    PrintJob.payload_text == "",
+                    ~PrintJob.id.in_(retained_tombstone_ids),
+                )
+                .delete(synchronize_session=False)
+            )
         db.commit()
-        if compacted or deleted:
+        if compacted or deleted or overflow_deleted:
             log.info(
                 "[RETENÇÃO DE IMPRESSÃO] restaurante=%s compactados=%s "
-                "tombstones_excluídos=%s",
+                "tombstones_expirados=%s tombstones_excedentes=%s",
                 restaurante_id,
                 compacted,
                 deleted,
+                overflow_deleted,
             )
     except Exception:
         db.rollback()
@@ -764,6 +796,10 @@ class CompleteAgentCommandRequest(BaseModel):
 class FailJobRequest(BaseModel):
     error: str
 
+
+class RetryJobsRequest(BaseModel):
+    job_ids: List[str] = Field(min_length=1, max_length=50)
+
 class InjectJobRequest(BaseModel):
     """Injeção manual de PrintJob — disponível apenas para admin/gerente (JWT)."""
     restaurante_id: Optional[int] = None  # compatibilidade; deve coincidir com o tenant autenticado
@@ -862,7 +898,19 @@ def get_print_monitor(
         .scalar()
     )
 
-    jobs = (
+    history_jobs = (
+        db.query(PrintJob)
+        .filter(
+            PrintJob.restaurante_id == rest_id,
+            PrintJob.created_at >= day_start,
+            PrintJob.created_at < day_end,
+            PrintJob.status.in_(TERMINAL_JOB_STATUSES),
+        )
+        .order_by(PrintJob.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    compatibility_jobs = (
         db.query(PrintJob)
         .filter(
             PrintJob.restaurante_id == rest_id,
@@ -871,6 +919,18 @@ def get_print_monitor(
         )
         .order_by(PrintJob.created_at.desc())
         .limit(limit)
+        .all()
+    )
+    queue_jobs = (
+        db.query(PrintJob)
+        .filter(
+            PrintJob.restaurante_id == rest_id,
+            PrintJob.status.in_(
+                (*UNRESOLVED_JOB_STATUSES, "failed")
+            ),
+        )
+        .order_by(PrintJob.created_at.asc(), PrintJob.id.asc())
+        .limit(PRINT_QUEUE_VISIBLE_LIMIT)
         .all()
     )
     latest_spooler_success = (
@@ -941,8 +1001,7 @@ def get_print_monitor(
     if expired_command:
         db.commit()
 
-    job_payload = []
-    for job in jobs:
+    def serialize_job(job: PrintJob) -> dict:
         created_at = _as_utc(job.created_at)
         claimed_at = _as_utc(job.claimed_at)
         printed_at = _as_utc(job.printed_at)
@@ -955,8 +1014,7 @@ def get_print_monitor(
         accepted_by_spooler = job.status == "printed"
         reference = _print_job_reference(job)
 
-        job_payload.append(
-            {
+        return {
                 "id": job.id,
                 "document_type": job.document_type,
                 "destination": job.destination,
@@ -990,7 +1048,10 @@ def get_print_monitor(
                     "cancelled",
                 } and bool(job.payload_text),
             }
-        )
+
+    job_payload = [serialize_job(job) for job in compatibility_jobs]
+    history_payload = [serialize_job(job) for job in history_jobs]
+    queue_payload = [serialize_job(job) for job in queue_jobs]
 
     latest_success_payload = None
     if latest_spooler_success:
@@ -1012,6 +1073,7 @@ def get_print_monitor(
         "generated_at": now.isoformat(),
         "history_date": history_date,
         "history_limit": PRINT_HISTORY_VISIBLE_LIMIT,
+        "queue_limit": PRINT_QUEUE_VISIBLE_LIMIT,
         "history_timezone": str(PRINT_HISTORY_TIMEZONE),
         "online_threshold_seconds": AGENT_ONLINE_THRESHOLD_SECONDS,
         "command_timeout_seconds": AGENT_COMMAND_TIMEOUT_SECONDS,
@@ -1043,6 +1105,8 @@ def get_print_monitor(
             ),
         },
         "jobs": job_payload,
+        "history_jobs": history_payload,
+        "queue_jobs": queue_payload,
     }
 
 
@@ -1725,6 +1789,53 @@ def fail_job(
         "attempts": job.attempts,
         "max_attempts": MAX_ATTEMPTS
     }
+
+@router.post("/jobs/retry-batch")
+def retry_failed_jobs(
+    req: RetryJobsRequest,
+    background_tasks: BackgroundTasks,
+    current_user: Usuario = Depends(
+        require_permission("impressao:administrar")
+    ),
+    db: Session = Depends(get_db),
+):
+    """Recupera falhas usando os jobs originais, sem duplicar payloads."""
+    rest_id = (
+        current_restaurante_id.get()
+        or getattr(current_user, "restaurante_id", None)
+    )
+    unique_ids = list(dict.fromkeys(req.job_ids))
+    failed_jobs = (
+        db.query(PrintJob)
+        .filter(
+            PrintJob.restaurante_id == rest_id,
+            PrintJob.id.in_(unique_ids),
+            PrintJob.status == "failed",
+            PrintJob.payload_text != "",
+        )
+        .with_for_update()
+        .all()
+    )
+    for job in failed_jobs:
+        job.status = "pending"
+        job.attempts = 0
+        job.agent_id = None
+        job.printer_name = None
+        job.claimed_at = None
+        job.printed_at = None
+        job.last_error = None
+    db.commit()
+    if failed_jobs:
+        _schedule_print_monitor_refresh(background_tasks, rest_id)
+    retried_ids = [job.id for job in failed_jobs]
+    return {
+        "status": "queued",
+        "retried_job_ids": retried_ids,
+        "ignored_job_ids": [
+            job_id for job_id in unique_ids if job_id not in retried_ids
+        ],
+    }
+
 
 @router.post("/jobs/{job_id}/reprint")
 def request_reprint(

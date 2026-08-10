@@ -6,7 +6,6 @@ import sys
 
 from config import AgentConfig, parse_cli_args
 from worker import run_agent_loop
-from server import start_local_print_server
 
 logging.basicConfig(
     level=logging.INFO,
@@ -17,12 +16,6 @@ logging.basicConfig(
 
 def main() -> int:
     config = parse_cli_args(AgentConfig.load())
-
-    # Inicia o servidor HTTP nativo local na porta 9123 para impressão instantânea USB
-    try:
-        start_local_print_server()
-    except Exception as err:
-        print(f"[AVISO] Não foi possível iniciar o servidor HTTP local na porta 9123: {err}")
 
     if not config.agent_token:
         from pairing import pair_agent

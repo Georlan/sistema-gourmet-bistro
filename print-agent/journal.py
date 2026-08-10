@@ -16,13 +16,15 @@ class PrintJournal:
         self._init_db()
 
     def _get_connection(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=10)
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA busy_timeout = 10000")
         return conn
 
     def _init_db(self):
         os.makedirs(os.path.dirname(os.path.abspath(self.db_path)), exist_ok=True)
         with self._get_connection() as conn:
+            conn.execute("PRAGMA journal_mode = WAL")
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS journal_jobs (
                     job_id TEXT PRIMARY KEY,
@@ -85,6 +87,34 @@ class PrintJournal:
             conn.execute(
                 "UPDATE journal_jobs SET confirmed_backend = 1 WHERE job_id = ?",
                 (job_id,)
+            )
+            # Mantém a deduplicação local por sete dias, limitada aos 2.000
+            # trabalhos confirmados mais recentes. Pendências HTTP nunca são
+            # removidas por esta manutenção.
+            cutoff = (
+                datetime.datetime.now(datetime.timezone.utc)
+                - datetime.timedelta(days=7)
+            ).isoformat()
+            conn.execute(
+                """
+                DELETE FROM journal_jobs
+                WHERE confirmed_backend = 1
+                  AND printed_at < ?
+                """,
+                (cutoff,),
+            )
+            conn.execute(
+                """
+                DELETE FROM journal_jobs
+                WHERE confirmed_backend = 1
+                  AND job_id NOT IN (
+                    SELECT job_id
+                    FROM journal_jobs
+                    WHERE confirmed_backend = 1
+                    ORDER BY printed_at DESC
+                    LIMIT 2000
+                  )
+                """
             )
             conn.commit()
 

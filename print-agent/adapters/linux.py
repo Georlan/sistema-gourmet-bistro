@@ -351,6 +351,18 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
 
         known_uris = {str(item.get("uri")) for item in printers}
         direct_device_paths = sorted(glob.glob("/dev/usb/lp*"))[:10]
+        # Uma fila CUPS USB pronta e /dev/usb/lp0 são duas visões do mesmo
+        # equipamento. A fila nomeada é o destino estável; não exponha a porta
+        # RAW como uma segunda impressora no painel.
+        has_ready_cups_usb = any(
+            printer.get("connection") == "usb"
+            and printer.get("present") is True
+            and printer.get("configured") is True
+            and not str(printer.get("uri") or "").startswith("/dev/")
+            for printer in printers
+        )
+        if has_ready_cups_usb:
+            direct_device_paths = []
         unmatched_sysfs = [
             device
             for device in sysfs_usb_printers
@@ -472,18 +484,14 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
                     set_default = _run_cups_command(
                         ["lpoptions", "-d", selected_name]
                     )
-                except (OSError, subprocess.TimeoutExpired):
-                    return {
-                        "success": False,
-                        "code": "cups_unavailable",
-                        "message": (
-                            "A impressora foi encontrada, mas o serviço "
-                            "de impressão não respondeu."
-                        ),
-                        "printer_name": selected_name,
-                        "diagnostics": diagnostics,
-                    }
-                if set_default.returncode != 0:
+                except (OSError, subprocess.TimeoutExpired) as exc:
+                    log.warning(
+                        "[LINUX ADAPTER] Impressora pronta; não foi possível "
+                        "alterar o padrão: %s",
+                        exc,
+                    )
+                    set_default = None
+                if set_default is not None and set_default.returncode != 0:
                     error = set_default.stderr.decode(
                         "utf-8",
                         errors="replace",
@@ -494,16 +502,8 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
                         selected_name,
                         error,
                     )
-                    return {
-                        "success": False,
-                        "code": "usb_configuration_failed",
-                        "message": (
-                            "A impressora foi detectada, mas não pôde ser "
-                            "definida como o destino principal."
-                        ),
-                        "printer_name": selected_name,
-                        "diagnostics": diagnostics,
-                    }
+                    # Definir como padrão é conveniência. A fila explícita já
+                    # está pronta e continua apta a receber os trabalhos.
             return {
                 "success": True,
                 "code": "usb_connected",
@@ -663,7 +663,14 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
             "diagnostics": refreshed,
         }
 
-    def print_ticket(self, payload_text: str, printer_name: str, doc_type: str) -> bool:
+    def print_ticket(
+        self,
+        payload_text: str,
+        printer_name: str,
+        doc_type: str,
+        *,
+        skip_ready_check: bool = False,
+    ) -> bool:
         raw_payload = build_escpos_payload(payload_text, encoding="cp860")
 
         target_printer = printer_name
@@ -675,7 +682,7 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
                 )
                 return False
 
-        if not self.is_printer_ready(target_printer):
+        if not skip_ready_check and not self.is_printer_ready(target_printer):
             log.error(
                 "[LINUX ADAPTER] A impressora '%s' está configurada, mas o "
                 "equipamento físico não foi detectado.",

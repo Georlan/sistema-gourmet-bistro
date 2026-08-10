@@ -499,6 +499,7 @@ class WindowsPrinterAdapter(BasePrinterAdapter):
             selected_name = queue_name
             diagnostics = self.get_diagnostics()
 
+        activation_error = None
         try:
             self._win32print.SetDefaultPrinter(selected_name)
             handle = self._win32print.OpenPrinter(selected_name)
@@ -516,20 +517,15 @@ class WindowsPrinterAdapter(BasePrinterAdapter):
             finally:
                 self._win32print.ClosePrinter(handle)
         except Exception as exc:
+            activation_error = exc
             log.error(
                 "[WINDOWS ADAPTER] Falha ao ativar '%s': %s",
                 selected_name,
                 exc,
             )
-            return {
-                "success": False,
-                "code": "usb_configuration_failed",
-                "message": (
-                    "A impressora foi detectada, mas não pôde ser ativada."
-                ),
-                "printer_name": selected_name or None,
-                "diagnostics": diagnostics,
-            }
+            # Algumas políticas do Windows impedem SetDefaultPrinter/Resume,
+            # embora a fila continue aceitando RAW. O diagnóstico renovado é
+            # a fonte de verdade para decidir o resultado.
 
         refreshed = self.get_diagnostics()
         ready = any(
@@ -549,7 +545,11 @@ class WindowsPrinterAdapter(BasePrinterAdapter):
                 else "usb_configuration_failed"
             ),
             "message": (
-                "Impressora USB conectada e pronta para uso."
+                (
+                    "Impressora USB já estava conectada e pronta para uso."
+                    if activation_error
+                    else "Impressora USB conectada e pronta para uso."
+                )
                 if ready
                 else (
                     "A impressora foi configurada, mas ainda não respondeu "
@@ -560,7 +560,14 @@ class WindowsPrinterAdapter(BasePrinterAdapter):
             "diagnostics": refreshed,
         }
 
-    def print_ticket(self, payload_text: str, printer_name: str, doc_type: str) -> bool:
+    def print_ticket(
+        self,
+        payload_text: str,
+        printer_name: str,
+        doc_type: str,
+        *,
+        skip_ready_check: bool = False,
+    ) -> bool:
         if sys.platform != "win32" or not self._win32print:
             log.error(
                 "[WINDOWS ADAPTER] Spooler RAW indisponível; "
@@ -575,7 +582,7 @@ class WindowsPrinterAdapter(BasePrinterAdapter):
             )
             return False
 
-        if not self.is_printer_ready(target_printer):
+        if not skip_ready_check and not self.is_printer_ready(target_printer):
             log.error(
                 "[WINDOWS ADAPTER] A fila '%s' existe, mas a impressora "
                 "física USB/rede não foi detectada.",

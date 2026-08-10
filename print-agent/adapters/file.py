@@ -32,7 +32,14 @@ class FilePrinterAdapter(BasePrinterAdapter):
         # Adaptador explicitamente escolhido para desenvolvimento/simulação.
         return True
 
-    def print_ticket(self, payload_text: str, printer_name: str, doc_type: str) -> bool:
+    def print_ticket(
+        self,
+        payload_text: str,
+        printer_name: str,
+        doc_type: str,
+        *,
+        skip_ready_check: bool = False,
+    ) -> bool:
         try:
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
             filename = f"ticket_{doc_type.lower()}_{timestamp}.txt"

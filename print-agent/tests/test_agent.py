@@ -5,6 +5,7 @@ Suíte de Testes Automatizados para o Kôma Print Agent Multiplataforma.
 import os
 import shutil
 import tempfile
+import time
 import pytest
 from unittest.mock import MagicMock, patch
 
@@ -28,6 +29,7 @@ from worker import (
     run_agent_loop,
     process_unconfirmed_journal_jobs,
 )
+from dispatcher import dispatch_claimed_jobs
 
 
 @pytest.fixture
@@ -83,6 +85,79 @@ def test_print_journal_idempotency(temp_dir):
     journal.mark_backend_confirmed("job-123")
     assert journal.is_confirmed("job-123") is True
     assert len(journal.get_unconfirmed_printed_jobs()) == 0
+
+
+def test_dispatcher_skips_repeated_diagnostics_and_preserves_fifo(temp_dir):
+    journal = PrintJournal(os.path.join(temp_dir, "dispatcher.db"))
+    adapter = MagicMock()
+    adapter.print_ticket.return_value = True
+    jobs = [
+        {
+            "id": f"job-{index}",
+            "idempotency_key": f"ikey-{index}",
+            "destination": "COZINHA",
+            "document_type": "producao",
+            "payload_text": f"CUPOM {index}",
+        }
+        for index in range(10)
+    ]
+
+    outcomes = dispatch_claimed_jobs(
+        adapter,
+        journal,
+        jobs,
+        {"COZINHA": "G250"},
+        max_parallel_printers=4,
+    )
+
+    assert [item["state"] for item in outcomes] == ["accepted"] * 10
+    assert [call.args[0] for call in adapter.print_ticket.call_args_list] == [
+        f"CUPOM {index}" for index in range(10)
+    ]
+    assert all(
+        call.kwargs["skip_ready_check"] is True
+        for call in adapter.print_ticket.call_args_list
+    )
+
+
+def test_dispatcher_processes_different_printers_in_parallel(temp_dir):
+    journal = PrintJournal(os.path.join(temp_dir, "parallel.db"))
+    adapter = MagicMock()
+
+    def slow_submit(*args, **kwargs):
+        time.sleep(0.12)
+        return True
+
+    adapter.print_ticket.side_effect = slow_submit
+    jobs = [
+        {
+            "id": "job-kitchen",
+            "idempotency_key": "ikey-kitchen",
+            "destination": "COZINHA",
+            "document_type": "producao",
+            "payload_text": "COZINHA",
+        },
+        {
+            "id": "job-bar",
+            "idempotency_key": "ikey-bar",
+            "destination": "BAR",
+            "document_type": "producao",
+            "payload_text": "BAR",
+        },
+    ]
+
+    started = time.perf_counter()
+    outcomes = dispatch_claimed_jobs(
+        adapter,
+        journal,
+        jobs,
+        {"COZINHA": "G250", "BAR": "Bar Thermal"},
+        max_parallel_printers=2,
+    )
+    elapsed = time.perf_counter() - started
+
+    assert [item["state"] for item in outcomes] == ["accepted", "accepted"]
+    assert elapsed < 0.21
 
 
 def test_offline_resilience_reconfirms_without_reprinting(temp_dir):

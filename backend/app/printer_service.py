@@ -1,7 +1,5 @@
-import os
 import datetime
 import textwrap
-import secrets
 from typing import List, Optional
 from .config import settings
 
@@ -178,158 +176,10 @@ def format_kitchen_item(qty: int, name: str, observation: str = "", client_name:
     return header
 
 class PrinterService:
-    """
-    Serviço de impressão com fila persistente em disco.
-    
-    Fluxo:
-      1. Job é salvo em disco imediatamente (garante que nunca é perdido)
-      2. Tentativa de impressão imediata
-      3. Se falhar: job fica em 'failed/' para retry posterior
-      4. retry_failed_jobs() pode ser chamado manualmente ou em agendamento
-    """
-    
-    FAILED_DIR = "failed"
-    MAX_RETRIES = 3
+    """Formata cupons; persistência e hardware pertencem à fila PrintJob."""
 
     def __init__(self):
         self.width = settings.PRINTER_WIDTH
-        self.jobs_dir = settings.PRINT_JOBS_DIR
-        self.simulate = settings.SIMULATE_PRINTER
-        # Ensure directories exist
-        os.makedirs(self.jobs_dir, exist_ok=True)
-        os.makedirs(os.path.join(self.jobs_dir, self.FAILED_DIR), exist_ok=True)
-
-    def _persist_job(self, doc_type: str, content: str) -> str:
-        """Salva o job em disco antes de tentar imprimir. Garante que nada é perdido."""
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"job_{doc_type}_{timestamp}_{secrets.token_hex(4)}.txt"
-        filepath = os.path.join(self.jobs_dir, filename)
-        with open(filepath, "w", encoding="utf-8") as f:
-            f.write(content)
-        return filepath
-
-    def _mark_failed(self, filepath: str):
-        """Move job para a pasta de falhas para retry posterior."""
-        filename = os.path.basename(filepath)
-        failed_path = os.path.join(self.jobs_dir, self.FAILED_DIR, filename)
-        try:
-            os.rename(filepath, failed_path)
-            print(f"[PRINT QUEUE] Job movido para falhas: {failed_path}")
-        except Exception as e:
-            print(f"[PRINT QUEUE] Erro ao mover job para falhas: {e}")
-
-    def _mark_done(self, filepath: str):
-        """Remove job da fila após impressão bem-sucedida."""
-        try:
-            if os.path.exists(filepath):
-                os.remove(filepath)
-        except Exception as e:
-            print(f"[PRINT QUEUE] Erro ao remover job concluído: {e}")
-
-    def _print_raw(self, content: str) -> bool:
-        """
-        Envia conteúdo raw para a impressora física.
-        Retorna True se OK, False se falhar.
-        """
-        try:
-            if os.name == 'posix':
-                device_path = "/dev/usb/lp0"
-                with open(device_path, "wb") as f:
-                    f.write(b"\x1b@")          # Initialize ESC @
-                    f.write(b"\x1bt\x10")       # Select cp858/Latin-1
-                    f.write(content.encode('cp1252', errors='replace'))
-                    f.write(b"\n\n\x1dV\x42\x00")  # Feed + cut
-                print(f"[PRINTER] Impresso com sucesso via USB {device_path}")
-                return True
-            else:
-                import win32print
-                hPrinter = win32print.OpenPrinter(settings.PRINTER_NAME)
-                try:
-                    win32print.StartDocPrinter(hPrinter, 1, (f"Koma Print", None, "RAW"))
-                    win32print.StartPagePrinter(hPrinter)
-                    raw = b"\x1b@\x1bt\x10" + content.encode('cp1252', errors='replace') + b"\n\n\x1d\x56\x42\x00"
-                    win32print.WritePrinter(hPrinter, raw)
-                    win32print.EndPagePrinter(hPrinter)
-                    win32print.EndDocPrinter(hPrinter)
-                finally:
-                    win32print.ClosePrinter(hPrinter)
-                print(f"[PRINTER] Impresso com sucesso via '{settings.PRINTER_NAME}'")
-                return True
-        except Exception as e:
-            print(f"[PRINTER] Falha de hardware: {e}")
-            return False
-
-    def send_to_printer(self, doc_type: str, content: str):
-        """
-        Ponto de entrada principal. 
-        - Em modo simulação: persiste em disco e retorna.
-        - Em modo real: persiste em disco PRIMEIRO, depois imprime.
-          Se impressora falhar, job fica em /failed para retry.
-        """
-        filepath = self._persist_job(doc_type, content)
-
-        if self.simulate:
-            print(f"[PRINTER SIMULATION] Job '{doc_type}' salvo em: {filepath}")
-            return filepath
-
-        # Modo real: tenta imprimir; falha → fica na fila de retry
-        success = self._print_raw(content)
-        if success:
-            self._mark_done(filepath)
-        else:
-            self._mark_failed(filepath)
-            print(f"[PRINT QUEUE] Job '{doc_type}' aguardando retry em: {filepath}")
-        
-        return filepath
-
-    def retry_failed_jobs(self, max_retries: int = MAX_RETRIES):
-        """
-        Tenta reimprimir todos os jobs na pasta /failed.
-        Chame isso manualmente ou via endpoint de admin quando a impressora voltar.
-        """
-        failed_dir = os.path.join(self.jobs_dir, self.FAILED_DIR)
-        if not os.path.exists(failed_dir):
-            return {"retried": 0, "success": 0, "still_failed": 0}
-
-        jobs = [f for f in os.listdir(failed_dir) if f.endswith(".txt")]
-        success_count = 0
-        still_failed = 0
-
-        for job_file in jobs:
-            job_path = os.path.join(failed_dir, job_file)
-            try:
-                with open(job_path, "r", encoding="utf-8") as f:
-                    content = f.read()
-                
-                ok = self._print_raw(content)
-                if ok:
-                    os.remove(job_path)
-                    success_count += 1
-                    print(f"[RETRY] Job '{job_file}' reimpresso com sucesso.")
-                else:
-                    still_failed += 1
-                    print(f"[RETRY] Job '{job_file}' ainda falhou.")
-            except Exception as e:
-                still_failed += 1
-                print(f"[RETRY] Erro ao processar job '{job_file}': {e}")
-
-        return {
-            "retried": len(jobs),
-            "success": success_count,
-            "still_failed": still_failed
-        }
-
-    def get_queue_status(self) -> dict:
-        """Retorna status da fila de impressão (para endpoint de admin)."""
-        failed_dir = os.path.join(self.jobs_dir, self.FAILED_DIR)
-        pending = len([f for f in os.listdir(self.jobs_dir) if f.endswith(".txt")]) if os.path.exists(self.jobs_dir) else 0
-        failed = len([f for f in os.listdir(failed_dir) if f.endswith(".txt")]) if os.path.exists(failed_dir) else 0
-        return {
-            "pending_jobs": pending,
-            "failed_jobs": failed,
-            "simulate_mode": self.simulate,
-            "jobs_dir": self.jobs_dir
-        }
 
 
     def generate_kitchen_ticket(
@@ -475,9 +325,6 @@ class PrinterService:
                 ESC_BOLD_ON + align_center(brand.upper(), width) + ESC_BOLD_OFF
             )
         lines.append(align_center("Gerenciado por Kôma", width))
-
-        if self.simulate:
-            lines.append("\n" + align_center("[CUT]", width) + "\n")
 
         return "\n".join(lines)
 
@@ -703,9 +550,6 @@ class PrinterService:
             )
         lines.append(align_center("Documento não fiscal", width))
 
-        if self.simulate:
-            lines.append("\n" + align_center("[CUT]", width) + "\n")
-
         return "\n".join(lines)
 
 
@@ -757,9 +601,6 @@ class PrinterService:
         lines.append(align_center("Obrigado pela preferência!", width))
         lines.append(align_center("Documento não fiscal", width))
         
-        if self.simulate:
-            lines.append("\n" + align_center("[CUT]", width) + "\n")
-            
         return "\n".join(lines)
 
     def generate_delivery_kitchen_ticket(self, comanda) -> str:
@@ -783,9 +624,6 @@ class PrinterService:
                 
         lines.append(draw_separator("=", width))
         
-        if self.simulate:
-            lines.append("\n" + align_center("[CUT]", width) + "\n")
-            
         return "\n".join(lines)
 
     def generate_delivery_motoboy_ticket(self, comanda, motoboy_nome: str) -> str:
@@ -838,9 +676,6 @@ class PrinterService:
         lines.append(align_center("Obrigado pela preferência!", width))
         lines.append(align_center("Documento não fiscal", width))
         
-        if self.simulate:
-            lines.append("\n" + align_center("[CUT]", width) + "\n")
-            
         return "\n".join(lines)
 
 def mask_phone(phone: Optional[str]) -> str:

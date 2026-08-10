@@ -14,6 +14,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     event,
+    text,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.hybrid import hybrid_property
@@ -1132,6 +1133,19 @@ class PrintJob(Base):
 
     __table_args__ = (
         UniqueConstraint("restaurante_id", "idempotency_key", name="uq_print_jobs_restaurante_idempotency"),
+        Index(
+            "ix_print_jobs_tenant_pending_fifo",
+            "restaurante_id",
+            "created_at",
+            "id",
+            postgresql_where=text("status = 'pending'"),
+        ),
+        Index(
+            "ix_print_jobs_tenant_status_created",
+            "restaurante_id",
+            "status",
+            "created_at",
+        ),
     )
 
 
@@ -1177,5 +1191,3 @@ class NotificacaoWhatsApp(Base):
     raw_payload = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.timezone.utc), onupdate=lambda: datetime.datetime.now(datetime.timezone.utc))
-
-

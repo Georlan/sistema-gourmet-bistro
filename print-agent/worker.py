@@ -9,6 +9,7 @@ from config import AgentConfig
 from api_client import KomaApiClient
 from journal import PrintJournal
 from adapters import get_adapter
+from dispatcher import dispatch_claimed_jobs
 
 log = logging.getLogger("print-agent.worker")
 
@@ -111,6 +112,10 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
     print(f"Adaptador:   {adapter.__class__.__name__}")
     print(f"Polling:     {config.poll_interval_seconds}s")
     print(f"Lote:        até {config.claim_batch_size} trabalho(s)")
+    print(
+        "Paralelismo: até "
+        f"{config.max_parallel_printers} impressora(s)"
+    )
     print("=========================================================")
 
     last_heartbeat = 0.0
@@ -264,117 +269,41 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
                     len(claimed_jobs),
                     claim_api_ms,
                 )
-                confirmations = []
-                latency_by_job = {}
-                printer_failed = False
-
-                for index, next_job in enumerate(claimed_jobs):
-                    job_id = next_job["id"]
-                    ikey = next_job.get("idempotency_key", job_id)
-                    doc_type = next_job.get(
-                        "document_type",
-                        "producao",
-                    ).upper()
-                    dest = next_job.get(
-                        "destination",
-                        "COZINHA",
-                    ).upper()
-                    payload = next_job.get("payload_text", "")
-                    queue_latency_ms = next_job.get("queue_latency_ms")
-                    queue_metric = (
-                        f"{queue_latency_ms}ms"
-                        if queue_latency_ms is not None
-                        else "indisponível"
-                    )
-                    target_printer = (
-                        config.printers.get(dest)
-                        or config.printers.get("PADRAO")
-                        or "Padrão"
-                    )
-
-                    log.info(
-                        "[JOB RESERVADO] Job ID '%s' (Tipo: %s, "
-                        "Destino: %s, Fila: %s)",
-                        job_id,
-                        doc_type,
-                        dest,
-                        queue_metric,
-                    )
-
-                    if journal.is_printed(job_id, ikey):
-                        log.info(
-                            "[IDEMPOTÊNCIA] Job '%s' já foi impresso nesta "
-                            "máquina. Não vou imprimir novamente.",
-                            job_id,
-                        )
-                        cups_ms = 0
-                        confirmations.append(
-                            {
-                                "job_id": job_id,
-                                "printer_name": target_printer,
-                            }
-                        )
-                    else:
-                        log.info(
-                            "[ENVIO À IMPRESSORA] Enviando job '%s' para "
-                            "'%s' (impressora: '%s')...",
-                            job_id,
-                            adapter.__class__.__name__,
-                            target_printer,
-                        )
-                        print_started = time.perf_counter()
-                        success = adapter.print_ticket(
-                            payload,
-                            target_printer,
-                            doc_type,
-                        )
-                        cups_ms = round(
-                            (time.perf_counter() - print_started) * 1000
-                        )
-                        if success:
-                            # O journal local é gravado antes da confirmação
-                            # remota: uma queda de rede nunca causa segunda via.
-                            journal.record_print_success(
-                                job_id,
-                                ikey,
-                                target_printer,
-                                confirmed=False,
-                            )
-                            confirmations.append(
-                                {
-                                    "job_id": job_id,
-                                    "printer_name": target_printer,
-                                }
-                            )
-                        else:
-                            client.fail_job(
-                                job_id,
-                                error_msg=(
-                                    "Falha no adaptador de impressão "
-                                    f"'{adapter.__class__.__name__}'"
-                                ),
-                            )
-                            remaining_ids = [
-                                pending_job["id"]
-                                for pending_job in claimed_jobs[index + 1:]
-                            ]
-                            released_ids = client.release_jobs(remaining_ids)
-                            log.error(
-                                "[FALHA] Job '%s' falhou no adaptador após "
-                                "%sms. %s trabalho(s) não enviados foram "
-                                "devolvidos à fila.",
-                                job_id,
-                                cups_ms,
-                                len(released_ids),
-                            )
-                            last_diagnostics_refresh = 0.0
-                            printer_failed = True
-                            break
-
-                    latency_by_job[job_id] = {
-                        "queue": queue_metric,
-                        "cups_ms": cups_ms,
+                outcomes = dispatch_claimed_jobs(
+                    adapter,
+                    journal,
+                    claimed_jobs,
+                    config.printers,
+                    config.max_parallel_printers,
+                )
+                confirmations = [
+                    {
+                        "job_id": item["job"]["id"],
+                        "printer_name": item["printer_name"],
                     }
+                    for item in outcomes
+                    if item["state"] == "accepted"
+                ]
+                failed = [item for item in outcomes if item["state"] == "failed"]
+                release_ids = [
+                    item["job"]["id"]
+                    for item in outcomes
+                    if item["state"] == "release"
+                ]
+                printer_failed = bool(failed)
+
+                for item in failed:
+                    client.fail_job(
+                        item["job"]["id"],
+                        error_msg=(
+                            "Falha no adaptador de impressão "
+                            f"'{adapter.__class__.__name__}'"
+                        ),
+                    )
+                if release_ids:
+                    client.release_jobs(release_ids)
+                if printer_failed:
+                    last_diagnostics_refresh = 0.0
 
                 confirmation_ms = 0
                 confirmed_ids = set()
@@ -391,7 +320,19 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
 
                 for item in confirmations:
                     job_id = item["job_id"]
-                    latency = latency_by_job.get(job_id, {})
+                    outcome = next(
+                        item
+                        for item in outcomes
+                        if item["job"]["id"] == job_id
+                    )
+                    queue_latency_ms = outcome["job"].get(
+                        "queue_latency_ms"
+                    )
+                    queue_metric = (
+                        f"{queue_latency_ms}ms"
+                        if queue_latency_ms is not None
+                        else "indisponível"
+                    )
                     if job_id in confirmed_ids:
                         journal.mark_backend_confirmed(job_id)
                         log.info(
@@ -410,9 +351,9 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
                         "[LATÊNCIA] Job '%s': fila=%s, reserva_lote_api=%sms, "
                         "envio_cups=%sms, confirmacao_lote_api=%sms",
                         job_id,
-                        latency.get("queue", "indisponível"),
+                        queue_metric,
                         claim_api_ms,
-                        latency.get("cups_ms", 0),
+                        outcome.get("submit_ms", 0),
                         confirmation_ms,
                     )
 

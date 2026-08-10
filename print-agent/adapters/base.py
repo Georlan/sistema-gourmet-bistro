@@ -90,9 +90,20 @@ class BasePrinterAdapter(ABC):
         }
 
     @abstractmethod
-    def print_ticket(self, payload_text: str, printer_name: str, doc_type: str) -> bool:
+    def print_ticket(
+        self,
+        payload_text: str,
+        printer_name: str,
+        doc_type: str,
+        *,
+        skip_ready_check: bool = False,
+    ) -> bool:
         """
         Envia o cupom para a impressora física ou destino configurado.
-        Retorna True se impresso com sucesso, False caso contrário.
+        Retorna True quando o sistema operacional aceitou o trabalho.
+
+        O worker pode usar ``skip_ready_check`` depois de validar o equipamento
+        uma única vez no início do lote. Isso evita executar CUPS/PowerShell de
+        novo para cada cupom sem enfraquecer a validação das chamadas isoladas.
         """
         pass

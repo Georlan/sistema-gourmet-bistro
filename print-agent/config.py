@@ -20,6 +20,7 @@ class AgentConfig:
     poll_interval_seconds: float = 0.5
     heartbeat_interval_seconds: float = 5.0
     claim_batch_size: int = 10
+    max_parallel_printers: int = 2
     printers: Dict[str, str] = field(default_factory=lambda: {"PADRAO": "Padrão"})
     pair_only: bool = False
 
@@ -54,6 +55,12 @@ class AgentConfig:
                         data.get(
                             "claim_batch_size",
                             config.claim_batch_size,
+                        )
+                    )
+                    config.max_parallel_printers = int(
+                        data.get(
+                            "max_parallel_printers",
+                            config.max_parallel_printers,
                         )
                     )
                     config.printers = data.get("printers", config.printers)
@@ -96,6 +103,18 @@ class AgentConfig:
                         os.getenv(
                             "KOMA_CLAIM_BATCH_SIZE",
                             str(config.claim_batch_size),
+                        )
+                    ),
+                ),
+            )
+            config.max_parallel_printers = max(
+                1,
+                min(
+                    4,
+                    int(
+                        os.getenv(
+                            "KOMA_MAX_PARALLEL_PRINTERS",
+                            str(config.max_parallel_printers),
                         )
                     ),
                 ),
@@ -163,6 +182,12 @@ def parse_cli_args(config: AgentConfig) -> AgentConfig:
         help="Quantidade máxima de trabalhos reservados por chamada (1–10)",
     )
     parser.add_argument(
+        "--parallel-printers",
+        type=int,
+        default=config.max_parallel_printers,
+        help="Quantidade de impressoras processadas em paralelo (1–4)",
+    )
+    parser.add_argument(
         "--pair-only",
         action="store_true",
         help="Conclui o pareamento automático e encerra",
@@ -177,6 +202,7 @@ def parse_cli_args(config: AgentConfig) -> AgentConfig:
     config.poll_interval_seconds = max(0.1, args.poll_sec)
     config.heartbeat_interval_seconds = max(5.0, args.hb_sec)
     config.claim_batch_size = max(1, min(10, args.batch_size))
+    config.max_parallel_printers = max(1, min(4, args.parallel_printers))
     config.pair_only = args.pair_only
 
     return config

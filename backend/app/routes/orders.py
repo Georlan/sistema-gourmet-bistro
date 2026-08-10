@@ -1900,66 +1900,6 @@ def confirmar_entrega_motoboy(
 
 
 
-@router.post("/teste-impressao")
-def testar_impressao(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
-    from ..printer_service import PrinterService
-    try:
-        printer = PrinterService()
-        test_text = (
-            "========================================\n"
-            "         KOMA GOURMET BISTRO\n"
-            "========================================\n"
-            "Teste de Impressao Direta (Hardware)\n"
-            "Disparado via: Painel do Caixa\n"
-            "Status: Conectado & Operando\n"
-            "========================================\n"
-            "\n\n\n\n"
-        )
-        printer.send_to_printer("teste", test_text)
-        return {"status": "success", "detail": "Teste de impressão enviado com sucesso"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/impressoras/detectadas")
-def buscar_impressoras_detectadas(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
-    import glob
-    import subprocess
-    import os
-    
-    impressoras = []
-    
-    # 1. Linux USB nodes
-    usb_printers = glob.glob('/dev/usb/lp*') + glob.glob('/dev/usblp*')
-    for p in usb_printers:
-        name = "Impressora Termica USB"
-        if "lp0" in p:
-            try:
-                out = subprocess.check_output("lsusb", shell=True).decode()
-                if "1753:0b00" in out or "GERTEC" in out.upper():
-                    name = "Gertec G250"
-            except:
-                pass
-        impressoras.append(f"{name} (USB - {p}) • Ativa")
-        
-    # 2. Windows printers
-    if os.name == 'nt':
-        try:
-            import win32print
-            printers = win32print.EnumPrinters(win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS)
-            for p in printers:
-                impressoras.append(f"{p[2]} (Windows Spool - {p[1]}) • Ativa")
-        except:
-            pass
-            
-    # Fallback/Default if empty
-    if not impressoras:
-        impressoras.append("Gertec G250 (USB - /dev/usb/lp0) • Ativa")
-        impressoras.append("Impressora Termica Cozinha (Rede - 192.168.1.150) • Simulador")
-        
-    return impressoras
-
-
 @router.post("/mesclar", response_model=ComandaResponse)
 def mesclar_comandas(
     mesa_origem_id: int,

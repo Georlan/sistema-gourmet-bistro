@@ -97,6 +97,7 @@ interface PrintMonitorResponse {
   generated_at: string;
   history_date: string;
   history_limit: number;
+  queue_limit: number;
   history_timezone: string;
   online_threshold_seconds: number;
   command_timeout_seconds?: number;
@@ -116,6 +117,8 @@ interface PrintMonitorResponse {
     oldest_unresolved_seconds: number | null;
   };
   jobs: PrintJobHistory[];
+  history_jobs: PrintJobHistory[];
+  queue_jobs: PrintJobHistory[];
   latest_spooler_success: {
     job_id: string;
     reference: string;
@@ -186,7 +189,8 @@ function friendlyPrinterName(value: string | null): string {
   return value;
 }
 
-function friendlyUsbConnectionError(status: number): string {
+function friendlyUsbConnectionError(status: number, detail?: string): string {
+  if (detail) return detail;
   if (status === 409) {
     return (
       'Não foi possível preparar a conexão USB. Tente novamente; '
@@ -214,6 +218,7 @@ export function PrintMonitorPanel({
   const [startingAgent, setStartingAgent] = useState(false);
   const [reprintingId, setReprintingId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [showQueue, setShowQueue] = useState(true);
 
   const authorization = authHeaders.Authorization || authHeaders.authorization || '';
 
@@ -402,7 +407,7 @@ export function PrintMonitorPanel({
   const hasFreshPrinterDiagnostics = Boolean(
     monitorData?.agents.some(agent => agentHasFreshDiagnostics(agent))
   );
-  const latestJob = monitorData?.jobs[0] || null;
+  const latestJob = monitorData?.queue_jobs?.[0] || monitorData?.jobs[0] || null;
 
   const requestUsbConnection = async (
     agentId?: string,
@@ -429,7 +434,9 @@ export function PrintMonitorPanel({
       );
       const data = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(friendlyUsbConnectionError(response.status));
+        throw new Error(
+          friendlyUsbConnectionError(response.status, data?.detail)
+        );
       }
       setError('');
       setPendingCommandId(data?.command?.id || null);
@@ -493,14 +500,48 @@ export function PrintMonitorPanel({
       setReprintingId(null);
     }
   };
-  const failedOrDelayedJobs = useMemo(() => {
-    return monitorData?.jobs.filter(j => (j.status === 'failed' || j.delayed) && j.can_reprint) || [];
+  const failedJobs = useMemo(() => {
+    return monitorData?.queue_jobs?.filter(
+      job => job.status === 'failed' && job.can_reprint
+    ) || [];
   }, [monitorData]);
 
   const handleRetryFailedJobs = async () => {
-    if (failedOrDelayedJobs.length === 0) return;
-    for (const job of failedOrDelayedJobs) {
-      await requestReprint(job);
+    if (failedJobs.length === 0) return;
+    if (!window.confirm(
+      `Recuperar ${failedJobs.length} impressão(ões) com falha?`
+    )) return;
+    setReprintingId('batch');
+    try {
+      const response = await fetch(
+        `${apiBaseUrl}/api/print-agents/jobs/retry-batch`,
+        {
+          method: 'POST',
+          headers: {
+            ...authHeaders,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({job_ids: failedJobs.map(job => job.id)})
+        }
+      );
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(data?.detail || 'Não foi possível recuperar a fila.');
+      }
+      setActionSuccessful(true);
+      setActionMessage(
+        `${data?.retried_job_ids?.length || 0} impressão(ões) voltaram para a fila.`
+      );
+      await loadMonitor(false);
+    } catch (requestError) {
+      setActionSuccessful(false);
+      setActionMessage(
+        requestError instanceof Error
+          ? requestError.message
+          : 'Não foi possível recuperar a fila.'
+      );
+    } finally {
+      setReprintingId(null);
     }
   };
 
@@ -537,13 +578,6 @@ export function PrintMonitorPanel({
         detail: 'Use o botão abaixo para procurar a impressora conectada.'
       };
     }
-    if (!hasUsbCommandAgent) {
-      return {
-        tone: 'danger',
-        title: 'Não foi possível preparar a conexão USB',
-        detail: 'Tente novamente; se continuar, contate o suporte.'
-      };
-    }
     if (!hasReadyPrinter && presentUsbPrinters.length > 0) {
       return {
         tone: 'warning',
@@ -577,6 +611,16 @@ export function PrintMonitorPanel({
         tone: 'neutral',
         title: 'Impressão em andamento',
         detail: `${queueTotal} trabalho(s) sendo processado(s).`
+      };
+    }
+    if (!hasUsbCommandAgent) {
+      return {
+        tone: 'success',
+        title: 'Impressora USB pronta',
+        detail: (
+          `${friendlyPrinterName(readyUsbPrinters[0]?.name || null)} está disponível. `
+          + 'Atualize o Kôma Print quando quiser habilitar a reconexão remota.'
+        )
       };
     }
     return {
@@ -668,7 +712,7 @@ export function PrintMonitorPanel({
                   {actionMessage}
                 </span>
               )}
-              {failedOrDelayedJobs.length > 0 && (
+              {failedJobs.length > 0 && (
                 <button
                   type="button"
                   onClick={() => void handleRetryFailedJobs()}
@@ -677,7 +721,7 @@ export function PrintMonitorPanel({
                   id="btn-retry-failed-print-jobs"
                 >
                   <RotateCcw className="h-4 w-4" />
-                  <span>Reenviar {failedOrDelayedJobs.length} impressão(ões) com falha/atraso</span>
+                  <span>Recuperar {failedJobs.length} impressão(ões) com falha</span>
                 </button>
               )}
             </div>
@@ -696,7 +740,7 @@ export function PrintMonitorPanel({
                   : <Power size={16} />}
                 {startingAgent ? 'Preparando…' : 'Preparar impressão'}
               </button>
-            ) : (
+            ) : hasReadyPrinter && !hasUsbCommandAgent ? null : (
               <button
                 type="button"
                 onClick={() => void requestUsbConnection()}
@@ -784,6 +828,80 @@ export function PrintMonitorPanel({
         </div>
       )}
 
+      <div className="overflow-hidden rounded-2xl border border-[#29292e]">
+        <button
+          type="button"
+          onClick={() => setShowQueue(current => !current)}
+          className="flex min-h-12 w-full items-center justify-between gap-3 bg-[#171719] px-4 py-3 text-left transition hover:bg-[#202023] cursor-pointer"
+          aria-expanded={showQueue}
+        >
+          <span className="flex min-w-0 items-center gap-3">
+            <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
+              queueTotal || failedJobs.length
+                ? 'bg-amber-400/10 text-amber-300'
+                : 'bg-emerald-400/10 text-emerald-300'
+            }`}>
+              <Clock3 size={15} />
+            </span>
+            <span>
+              <strong className="block text-[11px] text-white">Fila e recuperação</strong>
+              <span className="block text-[9px] font-normal text-gray-500">
+                {queueTotal} em processamento · {failedJobs.length} com falha · limite visual {monitorData?.queue_limit || 50}
+              </span>
+            </span>
+          </span>
+          {showQueue ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </button>
+
+        {showQueue && (
+          <div className="max-h-72 overflow-auto border-t border-[#29292e] bg-[#0d0d0f]">
+            {monitorData?.queue_jobs?.length ? (
+              <div className="divide-y divide-[#242428]">
+                {monitorData.queue_jobs.map(job => {
+                  const displayStatus = job.display_status || job.status;
+                  return (
+                    <div key={job.id} className="grid grid-cols-[1fr_auto] items-center gap-3 px-4 py-3 sm:grid-cols-[1fr_auto_auto]">
+                      <div className="min-w-0">
+                        <strong className="block truncate text-[10px] text-gray-200">
+                          {job.reference || friendlyDocumentType(job.document_type)}
+                        </strong>
+                        <span className="text-[8px] text-gray-500">
+                          {friendlyDocumentType(job.document_type)} · {job.destination} · aguardando {formatAge(job.age_seconds)}
+                        </span>
+                        {job.last_error && (
+                          <span className="mt-1 block truncate text-[8px] text-red-300" title={job.last_error}>
+                            {job.last_error}
+                          </span>
+                        )}
+                      </div>
+                      <span className={`inline-flex rounded-full border px-2 py-1 text-[8px] font-bold ${STATUS_STYLES[displayStatus] || STATUS_STYLES.cancelled}`}>
+                        {STATUS_LABELS[displayStatus] || displayStatus}
+                      </span>
+                      {job.status === 'failed' ? (
+                        <button
+                          type="button"
+                          onClick={() => void handleRetryFailedJobs()}
+                          disabled={Boolean(reprintingId)}
+                          className="col-span-2 inline-flex min-h-8 items-center justify-center gap-1.5 rounded-lg border border-red-500/30 px-2.5 py-1 text-[8px] font-bold text-red-200 transition hover:bg-red-500/10 disabled:opacity-50 sm:col-span-1 cursor-pointer"
+                        >
+                          <RotateCcw size={10} /> Recuperar
+                        </button>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="px-4 py-6 text-center">
+                <CheckCircle2 size={18} className="mx-auto text-emerald-400" />
+                <strong className="mt-2 block text-[10px] text-gray-300">Fila vazia</strong>
+                <span className="text-[8px] text-gray-500">Nenhuma impressão precisa ser recuperada.</span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -848,7 +966,13 @@ export function PrintMonitorPanel({
                 <button
                   type="button"
                   onClick={() => void requestUsbConnection(printer.agentId, printer)}
-                  disabled={busy || !hasOnlineAgent}
+                  disabled={
+                    busy
+                    || !hasOnlineAgent
+                    || !monitorData?.agents.find(
+                      agent => agent.agent_id === printer.agentId
+                    )?.supports_usb_commands
+                  }
                   className="mt-4 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#3a3a40] bg-[#1c1c1f] px-4 py-2 text-[10px] font-bold text-white transition hover:border-emerald-500/50 hover:bg-[#242428] disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
                 >
                   {busy
@@ -889,7 +1013,7 @@ export function PrintMonitorPanel({
             <History size={14} />
             Histórico recente
             <span className="text-[9px] font-normal text-gray-500">
-              hoje · {monitorData?.jobs.length || 0}/{monitorData?.history_limit || 20}
+              hoje · {monitorData?.history_jobs?.length || 0}/{monitorData?.history_limit || 20}
             </span>
           </span>
           {showHistory ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -897,7 +1021,7 @@ export function PrintMonitorPanel({
 
         {showHistory && (
           <div className="max-h-80 overflow-auto">
-            {monitorData?.jobs.length ? (
+            {monitorData?.history_jobs?.length ? (
               <table className="w-full text-left">
                 <thead className="sticky top-0 bg-[#121214] text-[8px] uppercase tracking-wider text-gray-500">
                   <tr>
@@ -909,7 +1033,7 @@ export function PrintMonitorPanel({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#27272A]">
-                  {monitorData.jobs.map(job => {
+                  {monitorData.history_jobs.map(job => {
                     const displayStatus = job.display_status || job.status;
                     return (
                       <tr key={job.id} className={job.delayed ? 'bg-amber-500/5' : ''}>

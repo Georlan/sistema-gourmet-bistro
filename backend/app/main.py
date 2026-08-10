@@ -429,16 +429,7 @@ def health_check():
         is_dev = os.getenv("ENVIRONMENT") == "development"
         db_status = f"unhealthy: {e}" if is_dev else "unhealthy"
 
-    # 2. Contar arquivos na fila de impressão
-    print_jobs_count = 0
-    try:
-        import os
-        if os.path.exists(settings.PRINT_JOBS_DIR):
-            print_jobs_count = len([f for f in os.listdir(settings.PRINT_JOBS_DIR) if os.path.isfile(os.path.join(settings.PRINT_JOBS_DIR, f))])
-    except Exception:
-        pass
-
-    # 3. Contar conexões ativas no WebSocket
+    # 2. Contar conexões ativas no WebSocket
     ws_connections_count = 0
     try:
         from .websocket_manager import manager
@@ -450,10 +441,7 @@ def health_check():
         "status": "ok",
         "version": settings.PROJECT_VERSION,
         "database": db_status,
-        "print_queue": {
-            "jobs_count": print_jobs_count,
-            "directory": settings.PRINT_JOBS_DIR
-        },
+        "print_queue": {"backend": "postgres", "consumer": "koma-print"},
         "websocket": {
             "active_connections": ws_connections_count
         }

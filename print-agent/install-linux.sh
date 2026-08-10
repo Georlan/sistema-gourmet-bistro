@@ -26,6 +26,7 @@ required_files=(
     config.py
     pairing.py
     worker.py
+    dispatcher.py
     api_client.py
     journal.py
     requirements.txt

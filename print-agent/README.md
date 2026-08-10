@@ -28,6 +28,18 @@ git pull --ff-only origin main
 bash print-agent/install-linux.sh
 ```
 
+## Instalação no Windows
+
+Pré-requisitos: Python 3.10+ e a impressora disponível no Spooler do Windows.
+Abra o PowerShell na raiz do projeto e execute:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\print-agent\install-windows.ps1
+```
+
+O instalador pareia o computador, instala o adaptador RAW, registra a tarefa
+`KomaPrintAgent` para iniciar no logon e configura o atalho `koma-print://`.
+
 Diagnóstico:
 
 ```bash
@@ -72,6 +84,8 @@ credencial armazenada em `~/.config/koma-print-agent/credentials.json`.
 | `--output-dir` | `KOMA_OUTPUT_DIR` | `print_output` | Saída do simulador `file` |
 | `--poll-sec` | `KOMA_POLL_SEC` | `0.5` | Espera somente quando a fila está vazia |
 | `--hb-sec` | `KOMA_HB_SEC` | `5` | Intervalo do heartbeat e dos comandos do painel |
+| `--batch-size` | `KOMA_CLAIM_BATCH_SIZE` | `10` | Trabalhos reservados por ida à nuvem |
+| `--parallel-printers` | `KOMA_MAX_PARALLEL_PRINTERS` | `2` | Impressoras processadas em paralelo (máximo 4) |
 
 O argumento `--token` existe para diagnóstico e automação técnica, mas não faz
 parte do fluxo normal do cliente.
@@ -81,6 +95,8 @@ parte do fluxo normal do cliente.
 - A conexão HTTP é reutilizada entre consultas.
 - A busca e a reserva do próximo cupom ocorrem em uma chamada atômica.
 - Enquanto houver fila, o próximo cupom é buscado sem pausa.
+- Diagnóstico físico é reaproveitado no lote, sem repetir CUPS/PowerShell para cada cupom.
+- Cada impressora preserva FIFO; destinos diferentes são submetidos em paralelo.
 - O journal SQLite local impede uma segunda impressão após falha de conexão.
 - Trabalhos impressos e ainda não confirmados são reconciliados com o backend.
 - Falha real de CUPS/Spooler não é registrada como impressão concluída.
@@ -106,9 +122,3 @@ Rotas usadas pelo agente:
 
 As rotas legadas `GET /jobs/next` e `POST /jobs/{id}/claim` permanecem
 disponíveis durante a atualização de instalações antigas.
-
-## Windows
-
-O adaptador RAW para o Spooler já existe e usa a impressora padrão ou a fila
-configurada. Ainda falta empacotar o instalador do Windows e o serviço de
-inicialização automática antes da distribuição comercial.
