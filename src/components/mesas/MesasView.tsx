@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
-import clsx from 'clsx';
+import React, { useMemo, useState } from 'react';
+import { Activity, CheckCircle2, Grid2X2, Radio, Utensils } from 'lucide-react';
 import { Table, Order, DraftItem } from '../../types';
 import { MesaCard } from '../MesaCard';
 
@@ -36,139 +36,158 @@ export function MesasView({
   readOnly = false,
 }: MesasViewProps) {
   const [internalFilter, setInternalFilter] = useState<'todos' | 'livres' | 'ocupadas' | 'prontas'>('todos');
-
   const currentFilter = externalFilter ?? internalFilter;
 
-  const handleFilterSelect = (filter: 'todos' | 'livres' | 'ocupadas' | 'prontas') => {
-    if (onFilterChange) {
-      onFilterChange(filter);
-    } else {
-      setInternalFilter(filter);
-    }
-  };
+  const tableRows = useMemo(() => (salonTables || []).map((table) => {
+    const tableOrders = orders.filter((order) => order.mesaId === table.id);
+    const isReady = tableOrders
+      .flatMap((order) => order.itens || [])
+      .some((item) => (item.status as string) === 'pronto');
+    return { table, tableOrders, isReady };
+  }), [orders, salonTables]);
 
-  const filteredTables = (salonTables || []).filter((table) => {
-    const tableOrders = orders.filter((o) => o.mesaId === table.id);
+  const counts = useMemo(() => ({
+    todos: tableRows.length,
+    livres: tableRows.filter(({ tableOrders }) => tableOrders.length === 0).length,
+    ocupadas: tableRows.filter(({ tableOrders }) => tableOrders.length > 0).length,
+    prontas: tableRows.filter(({ isReady }) => isReady).length,
+  }), [tableRows]);
+
+  const filteredRows = useMemo(() => tableRows.filter(({ tableOrders, isReady }) => {
     if (currentFilter === 'livres') return tableOrders.length === 0;
     if (currentFilter === 'ocupadas') return tableOrders.length > 0;
-    if (currentFilter === 'prontas') {
-      return tableOrders
-        .flatMap((o) => o.itens)
-        .some((i) => (i.status as string) === 'pronto');
-    }
+    if (currentFilter === 'prontas') return isReady;
     return true;
-  });
+  }), [currentFilter, tableRows]);
+
+  const handleFilterSelect = (filter: typeof currentFilter) => {
+    if (onFilterChange) onFilterChange(filter);
+    else setInternalFilter(filter);
+  };
+
+  const filters = [
+    { id: 'todos' as const, label: 'Todas', count: counts.todos },
+    { id: 'livres' as const, label: 'Livres', count: counts.livres },
+    { id: 'ocupadas' as const, label: 'Ocupadas', count: counts.ocupadas },
+    { id: 'prontas' as const, label: 'Prontas', count: counts.prontas },
+  ];
 
   return (
-    <div className="space-y-6 w-full text-white font-sans select-none">
-      <div className="space-y-3">
-        {/* Title + Filters Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-[#27272A]">
-          <div className="flex items-center gap-3">
-            <h3 className="font-serif text-xl sm:text-2xl font-bold tracking-tight text-white shrink-0">
-              Mesas
-            </h3>
-            <span className="text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-1 rounded-lg font-mono font-bold">
-              Estrutura Física do Salão
-            </span>
-          </div>
+    <div className="w-full text-white font-sans select-none space-y-4 sm:space-y-5">
+      <section className="waiter-salon-stage relative overflow-hidden rounded-[24px] sm:rounded-[30px] border border-white/[0.08] bg-[#0d100e] px-4 py-5 sm:px-7 sm:py-6 lg:px-9 lg:py-7">
+        <div className="waiter-salon-stage__plane" aria-hidden="true" />
+        <span className="waiter-salon-stage__word" aria-hidden="true">SALÃO</span>
 
-          {/* Filter Buttons */}
-          <div
-            role="group"
-            aria-label="Filtrar mesas por status"
-            className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full sm:w-auto"
-          >
-            {(['todos', 'livres', 'ocupadas', 'prontas'] as const).map((filter) => {
-              const count = {
-                todos: (salonTables || []).length,
-                livres: (salonTables || []).filter((t) => !orders.some((o) => o.mesaId === t.id)).length,
-                ocupadas: (salonTables || []).filter((t) => orders.some((o) => o.mesaId === t.id)).length,
-                prontas: (salonTables || []).filter((t) => {
-                  const tOrders = orders.filter((o) => o.mesaId === t.id);
-                  return tOrders.flatMap((o) => o.itens).some((i) => (i.status as string) === 'pronto');
-                }).length,
-              }[filter];
-
-              const label = {
-                todos: 'Todas',
-                livres: 'Livres',
-                ocupadas: 'Ocupadas',
-                prontas: 'Prontas',
-              }[filter];
-
-              const isActive = currentFilter === filter;
-
-              return (
-                <button
-                  key={filter}
-                  type="button"
-                  onClick={() => !readOnly && handleFilterSelect(filter)}
-                  aria-pressed={isActive}
-                  className={`px-3 py-2 rounded-xl text-xs font-bold transition-all text-center border ${
-                    readOnly ? 'cursor-default' : 'cursor-pointer'
-                  } ${
-                    isActive
-                      ? 'bg-[#280c12] text-white border-rose-950/80 shadow-md'
-                      : 'bg-[#14161B] text-zinc-300 hover:bg-zinc-800 border-zinc-800'
-                  }`}
-                >
-                  {label} <span className="opacity-75 text-[10px] font-normal ml-0.5">({count})</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Real Table Grid */}
-        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2.5 w-full p-1">
-          {filteredTables.length === 0 ? (
-            <div className="col-span-full py-10 text-center text-gray-500 text-sm italic">
-              Nenhuma mesa encontrada neste status.
+        <div className="relative z-10 flex flex-col xl:flex-row xl:items-end xl:justify-between gap-5 xl:gap-8">
+          <div className="max-w-2xl">
+            <div className="flex items-center gap-2 text-[9px] sm:text-[10px] font-mono font-bold uppercase tracking-[0.18em] text-[#00d9a6]">
+              <Radio size={13} className="animate-pulse" />
+              Operação ao vivo
             </div>
-          ) : (
-            filteredTables.map((table) => {
-              const tableOrders = orders.filter((o) => o.mesaId === table.id);
-              const waiterDrafts = draftItemsMap[table.id] || [];
-              const draftQtyCount = waiterDrafts.reduce((sum, item) => sum + (item.quantidade || 1), 0);
+            <div className="mt-2 flex items-end gap-3 sm:gap-4">
+              <h2 className="font-serif text-[2rem] sm:text-4xl lg:text-5xl font-black tracking-[-0.055em] leading-none text-white">
+                Mapa de mesas
+              </h2>
+              <span className="hidden sm:inline-block mb-1.5 h-1 w-14 bg-[#00b894] -rotate-2" aria-hidden="true" />
+            </div>
+            <p className="mt-2.5 max-w-xl text-xs sm:text-sm text-zinc-400 leading-relaxed">
+              Veja o salão inteiro, identifique prioridades e abra uma mesa com um toque.
+            </p>
+          </div>
 
-              const otherWaitersServing = Object.keys(activeDrafts[table.id] || {})
-                .filter((gId) => gId !== activeWaiterId)
-                .map((gId) => activeDrafts[table.id][gId].garcomNome);
-
-              const tableComandas = orders.filter((o) => o.mesaId === table.id);
-              const hasPendingPayment = pagamentosPendentes.some((pag) =>
-                tableComandas.some((o) => o.id === pag.comanda_id)
-              );
-
-              const mergedSources = tableComandas
-                .map((o) => o.mesaOrigemId)
-                .filter((id): id is number => id !== null && id !== undefined && id !== table.id);
-
-              const mergedIntoMesaId = orders.find((o) => o.mesaOrigemId === table.id)?.mesaId || null;
-
-              return (
-                <MesaCard
-                  key={table.id}
-                  table={table}
-                  orders={tableOrders}
-                  draftCount={draftQtyCount}
-                  otherWaitersServing={otherWaitersServing}
-                  currentTime={tableOrders.length > 0 ? currentTime : 0}
-                  activeWaiterId={activeWaiterId}
-                  onClick={(id) => {
-                    if (!readOnly && onTableClick) {
-                      onTableClick(id);
-                    }
-                  }}
-                  hasPendingPayment={hasPendingPayment}
-                  mergedSources={mergedSources}
-                  mergedIntoMesaId={mergedIntoMesaId}
-                />
-              );
-            })
-          )}
+          <div className="grid grid-cols-3 gap-px overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.08] w-full xl:w-auto xl:min-w-[470px]">
+            <div className="bg-[#111411] px-3 py-3 sm:px-4 sm:py-3.5">
+              <div className="flex items-center gap-1.5 text-zinc-500">
+                <Grid2X2 size={12} />
+                <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-wider">Salão</span>
+              </div>
+              <p className="mt-1 font-mono text-lg sm:text-xl font-bold text-white">{counts.todos}</p>
+            </div>
+            <div className="bg-[#111411] px-3 py-3 sm:px-4 sm:py-3.5">
+              <div className="flex items-center gap-1.5 text-rose-400">
+                <Utensils size={12} />
+                <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-wider">Ocupadas</span>
+              </div>
+              <p className="mt-1 font-mono text-lg sm:text-xl font-bold text-white">{counts.ocupadas}</p>
+            </div>
+            <div className="bg-[#111411] px-3 py-3 sm:px-4 sm:py-3.5">
+              <div className="flex items-center gap-1.5 text-amber-400">
+                <CheckCircle2 size={12} />
+                <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-wider">Prontas</span>
+              </div>
+              <p className="mt-1 font-mono text-lg sm:text-xl font-bold text-white">{counts.prontas}</p>
+            </div>
+          </div>
         </div>
+      </section>
+
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 border-b border-white/[0.07] pb-4">
+        <div className="flex items-center gap-2 text-zinc-400">
+          <Activity size={14} className="text-[#00b894]" />
+          <span className="text-[10px] font-bold uppercase tracking-[0.14em]">Estrutura física do salão</span>
+        </div>
+
+        <div role="group" aria-label="Filtrar mesas por status" className="grid grid-cols-4 gap-1.5 w-full lg:w-auto">
+          {filters.map((filter) => {
+            const isActive = currentFilter === filter.id;
+            return (
+              <button
+                key={filter.id}
+                type="button"
+                onClick={() => !readOnly && handleFilterSelect(filter.id)}
+                aria-pressed={isActive}
+                className={`min-w-0 lg:min-w-[108px] px-2.5 py-2.5 rounded-xl text-[10px] sm:text-xs font-bold transition-all text-center border ${
+                  readOnly ? 'cursor-default' : 'cursor-pointer'
+                } ${
+                  isActive
+                    ? 'bg-[#00b894] text-[#04100c] border-[#00b894] shadow-[0_8px_24px_rgba(0,184,148,0.16)]'
+                    : 'bg-white/[0.035] text-zinc-400 hover:text-white hover:bg-white/[0.07] border-white/[0.08]'
+                }`}
+              >
+                {filter.label} <span className={`font-mono text-[9px] ${isActive ? 'text-[#063f32]' : 'text-zinc-600'}`}>{filter.count}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-3.5 w-full">
+        {filteredRows.length === 0 ? (
+          <div className="col-span-full py-16 rounded-2xl border border-dashed border-white/[0.09] text-center text-zinc-500 text-sm">
+            Nenhuma mesa encontrada neste status.
+          </div>
+        ) : filteredRows.map(({ table, tableOrders }) => {
+          const waiterDrafts = draftItemsMap[table.id] || [];
+          const draftQtyCount = waiterDrafts.reduce((sum, item) => sum + (item.quantidade || 1), 0);
+          const otherWaitersServing = Object.keys(activeDrafts[table.id] || {})
+            .filter((waiterId) => waiterId !== activeWaiterId)
+            .map((waiterId) => activeDrafts[table.id][waiterId].garcomNome);
+          const hasPendingPayment = pagamentosPendentes.some((payment) =>
+            tableOrders.some((order) => order.id === payment.comanda_id)
+          );
+          const mergedSources = tableOrders
+            .map((order) => order.mesaOrigemId)
+            .filter((id): id is number => id !== null && id !== undefined && id !== table.id);
+          const mergedIntoMesaId = orders.find((order) => order.mesaOrigemId === table.id)?.mesaId || null;
+
+          return (
+            <MesaCard
+              key={table.id}
+              table={table}
+              orders={tableOrders}
+              draftCount={draftQtyCount}
+              otherWaitersServing={otherWaitersServing}
+              currentTime={tableOrders.length > 0 ? currentTime : 0}
+              activeWaiterId={activeWaiterId}
+              onClick={(id) => {
+                if (!readOnly && onTableClick) onTableClick(id);
+              }}
+              hasPendingPayment={hasPendingPayment}
+              mergedSources={mergedSources}
+              mergedIntoMesaId={mergedIntoMesaId}
+            />
+          );
+        })}
       </div>
     </div>
   );

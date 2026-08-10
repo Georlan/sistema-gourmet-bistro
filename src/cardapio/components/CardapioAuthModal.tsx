@@ -4,13 +4,14 @@
  */
 
 import React, { useState } from "react";
-import { ArrowRight, Phone, User, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, KeyRound, Phone, RefreshCw, User, X } from "lucide-react";
+import { API_BASE_URL } from "../../config/api";
 import {
   CustomerProfile,
   formatBrazilianPhone,
+  mapCustomerProfile,
   normalizeBrazilianPhone,
 } from "../customerSession";
-import { syncCustomerToSupabase } from "../supabaseSync";
 
 interface CardapioAuthModalProps {
   restaurantId: string | number;
@@ -25,47 +26,95 @@ export default function CardapioAuthModal({
 }: CardapioAuthModalProps) {
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
+  const [code, setCode] = useState("");
+  const [step, setStep] = useState<"identify" | "verify">("identify");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isResending, setIsResending] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  const handleSubmit = (event: React.FormEvent) => {
-    event.preventDefault();
-    const normalizedPhone = normalizeBrazilianPhone(phone);
-    const cleanName = name.trim();
+  const normalizedPhone = normalizeBrazilianPhone(phone);
+  const cleanName = name.trim();
+  const numericRestaurantId = Number(restaurantId);
 
+  const validateIdentity = () => {
+    if (!Number.isInteger(numericRestaurantId) || numericRestaurantId <= 0) {
+      setErrorMessage("Não foi possível identificar o restaurante.");
+      return false;
+    }
     if (normalizedPhone.length < 10 || normalizedPhone.length > 11) {
       setErrorMessage("Informe um celular válido com DDD.");
-      return;
+      return false;
     }
     if (cleanName.length < 2) {
       setErrorMessage("Informe um nome válido.");
+      return false;
+    }
+    return true;
+  };
+
+  const requestCode = async (resend = false) => {
+    if (!validateIdentity()) return;
+    resend ? setIsResending(true) : setIsSubmitting(true);
+    setErrorMessage("");
+    try {
+      const response = await fetch(`${API_BASE_URL}/cardapio/clientes/otp/solicitar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          restaurante_id: numericRestaurantId,
+          telefone: normalizedPhone,
+        }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(data?.detail || "Não foi possível enviar o código agora.");
+      }
+      setStep("verify");
+      setCode("");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Falha ao enviar o código.");
+    } finally {
+      setIsSubmitting(false);
+      setIsResending(false);
+    }
+  };
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (step === "identify") {
+      await requestCode();
+      return;
+    }
+    if (!/^\d{6}$/.test(code)) {
+      setErrorMessage("Digite o código de 6 números enviado pelo WhatsApp.");
       return;
     }
 
     setIsSubmitting(true);
     setErrorMessage("");
-
-    const customerId = `c-${Date.now()}`;
-    const profile = {
-      id: customerId,
-      name: cleanName,
-      phone: normalizedPhone,
-      address: "",
-      points: 0,
-      cashback: 0
-    };
-
-    // Sincroniza em tempo real com a tabela 'clientes' do Supabase e notifica o Caixa
-    void syncCustomerToSupabase({
-      id: customerId,
-      name: cleanName,
-      phone: normalizedPhone,
-      restaurantId
-    });
-
-    onLoginSuccess(profile, `session-token-${Date.now()}`);
-    setIsSubmitting(false);
-    onClose();
+    try {
+      const response = await fetch(`${API_BASE_URL}/cardapio/clientes/otp/verificar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          restaurante_id: numericRestaurantId,
+          telefone: normalizedPhone,
+          codigo: code,
+          nome: cleanName,
+          endereco: "",
+        }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.access_token || !data?.cliente) {
+        throw new Error(data?.detail || "Código inválido ou expirado.");
+      }
+      onLoginSuccess(mapCustomerProfile(data.cliente), String(data.access_token));
+      onClose();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Não foi possível confirmar o código.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -79,7 +128,7 @@ export default function CardapioAuthModal({
       <div
         className="relative w-full max-w-sm rounded-3xl bg-[#0e1017] border border-gray-800/80 p-6 shadow-2xl animate-scale-up"
         id="auth-modal-card"
-        onClick={(e) => e.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
       >
         <button
           type="button"
@@ -92,13 +141,15 @@ export default function CardapioAuthModal({
 
         <div className="text-center mt-2">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400 mb-3">
-            <Phone className="h-6 w-6" />
+            {step === "identify" ? <Phone className="h-6 w-6" /> : <KeyRound className="h-6 w-6" />}
           </div>
           <h2 className="font-display text-xl font-bold text-white">
-            Identifique-se pelo celular
+            {step === "identify" ? "Identifique-se pelo celular" : "Confirme seu WhatsApp"}
           </h2>
           <p className="mt-1.5 text-xs text-gray-400 max-w-xs mx-auto leading-relaxed">
-            Seu número conecta seus pedidos e perfil neste restaurante.
+            {step === "identify"
+              ? "Seu número conecta seus pedidos e perfil somente neste restaurante."
+              : `Enviamos um código de 6 números para ${formatBrazilianPhone(normalizedPhone)}.`}
           </p>
         </div>
 
@@ -109,57 +160,94 @@ export default function CardapioAuthModal({
         )}
 
         <form onSubmit={handleSubmit} className="mt-5 space-y-4" id="auth-form-input">
-          <label className="block">
-            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">
-              Celular com DDD
-            </span>
-            <span className="relative block">
-              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-gray-500 pointer-events-none" />
-              <input
-                type="tel"
-                required
-                autoFocus
-                inputMode="numeric"
-                autoComplete="tel"
-                placeholder="(00) 00000-0000"
-                value={phone}
-                onChange={(event) => setPhone(formatBrazilianPhone(event.target.value))}
-                className="w-full rounded-xl border border-gray-800 bg-[#161824] py-3 pl-10 pr-4 text-xs text-white placeholder-gray-600 focus:border-emerald-500 outline-hidden transition"
-              />
-            </span>
-          </label>
+          {step === "identify" ? (
+            <>
+              <label className="block">
+                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Celular com DDD</span>
+                <span className="relative block">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-gray-500 pointer-events-none" />
+                  <input
+                    type="tel"
+                    required
+                    autoFocus
+                    inputMode="numeric"
+                    autoComplete="tel"
+                    placeholder="(00) 00000-0000"
+                    value={phone}
+                    onChange={(event) => setPhone(formatBrazilianPhone(event.target.value))}
+                    className="w-full rounded-xl border border-gray-800 bg-[#161824] py-3 pl-10 pr-4 text-xs text-white placeholder-gray-600 focus:border-emerald-500 outline-hidden transition"
+                  />
+                </span>
+              </label>
 
-          <label className="block">
-            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">
-              Como devemos chamar você?
-            </span>
-            <span className="relative block">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-gray-500 pointer-events-none" />
+              <label className="block">
+                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Como devemos chamar você?</span>
+                <span className="relative block">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-gray-500 pointer-events-none" />
+                  <input
+                    type="text"
+                    required
+                    maxLength={100}
+                    autoComplete="name"
+                    placeholder="Nome completo"
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    className="w-full rounded-xl border border-gray-800 bg-[#161824] py-3 pl-10 pr-4 text-xs text-white placeholder-gray-600 focus:border-emerald-500 outline-hidden transition"
+                  />
+                </span>
+              </label>
+            </>
+          ) : (
+            <label className="block">
+              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Código de confirmação</span>
               <input
                 type="text"
                 required
-                maxLength={100}
-                autoComplete="name"
-                placeholder="Nome completo"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                className="w-full rounded-xl border border-gray-800 bg-[#161824] py-3 pl-10 pr-4 text-xs text-white placeholder-gray-600 focus:border-emerald-500 outline-hidden transition"
+                autoFocus
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                placeholder="000000"
+                value={code}
+                onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                className="w-full rounded-xl border border-gray-800 bg-[#161824] px-4 py-3 text-center font-mono text-xl tracking-[0.45em] text-white placeholder-gray-700 focus:border-emerald-500 outline-hidden transition"
               />
-            </span>
-          </label>
+            </label>
+          )}
 
           <button
             type="submit"
             disabled={isSubmitting}
             className="w-full rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 py-3.5 text-center text-xs font-bold text-white transition flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider"
           >
-            <span>{isSubmitting ? "Aguarde..." : "Confirmar e Entrar"}</span>
+            <span>{isSubmitting ? "Aguarde..." : step === "identify" ? "Enviar código" : "Confirmar e entrar"}</span>
             {!isSubmitting && <ArrowRight className="h-4 w-4" />}
           </button>
+
+          {step === "verify" && (
+            <div className="flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => { setStep("identify"); setErrorMessage(""); }}
+                className="inline-flex items-center gap-1 text-[10px] font-bold text-gray-400 hover:text-white transition cursor-pointer"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" /> Alterar número
+              </button>
+              <button
+                type="button"
+                disabled={isResending}
+                onClick={() => void requestCode(true)}
+                className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 hover:text-emerald-300 disabled:opacity-50 transition cursor-pointer"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${isResending ? "animate-spin" : ""}`} />
+                Reenviar código
+              </button>
+            </div>
+          )}
         </form>
 
         <p className="mt-4 text-[10px] text-gray-500 text-center leading-relaxed">
-          Ao enviar o pedido, o resumo será enviado para o WhatsApp do restaurante via link direto wa.me.
+          O código confirma que o número pertence a você e protege seu histórico e seus pontos.
         </p>
       </div>
     </div>

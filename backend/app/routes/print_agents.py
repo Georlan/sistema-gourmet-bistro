@@ -639,15 +639,18 @@ def get_current_agent(
             {"token_hash": computed_hash},
         ).mappings().first()
     else:
-        candidate = db.query(PrintAgentToken).filter(
-            PrintAgentToken.token_hash == computed_hash,
-            PrintAgentToken.ativo == True,
-        ).first()
-        identity = (
-            {"id": candidate.id, "restaurante_id": candidate.restaurante_id}
-            if candidate
-            else None
-        )
+        # O hash do agente é a credencial que descobre o tenant. Uma consulta
+        # ORM aqui herdaria o tenant da requisição anterior nos ambientes de
+        # teste/local e poderia rejeitar um agente válido de outro restaurante.
+        identity = db.execute(
+            text(
+                "SELECT id, restaurante_id "
+                "FROM print_agent_tokens "
+                "WHERE token_hash = :token_hash AND ativo = 1 "
+                "LIMIT 1"
+            ),
+            {"token_hash": computed_hash},
+        ).mappings().first()
 
     if not identity:
         raise HTTPException(

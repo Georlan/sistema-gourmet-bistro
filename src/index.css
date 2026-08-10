@@ -33,6 +33,53 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Waiter desktop workspace — shares the landing page's editorial planes. */
+.waiter-shell {
+  background:
+    radial-gradient(circle at 88% 6%, rgba(0, 184, 148, 0.07), transparent 25rem),
+    linear-gradient(180deg, #090a09 0%, #0b0c0b 58%, #090a09 100%);
+}
+
+.waiter-salon-stage__plane {
+  position: absolute;
+  inset: 0 0 0 42%;
+  background: linear-gradient(135deg, rgba(0, 184, 148, 0.04), rgba(0, 184, 148, 0.16));
+  clip-path: polygon(24% 0, 100% 0, 100% 100%, 0 100%);
+  pointer-events: none;
+}
+
+.waiter-salon-stage__plane::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(118deg, transparent 45%, rgba(0, 217, 166, 0.42) 45.15%, rgba(0, 217, 166, 0.42) 45.45%, transparent 45.6%);
+}
+
+.waiter-salon-stage__word {
+  position: absolute;
+  right: -0.04em;
+  bottom: -0.27em;
+  color: rgba(255, 255, 255, 0.025);
+  font-family: var(--font-serif);
+  font-size: clamp(5rem, 10vw, 10rem);
+  font-weight: 900;
+  letter-spacing: -0.09em;
+  line-height: 1;
+  pointer-events: none;
+}
+
+@media (max-width: 767px) {
+  .waiter-salon-stage__plane {
+    inset: 0;
+    opacity: 0.55;
+    clip-path: polygon(58% 0, 100% 0, 100% 100%, 22% 100%);
+  }
+
+  .waiter-salon-stage__word {
+    display: none;
+  }
+}
+
 /* Keyframes */
 @keyframes fadeIn {
   from {

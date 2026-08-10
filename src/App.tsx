@@ -10,7 +10,6 @@ import { Menu, X, User, Wifi, WifiOff, SlidersHorizontal, ArrowDownRight, ArrowU
 import { Table, Order, DraftItem, AppSettings, AppRole, Product } from './types';
 import { TABLES, WAITERS, RESTAURANT_CONFIG, PRODUCTS } from './data';
 import { getTableTotal } from './domain';
-import { supabase } from './cardapio/SupabaseClient';
 import { MesaCard } from './components/MesaCard';
 import { MesasView } from './components/mesas/MesasView';
 import { MesaDetailsModal } from './components/MesaDetailsModal';
@@ -264,6 +263,12 @@ export default function App() {
   } | null>(null);
 
   const fetchTurnoResumo = useCallback(async () => {
+    // O resumo financeiro pertence ao caixa. Evita 403 no portal do garçom
+    // sem enfraquecer a autorização do backend.
+    if (!isManagementRole(activeRole)) {
+      setTurnoResumo(null);
+      return;
+    }
     try {
       const res = await fetch(`${API_BASE_URL}/caixa/turno-atual/resumo`, { headers: getAuthHeaders() }).catch(() => null);
       if (res && res.ok) {
@@ -273,7 +278,7 @@ export default function App() {
     } catch (e) {
       // Ignora silenciosamente erros 403 ou de permissão no modo garçom
     }
-  }, [API_BASE_URL, getAuthHeaders]);
+  }, [activeRole, getAuthHeaders]);
 
   useEffect(() => {
     fetchConfig();
@@ -1125,26 +1130,6 @@ export default function App() {
     };
   }, [isAuthenticated, isWsConnected, activeRole]);
 
-  // Supabase Realtime: sincroniza mesas em tempo real com o banco de dados
-  useEffect(() => {
-    if (!isAuthenticated) return;
-
-    const channel = supabase
-      .channel('realtime-mesas')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'mesas' },
-        () => {
-          fetchTables();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [isAuthenticated]);
-
   // Login handler
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1888,10 +1873,10 @@ export default function App() {
   }
 
   return (
-    <div className={`min-h-screen bg-[#0B0C0E] text-white flex flex-col font-sans ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''}`}>
+    <div className={`waiter-shell min-h-screen bg-[#090a09] text-white flex flex-col font-sans ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''}`}>
       {/* GLOBAL TOP HEADER */}
-      <header className="bg-[#121214] border-b border-[#27272A]/50 text-white shrink-0 sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3">
+      <header className="bg-[#090a09]/95 backdrop-blur-xl border-b border-white/[0.07] text-white shrink-0 sticky top-0 z-30">
+        <div className="max-w-[1680px] mx-auto px-3 sm:px-6 lg:px-10 py-3.5">
           <div className="flex justify-between items-center">
 
             {/* Left: Settings Button + Logo + Title */}
@@ -1899,7 +1884,7 @@ export default function App() {
               <button
                 id="open-sidebar-btn"
                 onClick={() => setIsSidebarOpen(true)}
-                className="p-2 bg-[#1C1C1F] text-emerald-400 hover:bg-[#27272A] hover:text-white rounded-xl cursor-pointer border border-[#27272A] flex items-center justify-center transition-colors"
+                className="p-2.5 bg-white/[0.04] text-[#00b894] hover:bg-[#00b894] hover:text-black rounded-xl cursor-pointer border border-white/[0.09] flex items-center justify-center transition-all"
                 title="Operação & Configurações do Caixa"
               >
                 <SlidersHorizontal size={18} />
@@ -1908,7 +1893,7 @@ export default function App() {
               <div className="flex items-center gap-2.5">
                 <img src={logoImg} alt="Kôma Logo" className="h-8 w-8 object-contain shrink-0" />
                 <div>
-                  <h1 className="font-serif text-base sm:text-lg font-bold tracking-tight text-white leading-tight">
+                  <h1 className="font-serif text-base sm:text-lg font-black tracking-[-0.03em] text-white leading-tight">
                     {restaurantName}
                   </h1>
                   <p className="text-[9px] text-[#A1A1AA] font-sans leading-none mt-0.5">
@@ -1969,10 +1954,10 @@ export default function App() {
 
               {/* Calculate real-time metrics for drawer dashboards */}
               {(() => {
-                const mesasOcupadasCount = salonTables.filter((t: any) => t.status === 'ocupada' || t.status === 'occupied').length;
-                const mesasLivresCount = salonTables.filter((t: any) => t.status === 'livre' || t.status === 'free' || !t.status).length;
+                const mesasOcupadasCount = tableCounts.ocupada + tableCounts.pronto;
+                const mesasLivresCount = tableCounts.libre;
                 const pratosProntosCount = orders.reduce((acc, o: any) => {
-                  const prontos = (o.items || []).filter((i: any) => i.status === 'pronto' || i.status === 'READY');
+                  const prontos = (o.itens || o.items || []).filter((i: any) => i.status === 'pronto' || i.status === 'READY');
                   return acc + prontos.length;
                 }, 0);
 
@@ -2276,7 +2261,7 @@ export default function App() {
       )}
 
       {/* MAIN CONTAINER */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-4 sm:space-y-7">
+      <main className="flex-1 max-w-[1680px] w-full mx-auto px-3 sm:px-6 lg:px-10 py-4 sm:py-7 space-y-4 sm:space-y-7">
         {activeRole === 'cozinha' ? (
           <KitchenPanel
             orders={orders}
@@ -2325,10 +2310,11 @@ export default function App() {
       </main>
 
       {/* FOOTER */}
-      <footer className={clsx('bg-[#121214]', 'text-[#71717A]', 'border-t', 'border-[#27272A]', 'py-7', 'text-center', 'text-xs', 'shrink-0', 'font-sans')}>
-        <div className={clsx('max-w-7xl', 'mx-auto', 'px-4', 'space-y-1')}>
+      <footer className={clsx('bg-[#090a09]', 'text-[#71717A]', 'border-t', 'border-white/[0.06]', 'py-4', 'text-center', 'text-xs', 'shrink-0', 'font-sans')}>
+        <div className={clsx('max-w-[1680px]', 'mx-auto', 'px-4', 'flex', 'items-center', 'justify-center', 'gap-2')}>
           <p className={clsx('font-serif', 'text-sm', 'text-[#10b981]', 'font-medium')}>{restaurantName}</p>
-          <p className="text-[10px]">© {new Date().getFullYear()} {restaurantName}. Todos os direitos reservados.</p>
+          <span className="h-1 w-1 rounded-full bg-zinc-700" />
+          <p className="text-[10px]">Operação do salão</p>
         </div>
       </footer>
 

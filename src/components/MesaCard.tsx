@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { Clock, FileText, GitMerge } from 'lucide-react';
+import { CirclePlus, Clock3, FileText, GitMerge, ReceiptText, UsersRound } from 'lucide-react';
 import { Table, Order } from '../types';
 import { getTableTotal, formatElapsedTime } from '../domain';
 
@@ -33,151 +33,152 @@ export const MesaCard = React.memo<MesaCardProps>(({
   mergedIntoMesaId = null,
 }) => {
   const totalValue = getTableTotal(orders);
-  
-  // Calculate dynamic status:
   let status: 'livre' | 'ocupada' | 'pronto' | 'entregue' | 'mesclada' = 'livre';
   let firstOrderTimestamp: number | undefined;
 
   if (mergedIntoMesaId) {
     status = 'mesclada';
   } else if (orders.length > 0) {
-    // Find the oldest order timestamp
-    const timestamps = orders.map(o => o.timestamp);
-    firstOrderTimestamp = Math.min(...timestamps);
-
-    const allActiveItems = orders.flatMap(o => o.itens.filter(i => (i.status as string) !== 'cancelado'));
-    const hasPronto = allActiveItems.some(item => item.status === 'pronto');
-    const hasPreparando = allActiveItems.some(item => item.status === 'preparando');
-    const allEntregue = allActiveItems.length > 0 && !hasPronto && !hasPreparando;
-
-    if (hasPronto) {
-      status = 'pronto';
-    } else if (hasPreparando) {
-      status = 'ocupada';
-    } else if (allEntregue) {
-      status = 'entregue';
-    } else {
-      status = 'ocupada';
-    }
+    firstOrderTimestamp = Math.min(...orders.map((order) => order.timestamp));
+    const activeItems = orders.flatMap((order) => order.itens.filter((item) => (item.status as string) !== 'cancelado'));
+    const hasReady = activeItems.some((item) => item.status === 'pronto');
+    const hasPreparing = activeItems.some((item) => item.status === 'preparando');
+    const allDelivered = activeItems.length > 0 && !hasReady && !hasPreparing;
+    status = hasReady ? 'pronto' : hasPreparing ? 'ocupada' : allDelivered ? 'entregue' : 'ocupada';
   }
 
-  // Visual classes based on state (Cores aveludadas e mais escuras para conforto visual)
   const statusConfig = {
     livre: {
-      borderColor: 'border-emerald-900/40 hover:border-emerald-700/60 focus:ring-emerald-500',
-      bgColor: 'bg-[#041a12] hover:bg-[#072c1e]',
-      badgeColor: 'text-emerald-500',
-      label: '',
-      textColor: 'text-emerald-200/90',
+      surface: 'bg-[#0b1713] hover:bg-[#0e211a]',
+      border: 'border-emerald-900/50 hover:border-emerald-600/60 focus-visible:ring-emerald-400',
+      accent: 'bg-[#00b894]',
+      dot: 'bg-[#00d9a6]',
+      label: 'Livre',
+      labelColor: 'text-[#00d9a6]',
     },
     ocupada: {
-      borderColor: hasPendingPayment 
-        ? 'border-amber-600/50 focus:ring-amber-500'
-        : 'border-rose-950/80 hover:border-rose-900/80 focus:ring-rose-500',
-      bgColor: hasPendingPayment
-        ? 'bg-[#241505]'
-        : 'bg-[#220a0e] hover:bg-[#2e0e14]',
-      badgeColor: hasPendingPayment
-        ? 'text-amber-400'
-        : 'text-rose-400',
-      label: hasPendingPayment ? 'Aprovar Dinheiro' : 'Ocupada',
-      textColor: 'text-rose-200/90',
+      surface: hasPendingPayment ? 'bg-[#20180b] hover:bg-[#2a1f0c]' : 'bg-[#1b0d10] hover:bg-[#251014]',
+      border: hasPendingPayment
+        ? 'border-amber-800/60 hover:border-amber-500/60 focus-visible:ring-amber-400'
+        : 'border-rose-950 hover:border-rose-700/70 focus-visible:ring-rose-400',
+      accent: hasPendingPayment ? 'bg-amber-400' : 'bg-rose-500',
+      dot: hasPendingPayment ? 'bg-amber-400' : 'bg-rose-400',
+      label: hasPendingPayment ? 'Aprovar dinheiro' : 'Em atendimento',
+      labelColor: hasPendingPayment ? 'text-amber-300' : 'text-rose-300',
     },
     pronto: {
-      borderColor: 'border-amber-900/40 hover:border-amber-700/60 focus:ring-amber-500',
-      bgColor: 'bg-[#241505] hover:bg-[#2e1c07]',
-      badgeColor: 'text-amber-400',
-      label: 'Pronto p/ Servir',
-      textColor: 'text-amber-200/90',
+      surface: 'bg-[#211707] hover:bg-[#2b1e08]',
+      border: 'border-amber-800/60 hover:border-amber-500/70 focus-visible:ring-amber-400',
+      accent: 'bg-amber-400',
+      dot: 'bg-amber-400 animate-pulse',
+      label: 'Pronto para servir',
+      labelColor: 'text-amber-300',
     },
     entregue: {
-      borderColor: 'border-blue-900/40 hover:border-blue-700/60 focus:ring-blue-500',
-      bgColor: 'bg-[#081524] hover:bg-[#0d2138]',
-      badgeColor: 'text-blue-300',
-      label: 'Aguardando Pgto.',
-      textColor: 'text-blue-200/90',
+      surface: 'bg-[#0b1621] hover:bg-[#0d1d2c]',
+      border: 'border-sky-900/60 hover:border-sky-600/60 focus-visible:ring-sky-400',
+      accent: 'bg-sky-400',
+      dot: 'bg-sky-400',
+      label: 'Aguardando conta',
+      labelColor: 'text-sky-300',
     },
     mesclada: {
-      borderColor: 'border-dashed border-zinc-800 focus:ring-zinc-500',
-      bgColor: 'bg-[#0f1013]',
-      badgeColor: 'text-zinc-500',
-      label: `Mesclada na Mesa ${mergedIntoMesaId}`,
-      textColor: 'text-zinc-500',
+      surface: 'bg-[#101112] hover:bg-[#141517]',
+      border: 'border-dashed border-zinc-800 hover:border-zinc-600 focus-visible:ring-zinc-400',
+      accent: 'bg-zinc-600',
+      dot: 'bg-zinc-600',
+      label: `Unida à mesa ${mergedIntoMesaId}`,
+      labelColor: 'text-zinc-400',
     },
-  };
+  }[status];
 
-  const currentConfig = statusConfig[status];
   const elapsed = formatElapsedTime(firstOrderTimestamp, currentTime);
+  const activeItemCount = orders.reduce((total, order) => (
+    total + order.itens.filter((item) => (item.status as string) !== 'cancelado').length
+  ), 0);
+  const defaultName = `Mesa ${table.id}`;
+  const hasCustomName = Boolean(table.nome && table.nome !== defaultName);
 
   return (
     <button
       id={`mesa-card-${table.id}`}
+      type="button"
       onClick={() => onClick(table.id)}
-      className={`relative flex flex-col justify-between p-2 sm:p-3 rounded-xl border min-h-[85px] sm:min-h-[95px] ${currentConfig.borderColor} ${currentConfig.bgColor} cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full transition-all active:scale-95`}
+      aria-label={`${hasCustomName ? table.nome : defaultName}: ${statusConfig.label}`}
+      className={`group relative min-w-0 min-h-[112px] sm:min-h-[132px] overflow-hidden rounded-2xl border p-3 sm:p-4 text-left transition-all duration-200 ${statusConfig.surface} ${statusConfig.border} hover:-translate-y-0.5 hover:shadow-[0_16px_32px_rgba(0,0,0,0.24)] active:translate-y-0 active:scale-[0.98] focus:outline-none focus-visible:ring-2`}
     >
-      {/* Top Section */}
-      <div className="w-full">
-        <div className="flex items-start justify-between">
-          <span className="font-bold text-xs sm:text-sm text-zinc-100 tracking-tight leading-tight">
-            {table.nome && table.nome !== `Mesa ${table.id}` ? table.nome : `Mesa ${table.id}`}
-            {mergedSources && mergedSources.length > 0 && (
-              <span className="text-[10px] font-normal text-zinc-400 ml-1">+{mergedSources.join('+')}</span>
-            )}
-          </span>
-        </div>
-      </div>
+      <span className={`absolute left-0 top-0 h-[3px] w-full ${statusConfig.accent}`} aria-hidden="true" />
+      <span className="absolute -right-5 -top-8 font-serif text-[72px] sm:text-[88px] font-black leading-none text-white/[0.025]" aria-hidden="true">
+        {table.id}
+      </span>
 
-      {/* Bottom Section */}
-      {status === 'livre' ? (
-        <div className="w-full mt-1.5 flex items-center justify-between text-[10px] text-emerald-400 font-bold">
-          <span>LIVRE</span>
-          {draftCount > 0 ? (
-            <span className="flex items-center gap-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded px-1 py-0.5 text-[9px] font-bold">
-              <FileText size={9} className="shrink-0" />
-              <span>{draftCount}</span>
+      <div className="relative flex h-full flex-col justify-between gap-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <span className="block text-[8px] sm:text-[9px] font-mono font-bold uppercase tracking-[0.16em] text-zinc-500">
+              {hasCustomName ? `Mesa ${table.id}` : 'Mesa'}
             </span>
+            <strong className={`${hasCustomName ? 'text-base sm:text-lg truncate' : 'text-2xl sm:text-3xl'} mt-0.5 block font-serif font-black tracking-[-0.05em] leading-none text-white`}>
+              {hasCustomName ? table.nome : table.id}
+            </strong>
+            {mergedSources.length > 0 && (
+              <span className="mt-1 block text-[9px] font-mono text-zinc-400">+ mesas {mergedSources.join(', ')}</span>
+            )}
+          </div>
+          {status === 'livre' ? (
+            <CirclePlus size={18} className="shrink-0 text-emerald-500 transition-transform group-hover:rotate-90" />
+          ) : status === 'mesclada' ? (
+            <GitMerge size={17} className="shrink-0 text-zinc-500" />
           ) : (
-            <span className="text-xs font-bold">+</span>
+            <div className="flex items-center gap-1.5 rounded-full border border-white/[0.07] bg-black/20 px-2 py-1">
+              <span className={`h-1.5 w-1.5 rounded-full ${statusConfig.dot}`} />
+              <span className="hidden 2xl:inline text-[8px] font-bold uppercase tracking-wider text-zinc-400">Ativa</span>
+            </div>
           )}
         </div>
-      ) : status === 'mesclada' ? (
-        <div className="w-full mt-1.5 flex items-center justify-between text-[9px] text-zinc-400 font-sans">
-          <div className="flex items-center gap-1">
-            <GitMerge size={10} className="text-zinc-500 shrink-0" />
-            <span>Mesclada</span>
-          </div>
-          <span className="font-mono text-[9px]">M{mergedIntoMesaId}</span>
-        </div>
-      ) : (
-        <div className="w-full mt-1 flex items-center justify-between text-xs text-rose-200 font-bold">
-          {/* Timer */}
-          <div className="flex items-center gap-1">
-            <Clock size={10} className="text-rose-300 shrink-0" />
-            <span className="text-[10px] sm:text-[11px] font-mono font-bold text-rose-200">{elapsed}</span>
-          </div>
 
-          {/* Total Value */}
-          <div className="flex items-center gap-1">
+        <div>
+          <div className="flex items-center justify-between gap-2">
+            <span className={`min-w-0 truncate text-[8px] sm:text-[9px] font-bold uppercase tracking-[0.11em] ${statusConfig.labelColor}`}>
+              {statusConfig.label}
+            </span>
             {draftCount > 0 && (
-              <div
-                className="flex items-center gap-0.5 px-1 py-0.5 bg-emerald-500/20 text-emerald-300 rounded border border-emerald-500/30 text-[9px]"
-                title={`Rascunho: ${draftCount}`}
-              >
-                <FileText size={9} className="shrink-0" />
-                <span className="font-bold">{draftCount}</span>
-              </div>
-            )}
-            {otherWaitersServing.length > 0 && (
-              <span title={`Editando: ${otherWaitersServing.join(', ')}`} className="text-amber-400 text-[10px]">
-                ⚠️
+              <span className="flex shrink-0 items-center gap-1 rounded-md border border-emerald-500/25 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-bold text-emerald-300">
+                <FileText size={9} /> {draftCount}
               </span>
             )}
-            <span className="text-xs text-rose-200 font-bold font-mono">
-              {totalValue > 0 ? `R$${totalValue.toFixed(0)}` : status === 'entregue' ? '💳' : '+'}
-            </span>
           </div>
+
+          {status !== 'livre' && status !== 'mesclada' && (
+            <div className="mt-2 flex items-end justify-between gap-2 border-t border-white/[0.07] pt-2">
+              <div className="min-w-0 space-y-1">
+                <span className="flex items-center gap-1 text-[9px] sm:text-[10px] font-mono font-bold text-zinc-300">
+                  <Clock3 size={10} className="shrink-0 text-zinc-500" /> {elapsed}
+                </span>
+                <span className="flex items-center gap-1 text-[8px] sm:text-[9px] text-zinc-500">
+                  <UsersRound size={9} /> {activeItemCount} {activeItemCount === 1 ? 'item' : 'itens'}
+                </span>
+              </div>
+              <span className={`shrink-0 font-mono text-xs sm:text-sm font-bold ${status === 'pronto' ? 'text-amber-200' : status === 'entregue' ? 'text-sky-200' : 'text-rose-100'}`}>
+                {totalValue > 0 ? `R$ ${totalValue.toFixed(0)}` : <ReceiptText size={15} />}
+              </span>
+            </div>
+          )}
+
+          {status === 'mesclada' && (
+            <div className="mt-2 flex items-center justify-between border-t border-white/[0.06] pt-2 text-[9px] text-zinc-500">
+              <span>Atendimento unificado</span>
+              <span className="font-mono">M{mergedIntoMesaId}</span>
+            </div>
+          )}
+
+          {otherWaitersServing.length > 0 && (
+            <p className="mt-1.5 truncate text-[8px] text-amber-400" title={`Em atendimento por ${otherWaitersServing.join(', ')}`}>
+              Em edição por {otherWaitersServing.join(', ')}
+            </p>
+          )}
         </div>
-      )}
+      </div>
     </button>
   );
 });

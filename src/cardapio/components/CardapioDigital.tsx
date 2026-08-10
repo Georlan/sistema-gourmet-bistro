@@ -9,7 +9,6 @@ import { BrandConfig } from "../CardapioTypes";
 import { CartItem } from "./CardapioCartDrawer";
 import { API_BASE_URL } from "../../config/api";
 import { openWhatsAppMessage, buildPedidoConfirmadoMsg } from "../../config/whatsappUtils";
-import { syncOrderToSupabase } from "../supabaseSync";
 
 interface CreatedOrder {
   comanda_id: string;
@@ -132,14 +131,13 @@ export default function CardapioDigital({
     setErrorMessage("");
 
     try {
-      let comandaId = `res-${Date.now()}`;
-      let numeroPedido = Math.floor(1000 + Math.random() * 9000);
-
-      // Tenta rota do backend se disponível
+      // O backend tenant-aware é a única fonte de verdade. Ele grava no
+      // PostgreSQL do Supabase e notifica o caixa via WebSocket.
       const response = await fetch(`${API_BASE_URL}/cardapio/pedidos`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "X-Koma-Customer-Token": customerToken,
         },
         body: JSON.stringify({
           restaurante_id: targetRestauranteId,
@@ -152,25 +150,19 @@ export default function CardapioDigital({
           tipo_pedido: deliveryMethod === "delivery" ? "delivery" : "retirada",
           idempotency_key: idempotencyKeyRef.current
         })
-      }).catch(() => null);
+      });
 
-      if (response && response.ok) {
-        const data = await response.json().catch(() => null);
-        if (data?.comanda_id || data?.id) comandaId = String(data.comanda_id || data.id);
-        if (data?.numero_pedido != null) numeroPedido = Number(data.numero_pedido);
+      const data = await response.json().catch(() => null);
+      if (response.status === 401) {
+        onSessionExpired();
+        throw new Error("Sua sessão expirou. Confirme o celular novamente.");
+      }
+      if (!response.ok || !(data?.comanda_id || data?.id) || data?.numero_pedido == null) {
+        throw new Error(data?.detail || "Não foi possível registrar o pedido. Tente novamente.");
       }
 
-      // Persiste o cliente e o pedido diretamente nas tabelas 'clientes' e 'comandas' do Supabase
-      void syncOrderToSupabase({
-        comandaId: String(comandaId),
-        numeroPedido,
-        clienteNome: finalClienteNome,
-        clienteTelefone: normalizedPhone,
-        tipo: deliveryMethod === "delivery" ? "Delivery" : "Retirada",
-        total: estimatedTotal,
-        restaurantId: targetRestauranteId,
-        itens: cleanedItems
-      });
+      const comandaId = String(data.comanda_id || data.id);
+      const numeroPedido = Number(data.numero_pedido);
 
       const orderObj = {
         id: String(comandaId),
@@ -193,25 +185,12 @@ export default function CardapioDigital({
         numero_pedido: numeroPedido
       });
     } catch (error) {
-      console.warn("Registrando pedido em modo resiliente local:", error);
-      const localNum = Math.floor(1000 + Math.random() * 9000);
-      const localId = `res-${Date.now()}`;
-      
-      void syncOrderToSupabase({
-        comandaId: localId,
-        numeroPedido: localNum,
-        clienteNome: finalClienteNome,
-        clienteTelefone: normalizedPhone,
-        tipo: deliveryMethod === "delivery" ? "Delivery" : "Retirada",
-        total: estimatedTotal,
-        restaurantId: targetRestauranteId,
-        itens: cleanedItems
-      });
-
-      setCreatedOrder({
-        comanda_id: localId,
-        numero_pedido: localNum
-      });
+      console.warn("Falha ao registrar pedido no backend:", error);
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível enviar o pedido. Verifique sua conexão e tente novamente."
+      );
     } finally {
       isSubmittingRef.current = false;
       setIsSubmitting(false);

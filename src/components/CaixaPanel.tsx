@@ -1,5 +1,4 @@
 import { CardapioAssetUploader } from './CardapioAssetUploader';
-import { supabase } from '../cardapio/SupabaseClient';
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import logoImg from '../assets/logo.png';
 import { LoginButton } from '../../components/shadcnblocks/login-button';
@@ -1478,7 +1477,7 @@ export function CaixaPanel({
     return () => {
       window.removeEventListener('koma_orders_updated', handleDeliveryUpdate);
     };
-  }, [apiBaseUrl, authHeaders]);
+  }, [apiBaseUrl]);
 
   const openSimulatedOrderDetails = (order: SimulatedDeliveryOrder) => {
     const fullComanda = orders.find(o => o.id === order.id);
@@ -1888,13 +1887,16 @@ export function CaixaPanel({
 
   const refreshLoyaltyUsers = async () => {
     try {
-      // Busca exclusivamente da tabela real 'clientes' no Supabase
-      const { data: supaData } = await supabase
-        .from('clientes')
-        .select('*');
-
-      if (supaData) {
-        const mapped: LoyaltyCustomer[] = supaData.map((c: any) => ({
+      // O backend aplica autenticação, tenant e RLS antes de devolver as fichas.
+      const response = await fetch(`${apiBaseUrl}/fidelidade/clientes`, {
+        headers: authHeaders,
+      });
+      if (!response.ok) {
+        throw new Error(`Falha ao carregar clientes (${response.status})`);
+      }
+      const clientes = await response.json();
+      if (Array.isArray(clientes)) {
+        const mapped: LoyaltyCustomer[] = clientes.map((c: any) => ({
           id: String(c.id || c.telefone),
           cliente: c.nome || c.cliente || 'Cliente',
           telefone: c.telefone || '',
@@ -1908,7 +1910,7 @@ export function CaixaPanel({
         return;
       }
     } catch (error) {
-      console.error('Error fetching loyalty clients from Supabase:', error);
+      console.error('Error fetching loyalty clients from API:', error);
     }
   };
 
@@ -2344,60 +2346,6 @@ export function CaixaPanel({
     // 1. Carga inicial dos clientes
     void refreshLoyaltyUsers();
 
-    // 2. Escuta WebSocket do Supabase Realtime para mudanças na Tabela "clientes" (0 ms)
-    const channel = supabase
-      .channel('realtime_crm_clientes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*', // Escuta INSERT, UPDATE e DELETE
-          schema: 'public',
-          table: 'clientes'
-        },
-        (payload) => {
-          console.log("⚡ Novo evento de cliente recebido via Realtime:", payload);
-          if (payload.eventType === 'INSERT') {
-            const novoCliente = payload.new;
-            setLoyaltyUsers((prevClientes) => {
-              const cleanNewPhone = (novoCliente.telefone || '').replace(/\D/g, '');
-              if (prevClientes.some(c => c.id === novoCliente.id || (c.telefone || '').replace(/\D/g, '') === cleanNewPhone)) {
-                return prevClientes;
-              }
-              const mappedNew: LoyaltyCustomer = {
-                id: String(novoCliente.id || novoCliente.telefone),
-                cliente: novoCliente.nome || novoCliente.cliente || 'Cliente',
-                telefone: novoCliente.telefone || '',
-                pontos: Number(novoCliente.saldo_pontos || 0),
-                saldo_pontos: Number(novoCliente.saldo_pontos || 0),
-                saldoCashback: Number(novoCliente.saldo_cashback || 0),
-                saldo_cashback: Number(novoCliente.saldo_cashback || 0),
-                historico: novoCliente.historico || []
-              };
-              return [mappedNew, ...prevClientes];
-            });
-          } else if (payload.eventType === 'UPDATE') {
-            const updated = payload.new;
-            setLoyaltyUsers((prevClientes) =>
-              prevClientes.map(c => (c.id === updated.id || (c.telefone || '').replace(/\D/g, '') === (updated.telefone || '').replace(/\D/g, '')) ? {
-                id: String(updated.id || updated.telefone),
-                cliente: updated.nome || updated.cliente || 'Cliente',
-                telefone: updated.telefone || '',
-                pontos: Number(updated.saldo_pontos || 0),
-                saldo_pontos: Number(updated.saldo_pontos || 0),
-                saldoCashback: Number(updated.saldo_cashback || 0),
-                saldo_cashback: Number(updated.saldo_cashback || 0),
-                historico: updated.historico || []
-              } : c)
-            );
-          } else {
-            void refreshLoyaltyUsers();
-          }
-        }
-      )
-      .subscribe((status) => {
-        console.log("Status da conexão Realtime de Clientes:", status);
-      });
-
     const handleCustomerEvent = () => {
       void refreshLoyaltyUsers();
     };
@@ -2407,7 +2355,6 @@ export function CaixaPanel({
     return () => {
       window.removeEventListener('koma_customers_updated', handleCustomerEvent);
       window.removeEventListener('storage', handleCustomerEvent);
-      supabase.removeChannel(channel);
     };
   }, [apiBaseUrl]);
 
