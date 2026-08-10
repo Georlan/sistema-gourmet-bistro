@@ -87,10 +87,10 @@ export function Hero() {
             SISTEMA DE GESTÃO PARA RESTAURANTES, BARES E LANCHONETES
           </motion.p>
 
-          <h1 className="koma-hero-headline" aria-label="O restaurante não para. O Kôma acompanha o ritmo.">
-            <span className="koma-hero-line koma-hero-line--sm">O</span>
+          <h1 className="koma-hero-headline" aria-label="Menos erro na operação. Mais controle do restaurante.">
+            <span className="koma-hero-line koma-hero-line--sm">MENOS</span>
             <span className="koma-hero-title-axis">
-              <span className="koma-hero-line koma-hero-line--xl">RESTAURANTE</span>
+              <span className="koma-hero-line koma-hero-line--xl">ERRO.</span>
               <span className="koma-hero-bar-wrap" aria-hidden="true">
                 <motion.span
                   className="koma-hero-bar"
@@ -100,7 +100,7 @@ export function Hero() {
                 />
               </span>
             </span>
-            <span className="koma-hero-line koma-hero-line--lg koma-hero-line--accent">NÃO PARA.</span>
+            <span className="koma-hero-line koma-hero-line--lg koma-hero-line--accent koma-hero-line--benefit">MAIS CONTROLE.</span>
           </h1>
 
           <motion.p
@@ -109,7 +109,7 @@ export function Hero() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.45 }}
           >
-            Do pedido ao fechamento, mesas, salão, cozinha, impressão e caixa trabalham com a mesma informação em tempo real.
+            Pedidos, mesas, cozinha, cardápio e caixa conectados para sua equipe trabalhar mais rápido e você enxergar a operação inteira.
           </motion.p>
 
           <motion.ul
@@ -130,7 +130,7 @@ export function Hero() {
             transition={{ duration: 0.7, delay: 0.55 }}
           >
             <button type="button" className="koma-btn koma-btn--primary" onClick={() => setLeadModalOpen(true)}>
-              Começar com o Kôma
+              Começar agora
             </button>
             <a
               href={KOMA_LANDING_CONFIG.whatsappUrl}
@@ -149,7 +149,7 @@ export function Hero() {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.6, delay: 0.66 }}
           >
-            Cadastro inicial pelo WhatsApp. Leva menos de 1 minuto.
+            Conte como seu restaurante funciona. A conversa inicial é sem custo.
           </motion.p>
 
           <motion.div

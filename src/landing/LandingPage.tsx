@@ -2,13 +2,11 @@ import React, { useEffect } from 'react';
 import './landing.css';
 import { Header } from './sections/Header';
 import { Hero } from './sections/Hero';
-import { OperationFlow } from './sections/OperationFlow';
-import { CardapioScene } from './sections/CardapioScene';
-import { ImpactMoment } from './sections/ImpactMoment';
-import { Ecosystem } from './sections/Ecosystem';
 import { ValueStrip } from './sections/ValueStrip';
-import { Management } from './sections/Management';
-import { Reliability } from './sections/Reliability';
+import { SocialProof } from './sections/SocialProof';
+import { HowItWorks } from './sections/HowItWorks';
+import { OperationFlow } from './sections/OperationFlow';
+import { FAQ } from './sections/FAQ';
 import { Plans } from './sections/Plans';
 import { FinalCTA } from './sections/FinalCTA';
 
@@ -94,14 +92,12 @@ export default function LandingPage() {
         <Hero />
         <AngleDivider variant="dark-light" />
         <ValueStrip />
+        <SocialProof />
         <AngleDivider variant="light-dark" />
+        <HowItWorks />
         <OperationFlow />
-        <AngleDivider variant="dark-green" />
-        <ImpactMoment />
-        <Ecosystem />
-        <CardapioScene />
-        <Management />
-        <Reliability />
+        <AngleDivider variant="dark-light" />
+        <FAQ />
         <Plans />
         <FinalCTA />
       </main>

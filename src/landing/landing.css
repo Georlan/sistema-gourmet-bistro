@@ -2116,6 +2116,271 @@
   .koma-footer-brand span { max-width: none; }
 }
 
+/* ============================================================
+   CONVERSION STRUCTURE — proof, three-pillar flow, risk and FAQ
+   ============================================================ */
+.koma-hero-line--benefit {
+  font-size: clamp(3rem, 6.25vw, 7rem);
+}
+
+.koma-proof-section {
+  position: relative;
+  padding: clamp(3rem, 5.5vw, 5.5rem) var(--koma-section-x) var(--koma-section-y);
+  color: var(--koma-black);
+  background: var(--koma-offwhite);
+  overflow: hidden;
+}
+
+.koma-proof-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: var(--koma-section-x);
+  right: var(--koma-section-x);
+  height: 1px;
+  background: var(--koma-line-light);
+}
+
+.koma-proof-heading,
+.koma-proof-grid,
+.koma-proof-principles {
+  width: min(100%, 1480px);
+  margin-inline: auto;
+}
+
+.koma-proof-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.72fr);
+  align-items: end;
+  gap: clamp(2rem, 7vw, 8rem);
+  margin-bottom: clamp(2.5rem, 5vw, 4.75rem);
+}
+
+.koma-proof-heading > span {
+  grid-column: 1 / -1;
+  color: var(--koma-green-dark);
+  font-family: var(--koma-accent);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.13em;
+}
+
+.koma-proof-heading h2 {
+  margin: 0;
+  font-family: var(--koma-display);
+  font-size: clamp(3rem, 7vw, 7rem);
+  line-height: 0.85;
+  letter-spacing: -0.055em;
+}
+
+.koma-proof-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(28rem, 1.1fr);
+  min-height: 520px;
+  border: 1px solid var(--koma-line-light);
+}
+
+.koma-founder-quote {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  margin: 0;
+  padding: clamp(1.75rem, 4vw, 4rem);
+  color: var(--koma-white);
+  background: var(--koma-black);
+}
+
+.koma-founder-quote blockquote {
+  max-width: 21ch;
+  margin: 0;
+  font-family: var(--koma-display);
+  font-size: clamp(2rem, 3.8vw, 4.25rem);
+  line-height: 0.98;
+  letter-spacing: -0.035em;
+}
+
+.koma-founder-quote figcaption {
+  display: grid;
+  gap: 0.35rem;
+  padding-top: 3rem;
+  border-top: 1px solid var(--koma-line-dark);
+  font-family: var(--koma-accent);
+  letter-spacing: 0.09em;
+}
+
+.koma-founder-quote figcaption strong { color: var(--koma-green); font-size: 0.75rem; }
+.koma-founder-quote figcaption span { color: rgba(255, 255, 255, 0.5); font-size: 0.62rem; }
+
+.koma-proof-demo {
+  min-width: 0;
+  min-height: 100%;
+  background:
+    linear-gradient(rgba(0, 184, 148, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 184, 148, 0.06) 1px, transparent 1px),
+    #111513;
+  background-size: 64px 64px;
+}
+
+.koma-proof-demo video { width: 100%; height: 100%; object-fit: cover; }
+
+.koma-proof-demo-fallback {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: clamp(1.75rem, 4vw, 4rem);
+  color: var(--koma-white);
+}
+
+.koma-proof-demo-fallback > svg {
+  width: 68px;
+  height: 68px;
+  margin: auto auto auto 0;
+  padding: 1.25rem;
+  color: var(--koma-black);
+  background: var(--koma-green);
+  border-radius: 50%;
+}
+
+.koma-proof-demo-fallback > span {
+  margin-bottom: 0.8rem;
+  color: var(--koma-green);
+  font-family: var(--koma-accent);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.koma-proof-demo-fallback > strong {
+  max-width: 16ch;
+  font-family: var(--koma-display);
+  font-size: clamp(2rem, 3.5vw, 3.8rem);
+  line-height: 0.92;
+}
+
+.koma-proof-demo-fallback p { max-width: 42ch; margin: 1.15rem 0 1.5rem; color: var(--koma-muted-dark); line-height: 1.55; }
+.koma-proof-demo-fallback a { display: inline-flex; align-items: center; gap: 0.6rem; color: var(--koma-green); font-family: var(--koma-accent); font-size: 0.7rem; font-weight: 900; letter-spacing: 0.08em; text-decoration: none; text-transform: uppercase; }
+.koma-proof-demo-fallback a svg { width: 18px; height: 18px; transition: transform 180ms ease; }
+.koma-proof-demo-fallback a:hover svg { transform: translate(2px, -2px); }
+
+.koma-proof-principles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 1px solid var(--koma-line-light);
+  border-top: 0;
+}
+
+.koma-proof-principles span { display: flex; align-items: center; gap: 0.8rem; min-height: 76px; padding: 1rem 1.25rem; border-right: 1px solid var(--koma-line-light); font-family: var(--koma-accent); font-size: 0.63rem; font-weight: 900; letter-spacing: 0.07em; }
+.koma-proof-principles span:last-child { border-right: 0; }
+.koma-proof-principles b { color: var(--koma-green-dark); }
+
+.koma-how-section { border-bottom: 1px solid var(--koma-line-dark); }
+.koma-how-tabs { grid-template-columns: repeat(3, 1fr); }
+.koma-how-content { min-height: 560px; }
+.koma-how-points { display: grid; gap: 0.75rem; margin: 2rem 0 0; padding: 0; list-style: none; }
+.koma-how-points li { padding-top: 0.75rem; color: var(--koma-white); border-top: 1px solid var(--koma-line-dark); font-family: var(--koma-accent); font-size: 0.65rem; font-weight: 800; letter-spacing: 0.08em; }
+.koma-how-device { width: 100%; max-width: 760px; margin: 0 auto; }
+.koma-how-device--tablet { width: min(100%, 640px); transform: rotate(1.2deg); }
+.koma-how-device--phone { width: min(100%, 300px); filter: drop-shadow(0 40px 70px rgba(0, 0, 0, 0.5)); }
+
+.koma-capabilities-section { border-bottom: 1px solid var(--koma-line-dark); }
+.koma-capability-card--producao,
+.koma-capability-card--controle,
+.koma-capability-card--pagamento { grid-column: span 4; }
+.koma-capability-card--light .koma-capability-preview--menu > span { color: rgba(10, 10, 10, 0.58); }
+
+.koma-faq-section {
+  padding: var(--koma-section-y) var(--koma-section-x);
+  color: var(--koma-black);
+  background: var(--koma-offwhite);
+}
+
+.koma-faq-heading,
+.koma-faq-list { width: min(100%, 1480px); margin-inline: auto; }
+.koma-faq-heading { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(18rem, 0.55fr); gap: clamp(2rem, 8vw, 9rem); align-items: end; margin-bottom: clamp(3rem, 6vw, 5.5rem); }
+.koma-faq-heading > span { grid-column: 1 / -1; color: var(--koma-green-dark); font-family: var(--koma-accent); font-size: 0.72rem; font-weight: 900; letter-spacing: 0.13em; }
+.koma-faq-heading h2 { margin: 0; font-family: var(--koma-display); font-size: clamp(3rem, 7.5vw, 7.5rem); line-height: 0.84; letter-spacing: -0.055em; }
+.koma-faq-heading p { max-width: 34ch; margin: 0; color: var(--koma-muted-light); font-size: clamp(1rem, 1.35vw, 1.2rem); line-height: 1.55; }
+.koma-faq-list { border-top: 1px solid var(--koma-black); }
+.koma-faq-list details { border-bottom: 1px solid var(--koma-line-light); }
+.koma-faq-list summary { display: grid; grid-template-columns: 3rem 1fr 2rem; gap: 1rem; align-items: center; min-height: 92px; padding: 1.25rem 0; cursor: pointer; list-style: none; }
+.koma-faq-list summary::-webkit-details-marker { display: none; }
+.koma-faq-list summary > span { color: var(--koma-green-dark); font-family: var(--koma-accent); font-size: 0.68rem; }
+.koma-faq-list summary strong { font-family: var(--koma-display); font-size: clamp(1.3rem, 2.2vw, 2.25rem); line-height: 1; }
+.koma-faq-list summary i { position: relative; width: 22px; height: 22px; }
+.koma-faq-list summary i::before,
+.koma-faq-list summary i::after { content: ''; position: absolute; top: 50%; left: 0; width: 100%; height: 2px; background: var(--koma-black); transition: transform 180ms ease; }
+.koma-faq-list summary i::after { transform: rotate(90deg); }
+.koma-faq-list details[open] summary i::after { transform: rotate(0); }
+.koma-faq-list details > p { max-width: 62ch; margin: -0.25rem 2rem 0 4rem; padding: 0 0 2rem; color: var(--koma-muted-light); line-height: 1.65; }
+
+.koma-plans-risk {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(24rem, 0.85fr);
+  gap: clamp(2rem, 6vw, 7rem);
+  align-items: center;
+  width: min(100%, 1480px);
+  margin: 0 auto clamp(3rem, 6vw, 5rem);
+  padding: clamp(1.5rem, 3.5vw, 3.25rem);
+  color: var(--koma-white);
+  background: var(--koma-black);
+  border-left: 5px solid var(--koma-green);
+}
+.koma-plans-risk > div { display: grid; gap: 0.65rem; }
+.koma-plans-risk > div > span { color: var(--koma-green); font-family: var(--koma-accent); font-size: 0.64rem; font-weight: 900; letter-spacing: 0.11em; }
+.koma-plans-risk > div > strong { max-width: 18ch; font-family: var(--koma-display); font-size: clamp(2rem, 3.5vw, 3.6rem); line-height: 0.93; }
+.koma-plans-risk > div > p { max-width: 48ch; margin: 0.4rem 0 0; color: var(--koma-muted-dark); line-height: 1.55; }
+.koma-plans-risk ul { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--koma-line-dark); }
+.koma-plans-risk li { display: grid; grid-template-columns: 2rem 1fr; gap: 0.8rem; align-items: center; padding: 1rem 0; border-bottom: 1px solid var(--koma-line-dark); color: rgba(255,255,255,0.64); font-size: 0.8rem; }
+.koma-plans-risk li svg { width: 20px; height: 20px; color: var(--koma-green); }
+.koma-plans-risk li b { color: var(--koma-white); font-family: var(--koma-accent); font-size: 0.66rem; letter-spacing: 0.07em; }
+
+@media (max-width: 1080px) {
+  .koma-proof-heading,
+  .koma-faq-heading { grid-template-columns: 1fr; gap: 1.5rem; }
+  .koma-proof-grid { grid-template-columns: 1fr 1fr; }
+  .koma-how-content { grid-template-columns: minmax(0, 0.8fr) minmax(22rem, 1fr); gap: 3rem; }
+  .koma-capability-card--producao,
+  .koma-capability-card--controle,
+  .koma-capability-card--pagamento { grid-column: span 6; }
+  .koma-capability-card--pagamento { grid-column: 4 / span 6; }
+  .koma-plans-risk { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 768px) {
+  .koma-hero-line--benefit { font-size: clamp(2.35rem, 10.6vw, 4.35rem); }
+  .koma-proof-section { padding-block: 3.75rem 4.75rem; }
+  .koma-proof-heading h2 { font-size: clamp(2.8rem, 12vw, 4.6rem); }
+  .koma-proof-grid { grid-template-columns: 1fr; min-height: 0; }
+  .koma-founder-quote,
+  .koma-proof-demo-fallback { min-height: 430px; }
+  .koma-founder-quote blockquote { font-size: clamp(2rem, 9vw, 3.15rem); }
+  .koma-proof-principles { grid-template-columns: 1fr; }
+  .koma-proof-principles span { min-height: 62px; border-right: 0; border-bottom: 1px solid var(--koma-line-light); }
+  .koma-proof-principles span:last-child { border-bottom: 0; }
+  .koma-how-tabs { grid-template-columns: 1fr; }
+  .koma-how-tabs .koma-flow-tab { border-right: 0; border-bottom: 1px solid var(--koma-line-dark); }
+  .koma-how-tabs .koma-flow-tab:last-child { border-bottom: 0; }
+  .koma-how-content { grid-template-columns: 1fr; min-height: 0; gap: 3rem; }
+  .koma-how-device { min-height: 300px; display: grid; place-items: center; }
+  .koma-how-device--phone { width: min(72vw, 280px); }
+  .koma-how-device--tablet { width: min(100%, 560px); }
+  .koma-capability-card--producao,
+  .koma-capability-card--controle,
+  .koma-capability-card--pagamento { grid-column: 1; }
+  .koma-faq-heading h2 { font-size: clamp(3rem, 13vw, 4.8rem); }
+  .koma-faq-list summary { grid-template-columns: 2rem 1fr 1.5rem; min-height: 80px; gap: 0.75rem; }
+  .koma-faq-list summary strong { font-size: clamp(1.25rem, 6vw, 1.75rem); }
+  .koma-faq-list details > p { margin-inline: 2.75rem 0; }
+  .koma-plans-risk { padding: 1.5rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .koma-proof-demo-fallback a svg,
+  .koma-faq-list summary i::after { transition: none; }
+}
+
 @media (max-width: 430px) {
   .koma-hero-line--sm { font-size: clamp(2.1rem, 10vw, 2.7rem); }
   .koma-hero-line--xl { font-size: clamp(3.2rem, 16.1vw, 4.25rem); }
@@ -3972,6 +4237,29 @@
   }
 }
 
+/* Keep conversion-specific layout above legacy landing rules in the cascade. */
+.koma-how-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.koma-how-content { min-height: 560px; }
+.koma-capability-card--producao,
+.koma-capability-card--controle,
+.koma-capability-card--pagamento { grid-column: span 4; }
+
+@media (max-width: 1080px) {
+  .koma-how-content { grid-template-columns: minmax(0, 0.8fr) minmax(22rem, 1fr); }
+  .koma-capability-card--producao,
+  .koma-capability-card--controle,
+  .koma-capability-card--pagamento { grid-column: span 6; }
+  .koma-capability-card--pagamento { grid-column: 4 / span 6; }
+}
+
+@media (max-width: 768px) {
+  .koma-how-tabs { grid-template-columns: 1fr; }
+  .koma-how-content { grid-template-columns: 1fr; min-height: 0; }
+  .koma-capability-card--producao,
+  .koma-capability-card--controle,
+  .koma-capability-card--pagamento { grid-column: 1; }
+}
+
 @keyframes koma-eco-cue {
   0%, 100% { transform: scaleX(0.35); opacity: 0.45; }
   50% { transform: scaleX(1); opacity: 1; }
@@ -4410,7 +4698,7 @@
   }
   .koma-hero-line--lg {
     width: 100%;
-    font-size: clamp(3rem, 13.5vw, 5.45rem);
+    font-size: clamp(2.35rem, 10.6vw, 4.35rem);
     white-space: nowrap;
   }
   .koma-hero-bar-wrap { width: 100%; margin-block: 0.38rem 0.8rem; }
@@ -4559,7 +4847,7 @@
   .koma-hero { padding-top: 84px; }
   .koma-hero-line--sm { font-size: clamp(2.2rem, 11.5vw, 2.9rem); }
   .koma-hero-line--xl { font-size: clamp(2.7rem, 12.15vw, 3.3rem); }
-  .koma-hero-line--lg { font-size: clamp(2.8rem, 13.1vw, 3.55rem); }
+  .koma-hero-line--lg { font-size: clamp(2.3rem, 10.5vw, 3rem); }
   .koma-hero-device-container { width: 124%; margin-left: -12%; }
   .koma-hero-live-status { min-width: 170px; transform: scale(0.92); transform-origin: left bottom; }
   .koma-hero-strip-item { flex-basis: min(82vw, 290px); }

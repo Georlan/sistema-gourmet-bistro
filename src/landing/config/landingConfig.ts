@@ -9,6 +9,10 @@ export const KOMA_LANDING_CONFIG = {
   // Links de CTA
   signupAnchor: '#cadastro',
 
+  // Quando houver um vídeo real de operação, informe a URL pública aqui.
+  // Enquanto estiver vazio, a seção exibe uma demonstração guiada por WhatsApp.
+  proofVideoUrl: '',
+
   get whatsappUrl() {
     return `https://wa.me/${this.whatsappNumber}?text=${this.whatsappMessage}`;
   },

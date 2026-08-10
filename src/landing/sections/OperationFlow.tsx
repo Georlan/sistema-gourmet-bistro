@@ -1,23 +1,34 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { ArrowUpRight, CreditCard, Printer, RefreshCw, UsersRound } from 'lucide-react';
+import { ArrowUpRight, ChefHat, CreditCard, RefreshCw } from 'lucide-react';
 import { LeadCaptureModal } from '../components/LeadCaptureModal';
 
 const CAPABILITIES = [
   {
-    id: 'cardapio',
+    id: 'producao',
     num: '01',
-    eyebrow: 'CARDÁPIO CENTRALIZADO',
-    title: 'MUDE UMA VEZ. ATUALIZE TODAS AS TELAS.',
-    description: 'Preço, item e disponibilidade seguem a mesma base no caixa, no app do garçom e no cardápio digital.',
-    points: ['CAIXA', 'GARÇOM', 'QR CODE'],
-    result: 'UMA ALTERAÇÃO. TODO O RESTAURANTE ATUALIZADO.',
-    icon: RefreshCw,
+    eyebrow: 'PRODUÇÃO ORGANIZADA',
+    title: 'A COZINHA RECEBE SEM NOVO REPASSE.',
+    description: 'Itens, quantidades e observações seguem do pedido para a fila de produção e para a impressão configurada.',
+    points: ['KDS', 'OBSERVAÇÕES', 'IMPRESSÃO'],
+    result: 'O PEDIDO CHEGA CLARO PARA QUEM VAI PRODUZIR.',
+    icon: ChefHat,
     tone: 'green',
   },
   {
-    id: 'pagamento',
+    id: 'controle',
     num: '02',
+    eyebrow: 'CONTROLE CENTRAL',
+    title: 'MUDE UMA VEZ. ATUALIZE A OPERAÇÃO.',
+    description: 'Preço, item e disponibilidade seguem a mesma base no caixa, no app do garçom e no cardápio digital.',
+    points: ['PRODUTOS', 'DISPONIBILIDADE', 'RELATÓRIOS'],
+    result: 'MENOS CADASTRO REPETIDO. MAIS CONTEXTO PARA DECIDIR.',
+    icon: RefreshCw,
+    tone: 'light',
+  },
+  {
+    id: 'pagamento',
+    num: '03',
     eyebrow: 'PAGAMENTO FLEXÍVEL',
     title: 'RECEBA DO JEITO QUE A MESA PRECISA.',
     description: 'Registre pagamentos parciais, valores exatos e acompanhe quanto ainda falta receber.',
@@ -26,34 +37,12 @@ const CAPABILITIES = [
     icon: CreditCard,
     tone: 'dark',
   },
-  {
-    id: 'impressao',
-    num: '03',
-    eyebrow: 'IMPRESSÃO AUTOMÁTICA',
-    title: 'A COMANDA CERTA SAI NO LUGAR CERTO.',
-    description: 'Produção e fechamento recebem a informação necessária, com observações e histórico para reimpressão.',
-    points: ['PRODUÇÃO', 'FECHAMENTO', 'HISTÓRICO'],
-    result: 'MAIS CONTROLE. MENOS PAPEL DESPERDIÇADO.',
-    icon: Printer,
-    tone: 'dark',
-  },
-  {
-    id: 'clientes',
-    num: '04',
-    eyebrow: 'CLIENTES E RECORRÊNCIA',
-    title: 'TRANSFORME PEDIDO EM CLIENTE QUE VOLTA.',
-    description: 'Cadastro, histórico, cupons e fidelidade ajudam o restaurante a reconhecer e recuperar seus clientes.',
-    points: ['CADASTRO', 'HISTÓRICO', 'FIDELIDADE'],
-    result: 'UMA BASE PRONTA PARA VENDER DE NOVO.',
-    icon: UsersRound,
-    tone: 'light',
-  },
 ] as const;
 
 type CapabilityId = (typeof CAPABILITIES)[number]['id'];
 
 function CapabilityPreview({ id }: { id: CapabilityId }) {
-  if (id === 'cardapio') {
+  if (id === 'controle') {
     return (
       <div className="koma-capability-preview koma-capability-preview--menu" aria-hidden="true">
         <span>ITEM ATUALIZADO</span>
@@ -72,7 +61,7 @@ function CapabilityPreview({ id }: { id: CapabilityId }) {
     );
   }
 
-  if (id === 'impressao') {
+  if (id === 'producao') {
     return (
       <div className="koma-capability-preview koma-capability-preview--print" aria-hidden="true">
         <span><b>COZINHA</b><em>2 ITENS</em><strong>ENVIADO</strong></span>
@@ -81,28 +70,22 @@ function CapabilityPreview({ id }: { id: CapabilityId }) {
     );
   }
 
-  return (
-    <div className="koma-capability-preview koma-capability-preview--customer" aria-hidden="true">
-      <span>CLIENTE ATIVO</span>
-      <strong>MARIA</strong>
-      <div><b>8 PEDIDOS</b><b>120 PONTOS</b><b>CUPOM DISPONÍVEL</b></div>
-    </div>
-  );
+  return null;
 }
 
 export function OperationFlow() {
   const [leadModalOpen, setLeadModalOpen] = useState(false);
 
   return (
-    <section className="koma-capabilities-section" id="como-funciona" aria-labelledby="capabilities-title">
+    <section className="koma-capabilities-section" id="modulos" aria-labelledby="capabilities-title">
       <div className="koma-capabilities-heading">
         <div>
-          <span>02 / DENTRO DO KÔMA</span>
-          <h2 id="capabilities-title">VENDA. RECEBA.<br />PRODUZA. FIDELIZE.</h2>
+          <span>04 / MÓDULOS QUE EVITAM RETRABALHO</span>
+          <h2 id="capabilities-title">PRODUZA. CONTROLE.<br />RECEBA.</h2>
         </div>
 
         <div className="koma-capabilities-intro">
-          <p>As funções que movimentam o restaurante trabalham juntas, da primeira venda ao próximo pedido.</p>
+          <p>Três partes críticas da rotina compartilham o mesmo pedido, sem repetir cadastro ou conferência.</p>
           <button className="koma-btn koma-btn--primary koma-capabilities-cta" type="button" onClick={() => setLeadModalOpen(true)}>
             COMEÇAR COM O KÔMA
             <ArrowUpRight size={17} strokeWidth={2} aria-hidden="true" />

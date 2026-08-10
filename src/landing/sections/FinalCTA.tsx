@@ -15,17 +15,17 @@ export function FinalCTA() {
         id="cadastro"
         aria-label="Começar cadastro no Kôma"
       >
-        <span className="koma-cta-kicker">PRONTO PARA ORGANIZAR SUA OPERAÇÃO?</span>
+        <span className="koma-cta-kicker">07 / PRONTO PARA ORGANIZAR SUA OPERAÇÃO?</span>
         <div className="koma-cta-brand-signature">
           <img src={logoOnGreen} alt="" aria-hidden="true" />
           <span>Se você está com fome, <strong>Kôma</strong></span>
         </div>
         <h2 className="koma-cta-title">
-          SEU RESTAURANTE.<br /><em>UM SÓ FLUXO.</em>
+          MENOS CORRERIA.<br /><em>MAIS CONTROLE.</em>
         </h2>
 
         <p className="koma-cta-sub">
-          Conte como seu restaurante funciona. Com essas informações, preparamos seu cadastro e orientamos os próximos passos.
+          Conte como seu restaurante funciona. Nós mostramos o encaixe, verificamos os equipamentos e orientamos os próximos passos.
         </p>
 
         <div className="koma-cta-actions">
@@ -54,7 +54,8 @@ export function FinalCTA() {
         <span>© {new Date().getFullYear()} KÔMA. TODOS OS DIREITOS RESERVADOS.</span>
         <nav aria-label="Navegação do rodapé">
           <a href="#como-funciona">Como funciona</a>
-          <a href="#gestao">Gestão</a>
+          <a href="#modulos">Recursos</a>
+          <a href="#duvidas">Dúvidas</a>
           <a href="#planos">Planos</a>
         </nav>
       </footer>
