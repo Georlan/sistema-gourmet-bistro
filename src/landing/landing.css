@@ -5092,3 +5092,111 @@
     font-size: clamp(2.8rem, 13vw, 4.25rem);
   }
 }
+
+/* Final visual polish: compact diagonal rhythm and tighter section entries. */
+.koma-angle-divider {
+  z-index: 3;
+  height: clamp(2.4rem, 3.8vw, 4rem);
+}
+
+.koma-angle-divider--dark-light::before {
+  clip-path: polygon(0 0, 100% 0, 100% 10%, 0 88%);
+}
+
+.koma-angle-divider--dark-light::after {
+  clip-path: polygon(0 86%, 100% 8%, 100% 14%, 0 92%);
+}
+
+.koma-angle-divider--light-dark::before {
+  clip-path: polygon(0 0, 100% 0, 100% 88%, 0 10%);
+}
+
+.koma-angle-divider--light-dark::after {
+  clip-path: polygon(0 8%, 100% 86%, 100% 92%, 0 14%);
+}
+
+.koma-angle-divider--light-green {
+  background: var(--koma-green);
+}
+
+.koma-angle-divider--light-green::before {
+  background: #eceeea;
+  clip-path: polygon(0 0, 100% 0, 100% 86%, 0 12%);
+}
+
+.koma-angle-divider--light-green::after {
+  background: var(--koma-black);
+  clip-path: polygon(0 10%, 100% 84%, 100% 89%, 0 15%);
+  opacity: 0.9;
+}
+
+.koma-angle-divider + .koma-value-strip {
+  padding-top: clamp(3rem, 4.5vw, 4.5rem);
+  border-top: 0;
+}
+
+.koma-proof-section {
+  padding-bottom: clamp(1.5rem, 2.5vw, 2.5rem);
+}
+
+.koma-flow-section.koma-scroll-flow {
+  padding-top: clamp(3.25rem, 4.8vw, 4.75rem);
+  padding-bottom: clamp(2.75rem, 4vw, 4rem);
+}
+
+.koma-section-heading,
+.koma-faq-heading {
+  margin-bottom: clamp(2.25rem, 3.6vw, 3.5rem);
+}
+
+.koma-scroll-module-copy h3 {
+  max-width: 14ch;
+  font-size: clamp(2.4rem, 3.7vw, 4rem);
+  font-weight: 900;
+}
+
+.koma-faq-section {
+  padding-top: clamp(3.25rem, 4.8vw, 4.75rem);
+}
+
+.koma-faq-heading h2 {
+  font-size: clamp(3rem, 6.5vw, 6.25rem);
+  font-weight: 900;
+}
+
+.koma-plans-section {
+  padding-bottom: clamp(2.75rem, 4vw, 4rem);
+}
+
+.koma-cta-section {
+  padding-top: clamp(3rem, 4.5vw, 4.5rem);
+}
+
+@media (max-width: 768px) {
+  .koma-angle-divider {
+    height: clamp(1.8rem, 8vw, 2.6rem);
+  }
+
+  .koma-proof-section {
+    padding-bottom: 1.25rem;
+  }
+
+  .koma-flow-section.koma-scroll-flow,
+  .koma-faq-section {
+    padding-top: 2.75rem;
+  }
+
+  .koma-flow-section.koma-scroll-flow,
+  .koma-plans-section {
+    padding-bottom: 2.5rem;
+  }
+
+  .koma-scroll-module-copy h3 {
+    max-width: 14ch;
+    font-size: clamp(2.25rem, 10.5vw, 3.5rem);
+  }
+
+  .koma-faq-heading h2 {
+    font-size: clamp(2.75rem, 12vw, 4rem);
+  }
+}

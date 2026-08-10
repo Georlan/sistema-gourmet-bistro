@@ -51,7 +51,7 @@ export function HowItWorks() {
       <div className="koma-section-heading koma-section-heading--dark">
         <span>03 / COMO FUNCIONA</span>
         <h2 id="how-title">TRÊS PONTOS.<br />UM SÓ FLUXO.</h2>
-        <p>Continue rolando. Caixa, salão, produção e cardápio aparecem na ordem em que participam da operação.</p>
+        <p>Do pedido ao fechamento, cada tela recebe a mesma informação sem um novo repasse manual.</p>
       </div>
 
       <div className="koma-scroll-modules">

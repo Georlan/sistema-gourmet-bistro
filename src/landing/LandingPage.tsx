@@ -9,6 +9,12 @@ import { FAQ } from './sections/FAQ';
 import { Plans } from './sections/Plans';
 import { FinalCTA } from './sections/FinalCTA';
 
+type DividerVariant = 'dark-light' | 'light-dark' | 'light-green';
+
+function AngleDivider({ variant }: { variant: DividerVariant }) {
+  return <div className={`koma-angle-divider koma-angle-divider--${variant}`} aria-hidden="true" />;
+}
+
 export default function LandingPage() {
   useEffect(() => {
     document.title = 'KÔMA | Sistema para restaurantes, PDV, mesas e cozinha';
@@ -85,11 +91,15 @@ export default function LandingPage() {
       <Header />
       <main>
         <Hero />
+        <AngleDivider variant="dark-light" />
         <ValueStrip />
         <SocialProof />
+        <AngleDivider variant="light-dark" />
         <HowItWorks />
+        <AngleDivider variant="dark-light" />
         <FAQ />
         <Plans />
+        <AngleDivider variant="light-green" />
         <FinalCTA />
       </main>
     </div>
