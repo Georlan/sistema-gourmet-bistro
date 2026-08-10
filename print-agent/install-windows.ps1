@@ -6,12 +6,12 @@ $adapterDir = Join-Path $installDir "adapters"
 $venvDir = Join-Path $installDir ".venv"
 $taskName = "KomaPrintAgent"
 
-$pythonCommand = Get-Command python -ErrorAction SilentlyContinue
+$pythonCommand = Get-Command py -ErrorAction SilentlyContinue
 if (-not $pythonCommand) {
-    $pythonCommand = Get-Command py -ErrorAction SilentlyContinue
+    $pythonCommand = Get-Command python -ErrorAction SilentlyContinue
 }
 if (-not $pythonCommand) {
-    throw "Python 3.10 ou superior não foi encontrado no Windows."
+    throw "Python 3.10 ou superior nao foi encontrado no Windows."
 }
 
 $requiredFiles = @(
@@ -25,13 +25,20 @@ $adapterFiles = @(
 
 foreach ($file in $requiredFiles) {
     if (-not (Test-Path (Join-Path $scriptDir $file))) {
-        throw "Arquivo de impressão ausente: $file"
+        throw "Arquivo de impressao ausente: $file"
     }
 }
 
-Write-Host "[KÔMA] Preparando a impressão neste computador..."
-Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Force -Path $installDir, $adapterDir | Out-Null
+Write-Host "[KOMA] Preparando a impressao neste computador..."
+$existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+if ($existingTask) {
+    Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+}
+New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+New-Item -ItemType Directory -Force -Path $adapterDir | Out-Null
+if (-not (Test-Path $installDir) -or -not (Test-Path $adapterDir)) {
+    throw "Nao foi possivel criar a pasta local do Koma Print Agent."
+}
 
 foreach ($file in $requiredFiles) {
     Copy-Item -Force (Join-Path $scriptDir $file) (Join-Path $installDir $file)
@@ -50,7 +57,7 @@ if (-not (Test-Path $venvPython)) {
 }
 & $venvPython -m pip install --disable-pip-version-check --quiet -r (Join-Path $installDir "requirements.txt")
 
-Write-Host "[KÔMA] Conectando este computador ao restaurante..."
+Write-Host "[KOMA] Conectando este computador ao restaurante..."
 Push-Location $installDir
 try {
     & $venvPython main.py --pair-only
@@ -69,7 +76,7 @@ Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Se
 $protocolRoot = "HKCU:\Software\Classes\koma-print"
 New-Item -Force $protocolRoot | Out-Null
 New-ItemProperty -Path $protocolRoot -Name "URL Protocol" -Value "" -PropertyType String -Force | Out-Null
-Set-Item -Path $protocolRoot -Value "URL:Kôma Print"
+Set-Item -Path $protocolRoot -Value "URL:Koma Print"
 $commandKey = Join-Path $protocolRoot "shell\open\command"
 New-Item -Force $commandKey | Out-Null
 $launcher = Join-Path $installDir "koma-print-launcher.ps1"
@@ -79,9 +86,9 @@ Start-ScheduledTask -TaskName $taskName
 Start-Sleep -Seconds 2
 $task = Get-ScheduledTask -TaskName $taskName
 if ($task.State -notin @("Running", "Ready")) {
-    throw "O Kôma Print não iniciou. Verifique o Agendador de Tarefas do Windows."
+    throw "O Koma Print nao iniciou. Verifique o Agendador de Tarefas do Windows."
 }
 
 Write-Host ""
-Write-Host "[OK] Impressão instalada e configurada para iniciar com o Windows."
-Write-Host "[OK] Conecte a impressora USB e use o botão de busca no Kôma."
+Write-Host "[OK] Impressao instalada e configurada para iniciar com o Windows."
+Write-Host "[OK] Conecte a impressora USB e use o botao de busca no Koma."
