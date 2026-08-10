@@ -273,6 +273,13 @@ class Comanda(Base):
             "restaurante_id",
             "cliente_id",
         ).ddl_if(dialect="postgresql"),
+        Index(
+            "ix_comandas_tenant_open_created",
+            "restaurante_id",
+            "criado_em",
+            "id",
+            postgresql_where=text("fechada = false"),
+        ).ddl_if(dialect="postgresql"),
     )
     
     id = Column(String, primary_key=True, index=True)

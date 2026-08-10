@@ -13,7 +13,6 @@ import { getTableTotal } from './domain';
 import { MesaCard } from './components/MesaCard';
 import { MesasView } from './components/mesas/MesasView';
 import { MesaDetailsModal } from './components/MesaDetailsModal';
-import { CaixaPanel, MemoizedCaixaPanel } from './components/CaixaPanel';
 import clsx from 'clsx';
 import CardapioPage from './cardapio/CardapioPage';
 import SuperAdminPanel from './super-admin/SuperAdminPanel';
@@ -23,6 +22,18 @@ import { KitchenPanel } from './components/KitchenPanel';
 import LandingPage from './landing/LandingPage';
 import { API_BASE_URL } from './config/api';
 import { saveOperatorSession, getOperatorSession, clearOperatorSession } from './utils/authSession';
+
+const MemoizedCaixaPanel = React.lazy(() =>
+  import('./components/CaixaPanel').then(module => ({
+    default: module.MemoizedCaixaPanel
+  }))
+);
+
+const CashierLoading = () => (
+  <div className="w-full h-full bg-[#090b0a] text-[#00c996] flex items-center justify-center font-mono text-[10px] uppercase tracking-[0.18em]">
+    Preparando operação…
+  </div>
+);
 
 const LOCAL_STORAGE_DRAFTS_KEY = 'koma_drafts_vFinal_v3';
 const LOCAL_STORAGE_SETTINGS_KEY = 'koma_settings_vFinal_v3';
@@ -664,11 +675,14 @@ export default function App() {
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
 
   useEffect(() => {
+    // O caixa mantém o próprio relógio de SLA. Evita renderizar novamente todo
+    // o painel administrativo apenas para atualizar o relógio do salão.
+    if (isManagementRole(activeRole)) return;
     const interval = setInterval(() => {
       setCurrentTime(Date.now());
     }, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [activeRole]);
 
   // WebSocket Live Real-Time & Draft Sincronização
   interface ActiveDraftInfo {
@@ -705,7 +719,31 @@ export default function App() {
     let ws: WebSocket;
     let reconnectTimeout: any;
     let wsUpdateTimeout: any;
+    let pendingSupportingRefresh = false;
     let currentDelay = 2000;
+
+    // O backend pode publicar mais de um evento para a mesma alteração (por
+    // exemplo, mesa + pedido online). Consolida a rajada em uma única leitura
+    // para evitar aborts concorrentes, renders redundantes e atraso perceptível.
+    const scheduleRealtimeRefresh = (includeSupportingData = false) => {
+      pendingSupportingRefresh = pendingSupportingRefresh || includeSupportingData;
+      if (wsUpdateTimeout) clearTimeout(wsUpdateTimeout);
+      wsUpdateTimeout = setTimeout(() => {
+        fetchOrdersFromAPI();
+        if (pendingSupportingRefresh) {
+          fetchTables();
+          fetchLiveProdutos();
+          fetchLiveCategorias();
+          fetchConfig();
+          fetchTurnoResumo();
+          if (isManagementRole(activeRole)) {
+            fetchPagamentosPendentes();
+          }
+        }
+        pendingSupportingRefresh = false;
+        window.dispatchEvent(new Event('koma_orders_updated'));
+      }, 90);
+    };
 
     const playNotificationSound = () => {
       try {
@@ -750,8 +788,7 @@ export default function App() {
         try {
           const data = JSON.parse(event.data);
           if (data.event === "new_delivery_order" || data.event === "ORDER_UPDATED" || data.event === "NEW_ORDER") {
-            fetchOrdersFromAPI();
-            window.dispatchEvent(new Event('koma_orders_updated'));
+            scheduleRealtimeRefresh(false);
           }
           if (data.event === "print_monitor_updated") {
             // Atualização silenciosa: o painel refaz a consulta sem toast,
@@ -764,27 +801,12 @@ export default function App() {
             window.dispatchEvent(new Event('koma_customers_updated'));
           }
           if (data.event === "tables_updated" || data.event === "TABLE_UPDATED") {
-            if (wsUpdateTimeout) {
-              clearTimeout(wsUpdateTimeout);
-            }
-            wsUpdateTimeout = setTimeout(() => {
-              fetchOrdersFromAPI();
-              fetchTables();
-              fetchLiveProdutos();
-              fetchLiveCategorias();
-              fetchConfig();
-              fetchTurnoResumo();
-              if (isManagementRole(activeRole)) {
-                fetchPagamentosPendentes();
-              }
-              window.dispatchEvent(new Event('koma_orders_updated'));
-            }, 50);
+            scheduleRealtimeRefresh(true);
             if (data.detail && data.detail.type === "pagamento_registrado" && data.detail.status === "pendente") {
               showToast(`💵 CONFIRMAR DINHEIRO: R$ ${data.detail.valor.toFixed(2)} - Garçom ${data.detail.garcom_nome}`, 'info', 5000);
             }
           } else if (data.event === "MESA_ATUALIZADA") {
-            fetchOrdersFromAPI();
-            window.dispatchEvent(new Event('koma_orders_updated'));
+            scheduleRealtimeRefresh(false);
             const { mesa_id, status, comanda_id } = data.data;
             if (status === 'livre') {
               setOrders(prevOrders => prevOrders.filter(o => o.mesaId !== mesa_id));
@@ -1846,28 +1868,30 @@ export default function App() {
   if (isManagementRole(activeRole)) {
     return (
       <div className={`w-full h-screen bg-[#0B0C0E] text-white flex flex-col font-sans overflow-hidden ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''}`}>
-        <MemoizedCaixaPanel
-          orders={orders}
-          onRefreshOrders={fetchOrdersFromAPI}
-          apiBaseUrl={API_BASE_URL}
-          authHeaders={getAuthHeaders()}
-          activeWaiterNome={activeWaiterNome}
-          salonTables={salonTables}
-          onCreateMesa={handleCreateMesa}
-          onUpdateMesa={handleUpdateMesa}
-          onDeleteMesa={handleDeleteMesa}
-          pagamentosPendentes={pagamentosPendentes}
-          onRefreshPagamentosPendentes={fetchPagamentosPendentes}
-          isWsConnected={isWsConnected}
-          liveProdutos={liveProdutos}
-          liveCategorias={liveCategorias}
-          onRefreshCategorias={fetchLiveCategorias}
-          restauranteConfig={restauranteConfig}
-          fetchError={fetchError}
-          onOptimisticUpdateItemStatus={handleOptimisticUpdateItemStatus}
-          onOptimisticAddOrder={handleOptimisticAddOrder}
-          onRemovePendingPaymentOptimistic={handleRemovePendingPaymentOptimistic}
-        />
+        <React.Suspense fallback={<CashierLoading />}>
+          <MemoizedCaixaPanel
+            orders={orders}
+            onRefreshOrders={fetchOrdersFromAPI}
+            apiBaseUrl={API_BASE_URL}
+            authHeaders={getAuthHeaders()}
+            activeWaiterNome={activeWaiterNome}
+            salonTables={salonTables}
+            onCreateMesa={handleCreateMesa}
+            onUpdateMesa={handleUpdateMesa}
+            onDeleteMesa={handleDeleteMesa}
+            pagamentosPendentes={pagamentosPendentes}
+            onRefreshPagamentosPendentes={fetchPagamentosPendentes}
+            isWsConnected={isWsConnected}
+            liveProdutos={liveProdutos}
+            liveCategorias={liveCategorias}
+            onRefreshCategorias={fetchLiveCategorias}
+            restauranteConfig={restauranteConfig}
+            fetchError={fetchError}
+            onOptimisticUpdateItemStatus={handleOptimisticUpdateItemStatus}
+            onOptimisticAddOrder={handleOptimisticAddOrder}
+            onRemovePendingPaymentOptimistic={handleRemovePendingPaymentOptimistic}
+          />
+        </React.Suspense>
       </div>
     );
   }
@@ -2269,28 +2293,30 @@ export default function App() {
             currentTime={currentTime}
           />
         ) : isManagementRole(activeRole) ? (
-          <MemoizedCaixaPanel
-            orders={orders}
-            onRefreshOrders={fetchOrdersFromAPI}
-            apiBaseUrl={API_BASE_URL}
-            authHeaders={getAuthHeaders()}
-            activeWaiterNome={activeWaiterNome}
-            salonTables={salonTables}
-            onCreateMesa={handleCreateMesa}
-            onUpdateMesa={handleUpdateMesa}
-            onDeleteMesa={handleDeleteMesa}
-            pagamentosPendentes={pagamentosPendentes}
-            onRefreshPagamentosPendentes={fetchPagamentosPendentes}
-            isWsConnected={isWsConnected}
-            liveProdutos={liveProdutos}
-            liveCategorias={liveCategorias}
-            onRefreshCategorias={fetchLiveCategorias}
-            restauranteConfig={restauranteConfig}
-            fetchError={fetchError}
-            onOptimisticUpdateItemStatus={handleOptimisticUpdateItemStatus}
-            onOptimisticAddOrder={handleOptimisticAddOrder}
-            onRemovePendingPaymentOptimistic={handleRemovePendingPaymentOptimistic}
-          />
+          <React.Suspense fallback={<CashierLoading />}>
+            <MemoizedCaixaPanel
+              orders={orders}
+              onRefreshOrders={fetchOrdersFromAPI}
+              apiBaseUrl={API_BASE_URL}
+              authHeaders={getAuthHeaders()}
+              activeWaiterNome={activeWaiterNome}
+              salonTables={salonTables}
+              onCreateMesa={handleCreateMesa}
+              onUpdateMesa={handleUpdateMesa}
+              onDeleteMesa={handleDeleteMesa}
+              pagamentosPendentes={pagamentosPendentes}
+              onRefreshPagamentosPendentes={fetchPagamentosPendentes}
+              isWsConnected={isWsConnected}
+              liveProdutos={liveProdutos}
+              liveCategorias={liveCategorias}
+              onRefreshCategorias={fetchLiveCategorias}
+              restauranteConfig={restauranteConfig}
+              fetchError={fetchError}
+              onOptimisticUpdateItemStatus={handleOptimisticUpdateItemStatus}
+              onOptimisticAddOrder={handleOptimisticAddOrder}
+              onRemovePendingPaymentOptimistic={handleRemovePendingPaymentOptimistic}
+            />
+          </React.Suspense>
         ) : (
           /* VIEW 2: SALÃO (WAITERS OR CASHIER DASHBOARD) */
           <MesasView

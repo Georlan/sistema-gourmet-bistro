@@ -306,7 +306,7 @@ def get_comandas(
         query = query.filter(Comanda.mesa_id == mesa_id)
     if fechada is not None:
         query = query.filter(Comanda.fechada == fechada)
-    return query.all()
+    return query.order_by(Comanda.criado_em.asc(), Comanda.id.asc()).all()
 
 @router.get("/detalhes/todos", response_model=List[ComandaDetail])
 def get_comandas_detalhes(
@@ -326,7 +326,7 @@ def get_comandas_detalhes(
         query = query.filter(Comanda.mesa_id == mesa_id)
     if fechada is not None:
         query = query.filter(Comanda.fechada == fechada)
-    return query.all()
+    return query.order_by(Comanda.criado_em.asc(), Comanda.id.asc()).all()
 
 @router.get("/{comanda_id}", response_model=ComandaDetail)
 def get_comanda(comanda_id: str, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):

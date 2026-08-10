@@ -92,7 +92,7 @@ interface CaixaPanelProps {
   onRemovePendingPaymentOptimistic?: (pagamentoId: string) => void;
 }
 
-// Simulated dynamic lists for tabs that don't need real backend persistence yet
+// Operational view models used by the cashier screens.
 interface Courier {
   id: number;
   nome: string;
@@ -118,7 +118,7 @@ interface AccountItem {
   tipo: 'pagar' | 'receber';
 }
 
-interface SimulatedDeliveryOrder {
+interface DeliveryOrderView {
   id: string;
   cliente: string;
   telefone: string;
@@ -397,7 +397,7 @@ export function CaixaPanel({
   // ============================================================================
 
   // Col 1 — somente pedidos vinculados a uma mesa física, lançados pelo garçom ou caixa.
-  const tableOrdersInProduction = (() => {
+  const tableOrdersInProduction = useMemo(() => {
     const list: any[] = [];
     (orders || []).forEach(comanda => {
       const normalizedType = String(comanda.tipo || '').toLowerCase();
@@ -449,11 +449,11 @@ export function CaixaPanel({
       });
     });
     return list;
-  })();
+  }, [orders, salonTables]);
 
   // Col 3 — Fechar conta: mesas com status 'aguardando_pagamento' (conta pedida) ou itens prontos individualmente
   // Unifica comandas da mesma mesa em um único card de pagamento.
-  const tableOrdersReady = (() => {
+  const tableOrdersReady = useMemo(() => {
     const list: any[] = [];
     const groupedByMesa: Record<number, Array<{ comanda: any; itens: any[]; contaPedida: boolean }>> = {};
 
@@ -553,7 +553,7 @@ export function CaixaPanel({
     });
 
     return list;
-  })();
+  }, [orders, salonTables]);
 
   const handleTabChange = (tabId: string) => {
     setActiveTab(tabId as any);
@@ -1078,7 +1078,7 @@ export function CaixaPanel({
     { id: 4, bairro: "Espinheiro", taxa: 10.00, tempo: "30-40 min" }
   ]);
 
-  const [simulatedOrders, setSimulatedOrders] = useState<SimulatedDeliveryOrder[]>([]);
+  const [deliveryOrders, setDeliveryOrders] = useState<DeliveryOrderView[]>([]);
   const [motoboys, setMotoboys] = useState<any[]>([]);
   const [selectedMotoboys, setSelectedMotoboys] = useState<{ [orderId: string]: string }>({});
   const [novoMotoboyNome, setNewMotoboyNome] = useState('');
@@ -1133,7 +1133,7 @@ export function CaixaPanel({
   useEffect(() => {
     const interval = setInterval(() => {
       setNowTimestamp(Date.now());
-    }, 15000);
+    }, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -1145,15 +1145,12 @@ export function CaixaPanel({
   useEffect(() => {
     const handleOrdersUpdated = () => {
       setNowTimestamp(Date.now());
-      if (onRefreshOrders) {
-        onRefreshOrders();
-      }
     };
     window.addEventListener('koma_orders_updated', handleOrdersUpdated);
     return () => {
       window.removeEventListener('koma_orders_updated', handleOrdersUpdated);
     };
-  }, [onRefreshOrders]);
+  }, []);
 
   // Função auxiliar para calcular e formatar o tempo real decorrido da mesa/pedido
   const getMinutosDecorridos = (card: any) => {
@@ -1191,6 +1188,10 @@ export function CaixaPanel({
 
     const now = Date.now();
     const diff = Math.max(0, Math.floor((now - start) / 60000));
+    if (diff >= 2880) {
+      const days = Math.floor(diff / 1440);
+      return `${days}d ${Math.floor((diff % 1440) / 60)}h`;
+    }
     if (diff >= 60) {
       return `${Math.floor(diff / 60)}h ${diff % 60}m`;
     }
@@ -1289,14 +1290,14 @@ export function CaixaPanel({
     }
 
     if (itemList.length === 0) {
-      return <p className="font-medium text-[11px] text-slate-400 italic bg-[#10121A] p-2 rounded-lg border border-[#232738]">Nenhum item adicionado</p>;
+      return <p className="orders-card__items font-medium text-[11px] text-slate-400 italic p-2 rounded-lg">Nenhum item adicionado</p>;
     }
 
     const visibleItems = isExpanded ? itemList : itemList.slice(0, 3);
     const hiddenCount = itemList.length - 3;
 
     return (
-      <div className="space-y-0.5 bg-[#10121A] p-2 rounded-lg border border-[#232738]">
+      <div className="orders-card__items space-y-0.5 p-2 rounded-lg">
         <ul className="space-y-0.5">
           {visibleItems.map((it, idx) => (
             <li key={idx} className="font-medium text-xs text-slate-200 flex items-center justify-between font-sans truncate">
@@ -1375,7 +1376,7 @@ export function CaixaPanel({
     };
   }, []);
 
-  const mapComandaToSimulatedDelivery = (c: any): SimulatedDeliveryOrder => {
+  const mapComandaToDeliveryView = (c: any): DeliveryOrderView => {
     const itemCounts: { [name: string]: number } = {};
     const itensArr = Array.isArray(c?.itens) ? c.itens : Array.isArray(c?.items) ? c.items : [];
     const activeItems = itensArr.filter((it: any) => it.status !== 'cancelado');
@@ -1433,8 +1434,8 @@ export function CaixaPanel({
       const res = await fetch(`${apiBaseUrl}/comandas/delivery/ativos`, { headers: authHeaders });
       if (res.ok) {
         const data = await res.json();
-        const mapped = data.map(mapComandaToSimulatedDelivery);
-        setSimulatedOrders(mapped);
+        const mapped = data.map(mapComandaToDeliveryView);
+        setDeliveryOrders(mapped);
       }
     } catch (err) {
       console.error('Error fetching delivery orders', err);
@@ -1443,12 +1444,12 @@ export function CaixaPanel({
 
   // Watch for new pending orders → play alert sound
   useEffect(() => {
-    const pendingCount = simulatedOrders.filter(o => o.status === 'pendente').length;
+    const pendingCount = deliveryOrders.filter(o => o.status === 'pendente').length;
     if (pendingCount > prevPendingCountRef.current && !isDrawerOpen) {
       playPendingAlert();
     }
     prevPendingCountRef.current = pendingCount;
-  }, [simulatedOrders, isDrawerOpen]);
+  }, [deliveryOrders, isDrawerOpen]);
 
   const fetchMotoboys = async () => {
     try {
@@ -1468,9 +1469,6 @@ export function CaixaPanel({
 
     const handleDeliveryUpdate = () => {
       fetchDeliveryOrders();
-      fetchMotoboys();
-      fetchTurno();
-      if (onRefreshOrders) onRefreshOrders();
     };
 
     window.addEventListener('koma_orders_updated', handleDeliveryUpdate);
@@ -1479,7 +1477,7 @@ export function CaixaPanel({
     };
   }, [apiBaseUrl]);
 
-  const openSimulatedOrderDetails = (order: SimulatedDeliveryOrder) => {
+  const openDeliveryOrderDetails = (order: DeliveryOrderView) => {
     const fullComanda = orders.find(o => o.id === order.id);
     const itemsMapped = fullComanda
       ? fullComanda.itens.map((it: any) => ({
@@ -1516,7 +1514,7 @@ export function CaixaPanel({
       if (res.ok) {
         fetchDeliveryOrders();
         showToast('Status do pedido atualizado!');
-        const targetOrder = (simulatedOrders as any[]).find(o => String(o.id) === String(orderId));
+        const targetOrder = (deliveryOrders as any[]).find(o => String(o.id) === String(orderId));
         if (targetOrder && (targetOrder.telefone || targetOrder.delivery_telefone)) {
           const phone = targetOrder.telefone || targetOrder.delivery_telefone;
           const nome = targetOrder.cliente || targetOrder.identificador || 'Cliente';
@@ -2165,14 +2163,22 @@ export function CaixaPanel({
     fetchDeliveryOrders();
     fetchMotoboys();
     fetchConfiguracoes();
-
-    const interval = setInterval(() => {
-      fetchTurno();
-      fetchDeliveryOrders();
-    }, 5000); // Polling rápido 5s para sincronização em tempo real do Kanban
-
-    return () => clearInterval(interval);
   }, []);
+
+  // Contingência apenas quando o WebSocket estiver indisponível. Com a conexão
+  // saudável, os eventos são a fonte de verdade e não há polling concorrente.
+  useEffect(() => {
+    if (isWsConnected || activeTab !== 'operacao') return;
+    const refreshIfVisible = () => {
+      if (!document.hidden) {
+        fetchTurno();
+        fetchDeliveryOrders();
+        onRefreshOrders();
+      }
+    };
+    const interval = setInterval(refreshIfVisible, 12000);
+    return () => clearInterval(interval);
+  }, [isWsConnected, activeTab, onRefreshOrders]);
 
   useEffect(() => {
     if (activeTab === 'permissoes_cargos' || activeSubTab === 'equipe' || activeSubTab === 'pessoas') {
@@ -3344,23 +3350,23 @@ export function CaixaPanel({
   }, [tableOrdersInProduction, searchQuery, matchesSearchQuery]);
 
   const filteredCol2Simulated = useMemo(() => {
-    return simulatedOrders.filter(o => o.status === 'producao').filter(order => matchesSearchQuery(order, searchQuery));
-  }, [simulatedOrders, searchQuery, matchesSearchQuery]);
+    return deliveryOrders.filter(o => o.status === 'producao').filter(order => matchesSearchQuery(order, searchQuery));
+  }, [deliveryOrders, searchQuery, matchesSearchQuery]);
 
   const filteredCol2Table = useMemo(() => {
     return tableOrdersReady.filter(order => matchesSearchQuery(order, searchQuery));
   }, [tableOrdersReady, searchQuery, matchesSearchQuery]);
 
   const filteredCol3Simulated = useMemo(() => {
-    return simulatedOrders.filter(o => o.status === 'transito').filter(order => matchesSearchQuery(order, searchQuery));
-  }, [simulatedOrders, searchQuery, matchesSearchQuery]);
+    return deliveryOrders.filter(o => o.status === 'transito').filter(order => matchesSearchQuery(order, searchQuery));
+  }, [deliveryOrders, searchQuery, matchesSearchQuery]);
 
   const totalResultadosBusca = useMemo(() => {
     return filteredCol1.length + filteredCol2Simulated.length + filteredCol2Table.length + filteredCol3Simulated.length;
   }, [filteredCol1, filteredCol2Simulated, filteredCol2Table, filteredCol3Simulated]);
 
   return (
-    <div className={`flex w-full h-screen bg-[#0B0B0C] text-white overflow-hidden font-sans selection:bg-[#10b981]/30 text-xs ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''
+    <div className={`cashier-shell flex w-full h-screen bg-[#0B0B0C] text-white overflow-hidden font-sans selection:bg-[#10b981]/30 text-xs ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''
       }`}>
 
       {/* TOAST DE FEEDBACK NÃO-BLOQUEANTE */}
@@ -3509,7 +3515,7 @@ export function CaixaPanel({
                             : tab.id === 'assistente_koma' ? (activeTab === 'assistente_koma' || activeTab === 'robo_ia' || (activeTab === 'operacao' && activeSubTab === 'chat_copiloto'))
                             : activeTab === tab.id
                           );
-                          const orderCount = tab.id === 'operacao' ? (tableOrdersInProduction.length + simulatedOrders.filter(o => ['pendente', 'analise', 'producao', 'pronto', 'transito'].includes(o.status)).length + tableOrdersReady.length) : 0;
+                          const orderCount = tab.id === 'operacao' ? (tableOrdersInProduction.length + deliveryOrders.filter(o => ['pendente', 'analise', 'producao', 'pronto', 'transito'].includes(o.status)).length + tableOrdersReady.length) : 0;
 
                           return (
                             <SidebarMenuItem key={tab.id}>
@@ -3600,7 +3606,7 @@ export function CaixaPanel({
         )}
 
         {/* DESKTOP SIDEBAR - SHADCN COMPOSABLE ARCHITECTURE */}
-        <Sidebar className="hidden lg:flex w-64 bg-[#121214] border-r border-[#27272A] flex-col justify-between shrink-0">
+        <Sidebar className="cashier-sidebar hidden lg:flex w-64 bg-[#121214] border-r border-[#27272A] flex-col justify-between shrink-0">
           <SidebarHeader className="p-3.5 border-b border-[#27272A] space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -3711,7 +3717,7 @@ export function CaixaPanel({
                         : tab.id === 'assistente_koma' ? (activeTab === 'assistente_koma' || activeTab === 'robo_ia' || (activeTab === 'operacao' && activeSubTab === 'chat_copiloto'))
                         : activeTab === tab.id
                       );
-                      const orderCount = tab.id === 'operacao' ? (tableOrdersInProduction.length + simulatedOrders.filter(o => ['pendente', 'analise', 'producao', 'pronto', 'transito'].includes(o.status)).length + tableOrdersReady.length) : 0;
+                      const orderCount = tab.id === 'operacao' ? (tableOrdersInProduction.length + deliveryOrders.filter(o => ['pendente', 'analise', 'producao', 'pronto', 'transito'].includes(o.status)).length + tableOrdersReady.length) : 0;
 
                       return (
                         <SidebarMenuItem key={tab.id}>
@@ -3797,9 +3803,9 @@ export function CaixaPanel({
       </SidebarProvider>
 
       {/* CONTENT AREA */}
-      <main className={clsx('flex-1', 'bg-[#09090B]', 'flex', 'flex-col', 'overflow-hidden', 'w-full')}>
+      <main className={clsx('cashier-main', 'flex-1', 'bg-[#09090B]', 'flex', 'flex-col', 'overflow-hidden', 'w-full')}>
         {/* Top header bar */}
-        <header className={clsx('h-14', 'border-b', 'border-[#27272A]', 'bg-[#121214]', 'px-4', 'sm:px-6', 'flex', 'items-center', 'justify-between', 'shrink-0')}>
+        <header className={clsx('cashier-topbar', 'h-14', 'border-b', 'border-[#27272A]', 'bg-[#121214]', 'px-4', 'sm:px-6', 'flex', 'items-center', 'justify-between', 'shrink-0')}>
           <div className="flex items-center gap-2 truncate">
             <button
               type="button"
@@ -3846,7 +3852,7 @@ export function CaixaPanel({
         </header>
 
         {/* Sub-tabs Navigation Bar */}
-        <div className={clsx('bg-[#121214]/60', 'border-b', 'border-[#27272A]', 'px-6', 'py-1.5', 'flex', 'gap-2', 'shrink-0', 'overflow-x-auto', 'scrollbar-none')}>
+        <div className={clsx('cashier-subnav', 'bg-[#121214]/60', 'border-b', 'border-[#27272A]', 'px-6', 'py-1.5', 'flex', 'gap-2', 'shrink-0', 'overflow-x-auto', 'scrollbar-none')}>
           {(activeTab === 'assistente_koma' || activeTab === 'robo_ia') && [
             { id: 'chat', label: 'Chat' },
             { id: 'configuracao', label: 'Configuração' },
@@ -4037,7 +4043,7 @@ export function CaixaPanel({
         </div>
 
         {/* Dynamic Inner views */}
-        <div className={clsx('flex-1', 'overflow-y-auto', 'p-5', 'relative')}>
+        <div className={clsx('cashier-content', 'flex-1', 'overflow-y-auto', 'p-5', 'relative')}>
 
           {/* CASHIER CLOSED WARNING BANNER */}
           {turno?.status !== 'aberto' && ['pedidos', 'balcao', 'mesas', 'kds'].includes(activeSubTab) && (
@@ -4060,7 +4066,24 @@ export function CaixaPanel({
 
           {/* VIEW 1: MEUS PEDIDOS (Kanban) */}
           {activeSubTab === 'pedidos' && (
-            <div className={clsx('h-full', 'flex', 'flex-col', 'space-y-4')}>
+            <div className={clsx('orders-workspace', 'h-full', 'flex', 'flex-col', 'space-y-4')}>
+
+              <section className="orders-hero shrink-0" aria-labelledby="orders-heading">
+                <div className="orders-hero__copy">
+                  <p className="orders-eyebrow"><span /> OPERAÇÃO / TEMPO REAL</p>
+                  <h1 id="orders-heading">PEDIDOS <em>EM MOVIMENTO.</em></h1>
+                  <p>Acompanhe salão, retirada e pagamentos em um fluxo único — com menos ruído e mais decisão.</p>
+                </div>
+                <div className="orders-hero__metrics" aria-label="Resumo operacional">
+                  <div><strong>{filteredCol1.length}</strong><span>no salão</span></div>
+                  <div><strong>{filteredCol2Simulated.length}</strong><span>online</span></div>
+                  <div><strong>{filteredCol2Table.length + filteredCol3Simulated.length}</strong><span>para concluir</span></div>
+                  <div className={isWsConnected ? 'is-live' : 'is-offline'}>
+                    <span className="orders-live-dot" />
+                    <span>{isWsConnected ? 'Sincronização ativa' : 'Reconectando'}</span>
+                  </div>
+                </div>
+              </section>
 
               {/* ALERTA DE PAGAMENTO PENDENTE EM DINHEIRO (GARÇOM) */}
               {pagamentosPendentes.length > 0 && (
@@ -4140,7 +4163,7 @@ export function CaixaPanel({
               )}
 
               {/* Controls bar with Search Input */}
-              <div className="bg-[#121214] border border-[#27272A] p-3 rounded-2xl flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3 sticky top-0 z-20 shadow-md backdrop-blur-md">
+              <div className="orders-toolbar bg-[#121214] border border-[#27272A] p-3 rounded-2xl flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3 sticky top-0 z-20 shadow-md backdrop-blur-md">
                 {/* Search Bar Component */}
                 <div className="relative flex-1 max-w-md">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
@@ -4173,7 +4196,7 @@ export function CaixaPanel({
                     <span>Aceitar os pedidos automaticamente (iFood/Apps)</span>
                   </label>
                   <div className="text-[10px] text-gray-400">
-                    Total Delivery hoje: <strong className="text-white">R$ {simulatedOrders.reduce((s, o) => s + o.total, 0).toFixed(2)}</strong>
+                    Total Delivery hoje: <strong className="text-white">R$ {deliveryOrders.reduce((s, o) => s + o.total, 0).toFixed(2)}</strong>
                   </div>
                   {/* Bell button — opens floating drawer */}
                   <button
@@ -4183,9 +4206,9 @@ export function CaixaPanel({
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
                     <span className="text-[10px] font-bold">Novos Pedidos</span>
-                    {simulatedOrders.filter(o => o.status === 'pendente').length > 0 && (
+                    {deliveryOrders.filter(o => o.status === 'pendente').length > 0 && (
                       <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[8px] font-bold text-black animate-bounce">
-                        {simulatedOrders.filter(o => o.status === 'pendente').length}
+                        {deliveryOrders.filter(o => o.status === 'pendente').length}
                       </span>
                     )}
                   </button>
@@ -4238,13 +4261,13 @@ export function CaixaPanel({
 
                     {/* Drawer body */}
                     <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                      {simulatedOrders.filter(o => o.status === 'pendente').length === 0 ? (
+                      {deliveryOrders.filter(o => o.status === 'pendente').length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-40 text-gray-500 text-[11px] italic">
                           <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="mb-3 opacity-40"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
                           Nenhum pedido pendente
                         </div>
                       ) : (
-                        simulatedOrders.filter(o => o.status === 'pendente').map((order) => (
+                        deliveryOrders.filter(o => o.status === 'pendente').map((order) => (
                           <div key={order.id} className="bg-[#1C1C1F] border border-amber-500/20 hover:border-amber-500/40 p-4 rounded-xl space-y-3 transition-all">
                             <div className="flex justify-between items-start">
                               <div>
@@ -4288,7 +4311,7 @@ export function CaixaPanel({
                                 onClick={async () => {
                                   await handleUpdateDeliveryStatus(order.id, 'producao');
                                   // Close drawer if no more pending
-                                  if (simulatedOrders.filter(o => o.status === 'pendente').length <= 1) setIsDrawerOpen(false);
+                                  if (deliveryOrders.filter(o => o.status === 'pendente').length <= 1) setIsDrawerOpen(false);
                                 }}
                                 className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[10px] transition-all cursor-pointer uppercase tracking-wider"
                               >
@@ -4298,7 +4321,7 @@ export function CaixaPanel({
                                 type="button"
                                 onClick={async () => {
                                   await handleRecusarPedido(order.id);
-                                  if (simulatedOrders.filter(o => o.status === 'pendente').length <= 1) setIsDrawerOpen(false);
+                                  if (deliveryOrders.filter(o => o.status === 'pendente').length <= 1) setIsDrawerOpen(false);
                                 }}
                                 className="px-4 py-2 bg-rose-900/30 border border-rose-900/30 hover:bg-rose-800/40 text-rose-400 hover:text-white rounded-lg font-bold text-[10px] transition-all cursor-pointer"
                               >
@@ -4314,13 +4337,14 @@ export function CaixaPanel({
               )}
 
               {/* Kanban operacional universal: mesas, pedidos online e finalização. */}
-              <div className={clsx('flex-1', 'flex', 'md:grid', 'md:grid-cols-3', 'gap-4', 'overflow-x-auto', 'snap-x', 'snap-mandatory', 'pb-4', 'scrollbar-thin', 'scrollbar-thumb-zinc-800')}>
+              <div className="orders-board flex-1 gap-4 overflow-x-auto snap-x snap-mandatory pb-4 scrollbar-thin scrollbar-thumb-zinc-800">
 
 
                 {/* COLUMN 1: Em produção */}
-                <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden', 'min-w-[85vw]', 'sm:min-w-[320px]', 'md:min-w-0', 'flex-1', 'snap-center', 'shrink-0', 'md:shrink')}>
-                  <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
+                <div className="orders-column flex flex-col overflow-hidden snap-center">
+                  <div className="orders-column__header px-4 py-2.5 flex justify-between items-center shrink-0">
                     <div>
+                      <span className="orders-column__number">01 / SALÃO</span>
                       <span className={clsx('font-bold', 'text-white', 'font-sans', 'block', 'text-sm')}>Mesas em Atendimento</span>
                       <span className="text-xs text-gray-400 block mt-0.5 font-normal">Lançados pelo garçom ou caixa</span>
                     </div>
@@ -4329,7 +4353,7 @@ export function CaixaPanel({
                     </span>
                   </div>
 
-                  <div className={clsx('p-2.5', 'sm:p-3', 'flex-1', 'overflow-y-auto', 'space-y-2.5')}>
+                  <div className="orders-column__body p-2.5 sm:p-3 flex-1 overflow-y-auto space-y-2.5">
                     {filteredCol1.length === 0 ? (
                       <div className="py-16 text-center text-gray-400 italic text-xs space-y-1">
                         <Search size={20} className="mx-auto opacity-40 mb-2 text-gray-500" />
@@ -4349,7 +4373,7 @@ export function CaixaPanel({
                               key={`table-prod-${order.id}`} 
                               onClick={() => setSelectedKanbanOrder(order)}
                               className={clsx(
-                                'bg-[#18181B] hover:bg-[#1C1C1F] border border-[#27272A] rounded-xl hover:border-[#10b981]/50 transition-colors p-2.5 sm:p-3 space-y-2 text-left cursor-pointer shadow-sm',
+                                'orders-card bg-[#18181B] hover:bg-[#1C1C1F] border border-[#27272A] rounded-xl hover:border-[#10b981]/50 transition-colors p-2.5 sm:p-3 space-y-2 text-left cursor-pointer shadow-sm',
                                 sla.borderTopClass || 'border-t-2 border-t-emerald-800/70'
                               )}
                             >
@@ -4428,7 +4452,7 @@ export function CaixaPanel({
                                     setIsLoading(false);
                                   }
                                 }}
-                                className="w-full py-2 px-3 h-8 sm:h-9 bg-emerald-600/15 hover:bg-emerald-600/25 text-[#10b981] font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5 border border-emerald-500/20"
+                                className="orders-card__action w-full py-2 px-3 h-8 sm:h-9 font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5"
                               >
                                 <Check size={13} />
                                 <span>PRONTO → PAGAMENTO</span>
@@ -4442,9 +4466,10 @@ export function CaixaPanel({
                 </div>
 
                 {/* COLUMN 2: pedidos online aceitos, delivery ou retirada. */}
-                <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden', 'min-w-[85vw]', 'sm:min-w-[320px]', 'md:min-w-0', 'flex-1', 'snap-center', 'shrink-0', 'md:shrink')}>
-                  <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
+                <div className="orders-column flex flex-col overflow-hidden snap-center">
+                  <div className="orders-column__header px-4 py-2.5 flex justify-between items-center shrink-0">
                     <div>
+                      <span className="orders-column__number">02 / DIGITAL</span>
                       <span className={clsx('font-bold', 'text-white', 'font-sans', 'block', 'text-sm')}>Online e Retirada</span>
                       <span className="text-xs text-gray-400 block mt-0.5 font-normal">Pedidos aceitos no sino</span>
                     </div>
@@ -4453,7 +4478,7 @@ export function CaixaPanel({
                     </span>
                   </div>
 
-                  <div className={clsx('p-2.5', 'sm:p-3', 'flex-1', 'overflow-y-auto', 'space-y-2.5')}>
+                  <div className="orders-column__body p-2.5 sm:p-3 flex-1 overflow-y-auto space-y-2.5">
                     {filteredCol2Simulated.length === 0 ? (
                       <div className="py-16 text-center text-gray-400 italic text-xs space-y-1">
                         <Search size={20} className="mx-auto opacity-40 mb-2 text-gray-500" />
@@ -4476,9 +4501,9 @@ export function CaixaPanel({
                           return (
                             <div 
                               key={order.id} 
-                              onClick={() => openSimulatedOrderDetails(order)}
+                              onClick={() => openDeliveryOrderDetails(order)}
                               className={clsx(
-                                'bg-[#18181B] hover:bg-[#1C1C1F] border border-[#27272A] rounded-xl hover:border-[#10b981]/50 transition-colors p-2.5 sm:p-3 space-y-2 text-left cursor-pointer shadow-sm',
+                                'orders-card bg-[#18181B] hover:bg-[#1C1C1F] border border-[#27272A] rounded-xl hover:border-[#10b981]/50 transition-colors p-2.5 sm:p-3 space-y-2 text-left cursor-pointer shadow-sm',
                                 sla.borderTopClass || topAccentClass
                               )}
                             >
@@ -4506,7 +4531,7 @@ export function CaixaPanel({
                                     type="button"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      openSimulatedOrderDetails(order);
+                                      openDeliveryOrderDetails(order);
                                     }}
                                     className="p-1 bg-[#1C1C1F] hover:bg-[#27272A] text-gray-300 hover:text-[#10b981] rounded-md border border-[#27272A] transition-colors cursor-pointer shadow-xs"
                                     title="Ver detalhes do pedido"
@@ -4541,7 +4566,7 @@ export function CaixaPanel({
                                   if (isLoading) return;
                                   handleUpdateDeliveryStatus(order.id, 'transito');
                                 }}
-                                className="w-full py-2 px-3 h-8 sm:h-9 bg-emerald-600/15 hover:bg-emerald-600/25 text-[#10b981] font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5 border border-emerald-500/20"
+                                className="orders-card__action w-full py-2 px-3 h-8 sm:h-9 font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5"
                               >
                                 <Check size={13} />
                                 <span>{buttonText}</span>
@@ -4555,9 +4580,10 @@ export function CaixaPanel({
                 </div>
 
                 {/* COLUMN 3: pagamento e finalização de todas as modalidades. */}
-                <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'overflow-hidden', 'min-w-[85vw]', 'sm:min-w-[320px]', 'md:min-w-0', 'flex-1', 'snap-center', 'shrink-0', 'md:shrink')}>
-                  <div className={clsx('bg-[#18181B]', 'px-4', 'py-2.5', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
+                <div className="orders-column flex flex-col overflow-hidden snap-center">
+                  <div className="orders-column__header px-4 py-2.5 flex justify-between items-center shrink-0">
                     <div>
+                      <span className="orders-column__number">03 / FECHAMENTO</span>
                       <span className={clsx('font-bold', 'text-white', 'font-sans', 'block', 'text-sm')}>Pagamento e Finalização</span>
                       <span className="text-xs text-gray-400 block mt-0.5 font-normal">Prontos para receber ou concluir</span>
                     </div>
@@ -4566,7 +4592,7 @@ export function CaixaPanel({
                     </span>
                   </div>
 
-                  <div className={clsx('p-2.5', 'sm:p-3', 'flex-1', 'overflow-y-auto', 'space-y-2.5')}>
+                  <div className="orders-column__body p-2.5 sm:p-3 flex-1 overflow-y-auto space-y-2.5">
                     {filteredCol2Table.length === 0 && filteredCol3Simulated.length === 0 ? (
                       <div className="py-16 text-center text-gray-400 italic text-xs space-y-1">
                         <Search size={20} className="mx-auto opacity-40 mb-2 text-gray-500" />
@@ -4590,7 +4616,7 @@ export function CaixaPanel({
                               key={`close-${order.id}`}
                               onClick={() => setSelectedKanbanOrder(order)}
                               className={clsx(
-                                'bg-[#18181B] hover:bg-[#1C1C1F] border border-[#27272A] rounded-xl hover:border-[#10b981]/50 transition-colors p-2.5 sm:p-3 space-y-2 text-left cursor-pointer shadow-sm',
+                                'orders-card bg-[#18181B] hover:bg-[#1C1C1F] border border-[#27272A] rounded-xl hover:border-[#10b981]/50 transition-colors p-2.5 sm:p-3 space-y-2 text-left cursor-pointer shadow-sm',
                                 sla.borderTopClass || 'border-t-2 border-t-emerald-800/70'
                               )}
                             >
@@ -4665,7 +4691,7 @@ export function CaixaPanel({
                                     Math.max(0, total - Number(checkoutOrder.valorPago || 0)).toFixed(2)
                                   );
                                 }}
-                                className="w-full py-2 px-3 h-8 sm:h-9 bg-emerald-600/15 hover:bg-emerald-600/25 text-[#10b981] font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5 border border-emerald-500/20"
+                                className="orders-card__action w-full py-2 px-3 h-8 sm:h-9 font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5"
                               >
                                 <Check size={13} /><span>ABRIR PAGAMENTO DA MESA</span>
                               </button>
@@ -4690,9 +4716,9 @@ export function CaixaPanel({
                           return (
                             <div 
                               key={`transito-${order.id}`} 
-                              onClick={() => openSimulatedOrderDetails(order)}
+                              onClick={() => openDeliveryOrderDetails(order)}
                               className={clsx(
-                                'bg-[#18181B] hover:bg-[#1C1C1F] border border-[#27272A] rounded-xl hover:border-[#10b981]/50 transition-colors p-2.5 sm:p-3 space-y-2 text-left cursor-pointer shadow-sm',
+                                'orders-card bg-[#18181B] hover:bg-[#1C1C1F] border border-[#27272A] rounded-xl hover:border-[#10b981]/50 transition-colors p-2.5 sm:p-3 space-y-2 text-left cursor-pointer shadow-sm',
                                 sla.borderTopClass || topAccentClass
                               )}
                             >
@@ -4719,7 +4745,7 @@ export function CaixaPanel({
                                     type="button"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      openSimulatedOrderDetails(order);
+                                      openDeliveryOrderDetails(order);
                                     }}
                                     className="p-1 bg-[#1C1C1F] hover:bg-[#27272A] text-gray-300 hover:text-[#10b981] rounded-md border border-[#27272A] transition-colors cursor-pointer shadow-xs"
                                     title="Ver detalhes do pedido"
@@ -4776,7 +4802,7 @@ export function CaixaPanel({
                                     handleFinalizarPedido(order.id);
                                   }
                                 }}
-                                className="w-full py-2 px-3 h-8 sm:h-9 bg-emerald-600/15 hover:bg-emerald-600/25 text-[#10b981] font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5 border border-emerald-500/20"
+                                className="orders-card__action w-full py-2 px-3 h-8 sm:h-9 font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5"
                               >
                                 <Check size={13} /><span>{order.pago ? 'FINALIZAR PEDIDO' : 'RECEBER E FINALIZAR'}</span>
                               </button>
@@ -5347,19 +5373,19 @@ export function CaixaPanel({
                 <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-4', 'rounded-2xl')}>
                   <span className={clsx('text-[9px]', 'uppercase', 'tracking-wider', 'font-bold', 'text-gray-400', 'block')}>Em análise agora</span>
                   <strong className={clsx('text-xl', 'text-amber-500', 'font-mono', 'block', 'mt-1')}>
-                    {simulatedOrders.filter(o => o.status === 'analise').length}
+                    {deliveryOrders.filter(o => o.status === 'analise').length}
                   </strong>
                 </div>
                 <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-4', 'rounded-2xl')}>
                   <span className={clsx('text-[9px]', 'uppercase', 'tracking-wider', 'font-bold', 'text-gray-400', 'block')}>Em produção agora</span>
                   <strong className={clsx('text-xl', 'text-[#10b981]', 'font-mono', 'block', 'mt-1')}>
-                    {simulatedOrders.filter(o => o.status === 'producao').length + activeKitchenItems.filter(i => i.status === 'preparando').length}
+                    {deliveryOrders.filter(o => o.status === 'producao').length + activeKitchenItems.filter(i => i.status === 'preparando').length}
                   </strong>
                 </div>
                 <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-4', 'rounded-2xl')}>
                   <span className={clsx('text-[9px]', 'uppercase', 'tracking-wider', 'font-bold', 'text-gray-400', 'block')}>Pronto para entrega</span>
                   <strong className={clsx('text-xl', 'text-emerald-500', 'font-mono', 'block', 'mt-1')}>
-                    {simulatedOrders.filter(o => o.status === 'pronto').length}
+                    {deliveryOrders.filter(o => o.status === 'pronto').length}
                   </strong>
                 </div>
               </div>
@@ -7521,7 +7547,7 @@ export function CaixaPanel({
                       // 2. Generate delivery order from Co-pilot draft
                       const draft = copilotDraftCarts[activeChatContactId];
                       if (draft && draft.length > 0) {
-                        const newOrd: SimulatedDeliveryOrder = {
+                        const newOrd: DeliveryOrderView = {
                           id: `d-${Date.now().toString().slice(-3)}`,
                           cliente: contact.name,
                           telefone: contact.phone,
@@ -7534,7 +7560,7 @@ export function CaixaPanel({
                           endereco: "Av. Conselheiro Aguiar, 2300, Apto 502 - Boa Viagem",
                           criadoEm: "10:33"
                         };
-                        setSimulatedOrders(prev => [newOrd, ...prev]);
+                        setDeliveryOrders(prev => [newOrd, ...prev]);
                         alert(`Carrinho de Bruno Santos aprovado! Um novo pedido ${newOrd.id} foi gerado no painel e a resposta foi enviada ao WhatsApp.`);
                       } else {
                         alert('Resposta enviada ao cliente.');
@@ -7577,13 +7603,13 @@ export function CaixaPanel({
                 <div className={clsx('space-y-3', 'flex-1', 'overflow-y-auto')}>
                   <span className={clsx('text-[10px]', 'font-bold', 'text-[#10b981]', 'uppercase', 'tracking-wider', 'block')}>Pedidos para Despachar</span>
 
-                  {simulatedOrders.filter(o => o.status === 'producao' || o.status === 'analise').length === 0 ? (
+                  {deliveryOrders.filter(o => o.status === 'producao' || o.status === 'analise').length === 0 ? (
                     <div className={clsx('py-8', 'text-center', 'text-gray-500', 'text-xs', 'italic', 'bg-[#1C1C1F]/20', 'border', 'border-[#27272A]/40', 'rounded-2xl')}>
                       Não há pedidos prontos ou em produção aguardando despacho no momento.
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {simulatedOrders.filter(o => o.status === 'producao' || o.status === 'analise').map((order) => {
+                      {deliveryOrders.filter(o => o.status === 'producao' || o.status === 'analise').map((order) => {
                         const motoboyId = selectedMotoboys[order.id] || '';
                         return (
                           <div key={order.id} className={clsx('p-4', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-2xl', 'flex', 'flex-col', 'sm:flex-row', 'justify-between', 'gap-3', 'text-xs')}>
@@ -7650,13 +7676,13 @@ export function CaixaPanel({
                   {/* Pedidos Em Trânsito */}
                   <span className={clsx('text-[10px]', 'font-bold', 'text-[#10b981]', 'uppercase', 'tracking-wider', 'block', 'pt-4')}>Em Trânsito (Entregas Ativas)</span>
 
-                  {simulatedOrders.filter(o => o.status === 'pronto').length === 0 ? (
+                  {deliveryOrders.filter(o => o.status === 'pronto').length === 0 ? (
                     <div className={clsx('py-8', 'text-center', 'text-gray-500', 'text-xs', 'italic', 'bg-[#1C1C1F]/20', 'border', 'border-[#27272A]/40', 'rounded-2xl')}>
                       Nenhum pedido em trânsito no momento.
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {simulatedOrders.filter(o => o.status === 'pronto').map((order) => {
+                      {deliveryOrders.filter(o => o.status === 'pronto').map((order) => {
                         return (
                           <div key={order.id} className={clsx('p-4', 'bg-[#1C1C1F]/40', 'border', 'border-[#27272A]/40', 'rounded-2xl', 'flex', 'flex-col', 'sm:flex-row', 'justify-between', 'gap-3', 'text-xs')}>
                             <div className={clsx('space-y-1', 'flex-1')}>
