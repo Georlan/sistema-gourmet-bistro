@@ -1,4 +1,5 @@
 import React from 'react';
+import { Check, MessageCircle, Wrench } from 'lucide-react';
 import { SUBSCRIPTION_PLANS } from '../../config/subscriptionPlans';
 import { KOMA_LANDING_CONFIG } from '../config/landingConfig';
 
@@ -28,9 +29,22 @@ export function Plans() {
   return (
     <section className="koma-plans-section" id="planos" aria-labelledby="plans-title">
       <div className="koma-section-heading koma-section-heading--light">
-        <span>07 / PLANOS</span>
-        <h2 id="plans-title">COMECE PELO<br />TAMANHO CERTO.</h2>
-        <p>Três níveis de operação. Você evolui sem precisar trocar de sistema.</p>
+        <span>05 / PLANOS</span>
+        <h2 id="plans-title">ESCOLHA COM<br />CLAREZA.</h2>
+        <p>Comece com o que sua operação precisa hoje e evolua sem trocar de sistema.</p>
+      </div>
+
+      <div className="koma-plans-risk" aria-label="Como reduzimos o risco da contratação">
+        <div>
+          <span>ANTES DE CONTRATAR</span>
+          <strong>ENTENDA O ENCAIXE NA SUA OPERAÇÃO.</strong>
+          <p>Mostramos o fluxo, conferimos seus equipamentos e planejamos a implantação com você.</p>
+        </div>
+        <ul>
+          <li><MessageCircle aria-hidden="true" /><span><b>CONVERSA INICIAL</b> sem custo</span></li>
+          <li><Wrench aria-hidden="true" /><span><b>COMPATIBILIDADE</b> verificada antes</span></li>
+          <li><Check aria-hidden="true" /><span><b>IMPLANTAÇÃO</b> acompanhada</span></li>
+        </ul>
       </div>
 
       <div className="koma-plans-grid">
@@ -53,12 +67,12 @@ export function Plans() {
               {LANDING_PLAN_FEATURES[plan.id].map((feature) => <li key={feature}>{feature}</li>)}
             </ul>
             <a href={KOMA_LANDING_CONFIG.signupAnchor} className={`koma-btn ${plan.recommended ? 'koma-btn--primary' : 'koma-btn--outline-dark'}`}>
-              Escolher o {plan.name}
+              Conversar sobre o {plan.name}
             </a>
           </article>
         ))}
       </div>
-      <p className="koma-plans-note">Valores e recursos podem ser ajustados conforme contratação e implantação.</p>
+      <p className="koma-plans-note">Valores, taxas de implantação e disponibilidade de recursos são confirmados na proposta comercial.</p>
     </section>
   );
 }

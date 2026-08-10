@@ -38,7 +38,7 @@ export function Header() {
 
         <nav className="koma-header-nav" aria-label="Navegação principal">
           <a href="#como-funciona" className="koma-header-link">Como funciona</a>
-          <a href="#gestao" className="koma-header-link">Gestão</a>
+          <a href="#duvidas" className="koma-header-link">Dúvidas</a>
           <a href="#planos" className="koma-header-link">Planos</a>
         </nav>
 
@@ -75,7 +75,7 @@ export function Header() {
       >
         <nav aria-label="Menu mobile">
           <a href="#como-funciona" onClick={() => setMenuOpen(false)}>Como funciona</a>
-          <a href="#gestao" onClick={() => setMenuOpen(false)}>Gestão</a>
+          <a href="#duvidas" onClick={() => setMenuOpen(false)}>Dúvidas</a>
           <a href="#planos" onClick={() => setMenuOpen(false)}>Planos</a>
           <a
             href={KOMA_LANDING_CONFIG.signupAnchor}

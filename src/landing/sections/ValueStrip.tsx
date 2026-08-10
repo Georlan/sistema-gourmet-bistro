@@ -36,7 +36,7 @@ export function ValueStrip() {
         <p className="koma-value-intro">01 / MENOS RETRABALHO</p>
         <h2 id="value-title">UM PEDIDO.<br /><span>75% MENOS ETAPAS.</span></h2>
         <p>
-          Quatro passos viram um único passo. O restaurante ganha agilidade sem perder o controle.
+          Neste fluxo, quatro ações manuais viram um registro acompanhado por salão, cozinha e caixa.
         </p>
       </motion.header>
 
@@ -114,7 +114,7 @@ export function ValueStrip() {
           </article>
         ))}
         <div className="koma-value-action">
-          <p>Veja quanto trabalho o Kôma pode retirar da sua rotina.</p>
+          <p>Veja como esse fluxo se encaixa na rotina do seu restaurante.</p>
           <button type="button" className="koma-btn koma-btn--primary" onClick={() => setLeadModalOpen(true)}>
             QUERO COMEÇAR COM O KÔMA
           </button>

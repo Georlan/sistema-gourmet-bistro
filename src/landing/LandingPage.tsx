@@ -2,17 +2,16 @@ import React, { useEffect } from 'react';
 import './landing.css';
 import { Header } from './sections/Header';
 import { Hero } from './sections/Hero';
-import { OperationFlow } from './sections/OperationFlow';
-import { CardapioScene } from './sections/CardapioScene';
-import { ImpactMoment } from './sections/ImpactMoment';
-import { Ecosystem } from './sections/Ecosystem';
 import { ValueStrip } from './sections/ValueStrip';
-import { Management } from './sections/Management';
-import { Reliability } from './sections/Reliability';
+import { SocialProof } from './sections/SocialProof';
+import { HowItWorks } from './sections/HowItWorks';
+import { FAQ } from './sections/FAQ';
 import { Plans } from './sections/Plans';
 import { FinalCTA } from './sections/FinalCTA';
 
-function AngleDivider({ variant }: { variant: 'dark-light' | 'light-dark' | 'dark-green' }) {
+type DividerVariant = 'dark-light' | 'light-dark' | 'light-green';
+
+function AngleDivider({ variant }: { variant: DividerVariant }) {
   return <div className={`koma-angle-divider koma-angle-divider--${variant}`} aria-hidden="true" />;
 }
 
@@ -94,15 +93,13 @@ export default function LandingPage() {
         <Hero />
         <AngleDivider variant="dark-light" />
         <ValueStrip />
+        <SocialProof />
         <AngleDivider variant="light-dark" />
-        <OperationFlow />
-        <AngleDivider variant="dark-green" />
-        <ImpactMoment />
-        <Ecosystem />
-        <CardapioScene />
-        <Management />
-        <Reliability />
+        <HowItWorks />
+        <AngleDivider variant="dark-light" />
+        <FAQ />
         <Plans />
+        <AngleDivider variant="light-green" />
         <FinalCTA />
       </main>
     </div>
