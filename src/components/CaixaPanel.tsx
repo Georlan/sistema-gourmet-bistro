@@ -92,6 +92,35 @@ interface CaixaPanelProps {
   onRemovePendingPaymentOptimistic?: (pagamentoId: string) => void;
 }
 
+const CASHIER_SIDEBAR_GROUPS = [
+  {
+    category: 'Operação diária',
+    items: [
+      { id: 'operacao', label: 'Vendas', icon: ShoppingCart },
+      { id: 'financeiro', label: 'Caixa', icon: DollarSign },
+      { id: 'cardapio', label: 'Cardápio', icon: ClipboardList },
+      { id: 'estoque', label: 'Estoque', icon: Package },
+      { id: 'clientes', label: 'Clientes', icon: Users }
+    ]
+  },
+  {
+    category: 'Gestão',
+    items: [
+      { id: 'relatorios', label: 'Relatórios', icon: TrendingUp },
+      { id: 'permissoes_cargos', label: 'Equipe', icon: ShieldCheck }
+    ]
+  },
+  {
+    category: 'Ferramentas',
+    items: [
+      { id: 'assistente_koma', label: 'Assistente Kôma', icon: Cpu },
+      { id: 'impressao_salao', label: 'Salão e impressão', icon: Printer },
+      { id: 'assinatura_pix', label: 'Assinatura e Pix', icon: CreditCard },
+      { id: 'cardapio_digital', label: 'Cardápio digital', icon: Globe }
+    ]
+  }
+] as const;
+
 // Operational view models used by the cashier screens.
 interface Courier {
   id: number;
@@ -3381,6 +3410,63 @@ export function CaixaPanel({
     '--orders-columns': ordersColumnsTemplate
   } as React.CSSProperties;
 
+  const activeDeliveryOrdersCount = useMemo(
+    () => deliveryOrders.reduce(
+      (count, order) => ['pendente', 'analise', 'producao', 'pronto', 'transito'].includes(order.status) ? count + 1 : count,
+      0
+    ),
+    [deliveryOrders]
+  );
+  const sidebarOrderCount = tableOrdersInProduction.length + activeDeliveryOrdersCount + tableOrdersReady.length;
+
+  const isSidebarTabActive = (tabId: string) => (
+    tabId === 'cardapio_digital' ? (activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital')
+    : tabId === 'permissoes_cargos' ? (activeTab === 'permissoes_cargos' || (activeTab === 'configuracoes' && activeSubTab === 'equipe'))
+    : tabId === 'impressao_salao' ? (activeTab === 'impressao_salao' || (activeTab === 'configuracoes' && activeSubTab === 'impressoras'))
+    : tabId === 'assinatura_pix' ? (activeTab === 'assinatura_pix' || (activeTab === 'configuracoes' && activeSubTab === 'planos'))
+    : tabId === 'relatorios' ? (activeTab === 'relatorios' || activeTab === 'dashboard')
+    : tabId === 'assistente_koma' ? (activeTab === 'assistente_koma' || activeTab === 'robo_ia' || (activeTab === 'operacao' && activeSubTab === 'chat_copiloto'))
+    : activeTab === tabId
+  );
+
+  const handleSidebarNavigation = (tabId: string, closeMobile = false) => {
+    if (closeMobile) setIsMobileSidebarOpen(false);
+
+    if (tabId === 'cardapio_digital' && !hasOnlineMenu) {
+      setActiveTab('assinatura_pix');
+      setActiveSubTab('planos');
+      showToast(
+        currentPlanId === 'pro'
+          ? `Ative o ${ONLINE_MENU_ADDON.name} ou migre para o Kôma Premium.`
+          : 'O cardápio online está disponível no Kôma Pro como adicional e incluído no Premium.',
+        'info'
+      );
+      return;
+    }
+
+    if (tabId === 'cardapio_digital') {
+      setActiveTab('cardapio_digital');
+      setActiveSubTab('cardapio_digital');
+    } else if (tabId === 'permissoes_cargos') {
+      setActiveTab('permissoes_cargos');
+      if (!['pessoas', 'desempenho'].includes(activeSubTab)) setActiveSubTab('pessoas');
+    } else if (tabId === 'impressao_salao') {
+      setActiveTab('impressao_salao');
+      setActiveSubTab('impressoras');
+    } else if (tabId === 'assinatura_pix') {
+      setActiveTab('assinatura_pix');
+      setActiveSubTab('planos');
+    } else if (tabId === 'relatorios') {
+      setActiveTab('relatorios');
+      if (!['visao_geral', 'financeiro', 'produtos'].includes(activeSubTab)) setActiveSubTab('visao_geral');
+    } else if (tabId === 'assistente_koma') {
+      setActiveTab('assistente_koma');
+      if (!['chat', 'configuracao', 'simulador'].includes(activeSubTab)) setActiveSubTab('chat');
+    } else {
+      handleTabChange(tabId as any);
+    }
+  };
+
   return (
     <div className={`cashier-shell flex w-full h-screen bg-[#0B0B0C] text-white overflow-hidden font-sans selection:bg-[#10b981]/30 text-xs ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''
       }`}>
@@ -3405,36 +3491,36 @@ export function CaixaPanel({
               onClick={() => setIsMobileSidebarOpen(false)}
               className="fixed inset-0 bg-black/80 backdrop-blur-sm"
             />
-            <Sidebar className="relative w-72 max-w-[85vw] bg-[#121214] border-r border-[#27272A] flex flex-col justify-between shrink-0 h-full z-10 shadow-2xl overflow-y-auto">
-              <SidebarHeader className="p-3 border-b border-[#27272A]">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
+            <Sidebar className="cashier-sidebar cashier-sidebar--mobile relative w-[17rem] max-w-[88vw] flex flex-col justify-between shrink-0 h-full z-10 shadow-2xl overflow-y-auto">
+              <SidebarHeader className="cashier-sidebar__header p-3">
+                <div className="cashier-sidebar__brand-row">
+                  <div className="cashier-sidebar__brand">
+                    <span className="cashier-sidebar__logo-wrap">
+                      <img src={logoImg} alt="Kôma" className="w-7 h-7 object-contain" />
+                    </span>
+                    <span className="cashier-sidebar__brand-copy">
+                      <strong>Kôma</strong>
+                      <small>Gestão do restaurante</small>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
                     <button
                       type="button"
                       onClick={() => {
                         setIsOperatorDrawerOpen(true);
                         setIsMobileSidebarOpen(false);
                       }}
-                      className="p-2 rounded-xl bg-[#1C1C1F] hover:bg-[#27272A] text-slate-200 border border-[#27272A] cursor-pointer transition-colors"
-                      title="Opções do Caixa / Login"
+                      className="cashier-sidebar__utility-button"
+                      title="Conta e preferências"
+                      aria-label="Abrir conta e preferências"
                     >
                       <SlidersHorizontal size={15} />
                     </button>
-                    <div className="flex items-center gap-2.5">
-                      <img src={logoImg} alt="Kôma" className="w-7 h-7 object-contain shrink-0" />
-                      <span className="font-serif font-bold text-sm tracking-tight text-white leading-none">Kôma Caixa</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {turno?.status === 'aberto' ? (
-                      <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse shadow-xs" title="Caixa Aberto" />
-                    ) : (
-                      <span className="h-2.5 w-2.5 rounded-full bg-emerald-600 shadow-xs" title="Caixa Fechado" />
-                    )}
                     <button
                       type="button"
                       onClick={() => setIsMobileSidebarOpen(false)}
-                      className="p-1 text-gray-400 hover:text-white rounded-lg cursor-pointer"
+                      className="cashier-sidebar__utility-button"
+                      aria-label="Fechar menu"
                     >
                       <X size={16} />
                     </button>
@@ -3442,11 +3528,14 @@ export function CaixaPanel({
                 </div>
 
                 {/* Status do Turno */}
-                <div className="mt-2 bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-2.5 flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <span className="text-[9px] uppercase tracking-wider text-gray-400 font-bold block">Status do Turno</span>
-                    <span className="font-semibold text-[10px] text-white">
+                <div className={clsx('cashier-shift-card', turno?.status === 'aberto' ? 'is-open' : 'is-closed')}>
+                  <div className="cashier-shift-card__status">
+                    <span className="cashier-shift-card__dot" />
+                    <span className="cashier-shift-card__copy">
+                      <small>Turno atual</small>
+                      <strong>
                       {turno?.status === 'aberto' ? 'Caixa Aberto' : 'Caixa Fechado'}
+                      </strong>
                     </span>
                   </div>
                   {turno?.status === 'aberto' ? (
@@ -3456,9 +3545,9 @@ export function CaixaPanel({
                         setActiveSubTab('fechamento');
                         setIsMobileSidebarOpen(false);
                       }}
-                      className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-bold rounded-lg cursor-pointer transition-all uppercase tracking-wider"
+                      className="cashier-shift-card__action is-close"
                     >
-                      Fechar
+                      Encerrar
                     </button>
                   ) : (
                     <button
@@ -3466,55 +3555,18 @@ export function CaixaPanel({
                         setShowAbrirModal(true);
                         setIsMobileSidebarOpen(false);
                       }}
-                      className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-bold rounded-lg cursor-pointer transition-all uppercase tracking-wider animate-pulse-subtle"
+                      className="cashier-shift-card__action is-open"
                     >
-                      Abrir
+                      Abrir caixa
                     </button>
                   )}
                 </div>
               </SidebarHeader>
 
-              <SidebarContent className="p-2 space-y-1">
-                {[
-                  {
-                    category: 'Fluxo Operacional',
-                    items: [
-                      { id: 'operacao', label: 'Vendas', icon: ShoppingCart },
-                      { id: 'cardapio', label: 'Cardápio', icon: ClipboardList },
-                      { id: 'estoque', label: 'Estoque', icon: Package }
-                    ]
-                  },
-                  {
-                    category: 'Gestão de Tesouraria',
-                    items: [
-                      { id: 'financeiro', label: 'Caixa', icon: DollarSign },
-                      { id: 'clientes', label: 'Clientes', icon: Users }
-                    ]
-                  },
-                  {
-                    category: 'Performance & BI',
-                    items: [
-                      { id: 'relatorios', label: 'Relatórios', icon: TrendingUp }
-                    ]
-                  },
-                  {
-                    category: 'Processos Inteligentes',
-                    items: [
-                      { id: 'assistente_koma', label: 'Assistente Kôma', icon: Cpu }
-                    ]
-                  },
-                  {
-                    category: 'Parâmetros do Sistema',
-                    items: [
-                      { id: 'permissoes_cargos', label: 'Equipe', icon: ShieldCheck },
-                      { id: 'impressao_salao', label: 'Salão e Impressão', icon: Printer },
-                      { id: 'assinatura_pix', label: 'Assinatura & Pix', icon: CreditCard },
-                      { id: 'cardapio_digital', label: 'Cardápio Digital', icon: Globe }
-                    ]
-                  }
-                ].map((group, gIdx) => (
-                  <SidebarGroup key={gIdx}>
-                    <SidebarGroupLabel className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-400">
+              <SidebarContent className="cashier-sidebar__content p-2">
+                {CASHIER_SIDEBAR_GROUPS.map((group) => (
+                  <SidebarGroup key={group.category}>
+                    <SidebarGroupLabel className="cashier-nav-group-label">
                       {group.category}
                     </SidebarGroupLabel>
                     <SidebarGroupContent>
@@ -3522,63 +3574,24 @@ export function CaixaPanel({
                         {group.items.map((tab) => {
                           const Icon = tab.icon;
                           const isLocked = tab.id === 'cardapio_digital' && !hasOnlineMenu;
-                          const isActive = (
-                            tab.id === 'cardapio_digital' ? (activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital')
-                            : tab.id === 'permissoes_cargos' ? (activeTab === 'permissoes_cargos' || (activeTab === 'configuracoes' && activeSubTab === 'equipe'))
-                            : tab.id === 'impressao_salao' ? (activeTab === 'impressao_salao' || (activeTab === 'configuracoes' && activeSubTab === 'impressoras'))
-                            : tab.id === 'assinatura_pix' ? (activeTab === 'assinatura_pix' || (activeTab === 'configuracoes' && activeSubTab === 'planos'))
-                            : tab.id === 'relatorios' ? (activeTab === 'relatorios' || activeTab === 'dashboard')
-                            : tab.id === 'assistente_koma' ? (activeTab === 'assistente_koma' || activeTab === 'robo_ia' || (activeTab === 'operacao' && activeSubTab === 'chat_copiloto'))
-                            : activeTab === tab.id
-                          );
-                          const orderCount = tab.id === 'operacao' ? (tableOrdersInProduction.length + deliveryOrders.filter(o => ['pendente', 'analise', 'producao', 'pronto', 'transito'].includes(o.status)).length + tableOrdersReady.length) : 0;
+                          const isActive = isSidebarTabActive(tab.id);
+                          const orderCount = tab.id === 'operacao' ? sidebarOrderCount : 0;
 
                           return (
                             <SidebarMenuItem key={tab.id}>
                               <SidebarMenuButton
                                 isActive={isActive}
-                                onClick={() => {
-                                  setIsMobileSidebarOpen(false);
-                                  if (isLocked) {
-                                    setActiveTab('assinatura_pix');
-                                    setActiveSubTab('planos');
-                                    setPlanNoticeBanner(
-                                      currentPlanId === 'pro'
-                                          ? `Ative o ${ONLINE_MENU_ADDON.name} ou migre para o Kôma Premium para utilizar este recurso.`
-                                          : 'O Cardápio Online Kôma está disponível no Kôma Pro como adicional e incluído no Premium.'
-                                    );
-                                    return;
-                                  }
-                                  if (tab.id === 'cardapio_digital') {
-                                    setActiveTab('cardapio_digital');
-                                    setActiveSubTab('cardapio_digital');
-                                  } else if (tab.id === 'permissoes_cargos') {
-                                    setActiveTab('permissoes_cargos');
-                                    if (!['pessoas', 'desempenho'].includes(activeSubTab)) setActiveSubTab('pessoas');
-                                  } else if (tab.id === 'impressao_salao') {
-                                    setActiveTab('impressao_salao');
-                                    setActiveSubTab('impressoras');
-                                  } else if (tab.id === 'assinatura_pix') {
-                                    setActiveTab('assinatura_pix');
-                                    setActiveSubTab('planos');
-                                  } else if (tab.id === 'relatorios') {
-                                    setActiveTab('relatorios');
-                                    if (!['visao_geral', 'financeiro', 'produtos'].includes(activeSubTab)) setActiveSubTab('visao_geral');
-                                  } else if (tab.id === 'assistente_koma') {
-                                    setActiveTab('assistente_koma');
-                                    if (!['chat', 'configuracao', 'simulador'].includes(activeSubTab)) setActiveSubTab('chat');
-                                  } else {
-                                    handleTabChange(tab.id as any);
-                                  }
-                                }}
+                                onClick={() => handleSidebarNavigation(tab.id, true)}
+                                className="cashier-nav-item"
+                                title={tab.label}
                               >
-                                <Icon size={14} className={isActive ? 'text-[#10b981]' : 'text-gray-500 group-hover/button:text-white'} />
-                                <span className="text-[11px]">{tab.label}</span>
+                                <span className="cashier-nav-icon"><Icon size={15} /></span>
+                                <span className="cashier-nav-label">{tab.label}</span>
                                 {orderCount > 0 && <SidebarMenuBadge>{orderCount}</SidebarMenuBadge>}
                                 {isLocked && (
-                                  <span className="ml-auto text-[7.5px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-1">
+                                  <span className="cashier-nav-plan">
                                     <Lock size={9} />
-                                    <span>Upgrade</span>
+                                    <span>Plano</span>
                                   </span>
                                 )}
                               </SidebarMenuButton>
@@ -3591,29 +3604,31 @@ export function CaixaPanel({
                 ))}
               </SidebarContent>
 
-              <SidebarFooter className="p-3 border-t border-[#27272A] bg-[#18181B]/40 space-y-2">
-                <div className="space-y-1">
-                  <span className="text-[8px] text-gray-500 uppercase tracking-widest block font-bold">Acessibilidade / Fonte</span>
-                  <div className="grid grid-cols-3 gap-0.5 bg-[#09090B] p-0.5 rounded-lg border border-[#27272A]">
+              <SidebarFooter className="cashier-sidebar__footer p-3">
+                <div className="cashier-font-control">
+                  <span className="cashier-font-control__label">Tamanho do texto</span>
+                  <div className="cashier-font-control__options">
                     {(['padrao', 'grande', 'gigante'] as const).map((sz) => (
                       <button
                         key={sz}
                         type="button"
                         onClick={() => changeFontSize(sz)}
-                        className={`py-0.5 rounded text-[8px] font-bold uppercase transition-all cursor-pointer ${fontSize === sz ? 'bg-[#10b981] text-[#121214]' : 'text-gray-400 hover:text-white'}`}
+                        className={clsx('cashier-font-control__button', fontSize === sz && 'is-active')}
+                        aria-label={sz === 'padrao' ? 'Texto padrão' : sz === 'grande' ? 'Texto grande' : 'Texto muito grande'}
+                        title={sz === 'padrao' ? 'Texto padrão' : sz === 'grande' ? 'Texto grande' : 'Texto muito grande'}
                       >
-                        {sz === 'padrao' ? 'Pad' : sz === 'grande' ? 'Grd' : 'Ggt'}
+                        {sz === 'padrao' ? 'A' : sz === 'grande' ? 'A+' : 'A++'}
                       </button>
                     ))}
                   </div>
                 </div>
 
-                <div className="border-t border-[#27272A]/50 pt-2 space-y-1">
-                  <span className="text-[9px] text-gray-500 uppercase tracking-widest block">Operador ativo</span>
-                  <span className="font-bold text-white block truncate text-xs">{activeWaiterNome}</span>
-                  <span className="text-[9px] text-[#10b981] flex items-center gap-1 mt-1 font-mono">
-                    <span className="h-1.5 w-1.5 bg-emerald-500 rounded-full animate-ping" />
-                    Sincronização Online
+                <div className="cashier-operator">
+                  <span className="cashier-operator__avatar">{activeWaiterNome?.trim().charAt(0).toUpperCase() || 'K'}</span>
+                  <span className="cashier-operator__copy">
+                    <small>Operador</small>
+                    <strong>{activeWaiterNome}</strong>
+                    <span><i /> Sistema online</span>
                   </span>
                 </div>
               </SidebarFooter>
@@ -3622,36 +3637,38 @@ export function CaixaPanel({
         )}
 
         {/* DESKTOP SIDEBAR - SHADCN COMPOSABLE ARCHITECTURE */}
-        <Sidebar className="cashier-sidebar hidden lg:flex w-64 bg-[#121214] border-r border-[#27272A] flex-col justify-between shrink-0">
-          <SidebarHeader className="p-3.5 border-b border-[#27272A] space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
+        <Sidebar className="cashier-sidebar hidden lg:flex w-[17rem] flex-col justify-between shrink-0">
+          <SidebarHeader className="cashier-sidebar__header p-3.5">
+            <div className="cashier-sidebar__brand-row">
+              <div className="cashier-sidebar__brand">
+                <span className="cashier-sidebar__logo-wrap">
+                  <img src={logoImg} alt="Kôma" className="w-7 h-7 object-contain" />
+                </span>
+                <span className="cashier-sidebar__brand-copy">
+                  <strong>Kôma</strong>
+                  <small>Gestão do restaurante</small>
+                </span>
+              </div>
                 <button
                   type="button"
                   onClick={() => setIsOperatorDrawerOpen(true)}
-                  className="p-2 rounded-xl bg-[#1C1C1F] hover:bg-[#27272A] text-slate-200 border border-[#27272A] cursor-pointer transition-colors"
-                  title="Opções do Caixa / Login"
+                  className="cashier-sidebar__utility-button"
+                  title="Conta e preferências"
+                  aria-label="Abrir conta e preferências"
                 >
                   <SlidersHorizontal size={15} />
                 </button>
-                <div className="flex items-center gap-2.5">
-                  <img src={logoImg} alt="Kôma" className="w-7 h-7 object-contain shrink-0" />
-                  <span className="font-serif font-bold text-sm tracking-tight text-white leading-none">Kôma Caixa</span>
-                </div>
-              </div>
-              {turno?.status === 'aberto' ? (
-                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse shadow-xs" title="Caixa Aberto" />
-              ) : (
-                <span className="h-2.5 w-2.5 rounded-full bg-emerald-600 shadow-xs" title="Caixa Fechado" />
-              )}
             </div>
 
             {/* Quick status bar */}
-            <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-2.5 flex items-center justify-between">
-              <div className="space-y-0.5">
-                <span className="text-[9px] uppercase tracking-wider text-gray-400 font-bold block">Status do Turno</span>
-                <span className="font-semibold text-[10px] text-white">
+            <div className={clsx('cashier-shift-card', turno?.status === 'aberto' ? 'is-open' : 'is-closed')}>
+              <div className="cashier-shift-card__status">
+                <span className="cashier-shift-card__dot" />
+                <span className="cashier-shift-card__copy">
+                  <small>Turno atual</small>
+                  <strong>
                   {turno?.status === 'aberto' ? 'Caixa Aberto' : 'Caixa Fechado'}
+                  </strong>
                 </span>
               </div>
               {turno?.status === 'aberto' ? (
@@ -3660,63 +3677,26 @@ export function CaixaPanel({
                     setActiveTab('financeiro');
                     setActiveSubTab('fechamento');
                   }}
-                  className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-bold rounded-lg cursor-pointer transition-all uppercase tracking-wider"
+                  className="cashier-shift-card__action is-close"
                 >
-                  Fechar
+                  Encerrar
                 </button>
               ) : (
                 <button
                   onClick={() => setShowAbrirModal(true)}
-                  className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-bold rounded-lg cursor-pointer transition-all uppercase tracking-wider animate-pulse-subtle"
+                  className="cashier-shift-card__action is-open"
                 >
-                  Abrir
+                  Abrir caixa
                 </button>
               )}
             </div>
           </SidebarHeader>
 
           {/* Sidebar Content */}
-          <SidebarContent className="p-2 space-y-1">
-            {[
-              {
-                category: 'Fluxo Operacional',
-                items: [
-                  { id: 'operacao', label: 'Vendas', icon: ShoppingCart },
-                  { id: 'cardapio', label: 'Cardápio', icon: ClipboardList },
-                  { id: 'estoque', label: 'Estoque', icon: Package }
-                ]
-              },
-              {
-                category: 'Gestão de Tesouraria',
-                items: [
-                  { id: 'financeiro', label: 'Caixa', icon: DollarSign },
-                  { id: 'clientes', label: 'Clientes', icon: Users }
-                ]
-              },
-              {
-                category: 'Performance & BI',
-                items: [
-                  { id: 'relatorios', label: 'Relatórios', icon: TrendingUp }
-                ]
-              },
-              {
-                category: 'Processos Inteligentes',
-                items: [
-                  { id: 'assistente_koma', label: 'Assistente Kôma', icon: Cpu }
-                ]
-              },
-              {
-                category: 'Parâmetros do Sistema',
-                items: [
-                  { id: 'permissoes_cargos', label: 'Equipe', icon: ShieldCheck },
-                  { id: 'impressao_salao', label: 'Salão e Impressão', icon: Printer },
-                  { id: 'assinatura_pix', label: 'Assinatura & Pix', icon: CreditCard },
-                  { id: 'cardapio_digital', label: 'Cardápio Digital', icon: Globe }
-                ]
-              }
-            ].map((group, gIdx) => (
-              <SidebarGroup key={gIdx}>
-                <SidebarGroupLabel className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-400">
+          <SidebarContent className="cashier-sidebar__content p-2">
+            {CASHIER_SIDEBAR_GROUPS.map((group) => (
+              <SidebarGroup key={group.category}>
+                <SidebarGroupLabel className="cashier-nav-group-label">
                   {group.category}
                 </SidebarGroupLabel>
                 <SidebarGroupContent>
@@ -3724,60 +3704,26 @@ export function CaixaPanel({
                     {group.items.map((tab) => {
                       const Icon = tab.icon;
                       const isLocked = tab.id === 'cardapio_digital' && !hasOnlineMenu;
-                      const isActive = (
-                        tab.id === 'cardapio_digital' ? (activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital')
-                        : tab.id === 'permissoes_cargos' ? (activeTab === 'permissoes_cargos' || (activeTab === 'configuracoes' && activeSubTab === 'equipe'))
-                        : tab.id === 'impressao_salao' ? (activeTab === 'impressao_salao' || (activeTab === 'configuracoes' && activeSubTab === 'impressoras'))
-                        : tab.id === 'assinatura_pix' ? (activeTab === 'assinatura_pix' || (activeTab === 'configuracoes' && activeSubTab === 'planos'))
-                        : tab.id === 'relatorios' ? (activeTab === 'relatorios' || activeTab === 'dashboard')
-                        : tab.id === 'assistente_koma' ? (activeTab === 'assistente_koma' || activeTab === 'robo_ia' || (activeTab === 'operacao' && activeSubTab === 'chat_copiloto'))
-                        : activeTab === tab.id
-                      );
-                      const orderCount = tab.id === 'operacao' ? (tableOrdersInProduction.length + deliveryOrders.filter(o => ['pendente', 'analise', 'producao', 'pronto', 'transito'].includes(o.status)).length + tableOrdersReady.length) : 0;
+                      const isActive = isSidebarTabActive(tab.id);
+                      const orderCount = tab.id === 'operacao' ? sidebarOrderCount : 0;
 
                       return (
                         <SidebarMenuItem key={tab.id}>
                           <SidebarMenuButton
                             isActive={isActive}
-                            onClick={() => {
-                              if (isLocked) {
-                                setActiveTab('assinatura_pix');
-                                setActiveSubTab('planos');
-                                showToast(
-                                  currentPlanId === 'pro'
-                                      ? `Ative o ${ONLINE_MENU_ADDON.name} ou migre para o Kôma Premium.`
-                                      : 'O cardápio online está disponível no Kôma Pro como adicional e incluído no Premium.',
-                                  'info'
-                                );
-                                return;
-                              }
-                              if (tab.id === 'cardapio_digital') {
-                                setActiveTab('cardapio_digital');
-                                setActiveSubTab('cardapio_digital');
-                              } else if (tab.id === 'permissoes_cargos') {
-                                setActiveTab('permissoes_cargos');
-                                if (!['pessoas', 'desempenho'].includes(activeSubTab)) setActiveSubTab('pessoas');
-                              } else if (tab.id === 'impressao_salao') {
-                                setActiveTab('impressao_salao');
-                                setActiveSubTab('impressoras');
-                              } else if (tab.id === 'assinatura_pix') {
-                                setActiveTab('assinatura_pix');
-                                setActiveSubTab('planos');
-                              } else if (tab.id === 'relatorios') {
-                                setActiveTab('relatorios');
-                                if (!['visao_geral', 'financeiro', 'produtos'].includes(activeSubTab)) setActiveSubTab('visao_geral');
-                              } else if (tab.id === 'assistente_koma') {
-                                setActiveTab('assistente_koma');
-                                if (!['chat', 'configuracao', 'simulador'].includes(activeSubTab)) setActiveSubTab('chat');
-                              } else {
-                                handleTabChange(tab.id as any);
-                              }
-                            }}
+                            onClick={() => handleSidebarNavigation(tab.id)}
+                            className="cashier-nav-item"
+                            title={tab.label}
                           >
-                            <Icon size={14} className={isActive ? 'text-[#10b981]' : 'text-gray-500 group-hover/button:text-white'} />
-                            <span className="text-[11px]">{tab.label}</span>
+                            <span className="cashier-nav-icon"><Icon size={15} /></span>
+                            <span className="cashier-nav-label">{tab.label}</span>
                             {orderCount > 0 && <SidebarMenuBadge>{orderCount}</SidebarMenuBadge>}
-                            {isLocked && <Lock size={10} className="ml-auto text-amber-500/70" />}
+                            {isLocked && (
+                              <span className="cashier-nav-plan">
+                                <Lock size={9} />
+                                <span>Plano</span>
+                              </span>
+                            )}
                           </SidebarMenuButton>
                         </SidebarMenuItem>
                       );
@@ -3789,29 +3735,31 @@ export function CaixaPanel({
           </SidebarContent>
 
           {/* Sidebar Footer */}
-          <SidebarFooter className="p-3 border-t border-[#27272A] bg-[#18181B]/40 space-y-2">
-            <div className="space-y-1">
-              <span className="text-[8px] text-gray-500 uppercase tracking-widest block font-bold">Acessibilidade / Fonte</span>
-              <div className="grid grid-cols-3 gap-0.5 bg-[#09090B] p-0.5 rounded-lg border border-[#27272A]">
+          <SidebarFooter className="cashier-sidebar__footer p-3">
+            <div className="cashier-font-control">
+              <span className="cashier-font-control__label">Tamanho do texto</span>
+              <div className="cashier-font-control__options">
                 {(['padrao', 'grande', 'gigante'] as const).map((sz) => (
                   <button
                     key={sz}
                     type="button"
                     onClick={() => changeFontSize(sz)}
-                    className={`py-0.5 rounded text-[8px] font-bold uppercase transition-all cursor-pointer ${fontSize === sz ? 'bg-[#10b981] text-[#121214]' : 'text-gray-400 hover:text-white'}`}
+                    className={clsx('cashier-font-control__button', fontSize === sz && 'is-active')}
+                    aria-label={sz === 'padrao' ? 'Texto padrão' : sz === 'grande' ? 'Texto grande' : 'Texto muito grande'}
+                    title={sz === 'padrao' ? 'Texto padrão' : sz === 'grande' ? 'Texto grande' : 'Texto muito grande'}
                   >
-                    {sz === 'padrao' ? 'Pad' : sz === 'grande' ? 'Grd' : 'Ggt'}
+                    {sz === 'padrao' ? 'A' : sz === 'grande' ? 'A+' : 'A++'}
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="border-t border-[#27272A]/50 pt-2 space-y-1">
-              <span className="text-[9px] text-gray-500 uppercase tracking-widest block">Operador ativo</span>
-              <span className="font-bold text-white block truncate text-xs">{activeWaiterNome}</span>
-              <span className="text-[9px] text-[#10b981] flex items-center gap-1 mt-1 font-mono">
-                <span className="h-1.5 w-1.5 bg-emerald-500 rounded-full animate-ping" />
-                Sincronização Online
+            <div className="cashier-operator">
+              <span className="cashier-operator__avatar">{activeWaiterNome?.trim().charAt(0).toUpperCase() || 'K'}</span>
+              <span className="cashier-operator__copy">
+                <small>Operador</small>
+                <strong>{activeWaiterNome}</strong>
+                <span><i /> Sistema online</span>
               </span>
             </div>
           </SidebarFooter>
