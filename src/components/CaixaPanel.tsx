@@ -230,6 +230,53 @@ const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', {
   maximumFractionDigits: 2,
 }).format(Number(value) || 0);
 
+const formatCompactCurrency = (value: number) => new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+  maximumFractionDigits: 0,
+}).format(Number(value) || 0);
+
+const normalizeOperationalTimestamp = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value < 1_000_000_000_000 ? value * 1000 : value;
+  }
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const clockMatch = value.trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (clockMatch) {
+    const now = new Date();
+    const candidate = new Date(now);
+    candidate.setHours(Number(clockMatch[1]), Number(clockMatch[2]), 0, 0);
+    if (candidate.getTime() > now.getTime()) candidate.setDate(candidate.getDate() - 1);
+    return candidate.getTime();
+  }
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const formatOldestAge = (values: unknown[]) => {
+  const timestamps = values
+    .map(normalizeOperationalTimestamp)
+    .filter((value): value is number => value !== null && value <= Date.now());
+  if (timestamps.length === 0) return '—';
+  const elapsedMinutes = Math.max(0, Math.floor((Date.now() - Math.min(...timestamps)) / 60_000));
+  if (elapsedMinutes < 1) return 'Agora';
+  if (elapsedMinutes < 60) return `${elapsedMinutes} min`;
+  const hours = Math.floor(elapsedMinutes / 60);
+  const minutes = elapsedMinutes % 60;
+  if (hours < 24) return minutes ? `${hours}h ${minutes}min` : `${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ${hours % 24}h`;
+};
+
+const formatClockTime = (value: unknown) => {
+  const timestamp = normalizeOperationalTimestamp(value);
+  if (timestamp === null) return '—';
+  return new Date(timestamp).toLocaleTimeString('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
 const splitProductLabel = (label: string) => {
   const match = String(label || '').match(/^(\d{2,4})\s*[-–]\s*(.+)$/);
   return match ? { code: match[1], name: match[2] } : { code: '', name: label };
@@ -278,6 +325,17 @@ export function CaixaPanel({
   const pendingPaymentsTotal = useMemo(
     () => pagamentosPendentes.reduce((total, payment) => total + (Number(payment?.valor) || 0), 0),
     [pagamentosPendentes],
+  );
+  const cashSalesPerHour = turnoResumo?.status === 'aberto' && turnoResumo.tempo_aberto_minutos > 0
+    ? turnoResumo.total_vendas / (turnoResumo.tempo_aberto_minutos / 60)
+    : 0;
+  const cashShiftHealth = turnoResumo?.turno_esquecido
+    ? 'Revisar agora'
+    : turnoResumo?.status === 'aberto'
+      ? 'Regular'
+      : 'Sem turno';
+  const latestReceiptTime = formatClockTime(
+    turnoResumo?.atividades_recentes?.find(activity => activity.tipo === 'recebimento')?.criado_em,
   );
 
 
@@ -874,6 +932,26 @@ export function CaixaPanel({
     occupied: salonTableCards.filter(card => card.isOccupied && !card.hasPendingPayment).length,
     payment: salonTableCards.filter(card => card.hasPendingPayment).length,
   }), [salonTableCards]);
+
+  const salonInsights = useMemo(() => {
+    const activeCards = salonTableCards.filter(card => card.isOccupied && !card.isMerged);
+    const openValue = activeCards.reduce((total, card) => total + card.total, 0);
+    const timestamps = activeCards.flatMap(card => card.tableOrders.map(order => (
+      (order as any).aberta_em
+      || (order as any).data_abertura
+      || (order as any).aberto_em
+      || order.created_at
+      || order.timestamp
+      || (order as any).criadoEm
+    )));
+    return {
+      occupancy: salonTableCards.length > 0
+        ? Math.round((activeCards.length / salonTableCards.length) * 100)
+        : 0,
+      openValue,
+      oldestService: formatOldestAge(timestamps),
+    };
+  }, [salonTableCards]);
 
   const pdvTableOptions = useMemo(() => salonTableCards
     .map((card) => {
@@ -3188,6 +3266,16 @@ export function CaixaPanel({
     );
     return apiCategorias.filter((category) => activeCategoryIds.has(category.id));
   }, [apiCategorias, sellableProducts]);
+  const pdvMenuInsights = useMemo(() => {
+    const prices = sellableProducts.map(product => Number(product.preco) || 0);
+    return {
+      priceRange: prices.length > 0
+        ? `${formatCompactCurrency(Math.min(...prices))}–${formatCompactCurrency(Math.max(...prices))}`
+        : '—',
+      categoryCount: pdvCategories.length,
+      pausedCount: Math.max(0, dynamicMenu.length - sellableProducts.length),
+    };
+  }, [dynamicMenu.length, pdvCategories.length, sellableProducts]);
   const filteredProducts = useMemo(() => sellableProducts.filter((product) => {
     const category = apiCategorias.find((item) =>
       item.id === product.categoria_id
@@ -3378,6 +3466,31 @@ export function CaixaPanel({
     [deliveryOrders]
   );
   const sidebarOrderCount = tableOrdersInProduction.length + activeDeliveryOrdersCount + tableOrdersReady.length;
+  const operationalOrderInsights = useMemo(() => {
+    const closedStatuses = new Set(['fechada', 'fechado', 'cancelada', 'cancelado', 'finalizada', 'finalizado']);
+    const activeTableOrders = orders.filter(order => !closedStatuses.has(String(order.status || '').toLowerCase()));
+    const activeDigitalOrders = deliveryOrders.filter(order => (
+      ['pendente', 'analise', 'producao', 'pronto', 'transito'].includes(order.status)
+    ));
+    const tableValue = activeTableOrders.reduce((total, order) => total + (order.itens || []).reduce(
+      (itemTotal, item) => itemTotal + (!item.pago && String(item.status) !== 'cancelado' ? Number(item.preco) || 0 : 0),
+      0,
+    ), 0);
+    const digitalValue = activeDigitalOrders.reduce(
+      (total, order) => total + (!order.pago ? Number(order.total) || 0 : 0),
+      0,
+    );
+    const timestamps = [
+      ...activeTableOrders.map(order => order.created_at || order.timestamp),
+      ...activeDigitalOrders.map(order => order.criadoEm),
+    ];
+    return {
+      oldestOrder: formatOldestAge(timestamps),
+      openValue: tableValue + digitalValue,
+      attentionCount: activeDigitalOrders.filter(order => order.status === 'pendente').length
+        + pagamentosPendentes.length,
+    };
+  }, [deliveryOrders, orders, pagamentosPendentes.length]);
 
   const isSidebarTabActive = (tabId: string) => (
     tabId === 'cardapio_digital' ? (activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital')
@@ -3977,9 +4090,13 @@ export function CaixaPanel({
                 accent="em movimento"
                 description="Do salão ao recebimento, sem perder nenhuma etapa."
                 metrics={[
-                  { label: 'pedidos ativos', value: sidebarOrderCount },
-                  { label: 'aguardando aceite', value: deliveryOrders.filter(order => order.status === 'pendente').length },
-                  { label: 'pagamentos pendentes', value: pagamentosPendentes.length },
+                  { label: 'pedido mais antigo', value: operationalOrderInsights.oldestOrder },
+                  { label: 'valor em aberto', value: formatCompactCurrency(operationalOrderInsights.openValue) },
+                  {
+                    label: 'exigem atenção',
+                    value: operationalOrderInsights.attentionCount,
+                    valueClassName: operationalOrderInsights.attentionCount > 0 ? 'text-amber-300' : 'text-emerald-300',
+                  },
                 ]}
                 isConnected={isWsConnected}
               />
@@ -4710,7 +4827,15 @@ export function CaixaPanel({
                 title="Novo pedido,"
                 accent="sem atrito"
                 description="Escolha os itens, indique o destino e envie para a cozinha."
-                metrics={[]}
+                metrics={[
+                  { label: 'faixa de preços', value: pdvMenuInsights.priceRange },
+                  { label: 'categorias ativas', value: pdvMenuInsights.categoryCount },
+                  {
+                    label: 'itens pausados',
+                    value: pdvMenuInsights.pausedCount,
+                    valueClassName: pdvMenuInsights.pausedCount > 0 ? 'text-amber-300' : 'text-emerald-300',
+                  },
+                ]}
                 isConnected={isWsConnected}
               />
 
@@ -5184,7 +5309,11 @@ export function CaixaPanel({
                 title="Salão"
                 accent="em tempo real"
                 description="Acompanhe atendimentos e veja rapidamente quais mesas precisam de atenção."
-                metrics={[]}
+                metrics={[
+                  { label: 'ocupação', value: `${salonInsights.occupancy}%` },
+                  { label: 'consumo em aberto', value: formatCompactCurrency(salonInsights.openValue) },
+                  { label: 'maior atendimento', value: salonInsights.oldestService },
+                ]}
                 isConnected={isWsConnected}
               />
 
@@ -7151,6 +7280,7 @@ export function CaixaPanel({
           {activeTab === 'cardapio' && activeSubTab === 'categorias' && (
             <CardapioCategoriasTab
               apiCategorias={apiCategorias}
+              apiProdutos={apiProdutos}
               apiBaseUrl={apiBaseUrl}
               authHeaders={authHeaders}
               fetchCategorias={fetchCategorias}
@@ -7406,9 +7536,13 @@ export function CaixaPanel({
                 accent="sob controle"
                 description="Vendas, recebimentos e troco conciliados em um só lugar."
                 metrics={[
-                  { label: 'turno', value: turnoResumo?.status === 'aberto' ? 'Aberto' : 'Fechado' },
-                  { label: 'operador', value: turnoResumo?.operador_nome || '—' },
                   { label: 'aberto há', value: turnoResumo?.status === 'aberto' ? formatDuration(turnoResumo.tempo_aberto_minutos) : '—' },
+                  { label: 'ritmo de vendas', value: turnoResumo?.status === 'aberto' ? `${formatCompactCurrency(cashSalesPerHour)}/h` : '—' },
+                  {
+                    label: 'situação do turno',
+                    value: cashShiftHealth,
+                    valueClassName: turnoResumo?.turno_esquecido ? 'text-amber-300' : 'text-emerald-300',
+                  },
                 ]}
                 isConnected={isWsConnected}
               />
@@ -7449,9 +7583,9 @@ export function CaixaPanel({
                 accent="sem surpresa"
                 description="Conte, confira as pendências e encerre com rastreabilidade."
                 metrics={[
-                  { label: 'turno', value: turnoResumo?.status === 'aberto' ? 'Aberto' : 'Fechado' },
-                  { label: 'operador', value: turnoResumo?.operador_nome || '—' },
-                  { label: 'pendências', value: pagamentosPendentes.length + (turnoResumo?.comandas_abertas_count ?? 0) },
+                  { label: 'aberto há', value: turnoResumo?.status === 'aberto' ? formatDuration(turnoResumo.tempo_aberto_minutos) : '—' },
+                  { label: 'último recebimento', value: latestReceiptTime },
+                  { label: 'modo de conferência', value: 'Contagem cega', valueClassName: 'text-sky-300' },
                 ]}
                 isConnected={isWsConnected}
               />

@@ -63,13 +63,20 @@ export function CardapioProdutosTab({
 
   const summary = useMemo(() => {
     const published = produtos.filter((product) => product.ativo !== false).length;
+    const withoutImage = produtos.filter((product) => (
+      !product.imagem && !product.imagens_galeria?.some(Boolean)
+    )).length;
+    const categoryHasProduct = (category: CatalogCategory) => produtos.some(product => (
+      productCategoryId(product) === category.id
+      || product.categoria === category.nome
+    ));
     return {
-      total: produtos.length,
-      published,
       paused: produtos.length - published,
-      categories: categorias.length,
+      publicationRate: produtos.length > 0 ? Math.round((published / produtos.length) * 100) : 0,
+      withoutImage,
+      emptyCategories: categorias.filter(category => !categoryHasProduct(category)).length,
     };
-  }, [categorias.length, produtos]);
+  }, [categorias, produtos]);
 
   const filteredProducts = useMemo(() => produtos.filter((product) => {
     if (categoryFilter !== 'todos' && productCategoryId(product) !== categoryFilter) return false;
@@ -251,10 +258,10 @@ export function CardapioProdutosTab({
         accent="organizado para vender"
         description="Produtos, preços e disponibilidade sincronizados entre caixa, atendimento e cardápio digital."
         metrics={[
-          { label: 'produtos', value: summary.total },
-          { label: 'disponíveis', value: summary.published, valueClassName: 'text-emerald-300' },
-          { label: 'pausados', value: summary.paused, valueClassName: 'text-amber-300' },
-          { label: 'categorias', value: summary.categories, valueClassName: 'text-sky-300' },
+          { label: 'publicação', value: `${summary.publicationRate}%`, valueClassName: 'text-emerald-300' },
+          { label: 'itens pausados', value: summary.paused, valueClassName: summary.paused > 0 ? 'text-amber-300' : 'text-emerald-300' },
+          { label: 'sem imagem', value: summary.withoutImage, valueClassName: summary.withoutImage > 0 ? 'text-amber-300' : 'text-emerald-300' },
+          { label: 'categorias vazias', value: summary.emptyCategories, valueClassName: summary.emptyCategories > 0 ? 'text-amber-300' : 'text-emerald-300' },
         ]}
       />
 
