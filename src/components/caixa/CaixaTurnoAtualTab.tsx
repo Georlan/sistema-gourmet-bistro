@@ -133,7 +133,7 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
     turnoResumo.tempo_aberto_minutos > 1440 || turnoResumo.turno_esquecido === true
   );
   const digitalTotal = turnoResumo.total_pix + turnoResumo.total_cartao;
-  const activities = turnoResumo.atividades_recentes || [];
+  const activities = (turnoResumo.atividades_recentes || []).slice(0, 5);
 
   if (!isTurnoAberto) {
     return (
@@ -198,9 +198,11 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
-          <button type="button" onClick={onRefresh} disabled={isLoading} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#303532] bg-[#151816] px-3 py-2 text-[10px] font-bold text-zinc-300 transition-colors hover:border-[#196b55] hover:text-[#54d9b3] disabled:cursor-wait disabled:opacity-60">
-            <RefreshCw size={13} className={isLoading ? 'animate-spin' : ''} /> Atualizar
-          </button>
+          {!isConnected && (
+            <button type="button" onClick={onRefresh} disabled={isLoading} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#303532] bg-[#151816] px-3 py-2 text-[10px] font-bold text-zinc-300 transition-colors hover:border-[#196b55] hover:text-[#54d9b3] disabled:cursor-wait disabled:opacity-60">
+              <RefreshCw size={13} className={isLoading ? 'animate-spin' : ''} /> Tentar sincronizar
+            </button>
+          )}
           <button type="button" onClick={onOpenSuprimentoModal} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#303532] bg-[#151816] px-3 py-2 text-[10px] font-bold text-zinc-300 transition-colors hover:border-[#196b55] hover:text-[#54d9b3]">
             <ArrowDownRight size={13} /> Suprimento
           </button>
@@ -263,7 +265,7 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
             </dl>
           </article>
 
-          <article className={`rounded-[18px] border p-4 ${
+          <article className={`rounded-[18px] border p-3 ${
             !isConnected || isTurnoEsquecido || pendingPaymentsCount > 0
               ? 'border-[#3d3a30] bg-[#151511]'
               : 'border-[#145c49] bg-[#0b211b]'
@@ -274,7 +276,7 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
                 <h3 className="text-xs font-bold text-[#f5f4ef]">
                   {!isConnected ? 'Sincronização reconectando' : isTurnoEsquecido ? 'Turno aberto há mais de 24 horas' : pendingPaymentsCount > 0 ? 'Há contas aguardando confirmação' : 'Operação em dia'}
                 </h3>
-                <p className="mt-1 text-[10px] leading-relaxed text-zinc-500">
+                <p className="mt-0.5 text-[10px] leading-relaxed text-zinc-500">
                   {!isConnected ? 'As informações salvas continuam disponíveis e serão atualizadas ao reconectar.' : isTurnoEsquecido ? 'Confira os valores e encerre o turno anterior antes de continuar.' : pendingPaymentsCount > 0 ? `${pendingPaymentsCount} pagamento(s) precisam de conferência.` : 'Resumo conciliado e atualização em tempo real ativa.'}
                 </p>
                 {(isTurnoEsquecido || pendingPaymentsCount > 0) && (

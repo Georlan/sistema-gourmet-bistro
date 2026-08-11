@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import logoImg from '../assets/logo.png';
 import { LoginButton } from '../../components/shadcnblocks/login-button';
 import {
-  DollarSign, ArrowUpRight, ArrowDownRight, Lock, Unlock, Users,
+  DollarSign, ArrowUpRight, Lock, Users,
   Receipt, ShoppingCart, Percent, CreditCard, Check, AlertTriangle,
   Clock, X, RefreshCw, Edit3, Trash2, Plus, ChevronRight,
   MapPin, ClipboardList, BarChart2, Package, Shield, ShieldCheck, Star,
@@ -22,7 +22,6 @@ import { CaixaMovimentacoesTab } from './caixa/CaixaMovimentacoesTab';
 import { SangriaModal } from './caixa/SangriaModal';
 import { SuprimentoModal } from './caixa/SuprimentoModal';
 import { ManagerPinModal } from './ManagerPinModal';
-import { FechamentoCegoModal } from './FechamentoCegoModal';
 import { CaixaFechamentoTab } from './caixa/CaixaFechamentoTab';
 import { RelatorioFinanceiroTab } from './relatorios/RelatorioFinanceiroTab';
 import { RelatoriosVisaoGeralTab } from './relatorios/RelatoriosVisaoGeralTab';
@@ -228,6 +227,11 @@ const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 }).format(Number(value) || 0);
+
+const splitProductLabel = (label: string) => {
+  const match = String(label || '').match(/^(\d{2,4})\s*[-–]\s*(.+)$/);
+  return match ? { code: match[1], name: match[2] } : { code: '', name: label };
+};
 
 const formatDuration = (minutes: number) => {
   const safeMinutes = Math.max(0, Number(minutes) || 0);
@@ -744,7 +748,7 @@ export function CaixaPanel({
 
   // Config Salão sub-tab
   const [printingSettingsTab, setPrintingSettingsTab] = useState<
-    'impressao' | 'garcom' | 'taxa'
+    'impressao' | 'mesas' | 'garcom' | 'taxa'
   >('impressao');
   const [configSalSubTab, setConfigSalSubTab] = useState<'pedido' | 'fechamento' | 'atendimento'>('pedido');
 
@@ -756,10 +760,6 @@ export function CaixaPanel({
 
   // Modals state
   const [showAbrirModal, setShowAbrirModal] = useState(false);
-  const [showFecharModal, setShowFecharModal] = useState(false);
-  const [showMovModal, setShowMovModal] = useState(false);
-  const [holdProgress, setHoldProgress] = useState(0);
-  const holdIntervalRef = useRef<number | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
 
@@ -859,11 +859,9 @@ export function CaixaPanel({
   const [editTableCap, setEditTableCap] = useState('');
   const [editTableNome, setEditTableNome] = useState('');
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
-  const [confirmingFreeTableId, setConfirmingFreeTableId] = useState<number | null>(null);
   const [tableStatusFilter, setTableStatusFilter] = useState<'all' | 'free' | 'occupied' | 'payment'>('all');
-  const [tableMutation, setTableMutation] = useState<'create' | 'update' | 'delete' | 'release' | null>(null);
+  const [tableMutation, setTableMutation] = useState<'create' | 'update' | 'delete' | null>(null);
   const [tableFormError, setTableFormError] = useState('');
-  const [tableReleaseError, setTableReleaseError] = useState('');
 
   const salonTableCards = useMemo(() => (salonTables || []).map((table) => {
     const mergedIntoMesaId = orders.find(order => order.mesaOrigemId === table.id)?.mesaId || null;
@@ -992,14 +990,8 @@ export function CaixaPanel({
 
   // Form states
   const [saldoInicial, setSaldoInicial] = useState('100.00');
-  const [movTipo, setMovTipo] = useState<'suprimento' | 'sangria'>('suprimento');
-  const [movValor, setMovValor] = useState('');
-  const [movDesc, setMovDesc] = useState('');
 
   // Counted values for closing cashier
-  const [decDinheiro, setDecDinheiro] = useState('');
-  const [decPix, setDecPix] = useState('');
-  const [decCartao, setDecCartao] = useState('');
 
   // Checkout payment states
   const [checkoutServiceTax, setCheckoutServiceTax] = useState(true);
@@ -1174,16 +1166,14 @@ export function CaixaPanel({
   // POS Drawer Custom Events (Sangria, Suprimento, Sync)
   useEffect(() => {
     const handleOpenSangria = () => {
-      setMovTipo('sangria');
-      setMovValor('');
-      setMovDesc('');
-      setShowMovModal(true);
+      setActiveTab('financeiro');
+      setActiveSubTab('turno_atual');
+      setShowSangriaModal(true);
     };
     const handleOpenSuprimento = () => {
-      setMovTipo('suprimento');
-      setMovValor('');
-      setMovDesc('');
-      setShowMovModal(true);
+      setActiveTab('financeiro');
+      setActiveSubTab('turno_atual');
+      setShowSuprimentoModal(true);
     };
     const handleSyncAll = () => {
       fetchTurno();
@@ -1350,7 +1340,7 @@ export function CaixaPanel({
         }).filter((t: number) => t < Infinity)
       ));
 
-    if (!timestamp) return '0 MIN';
+    if (!timestamp) return 'AGORA';
 
     let start = 0;
     if (typeof timestamp === 'number') start = timestamp;
@@ -1361,7 +1351,7 @@ export function CaixaPanel({
       start = timestamp.getTime();
     }
 
-    if (!start || isNaN(start)) return '0 MIN';
+    if (!start || isNaN(start)) return 'AGORA';
 
     const now = Date.now();
     const diff = Math.max(0, Math.floor((now - start) / 60000));
@@ -1372,7 +1362,7 @@ export function CaixaPanel({
     if (diff >= 60) {
       return `${Math.floor(diff / 60)}h ${diff % 60}m`;
     }
-    return `${diff} MIN`;
+    return diff === 0 ? 'AGORA' : `${diff} MIN`;
   };
 
   // Função robusta de parser e cálculo de tempo decorrido (evitando UTC/NaN e nunca usando updated_at)
@@ -2634,123 +2624,6 @@ export function CaixaPanel({
     }
   };
 
-  // Hold-to-confirm close shift button actions
-  const startHoldConfirm = (e: React.MouseEvent | React.TouchEvent) => {
-    e.preventDefault();
-    if (holdIntervalRef.current) return;
-
-    let progress = 0;
-    const interval = window.setInterval(() => {
-      progress += 5; // 20 steps of 100ms = 2000ms (2 seconds)
-      if (progress >= 100) {
-        progress = 100;
-        setHoldProgress(100);
-        clearInterval(interval);
-        holdIntervalRef.current = null;
-        submitFecharCaixaDirectly();
-      } else {
-        setHoldProgress(progress);
-      }
-    }, 100);
-
-    holdIntervalRef.current = interval;
-  };
-
-  const cancelHoldConfirm = () => {
-    if (holdIntervalRef.current) {
-      clearInterval(holdIntervalRef.current);
-      holdIntervalRef.current = null;
-    }
-    setHoldProgress(0);
-  };
-
-  const submitFecharCaixaDirectly = async () => {
-    setErrorMsg('');
-    try {
-      const res = await fetch(`${apiBaseUrl}/caixa/turno/fechar`, {
-        method: 'POST',
-        headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          declarado_dinheiro: parseFloat(decDinheiro || '0'),
-          declarado_pix: turno?.total_esperado_pix || 0,
-          declarado_cartao: turno?.total_esperado_cartao || 0
-        })
-      });
-      if (res.ok) {
-        setShowFecharModal(false);
-        setDecDinheiro('');
-        setDecPix('');
-        setDecCartao('');
-        setHoldProgress(0);
-        fetchTurno();
-      } else {
-        const data = await res.json();
-        setErrorMsg(data.detail || 'Erro ao fechar caixa');
-        setHoldProgress(0);
-      }
-    } catch (err) {
-      setErrorMsg('Erro de conexão ao servidor.');
-      setHoldProgress(0);
-    }
-  };
-
-  // Handle close cashier
-  const handleFecharCaixa = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg('');
-    try {
-      const res = await fetch(`${apiBaseUrl}/caixa/turno/fechar`, {
-        method: 'POST',
-        headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          declarado_dinheiro: parseFloat(decDinheiro || '0'),
-          declarado_pix: turno?.total_esperado_pix || 0,
-          declarado_cartao: turno?.total_esperado_cartao || 0
-        })
-      });
-      if (res.ok) {
-        setShowFecharModal(false);
-        setDecDinheiro('');
-        setDecPix('');
-        setDecCartao('');
-        fetchTurno();
-      } else {
-        const data = await res.json();
-        setErrorMsg(data.detail || 'Erro ao fechar caixa');
-      }
-    } catch (err) {
-      setErrorMsg('Erro de conexão ao servidor.');
-    }
-  };
-
-  // Handle shift movements (suprimento/sangria)
-  const handleMovimentar = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg('');
-    try {
-      const res = await fetch(`${apiBaseUrl}/caixa/turno/movimentar`, {
-        method: 'POST',
-        headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tipo: movTipo,
-          valor: parseFloat(movValor),
-          descricao: movDesc
-        })
-      });
-      if (res.ok) {
-        setShowMovModal(false);
-        setMovValor('');
-        setMovDesc('');
-        fetchTurno();
-      } else {
-        const data = await res.json();
-        setErrorMsg(data.detail || 'Erro ao registrar movimentação');
-      }
-    } catch (err) {
-      setErrorMsg('Erro de conexão ao servidor.');
-    }
-  };
-
   // Handle payment processing
   const handleProcessPayment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -3671,18 +3544,7 @@ export function CaixaPanel({
                       </strong>
                     </span>
                   </div>
-                  {turno?.status === 'aberto' ? (
-                    <button
-                      onClick={() => {
-                        setActiveTab('financeiro');
-                        setActiveSubTab('fechamento');
-                        setIsMobileSidebarOpen(false);
-                      }}
-                      className="cashier-shift-card__action is-close"
-                    >
-                      Encerrar
-                    </button>
-                  ) : (
+                  {turno?.status !== 'aberto' && (
                     <button
                       onClick={() => {
                         setShowAbrirModal(true);
@@ -3804,17 +3666,7 @@ export function CaixaPanel({
                   </strong>
                 </span>
               </div>
-              {turno?.status === 'aberto' ? (
-                <button
-                  onClick={() => {
-                    setActiveTab('financeiro');
-                    setActiveSubTab('fechamento');
-                  }}
-                  className="cashier-shift-card__action is-close"
-                >
-                  Encerrar
-                </button>
-              ) : (
+              {turno?.status !== 'aberto' && (
                 <button
                   onClick={() => setShowAbrirModal(true)}
                   className="cashier-shift-card__action is-open"
@@ -3916,7 +3768,7 @@ export function CaixaPanel({
             <h2 className={clsx('font-serif', 'font-bold', 'text-xs', 'sm:text-sm', 'tracking-tight', 'text-white', 'uppercase', 'tracking-wider', 'truncate')}>
               {(activeTab === 'relatorios' || activeTab === 'dashboard') && 'Relatórios'}
               {(activeTab === 'assistente_koma' || activeTab === 'robo_ia') && 'Assistente Kôma'}
-              {activeTab === 'operacao' && 'Gestão de Atendimento Local'}
+              {activeTab === 'operacao' && 'OPERAÇÃO DE VENDAS'}
               {activeTab === 'cardapio' && 'CARDÁPIO DO RESTAURANTE'}
               {activeTab === 'estoque' && 'GESTÃO DE ESTOQUE'}
               {activeTab === 'financeiro' && 'GESTÃO DO CAIXA'}
@@ -3977,8 +3829,8 @@ export function CaixaPanel({
 
           {activeTab === 'operacao' && [
             { id: 'pedidos', label: 'Pedidos' },
-            { id: 'balcao', label: 'Balcão' },
-            { id: 'mesas', label: 'Mesas', show: modulesActive.salon }
+            { id: 'balcao', label: 'Novo pedido' },
+            { id: 'mesas', label: 'Salão', show: modulesActive.salon }
           ].filter(sub => sub.show !== false).map(sub => (
             <button
               key={sub.id}
@@ -4172,9 +4024,9 @@ export function CaixaPanel({
                 accent="em movimento"
                 description="Do salão ao recebimento, sem perder nenhuma etapa."
                 metrics={[
-                  { label: 'no salão', value: filteredCol1.length },
-                  { label: 'online', value: filteredDigitalProduction.length },
-                  { label: 'para concluir', value: filteredCol2Table.length + filteredDeliveryFinalization.length },
+                  { label: 'pedidos ativos', value: sidebarOrderCount },
+                  { label: 'aguardando aceite', value: deliveryOrders.filter(order => order.status === 'pendente').length },
+                  { label: 'pagamentos pendentes', value: pagamentosPendentes.length },
                 ]}
                 isConnected={isWsConnected}
               />
@@ -4194,7 +4046,7 @@ export function CaixaPanel({
                         <div key={pag.id} className="bg-[#09090B] border border-[#27272A] p-3 rounded-xl flex justify-between items-center gap-4 text-[11px] text-left">
                           <div>
                             <span className="text-gray-400 block">Mesa {mesaNum}</span>
-                            <span className="font-bold text-white block">R$ {pag.valor.toFixed(2)} em Dinheiro</span>
+                            <span className="font-bold text-white block">{formatCurrency(pag.valor)} em Dinheiro</span>
                             <span className="text-[9.5px] text-[#10b981] block font-mono">Garçom solicitante: {pag.nome_cliente || 'Garçom'}</span>
                           </div>
                           <div className="flex gap-2">
@@ -4300,7 +4152,7 @@ export function CaixaPanel({
                   </label>
                   <div className="orders-delivery-total">
                     <span>Delivery hoje</span>
-                    <strong>R$ {deliveryOrders.reduce((s, o) => s + o.total, 0).toFixed(2)}</strong>
+                    <strong>{formatCurrency(deliveryOrders.reduce((s, o) => s + o.total, 0))}</strong>
                   </div>
                   {/* Bell button — opens floating drawer */}
                   <button
@@ -4309,7 +4161,7 @@ export function CaixaPanel({
                     className="orders-new-orders"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-                    <span>Novos pedidos</span>
+                    <span>Aguardando aceite</span>
                     {deliveryOrders.filter(o => o.status === 'pendente').length > 0 && (
                       <span className="orders-new-orders__count">
                         {deliveryOrders.filter(o => o.status === 'pendente').length}
@@ -4335,7 +4187,7 @@ export function CaixaPanel({
                     {/* Drawer header */}
                     <div className="flex items-center justify-between px-5 py-4 border-b border-[#27272A] shrink-0">
                       <div>
-                        <h2 className="font-bold text-white text-sm">Novos Pedidos</h2>
+                        <h2 className="font-bold text-white text-sm">Pedidos aguardando aceite</h2>
                         <p className="text-[10px] text-gray-400 mt-0.5">Aceite ou recuse cada pedido antes de produzir</p>
                       </div>
                       <button
@@ -4371,7 +4223,7 @@ export function CaixaPanel({
                                 <span className="text-[10px] text-gray-400 block">{order.telefone}</span>
                               </div>
                               <div className="text-right">
-                                <span className="orders-card__price">R$ {order.total.toFixed(2)}</span>
+                                <span className="orders-card__price">{formatCurrency(order.total)}</span>
                                 <span className="text-[9px] text-gray-500">{order.criadoEm}</span>
                                 {order.numeroPedido && <span className="text-[8px] text-gray-600 font-mono block">#{order.numeroPedido}</span>}
                               </div>
@@ -4496,10 +4348,10 @@ export function CaixaPanel({
                                     className="orders-card__icon"
                                     title="Ver detalhes do pedido"
                                   >
-                                    <Edit3 size={12} />
+                                    <ChevronRight size={12} />
                                   </button>
                                   <span className="orders-card__price">
-                                    R$ {totalVal.toFixed(2)}
+                                    {formatCurrency(totalVal)}
                                   </span>
                                 </div>
                               </div>
@@ -4556,8 +4408,8 @@ export function CaixaPanel({
                   <div className="orders-column__header px-4 py-2.5 flex justify-between items-center shrink-0">
                     <div>
                       <span className="orders-column__number">02 / DIGITAL</span>
-                      <span className={clsx('font-bold', 'text-white', 'font-sans', 'block', 'text-sm')}>Online e Retirada</span>
-                      <span className="text-xs text-gray-400 block mt-0.5 font-normal">Pedidos aceitos no sino</span>
+                      <span className={clsx('font-bold', 'text-white', 'font-sans', 'block', 'text-sm')}>Delivery e Retirada</span>
+                      <span className="text-xs text-gray-400 block mt-0.5 font-normal">Pedidos aceitos e em preparo</span>
                     </div>
                     <span className="orders-column__count">
                       {filteredDigitalProduction.length}
@@ -4618,10 +4470,10 @@ export function CaixaPanel({
                                     className="orders-card__icon"
                                     title="Ver detalhes do pedido"
                                   >
-                                    <Edit3 size={12} />
+                                    <ChevronRight size={12} />
                                   </button>
                                   <span className="orders-card__price">
-                                    R$ {order.total.toFixed(2)}
+                                    {formatCurrency(order.total)}
                                   </span>
                                 </div>
                               </div>
@@ -4666,8 +4518,8 @@ export function CaixaPanel({
                   <div className="orders-column__header px-4 py-2.5 flex justify-between items-center shrink-0">
                     <div>
                       <span className="orders-column__number">03 / FECHAMENTO</span>
-                      <span className={clsx('font-bold', 'text-white', 'font-sans', 'block', 'text-sm')}>Pagamento e Finalização</span>
-                      <span className="text-xs text-gray-400 block mt-0.5 font-normal">Prontos para receber ou concluir</span>
+                      <span className={clsx('font-bold', 'text-white', 'font-sans', 'block', 'text-sm')}>Prontos para concluir</span>
+                      <span className="text-xs text-gray-400 block mt-0.5 font-normal">Receba ou finalize conforme a modalidade</span>
                     </div>
                     <span className="orders-column__count">
                       {filteredCol2Table.length + filteredDeliveryFinalization.length}
@@ -4728,10 +4580,10 @@ export function CaixaPanel({
                                     className="orders-card__icon"
                                     title="Ver detalhes do pedido"
                                   >
-                                    <Edit3 size={12} />
+                                    <ChevronRight size={12} />
                                   </button>
                                   <span className="orders-card__price">
-                                    R$ {totalVal.toFixed(2)}
+                                    {formatCurrency(totalVal)}
                                   </span>
                                 </div>
                               </div>
@@ -4828,10 +4680,10 @@ export function CaixaPanel({
                                     className="orders-card__icon"
                                     title="Ver detalhes do pedido"
                                   >
-                                    <Edit3 size={12} />
+                                    <ChevronRight size={12} />
                                   </button>
                                   <span className="orders-card__price">
-                                    R$ {order.total.toFixed(2)}
+                                    {formatCurrency(order.total)}
                                   </span>
                                 </div>
                               </div>
@@ -4901,15 +4753,11 @@ export function CaixaPanel({
             <div className="orders-workspace h-full min-h-0 flex flex-col gap-3 sm:gap-4">
               <OperationalHero
                 id="counter-heading"
-                eyebrow="CAIXA / LANÇAMENTO RÁPIDO"
-                title="Venda direta,"
+                eyebrow="VENDA / NOVO PEDIDO"
+                title="Novo pedido,"
                 accent="sem atrito"
                 description="Escolha os itens, indique o destino e envie para a cozinha."
-                metrics={[
-                  { label: 'no cardápio', value: sellableProducts.length },
-                  { label: 'mesas ocupadas', value: pdvOccupiedTableCount },
-                  { label: 'no pedido', value: pdvCartItemCount },
-                ]}
+                metrics={[]}
                 isConnected={isWsConnected}
               />
 
@@ -5000,7 +4848,9 @@ export function CaixaPanel({
                 <div className="flex-1 min-h-0 overflow-y-auto pr-1 overscroll-contain">
                   {filteredProducts.length > 0 ? (
                   <div className="grid grid-cols-1 min-[430px]:grid-cols-2 md:grid-cols-3 2xl:grid-cols-4 gap-2.5 pb-2">
-                    {filteredProducts.map((p) => (
+                    {filteredProducts.map((p) => {
+                      const productLabel = splitProductLabel(p.nome);
+                      return (
                       <button
                         type="button"
                         key={p.id}
@@ -5011,7 +4861,8 @@ export function CaixaPanel({
                           <img src={p.imagem} alt="" loading="lazy" className="w-full h-20 object-cover rounded-xl" />
                         )}
                         <div className="min-h-[34px]">
-                          <h4 className="font-semibold text-zinc-100 text-xs sm:text-[13px] group-hover:text-white transition-colors leading-snug line-clamp-2">{p.nome}</h4>
+                          {productLabel.code && <span className="mb-1 block font-mono text-[8px] font-bold tracking-[0.14em] text-zinc-600">CÓD. {productLabel.code}</span>}
+                          <h4 className="font-semibold text-zinc-100 text-xs sm:text-[13px] group-hover:text-white transition-colors leading-snug line-clamp-2">{productLabel.name}</h4>
                           {p.descricao && <p className="text-[9px] sm:text-[10px] text-zinc-500 mt-1 line-clamp-1 leading-tight">{p.descricao}</p>}
                         </div>
                         <div className="flex justify-between items-center border-t border-white/[0.06] pt-2.5">
@@ -5021,7 +4872,7 @@ export function CaixaPanel({
                           </span>
                         </div>
                       </button>
-                    ))}
+                    )})}
                   </div>
                   ) : (
                     <div className="h-full min-h-52 rounded-2xl border border-dashed border-white/[0.09] bg-white/[0.015] flex flex-col items-center justify-center text-center px-6">
@@ -5038,7 +4889,7 @@ export function CaixaPanel({
               </div>
 
               {/* Shopping cart sidebar */}
-              <div className={`w-full xl:w-[350px] 2xl:w-[380px] bg-[#0d110f] border border-white/[0.08] rounded-2xl ${balcaoMobileView === 'carrinho' ? 'flex' : 'hidden xl:flex'} flex-col overflow-hidden shrink-0`}>
+              <div className={`w-full xl:w-[350px] 2xl:w-[380px] bg-[#0d110f] border border-white/[0.08] rounded-2xl ${balcaoMobileView === 'carrinho' ? 'flex' : 'hidden xl:flex'} ${pdvCart.length === 0 ? 'xl:self-start' : ''} flex-col overflow-hidden shrink-0`}>
                 <div className="bg-white/[0.025] px-4 py-3.5 border-b border-white/[0.07] flex justify-between items-center shrink-0">
                   <span className="font-semibold text-white flex items-center gap-2">
                     <span className="w-8 h-8 rounded-xl bg-[#00b894]/10 border border-[#00b894]/15 inline-flex items-center justify-center"><ShoppingCart size={15} className="text-[#4fe0bc]" /></span>
@@ -5310,7 +5161,7 @@ export function CaixaPanel({
                   <div className={clsx('flex', 'justify-between', 'items-center', 'font-mono', 'border-t', 'border-[#27272A]', 'pt-2', 'text-[11px]', 'font-bold', 'text-white')}>
                     <span>Total Pedido:</span>
                     <span className={clsx('text-[#10b981]', 'text-sm')}>
-                      R$ {(pdvCart.reduce((sum, item) => sum + (item.product.preco * item.quantity), 0)).toFixed(2)}
+                      {formatCurrency(pdvCart.reduce((sum, item) => sum + (item.product.preco * item.quantity), 0))}
                     </span>
                   </div>
 
@@ -5318,7 +5169,7 @@ export function CaixaPanel({
                     id="pdv-submit-btn"
                     type="submit"
                     disabled={pdvCart.length === 0 || isLoading}
-                    className="w-full min-h-11 py-2 bg-[#00b894] hover:bg-[#13c9a0] text-[#06110d] rounded-xl font-bold text-[10px] uppercase tracking-wider transition-colors cursor-pointer flex flex-col items-center justify-center gap-0.5 disabled:opacity-35 disabled:cursor-not-allowed"
+                    className="w-full min-h-11 py-2 bg-[#00b894] hover:bg-[#13c9a0] text-[#06110d] rounded-xl border border-transparent font-bold text-[10px] uppercase tracking-wider transition-colors cursor-pointer flex flex-col items-center justify-center gap-0.5 disabled:cursor-not-allowed disabled:border-[#272c29] disabled:bg-[#151816] disabled:text-zinc-600"
                   >
                     <div className={clsx('flex', 'items-center', 'gap-1')}>
                       <Check size={12} />
@@ -5341,7 +5192,7 @@ export function CaixaPanel({
                     <span>{pdvCartItemCount} itens no carrinho</span>
                   </span>
                   <span className="text-xs font-mono font-extrabold bg-black/30 px-3 py-1 rounded-xl">
-                    R$ {pdvCart.reduce((sum, item) => sum + (item.product.preco * item.quantity), 0).toFixed(2)} →
+                    {formatCurrency(pdvCart.reduce((sum, item) => sum + (item.product.preco * item.quantity), 0))} →
                   </span>
                 </button>
               )}
@@ -5355,15 +5206,11 @@ export function CaixaPanel({
             <div className="orders-workspace flex h-full min-h-0 flex-col gap-3">
               <OperationalHero
                 id="tables-heading"
-                eyebrow="SALÃO / ORGANIZAÇÃO AO VIVO"
-                title="Estrutura física"
-                accent="do salão"
-                description="Organize as mesas e veja rapidamente quais precisam de atenção."
-                metrics={[
-                  { label: 'mesas', value: tableStatusCounts.all },
-                  { label: 'livres', value: tableStatusCounts.free },
-                  { label: 'em uso', value: tableStatusCounts.occupied + tableStatusCounts.payment },
-                ]}
+                eyebrow="OPERAÇÃO DO SALÃO"
+                title="Salão"
+                accent="em tempo real"
+                description="Acompanhe atendimentos e veja rapidamente quais mesas precisam de atenção."
+                metrics={[]}
                 isConnected={isWsConnected}
               />
 
@@ -5392,17 +5239,6 @@ export function CaixaPanel({
                       </button>
                     ))}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTableFormError('');
-                      setShowAddMesaModal(true);
-                    }}
-                    className="flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-[#10b981] px-3.5 text-[9px] font-extrabold uppercase tracking-wider text-[#07110e] transition-colors hover:bg-[#35c99a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6ee7b7]"
-                  >
-                    <Plus size={13} />
-                    Adicionar mesa
-                  </button>
                 </div>
 
                 <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
@@ -5418,7 +5254,7 @@ export function CaixaPanel({
                         <div className="space-y-2 text-zinc-500">
                           <ClipboardList className="mx-auto text-[#10b981]" size={22} />
                           <strong className="block text-sm text-zinc-200">Nenhuma mesa cadastrada</strong>
-                          <p className="text-xs">Use “Adicionar mesa” para montar o salão.</p>
+                          <p className="text-xs">Revise a configuração do salão antes de iniciar a operação.</p>
                         </div>
                       )}
                     </div>
@@ -5461,20 +5297,6 @@ export function CaixaPanel({
                                   )}
                                 </div>
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditingTable(table);
-                                  setEditTableCap(String(table.capacidade || 4));
-                                  setEditTableNome(table.nome || '');
-                                  setIsConfirmingDelete(false);
-                                  setTableFormError('');
-                                }}
-                                aria-label={`Editar Mesa ${table.id}`}
-                                className="rounded-lg border border-white/[0.07] bg-white/[0.025] p-2 text-zinc-500 transition-colors hover:border-[#10b981]/30 hover:text-[#6ee7b7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10b981]"
-                              >
-                                <Edit3 size={13} />
-                              </button>
                             </div>
 
                             <div className="space-y-2">
@@ -5517,43 +5339,58 @@ export function CaixaPanel({
                               )}
                             </div>
 
-                            {isOccupied && (
+                            {!isMerged && (
                               <div className="flex gap-1.5 border-t border-white/[0.06] pt-2.5">
-                                <button
-                                  type="button"
-                                  disabled={tableOrders.length === 0}
-                                  onClick={() => {
-                                    const checkoutOrder = buildTableCheckoutOrder(tableOrders);
-                                    if (!checkoutOrder) return;
-                                    setSelectedOrder(checkoutOrder);
-                                    setShowCheckoutModal(true);
-                                    setCheckoutServiceTax(true);
-                                    setSplitPeople('1');
-                                    setSelectedItemIds([]);
-                                    const subtotal = checkoutOrder.itens
-                                      .filter(item => (item.status as string) !== 'cancelado')
-                                      .reduce((sum, item) => sum + item.preco, 0);
-                                    const checkoutTotal = subtotal * (1.0 + (taxaServicoAtiva ? serviceTaxRate / 100 : 0));
-                                    setPaymentValor(Math.max(0, checkoutTotal - Number(checkoutOrder.valorPago || 0)).toFixed(2));
-                                  }}
-                                  className="flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#123c31] px-2 text-[9px] font-extrabold uppercase tracking-wide text-[#6ee7b7] transition-colors hover:bg-[#185241] disabled:cursor-wait disabled:opacity-45"
-                                >
-                                  <CreditCard size={12} />
-                                  Receber conta
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={tableOrders.length === 0}
-                                  onClick={() => {
-                                    setTableReleaseError('');
-                                    setConfirmingFreeTableId(table.id);
-                                  }}
-                                  className="flex min-h-9 items-center justify-center rounded-lg border border-rose-900/35 bg-rose-950/15 px-2.5 text-rose-400 transition-colors hover:bg-rose-950/35 disabled:cursor-wait disabled:opacity-35"
-                                  title="Liberar mesa sem receber"
-                                  aria-label={`Liberar Mesa ${table.id} sem receber`}
-                                >
-                                  <Unlock size={12} />
-                                </button>
+                                {isOccupied ? (
+                                  hasPendingPayment ? (
+                                    <button
+                                      type="button"
+                                      disabled={tableOrders.length === 0}
+                                      onClick={() => {
+                                        const checkoutOrder = buildTableCheckoutOrder(tableOrders);
+                                        if (!checkoutOrder) return;
+                                        setSelectedOrder(checkoutOrder);
+                                        setShowCheckoutModal(true);
+                                        setCheckoutServiceTax(true);
+                                        setSplitPeople('1');
+                                        setSelectedItemIds([]);
+                                        const subtotal = checkoutOrder.itens
+                                          .filter(item => (item.status as string) !== 'cancelado')
+                                          .reduce((sum, item) => sum + item.preco, 0);
+                                        const checkoutTotal = subtotal * (1.0 + (taxaServicoAtiva ? serviceTaxRate / 100 : 0));
+                                        setPaymentValor(Math.max(0, checkoutTotal - Number(checkoutOrder.valorPago || 0)).toFixed(2));
+                                      }}
+                                      className="flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#123c31] px-2 text-[9px] font-extrabold uppercase tracking-wide text-[#6ee7b7] transition-colors hover:bg-[#185241] disabled:cursor-wait disabled:opacity-45"
+                                    >
+                                      <CreditCard size={12} />
+                                      Receber conta
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      disabled={tableOrders.length === 0}
+                                      onClick={() => tableOrders[0] && setSelectedKanbanOrder(tableOrders[0])}
+                                      className="flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#24483e] bg-[#101815] px-2 text-[9px] font-extrabold uppercase tracking-wide text-[#6ee7b7] transition-colors hover:bg-[#153028] disabled:cursor-wait disabled:opacity-45"
+                                    >
+                                      <Receipt size={12} />
+                                      Ver comanda
+                                    </button>
+                                  )
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setPdvOrderType('mesa');
+                                      setPdvTargetMesaId(table.id);
+                                      setBalcaoMobileView('produtos');
+                                      setActiveSubTab('balcao');
+                                    }}
+                                    className="flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#24483e] bg-[#101815] px-2 text-[9px] font-extrabold uppercase tracking-wide text-[#6ee7b7] transition-colors hover:bg-[#153028]"
+                                  >
+                                    <Plus size={12} />
+                                    Abrir pedido
+                                  </button>
+                                )}
                               </div>
                             )}
                           </article>
@@ -5944,6 +5781,7 @@ export function CaixaPanel({
               <div className="flex flex-wrap gap-1.5 rounded-xl border border-[#27272A] bg-[#09090B] p-1 w-fit">
                 {[
                   { id: 'impressao', label: 'Impressão', icon: Printer },
+                  { id: 'mesas', label: 'Mesas', icon: Users },
                   { id: 'garcom', label: 'App do Garçom', icon: Smartphone },
                   { id: 'taxa', label: 'Taxa de Serviço', icon: Percent }
                 ].map(tab => {
@@ -5954,7 +5792,7 @@ export function CaixaPanel({
                       key={tab.id}
                       type="button"
                       onClick={() => setPrintingSettingsTab(
-                        tab.id as 'impressao' | 'garcom' | 'taxa'
+                        tab.id as 'impressao' | 'mesas' | 'garcom' | 'taxa'
                       )}
                       className={`px-3 py-2 text-[9px] font-bold rounded-lg cursor-pointer transition-all flex items-center gap-1.5 ${
                         selected
@@ -5990,6 +5828,61 @@ export function CaixaPanel({
                     Comparar planos
                   </button>
                 </div>
+              )}
+
+              {printingSettingsTab === 'mesas' && (
+                <section className="overflow-hidden rounded-[22px] border border-[#27272A] bg-[#101311]">
+                  <header className="flex flex-col gap-3 border-b border-[#27272A] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                    <div>
+                      <h3 className="text-sm font-bold text-white">Configuração das mesas</h3>
+                      <p className="mt-1 text-[10px] text-zinc-500">Cadastre, nomeie e defina a capacidade. A ocupação continua sendo controlada pelas comandas.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTableFormError('');
+                        setShowAddMesaModal(true);
+                      }}
+                      className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-[#10b981] px-4 text-[9px] font-extrabold uppercase tracking-wider text-[#07110e] transition-colors hover:bg-[#35c99a]"
+                    >
+                      <Plus size={13} /> Adicionar mesa
+                    </button>
+                  </header>
+
+                  {salonTables.length === 0 ? (
+                    <div className="flex min-h-48 flex-col items-center justify-center px-5 text-center">
+                      <Users size={22} className="text-zinc-700" />
+                      <strong className="mt-3 text-xs text-zinc-300">Nenhuma mesa cadastrada</strong>
+                      <span className="mt-1 text-[10px] text-zinc-600">Adicione a primeira mesa para liberar a operação do salão.</span>
+                    </div>
+                  ) : (
+                    <div className="grid gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+                      {[...salonTables].sort((a, b) => a.id - b.id).map(table => (
+                        <article key={table.id} className="flex items-center justify-between gap-3 rounded-2xl border border-[#292e2c] bg-[#151816] p-3.5">
+                          <div className="min-w-0">
+                            <span className="block font-mono text-[8px] font-bold uppercase tracking-[0.18em] text-zinc-600">Mesa {table.id}</span>
+                            <strong className="mt-0.5 block truncate text-xs text-zinc-100">{table.nome || `Mesa ${table.id}`}</strong>
+                            <span className="mt-1 flex items-center gap-1 text-[9px] text-zinc-500"><Users size={10} /> {table.capacidade || 4} lugares</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingTable(table);
+                              setEditTableCap(String(table.capacidade || 4));
+                              setEditTableNome(table.nome || '');
+                              setIsConfirmingDelete(false);
+                              setTableFormError('');
+                            }}
+                            aria-label={`Editar Mesa ${table.id}`}
+                            className="rounded-lg border border-white/[0.07] bg-white/[0.025] p-2 text-zinc-500 transition-colors hover:border-[#10b981]/30 hover:text-[#6ee7b7]"
+                          >
+                            <Edit3 size={13} />
+                          </button>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </section>
               )}
 
               {/* Service Tax config block moved to Salão e Impressão */}
@@ -7460,9 +7353,6 @@ export function CaixaPanel({
               movimentacoes={caixaMovimentacoes}
               turnoResumo={turnoResumo}
               isLoading={isCaixaMovimentacoesLoading}
-              onOpenSangriaModal={() => setShowSangriaModal(true)}
-              onOpenSuprimentoModal={() => setShowSuprimentoModal(true)}
-              onRefresh={fetchCaixaMovimentacoes}
             />
           )}
 
@@ -8190,170 +8080,6 @@ export function CaixaPanel({
               <div className={clsx('flex', 'gap-2.5')}>
                 <button type="button" onClick={() => setShowAbrirModal(false)} className={clsx('flex-1', 'py-2.5', 'bg-[#121214]', 'hover:bg-[#27272A]', 'border', 'border-[#27272A]', 'text-white', 'rounded-xl', 'transition-all', 'cursor-pointer', 'font-bold')}>Cancelar</button>
                 <button type="submit" className={clsx('flex-1', 'py-2.5', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'rounded-xl', 'transition-all', 'cursor-pointer', 'font-bold', 'shadow-md')}>Confirmar Abertura</button>
-              </div>
-            </form>
-          </div>
-        )
-      }
-
-      {/* 2. MODAL: FECHAR CAIXA */}
-      {
-        showFecharModal && (
-          <div
-            onClick={(e) => { if (e.target === e.currentTarget) setShowFecharModal(false); }}
-            className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4', 'cursor-pointer')}
-          >
-            <form onSubmit={handleFecharCaixa} className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-3xl', 'w-full', 'max-w-md', 'p-6', 'space-y-5', 'shadow-2xl', 'animate-scale-in')}>
-              <div className={clsx('flex', 'justify-between', 'items-center', 'border-b', 'border-[#27272A]', 'pb-3')}>
-                <h3 className={clsx('font-serif', 'font-bold', 'text-lg', 'text-white')}>Fechamento do Caixa</h3>
-                <button type="button" onClick={() => setShowFecharModal(false)} className={clsx('p-1', 'hover:bg-[#27272A]', 'rounded-full', 'text-gray-400', 'hover:text-white', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}><X size={16} /></button>
-              </div>
-
-              <p className={clsx('text-[11px]', 'text-gray-400', 'leading-relaxed', 'bg-[#121214]', 'p-3', 'rounded-xl', 'border', 'border-[#27272A]')}>
-                Insira os valores contados fisicamente na gaveta de dinheiro e confira as maquininhas de cartão/pix antes de fechar o turno.
-              </p>
-
-              <div className={clsx('space-y-4', 'font-sans', 'text-xs')}>
-                <div className={clsx('grid', 'grid-cols-3', 'gap-2', 'text-[10px]', 'text-gray-400', 'uppercase', 'tracking-wider', 'font-bold', 'border-b', 'border-[#27272A]', 'pb-1.5')}>
-                  <span>Método</span>
-                  <span className="text-right">Esperado</span>
-                  <span className="text-right">Declarado</span>
-                </div>
-
-                <div className={clsx('grid', 'grid-cols-3', 'items-center', 'gap-2', 'font-mono')}>
-                  <span className={clsx('font-sans', 'text-gray-300')}>Dinheiro</span>
-                  <span className={clsx('text-right', 'text-gray-400')}>R$ {turno?.total_esperado_dinheiro?.toFixed(2)}</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    placeholder="0.00"
-                    value={decDinheiro}
-                    onChange={(e) => setDecDinheiro(e.target.value)}
-                    className={clsx('text-right', 'py-1.5', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'focus:border-[#10b981]', 'text-white')}
-                  />
-                </div>
-
-                <div className={clsx('grid', 'grid-cols-3', 'items-center', 'gap-2', 'font-mono')}>
-                  <span className={clsx('font-sans', 'text-gray-300', 'font-medium')}>Pix</span>
-                  <span className={clsx('text-right', 'text-gray-400')}>R$ {turno?.total_esperado_pix?.toFixed(2)}</span>
-                  <span className={clsx('text-right', 'text-emerald-400', 'text-[10px]', 'font-sans', 'font-bold', 'uppercase', 'tracking-wide')}>Conciliado</span>
-                </div>
-
-                <div className={clsx('grid', 'grid-cols-3', 'items-center', 'gap-2', 'font-mono')}>
-                  <span className={clsx('font-sans', 'text-gray-300', 'font-medium')}>Cartão</span>
-                  <span className={clsx('text-right', 'text-gray-400')}>R$ {turno?.total_esperado_cartao?.toFixed(2)}</span>
-                  <span className={clsx('text-right', 'text-emerald-400', 'text-[10px]', 'font-sans', 'font-bold', 'uppercase', 'tracking-wide')}>Conciliado</span>
-                </div>
-              </div>
-
-              {errorMsg && (
-                <div className={clsx('bg-rose-500/10', 'border', 'border-rose-500/25', 'text-rose-400', 'p-2.5', 'rounded-xl', 'text-center', 'font-medium', 'block')}>
-                  {errorMsg}
-                </div>
-              )}
-
-              <div className={clsx('flex', 'gap-2.5', 'pt-2')}>
-                <button type="button" onClick={() => setShowFecharModal(false)} className={clsx('flex-1', 'py-2.5', 'bg-[#121214]', 'hover:bg-[#27272A]', 'border', 'border-[#27272A]', 'text-white', 'rounded-xl', 'transition-all', 'cursor-pointer', 'font-bold')}>Voltar</button>
-                <button
-                  type="button"
-                  onMouseDown={startHoldConfirm}
-                  onMouseUp={cancelHoldConfirm}
-                  onMouseLeave={cancelHoldConfirm}
-                  onTouchStart={startHoldConfirm}
-                  onTouchEnd={cancelHoldConfirm}
-                  style={{
-                    background: holdProgress > 0
-                      ? `linear-gradient(to right, #22C55E ${holdProgress}%, #10b981 ${holdProgress}%)`
-                      : '#10b981'
-                  }}
-                  className={clsx('flex-1', 'py-2.5', 'text-white', 'rounded-xl', 'transition-all', 'cursor-pointer', 'font-bold', 'shadow-md', 'select-none', 'relative', 'overflow-hidden', 'active:scale-95')}
-                >
-                  {holdProgress > 0 ? `Segurando (${Math.round(holdProgress)}%)` : 'Segurar para Fechar (2s)'}
-                </button>
-              </div>
-            </form>
-          </div>
-        )
-      }
-
-      {/* 3. MODAL: SUPRIMENTO / SANGRIA */}
-      {
-        showMovModal && (
-          <div
-            onClick={(e) => { if (e.target === e.currentTarget) setShowMovModal(false); }}
-            className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4', 'cursor-pointer')}
-          >
-            <form onSubmit={handleMovimentar} className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-3xl', 'w-full', 'max-w-sm', 'p-6', 'space-y-5', 'shadow-2xl', 'animate-scale-in')}>
-              <div className={clsx('flex', 'justify-between', 'items-center', 'border-b', 'border-[#27272A]', 'pb-3')}>
-                <h3 className={clsx('font-serif', 'font-bold', 'text-lg', 'text-white')}>Suprimento / Sangria</h3>
-                <button type="button" onClick={() => setShowMovModal(false)} className={clsx('p-1', 'hover:bg-[#27272A]', 'rounded-full', 'text-gray-400', 'hover:text-white', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}><X size={16} /></button>
-              </div>
-
-              <div className={clsx('flex', 'gap-2', 'p-1', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'shrink-0')}>
-                <button
-                  type="button"
-                  onClick={() => setMovTipo('suprimento')}
-                  className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${movTipo === 'suprimento'
-                    ? 'bg-emerald-600 text-white font-bold'
-                    : 'text-gray-400 hover:text-white'
-                    }`}
-                >
-                  <ArrowUpRight size={13} />
-                  <span>Suprimento (Inserir)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMovTipo('sangria')}
-                  className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${movTipo === 'sangria'
-                    ? 'bg-emerald-600 text-white shadow-sm font-bold'
-                    : 'text-gray-400 hover:text-white'
-                    }`}
-                >
-                  <ArrowDownRight size={13} />
-                  <span>Sangria (Retirar)</span>
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className={clsx('text-[10px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Valor (R$):</label>
-                  <div className="relative">
-                    <span className={clsx('absolute', 'left-3.5', 'top-3', 'text-gray-400', 'font-mono')}>R$</span>
-                    <input
-                      type="number"
-                      step="0.01"
-                      required
-                      placeholder="0.00"
-                      value={movValor}
-                      onChange={(e) => setMovValor(e.target.value)}
-                      className={clsx('w-full', 'pl-9', 'pr-4', 'py-2.5', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'focus:outline-none', 'focus:ring-2', 'focus:ring-[#10b981]/20', 'focus:border-[#10b981]', 'text-white', 'font-mono')}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className={clsx('text-[10px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Motivo / Descrição:</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ex: Troco inicial extra, Sangria de segurança..."
-                    value={movDesc}
-                    onChange={(e) => setMovDesc(e.target.value)}
-                    className={clsx('w-full', 'px-4', 'py-2.5', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'focus:outline-none', 'focus:ring-2', 'focus:ring-[#10b981]/20', 'focus:border-[#10b981]', 'text-white')}
-                  />
-                </div>
-              </div>
-
-              {errorMsg && (
-                <div className={clsx('bg-rose-500/10', 'border', 'border-rose-500/25', 'text-rose-400', 'p-2.5', 'rounded-xl', 'text-center', 'font-medium', 'block')}>
-                  {errorMsg}
-                </div>
-              )}
-
-              <div className={clsx('flex', 'gap-2.5')}>
-                <button type="button" onClick={() => setShowMovModal(false)} className={clsx('flex-1', 'py-2.5', 'bg-[#121214]', 'hover:bg-[#27272A]', 'border', 'border-[#27272A]', 'text-white', 'rounded-xl', 'transition-all', 'cursor-pointer', 'font-bold')}>Cancelar</button>
-                <button type="submit" className={clsx('flex-1', 'py-2.5', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'rounded-xl', 'transition-all', 'cursor-pointer', 'font-bold', 'shadow-md')}>Salvar Lançamento</button>
               </div>
             </form>
           </div>
@@ -9145,96 +8871,6 @@ export function CaixaPanel({
               )}
               </div>
             </form>
-          </div>
-        )
-      }
-
-      {/* 5.2 MODAL: CONFIRMAR LIBERAÇÃO DE MESA */}
-      {
-        confirmingFreeTableId !== null && (
-          <div
-            role="presentation"
-            onClick={(e) => {
-              if (e.target === e.currentTarget && !tableMutation) setConfirmingFreeTableId(null);
-            }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
-          >
-            <div className="w-full max-w-md overflow-hidden rounded-[24px] border border-rose-900/35 bg-[#141715] shadow-2xl animate-scale-in">
-              <div className="space-y-4 px-5 py-5 text-center sm:px-6">
-                <span className="mx-auto flex h-11 w-11 items-center justify-center rounded-full border border-rose-900/35 bg-rose-950/25 text-rose-400">
-                  <Unlock size={18} />
-                </span>
-                <div>
-                  <span className="font-mono text-[8px] font-bold uppercase tracking-[0.2em] text-rose-400">Ação excepcional</span>
-                  <h3 className="mt-1 text-lg font-bold text-white">Liberar Mesa {confirmingFreeTableId} sem receber?</h3>
-                  <p className="mx-auto mt-2 max-w-sm text-[11px] leading-relaxed text-zinc-400">
-                    Use somente quando o atendimento precisar ser encerrado manualmente. As comandas abertas serão fechadas e a mesa voltará a ficar livre.
-                  </p>
-                </div>
-
-                {tableReleaseError && (
-                  <div role="alert" className="flex gap-2 rounded-xl border border-rose-900/40 bg-rose-950/20 p-3 text-left text-[11px] leading-relaxed text-rose-300">
-                    <AlertTriangle className="mt-0.5 shrink-0" size={14} />
-                    {tableReleaseError}
-                  </div>
-                )}
-
-                <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row">
-                  <button
-                    type="button"
-                    disabled={tableMutation !== null}
-                    onClick={() => setConfirmingFreeTableId(null)}
-                    className="min-h-11 flex-1 rounded-xl border border-[#303633] bg-[#0c0f0d] px-4 text-xs font-bold text-zinc-400 transition-colors hover:text-white disabled:opacity-40"
-                  >
-                    Voltar
-                  </button>
-                  <button
-                    type="button"
-                    disabled={tableMutation !== null}
-                    onClick={async () => {
-                      if (tableMutation || confirmingFreeTableId === null) return;
-                      const mesaId = confirmingFreeTableId;
-                      const openOrders = orders.filter(order => order.mesaId === mesaId);
-                      if (openOrders.length === 0) {
-                        setTableReleaseError('Não há comandas abertas nesta mesa. Atualize a tela e tente novamente.');
-                        return;
-                      }
-
-                      try {
-                        setTableMutation('release');
-                        setTableReleaseError('');
-                        const responses = await Promise.all(openOrders.map(comanda => (
-                          fetch(`${apiBaseUrl}/comandas/${comanda.id}/fechar?force=true`, {
-                            method: 'PUT',
-                            headers: authHeaders,
-                          })
-                        )));
-                        const failedResponse = responses.find(response => !response.ok);
-                        if (failedResponse) {
-                          const payload = await failedResponse.json().catch(() => null);
-                          throw new Error(payload?.detail || 'O servidor recusou a liberação da mesa.');
-                        }
-
-                        await onRefreshOrders();
-                        setConfirmingFreeTableId(null);
-                        setSelectedOrder(null);
-                        setShowCheckoutModal(false);
-                        showToast(`Mesa ${mesaId} liberada.`, 'success');
-                      } catch (err: any) {
-                        console.error(err);
-                        setTableReleaseError(err?.message || 'Não foi possível liberar a mesa.');
-                      } finally {
-                        setTableMutation(null);
-                      }
-                    }}
-                    className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 text-xs font-bold text-white transition-colors hover:bg-rose-500 disabled:cursor-wait disabled:opacity-60"
-                  >
-                    {tableMutation === 'release' && <RefreshCw className="animate-spin" size={14} />}
-                    {tableMutation === 'release' ? 'Liberando…' : 'Liberar sem receber'}
-                  </button>
-                </div>
-              </div>
-            </div>
           </div>
         )
       }
