@@ -1,180 +1,238 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import clsx from 'clsx';
-import { ArrowDownRight, ArrowUpRight, Plus, RefreshCw, Filter } from 'lucide-react';
-import { CaixaMovimentacao } from '../../types';
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  Banknote,
+  CalendarDays,
+  Download,
+  Filter,
+  History,
+  Plus,
+  RefreshCw,
+  Scale,
+  Search,
+} from 'lucide-react';
+import { CaixaMovimentacao, CaixaTurnoResumo } from '../../types';
 
 interface CaixaMovimentacoesTabProps {
   movimentacoes: CaixaMovimentacao[];
+  turnoResumo?: CaixaTurnoResumo | null;
   isLoading: boolean;
   onOpenSangriaModal: () => void;
   onOpenSuprimentoModal: () => void;
   onRefresh: () => void;
 }
 
+const currencyFormatter = new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+  minimumFractionDigits: 2,
+});
+
+const formatCurrency = (value: number) => currencyFormatter.format(Number(value) || 0);
+
+const escapeCsv = (value: unknown) => {
+  const text = String(value ?? '');
+  return `"${text.replace(/"/g, '""')}"`;
+};
+
 export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
   movimentacoes,
+  turnoResumo,
   isLoading,
   onOpenSangriaModal,
   onOpenSuprimentoModal,
-  onRefresh
+  onRefresh,
 }) => {
-  const [filterTipo, setFilterTipo] = useState<string>('todos');
-  const [filterDataInicio, setFilterDataInicio] = useState<string>('');
-  const [filterDataFim, setFilterDataFim] = useState<string>('');
+  const [filterTipo, setFilterTipo] = useState('todos');
+  const [filterDataInicio, setFilterDataInicio] = useState('');
+  const [filterDataFim, setFilterDataFim] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
 
-  const filteredMovs = movimentacoes.filter(m => {
-    if (filterTipo !== 'todos' && m.tipo !== filterTipo) return false;
-    if (filterDataInicio && new Date(m.criado_em) < new Date(filterDataInicio)) return false;
-    if (filterDataFim && new Date(m.criado_em) > new Date(`${filterDataFim}T23:59:59`)) return false;
-    return true;
-  });
+  const filteredMovs = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLocaleLowerCase('pt-BR');
+
+    return movimentacoes.filter(movimentacao => {
+      if (filterTipo !== 'todos' && movimentacao.tipo !== filterTipo) return false;
+
+      const createdAt = new Date(movimentacao.criado_em);
+      if (filterDataInicio && createdAt < new Date(`${filterDataInicio}T00:00:00`)) return false;
+      if (filterDataFim && createdAt > new Date(`${filterDataFim}T23:59:59.999`)) return false;
+
+      if (normalizedSearch) {
+        const searchable = [
+          movimentacao.descricao,
+          movimentacao.observacao,
+          movimentacao.usuario_nome,
+          movimentacao.tipo,
+        ].join(' ').toLocaleLowerCase('pt-BR');
+        if (!searchable.includes(normalizedSearch)) return false;
+      }
+
+      return true;
+    });
+  }, [filterDataFim, filterDataInicio, filterTipo, movimentacoes, searchTerm]);
+
+  const totals = useMemo(() => filteredMovs.reduce(
+    (accumulator, movimentacao) => {
+      const value = Number(movimentacao.valor) || 0;
+      if (movimentacao.tipo === 'suprimento') accumulator.suprimentos += value;
+      if (movimentacao.tipo === 'sangria') accumulator.sangrias += value;
+      return accumulator;
+    },
+    { suprimentos: 0, sangrias: 0 },
+  ), [filteredMovs]);
+
+  const hasFilters = Boolean(
+    filterTipo !== 'todos' || filterDataInicio || filterDataFim || searchTerm.trim(),
+  );
+
+  const clearFilters = () => {
+    setFilterTipo('todos');
+    setFilterDataInicio('');
+    setFilterDataFim('');
+    setSearchTerm('');
+  };
+
+  const exportCsv = () => {
+    const header = ['Data e hora', 'Tipo', 'Valor', 'Saldo anterior', 'Saldo posterior', 'Descrição', 'Observação', 'Operador'];
+    const rows = filteredMovs.map(movimentacao => [
+      new Date(movimentacao.criado_em).toLocaleString('pt-BR'),
+      movimentacao.tipo,
+      Number(movimentacao.valor).toFixed(2),
+      Number(movimentacao.saldo_anterior || 0).toFixed(2),
+      Number(movimentacao.saldo_posterior || 0).toFixed(2),
+      movimentacao.descricao,
+      movimentacao.observacao || '',
+      movimentacao.usuario_nome || 'Operador',
+    ]);
+    const csv = `\uFEFF${[header, ...rows].map(row => row.map(escapeCsv).join(';')).join('\n')}`;
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `movimentacoes-caixa-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  if (isLoading && movimentacoes.length === 0) {
+    return (
+      <div className="space-y-4" aria-busy="true" aria-label="Carregando movimentações do caixa">
+        <div className="h-36 animate-pulse rounded-[24px] border border-[#252b28] bg-[#0d100f]" />
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {[0, 1, 2, 3].map(item => <div key={item} className="h-24 animate-pulse rounded-[18px] border border-[#252b28] bg-[#111412]" />)}
+        </div>
+        <div className="h-80 animate-pulse rounded-[22px] border border-[#252b28] bg-[#0d100f]" />
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-5 text-left animate-fade-in">
-      {/* Header Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-[#0E1015] border border-[#1C1F28] p-4 rounded-3xl">
-        <div>
-          <h3 className="font-serif text-sm font-bold text-white">Movimentações de Caixa (Sangrias e Suprimentos)</h3>
-          <p className="text-[10px] text-gray-400">Rastreabilidade completa de retiradas (sangrias) e aportes de troco (suprimentos).</p>
+    <div className="space-y-4 text-left animate-fade-in" aria-busy={isLoading}>
+      <section className="overflow-hidden rounded-[24px] border border-[#1d2925] bg-[#0a0d0c]">
+        <div className="grid gap-5 px-5 py-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end lg:px-6">
+          <div className="max-w-2xl">
+            <p className="flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.22em] text-[#54d9b3]">
+              <span className="h-px w-6 bg-[#54d9b3]" /> Auditoria financeira
+            </p>
+            <h2 className="mt-3 text-2xl font-black tracking-[-0.04em] text-[#f5f4ef] sm:text-3xl">
+              Cada entrada. <span className="text-[#54d9b3]">Cada saída.</span>
+            </h2>
+            <p className="mt-2 max-w-xl text-xs leading-relaxed text-zinc-500">
+              Consulte ajustes do caixa, confira saldos e exporte o recorte exibido sem carregar o histórico inteiro.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
+            <button type="button" onClick={onRefresh} disabled={isLoading} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#303532] bg-[#151816] px-3 py-2.5 text-[10px] font-bold text-zinc-300 transition-colors hover:border-[#196b55] hover:text-[#54d9b3] disabled:cursor-wait disabled:opacity-60">
+              <RefreshCw size={13} className={isLoading ? 'animate-spin' : ''} /> Atualizar
+            </button>
+            <button type="button" onClick={exportCsv} disabled={filteredMovs.length === 0} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#303532] bg-[#151816] px-3 py-2.5 text-[10px] font-bold text-zinc-300 transition-colors hover:border-[#196b55] hover:text-[#54d9b3] disabled:opacity-40">
+              <Download size={13} /> Exportar CSV
+            </button>
+            <button type="button" onClick={onOpenSuprimentoModal} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#196b55] bg-[#0b2d25] px-3 py-2.5 text-[10px] font-bold text-[#60e4be] transition-colors hover:bg-[#103b30]">
+              <Plus size={13} /> Suprimento
+            </button>
+            <button type="button" onClick={onOpenSangriaModal} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#543535] bg-[#211414] px-3 py-2.5 text-[10px] font-bold text-[#dfabab] transition-colors hover:bg-[#2d1919]">
+              <Plus size={13} /> Sangria
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onRefresh}
-            className="p-2 border border-[#1C1F28] bg-[#0D0F14] hover:bg-[#181A22] text-gray-400 hover:text-white rounded-xl transition-all cursor-pointer"
-            title="Atualizar Movimentações"
-          >
-            <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
-          </button>
-          <button
-            type="button"
-            onClick={onOpenSuprimentoModal}
-            className="px-3.5 py-2 bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-900/40 text-emerald-300 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
-          >
-            <Plus size={14} />
-            <span>+ Novo Suprimento</span>
-          </button>
-          <button
-            type="button"
-            onClick={onOpenSangriaModal}
-            className="px-3.5 py-2 bg-rose-950/60 hover:bg-rose-900/80 border border-rose-900/40 text-rose-300 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
-          >
-            <Plus size={14} />
-            <span>+ Nova Sangria</span>
-          </button>
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-[#1d2925] bg-[#0d100f] px-5 py-3 text-[10px] text-zinc-500 lg:px-6">
+          <span className="flex items-center gap-2"><History size={12} className="text-[#54d9b3]" /> Até 100 registros mais recentes</span>
+          <span className="flex items-center gap-2"><Banknote size={12} className="text-[#54d9b3]" /> {turnoResumo?.status === 'aberto' ? `Caixa aberto · ${turnoResumo.operador_nome || 'Operador'}` : 'Histórico de caixa'}</span>
         </div>
-      </div>
+      </section>
 
-      {/* Compact Inline Filter Bar */}
-      <div className="flex flex-wrap items-center gap-3 bg-[#0E1015] border border-[#1C1F28] px-3.5 py-2 rounded-2xl text-[10px]">
-        <div className="flex items-center gap-1.5 text-gray-400 font-bold uppercase tracking-wider shrink-0">
-          <Filter size={11} className="text-[#059669]" />
-          <span>Filtrar:</span>
-        </div>
-        <select
-          value={filterTipo}
-          onChange={(e) => setFilterTipo(e.target.value)}
-          className="px-2.5 py-1 bg-[#151720] border border-[#252836] rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500 cursor-pointer"
-        >
-          <option value="todos">Todas as Movimentações</option>
-          <option value="suprimento">Apenas Suprimentos (+)</option>
-          <option value="sangria">Apenas Sangrias (-)</option>
-        </select>
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          { label: 'Suprimentos', value: totals.suprimentos, detail: 'Entradas no recorte', icon: ArrowDownRight, tone: 'text-[#54d9b3]' },
+          { label: 'Sangrias', value: totals.sangrias, detail: 'Retiradas no recorte', icon: ArrowUpRight, tone: 'text-[#dfabab]' },
+          { label: 'Impacto líquido', value: totals.suprimentos - totals.sangrias, detail: 'Entradas menos saídas', icon: Scale, tone: totals.suprimentos >= totals.sangrias ? 'text-[#54d9b3]' : 'text-[#dfabab]' },
+          { label: 'Registros', value: filteredMovs.length, detail: hasFilters ? 'Resultado filtrado' : 'Histórico carregado', icon: History, tone: 'text-[#f5f4ef]', count: true },
+        ].map(metric => (
+          <article key={metric.label} className="rounded-[18px] border border-[#252b28] bg-[#111412] p-4">
+            <span className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.14em] text-zinc-500"><metric.icon size={13} className={metric.tone} /> {metric.label}</span>
+            <strong className={clsx('mt-2 block text-xl font-bold tabular-nums', metric.tone)}>{metric.count ? metric.value : formatCurrency(metric.value)}</strong>
+            <span className="mt-1 block text-[10px] text-zinc-600">{metric.detail}</span>
+          </article>
+        ))}
+      </section>
 
-        <div className="flex items-center gap-1.5 text-gray-400">
-          <span className="text-[9px] uppercase font-bold">De:</span>
-          <input
-            type="date"
-            value={filterDataInicio}
-            onChange={(e) => setFilterDataInicio(e.target.value)}
-            className="px-2 py-1 bg-[#151720] border border-[#252836] rounded-xl text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
-          />
+      <section className="rounded-[20px] border border-[#252b28] bg-[#0d100f] p-4">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <span className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.14em] text-zinc-500"><Filter size={13} className="text-[#54d9b3]" /> Filtros</span>
+          {hasFilters && <button type="button" onClick={clearFilters} className="text-[10px] font-bold text-[#54d9b3] hover:text-[#7becce]">Limpar filtros</button>}
         </div>
-
-        <div className="flex items-center gap-1.5 text-gray-400">
-          <span className="text-[9px] uppercase font-bold">Até:</span>
-          <input
-            type="date"
-            value={filterDataFim}
-            onChange={(e) => setFilterDataFim(e.target.value)}
-            className="px-2 py-1 bg-[#151720] border border-[#252836] rounded-xl text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
-          />
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(220px,1.3fr)_minmax(170px,.7fr)_minmax(155px,.6fr)_minmax(155px,.6fr)]">
+          <label className="relative">
+            <span className="sr-only">Buscar movimentação</span>
+            <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600" />
+            <input value={searchTerm} onChange={event => setSearchTerm(event.target.value)} placeholder="Buscar motivo, observação ou operador" className="h-10 w-full rounded-xl border border-[#2a302d] bg-[#151816] pl-9 pr-3 text-xs text-white outline-none transition-colors placeholder:text-zinc-600 focus:border-[#196b55]" />
+          </label>
+          <select value={filterTipo} onChange={event => setFilterTipo(event.target.value)} className="h-10 w-full rounded-xl border border-[#2a302d] bg-[#151816] px-3 text-xs text-white outline-none focus:border-[#196b55]">
+            <option value="todos">Todas as operações</option>
+            <option value="suprimento">Suprimentos</option>
+            <option value="sangria">Sangrias</option>
+          </select>
+          <label className="relative"><span className="sr-only">Data inicial</span><CalendarDays size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600" /><input type="date" value={filterDataInicio} onChange={event => setFilterDataInicio(event.target.value)} className="h-10 w-full rounded-xl border border-[#2a302d] bg-[#151816] pl-9 pr-2 text-xs text-white outline-none focus:border-[#196b55]" /></label>
+          <label className="relative"><span className="sr-only">Data final</span><CalendarDays size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600" /><input type="date" value={filterDataFim} onChange={event => setFilterDataFim(event.target.value)} className="h-10 w-full rounded-xl border border-[#2a302d] bg-[#151816] pl-9 pr-2 text-xs text-white outline-none focus:border-[#196b55]" /></label>
         </div>
+      </section>
 
-        {(filterTipo !== 'todos' || filterDataInicio || filterDataFim) && (
-          <button
-            type="button"
-            onClick={() => {
-              setFilterTipo('todos');
-              setFilterDataInicio('');
-              setFilterDataFim('');
-            }}
-            className="text-[9px] text-gray-500 hover:text-white underline cursor-pointer ml-auto"
-          >
-            Limpar filtros
-          </button>
-        )}
-      </div>
+      <section className="grid gap-3 xl:grid-cols-[minmax(0,1.6fr)_minmax(280px,.65fr)]">
+        <article className="overflow-hidden rounded-[20px] border border-[#252b28] bg-[#0d100f]">
+          <header className="flex items-center justify-between gap-3 border-b border-[#252b28] px-4 py-3 sm:px-5">
+            <div><h3 className="text-xs font-bold text-[#f5f4ef]">Histórico de ajustes</h3><p className="mt-0.5 text-[10px] text-zinc-500">Ordem cronológica, do registro mais recente ao mais antigo</p></div>
+            <span className="rounded-full border border-[#2a302d] bg-[#151816] px-2.5 py-1 text-[9px] font-bold text-zinc-500">{filteredMovs.length} registro(s)</span>
+          </header>
+          {filteredMovs.length === 0 ? (
+            <div className="flex min-h-64 flex-col items-center justify-center px-5 text-center"><History size={24} className="text-zinc-700" /><strong className="mt-3 text-xs text-zinc-400">Nenhuma movimentação encontrada</strong><span className="mt-1 max-w-sm text-[10px] leading-relaxed text-zinc-600">Ajuste os filtros ou registre uma sangria ou um suprimento para começar o histórico.</span></div>
+          ) : (
+            <ul className="divide-y divide-[#202522]">
+              {filteredMovs.map(movimentacao => {
+                const isSupply = movimentacao.tipo === 'suprimento';
+                const date = new Date(movimentacao.criado_em);
+                return (
+                  <li key={movimentacao.id} className="grid gap-3 px-4 py-3.5 transition-colors hover:bg-white/[0.015] sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center sm:px-5">
+                    <span className={clsx('flex h-9 w-9 items-center justify-center rounded-xl border', isSupply ? 'border-[#145c49] bg-[#0b2d25] text-[#54d9b3]' : 'border-[#543535] bg-[#211414] text-[#dfabab]')}>{isSupply ? <ArrowDownRight size={15} /> : <ArrowUpRight size={15} />}</span>
+                    <span className="min-w-0"><span className="flex flex-wrap items-center gap-x-2 gap-y-0.5"><strong className="truncate text-xs text-[#f5f4ef]">{movimentacao.descricao || (isSupply ? 'Suprimento' : 'Sangria')}</strong><span className="text-[9px] text-zinc-600">{date.toLocaleDateString('pt-BR')} · {date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span></span><span className="mt-0.5 block truncate text-[10px] text-zinc-500">{movimentacao.usuario_nome || 'Operador'}{movimentacao.observacao ? ` · ${movimentacao.observacao}` : ''}</span><span className="mt-1 block text-[9px] tabular-nums text-zinc-600">Saldo: {formatCurrency(Number(movimentacao.saldo_anterior || 0))} → {formatCurrency(Number(movimentacao.saldo_posterior || 0))}</span></span>
+                    <strong className={clsx('whitespace-nowrap text-sm font-bold tabular-nums sm:text-right', isSupply ? 'text-[#54d9b3]' : 'text-[#dfabab]')}>{isSupply ? '+' : '−'} {formatCurrency(Number(movimentacao.valor))}</strong>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </article>
 
-      {/* Audit Log Table */}
-      <div className="bg-[#0E1015] border border-[#1C1F28] rounded-3xl p-5 space-y-3">
-        <div className="overflow-x-auto border border-[#252836] rounded-2xl">
-          <table className="w-full text-left text-[10px]">
-            <thead>
-              <tr className="bg-[#151720] border-b border-[#252836] text-gray-400 uppercase tracking-wider font-bold">
-                <th className="p-3">Data / Hora</th>
-                <th className="p-3">Tipo</th>
-                <th className="p-3 font-mono">Valor</th>
-                <th className="p-3 font-mono">Saldo Anterior ➔ Novo</th>
-                <th className="p-3">Motivo / Descrição</th>
-                <th className="p-3">Operador</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#1C1F28]">
-              {filteredMovs.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="p-8 text-center text-gray-500 italic">
-                    Nenhuma movimentação registrada no caixa para os filtros selecionados.
-                  </td>
-                </tr>
-              ) : (
-                filteredMovs.map((mov) => {
-                  const isSuprimento = mov.tipo === 'suprimento';
-                  return (
-                    <tr key={mov.id} className="hover:bg-[#151720]/40 transition-colors">
-                      <td className="p-3 text-gray-400 whitespace-nowrap font-mono">
-                        {new Date(mov.criado_em).toLocaleDateString('pt-BR')} {new Date(mov.criado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                      </td>
-                      <td className="p-3">
-                        <span className={clsx(
-                          'px-2.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wider flex items-center gap-1 w-fit border',
-                          isSuprimento ? 'bg-emerald-950/60 text-emerald-400/90 border-emerald-900/40' : 'bg-rose-950/60 text-rose-400/90 border-rose-900/40'
-                        )}>
-                          {isSuprimento ? <ArrowDownRight size={10} /> : <ArrowUpRight size={10} />}
-                          {isSuprimento ? 'Suprimento' : 'Sangria'}
-                        </span>
-                      </td>
-                      <td className={clsx('p-3 font-mono font-bold text-sm', isSuprimento ? 'text-[#059669]' : 'text-rose-400/90')}>
-                        {isSuprimento ? '+' : '-'} R$ {Number(mov.valor).toFixed(2)}
-                      </td>
-                      <td className="p-3 font-mono text-gray-300 whitespace-nowrap">
-                        R$ {(mov.saldo_anterior || 0).toFixed(2)} ➔ <strong className="text-white">R$ {(mov.saldo_posterior || 0).toFixed(2)}</strong>
-                      </td>
-                      <td className="p-3 text-gray-300 max-w-xs truncate" title={mov.descricao}>
-                        {mov.descricao || '—'}
-                        {mov.observacao && <span className="text-[8px] text-gray-500 block">{mov.observacao}</span>}
-                      </td>
-                      <td className="p-3 text-gray-300 font-semibold">
-                        {mov.usuario_nome || 'Operador'}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+        <article className="h-fit rounded-[20px] border border-[#252b28] bg-[#111412] p-4">
+          <div className="flex items-center gap-2 border-b border-[#252b28] pb-3"><Scale size={15} className="text-[#54d9b3]" /><h3 className="text-[10px] font-bold uppercase tracking-[0.13em] text-zinc-300">Conferência do recorte</h3></div>
+          <dl className="mt-4 space-y-3 text-xs"><div className="flex justify-between gap-3 text-zinc-400"><dt>Entradas</dt><dd className="font-semibold tabular-nums text-[#54d9b3]">+ {formatCurrency(totals.suprimentos)}</dd></div><div className="flex justify-between gap-3 text-zinc-400"><dt>Saídas</dt><dd className="font-semibold tabular-nums text-[#dfabab]">− {formatCurrency(totals.sangrias)}</dd></div><div className="flex items-end justify-between gap-3 border-t border-[#252b28] pt-3"><dt className="font-bold text-zinc-300">Impacto líquido</dt><dd className={clsx('text-base font-bold tabular-nums', totals.suprimentos >= totals.sangrias ? 'text-[#54d9b3]' : 'text-[#dfabab]')}>{formatCurrency(totals.suprimentos - totals.sangrias)}</dd></div></dl>
+          <p className="mt-4 rounded-xl border border-[#252b28] bg-[#0d100f] p-3 text-[10px] leading-relaxed text-zinc-600">Esta conferência respeita os filtros aplicados. O saldo oficial do turno permanece no resumo do caixa.</p>
+        </article>
+      </section>
     </div>
   );
 };
