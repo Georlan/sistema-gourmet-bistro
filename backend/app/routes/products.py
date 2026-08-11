@@ -52,6 +52,16 @@ class CatalogoResponse(BaseModel):
     produtos: List[ProdutoResponse]
 
 
+class DisponibilidadeLoteRequest(BaseModel):
+    produto_ids: List[str] = Field(min_length=1, max_length=500)
+    ativo: bool
+
+
+class DisponibilidadeLoteResponse(BaseModel):
+    atualizados: int
+    ativo: bool
+
+
 CATEGORY_DISPLAY_ORDER = [
     "Pizzas Tradicionais", "Pizzas Especiais", "Hambúrgueres Bovinos",
     "Hambúrgueres de Frango", "Hambúrgueres Suínos", "Baguetes",
@@ -90,7 +100,12 @@ def create_categoria(
     rest_id = require_tenant_id()
     if db.query(Categoria).filter_by(restaurante_id=rest_id, id=data.id).first():
         raise HTTPException(status_code=400, detail="ID de categoria já existe.")
-    cat = Categoria(id=data.id, nome=data.nome, destino_impressao=data.destino_impressao)
+    cat = Categoria(
+        id=data.id,
+        restaurante_id=rest_id,
+        nome=data.nome,
+        destino_impressao=data.destino_impressao,
+    )
     db.add(cat)
     db.commit()
     db.refresh(cat)
@@ -234,6 +249,44 @@ def get_produto(produto_id: str, db: Session = Depends(get_db), current_user: Us
         )
     return produto
 
+
+@router.patch(
+    "/disponibilidade",
+    response_model=DisponibilidadeLoteResponse,
+)
+def update_disponibilidade_lote(
+    data: DisponibilidadeLoteRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("catalogo:administrar")),
+):
+    """Publica ou pausa vários produtos do tenant em uma única transação."""
+    del current_user
+    rest_id = require_tenant_id()
+    product_ids = list(dict.fromkeys(product_id.strip() for product_id in data.produto_ids if product_id.strip()))
+    if not product_ids:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Informe ao menos um produto válido.",
+        )
+
+    updated = (
+        db.query(Produto)
+        .filter(
+            Produto.restaurante_id == rest_id,
+            Produto.id.in_(product_ids),
+        )
+        .update({Produto.ativo: data.ativo}, synchronize_session=False)
+    )
+    db.commit()
+    if updated:
+        notify_catalog_update(
+            background_tasks,
+            "Disponibilidade do cardápio atualizada",
+            rest_id,
+        )
+    return {"atualizados": updated, "ativo": data.ativo}
+
 @router.post("/", response_model=ProdutoResponse, status_code=status.HTTP_201_CREATED)
 def create_produto(
     produto_data: ProdutoCreate, 
@@ -265,7 +318,10 @@ def create_produto(
             detail="Já existe um produto cadastrado com este ID"
         )
         
-    novo_produto = Produto(**produto_data.model_dump())
+    novo_produto = Produto(
+        **produto_data.model_dump(),
+        restaurante_id=rest_id,
+    )
     db.add(novo_produto)
     db.commit()
     db.refresh(novo_produto)
@@ -410,7 +466,12 @@ def importar_cardapio(
                     Categoria.id == id_cat,
                 ).first()
                 if not cat:
-                    cat = Categoria(id=id_cat, nome=cat_nome, destino_impressao=destino)
+                    cat = Categoria(
+                        id=id_cat,
+                        restaurante_id=rest_id,
+                        nome=cat_nome,
+                        destino_impressao=destino,
+                    )
                     db.add(cat)
                 else:
                     cat.nome = cat_nome
@@ -437,7 +498,12 @@ def importar_cardapio(
             destino = "COZINHA"
             if cat_id in ["cat-refri", "cat-cervejas"]:
                 destino = "NENHUM"
-            cat = Categoria(id=cat_id, nome=nome_cat, destino_impressao=destino)
+            cat = Categoria(
+                id=cat_id,
+                restaurante_id=rest_id,
+                nome=nome_cat,
+                destino_impressao=destino,
+            )
             db.add(cat)
             db.flush()
             
@@ -461,6 +527,7 @@ def importar_cardapio(
         else:
             novo = Produto(
                 id=item.id,
+                restaurante_id=rest_id,
                 nome=item.nome,
                 preco=item.preco,
                 categoria_id=item.categoria_id,

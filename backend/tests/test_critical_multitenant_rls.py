@@ -2,8 +2,9 @@ import pytest
 from fastapi.testclient import TestClient
 from app.main import app
 from app.database import engine, Base, SessionLocal, current_restaurante_id
-from app.models import Restaurante, Categoria, Produto, Cliente
+from app.models import Restaurante, Categoria, Produto, Cliente, Usuario
 from app.routes.cardapio_digital import public_tenant_scope
+from app.routes.auth import create_access_token
 from app.services.clientes import cadastrar_ou_atualizar_cliente
 
 client = TestClient(app)
@@ -34,8 +35,12 @@ def setup_multitenant_data():
             db.commit()
 
         if not db.query(Produto).filter(Produto.nome == "Burguer Tenant A").first():
-            db.add(Produto(id="prod-tenant-a", nome="Burguer Tenant A", preco=30.0, categoria_id="cat-tenant-a", restaurante_id=101, ativo=True))
-            db.commit()
+            db.add(Produto(id="prod-tenant-a", nome="Burguer Tenant A", preco=30.0, categoria_id="cat-tenant-a", restaurante_id=101, ativo=True, imagens_galeria=["https://cdn.test/burguer-a.webp"]))
+        else:
+            db.query(Produto).filter(Produto.restaurante_id == 101, Produto.id == "prod-tenant-a").update({Produto.ativo: True, Produto.imagens_galeria: ["https://cdn.test/burguer-a.webp"]})
+        if not db.query(Usuario).filter(Usuario.id == "admin-tenant-a").first():
+            db.add(Usuario(id="admin-tenant-a", nome="Admin Tenant A", email="admin-a@tenant.test", cargo="admin", status="ativo", restaurante_id=101))
+        db.commit()
     finally:
         current_restaurante_id.reset(tok101)
 
@@ -61,7 +66,11 @@ def setup_multitenant_data():
 
         if not db.query(Produto).filter(Produto.nome == "Pizza Tenant B").first():
             db.add(Produto(id="prod-tenant-b", nome="Pizza Tenant B", preco=45.0, categoria_id="cat-tenant-b", restaurante_id=202, ativo=True))
-            db.commit()
+        else:
+            db.query(Produto).filter(Produto.restaurante_id == 202, Produto.id == "prod-tenant-b").update({Produto.ativo: True})
+        if not db.query(Usuario).filter(Usuario.id == "admin-tenant-b").first():
+            db.add(Usuario(id="admin-tenant-b", nome="Admin Tenant B", email="admin-b@tenant.test", cargo="admin", status="ativo", restaurante_id=202))
+        db.commit()
     finally:
         current_restaurante_id.reset(tok202)
         db.close()
@@ -134,6 +143,40 @@ def test_public_menu_exposes_only_minimal_dto():
     assert "destino_impressao" not in menu["categorias"][0]
     assert "restaurante_id" not in menu["produtos"][0]
     assert "ativo" not in menu["produtos"][0]
+    assert menu["produtos"][0]["imagens_galeria"] == [
+        "https://cdn.test/burguer-a.webp"
+    ]
+
+
+def test_authenticated_catalog_and_batch_availability_are_tenant_scoped():
+    token_a = create_access_token(
+        subject="admin-tenant-a",
+        restaurante_id=101,
+        role="admin",
+    )
+    headers_a = {"Authorization": f"Bearer {token_a}"}
+
+    catalog = client.get("/produtos/catalogo", headers=headers_a)
+    assert catalog.status_code == 200
+    names = {product["nome"] for product in catalog.json()["produtos"]}
+    assert "Burguer Tenant A" in names
+    assert "Pizza Tenant B" not in names
+
+    update = client.patch(
+        "/produtos/disponibilidade",
+        headers=headers_a,
+        json={
+            "produto_ids": ["prod-tenant-a", "prod-tenant-b"],
+            "ativo": False,
+        },
+    )
+    assert update.status_code == 200
+    assert update.json()["atualizados"] == 1
+
+    menu_a = client.get("/api/cardapio-digital/public?restaurante_id=101").json()
+    menu_b = client.get("/api/cardapio-digital/public?restaurante_id=202").json()
+    assert "Burguer Tenant A" not in {product["nome"] for product in menu_a["produtos"]}
+    assert "Pizza Tenant B" in {product["nome"] for product in menu_b["produtos"]}
 
 
 @pytest.mark.parametrize(

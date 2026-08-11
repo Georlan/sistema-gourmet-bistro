@@ -30,11 +30,12 @@ import { EquipeDesempenhoTab } from './equipe/EquipeDesempenhoTab';
 import { EquipeCargosTab } from './equipe/EquipeCargosTab';
 import { PrintMonitorPanel } from './printing/PrintMonitorPanel';
 import { CardapioCategoriasTab } from './cardapio/CardapioCategoriasTab';
+import { CardapioProdutosTab } from './cardapio/CardapioProdutosTab';
 import { CategoriaModal } from './cardapio/CategoriaModal';
 import { AssistenteConfigTab } from './assistente/AssistenteConfigTab';
 import { AssistenteSimuladorTab } from './assistente/AssistenteSimuladorTab';
 import { AssinaturaPixTab } from './assinatura/AssinaturaPixTab';
-import type { CatalogCategory } from '../catalog/catalog';
+import { normalizeCatalogSnapshot, type CatalogCategory } from '../catalog/catalog';
 import { getProductPresets, obterNomeCategoria, smartSearchMatch } from '../domain';
 import { API } from '../config/caixaService';
 import {
@@ -433,6 +434,10 @@ export function CaixaPanel({
 
   useEffect(() => {
     let sanitized = activeSubTab;
+    if (activeTab === 'cardapio' && activeSubTab === 'disponibilidade') {
+      sanitized = 'produtos';
+      setActiveSubTab('produtos');
+    }
     if (activeTab === 'relatorios' || activeTab === 'dashboard') {
       if (['metas', 'vendas', 'indicadores', 'relatorio_geral', 'faturamento_garcom'].includes(activeSubTab)) {
         sanitized = 'visao_geral';
@@ -1862,11 +1867,9 @@ export function CaixaPanel({
   });
   // Real products loaded from backend
   const [apiProdutos, setApiProdutos] = useState<Product[]>([]);
-  // Search state for Disponibilidade tab
+  // Mantidos enquanto a implementação visual anterior permanece fora do runtime.
   const [disponibilidadeSearch, setDisponibilidadeSearch] = useState<string>('');
-  // Search state for Produtos tab (Cardápio management)
   const [cardapioProdutosSearch, setCardapioProdutosSearch] = useState<string>('');
-
   // Online payments & billing plan states
   const [payPixActive, setPayPixActive] = useState(true);
   const [payCardActive, setPayCardActive] = useState(true);
@@ -2291,32 +2294,23 @@ export function CaixaPanel({
 
   const fetchProdutos = async () => {
     try {
-      const res = await fetch(`${apiBaseUrl}/produtos/`, { headers: authHeaders });
+      const res = await fetch(`${apiBaseUrl}/produtos/catalogo`, {
+        headers: authHeaders,
+        cache: 'no-store',
+      });
       if (res.ok) {
-        const data = await res.json();
-        const sorted = Array.isArray(data)
-          ? [...data].sort((a: any, b: any) =>
-              String(a.id).localeCompare(String(b.id), undefined, { numeric: true, sensitivity: 'base' })
-            )
-          : data;
-        setApiProdutos(sorted);
-        setDynamicMenu(sorted);
+        const catalog = normalizeCatalogSnapshot(await res.json());
+        setApiProdutos(catalog.produtos);
+        setDynamicMenu(catalog.produtos);
+        setApiCategorias(catalog.categorias);
       }
     } catch (e) {
-      console.error('Error fetching produtos', e);
+      console.error('Error fetching catalog snapshot', e);
     }
   };
 
   const fetchCategorias = async () => {
-    try {
-      const res = await fetch(`${apiBaseUrl}/produtos/categorias`, { headers: authHeaders });
-      if (res.ok) {
-        const data = await res.json();
-        setApiCategorias(data);
-      }
-    } catch (e) {
-      console.error('Error fetching categorias', e);
-    }
+    await fetchProdutos();
   };
 
   useEffect(() => {
@@ -2510,7 +2504,6 @@ export function CaixaPanel({
     }
     if (activeTab === 'cardapio') {
       fetchProdutos();
-      fetchCategorias();
     }
     if (activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital') {
       fetchCardapioConfig();
@@ -3845,8 +3838,7 @@ export function CaixaPanel({
           ))}
 
           {activeTab === 'cardapio' && [
-            { id: 'produtos', label: 'Lista de Produtos' },
-            { id: 'disponibilidade', label: 'Pausar / Ativar Pratos' },
+            { id: 'produtos', label: 'Produtos e disponibilidade' },
             { id: 'categorias', label: 'Categorias' }
           ].map(sub => (
             <button
@@ -6666,8 +6658,102 @@ export function CaixaPanel({
             </div>
           )}
 
-          {/* ABA PRODUTOS */}
+          {/* CATÁLOGO CENTRAL: produtos e disponibilidade usam o mesmo snapshot. */}
           {activeTab === 'cardapio' && activeSubTab === 'produtos' && (
+            <CardapioProdutosTab
+              produtos={apiProdutos}
+              categorias={apiCategorias}
+              catalogReady={catalogReady || apiProdutos.length > 0 || apiCategorias.length > 0}
+              previewUrl={hasOnlineMenu && restauranteConfig?.id
+                ? `${window.location.origin}/cardapio?restaurante_id=${encodeURIComponent(String(restauranteConfig.id))}`
+                : undefined}
+              onCreateProduct={() => {
+                setEditingProduct(null);
+                setProdFormId('');
+                setProdFormNome('');
+                setProdFormPreco('');
+                setProdFormCategoriaId(apiCategorias[0]?.id || '');
+                setProdFormDescricao('');
+                setProdFormImagem('');
+                setProdFormImagem2('');
+                setProdFormImagem3('');
+                setProdFormAtivo(true);
+                setShowProductModal(true);
+              }}
+              onCreateCategory={() => setShowCategoryModal(true)}
+              onEditProduct={(product) => {
+                setEditingProduct(product);
+                setProdFormId(product.id);
+                setProdFormNome(product.nome);
+                setProdFormPreco(product.preco.toString());
+                setProdFormCategoriaId(product.categoria_id || '');
+                setProdFormDescricao(product.descricao || '');
+                const gallery = product.imagens_galeria || [];
+                setProdFormImagem(product.imagem || gallery[0] || '');
+                setProdFormImagem2(gallery[1] || '');
+                setProdFormImagem3(gallery[2] || '');
+                setProdFormAtivo(product.ativo !== false);
+                setShowProductModal(true);
+              }}
+              onDuplicateProduct={(product) => {
+                setEditingProduct(null);
+                setProdFormId('');
+                setProdFormNome(`${product.nome} (Cópia)`);
+                setProdFormPreco(product.preco.toString());
+                setProdFormCategoriaId(product.categoria_id || '');
+                setProdFormDescricao(product.descricao || '');
+                const gallery = product.imagens_galeria || [];
+                setProdFormImagem(product.imagem || gallery[0] || '');
+                setProdFormImagem2(gallery[1] || '');
+                setProdFormImagem3(gallery[2] || '');
+                setProdFormAtivo(true);
+                setShowProductModal(true);
+              }}
+              onRemoveProduct={async (product) => {
+                if (!confirm(`Remover "${product.nome}" dos canais de venda? O histórico das vendas será preservado.`)) return;
+                try {
+                  const response = await fetch(`${apiBaseUrl}/produtos/${product.id}`, {
+                    method: 'DELETE',
+                    headers: authHeaders,
+                  });
+                  if (!response.ok) throw new Error('Não foi possível remover o produto.');
+                  await fetchProdutos();
+                  showToast('Produto removido dos canais de venda.');
+                } catch (error) {
+                  showToast(error instanceof Error ? error.message : 'Erro ao remover produto.', 'error');
+                }
+              }}
+              onToggleProduct={async (product, ativo) => {
+                const response = await fetch(`${apiBaseUrl}/produtos/${product.id}`, {
+                  method: 'PUT',
+                  headers: { ...authHeaders, 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ ativo }),
+                });
+                if (!response.ok) {
+                  showToast('Não foi possível atualizar a disponibilidade.', 'error');
+                  return;
+                }
+                await fetchProdutos();
+                showToast(ativo ? 'Produto publicado.' : 'Produto pausado.');
+              }}
+              onSetCategoryAvailability={async (productIds, ativo) => {
+                const response = await fetch(`${apiBaseUrl}/produtos/disponibilidade`, {
+                  method: 'PATCH',
+                  headers: { ...authHeaders, 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ produto_ids: productIds, ativo }),
+                });
+                if (!response.ok) {
+                  showToast('Não foi possível atualizar a categoria.', 'error');
+                  return;
+                }
+                await fetchProdutos();
+                showToast(ativo ? 'Categoria publicada.' : 'Categoria pausada.');
+              }}
+            />
+          )}
+
+          {/* Implementação anterior mantida temporariamente fora do runtime. */}
+          {false && activeTab === 'cardapio' && activeSubTab === 'produtos' && (
             <div className={clsx('space-y-4', 'animate-fade-in', 'text-left')}>
               <div className={clsx('flex', 'justify-between', 'items-center')}>
                 <div>
@@ -6877,7 +6963,7 @@ export function CaixaPanel({
           )}
 
           {/* DISPONIBILIDADE CARDAPIO — REAL API com busca e categorias */}
-          {activeTab === 'cardapio' && activeSubTab === 'disponibilidade' && (() => {
+          {false && activeTab === 'cardapio' && activeSubTab === 'disponibilidade' && (() => {
             const source = apiProdutos;
             const handleBatchAvailability = async (keyword: string, active: boolean) => {
               const targetProducts = source.filter(p => {
