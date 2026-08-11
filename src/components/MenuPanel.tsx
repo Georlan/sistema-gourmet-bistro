@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Search, Plus, Minus, Trash2, SlidersHorizontal, ArrowRight, FileText, Info, ArrowLeft, ShoppingCart, X } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, SlidersHorizontal, ArrowRight, FileText, Info, ShoppingCart, X } from 'lucide-react';
 import { Product, DraftItem, AppSettings, Order } from '../types';
 import { getProductPresets, obterNomeCategoria, smartSearchMatch } from '../domain';
 import type { CatalogCategory } from '../catalog/catalog';
@@ -44,8 +44,9 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
   isSubmitting = false,
   allowExternalOrders = true,
 }) => {
-  // Navigation state: starts showing the Cart (carrinho) by default
-  const [view, setView] = useState<'cart' | 'menu'>('cart');
+  // Uma mesa sem rascunho abre direto no cardápio. Quando já existem itens,
+  // preserva a revisão do carrinho como primeira tela.
+  const [view, setView] = useState<'cart' | 'menu'>(() => draftItems.length > 0 ? 'cart' : 'menu');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [showSettings, setShowSettings] = useState<boolean>(false);
@@ -131,12 +132,12 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
     setConfigClient(draftItems.length > 0 ? draftItems[0].clienteNome : '');
   };
 
-  // Add configured item to draft and return to cart view
+  // Adiciona ao mesmo rascunho persistente. Permanecer no cardápio evita que
+  // o garçom precise reabrir a lista a cada novo item.
   const handleConfirmAdd = () => {
     if (!selectedProductToConfigure) return;
     onAddToDraft(selectedProductToConfigure, configQty, configObs, configClient);
     setSelectedProductToConfigure(null);
-    setView('cart'); // Go back to cart view immediately to show the item
   };
 
   // Total draft count and price
@@ -144,26 +145,29 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
   const draftTotal = draftItems.reduce((sum, item) => sum + (item.preco * (item.quantidade || 1)), 0);
 
   return (
-    <div className="relative h-full">
+    <div className="relative sm:h-full">
       {/* 1. VIEW: CART (CARRINHO DE COMPRAS) */}
       {view === 'cart' && (
-        <div className="bg-[#121214] sm:border sm:border-[#27272A] sm:rounded-3xl p-3 sm:p-5 flex flex-col h-full max-w-2xl mx-auto border-0 rounded-none overflow-hidden min-h-0">
-          <div className="flex flex-col h-full justify-between min-h-0">
+        <div className="bg-[#121214] sm:border sm:border-[#27272A] sm:rounded-3xl p-3 sm:p-5 flex flex-col sm:h-full max-w-2xl mx-auto border-0 rounded-none overflow-visible sm:overflow-hidden min-h-0">
+          <div className="flex flex-col sm:h-full justify-between min-h-0">
             
             {/* Cart Header */}
-            <div className="flex items-center justify-between pb-3.5 border-b border-[#27272A] shrink-0 mb-3">
+            <div className="flex items-center justify-between gap-3 pb-3 border-b border-[#27272A] shrink-0 mb-3">
               <div className="flex items-center gap-1.5 text-white">
                 <ShoppingCart size={18} className="text-[#10b981]" />
-                <h3 className="font-serif font-bold text-base">Carrinho de Lançamento</h3>
+                <div>
+                  <h3 className="font-serif font-bold text-base leading-tight">Revisar pedido</h3>
+                  <p className="text-[10px] text-gray-400 mt-0.5">Mesa {tableId}</p>
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setView('menu')}
-                  className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1 border border-emerald-400 shadow-sm"
+                  className="min-h-10 px-3 py-2 bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-bold rounded-xl transition-colors cursor-pointer flex items-center gap-1 border border-emerald-400 shadow-sm"
                 >
                   <Plus size={13} />
-                  <span>Adicionar Itens</span>
+                  <span>Adicionar</span>
                 </button>
                 <span className="px-2.5 py-0.5 text-xs font-bold font-mono bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full">
                   {totalDraftQty} {totalDraftQty === 1 ? 'item' : 'itens'}
@@ -173,29 +177,24 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
 
             {/* Cart Body */}
             {draftItems.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-center space-y-4 flex-1">
-                <div className="p-4 bg-[#1C1C1F] rounded-full text-[#10b981]/50 border border-[#27272A]">
-                  <ShoppingCart size={32} />
-                </div>
-                <div className="text-sm text-white font-semibold font-sans uppercase tracking-wider">Carrinho Vazio</div>
-                <p className="text-xs text-gray-400 max-w-[240px] leading-relaxed">
-                  Não há itens no rascunho. Clique no botão abaixo para abrir o cardápio e selecionar os pratos da Mesa {tableId}.
-                </p>
+              <div className="flex flex-col items-center justify-center py-10 text-center space-y-3 flex-1">
+                <div className="text-sm text-white font-semibold font-sans">Nenhum item no pedido</div>
+                <p className="text-xs text-gray-400 max-w-[260px] leading-relaxed">Escolha os produtos da Mesa {tableId}.</p>
                 <button
                   type="button"
                   onClick={() => setView('menu')}
-                  className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 border border-emerald-400 text-black rounded-xl text-xs font-bold tracking-wider uppercase transition-colors cursor-pointer"
+                  className="min-h-11 px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 border border-emerald-400 text-black rounded-xl text-xs font-bold transition-colors cursor-pointer"
                 >
-                  Ver Cardápio
+                  Abrir cardápio
                 </button>
               </div>
             ) : (
               <div className="flex-1 flex flex-col justify-between min-h-0 overflow-hidden">
-                <div className="flex-1 overflow-y-auto min-h-0 pr-1 space-y-4">
+                <div className="flex-1 overflow-visible sm:overflow-y-auto min-h-0 sm:pr-1 space-y-3">
                 {/* Global table client name config */}
-                <div className="bg-[#1C1C1F] border border-[#27272A] p-4 rounded-2xl space-y-2.5 shadow-sm">
+                <div className="bg-[#1C1C1F] border border-[#27272A] p-3 rounded-xl space-y-2 shadow-sm">
                   <label htmlFor="overall-client-name" className="text-[10px] font-sans font-bold text-gray-300 uppercase tracking-wider block">
-                    Identificar Cliente (Opcional - Para todo o carrinho)
+                    Cliente do pedido <span className="normal-case text-gray-500">(opcional)</span>
                   </label>
                   <div className="relative">
                     <input
@@ -237,28 +236,28 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                 </div>
 
                 {/* Draft items list */}
-                <div className="space-y-3 sm:max-h-[40vh] sm:overflow-y-auto max-h-none overflow-y-visible pr-1 scrollbar-thin flex-1">
+                <div className="space-y-2 sm:max-h-[40vh] sm:overflow-y-auto max-h-none overflow-y-visible sm:pr-1 scrollbar-thin flex-1">
                   {draftItems.map((item, index) => (
                     <div
                       key={item.id}
                       id={`draft-item-${item.id}`}
-                      className="p-4 bg-[#1C1C1F] border border-[#27272A] rounded-2xl space-y-3 shadow-sm group"
+                      className="p-3 bg-[#1C1C1F] border border-[#27272A] rounded-xl space-y-2.5 shadow-sm group"
                     >
                       {/* Item Header */}
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start gap-1.5 min-w-0">
                           <span className="text-[10px] font-bold font-mono bg-[#121214] text-gray-400 h-5 w-5 rounded-full flex items-center justify-center border border-[#27272A]">
                             {index + 1}
                           </span>
-                          <div>
-                            <span className="text-xs font-bold text-white block">{item.nome}</span>
+                          <div className="min-w-0">
+                            <span className="text-xs font-bold text-white block leading-snug">{item.nome}</span>
                             {item.clienteNome && (
                               <span className="text-[9px] font-bold text-[#10b981] uppercase block">Para: {item.clienteNome}</span>
                             )}
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 shrink-0">
                           <span className="text-xs font-mono font-bold text-[#10b981] mr-1">
                             R$ {(item.preco * (item.quantidade || 1)).toFixed(2)}
                           </span>
@@ -407,10 +406,10 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                     </span>
                   </div>
 
-                  <div className="bg-[#1C1C1F] border border-[#27272A] rounded-xl p-3 flex items-start gap-2">
+                  <div className="bg-[#1C1C1F] border border-[#27272A] rounded-xl px-3 py-2 flex items-start gap-2">
                     <Info size={14} className="text-[#10b981] shrink-0 mt-0.5" />
                     <p className="text-[10px] text-gray-300 leading-normal font-sans">
-                      Esses rascunhos são <strong>individuais e persistentes</strong>. Ao clicar em <strong>Lançar Pedido</strong>, eles serão consolidados na conta e encaminhados imediatamente para a cozinha.
+                      Ao lançar, os itens entram na conta da mesa e seguem para a cozinha.
                     </p>
                   </div>
 
@@ -418,7 +417,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                     id="submit-draft-order-btn"
                     disabled={isSubmitting}
                     onClick={() => onSubmitDraft(orderType)}
-                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/10 transition-all hover:translate-y-[-1px] cursor-pointer uppercase tracking-wider font-sans border border-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full min-h-12 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/10 transition-colors cursor-pointer uppercase tracking-wider font-sans border border-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <span>{isSubmitting ? 'Lançando...' : 'Lançar Pedido'}</span>
                     <ArrowRight size={14} />
@@ -433,34 +432,32 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
       {/* 2. VIEW: MENU (CARDÁPIO DE PRODUTOS) */}
       {view === 'menu' && (
         <div className="lg:col-span-12 flex flex-col justify-between max-w-4xl mx-auto bg-[#121214] sm:border sm:border-[#27272A] sm:rounded-3xl p-3 sm:p-5 sm:min-h-[450px] border-0 rounded-none">
-          <div className="space-y-4">
+          <div className="space-y-3 sm:space-y-4">
             
             {/* Header: Title and Back button */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#27272A]">
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setView('cart')}
-                  className="p-2 hover:bg-[#27272A] rounded-xl text-gray-400 hover:text-white transition-colors cursor-pointer border border-[#27272A]"
-                  title="Voltar ao carrinho"
-                >
-                  <ArrowLeft size={16} />
-                </button>
+            <div className="flex items-center justify-between gap-3 pb-3 border-b border-[#27272A]">
+              <div className="min-w-0">
                 <div>
-                  <h3 className="font-serif text-xl font-bold text-white tracking-tight">Cardápio de Iguarias</h3>
-                  <p className="text-xs text-[#A1A1AA] font-sans">Selecione produtos para adicionar ao carrinho da Mesa {tableId}</p>
+                  <h3 className="font-serif text-lg sm:text-xl font-bold text-white tracking-tight">Adicionar itens</h3>
+                  <p className="text-[11px] sm:text-xs text-[#A1A1AA] font-sans">Pedido da Mesa {tableId}</p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   type="button"
                   onClick={() => setView('cart')}
-                  className="px-3.5 py-2 bg-[#1C1C1F] hover:bg-[#27272A] text-white border border-[#27272A] text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+                  className={`min-h-10 px-3 py-2 text-xs font-bold rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 shadow-sm border ${
+                    totalDraftQty > 0
+                      ? 'bg-emerald-500 text-black border-emerald-400 hover:bg-emerald-400'
+                      : 'bg-[#1C1C1F] text-white border-[#27272A] hover:bg-[#27272A]'
+                  }`}
                 >
-                  <ShoppingCart size={13} className="text-[#10b981]" />
-                  <span>Ver Carrinho</span>
-                  <span className="bg-rose-900/40 border border-rose-800/50 text-white font-mono text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-rose-900/50/30 ml-0.5">
+                  <ShoppingCart size={14} />
+                  <span>Revisar</span>
+                  <span className={`font-mono text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-0.5 ${
+                    totalDraftQty > 0 ? 'bg-black/15 text-black' : 'bg-[#121214] text-gray-300'
+                  }`}>
                     {totalDraftQty}
                   </span>
                 </button>
@@ -470,10 +467,11 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                   <button
                     id="toggle-menu-settings"
                     onClick={() => setShowSettings(!showSettings)}
-                    className="flex items-center gap-1.5 px-3 py-2 text-xs text-gray-400 hover:text-white bg-[#1C1C1F] hover:bg-[#27272A] rounded-xl transition-colors cursor-pointer border border-[#27272A]"
+                    className="min-h-10 p-2.5 text-gray-400 hover:text-white bg-[#1C1C1F] hover:bg-[#27272A] rounded-xl transition-colors cursor-pointer border border-[#27272A]"
+                    title="Ajustar visualização"
+                    aria-label="Ajustar visualização"
                   >
-                    <SlidersHorizontal size={13} />
-                    <span>Visualização</span>
+                    <SlidersHorizontal size={15} />
                   </button>
 
                   {showSettings && (
@@ -506,7 +504,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
             </div>
 
             {/* Search & Categories */}
-            <div className="sticky top-[-12px] sm:relative bg-[#121214] z-20 pt-1.5 pb-2.5 space-y-3">
+            <div className="bg-[#121214] pt-1 pb-1.5 space-y-2.5">
               <div className="relative">
                 <Search className="absolute left-3.5 top-3.5 h-4 w-4 text-gray-400" />
                 <input
@@ -519,8 +517,28 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                 />
               </div>
 
-              {/* Category selector */}
-              <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+              {/* No celular, o seletor evita uma faixa horizontal difícil de
+                  controlar. Os chips permanecem disponíveis em telas maiores. */}
+              <label className="block sm:hidden">
+                <span className="sr-only">Categoria</span>
+                <select
+                  id="mobile-category-select"
+                  value={selectedCategory}
+                  onChange={(event) => {
+                    setSelectedCategory(event.target.value);
+                    setSearchQuery('');
+                    const element = document.getElementById(`category-sec-${event.target.value.toLowerCase().replace(/\s+/g, '-')}`);
+                    element?.scrollIntoView({ block: 'start' });
+                  }}
+                  className="w-full min-h-11 px-3 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-sm font-semibold text-white focus:outline-none focus:border-[#10b981]"
+                >
+                  {categoriesList.map((category) => (
+                    <option key={category.id} value={category.nome}>{category.nome}</option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="hidden sm:flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
                 {categoriesList.map((catObj) => (
                   <button
                     key={catObj.id}
@@ -530,9 +548,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                       setSearchQuery('');
                       setTimeout(() => {
                         const element = document.getElementById(`category-sec-${catObj.nome.toLowerCase().replace(/\s+/g, '-')}`);
-                        if (element) {
-                          element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        }
+                        element?.scrollIntoView({ block: 'start' });
                       }, 50);
                     }}
                     className={`px-4 py-2 text-xs font-semibold rounded-lg whitespace-nowrap transition-all cursor-pointer ${
@@ -548,7 +564,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
             </div>
 
             {/* Scrollable Products List grouped by Categories */}
-            <div className="flex flex-col gap-6 sm:max-h-[50vh] sm:overflow-y-auto max-h-none overflow-y-visible pr-1 scroll-smooth">
+            <div className="flex flex-col gap-4 sm:gap-6 sm:max-h-[50vh] sm:overflow-y-auto max-h-none overflow-y-visible sm:pr-1">
               {(() => {
                 let totalRendered = 0;
                 const productsList = liveProdutos.filter((product) => product.ativo !== false);
@@ -569,21 +585,23 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                     <div 
                       key={catObj.id} 
                       id={`category-sec-${catObj.nome.toLowerCase().replace(/\s+/g, '-')}`}
-                      className="space-y-3 scroll-mt-[105px] sm:scroll-mt-2 pt-2"
+                      className={`space-y-2 sm:space-y-3 scroll-mt-2 pt-1 sm:pt-2 ${
+                        !searchQuery && selectedCategory !== catObj.nome ? 'hidden sm:block' : ''
+                      }`}
                     >
                       <h4 className="font-serif text-xs font-bold text-[#10b981] uppercase tracking-wider border-b border-[#27272A] pb-1.5 pt-1">
                         {catObj.nome}
                       </h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 sm:gap-4">
                         {categoryProducts.map((product) => {
                           return (
                           <div
                             key={product.id}
                             id={`product-card-${product.id}`}
-                            className="bg-[#121214]/60 border border-[#27272A] hover:border-[#10b981]/30 rounded-2xl p-4 flex flex-col justify-between group cursor-pointer"
+                            className="bg-[#161619] border border-[#27272A] hover:border-[#10b981]/30 rounded-xl sm:rounded-2xl p-3 sm:p-4 flex flex-col justify-between group cursor-pointer"
                             onClick={() => handleOpenConfig(product)}
                           >
-                            <div className="space-y-3">
+                            <div className="space-y-2 sm:space-y-3">
                               {/* Product Image */}
                               {settings.exibirImagens && product.imagem && (
                                 <div 
@@ -613,7 +631,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                                 </div>
                                 
                                 {settings.exibirDescricoes && (
-                                  <p className="text-[11px] text-gray-400 mt-1.5 leading-relaxed">
+                                  <p className="text-[11px] text-gray-400 mt-1.5 leading-relaxed line-clamp-2 sm:line-clamp-none">
                                     {product.descricao}
                                   </p>
                                 )}
@@ -627,9 +645,9 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                                 e.stopPropagation();
                                 handleOpenConfig(product);
                               }}
-                              className="mt-4 w-full flex items-center justify-center gap-1 py-2 text-xs font-bold rounded-xl transition-all border bg-[#1C1C1F] hover:bg-[#10b981]/20 text-[#10b981] cursor-pointer border-[#27272A]"
+                              className="mt-2.5 sm:mt-4 w-full min-h-10 flex items-center justify-center gap-1 py-2 text-xs font-bold rounded-xl transition-colors border bg-[#1C1C1F] hover:bg-[#10b981]/20 text-[#10b981] cursor-pointer border-[#27272A]"
                             >
-                              <Plus size={13} /><span>Configurar e Adicionar</span>
+                              <Plus size={13} /><span>Adicionar</span>
                             </button>
                           </div>
                         );})}
@@ -664,15 +682,15 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
               setSelectedProductToConfigure(null);
             }
           }}
-          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 animate-fade-in cursor-pointer"
+          className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in cursor-pointer"
         >
-          <div className="bg-[#1C1C1F] border border-[#27272A] rounded-3xl w-full max-w-md p-6 space-y-4 shadow-2xl animate-scale-in">
+          <div className="bg-[#1C1C1F] border border-[#27272A] rounded-t-3xl sm:rounded-3xl w-full max-w-md max-h-[92dvh] overflow-y-auto p-4 sm:p-6 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3 sm:space-y-4 shadow-2xl animate-scale-in">
             
             {/* Modal Header */}
             <div className="flex justify-between items-start border-b border-[#27272A] pb-3">
               <div>
                 <span className="text-[10px] font-bold text-[#10b981] uppercase tracking-wider">{obterNomeCategoria(selectedProductToConfigure.categoria)}</span>
-                <h4 className="font-serif font-bold text-lg text-white mt-0.5">{selectedProductToConfigure.nome}</h4>
+                <h4 className="font-serif font-bold text-base sm:text-lg text-white mt-0.5">{selectedProductToConfigure.nome}</h4>
               </div>
               <button
                 type="button"
@@ -684,11 +702,11 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
             </div>
 
             {/* Modal Content */}
-            <div className="space-y-4 font-sans text-xs">
+            <div className="space-y-3 sm:space-y-4 font-sans text-xs">
               
               {/* Product description / image preview */}
               {selectedProductToConfigure.descricao && (
-                <p className="text-gray-400 leading-relaxed text-[11px] bg-[#121214] p-3 rounded-xl border border-[#27272A]">
+                <p className="text-gray-400 leading-relaxed text-[11px] bg-[#121214] px-3 py-2.5 rounded-xl border border-[#27272A]">
                   {selectedProductToConfigure.descricao}
                 </p>
               )}
@@ -696,7 +714,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
               {/* Quantity selector */}
               <div className="space-y-1.5">
                 <span className="text-[10px] font-bold text-gray-300 uppercase tracking-wider block">Quantidade:</span>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center bg-[#121214] rounded-xl border border-[#27272A] p-1">
                     <button
                       type="button"
@@ -714,8 +732,8 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                       <Plus size={14} />
                     </button>
                   </div>
-                  <span className="font-mono text-sm font-bold text-[#10b981] ml-2">
-                    Valor total: R$ {(selectedProductToConfigure.preco * configQty).toFixed(2)}
+                  <span className="font-mono text-sm font-bold text-[#10b981] text-right">
+                    R$ {(selectedProductToConfigure.preco * configQty).toFixed(2)}
                   </span>
                 </div>
               </div>

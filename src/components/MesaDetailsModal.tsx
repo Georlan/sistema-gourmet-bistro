@@ -157,7 +157,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
       <div className="bg-[#0D0D10] rounded-none sm:rounded-3xl border-0 sm:border border-[#10b981]/15 shadow-2xl w-full max-w-5xl overflow-hidden h-full sm:h-auto max-h-full sm:max-h-[90vh] flex flex-col">
         
         {/* MODAL HEADER */}
-        <div className="bg-[#18181B] text-white p-4 sm:p-6 flex flex-col gap-3 shrink-0 border-b border-[#27272A] relative">
+        <div className="bg-[#18181B] text-white p-3 sm:p-6 flex flex-col gap-2 sm:gap-3 shrink-0 border-b border-[#27272A] relative">
           {/* Top Line: Title + Status + Close Button */}
           <div className="flex justify-between items-center w-full">
             <div className="flex items-center gap-2">
@@ -169,12 +169,12 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
               >
                 <ArrowLeft size={16} />
               </button>
-              <h2 className="font-serif text-xl sm:text-3xl font-bold tracking-tight text-white">Mesa {table.id}{originStr}</h2>
+              <h2 className="font-serif text-lg sm:text-3xl font-bold tracking-tight text-white">Mesa {table.id}{originStr}</h2>
               <span className={`px-2 py-0.5 text-[9px] sm:text-[10px] font-sans font-bold tracking-wider uppercase rounded-full border ${
                 orders.length === 0 
                   ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
                   : orders.some(o => o.itens.some(i => i.status === 'pronto'))
-                    ? 'bg-[#10b981]/15 text-[#10b981] border-[#10b981]/30 animate-pulse-subtle'
+                    ? 'bg-[#10b981]/15 text-[#10b981] border-[#10b981]/30'
                     : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
               }`}>
                 {orders.length === 0 ? 'Livre' : orders.some(o => o.itens.some(i => i.status === 'pronto')) ? 'Pronto p/ Servir' : 'Ocupada'}
@@ -184,7 +184,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
             <button
               id="close-mesa-modal-btn"
               onClick={onClose}
-              className="p-2 rounded-full hover:bg-white/5 text-gray-400 hover:text-white transition-colors cursor-pointer border border-transparent hover:border-[#27272A]"
+              className="p-2 rounded-xl hover:bg-white/5 text-gray-400 hover:text-white transition-colors cursor-pointer border border-transparent hover:border-[#27272A]"
             >
               <X size={20} />
             </button>
@@ -203,7 +203,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                 const transferOrigin = orders.find(o => o.mesaTransferidaDe)?.mesaTransferidaDe;
                 if (transferOrigin) {
                   return (
-                    <span className="px-2 py-0.5 text-[9px] bg-purple-500/20 text-purple-300 border border-purple-500/35 rounded-md font-sans font-bold uppercase tracking-wider block w-fit shadow-xs animate-pulse-subtle">
+                    <span className="px-2 py-0.5 text-[9px] bg-purple-500/20 text-purple-300 border border-purple-500/35 rounded-md font-sans font-bold uppercase tracking-wider block w-fit shadow-xs">
                       🔗 Transf. de M{transferOrigin}
                     </span>
                   );
@@ -222,7 +222,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
         <div
           role="tablist"
           aria-label="Ações da mesa"
-          className="bg-[#121214] border-b border-[#27272A] px-3 sm:px-6 py-2.5 grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-2 shrink-0"
+          className="bg-[#121214] border-b border-[#27272A] px-3 sm:px-6 py-2 grid grid-cols-2 gap-1.5 sm:flex sm:items-center sm:gap-2 shrink-0"
         >
           <button
             id="tab-consumo-btn"
@@ -237,7 +237,8 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
             }`}
           >
             <Receipt size={14} className="text-[#10b981]" />
-            <span>Consumo Ativo</span>
+            <span className="sm:hidden">Consumo</span>
+            <span className="hidden sm:inline">Consumo Ativo</span>
           </button>
 
           {canAppendOrderItems && (
@@ -254,9 +255,12 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
             }`}
           >
             <PlusCircle size={14} className="text-[#10b981]" />
-            <span>Lançar Pedido</span>
+            <span className="sm:hidden">Novo pedido</span>
+            <span className="hidden sm:inline">Lançar Pedido</span>
             {draftItems.length > 0 && (
-              <span className="h-2 w-2 rounded-full bg-rose-900/40 border border-rose-800/50 animate-ping"></span>
+              <span className="min-w-5 h-5 px-1 rounded-full bg-[#10b981]/15 border border-[#10b981]/30 text-[#10b981] text-[9px] font-mono flex items-center justify-center">
+                {draftItems.reduce((total, item) => total + (item.quantidade || 1), 0)}
+              </span>
             )}
           </button>
           )}
@@ -309,7 +313,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
           
           {/* Concurrency Alert Banner */}
           {otherWaitersServing.length > 0 && (
-            <div className="bg-amber-500/10 border border-amber-500/35 text-amber-400 p-3.5 rounded-2xl flex items-start gap-2 text-xs font-sans shadow-sm leading-relaxed animate-pulse">
+            <div className="bg-amber-500/10 border border-amber-500/35 text-amber-400 p-3.5 rounded-2xl flex items-start gap-2 text-xs font-sans shadow-sm leading-relaxed">
               <span className="text-sm shrink-0">⚠️</span>
               <div>
                 <strong className="text-white block font-semibold mb-0.5">Aviso de Concorrência</strong>
