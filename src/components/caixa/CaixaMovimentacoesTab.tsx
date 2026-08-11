@@ -7,10 +7,10 @@ import {
   Download,
   Filter,
   History,
-  Scale,
   Search,
 } from 'lucide-react';
 import { CaixaMovimentacao, CaixaTurnoResumo } from '../../types';
+import { OperationalBanner } from '../shared/OperationalBanner';
 
 interface CaixaMovimentacoesTabProps {
   movimentacoes: CaixaMovimentacao[];
@@ -112,61 +112,38 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
   if (isLoading && movimentacoes.length === 0) {
     return (
       <div className="space-y-4" aria-busy="true" aria-label="Carregando movimentações do caixa">
-        <div className="h-36 animate-pulse rounded-[24px] border border-[#252b28] bg-[#0d100f]" />
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {[0, 1, 2, 3].map(item => <div key={item} className="h-24 animate-pulse rounded-[18px] border border-[#252b28] bg-[#111412]" />)}
-        </div>
+        <div className="h-24 animate-pulse rounded-2xl border border-[#252b28] bg-[#0d100f]" />
+        <div className="h-24 animate-pulse rounded-[20px] border border-[#252b28] bg-[#111412]" />
         <div className="h-80 animate-pulse rounded-[22px] border border-[#252b28] bg-[#0d100f]" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-4 text-left animate-fade-in" aria-busy={isLoading}>
-      <section className="overflow-hidden rounded-[24px] border border-[#1d2925] bg-[#0a0d0c]">
-        <div className="grid gap-5 px-5 py-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end lg:px-6">
-          <div className="max-w-2xl">
-            <p className="flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.22em] text-[#54d9b3]">
-              <span className="h-px w-6 bg-[#54d9b3]" /> Histórico do caixa
-            </p>
-            <h2 className="mt-3 text-2xl font-black tracking-[-0.04em] text-[#f5f4ef] sm:text-3xl">
-              Movimentações <span className="text-[#54d9b3]">do caixa</span>
-            </h2>
-            <p className="mt-2 max-w-xl text-xs leading-relaxed text-zinc-500">
-              Consulte sangrias e suprimentos, filtre o período e exporte o resultado exibido.
-            </p>
-          </div>
-          <div className="flex justify-end">
-            <button type="button" onClick={exportCsv} disabled={filteredMovs.length === 0} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#303532] bg-[#151816] px-3 py-2.5 text-[10px] font-bold text-zinc-300 transition-colors hover:border-[#196b55] hover:text-[#54d9b3] disabled:opacity-40">
+    <div className="orders-workspace space-y-4 text-left animate-fade-in" aria-busy={isLoading}>
+      <OperationalBanner
+        id="cash-movements-heading"
+        eyebrow="HISTÓRICO DO CAIXA"
+        title="Movimentações"
+        accent="do caixa"
+        description={`Sangrias e suprimentos do período${turnoResumo?.operador_nome ? ` · ${turnoResumo.operador_nome}` : ''}.`}
+        metrics={[
+          { label: 'suprimentos', value: formatCurrency(totals.suprimentos), valueClassName: 'text-[#54d9b3]' },
+          { label: 'sangrias', value: formatCurrency(totals.sangrias), valueClassName: 'text-[#dfabab]' },
+          { label: 'saldo dos ajustes', value: formatCurrency(totals.suprimentos - totals.sangrias), valueClassName: totals.suprimentos >= totals.sangrias ? 'text-[#54d9b3]' : 'text-[#dfabab]' },
+          { label: 'turno atual', value: turnoResumo?.status === 'aberto' ? 'Aberto' : 'Fechado', valueClassName: turnoResumo?.status === 'aberto' ? 'text-emerald-300' : 'text-amber-300' },
+        ]}
+      />
+
+      <section className="rounded-[20px] border border-[#252b28] bg-[#0d100f] p-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <span className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.14em] text-zinc-500"><Filter size={13} className="text-[#54d9b3]" /> Filtros</span>
+          <div className="flex items-center gap-2">
+            {hasFilters && <button type="button" onClick={clearFilters} className="px-2 text-[10px] font-bold text-[#54d9b3] hover:text-[#7becce]">Limpar filtros</button>}
+            <button type="button" onClick={exportCsv} disabled={filteredMovs.length === 0} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#303532] bg-[#151816] px-3 py-2 text-[10px] font-bold text-zinc-300 transition-colors hover:border-[#196b55] hover:text-[#54d9b3] disabled:opacity-40">
               <Download size={13} /> Exportar CSV
             </button>
           </div>
-        </div>
-        {turnoResumo?.status === 'aberto' && (
-          <div className="border-t border-[#1d2925] bg-[#0d100f] px-5 py-3 text-[10px] text-zinc-500 lg:px-6">
-            Caixa aberto · {turnoResumo.operador_nome || 'Operador'}
-          </div>
-        )}
-      </section>
-
-      <section className="grid gap-3 sm:grid-cols-3">
-        {[
-          { label: 'Suprimentos', value: totals.suprimentos, detail: 'Entradas no recorte', icon: ArrowDownRight, tone: 'text-[#54d9b3]' },
-          { label: 'Sangrias', value: totals.sangrias, detail: 'Retiradas no recorte', icon: ArrowUpRight, tone: 'text-[#dfabab]' },
-          { label: 'Saldo dos ajustes', value: totals.suprimentos - totals.sangrias, detail: 'Entradas menos saídas', icon: Scale, tone: totals.suprimentos >= totals.sangrias ? 'text-[#54d9b3]' : 'text-[#dfabab]' },
-        ].map(metric => (
-          <article key={metric.label} className="rounded-[18px] border border-[#252b28] bg-[#111412] p-4">
-            <span className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.14em] text-zinc-500"><metric.icon size={13} className={metric.tone} /> {metric.label}</span>
-            <strong className={clsx('mt-2 block text-xl font-bold tabular-nums', metric.tone)}>{formatCurrency(metric.value)}</strong>
-            <span className="mt-1 block text-[10px] text-zinc-600">{metric.detail}</span>
-          </article>
-        ))}
-      </section>
-
-      <section className="rounded-[20px] border border-[#252b28] bg-[#0d100f] p-4">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <span className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.14em] text-zinc-500"><Filter size={13} className="text-[#54d9b3]" /> Filtros</span>
-          {hasFilters && <button type="button" onClick={clearFilters} className="text-[10px] font-bold text-[#54d9b3] hover:text-[#7becce]">Limpar filtros</button>}
         </div>
         <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(220px,1.3fr)_minmax(170px,.7fr)_minmax(155px,.6fr)_minmax(155px,.6fr)]">
           <label className="relative">

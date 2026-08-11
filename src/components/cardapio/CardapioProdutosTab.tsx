@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from 'react';
 import {
-  CheckCircle2,
   Copy,
   Edit3,
   Eye,
@@ -18,6 +17,7 @@ import clsx from 'clsx';
 import type { Product } from '../../types';
 import type { CatalogCategory } from '../../catalog/catalog';
 import { smartSearchMatch } from '../../domain';
+import { OperationalBanner } from '../shared/OperationalBanner';
 
 type AvailabilityFilter = 'todos' | 'publicados' | 'pausados';
 
@@ -243,51 +243,23 @@ export function CardapioProdutosTab({
   };
 
   return (
-    <div className="mx-auto w-full max-w-[1500px] space-y-5 pb-8 text-left animate-fade-in">
-      <section className="relative overflow-hidden rounded-[26px] border border-emerald-300/10 bg-[radial-gradient(circle_at_92%_0%,rgba(16,185,129,.14),transparent_34%),linear-gradient(135deg,#121713_0%,#0d100e_62%,#101311_100%)] p-5 shadow-[0_24px_70px_rgba(0,0,0,.24)] sm:p-6">
-        <div className="relative z-10 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-          <div className="max-w-2xl">
-            <p className="mb-2 flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.22em] text-emerald-300">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-300 shadow-[0_0_12px_rgba(110,231,183,.75)]" />
-              Catálogo central
-            </p>
-            <h1 className="text-xl font-black tracking-[-0.035em] text-white sm:text-2xl">Seu cardápio, organizado para vender.</h1>
-            <p className="mt-2 max-w-xl text-[11px] leading-relaxed text-zinc-400 sm:text-xs">
-              Edite uma vez e mantenha caixa, atendimento e cardápio digital usando os mesmos produtos, preços e disponibilidade.
-            </p>
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            {previewUrl && (
-              <a href={previewUrl} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.035] px-4 py-2.5 text-[10px] font-bold text-zinc-200 transition-colors hover:bg-white/[0.07]">
-                <Eye size={14} /> Ver cardápio online
-              </a>
-            )}
-            <button type="button" onClick={onCreateCategory} className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-300/15 bg-emerald-300/[0.06] px-4 py-2.5 text-[10px] font-bold text-emerald-200 transition-colors hover:bg-emerald-300/[0.11]">
-              <Layers3 size={14} /> Nova categoria
-            </button>
-            <button type="button" onClick={onCreateProduct} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 py-2.5 text-[10px] font-black text-[#07110d] shadow-[0_10px_30px_rgba(16,185,129,.2)] transition-colors hover:bg-emerald-300">
-              <Plus size={14} /> Novo produto
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <section className="grid grid-cols-2 gap-2.5 lg:grid-cols-4" aria-label="Resumo do catálogo">
-        {[
-          { label: 'Produtos', value: summary.total, icon: PackageOpen, tone: 'text-white' },
-          { label: 'Disponíveis', value: summary.published, icon: CheckCircle2, tone: 'text-emerald-300' },
-          { label: 'Pausados', value: summary.paused, icon: EyeOff, tone: 'text-amber-300' },
-          { label: 'Categorias', value: summary.categories, icon: Layers3, tone: 'text-sky-300' },
-        ].map(({ label, value, icon: Icon, tone }) => (
-          <div key={label} className="flex items-center gap-3 rounded-2xl border border-white/[0.065] bg-[#101311] px-4 py-3.5">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[0.035] text-zinc-500"><Icon size={15} /></span>
-            <div><strong className={clsx('block font-mono text-lg leading-none', tone)}>{value}</strong><span className="mt-1 block text-[9px] font-medium text-zinc-500">{label}</span></div>
-          </div>
-        ))}
-      </section>
+    <div className="orders-workspace w-full space-y-4 pb-8 text-left animate-fade-in">
+      <OperationalBanner
+        id="catalog-products-heading"
+        eyebrow="CATÁLOGO CENTRAL"
+        title="Cardápio"
+        accent="organizado para vender"
+        description="Produtos, preços e disponibilidade sincronizados entre caixa, atendimento e cardápio digital."
+        metrics={[
+          { label: 'produtos', value: summary.total },
+          { label: 'disponíveis', value: summary.published, valueClassName: 'text-emerald-300' },
+          { label: 'pausados', value: summary.paused, valueClassName: 'text-amber-300' },
+          { label: 'categorias', value: summary.categories, valueClassName: 'text-sky-300' },
+        ]}
+      />
 
       <section className="space-y-3 rounded-[22px] border border-white/[0.065] bg-[#101311] p-3.5 sm:p-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
           <div className="relative flex-1">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-600" size={15} />
             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por nome, descrição ou código…" className="h-11 w-full rounded-xl border border-white/[0.07] bg-black/20 pl-10 pr-10 text-[11px] text-white outline-none transition-colors placeholder:text-zinc-600 focus:border-emerald-400/30" />
@@ -303,6 +275,19 @@ export function CardapioProdutosTab({
                 {label}
               </button>
             ))}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {previewUrl && (
+              <a href={previewUrl} target="_blank" rel="noreferrer" className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.035] px-3 py-2.5 text-[9px] font-bold text-zinc-200 transition-colors hover:bg-white/[0.07] sm:flex-none">
+                <Eye size={13} /> Ver cardápio
+              </a>
+            )}
+            <button type="button" onClick={onCreateCategory} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-emerald-300/15 bg-emerald-300/[0.06] px-3 py-2.5 text-[9px] font-bold text-emerald-200 transition-colors hover:bg-emerald-300/[0.11] sm:flex-none">
+              <Layers3 size={13} /> Nova categoria
+            </button>
+            <button type="button" onClick={onCreateProduct} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-400 px-3 py-2.5 text-[9px] font-black text-[#07110d] transition-colors hover:bg-emerald-300 sm:flex-none">
+              <Plus size={13} /> Novo produto
+            </button>
           </div>
         </div>
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
