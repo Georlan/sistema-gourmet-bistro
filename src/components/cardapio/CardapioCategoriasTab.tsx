@@ -12,6 +12,7 @@ import {
   X,
 } from 'lucide-react';
 import { CategoriaModal, DeleteCategoryModal, CategoryData } from './CategoriaModal';
+import { OperationalBanner } from '../shared/OperationalBanner';
 
 interface CardapioCategoriasTabProps {
   apiCategorias: CategoryData[];
@@ -69,6 +70,15 @@ export function CardapioCategoriasTab({
     return apiCategorias.filter((category) => category.nome.toLocaleLowerCase('pt-BR').includes(normalized));
   }, [apiCategorias, search]);
 
+  const destinationSummary = useMemo(() => apiCategorias.reduce(
+    (summary, category) => {
+      const destination = category.destino_impressao as keyof typeof summary;
+      if (destination in summary) summary[destination] += 1;
+      return summary;
+    },
+    { COZINHA: 0, BAR: 0, NENHUM: 0 },
+  ), [apiCategorias]);
+
   const handleOpenCreate = () => {
     setEditingCategory(null);
     setModalOpen(true);
@@ -95,34 +105,30 @@ export function CardapioCategoriasTab({
   };
 
   return (
-    <div className="mx-auto w-full max-w-[1500px] space-y-5 pb-8 text-left animate-fade-in">
-      <section className="relative overflow-hidden rounded-[26px] border border-emerald-300/10 bg-[radial-gradient(circle_at_92%_0%,rgba(16,185,129,.13),transparent_34%),linear-gradient(135deg,#121713_0%,#0d100e_68%,#101311_100%)] p-5 shadow-[0_24px_70px_rgba(0,0,0,.24)] sm:p-6">
-        <div className="relative z-10 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-          <div className="max-w-2xl">
-            <p className="mb-2 flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.22em] text-emerald-300">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" /> Organização do cardápio
-            </p>
-            <h1 className="text-xl font-black tracking-[-0.035em] text-white sm:text-2xl">Categorias simples de encontrar e preparar.</h1>
-            <p className="mt-2 max-w-xl text-[11px] leading-relaxed text-zinc-400 sm:text-xs">
-              Organize os produtos e escolha onde cada grupo será impresso quando um pedido entrar.
-            </p>
-          </div>
-          <button type="button" onClick={handleOpenCreate} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 py-2.5 text-[10px] font-black text-[#07110d] shadow-[0_10px_30px_rgba(16,185,129,.2)] transition-colors hover:bg-emerald-300">
-            <Plus size={14} /> Nova categoria
-          </button>
-        </div>
-      </section>
+    <div className="orders-workspace w-full space-y-4 pb-8 text-left animate-fade-in">
+      <OperationalBanner
+        id="catalog-categories-heading"
+        eyebrow="ORGANIZAÇÃO DO CARDÁPIO"
+        title="Categorias"
+        accent="prontas para produzir"
+        description="Organize os produtos e defina para onde cada pedido será enviado na operação."
+        metrics={[
+          { label: 'categorias', value: apiCategorias.length },
+          { label: 'na cozinha', value: destinationSummary.COZINHA, valueClassName: 'text-orange-300' },
+          { label: 'no bar', value: destinationSummary.BAR, valueClassName: 'text-sky-300' },
+          { label: 'sem impressão', value: destinationSummary.NENHUM, valueClassName: 'text-zinc-300' },
+        ]}
+      />
 
-      <section className="flex flex-col gap-3 rounded-[22px] border border-white/[0.065] bg-[#101311] p-3.5 sm:flex-row sm:items-center sm:justify-between sm:p-4">
-        <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-300/10 bg-emerald-300/[0.05] text-emerald-300"><Layers3 size={16} /></span>
-          <div><strong className="block font-mono text-lg leading-none text-white">{apiCategorias.length}</strong><span className="mt-1 block text-[9px] text-zinc-500">categorias cadastradas</span></div>
-        </div>
-        <div className="relative w-full sm:max-w-sm">
+      <section className="flex flex-col gap-3 rounded-[22px] border border-white/[0.065] bg-[#101311] p-3.5 sm:flex-row sm:items-center sm:p-4">
+        <div className="relative w-full flex-1">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-600" size={15} />
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar categoria…" className="h-11 w-full rounded-xl border border-white/[0.07] bg-black/20 pl-10 pr-10 text-[11px] text-white outline-none placeholder:text-zinc-600 focus:border-emerald-400/30" />
           {search && <button type="button" onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1 text-zinc-600 hover:text-white" aria-label="Limpar busca"><X size={13} /></button>}
         </div>
+        <button type="button" onClick={handleOpenCreate} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 py-3 text-[10px] font-black text-[#07110d] transition-colors hover:bg-emerald-300">
+          <Plus size={14} /> Nova categoria
+        </button>
       </section>
 
       {filteredCategories.length === 0 ? (

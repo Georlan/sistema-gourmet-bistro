@@ -35,6 +35,7 @@ import { CategoriaModal } from './cardapio/CategoriaModal';
 import { AssistenteConfigTab } from './assistente/AssistenteConfigTab';
 import { AssistenteSimuladorTab } from './assistente/AssistenteSimuladorTab';
 import { AssinaturaPixTab } from './assinatura/AssinaturaPixTab';
+import { OperationalBanner } from './shared/OperationalBanner';
 import { normalizeCatalogSnapshot, type CatalogCategory } from '../catalog/catalog';
 import { getProductPresets, obterNomeCategoria, smartSearchMatch } from '../domain';
 import { API } from '../config/caixaService';
@@ -241,46 +242,6 @@ const formatDuration = (minutes: number) => {
   const remainingMinutes = safeMinutes % 60;
   return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}min` : `${hours}h`;
 };
-
-interface OperationalHeroProps {
-  id: string;
-  eyebrow: string;
-  title: string;
-  accent: string;
-  description: string;
-  metrics: Array<{ label: string; value: React.ReactNode }>;
-  isConnected: boolean;
-}
-
-const OperationalHero = ({
-  id,
-  eyebrow,
-  title,
-  accent,
-  description,
-  metrics,
-  isConnected,
-}: OperationalHeroProps) => (
-  <section className="orders-hero shrink-0" aria-labelledby={id}>
-    <div className="orders-hero__copy">
-      <p className="orders-eyebrow"><span /> {eyebrow}</p>
-      <h1 id={id}>{title} <em>{accent}</em></h1>
-      <p>{description}</p>
-    </div>
-    <div className="orders-hero__metrics" aria-label={`Resumo: ${title} ${accent}`}>
-      {metrics.map(metric => (
-        <div key={metric.label}>
-          <strong>{metric.value}</strong>
-          <span>{metric.label}</span>
-        </div>
-      ))}
-      <div className={isConnected ? 'is-live' : 'is-offline'}>
-        <span className="orders-live-dot" />
-        <span>{isConnected ? 'Tempo real ativo' : 'Reconectando'}</span>
-      </div>
-    </div>
-  </section>
-);
 
 export function CaixaPanel({
   orders = [],
@@ -4009,7 +3970,7 @@ export function CaixaPanel({
           {activeSubTab === 'pedidos' && (
             <div className={clsx('orders-workspace', 'h-full', 'flex', 'flex-col', 'space-y-4')}>
 
-              <OperationalHero
+              <OperationalBanner
                 id="orders-heading"
                 eyebrow="OPERAÇÃO AO VIVO"
                 title="Pedidos"
@@ -4743,7 +4704,7 @@ export function CaixaPanel({
           {/* VIEW 2: PDV (Pedidos Balcão) */}
           {activeSubTab === 'balcao' && (
             <div className="orders-workspace h-full min-h-0 flex flex-col gap-3 sm:gap-4">
-              <OperationalHero
+              <OperationalBanner
                 id="counter-heading"
                 eyebrow="VENDA / NOVO PEDIDO"
                 title="Novo pedido,"
@@ -5217,7 +5178,7 @@ export function CaixaPanel({
           {/* VIEW 3: MAPA DE MESAS (Salão) */}
           {activeSubTab === 'mesas' && (
             <div className="orders-workspace flex h-full min-h-0 flex-col gap-3">
-              <OperationalHero
+              <OperationalBanner
                 id="tables-heading"
                 eyebrow="OPERAÇÃO DO SALÃO"
                 title="Salão"
@@ -7438,7 +7399,7 @@ export function CaixaPanel({
           {/* MÓDULO CAIXA REORGANIZADO */}
           {activeTab === 'financeiro' && (activeSubTab === 'turno_atual' || activeSubTab === 'fluxo') && (
             <div className="orders-workspace space-y-4">
-              <OperationalHero
+              <OperationalBanner
                 id="cash-heading"
                 eyebrow="CAIXA / CONFERÊNCIA AO VIVO"
                 title="Seu caixa,"
@@ -7481,7 +7442,7 @@ export function CaixaPanel({
 
           {activeTab === 'financeiro' && (activeSubTab === 'fechamento' || activeSubTab === 'conferencia') && (
             <div className="orders-workspace space-y-4">
-              <OperationalHero
+              <OperationalBanner
                 id="cash-closing-heading"
                 eyebrow="CAIXA / ENCERRAMENTO SEGURO"
                 title="Feche o turno,"
