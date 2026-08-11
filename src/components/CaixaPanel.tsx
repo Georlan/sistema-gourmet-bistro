@@ -5,7 +5,7 @@ import { LoginButton } from '../../components/shadcnblocks/login-button';
 import {
   DollarSign, ArrowUpRight, Lock, Users,
   Receipt, ShoppingCart, Percent, CreditCard, Check, AlertTriangle,
-  Clock, X, RefreshCw, Edit3, Trash2, Plus, ChevronRight,
+  Clock, X, RefreshCw, Edit3, Trash2, Plus, ChevronLeft, ChevronRight,
   MapPin, ClipboardList, BarChart2, Package, Shield, ShieldCheck, Star,
   MessageSquare, Send, Printer, Cpu, HelpCircle, Smartphone,
   Gift, Tag, TrendingUp, Heart, Globe, Menu, Maximize2, Minimize2,
@@ -1218,6 +1218,93 @@ export function CaixaPanel({
   // Search terms
   const [pdvSearch, setPdvSearch] = useState('');
   const [pdvSelectedCategory, setPdvSelectedCategory] = useState<string>('todos');
+  const pdvCategoryScrollRef = useRef<HTMLDivElement>(null);
+  const pdvCategoryDragRef = useRef({
+    pointerId: -1,
+    startX: 0,
+    startScrollLeft: 0,
+    moved: false,
+  });
+  const pdvCategorySuppressClickRef = useRef(false);
+  const [pdvCategoryScrollState, setPdvCategoryScrollState] = useState({
+    hasOverflow: false,
+    canScrollLeft: false,
+    canScrollRight: false,
+  });
+
+  const updatePdvCategoryScrollState = useCallback(() => {
+    const element = pdvCategoryScrollRef.current;
+    if (!element) return;
+    const maxScrollLeft = Math.max(element.scrollWidth - element.clientWidth, 0);
+    setPdvCategoryScrollState({
+      hasOverflow: maxScrollLeft > 2,
+      canScrollLeft: element.scrollLeft > 2,
+      canScrollRight: element.scrollLeft < maxScrollLeft - 2,
+    });
+  }, []);
+
+  const scrollPdvCategories = useCallback((direction: -1 | 1) => {
+    const element = pdvCategoryScrollRef.current;
+    if (!element) return;
+    element.scrollBy({
+      left: direction * Math.max(element.clientWidth * 0.72, 240),
+      behavior: 'smooth',
+    });
+  }, []);
+
+  const handlePdvCategoryWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
+    const element = pdvCategoryScrollRef.current;
+    if (!element || element.scrollWidth <= element.clientWidth) return;
+    const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY)
+      ? event.deltaX
+      : event.deltaY;
+    const maxScrollLeft = element.scrollWidth - element.clientWidth;
+    const canMove = delta < 0
+      ? element.scrollLeft > 0
+      : element.scrollLeft < maxScrollLeft;
+    if (!canMove) return;
+    event.preventDefault();
+    element.scrollLeft += delta;
+  }, []);
+
+  const handlePdvCategoryPointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== 'mouse' || event.button !== 0) return;
+    const element = pdvCategoryScrollRef.current;
+    if (!element || element.scrollWidth <= element.clientWidth) return;
+    pdvCategoryDragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startScrollLeft: element.scrollLeft,
+      moved: false,
+    };
+    element.setPointerCapture(event.pointerId);
+  }, []);
+
+  const handlePdvCategoryPointerMove = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const element = pdvCategoryScrollRef.current;
+    const drag = pdvCategoryDragRef.current;
+    if (!element || drag.pointerId !== event.pointerId) return;
+    const distance = event.clientX - drag.startX;
+    if (Math.abs(distance) > 4) drag.moved = true;
+    if (!drag.moved) return;
+    element.scrollLeft = drag.startScrollLeft - distance;
+  }, []);
+
+  const finishPdvCategoryDrag = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const element = pdvCategoryScrollRef.current;
+    const drag = pdvCategoryDragRef.current;
+    if (!element || drag.pointerId !== event.pointerId) return;
+    pdvCategorySuppressClickRef.current = drag.moved;
+    if (drag.moved) {
+      window.setTimeout(() => {
+        pdvCategorySuppressClickRef.current = false;
+      }, 0);
+    }
+    if (element.hasPointerCapture(event.pointerId)) {
+      element.releasePointerCapture(event.pointerId);
+    }
+    pdvCategoryDragRef.current.pointerId = -1;
+  }, []);
 
   // PDV Local Cart state
   const [pdvCart, setPdvCart] = useState<{ product: Product; quantity: number; obs: string; client: string }[]>([]);
@@ -3398,6 +3485,15 @@ export function CaixaPanel({
     }
   }, [pdvCategories, pdvSelectedCategory]);
 
+  useEffect(() => {
+    updatePdvCategoryScrollState();
+    const element = pdvCategoryScrollRef.current;
+    if (!element) return;
+    const resizeObserver = new ResizeObserver(updatePdvCategoryScrollState);
+    resizeObserver.observe(element);
+    return () => resizeObserver.disconnect();
+  }, [activeSubTab, balcaoMobileView, pdvCategories, updatePdvCategoryScrollState]);
+
   // KDS Delay Timer Component
   const KDSTimer: React.FC<{ itemTimestamp?: string; status: string }> = ({ itemTimestamp, status }) => {
     const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
@@ -5020,7 +5116,35 @@ export function CaixaPanel({
                     )}
                   </div>
 
-                  <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Filtrar por categoria">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    {pdvCategoryScrollState.hasOverflow && (
+                      <button
+                        type="button"
+                        onClick={() => scrollPdvCategories(-1)}
+                        disabled={!pdvCategoryScrollState.canScrollLeft}
+                        aria-label="Ver categorias anteriores"
+                        className="hidden size-8 shrink-0 items-center justify-center rounded-lg border border-white/[0.09] bg-white/[0.035] text-zinc-300 transition-colors hover:border-[#00b894]/40 hover:text-[#40e0bd] disabled:cursor-not-allowed disabled:opacity-25 sm:flex"
+                      >
+                        <ChevronLeft size={15} />
+                      </button>
+                    )}
+                    <div
+                      ref={pdvCategoryScrollRef}
+                      onScroll={updatePdvCategoryScrollState}
+                      onWheel={handlePdvCategoryWheel}
+                      onPointerDown={handlePdvCategoryPointerDown}
+                      onPointerMove={handlePdvCategoryPointerMove}
+                      onPointerUp={finishPdvCategoryDrag}
+                      onPointerCancel={finishPdvCategoryDrag}
+                      onClickCapture={(event) => {
+                        if (!pdvCategorySuppressClickRef.current) return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        pdvCategorySuppressClickRef.current = false;
+                      }}
+                      className="flex min-w-0 flex-1 cursor-grab select-none items-center gap-1.5 overflow-x-auto pb-0.5 active:cursor-grabbing [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                      aria-label="Filtrar por categoria"
+                    >
                     <button
                       type="button"
                       onClick={() => setPdvSelectedCategory('todos')}
@@ -5044,6 +5168,18 @@ export function CaixaPanel({
                         {catObj.nome}
                       </button>
                     ))}
+                    </div>
+                    {pdvCategoryScrollState.hasOverflow && (
+                      <button
+                        type="button"
+                        onClick={() => scrollPdvCategories(1)}
+                        disabled={!pdvCategoryScrollState.canScrollRight}
+                        aria-label="Ver próximas categorias"
+                        className="hidden size-8 shrink-0 items-center justify-center rounded-lg border border-white/[0.09] bg-white/[0.035] text-zinc-300 transition-colors hover:border-[#00b894]/40 hover:text-[#40e0bd] disabled:cursor-not-allowed disabled:opacity-25 sm:flex"
+                      >
+                        <ChevronRight size={15} />
+                      </button>
+                    )}
                   </div>
                 </div>
 
