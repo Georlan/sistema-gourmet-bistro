@@ -1,3 +1,5 @@
+import datetime
+
 import pytest
 from fastapi.testclient import TestClient
 from app.main import app
@@ -16,6 +18,7 @@ from app.models import (
     CaixaMovimentacao,
     Pagamento,
     ConfiguracaoRestaurante,
+    PrintJob,
 )
 
 client = TestClient(app)
@@ -48,6 +51,7 @@ def setup_caixa_pdv():
             db.commit()
 
         # Limpa o fluxo financeiro/operacional criado por testes anteriores.
+        db.query(PrintJob).filter(PrintJob.restaurante_id == 777).delete()
         db.query(Pagamento).filter(Pagamento.restaurante_id == 777).delete()
         db.query(Item).filter(Item.restaurante_id == 777).delete()
         db.query(Lancamento).filter(Lancamento.restaurante_id == 777).delete()
@@ -159,6 +163,186 @@ def criar_comanda_mesa(
     finally:
         db.close()
 
+
+def test_pedido_e_impressao_exigem_caixa_aberto_do_mesmo_restaurante():
+    headers = get_pdv_auth_headers()
+
+    # Um turno aberto em outro restaurante não pode autorizar este tenant.
+    token_778 = current_restaurante_id.set(778)
+    other_db = SessionLocal()
+    try:
+        restaurante = other_db.query(Restaurante).filter(Restaurante.id == 778).first()
+        if restaurante is None:
+            other_db.add(Restaurante(id=778, nome="Outro Restaurante", plano="bistro"))
+        usuario = other_db.query(Usuario).filter(Usuario.id == "usr_pdv_778").first()
+        if usuario is None:
+            other_db.add(Usuario(
+                id="usr_pdv_778",
+                nome="Caixa Outro Tenant",
+                usuario="pdv778",
+                email="pdv778@koma.com",
+                senha_hash="$2b$12$dummyhashforcaixatestsuite",
+                role="caixa",
+                status="ativo",
+                restaurante_id=778,
+            ))
+        other_db.commit()
+        other_db.query(CaixaTurno).filter(
+            CaixaTurno.restaurante_id == 778,
+            CaixaTurno.status == "aberto",
+        ).delete()
+        other_db.add(CaixaTurno(
+            restaurante_id=778,
+            aberto_por_id="usr_pdv_778",
+            saldo_inicial=0,
+            status="aberto",
+        ))
+        other_db.commit()
+    finally:
+        other_db.close()
+        current_restaurante_id.reset(token_778)
+
+    blocked_open = client.post(
+        "/comandas/",
+        headers=headers,
+        json={
+            "mesa_id": 7,
+            "garcom_id": "usr_pdv_777",
+            "tipo": "Consumo no Local",
+        },
+    )
+    assert blocked_open.status_code == 409, blocked_open.text
+    assert "caixa precisa estar aberto" in blocked_open.json()["detail"]
+
+    opened = client.post(
+        "/caixa/turno/abrir",
+        headers=headers,
+        json={"saldo_inicial": 0},
+    )
+    assert opened.status_code == 201, opened.text
+
+    created = client.post(
+        "/comandas/",
+        headers=headers,
+        json={
+            "mesa_id": 7,
+            "garcom_id": "usr_pdv_777",
+            "tipo": "Consumo no Local",
+        },
+    )
+    assert created.status_code == 201, created.text
+    comanda_id = created.json()["id"]
+
+    db = SessionLocal()
+    try:
+        turno = db.query(CaixaTurno).filter(
+            CaixaTurno.restaurante_id == 777,
+            CaixaTurno.status == "aberto",
+        ).one()
+        turno.status = "fechado"
+        turno.fechado_em = datetime.datetime.now(datetime.timezone.utc)
+        db.commit()
+    finally:
+        db.close()
+
+    blocked_launch = client.post(
+        f"/comandas/{comanda_id}/lancamentos",
+        headers=headers,
+        json={
+            "garcom_id": "usr_pdv_777",
+            "itens": [{"produto_id": "prod-pdv-777", "observacao": ""}],
+        },
+    )
+    assert blocked_launch.status_code == 409, blocked_launch.text
+
+    db = SessionLocal()
+    try:
+        assert db.query(Item).filter(Item.comanda_id == comanda_id).count() == 0
+        assert db.query(PrintJob).filter(
+            PrintJob.restaurante_id == 777,
+            PrintJob.source_id == comanda_id,
+        ).count() == 0
+    finally:
+        db.close()
+
+
+def test_aceite_online_nao_imprime_com_caixa_fechado():
+    headers = get_pdv_auth_headers()
+    comanda_id = "cmd-online-caixa-fechado"
+
+    db = SessionLocal()
+    try:
+        comanda = Comanda(
+            id=comanda_id,
+            restaurante_id=777,
+            mesa_id=None,
+            garcom_id="usr_pdv_777",
+            tipo="Retirada",
+            numero_pedido=7701,
+            delivery_status="pendente",
+            fechada=False,
+        )
+        lancamento = Lancamento(
+            id="lan-online-caixa-fechado",
+            restaurante_id=777,
+            comanda_id=comanda_id,
+            garcom_id="usr_pdv_777",
+        )
+        item = Item(
+            id="item-online-caixa-fechado",
+            restaurante_id=777,
+            comanda_id=comanda_id,
+            lancamento_id=lancamento.id,
+            produto_id="prod-pdv-777",
+            preco_unit=42,
+            status="preparando",
+            pago=False,
+        )
+        db.add_all([comanda, lancamento, item])
+        db.commit()
+    finally:
+        db.close()
+
+    blocked = client.put(
+        f"/comandas/{comanda_id}/delivery/status",
+        params={"status_novo": "producao"},
+        headers=headers,
+    )
+    assert blocked.status_code == 409, blocked.text
+
+    db = SessionLocal()
+    try:
+        assert db.query(Comanda).filter(Comanda.id == comanda_id).one().delivery_status == "pendente"
+        assert db.query(PrintJob).filter(
+            PrintJob.restaurante_id == 777,
+            PrintJob.source_id == comanda_id,
+        ).count() == 0
+    finally:
+        db.close()
+
+    opened = client.post(
+        "/caixa/turno/abrir",
+        headers=headers,
+        json={"saldo_inicial": 0},
+    )
+    assert opened.status_code == 201, opened.text
+
+    accepted = client.put(
+        f"/comandas/{comanda_id}/delivery/status",
+        params={"status_novo": "producao"},
+        headers=headers,
+    )
+    assert accepted.status_code == 200, accepted.text
+
+    db = SessionLocal()
+    try:
+        assert db.query(Comanda).filter(Comanda.id == comanda_id).one().delivery_status == "producao"
+        assert db.query(PrintJob).filter(
+            PrintJob.restaurante_id == 777,
+            PrintJob.source_id == comanda_id,
+        ).count() >= 1
+    finally:
+        db.close()
 
 def test_pdv_caixa_full_shift_cycle():
     """1. Fluxo de Caixa/PDV: Ciclo completo de Abertura, Resumo e Fechamento de Turno."""

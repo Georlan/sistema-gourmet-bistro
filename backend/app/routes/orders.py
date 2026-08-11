@@ -19,6 +19,7 @@ from ..models import (
     MotoboyTokenAtivo,
     ConfiguracaoRestaurante,
     Restaurante,
+    CaixaTurno,
 )
 from ..schemas import (
     ComandaResponse, ComandaDetail, ComandaCreate,
@@ -66,6 +67,24 @@ MENSAGEM_WHATSAPP_RECUSADO = (
     "Olá, {nome}. Infelizmente seu pedido #{numero} no {restaurante} não pôde "
     "ser aceito no momento. Entre em contato conosco para mais detalhes."
 )
+
+
+def require_open_cash_shift(db: Session, restaurante_id: Optional[int] = None) -> CaixaTurno:
+    """Impede que consumo e impressão nasçam fora de um turno financeiro."""
+    rid = restaurante_id or require_tenant_id()
+    turno = db.query(CaixaTurno).filter(
+        CaixaTurno.restaurante_id == rid,
+        CaixaTurno.status == "aberto",
+    ).first()
+    if turno is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "O caixa precisa estar aberto para criar, aceitar ou imprimir "
+                "pedidos. Abra o turno e tente novamente."
+            ),
+        )
+    return turno
 
 
 def _agendar_notificacao_whatsapp_status(
@@ -447,9 +466,15 @@ def abrir_comanda(comanda_in: ComandaCreate, background_tasks: BackgroundTasks, 
             "perm_garcom_delivery",
         )
 
+    rid = require_tenant_id()
+    require_open_cash_shift(db, rid)
+
     # 1. Validar se a mesa existe (se mesa_id for informado)
     if comanda_in.mesa_id is not None:
-        mesa = db.query(Mesa).filter(Mesa.id == comanda_in.mesa_id).first()
+        mesa = db.query(Mesa).filter(
+            Mesa.restaurante_id == rid,
+            Mesa.id == comanda_in.mesa_id,
+        ).first()
         if not mesa:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -460,6 +485,7 @@ def abrir_comanda(comanda_in: ComandaCreate, background_tasks: BackgroundTasks, 
         # repetido sem identificador reutiliza a comanda geral; um nome novo
         # cria outra comanda compartilhando o mesmo número do pedido.
         comandas_abertas = db.query(Comanda).filter(
+            Comanda.restaurante_id == rid,
             Comanda.mesa_id == comanda_in.mesa_id,
             Comanda.fechada == False
         ).order_by(Comanda.criado_em.asc()).all()
@@ -497,7 +523,10 @@ def abrir_comanda(comanda_in: ComandaCreate, background_tasks: BackgroundTasks, 
         numero_pedido = gerar_novo_numero_pedido(db)
 
     # 3. Validar se o garçom existe
-    garcom = db.query(Usuario).filter(Usuario.id == comanda_in.garcom_id).first()
+    garcom = db.query(Usuario).filter(
+        Usuario.restaurante_id == rid,
+        Usuario.id == comanda_in.garcom_id,
+    ).first()
     if not garcom:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -515,7 +544,7 @@ def abrir_comanda(comanda_in: ComandaCreate, background_tasks: BackgroundTasks, 
     try:
         nova_comanda = Comanda(
             id=f"c-{uuid.uuid4().hex[:8]}",
-            restaurante_id=current_restaurante_id.get(),
+            restaurante_id=rid,
             mesa_id=comanda_in.mesa_id,
             garcom_id=comanda_in.garcom_id,
             tipo=comanda_in.tipo,
@@ -577,6 +606,7 @@ async def criar_venda_direta(
             current_user,
             "perm_garcom_delivery",
         )
+    require_open_cash_shift(db, rid)
     if tipo_pedido == "Consumo no Local" and venda_in.mesa_id is None:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -857,20 +887,39 @@ def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_ta
     """
     Lança novos itens na comanda (gerando um novo lote de pedido) e aciona a impressão de cozinha.
     """
-    # 1. Verificar se a comanda existe
-    comanda = db.query(Comanda).filter(Comanda.id == comanda_id).first()
+    rid = require_tenant_id()
+
+    # 1. Verificar se a comanda existe no restaurante autenticado
+    comanda = db.query(Comanda).filter(
+        Comanda.restaurante_id == rid,
+        Comanda.id == comanda_id,
+    ).first()
     if not comanda:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Comanda não encontrada"
         )
         
+    has_existing_items = db.query(Item.id).filter(
+        Item.restaurante_id == rid,
+        Item.comanda_id == comanda.id,
+        Item.status != "cancelado",
+    ).first() is not None
+    if has_existing_items:
+        require_waiter_permission(
+            db,
+            current_user,
+            "perm_garcom_editar",
+        )
+
+    require_open_cash_shift(db, rid)
+
     # 2. Regras de comanda fechada (Se estiver fechada, cria nova comanda automaticamente para a mesa)
     if comanda.fechada:
         if comanda.mesa_id:
             nova_comanda = Comanda(
                 id=f"c-{uuid.uuid4().hex[:8]}",
-                restaurante_id=current_restaurante_id.get(),
+                restaurante_id=rid,
                 mesa_id=comanda.mesa_id,
                 garcom_id=lancamento_in.garcom_id,
                 tipo="Consumo no Local",
@@ -887,19 +936,11 @@ def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_ta
                 detail="Comanda já fechada. Reabra antes de lançar novos itens."
             )
 
-    has_existing_items = db.query(Item.id).filter(
-        Item.comanda_id == comanda.id,
-        Item.status != "cancelado",
-    ).first() is not None
-    if has_existing_items:
-        require_waiter_permission(
-            db,
-            current_user,
-            "perm_garcom_editar",
-        )
-
     # 3. Validar se o garçom existe
-    garcom = db.query(Usuario).filter(Usuario.id == lancamento_in.garcom_id).first()
+    garcom = db.query(Usuario).filter(
+        Usuario.restaurante_id == rid,
+        Usuario.id == lancamento_in.garcom_id,
+    ).first()
     if not garcom:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -922,7 +963,13 @@ def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_ta
     if prod_ids:
         # Usamos joinedload para trazer a categoria associada, resolvendo N+1 na verificação de impressão logo depois
         from sqlalchemy.orm import joinedload
-        produtos = {p.id: p for p in db.query(Produto).options(joinedload(Produto.categoria)).filter(Produto.id.in_(prod_ids)).all()}
+        produtos = {
+            p.id: p
+            for p in db.query(Produto).options(joinedload(Produto.categoria)).filter(
+                Produto.restaurante_id == rid,
+                Produto.id.in_(prod_ids),
+            ).all()
+        }
 
     try:
         itens_criados = []
@@ -941,6 +988,7 @@ def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_ta
 
             novo_item = Item(
                 id=f"i-{uuid.uuid4().hex[:8]}",
+                restaurante_id=rid,
                 comanda_id=comanda_id,
                 lancamento_id=novo_lancamento.id,
                 produto_id=item_in.produto_id,
@@ -1686,6 +1734,7 @@ def listar_delivery_ativos(db: Session = Depends(get_db), current_user: Usuario 
     Inclui as pendentes (na gaveta de aceite) e as em produção/trânsito.
     """
     return db.query(Comanda).filter(
+        Comanda.restaurante_id == require_tenant_id(),
         Comanda.tipo.in_(["Delivery", "Entrega", "Retirada"]),
         Comanda.fechada == False
     ).all()
@@ -1710,9 +1759,13 @@ def atualizar_status_delivery(
             detail=f"Status inválido. Use um de: {', '.join(sorted(status_validos))}"
         )
 
+    rid = require_tenant_id()
     comanda = (
         db.query(Comanda)
-        .filter(Comanda.id == comanda_id)
+        .filter(
+            Comanda.restaurante_id == rid,
+            Comanda.id == comanda_id,
+        )
         .with_for_update()
         .first()
     )
@@ -1726,6 +1779,8 @@ def atualizar_status_delivery(
         )
 
     status_anterior = comanda.delivery_status
+    if status_normalizado == "producao" and status_anterior != "producao":
+        require_open_cash_shift(db, rid)
     comanda.delivery_status = status_normalizado
     if status_normalizado == "producao" and status_anterior != "producao":
         enqueue_initial_production_for_order(db, comanda)
