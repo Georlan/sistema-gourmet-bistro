@@ -5,6 +5,11 @@ $installDir = Join-Path $env:LOCALAPPDATA "KomaPrintAgent"
 $adapterDir = Join-Path $installDir "adapters"
 $venvDir = Join-Path $installDir ".venv"
 $taskName = "KomaPrintAgent"
+$protocolRoot = "HKCU:\\Software\\Classes\\koma-print"
+
+# Remove registros antigos antes de reinstalar. Isso impede que um protocolo
+# quebrado continue abrindo o PowerShell em ciclo quando a tarefa nao existe.
+Remove-Item -Path $protocolRoot -Recurse -Force -ErrorAction SilentlyContinue
 
 $pythonCommand = Get-Command py -ErrorAction SilentlyContinue
 if (-not $pythonCommand) {
@@ -69,18 +74,9 @@ $pythonw = Join-Path $venvDir "Scripts\pythonw.exe"
 $action = New-ScheduledTaskAction -Execute $pythonw -Argument ("`"{0}`"" -f (Join-Path $installDir "main.py")) -WorkingDirectory $installDir
 $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $currentUser
-$settings = New-ScheduledTaskSettingsSet -RestartCount 20 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero)
+$settings = New-ScheduledTaskSettingsSet -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
 $principal = New-ScheduledTaskPrincipal -UserId $currentUser -LogonType Interactive -RunLevel Limited
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null
-
-$protocolRoot = "HKCU:\Software\Classes\koma-print"
-New-Item -Force $protocolRoot | Out-Null
-New-ItemProperty -Path $protocolRoot -Name "URL Protocol" -Value "" -PropertyType String -Force | Out-Null
-Set-Item -Path $protocolRoot -Value "URL:Koma Print"
-$commandKey = Join-Path $protocolRoot "shell\open\command"
-New-Item -Force $commandKey | Out-Null
-$launcher = Join-Path $installDir "koma-print-launcher.ps1"
-Set-Item -Path $commandKey -Value ("powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"{0}`" `"%1`"" -f $launcher)
 
 Start-ScheduledTask -TaskName $taskName
 Start-Sleep -Seconds 2
@@ -88,6 +84,23 @@ $task = Get-ScheduledTask -TaskName $taskName
 if ($task.State -notin @("Running", "Ready")) {
     throw "O Koma Print nao iniciou. Verifique o Agendador de Tarefas do Windows."
 }
+
+# O protocolo do navegador usa WScript para iniciar a tarefa sem exibir
+# uma janela do PowerShell. A tarefa ignora chamadas repetidas enquanto
+# uma instancia do agente ja estiver ativa.
+$protocolLauncher = Join-Path $installDir "koma-print-launcher.vbs"
+$protocolScript = @'
+Set shell = CreateObject("WScript.Shell")
+shell.Run "schtasks.exe /Run /TN ""KomaPrintAgent""", 0, False
+'@
+Set-Content -Path $protocolLauncher -Value $protocolScript -Encoding ASCII -Force
+
+New-Item -Force $protocolRoot | Out-Null
+New-ItemProperty -Path $protocolRoot -Name "URL Protocol" -Value "" -PropertyType String -Force | Out-Null
+Set-Item -Path $protocolRoot -Value "URL:Koma Print"
+$commandKey = Join-Path $protocolRoot "shell\\open\\command"
+New-Item -Force $commandKey | Out-Null
+Set-Item -Path $commandKey -Value ("wscript.exe `"{0}`" `"%1`"" -f $protocolLauncher)
 
 Write-Host ""
 Write-Host "[OK] Impressao instalada e configurada para iniciar com o Windows."
