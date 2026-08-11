@@ -1740,12 +1740,7 @@ def atualizar_configuracao_restaurante(
     
     background_tasks.add_task(
         manager.broadcast,
-        {"event": "CONFIG_UPDATE", "data": restaurante_data},
-        rest_id
-    )
-    background_tasks.add_task(
-        manager.broadcast,
-        {"type": "catalog_updated", "message": "Configurações visuais atualizadas"},
+        {"event": "config_updated", "data": restaurante_data},
         rest_id
     )
     

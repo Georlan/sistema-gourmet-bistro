@@ -1,5 +1,6 @@
 import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from ..database import get_db, current_restaurante_id, require_tenant_id
@@ -17,12 +18,14 @@ router = APIRouter(
 @router.get("/", response_model=List[MesaResponse])
 def get_mesas(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """Retorna todas as mesas do salão com suas respectivas capacidades e nomes."""
-    return db.query(Mesa).order_by(Mesa.id).all()
+    rest_id = require_tenant_id()
+    return db.query(Mesa).filter(Mesa.restaurante_id == rest_id).order_by(Mesa.id).all()
 
 @router.get("/{mesa_id}", response_model=MesaResponse)
 def get_mesa(mesa_id: int, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """Busca os detalhes de uma mesa específica pelo ID."""
-    mesa = db.query(Mesa).filter(Mesa.id == mesa_id).first()
+    rest_id = require_tenant_id()
+    mesa = db.query(Mesa).filter(Mesa.restaurante_id == rest_id, Mesa.id == mesa_id).first()
     if not mesa:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -39,7 +42,8 @@ def update_mesa(
     current_user: Usuario = Depends(require_permission("caixa:operar"))
 ):
     """Permite alterar a capacidade ou o nome personalizado da mesa."""
-    db_mesa = db.query(Mesa).filter(Mesa.id == mesa_id).first()
+    rest_id = require_tenant_id()
+    db_mesa = db.query(Mesa).filter(Mesa.restaurante_id == rest_id, Mesa.id == mesa_id).first()
     if not db_mesa:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -53,7 +57,11 @@ def update_mesa(
         
     db.commit()
     db.refresh(db_mesa)
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
+    background_tasks.add_task(
+        manager.broadcast,
+        {"event": "tables_updated", "detail": {"type": "layout_mesa_atualizado", "action": "updated", "mesa_id": mesa_id}},
+        rest_id,
+    )
     return db_mesa
 
 @router.post("/", response_model=MesaResponse, status_code=status.HTTP_201_CREATED)
@@ -64,7 +72,8 @@ def create_mesa(
     current_user: Usuario = Depends(require_permission("caixa:operar"))
 ):
     """Cria uma nova mesa dinamicamente no salão."""
-    existing = db.query(Mesa).filter(Mesa.id == mesa_in.id).first()
+    rest_id = require_tenant_id()
+    existing = db.query(Mesa).filter(Mesa.restaurante_id == rest_id, Mesa.id == mesa_in.id).first()
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -72,13 +81,25 @@ def create_mesa(
         )
     nova_mesa = Mesa(
         id=mesa_in.id,
+        restaurante_id=rest_id,
         capacidade=mesa_in.capacidade,
         nome=mesa_in.nome
     )
     db.add(nova_mesa)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Mesa com número {mesa_in.id} já existe.",
+        ) from exc
     db.refresh(nova_mesa)
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
+    background_tasks.add_task(
+        manager.broadcast,
+        {"event": "tables_updated", "detail": {"type": "layout_mesa_atualizado", "action": "created", "mesa_id": mesa_in.id}},
+        rest_id,
+    )
     return nova_mesa
 
 @router.delete("/{mesa_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -89,13 +110,18 @@ def delete_mesa(
     current_user: Usuario = Depends(require_permission("caixa:operar"))
 ):
     """Remove uma mesa do salão se ela não tiver nenhuma comanda ativa aberta."""
-    mesa = db.query(Mesa).filter(Mesa.id == mesa_id).first()
+    rest_id = require_tenant_id()
+    mesa = db.query(Mesa).filter(Mesa.restaurante_id == rest_id, Mesa.id == mesa_id).first()
     if not mesa:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Mesa não encontrada"
         )
-    comanda_ativa = db.query(Comanda).filter(Comanda.mesa_id == mesa_id, Comanda.fechada == False).first()
+    comanda_ativa = db.query(Comanda).filter(
+        Comanda.restaurante_id == rest_id,
+        Comanda.mesa_id == mesa_id,
+        Comanda.fechada == False,
+    ).first()
     if comanda_ativa:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -109,7 +135,11 @@ def delete_mesa(
     ).update({Comanda.mesa_id: None}, synchronize_session=False)
     db.delete(mesa)
     db.commit()
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
+    background_tasks.add_task(
+        manager.broadcast,
+        {"event": "tables_updated", "detail": {"type": "layout_mesa_atualizado", "action": "deleted", "mesa_id": mesa_id}},
+        rest_id,
+    )
     return
 
 

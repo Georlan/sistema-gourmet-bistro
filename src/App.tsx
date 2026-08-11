@@ -460,11 +460,13 @@ export default function App() {
       if (res.ok) {
         await fetchTables();
       } else {
-        const err = await res.json();
-        showToast(`Erro ao criar mesa: ${err.detail}`, 'error');
+        const payload = await res.json().catch(() => null);
+        throw new Error(payload?.detail || res.statusText || 'Não foi possível criar a mesa.');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      showToast(`Erro ao criar mesa: ${err.message || 'falha de conexão'}`, 'error');
+      throw err;
     }
   };
 
@@ -479,11 +481,13 @@ export default function App() {
       if (res.ok) {
         await fetchTables();
       } else {
-        const err = await res.json();
-        showToast(`Erro ao atualizar mesa: ${err.detail}`, 'error');
+        const payload = await res.json().catch(() => null);
+        throw new Error(payload?.detail || res.statusText || 'Não foi possível atualizar a mesa.');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      showToast(`Erro ao atualizar mesa: ${err.message || 'falha de conexão'}`, 'error');
+      throw err;
     }
   };
 
@@ -497,18 +501,13 @@ export default function App() {
       if (res.ok) {
         await fetchTables();
       } else {
-        let errMsg = 'Erro desconhecido';
-        try {
-          const err = await res.json();
-          errMsg = err.detail || errMsg;
-        } catch (_) {
-          errMsg = res.statusText || errMsg;
-        }
-        showToast(`Erro ao excluir mesa: ${errMsg}`, 'error');
+        const payload = await res.json().catch(() => null);
+        throw new Error(payload?.detail || res.statusText || 'Não foi possível excluir a mesa.');
       }
     } catch (err: any) {
       console.error(err);
-      showToast(`Erro de conexão ao excluir mesa: ${err.message}`, 'error');
+      showToast(`Erro ao excluir mesa: ${err.message || 'falha de conexão'}`, 'error');
+      throw err;
     }
   };
 
@@ -728,110 +727,141 @@ export default function App() {
       return;
     }
 
-    let ws: WebSocket;
-    let reconnectTimeout: any;
-    let wsUpdateTimeout: any;
-    let pendingSupportingRefresh = false;
+    let activeSocket: WebSocket | null = null;
+    let reconnectTimeout: ReturnType<typeof setTimeout> | undefined;
+    let wsUpdateTimeout: ReturnType<typeof setTimeout> | undefined;
+    let stopped = false;
     let currentDelay = 2000;
 
-    // O backend pode publicar mais de um evento para a mesma alteração (por
-    // exemplo, mesa + pedido online). Consolida a rajada em uma única leitura
-    // para evitar aborts concorrentes, renders redundantes e atraso perceptível.
-    const scheduleRealtimeRefresh = (includeSupportingData = false) => {
-      pendingSupportingRefresh = pendingSupportingRefresh || includeSupportingData;
+    type RealtimeRefreshFlags = {
+      orders?: boolean;
+      tables?: boolean;
+      catalog?: boolean;
+      config?: boolean;
+      summary?: boolean;
+      payments?: boolean;
+    };
+
+    let pendingRefresh: RealtimeRefreshFlags = {};
+
+    // Vários endpoints publicam eventos próximos entre si. Consolida a rajada
+    // e busca somente os recursos realmente afetados pela mudança.
+    const scheduleRealtimeRefresh = (flags: RealtimeRefreshFlags) => {
+      pendingRefresh = { ...pendingRefresh, ...flags };
       if (wsUpdateTimeout) clearTimeout(wsUpdateTimeout);
       wsUpdateTimeout = setTimeout(() => {
-        fetchOrdersFromAPI();
-        if (pendingSupportingRefresh) {
-          fetchTables();
-          fetchLiveCatalog();
-          fetchConfig();
-          fetchTurnoResumo();
-          if (isManagementRole(activeRole)) {
-            fetchPagamentosPendentes();
-          }
+        const refresh = pendingRefresh;
+        pendingRefresh = {};
+
+        if (refresh.orders) fetchOrdersFromAPI();
+        if (refresh.tables) fetchTables();
+        if (refresh.catalog) fetchLiveCatalog();
+        if (refresh.config) fetchConfig();
+        if (refresh.summary) fetchTurnoResumo();
+        if (refresh.payments && isManagementRole(activeRole)) {
+          fetchPagamentosPendentes();
         }
-        pendingSupportingRefresh = false;
-        window.dispatchEvent(new Event('koma_orders_updated'));
+        if (refresh.orders || refresh.tables) {
+          window.dispatchEvent(new Event('koma_orders_updated'));
+        }
       }, 90);
     };
 
-    const playNotificationSound = () => {
-      try {
-        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-        const playTone = (freq: number, start: number, duration: number) => {
-          const osc = audioCtx.createOscillator();
-          const gain = audioCtx.createGain();
-          osc.type = "sine";
-          osc.frequency.setValueAtTime(freq, start);
-          gain.gain.setValueAtTime(0.15, start);
-          gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-          osc.connect(gain);
-          gain.connect(audioCtx.destination);
-          osc.start(start);
-          osc.stop(start + duration);
-        };
-        playTone(587.33, audioCtx.currentTime, 0.15); // D5
-        playTone(880.00, audioCtx.currentTime + 0.15, 0.25); // A5
-      } catch (e) {
-        console.warn("Could not play notification sound:", e);
-      }
-    };
-
     const connectWS = () => {
-      if (document.hidden) return;
+      if (stopped || document.hidden) return;
+
+      const existing = wsRef.current;
+      if (
+        existing
+        && (existing.readyState === WebSocket.CONNECTING || existing.readyState === WebSocket.OPEN)
+      ) {
+        return;
+      }
+
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+        reconnectTimeout = undefined;
+      }
+
       const wsBase = API_BASE_URL.replace(/^http/, 'ws');
       const tokenKey = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
       const token = localStorage.getItem(tokenKey) || "";
       const wsUrl = `${wsBase}/ws/${activeWaiterId}?token=${token}`;
-      ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
+      const socket = new WebSocket(wsUrl);
+      activeSocket = socket;
+      wsRef.current = socket;
 
-      ws.onopen = () => {
+      socket.onopen = () => {
+        if (stopped || wsRef.current !== socket) return;
         console.log("WebSocket connection established");
         setIsWsConnected(true);
-        currentDelay = 2000; // Reset backoff delay on successful connection
+        currentDelay = 2000;
         fetchTables();
         fetchOrdersFromAPI();
       };
 
-      ws.onmessage = (event) => {
+      socket.onmessage = (event) => {
+        if (stopped || wsRef.current !== socket) return;
         try {
           const data = JSON.parse(event.data);
-          if (data.event === "new_delivery_order" || data.event === "ORDER_UPDATED" || data.event === "NEW_ORDER") {
-            scheduleRealtimeRefresh(false);
+          const eventName = data.event || data.type;
+
+          if (
+            eventName === "new_delivery_order"
+            || eventName === "ORDER_UPDATED"
+            || eventName === "NEW_ORDER"
+            || eventName === "order_updated"
+            || eventName === "order_status_updated"
+          ) {
+            scheduleRealtimeRefresh({ orders: true });
           }
-          if (data.event === "print_monitor_updated") {
+          if (eventName === "print_monitor_updated") {
             // Atualização silenciosa: o painel refaz a consulta sem toast,
             // som ou interrupção do operador.
             window.dispatchEvent(
               new Event('koma_print_monitor_refresh')
             );
           }
-          if (data.event === "customers_updated") {
+          if (eventName === "customers_updated") {
             window.dispatchEvent(new Event('koma_customers_updated'));
           }
-          if ((data.event || data.type) === "catalog_updated") {
-            fetchLiveCatalog();
+          if (eventName === "catalog_updated") {
+            scheduleRealtimeRefresh({ catalog: true });
           }
-          if (data.event === "tables_updated" || data.event === "TABLE_UPDATED") {
-            scheduleRealtimeRefresh(true);
+          if (eventName === "config_updated" || eventName === "CONFIG_UPDATE") {
+            scheduleRealtimeRefresh({ config: true });
+          }
+          if (eventName === "tables_updated" || eventName === "TABLE_UPDATED") {
+            const isLayoutChange = data.detail?.type === 'layout_mesa_atualizado';
+            scheduleRealtimeRefresh(isLayoutChange
+              ? { tables: true }
+              : {
+                  orders: true,
+                  tables: true,
+                  summary: true,
+                  payments: true
+                }
+            );
             if (data.detail && data.detail.type === "pagamento_registrado" && data.detail.status === "pendente") {
               showToast(`💵 CONFIRMAR DINHEIRO: R$ ${data.detail.valor.toFixed(2)} - Garçom ${data.detail.garcom_nome}`, 'info', 5000);
             }
-          } else if (data.event === "MESA_ATUALIZADA") {
-            scheduleRealtimeRefresh(false);
-            const { mesa_id, status, comanda_id } = data.data;
+          } else if (eventName === "MESA_ATUALIZADA" || eventName === "MESA_UPDATED") {
+            scheduleRealtimeRefresh({ orders: true });
+            const mesaUpdate = data.data || data;
+            const mesaId = Number(mesaUpdate.mesa_id);
+            const status = String(mesaUpdate.status || '').toLowerCase();
+            const comandaId = mesaUpdate.comanda_id ?? null;
+            if (!Number.isFinite(mesaId) || mesaId <= 0) return;
             if (status === 'livre') {
-              setOrders(prevOrders => prevOrders.filter(o => o.mesaId !== mesa_id));
+              setOrders(prevOrders => prevOrders.filter(o => o.mesaId !== mesaId));
             }
             setSalonTables(prevTables =>
-              prevTables.map(t => t.id === mesa_id ? { ...t, status: status, comanda_id: comanda_id } : t)
+              prevTables.map(t => t.id === mesaId ? { ...t, status, comanda_id: comandaId } : t)
             );
             if (status === 'livre' && portal === 'garcom' && navigator.vibrate) {
               navigator.vibrate(100);
             }
-          } else if (data.event === "draft_status") {
+          } else if (eventName === "draft_status") {
             const { mesa_id, garcom_id, garcom_nome, ativo } = data;
             setActiveDrafts(prev => {
               const updated = { ...prev };
@@ -853,7 +883,7 @@ export default function App() {
               }
               return updated;
             });
-          } else if (data.event === "waiter_connected" || data.event === "waiter_disconnected") {
+          } else if (eventName === "waiter_connected" || eventName === "waiter_disconnected") {
             const { garcom_id } = data;
             setActiveDrafts(prev => {
               const updated = { ...prev };
@@ -877,27 +907,29 @@ export default function App() {
         }
       };
 
-      ws.onclose = () => {
+      socket.onclose = () => {
+        if (stopped || wsRef.current !== socket) return;
         setIsWsConnected(false);
         wsRef.current = null;
         if (!document.hidden) {
           console.log(`WebSocket disconnected, reconnecting in ${currentDelay}ms`);
+          if (reconnectTimeout) clearTimeout(reconnectTimeout);
           reconnectTimeout = setTimeout(connectWS, currentDelay);
-          currentDelay = Math.min(currentDelay * 1.5, 30000); // Exponential backoff max 30s
+          currentDelay = Math.min(currentDelay * 1.5, 30000);
         }
       };
 
-      ws.onerror = (err) => {
+      socket.onerror = (err) => {
         console.error("WebSocket connection error:", err);
       };
     };
 
     const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-          currentDelay = 2000;
-          connectWS();
-        }
+      if (document.hidden || stopped) return;
+      const socket = wsRef.current;
+      if (!socket || socket.readyState === WebSocket.CLOSED) {
+        currentDelay = 2000;
+        connectWS();
       }
     };
 
@@ -905,27 +937,34 @@ export default function App() {
     connectWS();
 
     return () => {
+      stopped = true;
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      clearTimeout(reconnectTimeout);
-      clearTimeout(wsUpdateTimeout);
-      if (ws) {
-        ws.onopen = null;
-        ws.onmessage = null;
-        ws.onclose = null;
-        ws.onerror = null;
-        ws.close();
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (wsUpdateTimeout) clearTimeout(wsUpdateTimeout);
+      if (activeSocket) {
+        activeSocket.onopen = null;
+        activeSocket.onmessage = null;
+        activeSocket.onclose = null;
+        activeSocket.onerror = null;
+        activeSocket.close();
       }
-      // Nullify the ref so reconnect timers don't operate on a closed socket
-      wsRef.current = null;
+      if (wsRef.current === activeSocket) wsRef.current = null;
     };
-  }, [isAuthenticated, activeWaiterId]);
+  }, [isAuthenticated, activeWaiterId, activeRole, portal]);
 
   // Sync local draft changes to WebSocket
   useEffect(() => {
     if (!isAuthenticated || !activeWaiterId || !isWsConnected || activeRole !== 'garcom') return;
 
     const currentStatuses: { [mesaId: number]: boolean } = {};
-    for (let mId = 1; mId <= RESTAURANT_CONFIG.totalMesas; mId++) {
+    const mesaIds = new Set<number>([
+      ...salonTables.map(table => table.id),
+      ...Object.keys(drafts).map(Number),
+      ...Object.keys(lastDraftStatusesRef.current).map(Number)
+    ]);
+
+    mesaIds.forEach((mId) => {
+      if (!Number.isFinite(mId) || mId <= 0) return;
       const hasDraft = (drafts[mId] || []).length > 0;
       const isViewing = selectedTableId === mId;
       const isActive = hasDraft || isViewing;
@@ -935,9 +974,9 @@ export default function App() {
       if (isActive !== prev) {
         notifyDraftStatus(mId, isActive);
       }
-    }
+    });
     lastDraftStatusesRef.current = currentStatuses;
-  }, [drafts, selectedTableId, isAuthenticated, activeWaiterId, isWsConnected, activeRole]);
+  }, [drafts, selectedTableId, salonTables, isAuthenticated, activeWaiterId, isWsConnected, activeRole]);
 
   // Reset statuses ref on disconnect to trigger fresh sync upon reconnect
   useEffect(() => {

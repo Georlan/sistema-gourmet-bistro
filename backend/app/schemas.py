@@ -138,18 +138,18 @@ class UsuarioSimples(BaseModel):
 
 # ----------------- MESA (TABLE) -----------------
 class MesaBase(BaseModel):
-    id: int
-    capacidade: int
+    id: int = Field(ge=1)
+    capacidade: int = Field(ge=1)
     nome: Optional[str] = None
 
 class MesaCreate(BaseModel):
-    id: int
-    capacidade: int
+    id: int = Field(ge=1)
+    capacidade: int = Field(ge=1)
     nome: Optional[str] = None
 
 class MesaUpdate(BaseModel):
     nome: Optional[str] = None
-    capacidade: Optional[int] = None
+    capacidade: Optional[int] = Field(default=None, ge=1)
 
 class MesaResponse(MesaBase):
     model_config = ConfigDict(from_attributes=True)

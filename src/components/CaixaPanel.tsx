@@ -789,11 +789,57 @@ export function CaixaPanel({
   const [newMesaId, setNewMesaId] = useState('');
   const [newMesaCap, setNewMesaCap] = useState('4');
   const [newMesaNome, setNewMesaNome] = useState('');
-  const [editingTable, setEditingTable] = useState<any | null>(null);
+  const [editingTable, setEditingTable] = useState<Table | null>(null);
   const [editTableCap, setEditTableCap] = useState('');
   const [editTableNome, setEditTableNome] = useState('');
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [confirmingFreeTableId, setConfirmingFreeTableId] = useState<number | null>(null);
+  const [tableStatusFilter, setTableStatusFilter] = useState<'all' | 'free' | 'occupied' | 'payment'>('all');
+  const [tableMutation, setTableMutation] = useState<'create' | 'update' | 'delete' | 'release' | null>(null);
+  const [tableFormError, setTableFormError] = useState('');
+  const [tableReleaseError, setTableReleaseError] = useState('');
+
+  const salonTableCards = useMemo(() => (salonTables || []).map((table) => {
+    const mergedIntoMesaId = orders.find(order => order.mesaOrigemId === table.id)?.mesaId || null;
+    const isMerged = mergedIntoMesaId !== null;
+    const displayMesaId = isMerged ? mergedIntoMesaId : table.id;
+    const tableOrders = orders.filter(order => order.mesaId === displayMesaId);
+    const isOccupied = tableOrders.length > 0;
+    const hasPendingPayment = pagamentosPendentes.some(payment =>
+      tableOrders.some(order => order.id === payment.comanda_id)
+    );
+    const total = tableOrders.reduce((sum, order) => (
+      sum + (order.itens || []).reduce((itemsTotal, item) => itemsTotal + Number(item.preco || 0), 0)
+    ), 0);
+
+    return {
+      table,
+      displayMesaId,
+      tableOrders,
+      isMerged,
+      isOccupied,
+      hasPendingPayment,
+      total,
+    };
+  }), [orders, pagamentosPendentes, salonTables]);
+
+  const tableStatusCounts = useMemo(() => ({
+    all: salonTableCards.length,
+    free: salonTableCards.filter(card => !card.isOccupied && !card.isMerged).length,
+    occupied: salonTableCards.filter(card => card.isOccupied && !card.hasPendingPayment).length,
+    payment: salonTableCards.filter(card => card.hasPendingPayment).length,
+  }), [salonTableCards]);
+
+  const visibleSalonTableCards = useMemo(() => salonTableCards.filter((card) => {
+    if (tableStatusFilter === 'free') return !card.isOccupied && !card.isMerged;
+    if (tableStatusFilter === 'occupied') return card.isOccupied && !card.hasPendingPayment;
+    if (tableStatusFilter === 'payment') return card.hasPendingPayment;
+    return true;
+  }), [salonTableCards, tableStatusFilter]);
+
+  const editingTableRuntime = editingTable
+    ? salonTableCards.find(card => card.table.id === editingTable.id)
+    : undefined;
 
   // Product & Category management states
   const [apiCategorias, setApiCategorias] = useState<any[]>([]);
@@ -2390,42 +2436,6 @@ export function CaixaPanel({
     };
   }, [apiBaseUrl]);
 
-  // Listener para mensagens nativas de WebSocket / Eventos do sistema Kôma
-  useEffect(() => {
-    const handleWebSocketMessage = (event: MessageEvent) => {
-      try {
-        const message = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-        if (message?.type === 'NEW_CLIENT' || message?.type === 'CLIENTE_CADASTRADO' || message?.type === 'koma_new_client') {
-          const novoCliente = message.data || message.detail;
-          if (novoCliente) {
-            setLoyaltyUsers((prev) => {
-              const cleanPhone = (novoCliente.telefone || '').replace(/\D/g, '');
-              if (prev.some(c => c.id === novoCliente.id || (c.telefone || '').replace(/\D/g, '') === cleanPhone)) {
-                return prev;
-              }
-              const mapped: LoyaltyCustomer = {
-                id: String(novoCliente.id || novoCliente.telefone),
-                cliente: novoCliente.nome || novoCliente.cliente || 'Cliente',
-                telefone: novoCliente.telefone || '',
-                pontos: Number(novoCliente.saldo_pontos || 0),
-                saldo_pontos: Number(novoCliente.saldo_pontos || 0),
-                saldoCashback: Number(novoCliente.saldo_cashback || 0),
-                saldo_cashback: Number(novoCliente.saldo_cashback || 0),
-                historico: []
-              };
-              return [mapped, ...prev];
-            });
-          }
-        }
-      } catch (e) {
-        // Ignora mensagens não-JSON
-      }
-    };
-
-    window.addEventListener('message', handleWebSocketMessage);
-    return () => window.removeEventListener('message', handleWebSocketMessage);
-  }, []);
-
   // Sincronização em tempo real do cardápio via WebSocket / Props
   useEffect(() => {
     if (liveProdutos) {
@@ -2797,45 +2807,38 @@ export function CaixaPanel({
   };
 
   // Free table instantly (Cashier power)
-  const handleForceFreeTable = async (mesaId: number) => {
-    if (!confirm(`Deseja realmente fechar e liberar a Mesa ${mesaId} de forma forçada?`)) return;
-    const tableOrders = orders.filter(o => o.mesaId === mesaId);
-    try {
-      for (const comanda of tableOrders) {
-        await fetch(`${apiBaseUrl}/comandas/${comanda.id}/fechar`, {
-          method: "PUT",
-          headers: authHeaders
-        });
-      }
-      onRefreshOrders();
-      setSelectedOrder(null);
-      setShowCheckoutModal(false);
-    } catch (err) {
-      console.error(err);
-      alert("Erro ao liberar mesa.");
-    }
-  };
-
   // Add dynamic mesa CRUD handlers
   const handleAddMesaSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMesaId || isNaN(parseInt(newMesaId))) return;
+    if (tableMutation) return;
+    const mesaId = Number.parseInt(newMesaId, 10);
+    const capacidade = Number.parseInt(newMesaCap, 10);
+    if (!Number.isFinite(mesaId) || mesaId <= 0) {
+      setTableFormError('Informe um número de mesa maior que zero.');
+      return;
+    }
+    if (!Number.isFinite(capacidade) || capacidade <= 0) {
+      setTableFormError('Informe uma capacidade maior que zero.');
+      return;
+    }
+    if (salonTables.some(table => table.id === mesaId)) {
+      setTableFormError(`A Mesa ${mesaId} já existe no salão.`);
+      return;
+    }
+
     try {
-      await onCreateMesa(parseInt(newMesaId), parseInt(newMesaCap), newMesaNome || undefined);
+      setTableMutation('create');
+      setTableFormError('');
+      await onCreateMesa(mesaId, capacidade, newMesaNome.trim() || undefined);
       setShowAddMesaModal(false);
       setNewMesaId('');
+      setNewMesaCap('4');
       setNewMesaNome('');
-    } catch (err) {
-      alert("Erro ao criar nova mesa.");
-    }
-  };
-
-  const handleDeleteMesaAction = async (id: number) => {
-    if (!confirm(`Deseja realmente remover a Mesa ${id} do salão de forma permanente?`)) return;
-    try {
-      await onDeleteMesa(id);
-    } catch (err) {
-      alert("Erro ao deletar mesa.");
+      showToast(`Mesa ${mesaId} adicionada ao salão.`, 'success');
+    } catch (err: any) {
+      setTableFormError(err?.message || 'Não foi possível criar a mesa. Tente novamente.');
+    } finally {
+      setTableMutation(null);
     }
   };
 
@@ -5182,168 +5185,230 @@ export function CaixaPanel({
 
           {/* VIEW 3: MAPA DE MESAS (Salão) */}
           {activeSubTab === 'mesas' && (
-            <div className={clsx('h-full', 'flex', 'flex-col', 'space-y-4')}>
-              <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-3', 'rounded-2xl', 'flex', 'justify-between', 'items-center', 'gap-3')}>
-                <span className={clsx('font-serif', 'font-bold', 'text-gray-300')}>Estrutura Física do Salão</span>
-                <button
-                  onClick={() => setShowAddMesaModal(true)}
-                  className={clsx('px-4', 'py-2', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'font-bold', 'rounded-xl', 'flex', 'items-center', 'gap-1.5', 'cursor-pointer', 'text-[10px]', 'uppercase', 'tracking-wider', 'shadow')}
-                >
-                  <Plus size={12} />
-                  <span>Adicionar Mesa</span>
-                </button>
-              </div>
+            <div className="flex h-full min-h-0 flex-col gap-3">
+              <section className="relative overflow-hidden rounded-[22px] border border-[#163b32] bg-[#0b100e] px-4 py-4 sm:px-5">
+                <div aria-hidden="true" className="absolute inset-y-0 right-0 hidden w-[42%] skew-x-[-22deg] border-l border-[#10b981]/25 bg-[#073b30] opacity-80 lg:block" />
+                <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="max-w-xl">
+                    <span className="mb-1.5 block font-mono text-[9px] font-bold uppercase tracking-[0.24em] text-[#10b981]">
+                      Salão / organização ao vivo
+                    </span>
+                    <h2 className="text-xl font-extrabold tracking-tight text-white sm:text-2xl">
+                      Estrutura física do salão
+                    </h2>
+                    <p className="mt-1 text-xs leading-relaxed text-zinc-400">
+                      Organize as mesas e veja rapidamente quais precisam de atenção.
+                    </p>
+                  </div>
 
-              <div className={clsx('flex-1', 'bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-3', 'sm:p-5', 'overflow-y-auto')}>
-                <div className={clsx('grid', 'grid-cols-2', 'sm:grid-cols-3', 'md:grid-cols-4', 'lg:grid-cols-5', 'xl:grid-cols-6', 'gap-2.5', 'sm:gap-4')}>
-                   {(salonTables || []).length === 0 ? (
-                    <div className="col-span-full py-16 text-center text-zinc-500 font-serif text-sm">
+                  <div className="relative flex flex-wrap items-stretch gap-2 lg:justify-end">
+                    {[
+                      { label: 'Mesas', value: tableStatusCounts.all },
+                      { label: 'Livres', value: tableStatusCounts.free },
+                      { label: 'Em atendimento', value: tableStatusCounts.occupied },
+                      { label: 'Para receber', value: tableStatusCounts.payment },
+                    ].map(metric => (
+                      <div key={metric.label} className="min-w-[92px] rounded-xl border border-white/10 bg-[#071d17]/90 px-3 py-2">
+                        <strong className="block font-mono text-base text-white">{metric.value}</strong>
+                        <span className="text-[9px] text-zinc-400">{metric.label}</span>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTableFormError('');
+                        setShowAddMesaModal(true);
+                      }}
+                      className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#10b981] px-4 text-[10px] font-extrabold uppercase tracking-wider text-[#07110e] transition-colors hover:bg-[#35c99a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6ee7b7]"
+                    >
+                      <Plus size={14} />
+                      Adicionar mesa
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[22px] border border-[#252b28] bg-[#0d100f]">
+                <div className="flex flex-col gap-2 border-b border-[#252b28] px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+                  <div className="flex max-w-full gap-1 overflow-x-auto rounded-xl bg-[#080a09] p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    {[
+                      { id: 'all' as const, label: 'Todas', count: tableStatusCounts.all },
+                      { id: 'free' as const, label: 'Livres', count: tableStatusCounts.free },
+                      { id: 'occupied' as const, label: 'Em atendimento', count: tableStatusCounts.occupied },
+                      { id: 'payment' as const, label: 'Para receber', count: tableStatusCounts.payment },
+                    ].map(filter => (
+                      <button
+                        key={filter.id}
+                        type="button"
+                        aria-pressed={tableStatusFilter === filter.id}
+                        onClick={() => setTableStatusFilter(filter.id)}
+                        className={clsx(
+                          'whitespace-nowrap rounded-lg px-3 py-2 text-[10px] font-bold transition-colors',
+                          tableStatusFilter === filter.id
+                            ? 'bg-[#123c31] text-[#6ee7b7]'
+                            : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200'
+                        )}
+                      >
+                        {filter.label} <span className="ml-1 font-mono opacity-70">{filter.count}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[9px] text-zinc-500">
+                    <span className={clsx('h-1.5 w-1.5 rounded-full', isWsConnected ? 'bg-[#10b981]' : 'bg-zinc-600')} />
+                    {isWsConnected ? 'Atualização em tempo real' : 'Reconectando atualização'}
+                  </div>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
+                  {salonTableCards.length === 0 ? (
+                    <div className="flex min-h-56 items-center justify-center text-center">
                       {fetchError ? (
-                        <div className="space-y-2">
-                          <span className="text-rose-400 block font-mono text-xs">
-                            ⚠️ Erro de comunicação com o servidor:
-                          </span>
-                          <span className="text-zinc-400 block font-mono text-xs bg-black/40 p-3 rounded-lg border border-zinc-800 max-w-md mx-auto">
-                            {fetchError}
-                          </span>
+                        <div className="max-w-md space-y-2 rounded-2xl border border-rose-900/40 bg-rose-950/15 p-5">
+                          <AlertTriangle className="mx-auto text-rose-400" size={20} />
+                          <strong className="block text-sm text-white">Não foi possível carregar o salão</strong>
+                          <p className="break-words font-mono text-[10px] leading-relaxed text-zinc-400">{fetchError}</p>
                         </div>
                       ) : (
-                        "Nenhuma mesa encontrada ou carregando layout..."
+                        <div className="space-y-2 text-zinc-500">
+                          <ClipboardList className="mx-auto text-[#10b981]" size={22} />
+                          <strong className="block text-sm text-zinc-200">Nenhuma mesa cadastrada</strong>
+                          <p className="text-xs">Use “Adicionar mesa” para montar o salão.</p>
+                        </div>
                       )}
                     </div>
+                  ) : visibleSalonTableCards.length === 0 ? (
+                    <div className="flex min-h-56 items-center justify-center text-center text-xs text-zinc-500">
+                      Nenhuma mesa neste filtro.
+                    </div>
                   ) : (
-                    (salonTables || []).map((table) => {
-                      const mergedIntoMesaId = orders.find(o => o.mesaOrigemId === table.id)?.mesaId || null;
-                      const isMerged = mergedIntoMesaId !== null;
-                      const displayMesaId = isMerged ? mergedIntoMesaId : table.id;
-                      const tableOrders = orders.filter(o => o.mesaId === displayMesaId);
-                      const isOcupada = tableOrders.length > 0;
-                      const hasPendingPayment = pagamentosPendentes.some(pag =>
-                        tableOrders.some(o => o.id === pag.comanda_id)
-                      );
-                      const totalConsumoMesa = tableOrders.reduce((sum, order) => {
-                        return sum + (order.itens || []).reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
-                      }, 0);
+                    <div className="grid grid-cols-1 gap-2.5 min-[420px]:grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
+                      {visibleSalonTableCards.map((card) => {
+                        const { table, displayMesaId, tableOrders, isMerged, isOccupied, hasPendingPayment, total } = card;
+                        const originId = tableOrders.find(order => order.mesaOrigemId && Number(order.mesaOrigemId) !== Number(displayMesaId))?.mesaOrigemId;
+                        const transferredFromId = tableOrders.find(order => order.mesaTransferidaDe && Number(order.mesaTransferidaDe) !== Number(displayMesaId))?.mesaTransferidaDe;
+                        const statusLabel = isMerged
+                          ? 'Mesclada'
+                          : hasPendingPayment
+                            ? 'Para receber'
+                            : isOccupied
+                              ? 'Em atendimento'
+                              : 'Livre';
 
-                      return (
-                        <div
-                          key={table.id}
-                          className={`bg-[#121214] border rounded-2xl p-2.5 sm:p-3.5 flex flex-col justify-between gap-2 sm:gap-3 transition-all relative group shadow-sm ${hasPendingPayment
-                            ? 'border-amber-500/80 shadow-[0_0_15px_rgba(245,158,11,0.2)] animate-pulse'
-                            : isMerged
-                              ? 'border-dashed border-zinc-800 opacity-60 bg-zinc-950/20'
-                              : isOcupada
-                                ? 'border-rose-500/40 hover:border-rose-500/80 bg-rose-950/10'
-                                : 'border-[#27272A] hover:border-[#10b981]/40'
-                            }`}
-                        >
-                          {/* Header Mesa + Edit */}
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest block">Mesa</span>
-                              <strong className="text-lg sm:text-xl font-serif text-white leading-none">{table.id}</strong>
-                              {table.nome && table.nome !== `Mesa ${table.id}` && (
-                                <span className="text-[9px] text-[#10b981] block mt-0.5 font-medium">{table.nome}</span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <span className={`px-2 py-0.5 text-[8.5px] font-bold uppercase tracking-wider rounded-full ${isMerged
-                                ? 'bg-zinc-800 text-zinc-500'
-                                : isOcupada
-                                  ? 'bg-rose-500/15 text-rose-400 border border-rose-500/20'
-                                  : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                }`}
-                              >
-                                {isMerged ? 'Mesclada' : isOcupada ? 'Ocupada' : 'Livre'}
-                              </span>
+                        return (
+                          <article
+                            key={table.id}
+                            className={clsx(
+                              'group flex min-h-[148px] flex-col justify-between gap-3 rounded-2xl border p-3.5 transition-colors',
+                              isMerged && 'border-dashed border-zinc-800 bg-black/20 opacity-65',
+                              hasPendingPayment && 'border-[#d2b36c]/45 bg-[#201b10]/35',
+                              isOccupied && !hasPendingPayment && 'border-[#1d5547] bg-[#0d1714] hover:border-[#2c7663]',
+                              !isOccupied && !isMerged && 'border-[#292e2c] bg-[#111412] hover:border-[#2a5e50]'
+                            )}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <span className="block font-mono text-[8px] font-bold uppercase tracking-[0.2em] text-zinc-600">Mesa</span>
+                                <div className="mt-0.5 flex items-baseline gap-2">
+                                  <strong className="text-2xl font-extrabold leading-none text-white">{table.id}</strong>
+                                  {table.nome && table.nome !== `Mesa ${table.id}` && (
+                                    <span className="truncate text-[10px] font-medium text-zinc-400">{table.nome}</span>
+                                  )}
+                                </div>
+                              </div>
                               <button
+                                type="button"
                                 onClick={() => {
                                   setEditingTable(table);
-                                  setEditTableCap(table.capacidade ? table.capacidade.toString() : '4');
+                                  setEditTableCap(String(table.capacidade || 4));
                                   setEditTableNome(table.nome || '');
                                   setIsConfirmingDelete(false);
+                                  setTableFormError('');
                                 }}
-                                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded transition-all cursor-pointer"
-                                title="Editar mesa"
+                                aria-label={`Editar Mesa ${table.id}`}
+                                className="rounded-lg border border-white/[0.07] bg-white/[0.025] p-2 text-zinc-500 transition-colors hover:border-[#10b981]/30 hover:text-[#6ee7b7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10b981]"
                               >
-                                <Edit3 size={11} />
+                                <Edit3 size={13} />
                               </button>
                             </div>
-                          </div>
 
-                          {/* Consumo Total e Tags */}
-                          <div className="space-y-1.5 min-h-[36px] flex flex-col justify-center">
-                            {isOcupada ? (
-                              <div>
-                                <span className="text-[9px] text-zinc-400 font-medium block uppercase tracking-wider">Consumo Total</span>
-                                <span className="text-sm font-extrabold text-emerald-400 font-mono">
-                                  R$ {totalConsumoMesa.toFixed(2)}
+                            <div className="space-y-2">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className={clsx(
+                                  'rounded-full border px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider',
+                                  isMerged && 'border-zinc-700 bg-zinc-900 text-zinc-500',
+                                  hasPendingPayment && 'border-[#d2b36c]/25 bg-[#d2b36c]/10 text-[#e2c987]',
+                                  isOccupied && !hasPendingPayment && 'border-[#10b981]/20 bg-[#10b981]/10 text-[#6ee7b7]',
+                                  !isOccupied && !isMerged && 'border-white/[0.07] bg-white/[0.025] text-zinc-400'
+                                )}>
+                                  {statusLabel}
+                                </span>
+                                <span className="flex items-center gap-1 text-[9px] text-zinc-500">
+                                  <Users size={10} /> {table.capacidade || 4} lugares
                                 </span>
                               </div>
-                            ) : (
-                              <span className="text-[10px] text-zinc-600 italic">Disponível</span>
-                            )}
 
-                            {(() => {
-                              const origemId = tableOrders.find(o => o.mesaOrigemId && Number(o.mesaOrigemId) !== Number(displayMesaId))?.mesaOrigemId;
-                              const transfId = tableOrders.find(o => o.mesaTransferidaDe && Number(o.mesaTransferidaDe) !== Number(displayMesaId))?.mesaTransferidaDe;
-                              if (origemId) {
-                                return (
-                                  <span className="px-1.5 py-0.5 text-[8px] bg-emerald-500/10 text-emerald-300 font-bold rounded block w-fit border border-emerald-500/20 uppercase tracking-wider animate-pulse-subtle" title={`Consumo mesclado da Mesa ${origemId}`}>
-                                    🔗 Mesclado da Mesa {origemId}
-                                  </span>
-                                );
-                              }
-                              if (transfId) {
-                                return (
-                                  <span className="px-1.5 py-0.5 text-[8px] bg-purple-500/10 text-purple-300 font-bold rounded block w-fit border border-purple-500/20 uppercase tracking-wider" title={`Consumo transferido da Mesa ${transfId}`}>
-                                    🔗 Transferido da Mesa {transfId}
-                                  </span>
-                                );
-                              }
-                              return null;
-                            })()}
-                          </div>
+                              {isOccupied ? (
+                                <div className="flex items-end justify-between gap-2">
+                                  <span className="text-[9px] text-zinc-500">Consumo atual</span>
+                                  <strong className="font-mono text-sm text-[#6ee7b7]">
+                                    {total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                  </strong>
+                                </div>
+                              ) : (
+                                <span className="block text-[10px] text-zinc-600">Pronta para receber clientes</span>
+                              )}
 
-                          {/* Ações */}
-                          {isOcupada && (
-                            <div className="flex gap-1.5 pt-2 border-t border-[#27272A]">
-                              <button
-                                onClick={() => {
-                                  const checkoutOrder = buildTableCheckoutOrder(tableOrders);
-                                  if (!checkoutOrder) return;
-                                  setSelectedOrder(checkoutOrder);
-                                  setShowCheckoutModal(true);
-                                  setCheckoutServiceTax(true);
-                                  setSplitPeople('1');
-                                  setSelectedItemIds([]);
-                                  const sub = checkoutOrder.itens
-                                    .filter(item => (item.status as string) !== 'cancelado')
-                                    .reduce((sum, item) => sum + item.preco, 0);
-                                  const total = sub * (1.0 + (taxaServicoAtiva ? serviceTaxRate / 100 : 0));
-                                  setPaymentValor(
-                                    Math.max(0, total - Number(checkoutOrder.valorPago || 0)).toFixed(2)
-                                  );
-                                }}
-                                className="flex-1 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-[#121214] rounded-lg font-bold text-[9px] transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1 shadow-sm"
-                              >
-                                Checkout
-                              </button>
-                              <button
-                                onClick={() => setConfirmingFreeTableId(table.id)}
-                                className="p-1.5 bg-rose-950/40 hover:bg-rose-900/40 text-rose-400 border border-rose-900/30 rounded-lg transition-colors cursor-pointer"
-                                title="Liberar mesa de forma forçada"
-                              >
-                                <X size={12} />
-                              </button>
+                              {(originId || transferredFromId) && (
+                                <span className="block truncate text-[9px] text-zinc-500">
+                                  {originId ? `Unida à Mesa ${originId}` : `Transferida da Mesa ${transferredFromId}`}
+                                </span>
+                              )}
                             </div>
-                          )}
-                        </div>
-                      );
-                    })
+
+                            {isOccupied && (
+                              <div className="flex gap-1.5 border-t border-white/[0.06] pt-2.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const checkoutOrder = buildTableCheckoutOrder(tableOrders);
+                                    if (!checkoutOrder) return;
+                                    setSelectedOrder(checkoutOrder);
+                                    setShowCheckoutModal(true);
+                                    setCheckoutServiceTax(true);
+                                    setSplitPeople('1');
+                                    setSelectedItemIds([]);
+                                    const subtotal = checkoutOrder.itens
+                                      .filter(item => (item.status as string) !== 'cancelado')
+                                      .reduce((sum, item) => sum + item.preco, 0);
+                                    const checkoutTotal = subtotal * (1.0 + (taxaServicoAtiva ? serviceTaxRate / 100 : 0));
+                                    setPaymentValor(Math.max(0, checkoutTotal - Number(checkoutOrder.valorPago || 0)).toFixed(2));
+                                  }}
+                                  className="flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#123c31] px-2 text-[9px] font-extrabold uppercase tracking-wide text-[#6ee7b7] transition-colors hover:bg-[#185241]"
+                                >
+                                  <CreditCard size={12} />
+                                  Receber conta
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setTableReleaseError('');
+                                    setConfirmingFreeTableId(table.id);
+                                  }}
+                                  className="flex min-h-9 items-center justify-center rounded-lg border border-rose-900/35 bg-rose-950/15 px-2.5 text-rose-400 transition-colors hover:bg-rose-950/35"
+                                  title="Liberar mesa sem receber"
+                                  aria-label={`Liberar Mesa ${table.id} sem receber`}
+                                >
+                                  <Unlock size={12} />
+                                </button>
+                              </div>
+                            )}
+                          </article>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
-              </div>
+              </section>
             </div>
           )}
 
@@ -8618,55 +8683,100 @@ export function CaixaPanel({
       {
         showAddMesaModal && (
           <div
-            onClick={(e) => { if (e.target === e.currentTarget) setShowAddMesaModal(false); }}
-            className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4', 'cursor-pointer')}
+            role="presentation"
+            onClick={(e) => {
+              if (e.target === e.currentTarget && !tableMutation) setShowAddMesaModal(false);
+            }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
           >
-            <form onSubmit={handleAddMesaSubmit} className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-3xl', 'w-full', 'max-w-sm', 'p-6', 'space-y-4', 'shadow-2xl', 'animate-scale-in')}>
-              <div className={clsx('flex', 'justify-between', 'items-center', 'border-b', 'border-[#27272A]', 'pb-3')}>
-                <h3 className={clsx('font-serif', 'font-bold', 'text-lg', 'text-white')}>Criar Nova Mesa</h3>
-                <button type="button" onClick={() => setShowAddMesaModal(false)} className={clsx('p-1', 'hover:bg-[#27272A]', 'rounded-full', 'text-gray-400', 'hover:text-white', 'cursor-pointer')}><X size={16} /></button>
+            <form onSubmit={handleAddMesaSubmit} className="w-full max-w-md overflow-hidden rounded-[24px] border border-[#2b312e] bg-[#141715] shadow-2xl animate-scale-in">
+              <div className="flex items-start justify-between border-b border-[#2b312e] px-5 py-4 sm:px-6">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#10b981]/20 bg-[#10b981]/10 text-[#6ee7b7]">
+                    <Plus size={18} />
+                  </span>
+                  <div>
+                    <span className="block font-mono text-[8px] font-bold uppercase tracking-[0.2em] text-[#10b981]">Estrutura do salão</span>
+                    <h3 className="mt-0.5 text-lg font-bold text-white">Adicionar mesa</h3>
+                    <p className="mt-0.5 text-[10px] text-zinc-500">Ela ficará disponível no caixa e no app do garçom.</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={tableMutation !== null}
+                  onClick={() => setShowAddMesaModal(false)}
+                  aria-label="Fechar"
+                  className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-white/[0.05] hover:text-white disabled:opacity-40"
+                >
+                  <X size={16} />
+                </button>
               </div>
 
-              <div className={clsx('space-y-3', 'text-left')}>
-                <div className="space-y-1">
-                  <label className={clsx('text-[9px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Número da Mesa:</label>
+              <div className="space-y-4 px-5 py-5 sm:px-6">
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="space-y-1.5">
+                    <span className="block text-[9px] font-bold uppercase tracking-wider text-zinc-400">Número da mesa</span>
                   <input
                     type="number"
+                    min="1"
                     required
                     placeholder="Ex: 31"
                     value={newMesaId}
-                    onChange={(e) => setNewMesaId(e.target.value)}
-                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'font-mono')}
+                    onChange={(e) => { setNewMesaId(e.target.value); setTableFormError(''); }}
+                    className="w-full rounded-xl border border-[#303633] bg-[#0c0f0d] px-3 py-3 font-mono text-sm text-white outline-none transition-colors placeholder:text-zinc-700 focus:border-[#10b981]/60"
                   />
-                </div>
-
-                <div className="space-y-1">
-                  <label className={clsx('text-[9px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Capacidade (Lugares):</label>
+                  </label>
+                  <label className="space-y-1.5">
+                    <span className="block text-[9px] font-bold uppercase tracking-wider text-zinc-400">Lugares</span>
                   <input
                     type="number"
+                    min="1"
                     required
                     placeholder="Ex: 4"
                     value={newMesaCap}
-                    onChange={(e) => setNewMesaCap(e.target.value)}
-                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'font-mono')}
+                    onChange={(e) => { setNewMesaCap(e.target.value); setTableFormError(''); }}
+                    className="w-full rounded-xl border border-[#303633] bg-[#0c0f0d] px-3 py-3 font-mono text-sm text-white outline-none transition-colors placeholder:text-zinc-700 focus:border-[#10b981]/60"
                   />
+                  </label>
                 </div>
 
-                <div className="space-y-1">
-                  <label className={clsx('text-[9px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Nome Personalizado (Opcional):</label>
+                <label className="block space-y-1.5">
+                  <span className="block text-[9px] font-bold uppercase tracking-wider text-zinc-400">Nome de referência <span className="normal-case text-zinc-600">(opcional)</span></span>
                   <input
                     type="text"
-                    placeholder="Ex: Varanda VIP"
+                    maxLength={80}
+                    placeholder="Ex.: Varanda, Deck ou Mesa VIP"
                     value={newMesaNome}
-                    onChange={(e) => setNewMesaNome(e.target.value)}
-                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white')}
+                    onChange={(e) => { setNewMesaNome(e.target.value); setTableFormError(''); }}
+                    className="w-full rounded-xl border border-[#303633] bg-[#0c0f0d] px-3 py-3 text-sm text-white outline-none transition-colors placeholder:text-zinc-700 focus:border-[#10b981]/60"
                   />
-                </div>
-              </div>
+                </label>
 
-              <div className={clsx('flex', 'gap-2', 'pt-2')}>
-                <button type="button" onClick={() => setShowAddMesaModal(false)} className={clsx('flex-1', 'py-2', 'bg-[#121214]', 'hover:bg-[#27272A]', 'border', 'border-[#27272A]', 'text-white', 'rounded-xl', 'font-bold', 'cursor-pointer')}>Cancelar</button>
-                <button type="submit" className={clsx('flex-1', 'py-2', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'rounded-xl', 'font-bold', 'cursor-pointer')}>Salvar Mesa</button>
+                {tableFormError && (
+                  <div role="alert" className="flex gap-2 rounded-xl border border-rose-900/40 bg-rose-950/20 p-3 text-[11px] leading-relaxed text-rose-300">
+                    <AlertTriangle className="mt-0.5 shrink-0" size={14} />
+                    {tableFormError}
+                  </div>
+                )}
+
+                <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row">
+                  <button
+                    type="button"
+                    disabled={tableMutation !== null}
+                    onClick={() => setShowAddMesaModal(false)}
+                    className="min-h-11 flex-1 rounded-xl border border-[#303633] bg-[#0c0f0d] px-4 text-xs font-bold text-zinc-400 transition-colors hover:text-white disabled:opacity-40"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={tableMutation !== null}
+                    className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#10b981] px-4 text-xs font-extrabold text-[#07110e] transition-colors hover:bg-[#35c99a] disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {tableMutation === 'create' ? <RefreshCw className="animate-spin" size={14} /> : <Check size={14} />}
+                    {tableMutation === 'create' ? 'Adicionando…' : 'Adicionar mesa'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -8677,132 +8787,184 @@ export function CaixaPanel({
       {
         editingTable && (
           <div
-            onClick={(e) => { if (e.target === e.currentTarget) { setEditingTable(null); setIsConfirmingDelete(false); } }}
-            className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4', 'cursor-pointer')}
+            role="presentation"
+            onClick={(e) => {
+              if (e.target === e.currentTarget && !tableMutation) {
+                setEditingTable(null);
+                setIsConfirmingDelete(false);
+              }
+            }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
           >
-            <div className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-3xl', 'w-full', 'max-w-sm', 'p-6', 'space-y-4', 'shadow-2xl', 'animate-scale-in')}>
-              <div className={clsx('flex', 'justify-between', 'items-center', 'border-b', 'border-[#27272A]', 'pb-3')}>
-                <h3 className={clsx('font-serif', 'font-bold', 'text-lg', 'text-white')}>Editar Mesa {editingTable.id}</h3>
+            <form
+              onSubmit={async (event) => {
+                event.preventDefault();
+                if (tableMutation) return;
+                const capacity = Number.parseInt(editTableCap, 10);
+                if (!Number.isFinite(capacity) || capacity <= 0) {
+                  setTableFormError('Informe uma capacidade maior que zero.');
+                  return;
+                }
+                try {
+                  setTableMutation('update');
+                  setTableFormError('');
+                  await onUpdateMesa(editingTable.id, capacity, editTableNome.trim() || `Mesa ${editingTable.id}`);
+                  showToast(`Mesa ${editingTable.id} atualizada.`, 'success');
+                  setEditingTable(null);
+                } catch (err: any) {
+                  setTableFormError(err?.message || 'Não foi possível atualizar a mesa.');
+                } finally {
+                  setTableMutation(null);
+                }
+              }}
+              className="w-full max-w-md overflow-hidden rounded-[24px] border border-[#2b312e] bg-[#141715] shadow-2xl animate-scale-in"
+            >
+              <div className="flex items-start justify-between border-b border-[#2b312e] px-5 py-4 sm:px-6">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#10b981]/20 bg-[#10b981]/10 font-mono text-base font-extrabold text-[#6ee7b7]">
+                    {editingTable.id}
+                  </span>
+                  <div>
+                    <span className="block font-mono text-[8px] font-bold uppercase tracking-[0.2em] text-[#10b981]">Configuração da mesa</span>
+                    <h3 className="mt-0.5 text-lg font-bold text-white">Editar Mesa {editingTable.id}</h3>
+                    <p className="mt-0.5 text-[10px] text-zinc-500">
+                      {editingTableRuntime?.isOccupied ? 'Em atendimento agora' : 'Livre e disponível no salão'}
+                    </p>
+                  </div>
+                </div>
                 <button 
                   type="button" 
+                  disabled={tableMutation !== null}
                   onClick={() => {
                     setEditingTable(null);
                     setIsConfirmingDelete(false);
                   }} 
-                  className={clsx('p-1', 'hover:bg-[#27272A]', 'rounded-full', 'text-gray-400', 'hover:text-white', 'cursor-pointer')}
+                  aria-label="Fechar"
+                  className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-white/[0.05] hover:text-white disabled:opacity-40"
                 >
                   <X size={16} />
                 </button>
               </div>
 
-              {isConfirmingDelete ? (
-                <div className="bg-rose-950/20 border border-rose-900/40 p-4 rounded-2xl text-center space-y-3">
-                  <span className="text-lg block">⚠️</span>
-                  <p className="text-xs text-rose-300">
-                    Tem certeza que deseja remover a <strong>Mesa {editingTable.id}</strong> permanentemente? Essa ação não pode ser desfeita.
+              <div className="space-y-4 px-5 py-5 sm:px-6">
+                {isConfirmingDelete ? (
+                <div className="space-y-4 rounded-2xl border border-rose-900/40 bg-rose-950/20 p-4 text-center">
+                  <span className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-rose-500/10 text-rose-400"><Trash2 size={17} /></span>
+                  <div>
+                    <strong className="block text-sm text-white">Remover Mesa {editingTable.id}?</strong>
+                    <p className="mt-1 text-[11px] leading-relaxed text-zinc-400">
+                      Ela sairá do salão em todos os dispositivos. O histórico de pedidos será preservado.
                   </p>
+                  </div>
                   <div className="flex gap-2">
                     <button 
                       type="button" 
                       onClick={() => setIsConfirmingDelete(false)} 
-                      className="flex-1 py-1.5 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] text-white text-xs font-bold rounded-lg cursor-pointer transition-all"
+                      disabled={tableMutation !== null}
+                      className="min-h-10 flex-1 rounded-xl border border-[#303633] bg-[#0c0f0d] text-xs font-bold text-zinc-400 transition-colors hover:text-white disabled:opacity-40"
                     >
-                      Voltar
+                      Manter mesa
                     </button>
                     <button 
                       type="button" 
                       onClick={async () => {
-                        if (isLoading) return;
+                        if (tableMutation) return;
                         try {
-                          setIsLoading(true);
+                          setTableMutation('delete');
+                          setTableFormError('');
                           await onDeleteMesa(editingTable.id);
+                          showToast(`Mesa ${editingTable.id} removida do salão.`, 'success');
                           setEditingTable(null);
                           setIsConfirmingDelete(false);
-                        } catch (err) {
-                          console.error(err);
+                        } catch (err: any) {
+                          setTableFormError(err?.message || 'Não foi possível remover a mesa.');
+                          setIsConfirmingDelete(false);
                         } finally {
-                          setIsLoading(false);
+                          setTableMutation(null);
                         }
                       }}
-                      className="flex-1 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg cursor-pointer transition-all"
+                      disabled={tableMutation !== null}
+                      className="flex min-h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-rose-600 text-xs font-bold text-white transition-colors hover:bg-rose-500 disabled:cursor-wait disabled:opacity-60"
                     >
-                      Sim, Excluir
+                      {tableMutation === 'delete' && <RefreshCw className="animate-spin" size={13} />}
+                      {tableMutation === 'delete' ? 'Removendo…' : 'Remover'}
                     </button>
                   </div>
                 </div>
               ) : (
                 <>
-                  <div className={clsx('space-y-3', 'text-left')}>
-                    <div className="space-y-1">
-                      <label className={clsx('text-[9px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Nome da Mesa:</label>
+                  <div className="space-y-4 text-left">
+                    <label className="block space-y-1.5">
+                      <span className="block text-[9px] font-bold uppercase tracking-wider text-zinc-400">Nome de referência</span>
                       <input
                         type="text"
+                        maxLength={80}
                         placeholder={`Mesa ${editingTable.id}`}
                         value={editTableNome}
-                        onChange={(e) => setEditTableNome(e.target.value)}
-                        className={clsx('w-full', 'px-3', 'py-2', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white')}
+                        onChange={(e) => { setEditTableNome(e.target.value); setTableFormError(''); }}
+                        className="w-full rounded-xl border border-[#303633] bg-[#0c0f0d] px-3 py-3 text-sm text-white outline-none transition-colors placeholder:text-zinc-700 focus:border-[#10b981]/60"
                       />
-                    </div>
+                      <span className="block text-[9px] text-zinc-600">Use um nome simples, como “Varanda” ou “Deck”.</span>
+                    </label>
 
-                    <div className="space-y-1">
-                      <label className={clsx('text-[9px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Capacidade (Lugares):</label>
+                    <label className="block space-y-1.5">
+                      <span className="block text-[9px] font-bold uppercase tracking-wider text-zinc-400">Capacidade</span>
+                      <div className="relative">
+                        <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600" size={14} />
                       <input
                         type="number"
+                        min="1"
+                        required
                         placeholder="Ex: 4"
                         value={editTableCap}
-                        onChange={(e) => setEditTableCap(e.target.value)}
-                        className={clsx('w-full', 'px-3', 'py-2', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'font-mono')}
+                        onChange={(e) => { setEditTableCap(e.target.value); setTableFormError(''); }}
+                        className="w-full rounded-xl border border-[#303633] bg-[#0c0f0d] py-3 pl-9 pr-3 font-mono text-sm text-white outline-none transition-colors placeholder:text-zinc-700 focus:border-[#10b981]/60"
                       />
-                    </div>
+                      </div>
+                    </label>
                   </div>
 
-                  <div className="space-y-2 pt-2">
-                    <div className="flex gap-2">
+                  {tableFormError && (
+                    <div role="alert" className="flex gap-2 rounded-xl border border-rose-900/40 bg-rose-950/20 p-3 text-[11px] leading-relaxed text-rose-300">
+                      <AlertTriangle className="mt-0.5 shrink-0" size={14} />
+                      {tableFormError}
+                    </div>
+                  )}
+
+                  <div className="space-y-3 pt-1">
+                    <div className="flex flex-col-reverse gap-2 sm:flex-row">
                       <button 
                         type="button" 
                         onClick={() => setEditingTable(null)} 
-                        className={clsx('flex-1', 'py-2', 'bg-[#121214]', 'hover:bg-[#27272A]', 'border', 'border-[#27272A]', 'text-gray-400', 'hover:text-white', 'rounded-xl', 'font-bold', 'text-xs', 'cursor-pointer', 'transition-all')}
+                        disabled={tableMutation !== null}
+                        className="min-h-11 flex-1 rounded-xl border border-[#303633] bg-[#0c0f0d] px-4 text-xs font-bold text-zinc-400 transition-colors hover:text-white disabled:opacity-40"
                       >
                         Cancelar
                       </button>
                       <button 
-                        type="button"
-                        onClick={async () => {
-                          if (isLoading) return;
-                          const capVal = parseInt(editTableCap);
-                          const nameVal = editTableNome.trim() || `Mesa ${editingTable.id}`;
-                          if (isNaN(capVal) || capVal <= 0) {
-                            alert("Insira uma capacidade válida.");
-                            return;
-                          }
-                          try {
-                            setIsLoading(true);
-                            await onUpdateMesa(editingTable.id, capVal, nameVal);
-                            setEditingTable(null);
-                          } catch (err) {
-                            console.error(err);
-                          } finally {
-                            setIsLoading(false);
-                          }
-                        }}
-                        className={clsx('flex-1', 'py-2', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'rounded-xl', 'font-bold', 'text-xs', 'cursor-pointer', 'transition-all')}
+                        type="submit"
+                        disabled={tableMutation !== null}
+                        className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#10b981] px-4 text-xs font-extrabold text-[#07110e] transition-colors hover:bg-[#35c99a] disabled:cursor-wait disabled:opacity-60"
                       >
-                        Salvar
+                        {tableMutation === 'update' ? <RefreshCw className="animate-spin" size={14} /> : <Check size={14} />}
+                        {tableMutation === 'update' ? 'Salvando…' : 'Salvar alterações'}
                       </button>
                     </div>
 
                     <button
                       type="button"
                       onClick={() => setIsConfirmingDelete(true)}
-                      className={clsx('w-full', 'py-2', 'bg-rose-950/25', 'hover:bg-rose-950/45', 'border', 'border-rose-900/35', 'text-rose-400', 'hover:text-rose-300', 'rounded-xl', 'font-bold', 'text-[11px]', 'uppercase', 'tracking-wider', 'cursor-pointer', 'transition-all', 'flex', 'items-center', 'justify-center', 'gap-1')}
+                      disabled={Boolean(editingTableRuntime?.isOccupied) || tableMutation !== null}
+                      className="flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-rose-900/30 bg-rose-950/10 px-3 text-[10px] font-bold text-rose-400 transition-colors hover:bg-rose-950/25 disabled:cursor-not-allowed disabled:border-zinc-800 disabled:bg-transparent disabled:text-zinc-600"
                     >
                       <Trash2 size={12} />
-                      Excluir Mesa permanentemente
+                      {editingTableRuntime?.isOccupied ? 'Finalize o atendimento para remover' : 'Remover mesa do salão'}
                     </button>
                   </div>
                 </>
               )}
-            </div>
+              </div>
+            </form>
           </div>
         )
       }
@@ -8811,55 +8973,84 @@ export function CaixaPanel({
       {
         confirmingFreeTableId !== null && (
           <div
-            onClick={(e) => { if (e.target === e.currentTarget) setConfirmingFreeTableId(null); }}
-            className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4', 'cursor-pointer')}
+            role="presentation"
+            onClick={(e) => {
+              if (e.target === e.currentTarget && !tableMutation) setConfirmingFreeTableId(null);
+            }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
           >
-            <div className={clsx('bg-[#1C1C1F]', 'border', 'border-rose-900/40', 'rounded-3xl', 'w-full', 'max-w-sm', 'p-6', 'space-y-4', 'shadow-2xl', 'animate-scale-in')}>
-              <div className="text-center space-y-3">
-                <span className="text-2xl block">⚠️</span>
-                <h3 className="font-serif font-bold text-base text-white">Liberar Mesa {confirmingFreeTableId}</h3>
-                <p className="text-xs text-rose-300 leading-relaxed">
-                  Deseja realmente fechar e liberar a <strong>Mesa {confirmingFreeTableId}</strong> de forma forçada? Esta ação fechará o saldo e liberará a mesa no sistema.
-                </p>
-                <div className="flex gap-2 pt-2">
-                  <button 
-                    type="button" 
-                    onClick={() => setConfirmingFreeTableId(null)} 
-                    className="flex-1 py-2.5 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] text-white text-xs font-bold rounded-xl cursor-pointer transition-all"
+            <div className="w-full max-w-md overflow-hidden rounded-[24px] border border-rose-900/35 bg-[#141715] shadow-2xl animate-scale-in">
+              <div className="space-y-4 px-5 py-5 text-center sm:px-6">
+                <span className="mx-auto flex h-11 w-11 items-center justify-center rounded-full border border-rose-900/35 bg-rose-950/25 text-rose-400">
+                  <Unlock size={18} />
+                </span>
+                <div>
+                  <span className="font-mono text-[8px] font-bold uppercase tracking-[0.2em] text-rose-400">Ação excepcional</span>
+                  <h3 className="mt-1 text-lg font-bold text-white">Liberar Mesa {confirmingFreeTableId} sem receber?</h3>
+                  <p className="mx-auto mt-2 max-w-sm text-[11px] leading-relaxed text-zinc-400">
+                    Use somente quando o atendimento precisar ser encerrado manualmente. As comandas abertas serão fechadas e a mesa voltará a ficar livre.
+                  </p>
+                </div>
+
+                {tableReleaseError && (
+                  <div role="alert" className="flex gap-2 rounded-xl border border-rose-900/40 bg-rose-950/20 p-3 text-left text-[11px] leading-relaxed text-rose-300">
+                    <AlertTriangle className="mt-0.5 shrink-0" size={14} />
+                    {tableReleaseError}
+                  </div>
+                )}
+
+                <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row">
+                  <button
+                    type="button"
+                    disabled={tableMutation !== null}
+                    onClick={() => setConfirmingFreeTableId(null)}
+                    className="min-h-11 flex-1 rounded-xl border border-[#303633] bg-[#0c0f0d] px-4 text-xs font-bold text-zinc-400 transition-colors hover:text-white disabled:opacity-40"
                   >
-                    Cancelar
+                    Voltar
                   </button>
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
+                    disabled={tableMutation !== null}
                     onClick={async () => {
-                      if (isLoading) return;
+                      if (tableMutation || confirmingFreeTableId === null) return;
+                      const mesaId = confirmingFreeTableId;
+                      const openOrders = orders.filter(order => order.mesaId === mesaId);
+                      if (openOrders.length === 0) {
+                        setTableReleaseError('Não há comandas abertas nesta mesa. Atualize a tela e tente novamente.');
+                        return;
+                      }
+
                       try {
-                        setIsLoading(true);
-                        const tableOrders = orders.filter(o => o.mesaId === confirmingFreeTableId);
-                        for (const comanda of tableOrders) {
-                          const res = await fetch(`${apiBaseUrl}/comandas/${comanda.id}/fechar?force=true`, {
-                            method: "PUT",
-                            headers: authHeaders
-                          });
-                          if (!res.ok) {
-                            const errData = await res.json();
-                            throw new Error(errData.detail || "Erro ao liberar");
-                          }
+                        setTableMutation('release');
+                        setTableReleaseError('');
+                        const responses = await Promise.all(openOrders.map(comanda => (
+                          fetch(`${apiBaseUrl}/comandas/${comanda.id}/fechar?force=true`, {
+                            method: 'PUT',
+                            headers: authHeaders,
+                          })
+                        )));
+                        const failedResponse = responses.find(response => !response.ok);
+                        if (failedResponse) {
+                          const payload = await failedResponse.json().catch(() => null);
+                          throw new Error(payload?.detail || 'O servidor recusou a liberação da mesa.');
                         }
+
+                        await onRefreshOrders();
                         setConfirmingFreeTableId(null);
-                        onRefreshOrders();
                         setSelectedOrder(null);
                         setShowCheckoutModal(false);
+                        showToast(`Mesa ${mesaId} liberada.`, 'success');
                       } catch (err: any) {
                         console.error(err);
-                        alert(err.message || "Erro ao liberar mesa.");
+                        setTableReleaseError(err?.message || 'Não foi possível liberar a mesa.');
                       } finally {
-                        setIsLoading(false);
+                        setTableMutation(null);
                       }
                     }}
-                    className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl cursor-pointer transition-all"
+                    className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 text-xs font-bold text-white transition-colors hover:bg-rose-500 disabled:cursor-wait disabled:opacity-60"
                   >
-                    Sim, Liberar
+                    {tableMutation === 'release' && <RefreshCw className="animate-spin" size={14} />}
+                    {tableMutation === 'release' ? 'Liberando…' : 'Liberar sem receber'}
                   </button>
                 </div>
               </div>

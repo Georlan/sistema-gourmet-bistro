@@ -7,6 +7,10 @@ def test_websocket_audience_segmentation():
     asyncio.run(_exercise_websocket_audience_segmentation())
 
 
+def test_websocket_broadcast_keeps_healthy_peers_connected():
+    asyncio.run(_exercise_websocket_broadcast_failure_isolation())
+
+
 async def _exercise_websocket_audience_segmentation():
     manager = ConnectionManager()
     
@@ -48,3 +52,20 @@ async def _exercise_websocket_audience_segmentation():
     
     internal_socket.send_json.assert_called_with(catalog_event)
     client_socket.send_json.assert_called_with(catalog_event)
+
+
+async def _exercise_websocket_broadcast_failure_isolation():
+    manager = ConnectionManager()
+    failing_socket = AsyncMock()
+    healthy_socket = AsyncMock()
+    failing_socket.send_json.side_effect = RuntimeError("peer disconnected")
+
+    await manager.connect(failing_socket, 7, client_type="internal")
+    await manager.connect(healthy_socket, 7, client_type="internal")
+
+    event = {"event": "tables_updated"}
+    await manager.broadcast(event, 7)
+
+    healthy_socket.send_json.assert_called_once_with(event)
+    assert failing_socket not in manager.active_connections[7]["internal"]
+    assert healthy_socket in manager.active_connections[7]["internal"]

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from fastapi import WebSocket
 
@@ -40,7 +41,8 @@ class ConnectionManager:
         if client_type not in self.active_connections[restaurante_id]:
             self.active_connections[restaurante_id][client_type] = []
 
-        self.active_connections[restaurante_id][client_type].append(websocket)
+        if websocket not in self.active_connections[restaurante_id][client_type]:
+            self.active_connections[restaurante_id][client_type].append(websocket)
         logger.info(f"WebSocket conectado: restaurante_id={restaurante_id}, client_type={client_type}")
 
     def disconnect(self, websocket: WebSocket, restaurante_id: int | None = None) -> None:
@@ -112,10 +114,21 @@ class ConnectionManager:
         else:
             sockets_to_send = list(ctype_dict.get("internal", []))
 
-        for connection in sockets_to_send:
-            try:
-                await connection.send_json(message)
-            except Exception:
+        if not sockets_to_send:
+            return
+
+        # Uma conexão lenta não deve atrasar todos os outros caixas, garçons e
+        # cardápios do restaurante. Envia em paralelo e remove apenas os peers
+        # que falharam.
+        results = await asyncio.gather(
+            *(
+                asyncio.wait_for(connection.send_json(message), timeout=2.0)
+                for connection in sockets_to_send
+            ),
+            return_exceptions=True,
+        )
+        for connection, result in zip(sockets_to_send, results):
+            if isinstance(result, Exception):
                 self.disconnect(connection, restaurante_id)
 
 # Singleton instance of the connection manager

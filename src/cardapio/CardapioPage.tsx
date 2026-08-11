@@ -577,19 +577,31 @@ export default function CardapioPage() {
 
     const wsUrl = `${WS_BASE_URL}/ws/cliente?restaurante_id=${activeBrand.id}`;
 
-    let ws: WebSocket;
-    let reconnectTimeout: any;
+    let ws: WebSocket | null = null;
+    let reconnectTimeout: ReturnType<typeof setTimeout> | undefined;
+    let refreshTimeout: ReturnType<typeof setTimeout> | undefined;
+    let stopped = false;
     let currentDelay = 2000;
 
     const connectWS = () => {
-      if (document.hidden) return;
-      ws = new WebSocket(wsUrl);
+      if (stopped || document.hidden) return;
+      if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) return;
 
-      ws.onopen = () => {
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+        reconnectTimeout = undefined;
+      }
+
+      const socket = new WebSocket(wsUrl);
+      ws = socket;
+
+      socket.onopen = () => {
+        if (stopped || ws !== socket) return;
         currentDelay = 2000;
       };
 
-      ws.onmessage = (event) => {
+      socket.onmessage = (event) => {
+        if (stopped || ws !== socket) return;
         try {
           const data = JSON.parse(event.data);
           
@@ -599,19 +611,23 @@ export default function CardapioPage() {
             || eventName === "config_updated"
             || eventName === "store_status_changed"
           ) {
-            loadRestaurantData();
+            if (refreshTimeout) clearTimeout(refreshTimeout);
+            refreshTimeout = setTimeout(() => void loadRestaurantData(), 90);
           }
         } catch (err) {
           console.error("Erro ao processar mensagem do WebSocket:", err);
         }
       };
 
-      ws.onerror = (err) => {
+      socket.onerror = (err) => {
         console.warn("Erro na conexão do WebSocket:", err);
       };
 
-      ws.onclose = () => {
+      socket.onclose = () => {
+        if (stopped || ws !== socket) return;
+        ws = null;
         if (!document.hidden) {
+          if (reconnectTimeout) clearTimeout(reconnectTimeout);
           reconnectTimeout = setTimeout(connectWS, currentDelay);
           currentDelay = Math.min(currentDelay * 1.5, 30000);
         }
@@ -619,11 +635,10 @@ export default function CardapioPage() {
     };
 
     const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        if (!ws || ws.readyState !== WebSocket.OPEN) {
-          currentDelay = 2000;
-          connectWS();
-        }
+      if (document.hidden || stopped) return;
+      if (!ws || ws.readyState === WebSocket.CLOSED) {
+        currentDelay = 2000;
+        connectWS();
       }
     };
 
@@ -631,11 +646,19 @@ export default function CardapioPage() {
     connectWS();
 
     return () => {
+      stopped = true;
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      if (ws) ws.close();
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (refreshTimeout) clearTimeout(refreshTimeout);
+      if (ws) {
+        ws.onopen = null;
+        ws.onmessage = null;
+        ws.onclose = null;
+        ws.onerror = null;
+        ws.close();
+      }
     };
-  }, [activeBrand?.id]);
+  }, [activeBrand?.id, loadRestaurantData]);
 
   const handleLoginSuccess = (profile: CustomerProfile, token: string) => {
     setUser(profile);

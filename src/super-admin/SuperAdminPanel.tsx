@@ -211,12 +211,16 @@ export default function SuperAdminPanel() {
     
     let ws: WebSocket | null = null;
     let reconnectTimeout: any = null;
+    let stopped = false;
 
     const connectWS = () => {
+      if (stopped || (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN))) return;
       console.log("[SUPERADMIN] Connecting to WebSocket on:", wsUrl);
-      ws = new WebSocket(wsUrl);
+      const socket = new WebSocket(wsUrl);
+      ws = socket;
 
-      ws.onmessage = (event) => {
+      socket.onmessage = (event) => {
+        if (stopped || ws !== socket) return;
         try {
           const msg = JSON.parse(event.data);
           
@@ -282,12 +286,15 @@ export default function SuperAdminPanel() {
         }
       };
 
-      ws.onclose = () => {
+      socket.onclose = () => {
+        if (stopped || ws !== socket) return;
+        ws = null;
         console.warn("[SUPERADMIN] WebSocket closed. Reconnecting in 3s...");
+        if (reconnectTimeout) clearTimeout(reconnectTimeout);
         reconnectTimeout = setTimeout(connectWS, 3000);
       };
 
-      ws.onerror = (err) => {
+      socket.onerror = (err) => {
         console.warn("[SUPERADMIN] WebSocket connection not available in this environment. Seamlessly relying on robust background HTTP Polling fallback.");
       };
     };
@@ -316,10 +323,16 @@ export default function SuperAdminPanel() {
     }, 4000);
 
     return () => {
+      stopped = true;
       clearInterval(intervalId);
       clearInterval(pollIntervalId);
-      if (ws) ws.close();
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (ws) {
+        ws.onmessage = null;
+        ws.onclose = null;
+        ws.onerror = null;
+        ws.close();
+      }
     };
   }, []);
 
