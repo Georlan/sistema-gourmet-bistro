@@ -13,9 +13,11 @@ import {
 } from 'lucide-react';
 import { CategoriaModal, DeleteCategoryModal, CategoryData } from './CategoriaModal';
 import { OperationalBanner } from '../shared/OperationalBanner';
+import type { Product } from '../../types';
 
 interface CardapioCategoriasTabProps {
   apiCategorias: CategoryData[];
+  apiProdutos: Product[];
   apiBaseUrl: string;
   authHeaders: Record<string, string>;
   fetchCategorias: () => Promise<void>;
@@ -46,6 +48,7 @@ const destinationMeta = {
 
 export function CardapioCategoriasTab({
   apiCategorias,
+  apiProdutos,
   apiBaseUrl,
   authHeaders,
   fetchCategorias,
@@ -78,6 +81,29 @@ export function CardapioCategoriasTab({
     },
     { COZINHA: 0, BAR: 0, NENHUM: 0 },
   ), [apiCategorias]);
+
+  const catalogInsights = useMemo(() => {
+    const categoryHasProduct = (category: CategoryData) => apiProdutos.some(product => (
+      product.categoria_id === category.id
+      || product.categoria === category.id
+      || product.categoria === category.nome
+    ));
+    const productHasCategory = (product: Product) => apiCategorias.some(category => (
+      product.categoria_id === category.id
+      || product.categoria === category.id
+      || product.categoria === category.nome
+    ));
+    const routedCategories = destinationSummary.COZINHA + destinationSummary.BAR;
+
+    return {
+      routeCoverage: apiCategorias.length > 0
+        ? Math.round((routedCategories / apiCategorias.length) * 100)
+        : 0,
+      emptyCategories: apiCategorias.filter(category => !categoryHasProduct(category)).length,
+      orphanProducts: apiProdutos.filter(product => !productHasCategory(product)).length,
+      activeDestinations: Number(destinationSummary.COZINHA > 0) + Number(destinationSummary.BAR > 0),
+    };
+  }, [apiCategorias, apiProdutos, destinationSummary]);
 
   const handleOpenCreate = () => {
     setEditingCategory(null);
@@ -113,10 +139,10 @@ export function CardapioCategoriasTab({
         accent="prontas para produzir"
         description="Organize os produtos e defina para onde cada pedido será enviado na operação."
         metrics={[
-          { label: 'categorias', value: apiCategorias.length },
-          { label: 'na cozinha', value: destinationSummary.COZINHA, valueClassName: 'text-orange-300' },
-          { label: 'no bar', value: destinationSummary.BAR, valueClassName: 'text-sky-300' },
-          { label: 'sem impressão', value: destinationSummary.NENHUM, valueClassName: 'text-zinc-300' },
+          { label: 'com rota de impressão', value: `${catalogInsights.routeCoverage}%`, valueClassName: catalogInsights.routeCoverage === 100 ? 'text-emerald-300' : 'text-amber-300' },
+          { label: 'categorias vazias', value: catalogInsights.emptyCategories, valueClassName: catalogInsights.emptyCategories > 0 ? 'text-amber-300' : 'text-emerald-300' },
+          { label: 'produtos sem categoria', value: catalogInsights.orphanProducts, valueClassName: catalogInsights.orphanProducts > 0 ? 'text-amber-300' : 'text-emerald-300' },
+          { label: 'destinos ativos', value: catalogInsights.activeDestinations, valueClassName: 'text-sky-300' },
         ]}
       />
 

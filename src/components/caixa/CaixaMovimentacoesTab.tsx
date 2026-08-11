@@ -75,6 +75,16 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
     { suprimentos: 0, sangrias: 0 },
   ), [filteredMovs]);
 
+  const latestMovementTime = useMemo(() => {
+    const latestTimestamp = filteredMovs.reduce((latest, movimentacao) => {
+      const timestamp = new Date(movimentacao.criado_em).getTime();
+      return Number.isFinite(timestamp) ? Math.max(latest, timestamp) : latest;
+    }, 0);
+    return latestTimestamp > 0
+      ? new Date(latestTimestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+      : '—';
+  }, [filteredMovs]);
+
   const hasFilters = Boolean(
     filterTipo !== 'todos' || filterDataInicio || filterDataFim || searchTerm.trim(),
   );
@@ -131,7 +141,7 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
           { label: 'suprimentos', value: formatCurrency(totals.suprimentos), valueClassName: 'text-[#54d9b3]' },
           { label: 'sangrias', value: formatCurrency(totals.sangrias), valueClassName: 'text-[#dfabab]' },
           { label: 'saldo dos ajustes', value: formatCurrency(totals.suprimentos - totals.sangrias), valueClassName: totals.suprimentos >= totals.sangrias ? 'text-[#54d9b3]' : 'text-[#dfabab]' },
-          { label: 'turno atual', value: turnoResumo?.status === 'aberto' ? 'Aberto' : 'Fechado', valueClassName: turnoResumo?.status === 'aberto' ? 'text-emerald-300' : 'text-amber-300' },
+          { label: 'último no recorte', value: latestMovementTime },
         ]}
       />
 
