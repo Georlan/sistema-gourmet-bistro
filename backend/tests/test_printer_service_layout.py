@@ -125,6 +125,7 @@ def test_values_receipt_groups_quantity_and_shows_each_person_subtotal():
     assert "COMANDA INTEIRA" not in ticket
     assert "COMANDA - SÓ VALORES" not in ticket
     assert "PIZZARIA BELLA ITALIA" not in ticket
+    assert "FECHAMENTO" in ticket
     assert "CONSUMO NO LOCAL" not in ticket
     assert "PEDIDO: #305" not in ticket
     assert "GARÇOM: GEORLAN" not in ticket
@@ -132,10 +133,8 @@ def test_values_receipt_groups_quantity_and_shows_each_person_subtotal():
     assert "MESA: 3" in ticket
     assert "ABERTURA: 18:00" in ticket
     assert "R$ 82,00" in ticket
-    assert (
-        f"{ESC_DOUBLE_HEIGHT_ON}{ESC_BOLD_ON}3x HAMBÚRGUER TRADICIONAL"
-        in ticket
-    )
+    assert f"{ESC_BOLD_ON}3x HAMBÚRGUER TRADICIONAL" in ticket
+    assert ESC_DOUBLE_HEIGHT_ON not in ticket
 
 
 def test_full_receipt_keeps_complete_header_unchanged():
@@ -167,6 +166,7 @@ def test_full_receipt_keeps_complete_header_unchanged():
     assert "MESA: 3" in ticket
     assert "GARÇOM: Georlan" in ticket
     assert "ABERTURA:" not in ticket
+    assert ESC_DOUBLE_HEIGHT_ON not in ticket
 
 
 def test_receipt_omits_general_subtotal_when_table_has_no_named_clients():

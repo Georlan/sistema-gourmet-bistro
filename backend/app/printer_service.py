@@ -123,14 +123,14 @@ def _append_amount_line(lines: list[str], left: str, right: str, width: int) -> 
         lines.append(f"   {continuation}"[:width])
 
 
-def _append_large_amount_line(
+def _append_bold_amount_line(
     lines: list[str], left: str, right: str, width: int
 ) -> None:
-    """Destaca itens/valores sem perder a largura útil da bobina."""
+    """Destaca itens/valores sem duplicar a altura e o consumo de papel."""
     first_line = len(lines)
     _append_amount_line(lines, left, right, width)
-    lines[first_line] = ESC_DOUBLE_HEIGHT_ON + ESC_BOLD_ON + lines[first_line]
-    lines[-1] += ESC_BOLD_OFF + ESC_NORMAL_SIZE
+    lines[first_line] = ESC_BOLD_ON + lines[first_line]
+    lines[-1] += ESC_BOLD_OFF
 
 
 # AJUSTADO: Função utilitária segura para buscar chaves/atributos em dicts ou objetos SQLAlchemy
@@ -378,6 +378,12 @@ class PrinterService:
             opening_time = opened_at or now
             lines.append(
                 ESC_BOLD_ON
+                + align_center("FECHAMENTO", width)
+                + ESC_BOLD_OFF
+            )
+            lines.append(draw_separator("=", width))
+            lines.append(
+                ESC_BOLD_ON
                 + split_justified(
                     f"MESA: {mesa_id}",
                     f"ABERTURA: {opening_time.strftime('%H:%M')}",
@@ -389,30 +395,24 @@ class PrinterService:
         else:
             if position == "cabecalho" and header_text:
                 lines.append(
-                    ESC_DOUBLE_HEIGHT_ON
-                    + ESC_BOLD_ON
+                    ESC_BOLD_ON
                     + align_center(header_text.upper(), width)
                     + ESC_BOLD_OFF
-                    + ESC_NORMAL_SIZE
                 )
                 lines.append(draw_separator("=", width))
             order_type = _order_type_label(tipo, mesa_id)
             lines.append(
-                ESC_DOUBLE_HEIGHT_ON
-                + ESC_BOLD_ON
+                ESC_BOLD_ON
                 + align_center(order_type, width)
                 + ESC_BOLD_OFF
-                + ESC_NORMAL_SIZE
             )
             lines.append(draw_separator("=", width))
 
             mesa_str = f"MESA: {mesa_id}" if mesa_id is not None else "SEM MESA"
             lines.append(
-                ESC_DOUBLE_HEIGHT_ON
-                + ESC_BOLD_ON
+                ESC_BOLD_ON
                 + split_justified(f"PEDIDO: #{num_pedido}", mesa_str, width)
                 + ESC_BOLD_OFF
-                + ESC_NORMAL_SIZE
             )
             lines.append(
                 split_justified(
@@ -498,7 +498,7 @@ class PrinterService:
                     product_name,
                 )
                 left = f"{qty}x {printable_name.upper()}"
-                _append_large_amount_line(
+                _append_bold_amount_line(
                     lines,
                     left,
                     _format_brl(item_total),
@@ -554,15 +554,13 @@ class PrinterService:
             final_total = grand_total
 
         lines.append(
-            ESC_DOUBLE_HEIGHT_ON
-            + ESC_BOLD_ON
+            ESC_BOLD_ON
             + split_justified(
                 "TOTAL GERAL DA MESA:",
                 _format_brl(final_total),
                 width,
             )
             + ESC_BOLD_OFF
-            + ESC_NORMAL_SIZE
         )
         lines.append(draw_separator("=", width))
 
