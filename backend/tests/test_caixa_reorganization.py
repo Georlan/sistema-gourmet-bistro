@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
 from app.main import app
 from app.database import engine, Base, SessionLocal, current_restaurante_id
@@ -295,3 +296,45 @@ def test_fechamento_caixa_conferencia_cega():
     res_post_suprimento = client.post("/caixa/suprimento", json={"valor": 10.0, "motivo": "Teste"}, headers=headers)
     assert res_post_suprimento.status_code == 400
     assert "Não há nenhum turno de caixa aberto" in res_post_suprimento.json()["detail"]
+
+
+def test_historico_movimentacoes_limita_100_e_inclui_operador():
+    headers = get_auth_headers()
+    open_response = client.post(
+        "/caixa/turno/abrir",
+        json={"saldo_inicial": 100.0},
+        headers=headers,
+    )
+    assert open_response.status_code == 201
+    turno_id = open_response.json()["id"]
+
+    db = SessionLocal()
+    token_var = current_restaurante_id.set(888)
+    try:
+        base_time = datetime(2026, 8, 11, 8, 0, tzinfo=timezone.utc)
+        db.add_all([
+            CaixaMovimentacao(
+                restaurante_id=888,
+                turno_id=turno_id,
+                usuario_id="usr_caixa_888",
+                tipo="suprimento" if index % 2 == 0 else "sangria",
+                valor=index + 1,
+                saldo_anterior=100 + index,
+                saldo_posterior=101 + index,
+                descricao=f"Movimentação {index:03d}",
+                criado_em=base_time + timedelta(minutes=index),
+            )
+            for index in range(105)
+        ])
+        db.commit()
+    finally:
+        current_restaurante_id.reset(token_var)
+        db.close()
+
+    response = client.get("/caixa/movimentacoes", headers=headers)
+    assert response.status_code == 200
+    movimentacoes = response.json()
+    assert len(movimentacoes) == 100
+    assert movimentacoes[0]["descricao"] == "Movimentação 104"
+    assert movimentacoes[-1]["descricao"] == "Movimentação 005"
+    assert all(item["usuario_nome"] == "Operador Caixa 888" for item in movimentacoes)
