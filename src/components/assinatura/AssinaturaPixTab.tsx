@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import clsx from 'clsx';
-import NumberFlow from '@number-flow/react';
 import { motion } from 'motion/react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { TimelineContent } from '@/components/ui/timeline-animation';
@@ -32,8 +31,12 @@ import {
   PLAN_COMPARISON_MATRIX,
   SubscriptionPlanId,
   getSubscriptionPlan,
-  FeatureComparisonRow
+  FeatureComparisonRow,
+  ANNUAL_DISCOUNT_RATE,
+  formatCurrency,
+  getSubscriptionPricing
 } from '../../config/subscriptionPlans';
+import { KOMA_LANDING_CONFIG } from '../../landing/config/landingConfig';
 
 interface AssinaturaPixTabProps {
   currentPlanId: SubscriptionPlanId;
@@ -87,7 +90,7 @@ const PricingSwitch = ({ isYearly, onSwitch }: { isYearly: boolean; onSwitch: (y
             <span className={`rounded-full px-2 py-0.5 text-[9px] font-extrabold transition-colors ${
               isYearly ? "bg-zinc-950/30 text-zinc-950" : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
             }`}>
-              Economize 20%
+              Economize {ANNUAL_DISCOUNT_RATE * 100}%
             </span>
           </span>
         </button>
@@ -157,12 +160,9 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
     },
   };
 
-  // Preço anual com ~20% de desconto por mês
-  const getPlanDisplayPrice = (monthlyPrice: number) => {
-    if (isYearly) {
-      return Math.round(monthlyPrice * 0.8);
-    }
-    return monthlyPrice;
+  const getPlanContactUrl = (planName: string) => {
+    const message = `Olá! Quero falar sobre o ${planName} para o meu restaurante.`;
+    return `https://wa.me/${KOMA_LANDING_CONFIG.whatsappNumber}?text=${encodeURIComponent(message)}`;
   };
 
   return (
@@ -317,7 +317,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
               </div>
 
               <div className="font-mono text-right">
-                <span className="text-emerald-400 font-bold text-lg">R$ {currentPlan.price}</span>
+                <span className="text-emerald-400 font-bold text-lg">{formatCurrency(currentPlan.price)}</span>
                 <span className="text-gray-500 text-[10px]">/mês</span>
               </div>
             </div>
@@ -342,7 +342,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                   ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
                   : 'bg-amber-500/10 border-amber-500/20 text-amber-300'
               )}>
-                {hasOnlineMenu ? '✓ Cardápio Online Ativo' : '⚡ Cardápio Online Opcional (+R$ 49/mês)'}
+                {hasOnlineMenu ? '✓ Cardápio Digital Ativo' : '⚡ Cardápio Digital Opcional (+R$ 49/mês)'}
               </span>
               <span className="px-3 py-1 rounded-xl border border-zinc-700 bg-zinc-800 text-gray-300">
                 Taxa Pix In-App: <strong className="text-emerald-400">{currentPlan.rates.pixInApp}</strong>
@@ -466,7 +466,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
               customVariants={revealVariants}
               className="text-xs text-gray-400"
             >
-              Escolha a estrutura ideal para a sua operação. Preços flexíveis sem fidelidade.
+              Escolha o plano ideal para o momento da sua operação.
             </TimelineContent>
 
             {/* CHAVEADOR ANIMADO DE PERÍODO (MENSAL / ANUAL) */}
@@ -477,17 +477,21 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
               customVariants={revealVariants}
             >
               <PricingSwitch isYearly={isYearly} onSwitch={setIsYearly} />
+              <p className="min-h-4 text-[10px] text-gray-500">
+                {isYearly ? '10% de desconto no pagamento anual' : 'Valores cobrados mensalmente'}
+              </p>
             </TimelineContent>
           </div>
 
-          {/* GRID DE CARDS COM SHADCN E NUMBERFLOW */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-stretch max-w-7xl mx-auto py-2">
+          {/* GRID RESPONSIVO DE PLANOS */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 items-stretch max-w-7xl mx-auto py-2">
             {SUBSCRIPTION_PLANS.map((plan, index) => {
               const isCurrent = currentPlanId === plan.id;
               const isSelected = selectedPlanId === plan.id;
               const isPopular = plan.recommended;
 
-              const displayPrice = getPlanDisplayPrice(plan.price);
+              const pricing = getSubscriptionPricing(plan.price);
+              const displayPrice = isYearly ? pricing.annualMonthlyEquivalent : pricing.monthly;
 
               return (
                 <TimelineContent
@@ -501,9 +505,9 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                   <Card
                     onClick={() => setSelectedPlanId(plan.id)}
                     className={clsx(
-                      'relative h-full flex flex-col justify-between transition-all duration-300 cursor-pointer rounded-3xl border text-left',
+                      'relative h-full flex flex-col justify-between transition-all duration-200 cursor-pointer rounded-3xl border text-left overflow-visible',
                       isPopular
-                        ? 'bg-gradient-to-b from-[#1C1C1F] to-[#121214] border-emerald-500 shadow-xl shadow-emerald-950/40 ring-1 ring-emerald-500/50 md:scale-[1.03] z-10'
+                        ? 'bg-[#171719] border-emerald-500/70 shadow-lg shadow-black/30 ring-1 ring-emerald-500/20 md:-translate-y-1 z-10'
                         : isSelected
                         ? 'bg-[#1C1C1F] border-emerald-500/40 shadow-md'
                         : 'bg-[#121214]/90 border-[#27272A] hover:border-gray-600'
@@ -525,17 +529,18 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                       </div>
                       <p className="text-xs text-gray-400 min-h-[32px]">{plan.tagline}</p>
 
-                      <div className="flex items-baseline mt-4 pt-2 border-t border-[#27272A]">
-                        <span className="text-3xl font-bold font-mono text-emerald-400">
-                          R${" "}
-                          <NumberFlow
-                            value={displayPrice}
-                            className="text-3xl font-bold font-mono text-emerald-400"
-                          />
-                        </span>
-                        <span className="text-gray-400 text-xs ml-1 font-mono">
-                          /{isYearly ? "mês (anual)" : "mês"}
-                        </span>
+                      <div className="mt-4 pt-4 border-t border-[#27272A] min-w-0">
+                        <div className="flex items-end gap-1 whitespace-nowrap">
+                          <span className="text-3xl font-bold font-mono text-emerald-400 tracking-tight">
+                            {formatCurrency(displayPrice)}
+                          </span>
+                          <span className="text-gray-400 text-xs font-mono pb-1">/mês</span>
+                        </div>
+                        <p className="mt-1 min-h-4 text-[10px] leading-4 text-gray-500">
+                          {isYearly
+                            ? `${formatCurrency(pricing.annualTotal)} cobrados anualmente`
+                            : 'Cobrança mensal'}
+                        </p>
                       </div>
                     </CardHeader>
 
@@ -548,19 +553,21 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                             <span>Plano Atual</span>
                           </div>
                         ) : (
-                          <button
-                            type="button"
-                            disabled
-                            title="A contratação será liberada em breve."
+                          <a
+                            href={getPlanContactUrl(plan.name)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label={`Falar sobre o ${plan.name} no WhatsApp`}
                             className={clsx(
-                              'w-full py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all',
+                              'w-full py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors',
                               isPopular
-                                ? 'bg-emerald-500 text-zinc-950 shadow-lg shadow-emerald-950/40 hover:bg-emerald-400 cursor-not-allowed opacity-85'
-                                : 'bg-[#1C1C1F] text-gray-400 border border-[#27272A] cursor-not-allowed'
+                                ? 'bg-emerald-500 text-zinc-950 hover:bg-emerald-400'
+                                : 'bg-[#1C1C1F] text-gray-200 border border-[#343438] hover:border-emerald-500/50 hover:text-white'
                             )}
                           >
-                            <span>Contratação em breve</span>
-                          </button>
+                            <MessageSquare size={13} />
+                            <span>Falar sobre este plano</span>
+                          </a>
                         )}
                       </div>
 
@@ -588,31 +595,27 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
           </div>
 
           {/* CARD DO ADDON "CARDÁPIO ONLINE KÔMA" */}
-          <div className="p-5 bg-gradient-to-r from-amber-500/10 via-[#121214] to-[#121214] border border-amber-500/30 rounded-3xl text-left space-y-3">
+          <div className="p-5 bg-[#121214]/80 border border-[#303034] rounded-3xl text-left space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#27272A] pb-3">
               <div>
                 <div className="flex items-center gap-2">
-                  <strong className="text-amber-300 font-serif text-sm block">{ONLINE_MENU_ADDON.name}</strong>
-                  {currentPlanId === 'premium' ? (
-                    <span className="px-2.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[8px] font-bold uppercase rounded-full">
-                      ✓ Incluso no seu plano Premium
-                    </span>
-                  ) : (
-                    <span className="px-2.5 py-0.5 bg-amber-500/10 text-amber-300 border border-amber-500/20 text-[8px] font-bold uppercase rounded-full">
-                      ⚡ Adicional Pago (+ R$ {ONLINE_MENU_ADDON.price}/mês)
-                    </span>
-                  )}
+                  <strong className="text-white font-serif text-sm block">{ONLINE_MENU_ADDON.name}</strong>
                 </div>
                 <p className="text-xs text-gray-400 mt-1">{ONLINE_MENU_ADDON.description}</p>
               </div>
 
-              <div className="shrink-0 font-mono font-bold text-amber-300 text-sm">
-                + R$ {ONLINE_MENU_ADDON.price}<span className="text-[10px] text-gray-400">/mês</span>
+              <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 shrink-0">
+                <span className="px-2.5 py-1 bg-zinc-800 text-gray-200 border border-zinc-700 text-[9px] font-bold rounded-full whitespace-nowrap">
+                  R$ {ONLINE_MENU_ADDON.price}/mês no Pocket e Pro
+                </span>
+                <span className="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px] font-bold uppercase rounded-full whitespace-nowrap">
+                  Incluso no Premium
+                </span>
               </div>
             </div>
 
-            <p className="text-[10px] text-gray-400 leading-relaxed">
-              Permite que seus clientes escaneiem o QR Code na mesa ou acessem o link do seu restaurante para fazer pedidos autônomos. Os pedidos caem direto no Kanban com gaveta de aceite.
+            <p className="text-[10px] text-gray-500 leading-relaxed">
+              Implantação e configuração inicial podem ser cobradas separadamente.
             </p>
           </div>
 
@@ -644,9 +647,17 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                     <thead>
                       <tr className="bg-[#1C1C1F] border-b border-[#27272A] text-gray-400 uppercase text-[9px] tracking-wider">
                         <th className="p-3.5 font-sans">Funcionalidade</th>
-                        <th className="p-3.5 text-center font-mono">Kôma Pocket (R$ 79)</th>
-                        <th className="p-3.5 text-center font-mono bg-emerald-500/10 text-emerald-300">Kôma Pro (R$ 149)</th>
-                        <th className="p-3.5 text-center font-mono">Kôma Premium (R$ 249)</th>
+                        {SUBSCRIPTION_PLANS.map((plan) => (
+                          <th
+                            key={plan.id}
+                            className={clsx(
+                              'p-3.5 text-center font-mono whitespace-nowrap',
+                              plan.recommended && 'bg-emerald-500/10 text-emerald-300'
+                            )}
+                          >
+                            {plan.name} ({formatCurrency(plan.price)})
+                          </th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#27272A]/40 text-gray-200">

@@ -8,6 +8,7 @@ import { HowItWorks } from './sections/HowItWorks';
 import { FAQ } from './sections/FAQ';
 import { Plans } from './sections/Plans';
 import { FinalCTA } from './sections/FinalCTA';
+import { SUBSCRIPTION_PLANS } from '../config/subscriptionPlans';
 
 type DividerVariant = 'dark-light' | 'light-dark' | 'light-green';
 
@@ -54,6 +55,8 @@ export default function LandingPage() {
     const structuredData = document.createElement('script');
     structuredData.type = 'application/ld+json';
     structuredData.id = 'koma-software-schema';
+    const planPrices = SUBSCRIPTION_PLANS.map((plan) => plan.price);
+
     structuredData.text = JSON.stringify({
       '@context': 'https://schema.org',
       '@type': 'SoftwareApplication',
@@ -73,8 +76,8 @@ export default function LandingPage() {
       ],
       offers: {
         '@type': 'AggregateOffer',
-        lowPrice: '79',
-        highPrice: '249',
+        lowPrice: String(Math.min(...planPrices)),
+        highPrice: String(Math.max(...planPrices)),
         priceCurrency: 'BRL',
       },
     });
