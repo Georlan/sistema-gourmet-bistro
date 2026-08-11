@@ -1070,6 +1070,13 @@ export function CaixaPanel({
     perm_garcom_chamar?: boolean;
     perm_garcom_ociosas?: boolean;
   }) => {
+    const isPrintPersonalizationUpdate = [
+      'impressao_nome_restaurante',
+      'impressao_nome_posicao',
+      'impressao_mensagem_rodape',
+      'unificar_vias_delivery'
+    ].some(key => key in updates);
+    if (isPrintPersonalizationUpdate) setPrintSettingsSaveState('saving');
     // 1. Atualização Otimista Instantânea (0ms) de todos os toggles
     if (updates.taxa_servico_ativa !== undefined) {
       setCheckoutServiceTax(updates.taxa_servico_ativa);
@@ -1106,11 +1113,23 @@ export function CaixaPanel({
         body: JSON.stringify(updates)
       });
       if (!res.ok) {
-        fetchConfiguracoes();
+        const payload = await res.json().catch(() => null);
+        await fetchConfiguracoes();
+        showToast(
+          payload?.detail || 'Não foi possível salvar esta configuração.',
+          'error'
+        );
+        if (isPrintPersonalizationUpdate) setPrintSettingsSaveState('error');
+        return false;
       }
+      if (isPrintPersonalizationUpdate) setPrintSettingsSaveState('saved');
+      return true;
     } catch (e) {
       console.error('Error saving configurations:', e);
-      fetchConfiguracoes();
+      await fetchConfiguracoes();
+      showToast('Falha de conexão ao salvar a configuração.', 'error');
+      if (isPrintPersonalizationUpdate) setPrintSettingsSaveState('error');
+      return false;
     }
   };
 
@@ -1268,6 +1287,7 @@ export function CaixaPanel({
   const [printHeader, setPrintHeader] = useState("Kôma Gourmet Bistrô");
   const [printFooter, setPrintFooter] = useState("");
   const [printNamePosition, setPrintNamePosition] = useState<'cabecalho' | 'rodape' | 'oculto'>('cabecalho');
+  const [printSettingsSaveState, setPrintSettingsSaveState] = useState<'saved' | 'dirty' | 'saving' | 'error'>('saved');
   const [isTestingPrinter, setIsTestingPrinter] = useState(false);
 
   // AI Chatbot State
@@ -1533,19 +1553,12 @@ export function CaixaPanel({
   const handleQuickPrintOrder = async (order: any, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     try {
-      const printHeaderStr = localStorage.getItem("koma_print_header") || printHeader || "";
-      const printFooterStr = localStorage.getItem("koma_print_footer") || printFooter || "";
       let url = "";
       if (order.mesaId && Number(order.mesaId) > 0) {
         url = `${apiBaseUrl}/mesas/${order.mesaId}/imprimir-recibo?apenas_valores=true`;
       } else {
         url = `${apiBaseUrl}/comandas/${order.id}/imprimir-recibo`;
       }
-      const params = new URLSearchParams();
-      if (printHeaderStr) params.append("print_header", printHeaderStr);
-      if (printFooterStr) params.append("print_footer", printFooterStr);
-      if (params.toString()) url += (url.includes('?') ? '&' : '?') + params.toString();
-
       const response = await fetch(url, { method: 'POST', headers: authHeaders });
       if (response.ok) {
         showToast("Impressão via de conferência enviada para a fila!", "success");
@@ -5950,6 +5963,71 @@ export function CaixaPanel({
               )}
 
               {printingSettingsTab === 'mesas' && (
+                <OperationalBanner
+                  id="salon-tables-title"
+                  eyebrow="SALÃO / ORGANIZAÇÃO"
+                  title="Mesas"
+                  accent="prontas para receber"
+                  description="Capacidade e identificação do salão sem misturar configuração com comandas abertas."
+                  metrics={[
+                    { label: 'mesas cadastradas', value: salonTables.length },
+                    {
+                      label: 'lugares disponíveis',
+                      value: salonTables.reduce((total, table) => total + (table.capacidade || 4), 0)
+                    },
+                    {
+                      label: 'nomes personalizados',
+                      value: salonTables.filter(table => Boolean(table.nome?.trim())).length
+                    }
+                  ]}
+                />
+              )}
+
+              {printingSettingsTab === 'garcom' && (
+                <OperationalBanner
+                  id="waiter-app-title"
+                  eyebrow="SALÃO / APP DO GARÇOM"
+                  title="Atendimento"
+                  accent="com autonomia controlada"
+                  description="Veja rapidamente o que a equipe pode fazer antes de ajustar cada permissão."
+                  metrics={[
+                    {
+                      label: 'permissões ativas',
+                      value: [
+                        permDelivery, permEdit, permAddCharges, permCancel,
+                        permShowStatus, permOpenEmpty, permAutoPrint,
+                        permCloseAccount, permDiscount, permSurcharge,
+                        permPeopleCount, permTransferTables, permTransferItems,
+                        permClientCall, permShowIdleTables
+                      ].filter(Boolean).length
+                    },
+                    { label: 'impressão de pedido', value: permAutoPrint ? 'Automática' : 'Manual' },
+                    { label: 'fechamento no app', value: permCloseAccount ? 'Permitido' : 'Bloqueado' },
+                    {
+                      label: 'alerta de ociosidade',
+                      value: permShowIdleTables ? `${idleTimeThreshold} min` : 'Desativado'
+                    }
+                  ]}
+                />
+              )}
+
+              {printingSettingsTab === 'taxa' && (
+                <OperationalBanner
+                  id="service-tax-title"
+                  eyebrow="SALÃO / TAXA DE SERVIÇO"
+                  title="Taxa"
+                  accent={taxaServicoAtiva ? 'aplicada com clareza' : 'sob decisão do caixa'}
+                  description="A regra é única para o salão e chega ao fechamento sem cálculo paralelo."
+                  metrics={[
+                    { label: 'estado atual', value: taxaServicoAtiva ? 'Ativa' : 'Inativa' },
+                    { label: 'percentual padrão', value: taxaServicoAtiva ? `${serviceTaxRate}%` : '—' },
+                    { label: 'aplicação', value: 'Fechamento' },
+                    { label: 'alcance', value: 'Caixa e salão' }
+                  ]}
+                />
+              )}
+
+              {printingSettingsTab === 'mesas' && (
                 <section className="overflow-hidden rounded-[22px] border border-[#27272A] bg-[#101311]">
                   <header className="flex flex-col gap-3 border-b border-[#27272A] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
                     <div>
@@ -6171,9 +6249,29 @@ export function CaixaPanel({
 
               {/* Printer messages & test (Right Column) */}
               {printingSettingsTab === 'impressao' && hasPrinting && (
-              <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'grid', 'grid-cols-1', 'xl:grid-cols-2', 'gap-5')}>
+              <div className={clsx('bg-[#0f1210]', 'border', 'border-[#252b28]', 'rounded-[22px]', 'p-5', 'grid', 'grid-cols-1', 'xl:grid-cols-2', 'gap-6')}>
                 <div className="space-y-4">
-                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Impressoras térmicas</span>
+                  <div className="flex items-start justify-between gap-3 border-b border-[#252b28] pb-3">
+                    <div>
+                      <h3 className="text-sm font-bold text-white">Personalização do cupom</h3>
+                      <p className="mt-1 text-[9px] text-zinc-500">Uma configuração central para caixa, comandas e impressão automática.</p>
+                    </div>
+                    <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[8px] font-bold ${
+                      printSettingsSaveState === 'error'
+                        ? 'border-red-500/25 bg-red-500/[0.07] text-red-300'
+                        : printSettingsSaveState === 'dirty'
+                          ? 'border-amber-500/25 bg-amber-500/[0.07] text-amber-300'
+                          : 'border-emerald-500/20 bg-emerald-500/[0.06] text-emerald-300'
+                    }`}>
+                      {printSettingsSaveState === 'saving'
+                        ? 'SALVANDO…'
+                        : printSettingsSaveState === 'dirty'
+                          ? 'ALTERAÇÕES PENDENTES'
+                          : printSettingsSaveState === 'error'
+                            ? 'NÃO FOI SALVO'
+                            : 'SALVO NO RESTAURANTE'}
+                    </span>
+                  </div>
 
                   <div className={clsx('space-y-3', 'text-left')}>
                     <div className="space-y-1">
@@ -6182,7 +6280,10 @@ export function CaixaPanel({
                         type="text"
                         value={printHeader}
                         maxLength={80}
-                        onChange={(e) => setPrintHeader(e.target.value)}
+                        onChange={(e) => {
+                          setPrintHeader(e.target.value);
+                          setPrintSettingsSaveState('dirty');
+                        }}
                         onBlur={() => updateConfiguracoes({ impressao_nome_restaurante: printHeader })}
                         className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-[10px]')}
                       />
@@ -6210,7 +6311,10 @@ export function CaixaPanel({
                         value={printFooter}
                         maxLength={160}
                         placeholder="Ex.: endereço, telefone ou agradecimento"
-                        onChange={(e) => setPrintFooter(e.target.value)}
+                        onChange={(e) => {
+                          setPrintFooter(e.target.value);
+                          setPrintSettingsSaveState('dirty');
+                        }}
                         onBlur={() => updateConfiguracoes({ impressao_mensagem_rodape: printFooter })}
                         className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-[10px]')}
                       />
@@ -6236,11 +6340,11 @@ export function CaixaPanel({
 
                 </div>
 
-                {/* Prévia fiel ao formato térmico atual da comanda inteira. */}
+                {/* Prévia aproximada: a largura final depende da impressora. */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-serif font-bold text-gray-300">
-                      Prévia da comanda
+                      Prévia aproximada
                     </span>
                     <span className="rounded-full border border-[#27272A] px-2 py-1 text-[8px] text-gray-500">
                       exemplo em escala
@@ -6330,7 +6434,7 @@ export function CaixaPanel({
                     </div>
                   </div>
                   <p className="text-[8px] leading-relaxed text-gray-500">
-                    O nome, a posição e o rodapé acima atualizam esta prévia. A impressão real ajusta as quebras à largura configurada na térmica.
+                    O nome, a posição e o rodapé acima atualizam esta simulação. A impressão real usa o formatador do servidor e ajusta as quebras à largura da térmica.
                   </p>
                 </div>
 
@@ -8517,13 +8621,7 @@ export function CaixaPanel({
                         type="button"
                         onClick={async () => {
                           try {
-                            const printHeader = localStorage.getItem("koma_print_header") || "";
-                            const printFooter = localStorage.getItem("koma_print_footer") || "";
-                            let url = `${apiBaseUrl}/mesas/${selectedOrder.mesaId}/imprimir-recibo?apenas_valores=false`;
-                            const params = new URLSearchParams();
-                            if (printHeader) params.append("print_header", printHeader);
-                            if (printFooter) params.append("print_footer", printFooter);
-                            if (params.toString()) url += `&${params.toString()}`;
+                            const url = `${apiBaseUrl}/mesas/${selectedOrder.mesaId}/imprimir-recibo?apenas_valores=false`;
                             
                             const response = await fetch(url, {
                               method: 'POST',
@@ -8551,13 +8649,7 @@ export function CaixaPanel({
                         type="button"
                         onClick={async () => {
                           try {
-                            const printHeader = localStorage.getItem("koma_print_header") || "";
-                            const printFooter = localStorage.getItem("koma_print_footer") || "";
-                            let url = `${apiBaseUrl}/mesas/${selectedOrder.mesaId}/imprimir-recibo?apenas_valores=true`;
-                            const params = new URLSearchParams();
-                            if (printHeader) params.append("print_header", printHeader);
-                            if (printFooter) params.append("print_footer", printFooter);
-                            if (params.toString()) url += `&${params.toString()}`;
+                            const url = `${apiBaseUrl}/mesas/${selectedOrder.mesaId}/imprimir-recibo?apenas_valores=true`;
                             
                             const response = await fetch(url, {
                               method: 'POST',
@@ -9229,13 +9321,7 @@ export function CaixaPanel({
                       type="button"
                       onClick={async () => {
                         try {
-                          const printHeader = localStorage.getItem("koma_print_header") || "";
-                          const printFooter = localStorage.getItem("koma_print_footer") || "";
-                          let url = `${apiBaseUrl}/mesas/${selectedKanbanOrder.mesaId}/imprimir-recibo?apenas_valores=false`;
-                          const params = new URLSearchParams();
-                          if (printHeader) params.append("print_header", printHeader);
-                          if (printFooter) params.append("print_footer", printFooter);
-                          if (params.toString()) url += `&${params.toString()}`;
+                          const url = `${apiBaseUrl}/mesas/${selectedKanbanOrder.mesaId}/imprimir-recibo?apenas_valores=false`;
                           const response = await fetch(url, { method: 'POST', headers: authHeaders });
                           if (response.ok) {
                             window.dispatchEvent(
@@ -9261,13 +9347,7 @@ export function CaixaPanel({
                       type="button"
                       onClick={async () => {
                         try {
-                          const printHeader = localStorage.getItem("koma_print_header") || "";
-                          const printFooter = localStorage.getItem("koma_print_footer") || "";
-                          let url = `${apiBaseUrl}/mesas/${selectedKanbanOrder.mesaId}/imprimir-recibo?apenas_valores=true`;
-                          const params = new URLSearchParams();
-                          if (printHeader) params.append("print_header", printHeader);
-                          if (printFooter) params.append("print_footer", printFooter);
-                          if (params.toString()) url += `&${params.toString()}`;
+                          const url = `${apiBaseUrl}/mesas/${selectedKanbanOrder.mesaId}/imprimir-recibo?apenas_valores=true`;
                           const response = await fetch(url, { method: 'POST', headers: authHeaders });
                           if (response.ok) {
                             window.dispatchEvent(
@@ -10299,13 +10379,7 @@ export function CaixaPanel({
           try {
             const targetOrder = orders.find(o => o.id === comandaId) || quickActionsOrder;
             const mesaId = targetOrder?.mesaId || 0;
-            const printHeader = localStorage.getItem("koma_print_header") || "";
-            const printFooter = localStorage.getItem("koma_print_footer") || "";
-            let url = `${apiBaseUrl}/mesas/${mesaId}/imprimir-recibo?apenas_valores=true`;
-            const params = new URLSearchParams();
-            if (printHeader) params.append("print_header", printHeader);
-            if (printFooter) params.append("print_footer", printFooter);
-            if (params.toString()) url += `&${params.toString()}`;
+            const url = `${apiBaseUrl}/mesas/${mesaId}/imprimir-recibo?apenas_valores=true`;
 
             const res = await fetch(url, {
               method: 'POST',

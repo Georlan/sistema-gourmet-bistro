@@ -60,6 +60,10 @@ PRINT_JOB_TOMBSTONE_LIMIT = _positive_int_env(
     "KOMA_PRINT_DEDUP_MAX_TOMBSTONES",
     1000,
 )
+PRINT_JOB_MAX_UNRESOLVED_AGE_SECONDS = _positive_int_env(
+    "KOMA_PRINT_MAX_UNRESOLVED_AGE_SECONDS",
+    6 * 60 * 60,
+)
 try:
     PRINT_HISTORY_TIMEZONE = ZoneInfo(
         os.getenv("KOMA_PRINT_TIMEZONE", "America/Fortaleza")
@@ -526,6 +530,37 @@ def _release_stuck_jobs(
     )
 
 
+def _expire_stale_unresolved_jobs(
+    db: Session,
+    restaurante_id: int,
+    now: datetime.datetime,
+) -> int:
+    """Cancela trabalhos antigos antes que uma reconexão os imprima horas depois."""
+    cutoff = now - datetime.timedelta(
+        seconds=PRINT_JOB_MAX_UNRESOLVED_AGE_SECONDS
+    )
+    max_age_hours = max(
+        1,
+        round(PRINT_JOB_MAX_UNRESOLVED_AGE_SECONDS / 3600),
+    )
+    return db.query(PrintJob).filter(
+        PrintJob.restaurante_id == restaurante_id,
+        PrintJob.status.in_(UNRESOLVED_JOB_STATUSES),
+        PrintJob.created_at < cutoff,
+    ).update(
+        {
+            "status": "cancelled",
+            "claimed_at": None,
+            "agent_id": None,
+            "last_error": (
+                f"Expirado após {max_age_hours}h sem impressão. "
+                "Reimprima manualmente se ainda for necessário."
+            ),
+        },
+        synchronize_session=False,
+    )
+
+
 def _claim_pending_jobs(
     db: Session,
     agent: PrintAgentToken,
@@ -534,7 +569,14 @@ def _claim_pending_jobs(
 ) -> list[dict]:
     """Reserva atomicamente até ``limit`` trabalhos na ordem da fila."""
     safe_limit = max(1, min(limit, MAX_CLAIM_BATCH_SIZE))
-    _release_stuck_jobs(db, agent.restaurante_id, now)
+    expired_jobs = _expire_stale_unresolved_jobs(
+        db,
+        agent.restaurante_id,
+        now,
+    )
+    released_jobs = _release_stuck_jobs(db, agent.restaurante_id, now)
+    if expired_jobs or released_jobs:
+        db.flush()
 
     if db.get_bind().dialect.name == "postgresql":
         claimed_rows = db.execute(
@@ -842,6 +884,9 @@ def get_print_monitor(
         )
 
     now = datetime.datetime.now(datetime.timezone.utc)
+    expired_jobs = _expire_stale_unresolved_jobs(db, rest_id, now)
+    if expired_jobs:
+        db.commit()
     day_start, day_end, history_date = _print_history_day_bounds(now)
     delay_cutoff = now - datetime.timedelta(
         seconds=PRINT_DELAY_THRESHOLD_SECONDS
@@ -1025,7 +1070,14 @@ def get_print_monitor(
                 "table_number": reference["table_number"],
                 "status": job.status,
                 "display_status": (
-                    "spooler_accepted" if accepted_by_spooler else job.status
+                    "spooler_accepted"
+                    if accepted_by_spooler
+                    else "expired"
+                    if (
+                        job.status == "cancelled"
+                        and (job.last_error or "").startswith("Expirado")
+                    )
+                    else job.status
                 ),
                 "accepted_by_spooler": accepted_by_spooler,
                 "physical_confirmation": (
@@ -1078,6 +1130,8 @@ def get_print_monitor(
         "online_threshold_seconds": AGENT_ONLINE_THRESHOLD_SECONDS,
         "command_timeout_seconds": AGENT_COMMAND_TIMEOUT_SECONDS,
         "delay_threshold_seconds": PRINT_DELAY_THRESHOLD_SECONDS,
+        "max_unresolved_age_seconds": PRINT_JOB_MAX_UNRESOLVED_AGE_SECONDS,
+        "expired_jobs": expired_jobs,
         "physical_completion_tracking": False,
         "agents": agent_payload,
         "latest_spooler_success": latest_success_payload,
@@ -1446,8 +1500,13 @@ def get_next_job(
 
     # Compatibilidade com agentes antigos. Agentes novos usam /jobs/claim-next,
     # que busca e reserva o trabalho na mesma chamada.
+    expired_jobs = _expire_stale_unresolved_jobs(
+        db,
+        agent.restaurante_id,
+        now,
+    )
     released_jobs = _release_stuck_jobs(db, agent.restaurante_id, now)
-    if released_jobs:
+    if expired_jobs or released_jobs:
         db.commit()
 
     job = db.query(PrintJob).filter(
@@ -1530,6 +1589,14 @@ def claim_job(
             ),
         )
 
+    expired_jobs = _expire_stale_unresolved_jobs(
+        db,
+        agent.restaurante_id,
+        now,
+    )
+    if expired_jobs:
+        db.commit()
+
     # UPDATE atômico condicional — retorna o número de linhas realmente alteradas
     rows_updated = db.query(PrintJob).filter(
         PrintJob.id == job_id,
@@ -1569,7 +1636,10 @@ def claim_job(
             detail=f"Job já foi assumido por outro agente ('{existing.agent_id}') ou não está pendente (status: '{existing.status}')"
         )
 
-    job = db.query(PrintJob).filter(PrintJob.id == job_id).first()
+    job = db.query(PrintJob).filter(
+        PrintJob.id == job_id,
+        PrintJob.restaurante_id == agent.restaurante_id,
+    ).first()
 
     return {
         "id": job.id,

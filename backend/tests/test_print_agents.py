@@ -207,6 +207,83 @@ def test_claim_next_reserves_job_in_one_request():
         db.close()
 
 
+def test_claim_next_expires_old_job_instead_of_printing_it(monkeypatch):
+    """Uma reconexão não pode imprimir pedidos abandonados horas antes."""
+    monkeypatch.setattr(
+        print_agents_route,
+        "PRINT_JOB_MAX_UNRESOLVED_AGE_SECONDS",
+        60,
+    )
+    mark_agent_printer_ready("a1")
+    db = TestingSessionLocal()
+    try:
+        job = db.query(PrintJob).filter_by(id="job-1001").one()
+        job.created_at = (
+            datetime.datetime.now(datetime.timezone.utc)
+            - datetime.timedelta(minutes=5)
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = TestClient(app).post(
+        "/api/print-agents/jobs/claim-next",
+        headers={"X-Agent-Token": "token_agent_1"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() is None
+    db = TestingSessionLocal()
+    try:
+        expired = db.query(PrintJob).filter_by(id="job-1001").one()
+        assert expired.status == "cancelled"
+        assert expired.agent_id is None
+        assert expired.last_error.startswith("Expirado")
+    finally:
+        db.close()
+
+
+def test_print_monitor_expires_only_authenticated_restaurant_jobs(monkeypatch):
+    """A limpeza automática continua estritamente limitada ao tenant logado."""
+    monkeypatch.setattr(
+        print_agents_route,
+        "PRINT_JOB_MAX_UNRESOLVED_AGE_SECONDS",
+        60,
+    )
+    old_time = (
+        datetime.datetime.now(datetime.timezone.utc)
+        - datetime.timedelta(minutes=5)
+    )
+    db = TestingSessionLocal()
+    try:
+        db.query(PrintJob).filter(
+            PrintJob.id.in_(["job-1001", "job-2001"])
+        ).update({"created_at": old_time}, synchronize_session=False)
+        db.commit()
+    finally:
+        db.close()
+
+    response = TestClient(app).get(
+        "/api/print-agents/monitor",
+        headers=jwt_headers("2", 2, "admin"),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["expired_jobs"] == 1
+    db = TestingSessionLocal()
+    try:
+        tenant_1 = db.query(PrintJob).filter_by(id="job-1001").one()
+        assert tenant_1.status == "pending"
+        tenant_token = current_restaurante_id.set(2)
+        try:
+            tenant_2 = db.query(PrintJob).filter_by(id="job-2001").one()
+        finally:
+            current_restaurante_id.reset(tenant_token)
+        assert tenant_2.status == "cancelled"
+    finally:
+        db.close()
+
+
 def test_claim_next_never_delivers_same_job_to_second_agent():
     """O segundo agente não recebe o job já reservado atomicamente."""
     mark_agent_printer_ready("a1")

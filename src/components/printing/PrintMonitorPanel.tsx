@@ -15,6 +15,7 @@ import {
   WifiOff,
   Wrench
 } from 'lucide-react';
+import { OperationalBanner } from '../shared/OperationalBanner';
 
 interface DetectedPrinter {
   name: string;
@@ -102,6 +103,8 @@ interface PrintMonitorResponse {
   online_threshold_seconds: number;
   command_timeout_seconds?: number;
   delay_threshold_seconds: number;
+  max_unresolved_age_seconds?: number;
+  expired_jobs?: number;
   physical_completion_tracking: boolean;
   agents: PrintAgentHealth[];
   summary: {
@@ -143,7 +146,8 @@ const STATUS_LABELS: Record<string, string> = {
   printing: 'Enviando',
   spooler_accepted: 'Enviado ao sistema',
   failed: 'Falhou',
-  cancelled: 'Cancelado'
+  cancelled: 'Cancelado',
+  expired: 'Expirado'
 };
 
 const STATUS_STYLES: Record<string, string> = {
@@ -152,7 +156,8 @@ const STATUS_STYLES: Record<string, string> = {
   printing: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
   spooler_accepted: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
   failed: 'border-red-500/30 bg-red-500/10 text-red-300',
-  cancelled: 'border-zinc-500/30 bg-zinc-500/10 text-zinc-400'
+  cancelled: 'border-zinc-500/30 bg-zinc-500/10 text-zinc-400',
+  expired: 'border-amber-500/30 bg-amber-500/10 text-amber-300'
 };
 
 const dateTimeFormatter = new Intl.DateTimeFormat('pt-BR', {
@@ -655,8 +660,47 @@ export function PrintMonitorPanel({
     neutral: 'bg-sky-400/15 text-sky-300'
   };
 
+  const equipmentState = hasReadyPrinter
+    ? 'Pronta'
+    : presentUsbPrinters.length
+      ? 'Detectada'
+      : 'Ausente';
+  const oldestQueueValue = queueTotal > 0
+    ? formatAge(monitorData?.summary.oldest_unresolved_seconds ?? null)
+    : 'Livre';
+  const latestSentValue = monitorData?.latest_spooler_success
+    ? `há ${formatAge(monitorData.latest_spooler_success.age_seconds)}`
+    : 'Nenhum hoje';
+
   return (
-    <section className="rounded-3xl border border-[#2b2b2f] bg-[#121214] p-4 sm:p-5 space-y-5">
+    <div className="space-y-4">
+      <OperationalBanner
+        id="printing-operation-title"
+        eyebrow="SALÃO / IMPRESSÃO"
+        title="Impressão"
+        accent={hasReadyPrinter ? 'pronta para operar' : 'sem surpresa na fila'}
+        description="Conexão física, trabalhos pendentes e último envio em uma leitura rápida."
+        metrics={[
+          {
+            label: 'equipamento USB',
+            value: equipmentState,
+            valueClassName: hasReadyPrinter ? 'text-emerald-300' : 'text-amber-200'
+          },
+          {
+            label: queueTotal > 0 ? 'espera mais antiga' : 'fila de impressão',
+            value: oldestQueueValue,
+            valueClassName: monitorData?.summary.delayed ? 'text-amber-200' : undefined
+          },
+          { label: 'último envio', value: latestSentValue },
+          {
+            label: 'falhas hoje',
+            value: monitorData?.summary.failed ?? 0,
+            valueClassName: monitorData?.summary.failed ? 'text-red-300' : undefined
+          }
+        ]}
+      />
+
+    <section className="rounded-[22px] border border-[#252b28] bg-[#0f1210] p-4 sm:p-5 space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#27272A] pb-4">
         <div>
           <div className="flex items-center gap-2 text-sm font-bold text-white">
@@ -779,38 +823,6 @@ export function PrintMonitorPanel({
               </button>
             )}
           </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-        <div className="rounded-2xl border border-[#2a2a2e] bg-[#0b0b0d] p-3">
-          <div className="flex items-center gap-2 text-[9px] uppercase tracking-wider text-gray-500">
-            <Usb size={13} className={hasReadyPrinter ? 'text-emerald-400' : 'text-red-400'} />
-            Equipamento USB
-          </div>
-          <strong className={`mt-1 block text-xs ${hasReadyPrinter ? 'text-emerald-300' : 'text-red-300'}`}>
-            {hasReadyPrinter
-              ? 'Pronto'
-              : presentUsbPrinters.length
-                ? 'Detectado'
-                : 'Ausente'}
-          </strong>
-        </div>
-        <div className="rounded-2xl border border-[#2a2a2e] bg-[#0b0b0d] p-3">
-          <div className="flex items-center gap-2 text-[9px] uppercase tracking-wider text-gray-500">
-            <Clock3 size={13} />
-            Fila
-          </div>
-          <strong className="mt-1 block text-xs text-white">{queueTotal} pendente(s)</strong>
-        </div>
-        <div className="rounded-2xl border border-[#2a2a2e] bg-[#0b0b0d] p-3">
-          <div className="flex items-center gap-2 text-[9px] uppercase tracking-wider text-gray-500">
-            <AlertTriangle size={13} />
-            Falhas hoje
-          </div>
-          <strong className={`mt-1 block text-xs ${monitorData?.summary.failed ? 'text-red-300' : 'text-white'}`}>
-            {monitorData?.summary.failed ?? 0}
-          </strong>
         </div>
       </div>
 
@@ -1104,5 +1116,6 @@ export function PrintMonitorPanel({
         então o Kôma não apresenta essa etapa como confirmação física.
       </p>
     </section>
+    </div>
   );
 }
