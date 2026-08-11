@@ -219,6 +219,46 @@ const isTableCheckoutOrder = (order: Order | null | undefined) => {
   return !['delivery', 'entrega', 'retirada'].includes(normalizedType);
 };
 
+interface OperationalHeroProps {
+  id: string;
+  eyebrow: string;
+  title: string;
+  accent: string;
+  description: string;
+  metrics: Array<{ label: string; value: React.ReactNode }>;
+  isConnected: boolean;
+}
+
+const OperationalHero = ({
+  id,
+  eyebrow,
+  title,
+  accent,
+  description,
+  metrics,
+  isConnected,
+}: OperationalHeroProps) => (
+  <section className="orders-hero shrink-0" aria-labelledby={id}>
+    <div className="orders-hero__copy">
+      <p className="orders-eyebrow"><span /> {eyebrow}</p>
+      <h1 id={id}>{title} <em>{accent}</em></h1>
+      <p>{description}</p>
+    </div>
+    <div className="orders-hero__metrics" aria-label={`Resumo: ${title} ${accent}`}>
+      {metrics.map(metric => (
+        <div key={metric.label}>
+          <strong>{metric.value}</strong>
+          <span>{metric.label}</span>
+        </div>
+      ))}
+      <div className={isConnected ? 'is-live' : 'is-offline'}>
+        <span className="orders-live-dot" />
+        <span>{isConnected ? 'Tempo real ativo' : 'Reconectando'}</span>
+      </div>
+    </div>
+  </section>
+);
+
 export function CaixaPanel({
   orders = [],
   onRefreshOrders,
@@ -803,11 +843,26 @@ export function CaixaPanel({
     const mergedIntoMesaId = orders.find(order => order.mesaOrigemId === table.id)?.mesaId || null;
     const isMerged = mergedIntoMesaId !== null;
     const displayMesaId = isMerged ? mergedIntoMesaId : table.id;
-    const tableOrders = orders.filter(order => order.mesaId === displayMesaId);
-    const isOccupied = tableOrders.length > 0;
-    const hasPendingPayment = pagamentosPendentes.some(payment =>
-      tableOrders.some(order => order.id === payment.comanda_id)
-    );
+    const tableOrders = orders.filter(order => {
+      const normalizedOrderStatus = String(order.status || '').trim().toLowerCase();
+      return order.mesaId === displayMesaId
+        && !['fechada', 'fechado', 'cancelada', 'cancelado', 'finalizada', 'finalizado'].includes(normalizedOrderStatus);
+    });
+    const normalizedTableStatus = String(table.status || '').trim().toLowerCase();
+    const hasOperationalStatus = [
+      'ocupada',
+      'ocupado',
+      'pronta',
+      'pronto',
+      'aguardando_pagamento',
+      'para_receber',
+    ].includes(normalizedTableStatus);
+    const isOccupied = tableOrders.length > 0 || hasOperationalStatus;
+    const hasPendingPayment = ['aguardando_pagamento', 'para_receber'].includes(normalizedTableStatus)
+      || tableOrders.some(order => order.statusComanda === 'aguardando_pagamento')
+      || pagamentosPendentes.some(payment => (
+        tableOrders.some(order => order.id === payment.comanda_id)
+      ));
     const total = tableOrders.reduce((sum, order) => (
       sum + (order.itens || []).reduce((itemsTotal, item) => itemsTotal + Number(item.preco || 0), 0)
     ), 0);
@@ -4077,22 +4132,19 @@ export function CaixaPanel({
           {activeSubTab === 'pedidos' && (
             <div className={clsx('orders-workspace', 'h-full', 'flex', 'flex-col', 'space-y-4')}>
 
-              <section className="orders-hero shrink-0" aria-labelledby="orders-heading">
-                <div className="orders-hero__copy">
-                  <p className="orders-eyebrow"><span /> OPERAÇÃO AO VIVO</p>
-                  <h1 id="orders-heading">Pedidos <em>em movimento</em></h1>
-                  <p>Do salão ao recebimento, sem perder nenhuma etapa.</p>
-                </div>
-                <div className="orders-hero__metrics" aria-label="Resumo operacional">
-                  <div><strong>{filteredCol1.length}</strong><span>no salão</span></div>
-                  <div><strong>{filteredDigitalProduction.length}</strong><span>online</span></div>
-                  <div><strong>{filteredCol2Table.length + filteredDeliveryFinalization.length}</strong><span>para concluir</span></div>
-                  <div className={isWsConnected ? 'is-live' : 'is-offline'}>
-                    <span className="orders-live-dot" />
-                    <span>{isWsConnected ? 'Tempo real ativo' : 'Reconectando'}</span>
-                  </div>
-                </div>
-              </section>
+              <OperationalHero
+                id="orders-heading"
+                eyebrow="OPERAÇÃO AO VIVO"
+                title="Pedidos"
+                accent="em movimento"
+                description="Do salão ao recebimento, sem perder nenhuma etapa."
+                metrics={[
+                  { label: 'no salão', value: filteredCol1.length },
+                  { label: 'online', value: filteredDigitalProduction.length },
+                  { label: 'para concluir', value: filteredCol2Table.length + filteredDeliveryFinalization.length },
+                ]}
+                isConnected={isWsConnected}
+              />
 
               {/* ALERTA DE PAGAMENTO PENDENTE EM DINHEIRO (GARÇOM) */}
               {pagamentosPendentes.length > 0 && (
@@ -4814,22 +4866,19 @@ export function CaixaPanel({
           {/* VIEW 2: PDV (Pedidos Balcão) */}
           {activeSubTab === 'balcao' && (
             <div className="orders-workspace h-full min-h-0 flex flex-col gap-3 sm:gap-4">
-              <section className="orders-hero shrink-0" aria-labelledby="counter-heading">
-                <div className="orders-hero__copy">
-                  <p className="orders-eyebrow"><span /> CAIXA / LANÇAMENTO RÁPIDO</p>
-                  <h1 id="counter-heading">Venda direta, <em>sem atrito</em></h1>
-                  <p>Escolha os itens, indique o destino e envie para a cozinha.</p>
-                </div>
-                <div className="orders-hero__metrics" aria-label="Resumo do lançamento">
-                  <div><strong>{sellableProducts.length}</strong><span>no cardápio</span></div>
-                  <div><strong>{pdvOccupiedTableCount}</strong><span>mesas ocupadas</span></div>
-                  <div><strong>{pdvCartItemCount}</strong><span>no pedido</span></div>
-                  <div className={isWsConnected ? 'is-live' : 'is-offline'}>
-                    <span className="orders-live-dot" />
-                    <span>{isWsConnected ? 'Tempo real ativo' : 'Reconectando'}</span>
-                  </div>
-                </div>
-              </section>
+              <OperationalHero
+                id="counter-heading"
+                eyebrow="CAIXA / LANÇAMENTO RÁPIDO"
+                title="Venda direta,"
+                accent="sem atrito"
+                description="Escolha os itens, indique o destino e envie para a cozinha."
+                metrics={[
+                  { label: 'no cardápio', value: sellableProducts.length },
+                  { label: 'mesas ocupadas', value: pdvOccupiedTableCount },
+                  { label: 'no pedido', value: pdvCartItemCount },
+                ]}
+                isConnected={isWsConnected}
+              />
 
               <div className="min-h-0 flex-1 flex flex-col xl:flex-row gap-3 sm:gap-4 overflow-hidden relative">
 
@@ -5270,48 +5319,20 @@ export function CaixaPanel({
 
           {/* VIEW 3: MAPA DE MESAS (Salão) */}
           {activeSubTab === 'mesas' && (
-            <div className="flex h-full min-h-0 flex-col gap-3">
-              <section className="relative overflow-hidden rounded-[22px] border border-[#163b32] bg-[#0b100e] px-4 py-4 sm:px-5">
-                <div aria-hidden="true" className="absolute inset-y-0 right-0 hidden w-[42%] skew-x-[-22deg] border-l border-[#10b981]/25 bg-[#073b30] opacity-80 lg:block" />
-                <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="max-w-xl">
-                    <span className="mb-1.5 block font-mono text-[9px] font-bold uppercase tracking-[0.24em] text-[#10b981]">
-                      Salão / organização ao vivo
-                    </span>
-                    <h2 className="text-xl font-extrabold tracking-tight text-white sm:text-2xl">
-                      Estrutura física do salão
-                    </h2>
-                    <p className="mt-1 text-xs leading-relaxed text-zinc-400">
-                      Organize as mesas e veja rapidamente quais precisam de atenção.
-                    </p>
-                  </div>
-
-                  <div className="relative flex flex-wrap items-stretch gap-2 lg:justify-end">
-                    {[
-                      { label: 'Mesas', value: tableStatusCounts.all },
-                      { label: 'Livres', value: tableStatusCounts.free },
-                      { label: 'Em atendimento', value: tableStatusCounts.occupied },
-                      { label: 'Para receber', value: tableStatusCounts.payment },
-                    ].map(metric => (
-                      <div key={metric.label} className="min-w-[92px] rounded-xl border border-white/10 bg-[#071d17]/90 px-3 py-2">
-                        <strong className="block font-mono text-base text-white">{metric.value}</strong>
-                        <span className="text-[9px] text-zinc-400">{metric.label}</span>
-                      </div>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setTableFormError('');
-                        setShowAddMesaModal(true);
-                      }}
-                      className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#10b981] px-4 text-[10px] font-extrabold uppercase tracking-wider text-[#07110e] transition-colors hover:bg-[#35c99a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6ee7b7]"
-                    >
-                      <Plus size={14} />
-                      Adicionar mesa
-                    </button>
-                  </div>
-                </div>
-              </section>
+            <div className="orders-workspace flex h-full min-h-0 flex-col gap-3">
+              <OperationalHero
+                id="tables-heading"
+                eyebrow="SALÃO / ORGANIZAÇÃO AO VIVO"
+                title="Estrutura física"
+                accent="do salão"
+                description="Organize as mesas e veja rapidamente quais precisam de atenção."
+                metrics={[
+                  { label: 'mesas', value: tableStatusCounts.all },
+                  { label: 'livres', value: tableStatusCounts.free },
+                  { label: 'em uso', value: tableStatusCounts.occupied + tableStatusCounts.payment },
+                ]}
+                isConnected={isWsConnected}
+              />
 
               <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[22px] border border-[#252b28] bg-[#0d100f]">
                 <div className="flex flex-col gap-2 border-b border-[#252b28] px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
@@ -5338,10 +5359,17 @@ export function CaixaPanel({
                       </button>
                     ))}
                   </div>
-                  <div className="flex items-center gap-1.5 text-[9px] text-zinc-500">
-                    <span className={clsx('h-1.5 w-1.5 rounded-full', isWsConnected ? 'bg-[#10b981]' : 'bg-zinc-600')} />
-                    {isWsConnected ? 'Atualização em tempo real' : 'Reconectando atualização'}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTableFormError('');
+                      setShowAddMesaModal(true);
+                    }}
+                    className="flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-[#10b981] px-3.5 text-[9px] font-extrabold uppercase tracking-wider text-[#07110e] transition-colors hover:bg-[#35c99a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6ee7b7]"
+                  >
+                    <Plus size={13} />
+                    Adicionar mesa
+                  </button>
                 </div>
 
                 <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
@@ -5434,10 +5462,16 @@ export function CaixaPanel({
 
                               {isOccupied ? (
                                 <div className="flex items-end justify-between gap-2">
-                                  <span className="text-[9px] text-zinc-500">Consumo atual</span>
-                                  <strong className="font-mono text-sm text-[#6ee7b7]">
-                                    {total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                                  </strong>
+                                  {tableOrders.length > 0 ? (
+                                    <>
+                                      <span className="text-[9px] text-zinc-500">Consumo atual</span>
+                                      <strong className="font-mono text-sm text-[#6ee7b7]">
+                                        {total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                      </strong>
+                                    </>
+                                  ) : (
+                                    <span className="text-[9px] text-zinc-500">Sincronizando atendimento…</span>
+                                  )}
                                 </div>
                               ) : (
                                 <span className="block text-[10px] text-zinc-600">Pronta para receber clientes</span>
@@ -5454,6 +5488,7 @@ export function CaixaPanel({
                               <div className="flex gap-1.5 border-t border-white/[0.06] pt-2.5">
                                 <button
                                   type="button"
+                                  disabled={tableOrders.length === 0}
                                   onClick={() => {
                                     const checkoutOrder = buildTableCheckoutOrder(tableOrders);
                                     if (!checkoutOrder) return;
@@ -5468,18 +5503,19 @@ export function CaixaPanel({
                                     const checkoutTotal = subtotal * (1.0 + (taxaServicoAtiva ? serviceTaxRate / 100 : 0));
                                     setPaymentValor(Math.max(0, checkoutTotal - Number(checkoutOrder.valorPago || 0)).toFixed(2));
                                   }}
-                                  className="flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#123c31] px-2 text-[9px] font-extrabold uppercase tracking-wide text-[#6ee7b7] transition-colors hover:bg-[#185241]"
+                                  className="flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#123c31] px-2 text-[9px] font-extrabold uppercase tracking-wide text-[#6ee7b7] transition-colors hover:bg-[#185241] disabled:cursor-wait disabled:opacity-45"
                                 >
                                   <CreditCard size={12} />
                                   Receber conta
                                 </button>
                                 <button
                                   type="button"
+                                  disabled={tableOrders.length === 0}
                                   onClick={() => {
                                     setTableReleaseError('');
                                     setConfirmingFreeTableId(table.id);
                                   }}
-                                  className="flex min-h-9 items-center justify-center rounded-lg border border-rose-900/35 bg-rose-950/15 px-2.5 text-rose-400 transition-colors hover:bg-rose-950/35"
+                                  className="flex min-h-9 items-center justify-center rounded-lg border border-rose-900/35 bg-rose-950/15 px-2.5 text-rose-400 transition-colors hover:bg-rose-950/35 disabled:cursor-wait disabled:opacity-35"
                                   title="Liberar mesa sem receber"
                                   aria-label={`Liberar Mesa ${table.id} sem receber`}
                                 >

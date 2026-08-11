@@ -1112,7 +1112,11 @@ def fechar_comanda(
     Fecha a comanda. Aceita qualquer operador autenticado (garçom ou caixa).
     """
 
-    comanda = db.query(Comanda).filter(Comanda.id == comanda_id).first()
+    rest_id = require_tenant_id()
+    comanda = db.query(Comanda).filter(
+        Comanda.restaurante_id == rest_id,
+        Comanda.id == comanda_id,
+    ).first()
     if not comanda:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -1141,9 +1145,10 @@ def fechar_comanda(
     comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
     db.commit()
     db.refresh(comanda)
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, rest_id)
     if comanda.mesa_id:
         other_open = db.query(Comanda).filter(
+            Comanda.restaurante_id == rest_id,
             Comanda.mesa_id == comanda.mesa_id,
             Comanda.fechada == False,
             Comanda.id != comanda.id
@@ -1156,7 +1161,7 @@ def fechar_comanda(
                     "status": "livre",
                     "comanda_id": None
                 }
-            })
+            }, rest_id)
     return comanda
 
 @router.put("/{comanda_id}/reabrir", response_model=ComandaResponse)
@@ -1997,8 +2002,26 @@ def mesclar_comandas(
     """
     Mescla o consumo da mesa de origem na mesa de destino.
     """
+    rest_id = require_tenant_id()
+    if mesa_origem_id == mesa_destino_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Escolha duas mesas diferentes para realizar a mesclagem."
+        )
+
+    mesas_existentes = db.query(Mesa.id).filter(
+        Mesa.restaurante_id == rest_id,
+        Mesa.id.in_([mesa_origem_id, mesa_destino_id]),
+    ).all()
+    if len({mesa_id for (mesa_id,) in mesas_existentes}) != 2:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Mesa de origem ou destino não encontrada neste salão."
+        )
+
     # 1. Localizar comanda ativa da mesa de origem
     comanda_origem = db.query(Comanda).filter(
+        Comanda.restaurante_id == rest_id,
         Comanda.mesa_id == mesa_origem_id,
         Comanda.fechada == False
     ).first()
@@ -2018,6 +2041,7 @@ def mesclar_comandas(
 
     # Verificar se a mesa de destino já possui alguma comanda mesclada nela
     mesclas_destino = db.query(Comanda).filter(
+        Comanda.restaurante_id == rest_id,
         Comanda.mesa_id == mesa_destino_id,
         Comanda.mesa_origem_id != None,
         Comanda.fechada == False
@@ -2030,6 +2054,7 @@ def mesclar_comandas(
 
     # Verificar se a mesa destino está mesclada em outra mesa (ou seja, seu consumo foi mesclado em uma terceira mesa)
     comanda_destino_ativa = db.query(Comanda).filter(
+        Comanda.restaurante_id == rest_id,
         Comanda.mesa_id == mesa_destino_id,
         Comanda.fechada == False
     ).first()
@@ -2054,7 +2079,7 @@ def mesclar_comandas(
             "mesa_origem": mesa_origem_id,
             "mesa_destino": mesa_destino_id
         }
-    })
+    }, rest_id)
     
     return comanda_origem
 
@@ -2069,7 +2094,11 @@ def desmesclar_comanda(
     """
     Desmembra uma comanda mesclada de volta para a sua mesa de origem.
     """
-    comanda = db.query(Comanda).filter(Comanda.id == comanda_id).first()
+    rest_id = require_tenant_id()
+    comanda = db.query(Comanda).filter(
+        Comanda.restaurante_id == rest_id,
+        Comanda.id == comanda_id,
+    ).first()
     if not comanda:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -2083,6 +2112,16 @@ def desmesclar_comanda(
         )
         
     mesa_origem = comanda.mesa_origem_id
+    mesa_origem_existe = db.query(Mesa.id).filter(
+        Mesa.restaurante_id == rest_id,
+        Mesa.id == mesa_origem,
+    ).first()
+    if not mesa_origem_existe:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A mesa de origem não existe mais no salão."
+        )
+
     comanda.mesa_id = comanda.mesa_origem_id
     comanda.mesa_origem_id = None
     
@@ -2096,6 +2135,6 @@ def desmesclar_comanda(
             "comanda_id": comanda_id,
             "mesa_origem": mesa_origem
         }
-    })
+    }, rest_id)
     
     return comanda

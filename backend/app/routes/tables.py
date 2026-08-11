@@ -1,5 +1,6 @@
 import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -119,7 +120,7 @@ def delete_mesa(
         )
     comanda_ativa = db.query(Comanda).filter(
         Comanda.restaurante_id == rest_id,
-        Comanda.mesa_id == mesa_id,
+        or_(Comanda.mesa_id == mesa_id, Comanda.mesa_origem_id == mesa_id),
         Comanda.fechada == False,
     ).first()
     if comanda_ativa:
