@@ -7,7 +7,23 @@ import argparse
 import json
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Dict, Optional
+
+
+AUTOMATIC_PRINTER_NAMES = {
+    "",
+    "padrão",
+    "padrao",
+    "default",
+    "auto",
+    "automática",
+    "automatica",
+}
+
+
+def is_automatic_printer_name(value: str) -> bool:
+    return (value or "").strip().casefold() in AUTOMATIC_PRINTER_NAMES
 
 
 @dataclass
@@ -23,6 +39,7 @@ class AgentConfig:
     max_parallel_printers: int = 2
     printers: Dict[str, str] = field(default_factory=lambda: {"PADRAO": "Padrão"})
     pair_only: bool = False
+    config_path: str = "config.json"
 
     @classmethod
     def load(cls, config_path: Optional[str] = None) -> "AgentConfig":
@@ -30,6 +47,7 @@ class AgentConfig:
 
         # 1. Carregar arquivo JSON se existir
         target_json = config_path or os.getenv("KOMA_CONFIG_FILE", "config.json")
+        config.config_path = target_json
         if os.path.exists(target_json):
             try:
                 with open(target_json, "r", encoding="utf-8") as f:
@@ -63,7 +81,13 @@ class AgentConfig:
                             config.max_parallel_printers,
                         )
                     )
-                    config.printers = data.get("printers", config.printers)
+                    stored_printers = data.get("printers")
+                    if isinstance(stored_printers, dict):
+                        config.printers = {
+                            str(destination): str(name)
+                            for destination, name in stored_printers.items()
+                            if str(destination).strip() and str(name).strip()
+                        } or config.printers
             except Exception as exc:
                 print(f"[CONFIG WARNING] Erro ao ler '{target_json}': {exc}")
 
@@ -135,6 +159,47 @@ class AgentConfig:
                 pass
 
         return config
+
+    def remember_printer(self, printer_name: str) -> None:
+        """Memoriza a fila do Kôma sem alterar a impressora padrão do SO."""
+        selected = (printer_name or "").strip()
+        if not selected:
+            raise ValueError("Nome da impressora ausente.")
+
+        target = Path(self.config_path or "config.json")
+        data = {}
+        if target.exists():
+            try:
+                loaded = json.loads(target.read_text(encoding="utf-8"))
+                if isinstance(loaded, dict):
+                    data = loaded
+            except (OSError, ValueError, TypeError):
+                data = {}
+
+        stored_printers = data.get("printers")
+        if not isinstance(stored_printers, dict):
+            stored_printers = {}
+
+        # O destino PADRAO atende cozinha/bar quando não existe uma fila
+        # específica. Mapeamentos explícitos continuam intactos; apenas valores
+        # automáticos passam a apontar para a fila escolhida.
+        for destination, current_name in list(stored_printers.items()):
+            if is_automatic_printer_name(str(current_name)):
+                stored_printers[destination] = selected
+        stored_printers["PADRAO"] = selected
+        data["printers"] = stored_printers
+
+        target.parent.mkdir(parents=True, exist_ok=True)
+        temporary = target.with_suffix(f"{target.suffix}.tmp")
+        temporary.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        os.replace(temporary, target)
+        self.printers = {
+            str(destination): str(name)
+            for destination, name in stored_printers.items()
+        }
 
 
 def parse_cli_args(config: AgentConfig) -> AgentConfig:

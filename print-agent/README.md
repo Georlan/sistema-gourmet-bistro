@@ -30,8 +30,17 @@ bash print-agent/install-linux.sh
 
 ## Instalação no Windows
 
-Pré-requisitos: Python 3.10+ e a impressora disponível no Spooler do Windows.
-Abra o PowerShell na raiz do projeto e execute:
+Pré-requisitos: a impressora disponível no Spooler do Windows. Se Python 3.10+
+não estiver instalado, o instalador usa o `winget` para instalar Python 3.12 no
+perfil do usuário.
+Extraia o projeto e clique duas vezes em:
+
+```text
+INSTALAR-KOMA-WINDOWS.cmd
+```
+
+O atalho abre o instalador, faz o pareamento e valida a tarefa local. Como
+alternativa, abra o PowerShell na raiz do projeto e execute:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\print-agent\install-windows.ps1
@@ -39,6 +48,33 @@ powershell -ExecutionPolicy Bypass -File .\print-agent\install-windows.ps1
 
 O instalador pareia o computador, instala o adaptador RAW, registra a tarefa
 `KomaPrintAgent` para iniciar no logon e configura o atalho `koma-print://`.
+
+Depois, `VERIFICAR-KOMA-WINDOWS.cmd` mostra em uma tela curta se o agente está
+instalado, se a tarefa está ativa, qual fila o Kôma memorizou e qual continua
+sendo a impressora padrão do Windows.
+
+### Convivência com Anota AI e outros sistemas
+
+- O Kôma memoriza o nome exato da fila escolhida e não altera a impressora
+  padrão do Windows.
+- Se já existir uma única fila USB pronta (por exemplo, instalada para o Anota
+  AI), o Kôma a seleciona automaticamente em até alguns segundos.
+- Quando os dois sistemas usam a mesma fila do Spooler, o Windows serializa os
+  trabalhos: um cupom termina antes do próximo começar.
+- Não crie duas filas diferentes apontando para a mesma porta `USB00x`. Use a
+  fila já instalada pelo fabricante/Anota AI sempre que ela aparecer no Kôma.
+- Se o Anota AI usa acesso USB/serial direto e não o Spooler, reserve outra
+  impressora ou valide os dois simultaneamente; dois processos acessando a
+  mesma porta diretamente podem disputar o dispositivo.
+
+Checklist antes da operação:
+
+1. Execute `INSTALAR-KOMA-WINDOWS.cmd` e autorize o computador no navegador.
+2. Aguarde o diagnóstico final sem fechar a janela.
+3. Abra **Salão e impressão** e confirme a fila USB pronta.
+4. Imprima um teste do Anota AI e, logo em seguida, um teste do Kôma.
+5. Confirme que saíram dois cupons completos, sem mistura ou duplicidade.
+6. Reinicie o Windows e execute `VERIFICAR-KOMA-WINDOWS.cmd`.
 
 Diagnóstico:
 
