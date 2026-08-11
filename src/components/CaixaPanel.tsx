@@ -5046,12 +5046,26 @@ export function CaixaPanel({
                         value={pdvTargetMesaId || ''}
                         onChange={(e) => setPdvTargetMesaId(Number(e.target.value) || 0)}
                         aria-describedby="pdv-table-selection-help"
-                        className="min-h-10 w-full rounded-xl border border-white/[0.09] bg-[#090d0b] px-3 text-[10px] font-semibold text-white outline-none transition-colors focus:border-[#00b894]/70 focus:ring-2 focus:ring-[#00b894]/10"
+                        data-table-status={selectedPdvTableOption?.isOccupied ? 'occupied' : selectedPdvTableOption ? 'free' : 'unselected'}
+                        className={clsx(
+                          'min-h-10 w-full rounded-xl border px-3 text-[10px] font-semibold text-white outline-none transition-colors focus:ring-2',
+                          selectedPdvTableOption?.isOccupied
+                            ? 'border-[#6b2d37] bg-[#1b1013] focus:border-[#8a3d49] focus:ring-[#6b2d37]/20'
+                            : 'border-white/[0.09] bg-[#090d0b] focus:border-[#00b894]/70 focus:ring-[#00b894]/10'
+                        )}
                         required
                       >
                         <option value="">Selecione uma mesa</option>
                         {pdvTableOptions.map(option => (
-                          <option key={option.table.id} value={option.table.id}>
+                          <option
+                            key={option.table.id}
+                            value={option.table.id}
+                            data-table-status={option.isOccupied ? 'occupied' : 'free'}
+                            style={{
+                              backgroundColor: option.isOccupied ? '#1b1013' : '#090d0b',
+                              color: option.isOccupied ? '#e4a3ac' : '#d4d4d8',
+                            }}
+                          >
                             {option.isOccupied ? '●' : '○'} {option.label}
                             {option.table.nome ? ` · Mesa ${option.table.id}` : ''}
                             {option.isOccupied
@@ -5066,7 +5080,7 @@ export function CaixaPanel({
                         className={clsx(
                           'flex min-h-10 items-center gap-2.5 rounded-xl border px-3 py-2 text-left',
                           selectedPdvTableOption?.isOccupied
-                            ? 'border-[#00b894]/20 bg-[#00b894]/[0.07]'
+                            ? 'border-[#6b2d37]/80 bg-[#261317]'
                             : 'border-white/[0.07] bg-white/[0.02]'
                         )}
                       >
@@ -5074,11 +5088,18 @@ export function CaixaPanel({
                           aria-hidden="true"
                           className={clsx(
                             'h-2 w-2 shrink-0 rounded-full',
-                            selectedPdvTableOption?.isOccupied ? 'bg-[#00b894]' : 'bg-zinc-600'
+                            selectedPdvTableOption?.isOccupied
+                              ? 'bg-[#b95764] shadow-[0_0_0_3px_rgba(107,45,55,0.24)]'
+                              : selectedPdvTableOption
+                                ? 'bg-[#45b995]'
+                                : 'bg-zinc-600'
                           )}
                         />
                         <div className="min-w-0">
-                          <strong className="block text-[9px] font-semibold text-zinc-200">
+                          <strong className={clsx(
+                            'block text-[9px] font-semibold',
+                            selectedPdvTableOption?.isOccupied ? 'text-[#e4a3ac]' : 'text-zinc-200'
+                          )}>
                             {!selectedPdvTableOption
                               ? 'Escolha onde este pedido será lançado'
                               : selectedPdvTableOption.isOccupied
@@ -5218,10 +5239,10 @@ export function CaixaPanel({
                 <div className="flex flex-col gap-2 border-b border-[#252b28] px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
                   <div className="flex max-w-full gap-1 overflow-x-auto rounded-xl bg-[#080a09] p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                     {[
-                      { id: 'all' as const, label: 'Todas', count: tableStatusCounts.all },
-                      { id: 'free' as const, label: 'Livres', count: tableStatusCounts.free },
-                      { id: 'occupied' as const, label: 'Em atendimento', count: tableStatusCounts.occupied },
-                      { id: 'payment' as const, label: 'Para receber', count: tableStatusCounts.payment },
+                      { id: 'all' as const, label: 'Todas', count: tableStatusCounts.all, dot: 'bg-zinc-500' },
+                      { id: 'free' as const, label: 'Livres', count: tableStatusCounts.free, dot: 'bg-[#45b995]' },
+                      { id: 'occupied' as const, label: 'Em atendimento', count: tableStatusCounts.occupied, dot: 'bg-[#b95764]' },
+                      { id: 'payment' as const, label: 'Para receber', count: tableStatusCounts.payment, dot: 'bg-[#d17a86]' },
                     ].map(filter => (
                       <button
                         key={filter.id}
@@ -5231,10 +5252,15 @@ export function CaixaPanel({
                         className={clsx(
                           'whitespace-nowrap rounded-lg px-3 py-2 text-[10px] font-bold transition-colors',
                           tableStatusFilter === filter.id
-                            ? 'bg-[#123c31] text-[#6ee7b7]'
+                            ? filter.id === 'occupied'
+                              ? 'bg-[#38191f] text-[#e4a3ac]'
+                              : filter.id === 'payment'
+                                ? 'bg-[#46212a] text-[#efb2bc]'
+                                : 'bg-[#123c31] text-[#6ee7b7]'
                             : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200'
                         )}
                       >
+                        <span className={clsx('mr-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle', filter.dot)} aria-hidden="true" />
                         {filter.label} <span className="ml-1 font-mono opacity-70">{filter.count}</span>
                       </button>
                     ))}
@@ -5279,11 +5305,12 @@ export function CaixaPanel({
                         return (
                           <article
                             key={table.id}
+                            data-table-status={isMerged ? 'merged' : hasPendingPayment ? 'payment' : isOccupied ? 'occupied' : 'free'}
                             className={clsx(
                               'group flex min-h-[148px] flex-col justify-between gap-3 rounded-2xl border p-3.5 transition-colors',
                               isMerged && 'border-dashed border-zinc-800 bg-black/20 opacity-65',
-                              hasPendingPayment && 'border-[#d2b36c]/45 bg-[#201b10]/35',
-                              isOccupied && !hasPendingPayment && 'border-[#1d5547] bg-[#0d1714] hover:border-[#2c7663]',
+                              hasPendingPayment && 'border-[#74404b] bg-[#241419] hover:border-[#92515e]',
+                              isOccupied && !hasPendingPayment && 'border-[#5f2831] bg-[#1b1013] hover:border-[#7d3540]',
                               !isOccupied && !isMerged && 'border-[#292e2c] bg-[#111412] hover:border-[#2a5e50]'
                             )}
                           >
@@ -5304,10 +5331,17 @@ export function CaixaPanel({
                                 <span className={clsx(
                                   'rounded-full border px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider',
                                   isMerged && 'border-zinc-700 bg-zinc-900 text-zinc-500',
-                                  hasPendingPayment && 'border-[#d2b36c]/25 bg-[#d2b36c]/10 text-[#e2c987]',
-                                  isOccupied && !hasPendingPayment && 'border-[#10b981]/20 bg-[#10b981]/10 text-[#6ee7b7]',
+                                  hasPendingPayment && 'border-[#8a4753] bg-[#4b222b] text-[#efb2bc]',
+                                  isOccupied && !hasPendingPayment && 'border-[#6b2e38] bg-[#38191f] text-[#e4a3ac]',
                                   !isOccupied && !isMerged && 'border-white/[0.07] bg-white/[0.025] text-zinc-400'
                                 )}>
+                                  <span
+                                    className={clsx(
+                                      'mr-1 inline-block h-1.5 w-1.5 rounded-full align-middle',
+                                      hasPendingPayment ? 'bg-[#d17a86]' : isOccupied ? 'bg-[#b95764]' : 'bg-[#45b995]'
+                                    )}
+                                    aria-hidden="true"
+                                  />
                                   {statusLabel}
                                 </span>
                                 <span className="flex items-center gap-1 text-[9px] text-zinc-500">
@@ -5320,7 +5354,10 @@ export function CaixaPanel({
                                   {tableOrders.length > 0 ? (
                                     <>
                                       <span className="text-[9px] text-zinc-500">Consumo atual</span>
-                                      <strong className="font-mono text-sm text-[#6ee7b7]">
+                                      <strong className={clsx(
+                                        'font-mono text-sm',
+                                        hasPendingPayment ? 'text-[#efb2bc]' : 'text-[#e4a3ac]'
+                                      )}>
                                         {total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                       </strong>
                                     </>
@@ -5360,7 +5397,7 @@ export function CaixaPanel({
                                         const checkoutTotal = subtotal * (1.0 + (taxaServicoAtiva ? serviceTaxRate / 100 : 0));
                                         setPaymentValor(Math.max(0, checkoutTotal - Number(checkoutOrder.valorPago || 0)).toFixed(2));
                                       }}
-                                      className="flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#123c31] px-2 text-[9px] font-extrabold uppercase tracking-wide text-[#6ee7b7] transition-colors hover:bg-[#185241] disabled:cursor-wait disabled:opacity-45"
+                                      className="flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#874550] bg-[#4b222b] px-2 text-[9px] font-extrabold uppercase tracking-wide text-[#f0b5bd] transition-colors hover:bg-[#5a2933] disabled:cursor-wait disabled:opacity-45"
                                     >
                                       <CreditCard size={12} />
                                       Receber conta
@@ -5370,7 +5407,7 @@ export function CaixaPanel({
                                       type="button"
                                       disabled={tableOrders.length === 0}
                                       onClick={() => tableOrders[0] && setSelectedKanbanOrder(tableOrders[0])}
-                                      className="flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#24483e] bg-[#101815] px-2 text-[9px] font-extrabold uppercase tracking-wide text-[#6ee7b7] transition-colors hover:bg-[#153028] disabled:cursor-wait disabled:opacity-45"
+                                      className="flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#6b2e38] bg-[#241317] px-2 text-[9px] font-extrabold uppercase tracking-wide text-[#e4a3ac] transition-colors hover:bg-[#32181e] disabled:cursor-wait disabled:opacity-45"
                                     >
                                       <Receipt size={12} />
                                       Ver comanda
