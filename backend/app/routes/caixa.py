@@ -497,12 +497,25 @@ def listar_movimentacoes_caixa(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
-    """Lista histórico de movimentações de caixa para o tenant autenticado."""
+    """Lista até 100 ajustes recentes do tenant, com filtros e operador em uma consulta."""
     check_caixa_permission(current_user)
     rest_id = require_tenant_id()
 
-    query = db.query(CaixaMovimentacao).join(CaixaTurno, CaixaMovimentacao.turno_id == CaixaTurno.id).filter(
-        CaixaTurno.restaurante_id == rest_id
+    query = db.query(CaixaMovimentacao, Usuario).join(
+        CaixaTurno,
+        and_(
+            CaixaMovimentacao.turno_id == CaixaTurno.id,
+            CaixaMovimentacao.restaurante_id == CaixaTurno.restaurante_id,
+        ),
+    ).outerjoin(
+        Usuario,
+        and_(
+            CaixaMovimentacao.usuario_id == Usuario.id,
+            CaixaMovimentacao.restaurante_id == Usuario.restaurante_id,
+        ),
+    ).filter(
+        CaixaMovimentacao.restaurante_id == rest_id,
+        CaixaTurno.restaurante_id == rest_id,
     )
 
     if tipo:
@@ -522,30 +535,27 @@ def listar_movimentacoes_caixa(
         except ValueError:
             pass
 
-    movs = query.order_by(CaixaMovimentacao.criado_em.desc()).all()
+    rows = query.order_by(
+        CaixaMovimentacao.criado_em.desc(),
+        CaixaMovimentacao.id.desc(),
+    ).limit(100).all()
 
-    result = []
-    for m in movs:
-        op_nome = None
-        if m.usuario_id:
-            op_user = db.query(Usuario).filter_by(id=m.usuario_id).first()
-            if op_user:
-                op_nome = op_user.nome
-
-        result.append(CaixaMovimentacaoResponse(
-            id=m.id,
-            turno_id=m.turno_id,
-            usuario_id=m.usuario_id,
-            usuario_nome=op_nome,
-            tipo=m.tipo,
-            valor=m.valor,
-            saldo_anterior=m.saldo_anterior or 0.0,
-            saldo_posterior=m.saldo_posterior or 0.0,
-            descricao=m.descricao or "",
-            observacao=m.observacao or "",
-            criado_em=m.criado_em
-        ))
-    return result
+    return [
+        CaixaMovimentacaoResponse(
+            id=movimentacao.id,
+            turno_id=movimentacao.turno_id,
+            usuario_id=movimentacao.usuario_id,
+            usuario_nome=operador.nome if operador else None,
+            tipo=movimentacao.tipo,
+            valor=movimentacao.valor,
+            saldo_anterior=movimentacao.saldo_anterior or 0.0,
+            saldo_posterior=movimentacao.saldo_posterior or 0.0,
+            descricao=movimentacao.descricao or "",
+            observacao=movimentacao.observacao or "",
+            criado_em=movimentacao.criado_em,
+        )
+        for movimentacao, operador in rows
+    ]
 
 
 @router.post("/turno/movimentar", response_model=CaixaMovimentacaoResponse, status_code=status.HTTP_201_CREATED)
