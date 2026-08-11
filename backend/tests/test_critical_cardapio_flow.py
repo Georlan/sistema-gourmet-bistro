@@ -13,6 +13,7 @@ from app.models import (
     Comanda,
     Cliente,
     OtpChallenge,
+    CaixaTurno,
 )
 from app.security import create_access_token
 from app.services.customer_auth import create_customer_access_token
@@ -64,6 +65,19 @@ def setup_cardapio_data():
                 restaurante_id=100
             )
             db.add(user)
+            db.commit()
+
+        turno_aberto = db.query(CaixaTurno).filter(
+            CaixaTurno.restaurante_id == 100,
+            CaixaTurno.status == "aberto",
+        ).first()
+        if turno_aberto is None:
+            db.add(CaixaTurno(
+                restaurante_id=100,
+                aberto_por_id="usr_cardapio_100",
+                saldo_inicial=0,
+                status="aberto",
+            ))
             db.commit()
 
         # Create category for restaurant 100

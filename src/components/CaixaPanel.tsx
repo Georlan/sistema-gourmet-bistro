@@ -505,6 +505,33 @@ export function CaixaPanel({
     } as Order;
   };
 
+  const getTableMovementContext = (order: Order | any) => {
+    const mesaId = Number(order?.mesaId || 0);
+    if (mesaId <= 0) {
+      return { mergedMesaIds: [] as number[], transferredFromMesaIds: [] as number[] };
+    }
+
+    const relatedOrders = (orders || []).filter(candidate => {
+      const normalizedType = String(candidate.tipo || '').toLowerCase();
+      return Number(candidate.mesaId) === mesaId
+        && !(candidate as any).fechada
+        && !['delivery', 'entrega', 'retirada'].includes(normalizedType);
+    });
+    const movementSources = relatedOrders.length > 0 ? relatedOrders : [order];
+    const mergedMesaIds = Array.from(new Set(
+      movementSources
+        .map(candidate => Number(candidate.mesaOrigemId || 0))
+        .filter(originId => originId > 0 && originId !== mesaId)
+    )).sort((a, b) => a - b);
+    const transferredFromMesaIds = Array.from(new Set(
+      movementSources
+        .map(candidate => Number(candidate.mesaTransferidaDe || 0))
+        .filter(originId => originId > 0 && originId !== mesaId)
+    )).sort((a, b) => a - b);
+
+    return { mergedMesaIds, transferredFromMesaIds };
+  };
+
 
   // Configurações do Cardápio Digital Whitelabel
   const [cardapioStatusOverride, setCardapioStatusOverride] = useState<string>('Automático');
@@ -618,12 +645,15 @@ export function CaixaPanel({
       });
 
       const hasContaPedida = entries.some(e => e.contaPedida);
-      const temItensEmPreparo = (orders || [])
-        .filter(o => o.mesaId === mesaId)
-        .some(o => {
-          const arr = Array.isArray(o?.itens) ? o.itens : Array.isArray(o?.items) ? o.items : [];
-          return arr.some(i => i.status === 'preparando');
-        });
+      const relatedTableOrders = (orders || []).filter(o => Number(o.mesaId) === mesaId && !(o as any).fechada);
+      const itensEmPreparoCount = relatedTableOrders.reduce((count, relatedOrder) => {
+        const arr = Array.isArray(relatedOrder?.itens)
+          ? relatedOrder.itens
+          : Array.isArray(relatedOrder?.items)
+            ? relatedOrder.items
+            : [];
+        return count + arr.filter(item => item.status === 'preparando' && !item.pago).length;
+      }, 0);
 
       const firstComanda = entries[0].comanda;
       const mesaEntity = (salonTables || []).find(t => t.id === mesaId);
@@ -671,7 +701,8 @@ export function CaixaPanel({
         valorPago: entries.reduce((sum, e) => sum + (e.comanda.valorPago || 0), 0),
         itens: allItems,
         contaPedida: hasContaPedida,
-        temItensEmPreparo: temItensEmPreparo,
+        temItensEmPreparo: itensEmPreparoCount > 0,
+        itensEmPreparoCount,
         comandaIds: entries.map(e => e.comanda.id)
       });
     });
@@ -4389,6 +4420,7 @@ export function CaixaPanel({
                       <>
                         {filteredCol1.map((order) => {
                           const preparingItems = order.itens.filter(item => item.status === 'preparando');
+                          const tableMovement = getTableMovementContext(order);
                           const cardId = `prod-${order.id}`;
                           const sla = getOrderSlaData(order, nowTimestamp);
                           const isExpanded = !!expandedCardIds[cardId];
@@ -4412,9 +4444,14 @@ export function CaixaPanel({
                                   <span className="orders-card__chip is-primary">
                                     {order.mesaId && order.mesaId > 0 ? `MESA ${order.mesaId}` : 'BALCÃO'}
                                   </span>
-                                  {order.mesaOrigemId && Number(order.mesaOrigemId) !== Number(order.mesaId) && (
+                                  {tableMovement.transferredFromMesaIds.length > 0 && (
                                     <span className="orders-card__chip is-muted">
-                                      🔗 M{order.mesaOrigemId}
+                                      ↪ Transferida da M{tableMovement.transferredFromMesaIds.join(', M')}
+                                    </span>
+                                  )}
+                                  {tableMovement.mergedMesaIds.length > 0 && (
+                                    <span className="orders-card__chip is-muted">
+                                      ⛓ Mesclada com M{tableMovement.mergedMesaIds.join(', M')}
                                     </span>
                                   )}
                                 </div>
@@ -4632,6 +4669,8 @@ export function CaixaPanel({
                             ? (contaPedida ? `MESA ${order.mesaId} — CONTA PEDIDA` : `MESA ${order.mesaId} — PRONTO P/ RECEBER`)
                             : (contaPedida ? 'BALCÃO — CONTA PEDIDA' : 'BALCÃO — PRONTO');
                           const totalVal = order.itens.reduce((sum: number, it: any) => sum + (it.preco_unit || it.preco || 0), 0);
+                          const tableMovement = getTableMovementContext(order);
+                          const pendingTableItems = Number((order as any).itensEmPreparoCount || 0);
 
                           return (
                             <div
@@ -4649,6 +4688,16 @@ export function CaixaPanel({
                                     {sla.label}
                                   </span>
                                   <span className={clsx('orders-card__chip', contaPedida ? 'is-attention' : 'is-primary')}>{badgeText}</span>
+                                  {tableMovement.transferredFromMesaIds.length > 0 && (
+                                    <span className="orders-card__chip is-muted">
+                                      ↪ Transferida da M{tableMovement.transferredFromMesaIds.join(', M')}
+                                    </span>
+                                  )}
+                                  {tableMovement.mergedMesaIds.length > 0 && (
+                                    <span className="orders-card__chip is-muted">
+                                      ⛓ Mesclada com M{tableMovement.mergedMesaIds.join(', M')}
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="flex items-center gap-1 shrink-0">
                                   <button
@@ -4683,6 +4732,15 @@ export function CaixaPanel({
                                 </strong>
                                 <span className="shrink-0">{order.garcomNome || 'Garçom'}</span>
                               </div>
+
+                              {pendingTableItems > 0 && (
+                                <div className="flex items-center gap-2 rounded-lg border border-amber-400/25 bg-amber-500/10 px-2.5 py-2 text-[11px] font-semibold text-amber-200">
+                                  <Clock size={13} className="shrink-0" />
+                                  <span>
+                                    Esta mesa ainda tem {pendingTableItems} {pendingTableItems === 1 ? 'item em preparo' : 'itens em preparo'}.
+                                  </span>
+                                </div>
+                              )}
 
                               {renderCompactItemsList(order.itens, cardId, isExpanded, toggleCardExpansion)}
 
