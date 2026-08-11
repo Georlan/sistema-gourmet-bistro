@@ -7,9 +7,12 @@ export interface Product {
   id: string;
   nome: string;
   categoria: string;
+  categoria_id?: string;
   preco: number;
   descricao: string;
   imagem?: string;
+  imagens_galeria?: string[];
+  ativo?: boolean;
 }
 
 export interface DraftItem {

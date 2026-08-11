@@ -9,6 +9,7 @@ import { Table, Order, DraftItem, AppSettings, Product, AppRole, OrderItem } fro
 import { getTableTotal, getCustomerSubtotals, formatElapsedTime } from '../domain';
 import { MenuPanel } from './MenuPanel';
 import { TABLES, RESTAURANT_CONFIG } from '../data';
+import type { CatalogCategory } from '../catalog/catalog';
 
 interface MesaDetailsModalProps {
   table: Table;
@@ -41,7 +42,8 @@ interface MesaDetailsModalProps {
   onPrintKitchenLaunch?: (lancamentoId: string) => Promise<void>;
   salonTables?: Table[];
   liveProdutos?: Product[];
-  liveCategorias?: any[];
+  liveCategorias?: CatalogCategory[];
+  catalogReady?: boolean;
   restauranteConfig?: any;
   onUpdateItemDetails?: (itemId: string, observacao: string, clienteNome: string, quantidadeAdicional?: number) => Promise<void>;
   isSubmitting?: boolean;
@@ -82,6 +84,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
   salonTables,
   liveProdutos = [],
   liveCategorias = [],
+  catalogReady = false,
   restauranteConfig,
   onUpdateItemDetails,
   onMergeTables,
@@ -684,6 +687,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
               isSubmitting={isSubmitting}
               liveProdutos={liveProdutos}
               liveCategorias={liveCategorias}
+              catalogReady={catalogReady}
             />
           )}
 

@@ -8,7 +8,8 @@ import logoImg from './assets/logo.png';
 import { LoginButton } from '../components/shadcnblocks/login-button';
 import { Menu, X, User, Wifi, WifiOff, SlidersHorizontal, ArrowDownRight, ArrowUpRight, RefreshCw, Bell, Printer, TrendingUp, Utensils, CheckCircle2, UserCheck, UserX, ShoppingBag } from 'lucide-react';
 import { Table, Order, DraftItem, AppSettings, AppRole, Product } from './types';
-import { TABLES, WAITERS, RESTAURANT_CONFIG, PRODUCTS } from './data';
+import { TABLES, WAITERS, RESTAURANT_CONFIG } from './data';
+import { normalizeCatalogSnapshot, type CatalogCategory } from './catalog/catalog';
 import { getTableTotal } from './domain';
 import { MesaCard } from './components/MesaCard';
 import { MesasView } from './components/mesas/MesasView';
@@ -527,45 +528,59 @@ export default function App() {
 
   // 2. Live products loaded from backend (includes ativo field for availability blocking)
   const [liveProdutos, setLiveProdutos] = useState<Product[]>([]);
-  const [liveCategorias, setLiveCategorias] = useState<any[]>([]);
+  const [liveCategorias, setLiveCategorias] = useState<CatalogCategory[]>([]);
+  const catalogRequestRef = useRef(0);
 
-  const fetchLiveProdutos = useCallback(async () => {
+  const fetchLiveCatalog = useCallback(async () => {
+    const requestId = ++catalogRequestRef.current;
     try {
       const tokenKey = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
       const token = localStorage.getItem(tokenKey);
-      const headers: any = token ? { Authorization: `Bearer ${token}` } : {};
-      const res = await fetch(`${API_BASE_URL}/produtos/`, { headers });
-      if (res.status === 401) {
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+      let payload: unknown;
+      const catalogResponse = await fetch(`${API_BASE_URL}/produtos/catalogo`, {
+        headers,
+        cache: 'no-store',
+      });
+
+      if (catalogResponse.status === 401) {
         handleLogout();
         return;
       }
-      if (res.ok) {
-        const data = await res.json();
-        const sorted = Array.isArray(data)
-          ? [...data].sort((a: any, b: any) =>
-              String(a.id).localeCompare(String(b.id), undefined, { numeric: true, sensitivity: 'base' })
-            )
-          : [];
-        setLiveProdutos(sorted);
-        setIsProductsLoaded(true);
-      }
-    } catch (err) {
-      console.error("Error fetching live products", err);
-    }
-  }, [portal]);
 
-  const fetchLiveCategorias = useCallback(async () => {
-    try {
-      const tokenKey = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
-      const token = localStorage.getItem(tokenKey);
-      const headers: any = token ? { Authorization: `Bearer ${token}` } : {};
-      const res = await fetch(`${API_BASE_URL}/produtos/categorias`, { headers });
-      if (res.ok) {
-        const data = await res.json();
-        setLiveCategorias(data);
+      if (catalogResponse.ok) {
+        payload = await catalogResponse.json();
+      } else if (catalogResponse.status === 404 || catalogResponse.status === 405) {
+        // Compatibilidade durante deploy gradual: o endpoint atômico pode
+        // chegar alguns segundos depois do frontend novo.
+        const [productsResponse, categoriesResponse] = await Promise.all([
+          fetch(`${API_BASE_URL}/produtos/`, { headers, cache: 'no-store' }),
+          fetch(`${API_BASE_URL}/produtos/categorias`, { headers, cache: 'no-store' }),
+        ]);
+        if (productsResponse.status === 401 || categoriesResponse.status === 401) {
+          handleLogout();
+          return;
+        }
+        if (!productsResponse.ok || !categoriesResponse.ok) {
+          throw new Error(`CATALOG_HTTP_${productsResponse.status}_${categoriesResponse.status}`);
+        }
+        payload = {
+          produtos: await productsResponse.json(),
+          categorias: await categoriesResponse.json(),
+        };
+      } else {
+        throw new Error(`CATALOG_HTTP_${catalogResponse.status}`);
       }
+
+      if (requestId !== catalogRequestRef.current) return;
+      const catalog = normalizeCatalogSnapshot(payload);
+      setLiveProdutos(catalog.produtos);
+      setLiveCategorias(catalog.categorias);
+      setIsProductsLoaded(true);
     } catch (err) {
-      console.error("Error fetching live categories", err);
+      if (requestId === catalogRequestRef.current) {
+        console.error("Error fetching live catalog", err);
+      }
     }
   }, [portal]);
 
@@ -573,21 +588,18 @@ export default function App() {
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    fetchLiveProdutos();
-    fetchLiveCategorias();
+    fetchLiveCatalog();
     if (isWsConnected) return;
     const interval = setInterval(() => {
-      fetchLiveProdutos();
-      fetchLiveCategorias();
+      fetchLiveCatalog();
     }, 40000); // refresh every 40s if not connected to WS
     return () => clearInterval(interval);
-  }, [isAuthenticated, isWsConnected, fetchLiveProdutos, fetchLiveCategorias]);
+  }, [isAuthenticated, isWsConnected, fetchLiveCatalog]);
 
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
-      fetchLiveProdutos();
-      fetchLiveCategorias();
+      fetchLiveCatalog();
       window.dispatchEvent(new Event('koma_orders_updated'));
       window.dispatchEvent(new Event('koma_customers_updated'));
     };
@@ -602,7 +614,7 @@ export default function App() {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [fetchLiveProdutos, fetchLiveCategorias]);
+  }, [fetchLiveCatalog]);
 
   // 2b. Orders loaded from API
   const [orders, setOrders] = useState<Order[]>([]);
@@ -732,8 +744,7 @@ export default function App() {
         fetchOrdersFromAPI();
         if (pendingSupportingRefresh) {
           fetchTables();
-          fetchLiveProdutos();
-          fetchLiveCategorias();
+          fetchLiveCatalog();
           fetchConfig();
           fetchTurnoResumo();
           if (isManagementRole(activeRole)) {
@@ -799,6 +810,9 @@ export default function App() {
           }
           if (data.event === "customers_updated") {
             window.dispatchEvent(new Event('koma_customers_updated'));
+          }
+          if ((data.event || data.type) === "catalog_updated") {
+            fetchLiveCatalog();
           }
           if (data.event === "tables_updated" || data.event === "TABLE_UPDATED") {
             scheduleRealtimeRefresh(true);
@@ -1086,7 +1100,7 @@ export default function App() {
                 id: item.id,
                 produtoId: item.produto_id,
                 // Use name from API (produto populated by SQLAlchemy relationship)
-                nome: item.produto?.nome || PRODUCTS.find(p => p.id === item.produto_id)?.nome || `Item #${item.produto_id}`,
+                nome: item.produto?.nome || liveProdutos.find(p => p.id === item.produto_id)?.nome || `Item #${item.produto_id}`,
                 preco: item.preco_unit,
                 observacao: item.observacao || '',
                 clienteNome: item.cliente_nome || 'Consumo Geral',
@@ -1884,7 +1898,8 @@ export default function App() {
             isWsConnected={isWsConnected}
             liveProdutos={liveProdutos}
             liveCategorias={liveCategorias}
-            onRefreshCategorias={fetchLiveCategorias}
+            catalogReady={isProductsLoaded}
+            onRefreshCategorias={fetchLiveCatalog}
             restauranteConfig={restauranteConfig}
             fetchError={fetchError}
             onOptimisticUpdateItemStatus={handleOptimisticUpdateItemStatus}
@@ -2309,7 +2324,8 @@ export default function App() {
               isWsConnected={isWsConnected}
               liveProdutos={liveProdutos}
               liveCategorias={liveCategorias}
-              onRefreshCategorias={fetchLiveCategorias}
+              catalogReady={isProductsLoaded}
+              onRefreshCategorias={fetchLiveCatalog}
               restauranteConfig={restauranteConfig}
               fetchError={fetchError}
               onOptimisticUpdateItemStatus={handleOptimisticUpdateItemStatus}
@@ -2394,6 +2410,7 @@ export default function App() {
             onPrintKitchenLaunch={handlePrintKitchenLaunch}
             liveProdutos={liveProdutos}
             liveCategorias={liveCategorias}
+            catalogReady={isProductsLoaded}
             restauranteConfig={restauranteConfig}
             onUpdateItemDetails={handleUpdateItemDetails}
             onMergeTables={handleMergeTables}

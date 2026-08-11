@@ -1,5 +1,4 @@
 import os
-import json
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -66,16 +65,10 @@ def setup_database():
     db.commit()
     db.close()
     
-    # Limpar arquivo dump.json antigo se houver
-    if os.path.exists("backend/dump.json"):
-        os.remove("backend/dump.json")
-        
     yield
     Base.metadata.drop_all(bind=engine)
     app.dependency_overrides.clear()
     
-    if os.path.exists("backend/dump.json"):
-        os.remove("backend/dump.json")
 
 def test_sincronizacao_manual_cardapio():
     client = TestClient(app)
@@ -106,15 +99,12 @@ def test_sincronizacao_manual_cardapio():
     }, headers=headers)
     assert res_prod.status_code == 201
     
-    # Verificar se o dump.json foi criado e contém o novo produto
-    assert os.path.exists("backend/dump.json")
-    with open("backend/dump.json", "r", encoding="utf-8") as f:
-        dump = json.load(f)
-        
-    categories = dump["categories"]
-    products = dump["products"]
-    
-    assert "Sobremesas" in categories
+    # O snapshot autenticado é a fonte única; nenhum arquivo local participa do runtime.
+    catalog = client.get("/produtos/catalogo", headers=headers).json()
+    categories = catalog["categorias"]
+    products = catalog["produtos"]
+
+    assert any(category["nome"] == "Sobremesas" for category in categories)
     assert any(p["id"] == "prod-pudim" for p in products)
     
     # 4. Atualizar o preço do pudim
@@ -123,20 +113,20 @@ def test_sincronizacao_manual_cardapio():
     }, headers=headers)
     assert res_update.status_code == 200
     
-    # Verificar se o dump.json foi atualizado com o novo preço
-    with open("backend/dump.json", "r", encoding="utf-8") as f:
-        dump = json.load(f)
-    pudim = next(p for p in dump["products"] if p["id"] == "prod-pudim")
+    catalog = client.get("/produtos/catalogo", headers=headers).json()
+    pudim = next(p for p in catalog["produtos"] if p["id"] == "prod-pudim")
     assert pudim["preco"] == 12.0
     
     # 5. Deletar o produto Pudim
     res_delete = client.delete("/produtos/prod-pudim", headers=headers)
     assert res_delete.status_code == 204
     
-    # Verificar se o pudim saiu do dump.json
-    with open("backend/dump.json", "r", encoding="utf-8") as f:
-        dump = json.load(f)
-    assert not any(p["id"] == "prod-pudim" for p in dump["products"])
+    # A exclusão é lógica: preserva histórico, mas some dos canais públicos.
+    catalog = client.get("/produtos/catalogo", headers=headers).json()
+    pudim = next(p for p in catalog["produtos"] if p["id"] == "prod-pudim")
+    assert pudim["ativo"] is False
+    public_menu = client.get("/api/cardapio-digital/public?restaurante_id=1").json()
+    assert not any(p["id"] == "prod-pudim" for p in public_menu["produtos"])
 
 def test_importacao_sobrescreve_cardapio():
     client = TestClient(app)
@@ -188,11 +178,8 @@ def test_importacao_sobrescreve_cardapio():
     assert pizza is not None
     assert pizza.ativo is True
     
-    # Verificar dump.json
-    with open("backend/dump.json", "r", encoding="utf-8") as f:
-        dump = json.load(f)
-        
-    products = dump["products"]
+    catalog = client.get("/produtos/catalogo", headers=headers).json()
+    products = [p for p in catalog["produtos"] if p["ativo"]]
     assert len(products) == 2
     assert any(p["id"] == "prod-guarana" for p in products)
     assert any(p["id"] == "prod-pizza" for p in products)
@@ -252,10 +239,9 @@ def test_importacao_preserva_fk_historica():
     # Mas ela deve estar INATIVA para não aparecer no menu
     assert coca.ativo is False
     
-    # 4. Checar que Coca-Cola foi removida do dump.json ativo para que o menu seja dinâmico
-    with open("backend/dump.json", "r", encoding="utf-8") as f:
-        dump = json.load(f)
-    assert not any(p["id"] == "prod-coca" for p in dump["products"])
+    # 4. Checar que Coca-Cola foi removida do cardápio público ativo.
+    public_menu = client.get("/api/cardapio-digital/public?restaurante_id=1").json()
+    assert not any(p["id"] == "prod-coca" for p in public_menu["produtos"])
     
     db.close()
 
@@ -305,10 +291,7 @@ def test_importacao_composta_cardapio():
     assert limonada is not None
     assert limonada.ativo is True
     
-    # Verificar dump.json
-    with open("backend/dump.json", "r", encoding="utf-8") as f:
-        dump = json.load(f)
-        
-    assert "Refrescos Finos" in dump["categories"]
-    assert any(p["id"] == "prod-limonada" for p in dump["products"])
+    catalog = client.get("/produtos/catalogo", headers=headers).json()
+    assert any(category["nome"] == "Refrescos Finos" for category in catalog["categorias"])
+    assert any(p["id"] == "prod-limonada" and p["ativo"] for p in catalog["produtos"])
     db.close()

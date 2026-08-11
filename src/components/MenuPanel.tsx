@@ -6,8 +6,8 @@
 import React, { useState } from 'react';
 import { Search, Plus, Minus, Trash2, SlidersHorizontal, ArrowRight, FileText, Info, ArrowLeft, ShoppingCart, X } from 'lucide-react';
 import { Product, DraftItem, AppSettings, Order } from '../types';
-import { CATEGORIES, PRODUCTS } from '../data';
 import { getProductPresets, obterNomeCategoria, smartSearchMatch } from '../domain';
+import type { CatalogCategory } from '../catalog/catalog';
 
 interface MenuPanelProps {
   tableId: number;
@@ -21,7 +21,8 @@ interface MenuPanelProps {
   onSubmitDraft: (orderType: 'Consumo no Local' | 'Retirada' | 'Entrega') => void;
   historicClients?: string[];
   liveProdutos?: Product[];
-  liveCategorias?: any[];
+  liveCategorias?: CatalogCategory[];
+  catalogReady?: boolean;
   isSubmitting?: boolean;
 }
 
@@ -38,28 +39,9 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
   historicClients = [],
   liveProdutos = [],
   liveCategorias = [],
+  catalogReady = false,
   isSubmitting = false,
 }) => {
-  // Build availability map: productId -> boolean (true = available)
-  // If liveProdutos is empty (not yet loaded), default all to available
-  const ativoMap = React.useMemo(() => {
-    if (liveProdutos.length === 0) return null; // null = no data, treat all as available
-    const map: Record<string | number, boolean> = {};
-    liveProdutos.forEach((p: any) => {
-      map[p.id] = p.ativo !== false;
-      // Also index by nome for static PRODUCTS fallback
-      map[p.nome] = p.ativo !== false;
-    });
-    return map;
-  }, [liveProdutos]);
-
-  const isProductAvailable = (product: Product): boolean => {
-    if (!ativoMap) return true;
-    // Try ID first, then name
-    if (ativoMap[product.id] !== undefined) return ativoMap[product.id];
-    if (ativoMap[product.nome] !== undefined) return ativoMap[product.nome];
-    return true;
-  };
   // Navigation state: starts showing the Cart (carrinho) by default
   const [view, setView] = useState<'cart' | 'menu'>('cart');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
@@ -68,13 +50,21 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
   const [expandedDraftObs, setExpandedDraftObs] = useState<string | null>(null);
 
   const categoriesList = React.useMemo(() => {
-    return liveCategorias && liveCategorias.length > 0
-      ? liveCategorias
-      : CATEGORIES.map(c => ({ id: c, nome: c }));
-  }, [liveCategorias]);
+    const activeCategoryIds = new Set(
+      liveProdutos
+        .filter((product) => product.ativo !== false)
+        .map((product) => product.categoria_id)
+        .filter(Boolean)
+    );
+    return liveCategorias.filter((category) => activeCategoryIds.has(category.id));
+  }, [liveCategorias, liveProdutos]);
 
   React.useEffect(() => {
-    if (categoriesList.length > 0 && !selectedCategory) {
+    if (categoriesList.length === 0) {
+      setSelectedCategory('');
+      return;
+    }
+    if (!categoriesList.some((category) => category.nome === selectedCategory)) {
       setSelectedCategory(categoriesList[0].nome);
     }
   }, [categoriesList, selectedCategory]);
@@ -334,7 +324,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                         {/* Presets */}
                         <div className="flex flex-wrap gap-1 mt-1">
                           {(() => {
-                            const product = (liveProdutos && liveProdutos.length > 0 ? liveProdutos : PRODUCTS).find(p => p.id === item.produtoId);
+                            const product = liveProdutos.find(p => p.id === item.produtoId);
                             const presets = product ? getProductPresets(product) : ['VIAGEM', 'PRA MESA'];
                             return presets.map((preset) => {
                               const parts = item.observacao ? item.observacao.split(',').map(p => p.trim()) : [];
@@ -551,16 +541,12 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
             <div className="flex flex-col gap-6 sm:max-h-[50vh] sm:overflow-y-auto max-h-none overflow-y-visible pr-1 scroll-smooth">
               {(() => {
                 let totalRendered = 0;
-                const productsList = liveProdutos && liveProdutos.length > 0
-                  ? liveProdutos
-                  : PRODUCTS;
+                const productsList = liveProdutos.filter((product) => product.ativo !== false);
 
                 const renderedSections = categoriesList.map((catObj) => {
                   const categoryProducts = productsList.filter((product) => {
                     const prodCatName = obterNomeCategoria(product.categoria);
-                    const matchesCategory = liveProdutos && liveProdutos.length > 0
-                      ? (product as any).categoria_id === catObj.id || ((product as any).categoria?.id === catObj.id || prodCatName === catObj.nome)
-                      : prodCatName === catObj.nome;
+                    const matchesCategory = product.categoria_id === catObj.id || prodCatName === catObj.nome;
                     const fullProductText = `${product.nome} ${product.descricao || ''}`;
                     const matchesSearch = !searchQuery || smartSearchMatch(fullProductText, searchQuery);
                     return matchesCategory && matchesSearch;
@@ -580,17 +566,12 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                       </h4>
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                         {categoryProducts.map((product) => {
-                          const available = isProductAvailable(product);
                           return (
                           <div
                             key={product.id}
                             id={`product-card-${product.id}`}
-                            className={`bg-[#121214]/60 border rounded-2xl p-4 flex flex-col justify-between ${
-                              available
-                                ? 'border-[#27272A] hover:border-[#10b981]/30 group cursor-pointer'
-                                : 'border-red-900/30 opacity-60 cursor-not-allowed'
-                            }`}
-                            onClick={() => available && handleOpenConfig(product)}
+                            className="bg-[#121214]/60 border border-[#27272A] hover:border-[#10b981]/30 rounded-2xl p-4 flex flex-col justify-between group cursor-pointer"
+                            onClick={() => handleOpenConfig(product)}
                           >
                             <div className="space-y-3">
                               {/* Product Image */}
@@ -602,7 +583,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                                     src={product.imagem}
                                     alt={product.nome}
                                     referrerPolicy="no-referrer"
-                                    className={`w-full h-full object-cover ${available ? '' : 'grayscale'}`}
+                                    className="w-full h-full object-cover"
                                   />
                                 </div>
                               )}
@@ -610,9 +591,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                               <div>
                                 <div className="flex justify-between items-start gap-2">
                                   <h4 
-                                    className={`font-serif font-bold leading-tight text-sm transition-colors ${
-                                      available ? 'text-white group-hover:text-[#10b981]' : 'text-gray-500 line-through'
-                                    }`}
+                                    className="font-serif font-bold leading-tight text-sm text-white group-hover:text-[#10b981] transition-colors"
                                   >
                                     {product.nome}
                                   </h4>
@@ -620,11 +599,6 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                                     <span className="font-mono text-xs font-bold text-[#10b981] whitespace-nowrap">
                                       R$ {product.preco.toFixed(2)}
                                     </span>
-                                    {!available && (
-                                      <span className="text-[8px] font-bold px-1.5 py-0.5 bg-red-900/30 text-red-400 rounded-full border border-red-800/30">
-                                        ESGOTADO
-                                      </span>
-                                    )}
                                   </div>
                                 </div>
                                 
@@ -639,22 +613,13 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                             <button
                               id={`add-product-btn-${product.id}`}
                               type="button"
-                              disabled={!available}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (available) handleOpenConfig(product);
+                                handleOpenConfig(product);
                               }}
-                              className={`mt-4 w-full flex items-center justify-center gap-1 py-2 text-xs font-bold rounded-xl transition-all border ${
-                                available
-                                  ? 'bg-[#1C1C1F] hover:bg-[#10b981]/20 text-[#10b981] cursor-pointer border-[#27272A]'
-                                  : 'bg-red-900/10 text-red-500/50 cursor-not-allowed border-red-900/20'
-                              }`}
+                              className="mt-4 w-full flex items-center justify-center gap-1 py-2 text-xs font-bold rounded-xl transition-all border bg-[#1C1C1F] hover:bg-[#10b981]/20 text-[#10b981] cursor-pointer border-[#27272A]"
                             >
-                              {available ? (
-                                <><Plus size={13} /><span>Configurar e Adicionar</span></>
-                              ) : (
-                                <span>Indisponível</span>
-                              )}
+                              <Plus size={13} /><span>Configurar e Adicionar</span>
                             </button>
                           </div>
                         );})}
@@ -666,7 +631,9 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                 if (totalRendered === 0) {
                   return (
                     <div className="py-12 text-center text-gray-400 text-sm italic font-serif">
-                      Nenhum item culinário encontrado.
+                      {catalogReady
+                        ? 'Nenhum item disponível no cardápio.'
+                        : 'Carregando o cardápio…'}
                     </div>
                   );
                 }

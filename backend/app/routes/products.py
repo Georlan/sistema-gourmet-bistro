@@ -1,83 +1,31 @@
-import os
-import json
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session, joinedload
-from typing import List, Optional, Union, Dict, Any
-from ..database import get_db, current_restaurante_id, require_tenant_id
+from typing import List, Optional, Union
+from ..database import get_db, require_tenant_id
 from ..models import Produto, Categoria, ObservacaoPredefinida, Usuario
 from ..security import get_current_user, require_permission
 from ..schemas import ProdutoResponse, ProdutoCreate, ProdutoUpdate, CategoriaResponse
 from ..websocket_manager import manager
-from pydantic import BaseModel, ConfigDict
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+import re
+import unicodedata
 
 router = APIRouter(
     prefix="/produtos",
     tags=["Produtos e Categorias"]
 )
 
-def sincronizar_cardapio_json(db: Session):
-    """
-    Sincroniza os produtos e categorias ativos do banco de dados
-    com o arquivo físico 'backend/dump.json'.
-    """
-    try:
-        # Obter todos os produtos ativos
-        produtos_ativos = db.query(Produto).filter(Produto.ativo == True).all()
-        
-        # Obter todas as categorias que possuem pelo menos um produto ativo
-        categoria_ids_ativas = {p.categoria_id for p in produtos_ativos}
-        categorias_ativas = db.query(Categoria).filter(Categoria.id.in_(categoria_ids_ativas)).all()
-        
-        # Mapear os nomes das categorias por ID
-        cat_nome_map = {c.id: c.nome for c in categorias_ativas}
-        
-        # Manter a ordem das categorias consistente
-        order_list = [
-            "Hambúrgueres Bovinos",
-            "Hambúrgueres de Frango",
-            "Hambúrgueres Suínos",
-            "Baguetes",
-            "Pastéis Tradicionais",
-            "Pastelões Especiais",
-            "Pastéis Doces",
-            "Petiscos",
-            "Combos Promocionais",
-            "Sucos",
-            "Refrigerantes e Águas",
-            "Cervejas",
-            "Bebidas Quentes"
-        ]
-        
-        def get_cat_index(c):
-            return order_list.index(c.nome) if c.nome in order_list else len(order_list)
-            
-        categorias_ativas_ordenadas = sorted(categorias_ativas, key=get_cat_index)
-        
-        # Formatar a lista de categorias e produtos no formato original do dump
-        data = {
-            "categories": [c.nome for c in categorias_ativas_ordenadas],
-            "products": [
-                {
-                    "id": p.id,
-                    "nome": p.nome,
-                    "categoria": cat_nome_map.get(p.categoria_id, p.categoria_id),
-                    "preco": float(p.preco),
-                    "descricao": p.descricao or "",
-                    "imagem": p.imagem or ""
-                }
-                for p in produtos_ativos
-            ]
-        }
-        
-        # Gravar no arquivo backend/dump.json
-        filepath = "backend/dump.json"
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        
-        with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-            
-    except Exception as e:
-        print(f"Erro ao sincronizar cardápio JSON: {e}")
+def notify_catalog_update(
+    background_tasks: BackgroundTasks,
+    message: str,
+    restaurante_id: int,
+) -> None:
+    """Publica um único evento canônico para caixa, garçom e cardápio digital."""
+    background_tasks.add_task(
+        manager.broadcast,
+        {"event": "catalog_updated", "message": message},
+        restaurante_id,
+    )
 
 # ─── SCHEMAS (inline para evitar circular imports) ────────────────────────────
 class CategoriaUpdate(BaseModel):
@@ -99,6 +47,29 @@ class ObservacaoResponse(BaseModel):
     texto: str
     model_config = ConfigDict(from_attributes=True)
 
+class CatalogoResponse(BaseModel):
+    categorias: List[CategoriaResponse]
+    produtos: List[ProdutoResponse]
+
+
+CATEGORY_DISPLAY_ORDER = [
+    "Pizzas Tradicionais", "Pizzas Especiais", "Hambúrgueres Bovinos",
+    "Hambúrgueres de Frango", "Hambúrgueres Suínos", "Baguetes",
+    "Pastéis Tradicionais", "Pastelões Especiais", "Pastéis Doces",
+    "Petiscos", "Combos Promocionais", "Sucos", "Refrigerantes e Águas",
+    "Bebidas & Vinhos", "Cervejas", "Bebidas Quentes", "Sobremesas",
+]
+
+def ordered_categories(categories: List[Categoria]) -> List[Categoria]:
+    positions = {name: index for index, name in enumerate(CATEGORY_DISPLAY_ORDER)}
+    return sorted(
+        categories,
+        key=lambda category: (
+            positions.get(category.nome, len(positions)),
+            category.nome.casefold(),
+        ),
+    )
+
 
 # ─── CATEGORIES ENDPOINTS ─────────────────────────────────────────────────────
 @router.get("/categorias", response_model=List[CategoriaResponse])
@@ -106,29 +77,7 @@ def get_categorias(db: Session = Depends(get_db), current_user: Usuario = Depend
     """Retorna todas as categorias de produtos cadastradas no cardápio do restaurante ativo."""
     rest_id = require_tenant_id()
     categorias = db.query(Categoria).filter(Categoria.restaurante_id == rest_id).all()
-    order_list = [
-        "Pizzas Tradicionais",
-        "Pizzas Especiais",
-        "Hambúrgueres Bovinos",
-        "Hambúrgueres de Frango",
-        "Hambúrgueres Suínos",
-        "Baguetes",
-        "Pastéis Tradicionais",
-        "Pastelões Especiais",
-        "Pastéis Doces",
-        "Petiscos",
-        "Combos Promocionais",
-        "Sucos",
-        "Refrigerantes e Águas",
-        "Bebidas & Vinhos",
-        "Cervejas",
-        "Bebidas Quentes",
-        "Sobremesas"
-    ]
-    return sorted(
-        categorias,
-        key=lambda c: order_list.index(c.nome) if c.nome in order_list else len(order_list)
-    )
+    return ordered_categories(categorias)
 
 @router.post("/categorias", response_model=CategoriaResponse, status_code=status.HTTP_201_CREATED)
 def create_categoria(
@@ -138,15 +87,14 @@ def create_categoria(
     current_user: Usuario = Depends(require_permission("catalogo:administrar"))
 ):
     """Cria uma nova categoria (setup wizard interno)."""
-    if db.query(Categoria).filter_by(id=data.id).first():
+    rest_id = require_tenant_id()
+    if db.query(Categoria).filter_by(restaurante_id=rest_id, id=data.id).first():
         raise HTTPException(status_code=400, detail="ID de categoria já existe.")
     cat = Categoria(id=data.id, nome=data.nome, destino_impressao=data.destino_impressao)
     db.add(cat)
     db.commit()
     db.refresh(cat)
-    sincronizar_cardapio_json(db)
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
-    background_tasks.add_task(manager.broadcast, {"type": "catalog_updated", "message": "Categoria criada"}, require_tenant_id())
+    notify_catalog_update(background_tasks, "Categoria criada", require_tenant_id())
     return cat
 
 @router.put("/categorias/{categoria_id}", response_model=CategoriaResponse)
@@ -158,7 +106,8 @@ def update_categoria(
     current_user: Usuario = Depends(require_permission("catalogo:administrar"))
 ):
     """Atualiza nome e/ou destino de impressão de uma categoria."""
-    cat = db.query(Categoria).filter_by(id=categoria_id).first()
+    rest_id = require_tenant_id()
+    cat = db.query(Categoria).filter_by(restaurante_id=rest_id, id=categoria_id).first()
     if not cat:
         raise HTTPException(status_code=404, detail="Categoria não encontrada.")
     if data.nome is not None:
@@ -169,10 +118,7 @@ def update_categoria(
         cat.destino_impressao = data.destino_impressao
     db.commit()
     db.refresh(cat)
-    sincronizar_cardapio_json(db)
-    background_tasks.add_task(manager.broadcast, {"event": "config_updated"}, require_tenant_id())
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
-    background_tasks.add_task(manager.broadcast, {"type": "catalog_updated", "message": "Categoria atualizada"}, require_tenant_id())
+    notify_catalog_update(background_tasks, "Categoria atualizada", require_tenant_id())
     return cat
 
 @router.delete("/categorias/{categoria_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -183,16 +129,15 @@ def delete_categoria(
     current_user: Usuario = Depends(require_permission("catalogo:administrar"))
 ):
     """Remove uma categoria (só se não tiver produtos vinculados)."""
-    cat = db.query(Categoria).filter_by(id=categoria_id).first()
+    rest_id = require_tenant_id()
+    cat = db.query(Categoria).filter_by(restaurante_id=rest_id, id=categoria_id).first()
     if not cat:
         raise HTTPException(status_code=404, detail="Categoria não encontrada.")
     if cat.produtos:
         raise HTTPException(status_code=400, detail=f"Categoria tem {len(cat.produtos)} produto(s) vinculado(s). Remova-os primeiro.")
     db.delete(cat)
     db.commit()
-    sincronizar_cardapio_json(db)
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
-    background_tasks.add_task(manager.broadcast, {"type": "catalog_updated", "message": "Categoria excluída"}, require_tenant_id())
+    notify_catalog_update(background_tasks, "Categoria excluída", require_tenant_id())
     return
 
 
@@ -200,7 +145,8 @@ def delete_categoria(
 @router.get("/observacoes", response_model=List[ObservacaoResponse])
 def get_observacoes(categoria_id: Optional[str] = None, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """Lista observações predefinidas. Filtra por categoria_id se fornecido."""
-    q = db.query(ObservacaoPredefinida)
+    rest_id = require_tenant_id()
+    q = db.query(ObservacaoPredefinida).filter(ObservacaoPredefinida.restaurante_id == rest_id)
     if categoria_id:
         q = q.filter_by(categoria_id=categoria_id)
     return q.all()
@@ -212,7 +158,8 @@ def create_observacao(
     current_user: Usuario = Depends(require_permission("catalogo:administrar"))
 ):
     """Adiciona uma nova observação predefinida a uma categoria."""
-    if not db.query(Categoria).filter_by(id=data.categoria_id).first():
+    rest_id = require_tenant_id()
+    if not db.query(Categoria).filter_by(restaurante_id=rest_id, id=data.categoria_id).first():
         raise HTTPException(status_code=404, detail="Categoria não encontrada.")
     obs = ObservacaoPredefinida(categoria_id=data.categoria_id, texto=data.texto)
     db.add(obs)
@@ -227,7 +174,8 @@ def delete_observacao(
     current_user: Usuario = Depends(require_permission("catalogo:administrar"))
 ):
     """Remove uma observação predefinida pelo ID."""
-    obs = db.query(ObservacaoPredefinida).filter_by(id=obs_id).first()
+    rest_id = require_tenant_id()
+    obs = db.query(ObservacaoPredefinida).filter_by(restaurante_id=rest_id, id=obs_id).first()
     if not obs:
         raise HTTPException(status_code=404, detail="Observação não encontrada.")
     db.delete(obs)
@@ -252,6 +200,28 @@ def get_produtos(db: Session = Depends(get_db), current_user: Usuario = Depends(
         .all()
     )
 
+@router.get("/catalogo", response_model=CatalogoResponse)
+def get_catalogo(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Snapshot único do catálogo usado pelo caixa e pelo app do garçom."""
+    del current_user
+    rest_id = require_tenant_id()
+    categorias = ordered_categories(
+        db.query(Categoria)
+        .filter(Categoria.restaurante_id == rest_id)
+        .all()
+    )
+    produtos = (
+        db.query(Produto)
+        .options(joinedload(Produto.categoria))
+        .filter(Produto.restaurante_id == rest_id)
+        .order_by(Produto.id)
+        .all()
+    )
+    return {"categorias": categorias, "produtos": produtos}
+
 @router.get("/{produto_id}", response_model=ProdutoResponse)
 def get_produto(produto_id: str, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """Busca um produto específico no cardápio do restaurante ativo pelo ID."""
@@ -272,8 +242,12 @@ def create_produto(
     current_user: Usuario = Depends(require_permission("catalogo:administrar"))
 ):
     """Cadastra um novo produto no cardápio."""
+    rest_id = require_tenant_id()
     # Check if category exists
-    categoria = db.query(Categoria).filter(Categoria.id == produto_data.categoria_id).first()
+    categoria = db.query(Categoria).filter(
+        Categoria.restaurante_id == rest_id,
+        Categoria.id == produto_data.categoria_id,
+    ).first()
     if not categoria:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -281,7 +255,10 @@ def create_produto(
         )
         
     # Check if product ID already exists
-    existente = db.query(Produto).filter(Produto.id == produto_data.id).first()
+    existente = db.query(Produto).filter(
+        Produto.restaurante_id == rest_id,
+        Produto.id == produto_data.id,
+    ).first()
     if existente:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -292,9 +269,7 @@ def create_produto(
     db.add(novo_produto)
     db.commit()
     db.refresh(novo_produto)
-    sincronizar_cardapio_json(db)
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
-    background_tasks.add_task(manager.broadcast, {"type": "catalog_updated", "message": "Produto criado"}, require_tenant_id())
+    notify_catalog_update(background_tasks, "Produto criado", require_tenant_id())
     return novo_produto
 
 @router.put("/{produto_id}", response_model=ProdutoResponse)
@@ -306,7 +281,11 @@ def update_produto(
     current_user: Usuario = Depends(require_permission("catalogo:administrar"))
 ):
     """Atualiza as informações de um produto, incluindo seu preço ou status de ativação."""
-    db_produto = db.query(Produto).filter(Produto.id == produto_id).first()
+    rest_id = require_tenant_id()
+    db_produto = db.query(Produto).filter(
+        Produto.restaurante_id == rest_id,
+        Produto.id == produto_id,
+    ).first()
     if not db_produto:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -317,7 +296,10 @@ def update_produto(
     
     # Check category if it is being updated
     if "categoria_id" in data:
-        categoria = db.query(Categoria).filter(Categoria.id == data["categoria_id"]).first()
+        categoria = db.query(Categoria).filter(
+            Categoria.restaurante_id == rest_id,
+            Categoria.id == data["categoria_id"],
+        ).first()
         if not categoria:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -329,9 +311,7 @@ def update_produto(
         
     db.commit()
     db.refresh(db_produto)
-    sincronizar_cardapio_json(db)
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
-    background_tasks.add_task(manager.broadcast, {"type": "catalog_updated", "message": "Produto atualizado"}, require_tenant_id())
+    notify_catalog_update(background_tasks, "Produto atualizado", require_tenant_id())
     return db_produto
 
 @router.delete("/{produto_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -341,18 +321,22 @@ def delete_produto(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("catalogo:administrar"))
 ):
-    """Remove definitivamente um produto do cardápio."""
-    db_produto = db.query(Produto).filter(Produto.id == produto_id).first()
+    """Remove um produto dos canais de venda preservando o histórico."""
+    rest_id = require_tenant_id()
+    db_produto = db.query(Produto).filter(
+        Produto.restaurante_id == rest_id,
+        Produto.id == produto_id,
+    ).first()
     if not db_produto:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Produto não encontrado"
         )
-    db.delete(db_produto)
+    # Exclusão lógica: o item some imediatamente dos três canais sem quebrar
+    # comandas antigas que preservam a FK e o preço praticado na venda.
+    db_produto.ativo = False
     db.commit()
-    sincronizar_cardapio_json(db)
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
-    background_tasks.add_task(manager.broadcast, {"type": "catalog_updated", "message": "Produto excluído"}, require_tenant_id())
+    notify_catalog_update(background_tasks, "Produto removido do cardápio", require_tenant_id())
     return
 
 class ProdutoImportItem(BaseModel):
@@ -365,9 +349,25 @@ class ProdutoImportItem(BaseModel):
     imagens_galeria: Optional[List[str]] = None
     ativo: Optional[bool] = True
 
+class CategoriaImportItem(BaseModel):
+    id: Optional[str] = None
+    nome: str
+    destino_impressao: str = "COZINHA"
+
 class CardapioImportPayload(BaseModel):
-    categories: Optional[List[str]] = None
-    products: Optional[List[ProdutoImportItem]] = None
+    categories: Optional[List[Union[str, CategoriaImportItem]]] = Field(
+        default=None,
+        validation_alias=AliasChoices("categories", "categorias"),
+    )
+    products: Optional[List[ProdutoImportItem]] = Field(
+        default=None,
+        validation_alias=AliasChoices("products", "produtos"),
+    )
+
+def category_id_from_name(name: str) -> str:
+    normalized = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("utf-8").lower()
+    slug = re.sub(r"[^a-z0-9-]+", "-", normalized).strip("-")
+    return f"cat-{slug}"
 
 @router.post("/importar", response_model=List[ProdutoResponse])
 def importar_cardapio(
@@ -378,9 +378,10 @@ def importar_cardapio(
 ):
     """
     Importa uma lista de produtos sobrescrevendo o cardápio atual.
-    Suporta tanto lista direta de produtos quanto formato composto {categories, products}.
+    Suporta lista direta ou o formato composto {categories, products},
+    também aceitando as chaves em português {categorias, produtos}.
     Produtos antigos que não estão no novo cardápio serão inativados (ativo = False).
-    Reescreve o arquivo backend/dump.json e notifica via WebSocket.
+    O commit é único e depois um evento atualiza caixa, garçom e cardápio digital.
     """
     rest_id = require_tenant_id()
 
@@ -388,21 +389,32 @@ def importar_cardapio(
         produtos_data = payload.products or []
         # Opcionalmente podemos criar/garantir categorias da lista de categorias se informadas
         if payload.categories:
-            for cat_nome in payload.categories:
-                # Gerar ID a partir do nome
-                import unicodedata
-                import re
-                id_cat = unicodedata.normalize('NFKD', cat_nome).encode('ascii', 'ignore').decode('utf-8').lower()
-                id_cat = re.sub(r'[^a-z0-9\-]+', '-', id_cat).strip('-')
-                id_cat = f"cat-{id_cat}"
+            for category_data in payload.categories:
+                if isinstance(category_data, str):
+                    cat_nome = category_data
+                    id_cat = category_id_from_name(category_data)
+                    destino = "NENHUM" if any(term in id_cat for term in ("suco", "refri", "cerveja", "bebida")) else "COZINHA"
+                else:
+                    cat_nome = category_data.nome
+                    id_cat = category_data.id or category_id_from_name(category_data.nome)
+                    destino = category_data.destino_impressao
+
+                if destino not in ("COZINHA", "BAR", "NENHUM"):
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail=f"Destino de impressão inválido na categoria {cat_nome}.",
+                    )
                 
-                cat = db.query(Categoria).filter(Categoria.id == id_cat).first()
+                cat = db.query(Categoria).filter(
+                    Categoria.restaurante_id == rest_id,
+                    Categoria.id == id_cat,
+                ).first()
                 if not cat:
-                    destino = "COZINHA"
-                    if "suco" in id_cat or "refri" in id_cat or "cerveja" in id_cat or "bebida" in id_cat:
-                        destino = "NENHUM"
                     cat = Categoria(id=id_cat, nome=cat_nome, destino_impressao=destino)
                     db.add(cat)
+                else:
+                    cat.nome = cat_nome
+                    cat.destino_impressao = destino
             db.flush()
     else:
         produtos_data = payload
@@ -416,7 +428,10 @@ def importar_cardapio(
     for item in produtos_data:
         # Garantir categoria
         cat_id = item.categoria_id
-        cat = db.query(Categoria).filter(Categoria.id == cat_id).first()
+        cat = db.query(Categoria).filter(
+            Categoria.restaurante_id == rest_id,
+            Categoria.id == cat_id,
+        ).first()
         if not cat:
             nome_cat = cat_id.replace("cat-", "").replace("-", " ").replace("_", " ").title()
             destino = "COZINHA"
@@ -426,7 +441,10 @@ def importar_cardapio(
             db.add(cat)
             db.flush()
             
-        existente = db.query(Produto).filter(Produto.id == item.id).first()
+        existente = db.query(Produto).filter(
+            Produto.restaurante_id == rest_id,
+            Produto.id == item.id,
+        ).first()
         if existente:
             existente.nome = item.nome
             existente.preco = item.preco
@@ -458,14 +476,24 @@ def importar_cardapio(
 
     # 3. Limpeza preventiva de categorias órfãs (sem produtos ativos e sem observações)
     # (Nenhum produto inativo é deletado do banco fisicamente, conforme regras)
-    categorias = db.query(Categoria).all()
+    categorias = db.query(Categoria).filter(Categoria.restaurante_id == rest_id).all()
     for c in categorias:
-        produtos_ativos_cat = db.query(Produto).filter(Produto.categoria_id == c.id, Produto.ativo == True).first()
+        produtos_ativos_cat = db.query(Produto).filter(
+            Produto.restaurante_id == rest_id,
+            Produto.categoria_id == c.id,
+            Produto.ativo.is_(True),
+        ).first()
         if not produtos_ativos_cat:
-            obs_vinculo = db.query(ObservacaoPredefinida).filter(ObservacaoPredefinida.categoria_id == c.id).first()
+            obs_vinculo = db.query(ObservacaoPredefinida).filter(
+                ObservacaoPredefinida.restaurante_id == rest_id,
+                ObservacaoPredefinida.categoria_id == c.id,
+            ).first()
             if not obs_vinculo:
                 # Garantir que não existam produtos inativos remanescentes vinculados
-                prod_inativo = db.query(Produto).filter(Produto.categoria_id == c.id).first()
+                prod_inativo = db.query(Produto).filter(
+                    Produto.restaurante_id == rest_id,
+                    Produto.categoria_id == c.id,
+                ).first()
                 if not prod_inativo:
                     db.delete(c)
 
@@ -476,11 +504,7 @@ def importar_cardapio(
     for prod in imported_products:
         db.refresh(prod)
 
-    # 6. Sincronizar o dump.json contendo apenas o cardápio ativo
-    sincronizar_cardapio_json(db)
-    
-    # 7. Notificar os terminais em tempo real
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
-    background_tasks.add_task(manager.broadcast, {"type": "catalog_updated", "message": "Cardápio importado"}, require_tenant_id())
+    # 6. Notificar os três canais uma única vez após o commit atômico.
+    notify_catalog_update(background_tasks, "Cardápio importado", rest_id)
     
     return imported_products
