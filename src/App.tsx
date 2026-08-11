@@ -7,7 +7,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import logoImg from './assets/logo.png';
 import { LoginButton } from '../components/shadcnblocks/login-button';
 import { Menu, X, User, Wifi, WifiOff, SlidersHorizontal, ArrowDownRight, ArrowUpRight, RefreshCw, Bell, Printer, TrendingUp, Utensils, CheckCircle2, UserCheck, UserX, ShoppingBag } from 'lucide-react';
-import { Table, Order, DraftItem, AppSettings, AppRole, Product } from './types';
+import { Table, Order, DraftItem, AppSettings, AppRole, Product, CaixaTurnoResumo } from './types';
 import { TABLES, WAITERS, RESTAURANT_CONFIG } from './data';
 import { normalizeCatalogSnapshot, type CatalogCategory } from './catalog/catalog';
 import { getTableTotal } from './domain';
@@ -267,28 +267,35 @@ export default function App() {
     }
   };
 
-  const [turnoResumo, setTurnoResumo] = useState<{
-    total_vendas?: number;
-    comandas_abertas_count?: number;
-    total_sangrias?: number;
-    total_suprimentos?: number;
-  } | null>(null);
+  const [turnoResumo, setTurnoResumo] = useState<CaixaTurnoResumo | null>(null);
+  const [isTurnoResumoLoading, setIsTurnoResumoLoading] = useState(false);
+  const turnoResumoRequestRef = useRef(0);
 
   const fetchTurnoResumo = useCallback(async () => {
     // O resumo financeiro pertence ao caixa. Evita 403 no portal do garçom
     // sem enfraquecer a autorização do backend.
     if (!isManagementRole(activeRole)) {
       setTurnoResumo(null);
+      setIsTurnoResumoLoading(false);
       return;
     }
+
+    const requestId = ++turnoResumoRequestRef.current;
+    setIsTurnoResumoLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/caixa/turno-atual/resumo`, { headers: getAuthHeaders() }).catch(() => null);
       if (res && res.ok) {
         const data = await res.json().catch(() => null);
-        if (data) setTurnoResumo(data);
+        if (data && requestId === turnoResumoRequestRef.current) {
+          setTurnoResumo(data);
+        }
       }
     } catch (e) {
       // Ignora silenciosamente erros 403 ou de permissão no modo garçom
+    } finally {
+      if (requestId === turnoResumoRequestRef.current) {
+        setIsTurnoResumoLoading(false);
+      }
     }
   }, [activeRole, getAuthHeaders]);
 
@@ -798,6 +805,7 @@ export default function App() {
         currentDelay = 2000;
         fetchTables();
         fetchOrdersFromAPI();
+        fetchTurnoResumo();
       };
 
       socket.onmessage = (event) => {
@@ -830,6 +838,10 @@ export default function App() {
           }
           if (eventName === "config_updated" || eventName === "CONFIG_UPDATE") {
             scheduleRealtimeRefresh({ config: true });
+          }
+          if (eventName === "cash_updated") {
+            scheduleRealtimeRefresh({ summary: true });
+            window.dispatchEvent(new Event('koma_cash_updated'));
           }
           if (eventName === "tables_updated" || eventName === "TABLE_UPDATED") {
             const isLayoutChange = data.detail?.type === 'layout_mesa_atualizado';
@@ -1935,6 +1947,9 @@ export default function App() {
             pagamentosPendentes={pagamentosPendentes}
             onRefreshPagamentosPendentes={fetchPagamentosPendentes}
             isWsConnected={isWsConnected}
+            turnoResumo={turnoResumo}
+            isTurnoResumoLoading={isTurnoResumoLoading}
+            onRefreshTurnoResumo={fetchTurnoResumo}
             liveProdutos={liveProdutos}
             liveCategorias={liveCategorias}
             catalogReady={isProductsLoaded}
@@ -2361,6 +2376,9 @@ export default function App() {
               pagamentosPendentes={pagamentosPendentes}
               onRefreshPagamentosPendentes={fetchPagamentosPendentes}
               isWsConnected={isWsConnected}
+              turnoResumo={turnoResumo}
+              isTurnoResumoLoading={isTurnoResumoLoading}
+              onRefreshTurnoResumo={fetchTurnoResumo}
               liveProdutos={liveProdutos}
               liveCategorias={liveCategorias}
               catalogReady={isProductsLoaded}

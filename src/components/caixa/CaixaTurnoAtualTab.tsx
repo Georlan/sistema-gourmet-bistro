@@ -1,5 +1,18 @@
 import React from 'react';
-import { DollarSign, Lock, Clock, ArrowDownRight, ArrowUpRight, CheckCircle2, User, RefreshCw } from 'lucide-react';
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  Banknote,
+  Calculator,
+  CheckCircle2,
+  Clock,
+  CreditCard,
+  DollarSign,
+  Lock,
+  QrCode,
+  RefreshCw,
+  User,
+} from 'lucide-react';
 import { CaixaTurnoResumo } from '../../types';
 
 interface CaixaTurnoAtualTabProps {
@@ -10,68 +23,132 @@ interface CaixaTurnoAtualTabProps {
   onOpenNovoTurnoModal?: () => void;
 }
 
+const currencyFormatter = new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+const formatCurrency = (value: number) => currencyFormatter.format(Number(value) || 0);
+
+const formatMinutes = (minutes: number) => {
+  if (!minutes || minutes <= 0) return 'agora';
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  if (hours === 0) return `${remainingMinutes} min`;
+  return `${hours}h ${remainingMinutes}min`;
+};
+
+const CaixaSummarySkeleton = () => (
+  <div className="space-y-4" aria-busy="true" aria-label="Sincronizando resumo do caixa">
+    <div className="flex items-center justify-between rounded-[18px] border border-[#252b28] bg-[#0d100f] p-4">
+      <div className="space-y-2">
+        <div className="h-3 w-28 animate-pulse rounded bg-white/[0.08]" />
+        <div className="h-2.5 w-52 animate-pulse rounded bg-white/[0.05]" />
+      </div>
+      <div className="h-9 w-9 animate-pulse rounded-xl bg-white/[0.06]" />
+    </div>
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {[0, 1, 2, 3].map(item => (
+        <div key={item} className="h-24 animate-pulse rounded-[18px] border border-[#252b28] bg-[#0d100f]" />
+      ))}
+    </div>
+    <p className="text-center text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+      Sincronizando dados do turno…
+    </p>
+  </div>
+);
+
 export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
   turnoResumo,
   isLoading,
   onRefresh,
   onNavigateToFechamento,
-  onOpenNovoTurnoModal
+  onOpenNovoTurnoModal,
 }) => {
-  const isTurnoAberto = turnoResumo?.status === 'aberto';
-  const isTurnoEsquecido = isTurnoAberto && ((turnoResumo?.tempo_aberto_minutos || 0) > 1440 || Boolean((turnoResumo as any)?.turno_esquecido));
+  if (!turnoResumo) return <CaixaSummarySkeleton />;
 
-  const formatMinutos = (mins: number) => {
-    if (!mins || mins <= 0) return '0 min';
-    const horas = Math.floor(mins / 60);
-    const m = mins % 60;
-    if (horas === 0) return `${m} min`;
-    return `${horas}h ${m}m`;
-  };
+  const isTurnoAberto = turnoResumo.status === 'aberto';
+  const isTurnoEsquecido = isTurnoAberto && (
+    turnoResumo.tempo_aberto_minutos > 1440 || turnoResumo.turno_esquecido === true
+  );
+
+  const metrics = [
+    {
+      label: 'Saldo inicial',
+      value: turnoResumo.saldo_inicial,
+      help: 'Fundo de troco da abertura',
+      accent: false,
+    },
+    {
+      label: 'Vendas recebidas',
+      value: turnoResumo.total_vendas,
+      help: `${turnoResumo.total_pedidos_pagos} comanda(s) paga(s)`,
+      accent: true,
+    },
+    {
+      label: 'Entradas em dinheiro',
+      value: turnoResumo.total_dinheiro,
+      help: 'Valor físico recebido no turno',
+      accent: false,
+    },
+    {
+      label: 'Saldo esperado',
+      value: turnoResumo.saldo_esperado_dinheiro,
+      help: 'Dinheiro que deve estar no caixa',
+      accent: true,
+    },
+  ];
 
   return (
-    <div className="space-y-5 text-left animate-fade-in">
-      {/* Alert Banner if Turno Esquecido */}
+    <div className="space-y-4 text-left animate-fade-in" aria-live="polite">
       {isTurnoEsquecido && (
-        <div className="p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-center justify-between gap-3 text-amber-300 text-xs font-medium shadow-sm">
-          <div className="flex items-center gap-2.5">
-            <Clock size={18} className="shrink-0 text-amber-400 animate-pulse" />
-            <span>
-              <strong>Aviso de Operação:</strong> Este turno de caixa foi aberto há <strong>{formatMinutos(turnoResumo?.tempo_aberto_minutos || 0)}</strong> (mais de 24h) e pode ter sido esquecido aberto. Recomendamos realizar a conferência e o fechamento.
-            </span>
+        <div className="flex flex-col gap-3 rounded-[18px] border border-[#5a3434] bg-[#1b1212] p-4 text-[#e7b7b7] sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <Clock size={18} className="mt-0.5 shrink-0" />
+            <div>
+              <strong className="block text-xs text-[#f5dada]">Turno aberto há mais de 24 horas</strong>
+              <span className="mt-1 block text-[11px] leading-relaxed text-[#cfa3a3]">
+                Aberto há {formatMinutes(turnoResumo.tempo_aberto_minutos)}. Confira os valores antes de encerrar.
+              </span>
+            </div>
           </div>
           <button
             type="button"
             onClick={onNavigateToFechamento}
-            className="px-3 py-1.5 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 font-bold rounded-xl text-[10px] uppercase tracking-wider transition-all shrink-0 cursor-pointer border border-amber-500/20 shadow-xs"
+            className="shrink-0 rounded-xl border border-[#704040] bg-[#261717] px-4 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[#f0c4c4] transition-colors hover:bg-[#321d1d]"
           >
-            Conferir e Fechar
+            Conferir caixa
           </button>
         </div>
       )}
 
-      {/* Header Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-[#121214]/60 border border-[#27272A] p-4 rounded-2xl shadow-sm">
+      <section className="flex flex-col gap-4 rounded-[18px] border border-[#252b28] bg-[#0d100f] p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <div className={`p-2.5 rounded-xl border ${isTurnoEsquecido ? 'bg-amber-500/15 text-amber-400 border-amber-500/20' : isTurnoAberto ? 'bg-emerald-600/15 text-[#10b981] border-emerald-500/20' : 'bg-[#1C1C1F] text-gray-400 border-[#27272A]'}`}>
-            {isTurnoAberto ? <CheckCircle2 size={20} /> : <Lock size={20} />}
+          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${
+            isTurnoAberto
+              ? 'border-[#145c49] bg-[#0b2d25] text-[#54d9b3]'
+              : 'border-[#303532] bg-[#161917] text-zinc-500'
+          }`}>
+            {isTurnoAberto ? <CheckCircle2 size={19} /> : <Lock size={19} />}
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h3 className="font-sans text-sm font-bold text-white">Status do Turno</h3>
-              <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border ${
-                isTurnoEsquecido
-                  ? 'bg-amber-500/15 text-amber-300 border-amber-500/20'
-                  : isTurnoAberto
-                  ? 'bg-emerald-600/15 text-[#10b981] border-emerald-500/20'
-                  : 'bg-rose-500/15 text-rose-400 border-rose-500/20'
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-sm font-bold text-[#f5f4ef]">Turno atual</h2>
+              <span className={`rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] ${
+                isTurnoAberto
+                  ? 'border-[#145c49] bg-[#0b2d25] text-[#54d9b3]'
+                  : 'border-[#303532] bg-[#161917] text-zinc-500'
               }`}>
-                {isTurnoEsquecido ? '⚠ Turno Esquecido (+24h)' : isTurnoAberto ? '● Caixa Aberto' : '● Caixa Fechado'}
+                {isTurnoAberto ? 'Caixa aberto' : 'Caixa fechado'}
               </span>
+              {isLoading && <span className="text-[9px] text-zinc-500">Atualizando…</span>}
             </div>
-            <p className="text-xs text-gray-400 mt-0.5">
+            <p className="mt-1 text-[11px] text-zinc-400">
               {isTurnoAberto
-                ? `Aberto por ${turnoResumo?.operador_nome || 'Operador'} há ${formatMinutos(turnoResumo?.tempo_aberto_minutos || 0)}`
-                : 'Nenhum turno de caixa aberto no momento.'}
+                ? `${turnoResumo.operador_nome || 'Operador'} · aberto há ${formatMinutes(turnoResumo.tempo_aberto_minutos)}`
+                : 'Abra um turno para começar a registrar o movimento do dia.'}
             </p>
           </div>
         </div>
@@ -80,161 +157,128 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
           <button
             type="button"
             onClick={onRefresh}
-            className="p-2 border border-[#27272A] bg-[#1C1C1F] hover:bg-[#27272A] text-gray-300 hover:text-[#10b981] rounded-xl transition-colors cursor-pointer"
-            title="Atualizar Resumo"
+            disabled={isLoading}
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#303532] bg-[#151816] text-zinc-400 transition-colors hover:border-[#196b55] hover:text-[#54d9b3] disabled:cursor-wait disabled:opacity-60"
+            title="Atualizar resumo"
+            aria-label="Atualizar resumo do caixa"
           >
             <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
           </button>
-
           {isTurnoAberto ? (
             <button
               type="button"
               onClick={onNavigateToFechamento}
-              className="px-4 py-2 bg-emerald-600/15 hover:bg-emerald-600/25 text-[#10b981] rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 border border-emerald-500/20 shadow-xs"
+              className="inline-flex items-center gap-2 rounded-xl border border-[#196b55] bg-[#0b2d25] px-4 py-2 text-[10px] font-bold uppercase tracking-[0.1em] text-[#60e4be] transition-colors hover:bg-[#103b30]"
             >
-              <Lock size={14} />
-              <span>Fechar Caixa</span>
+              <Lock size={13} /> Fechar caixa
             </button>
-          ) : (
-            onOpenNovoTurnoModal && (
-              <button
-                type="button"
-                onClick={onOpenNovoTurnoModal}
-                className="px-4 py-2 bg-emerald-600/15 hover:bg-emerald-600/25 text-[#10b981] rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 border border-emerald-500/20 shadow-xs"
-              >
-                <DollarSign size={14} />
-                <span>Abrir Novo Turno</span>
-              </button>
-            )
-          )}
-        </div>
-      </div>
-
-      {!isTurnoAberto ? (
-        <div className="bg-[#121214]/60 border border-[#27272A] rounded-2xl p-8 text-center space-y-3 shadow-sm">
-          <div className="w-12 h-12 rounded-xl bg-[#18181B] border border-[#27272A] flex items-center justify-center mx-auto text-gray-400">
-            <Lock size={24} />
-          </div>
-          <h4 className="font-sans text-sm font-bold text-white">Nenhum turno de caixa aberto</h4>
-          <p className="text-xs text-gray-400 max-w-sm mx-auto">
-            Para registrar vendas em dinheiro ou movimentações no PDV, abra um novo turno informando o saldo inicial.
-          </p>
-          {onOpenNovoTurnoModal && (
+          ) : onOpenNovoTurnoModal ? (
             <button
               type="button"
               onClick={onOpenNovoTurnoModal}
-              className="px-5 py-2.5 bg-emerald-600/15 hover:bg-emerald-600/25 text-[#10b981] rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer border border-emerald-500/20 inline-flex items-center gap-2 shadow-xs"
+              className="inline-flex items-center gap-2 rounded-xl bg-[#00b894] px-4 py-2 text-[10px] font-bold uppercase tracking-[0.1em] text-[#06110e] transition-colors hover:bg-[#12c9a3]"
             >
-              <DollarSign size={16} />
-              <span>Abrir Caixa Agora</span>
+              <DollarSign size={13} /> Abrir caixa
             </button>
-          )}
+          ) : null}
         </div>
+      </section>
+
+      {!isTurnoAberto ? (
+        <section className="rounded-[18px] border border-[#252b28] bg-[#0d100f] px-5 py-10 text-center">
+          <Lock size={22} className="mx-auto text-zinc-600" />
+          <h3 className="mt-3 text-sm font-bold text-[#f5f4ef]">Nenhum turno aberto</h3>
+          <p className="mx-auto mt-1 max-w-md text-xs leading-relaxed text-zinc-500">
+            Informe o saldo inicial para controlar vendas, Pix, cartões e o dinheiro físico do caixa.
+          </p>
+        </section>
       ) : (
         <>
-          {/* Main Operational Metrics Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <div className="bg-[#18181B] hover:bg-[#1C1C1F] border border-[#27272A] p-4 rounded-xl space-y-1 shadow-sm transition-colors">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block">Saldo Inicial</span>
-              <strong className="text-xl font-mono font-bold text-white block mt-0.5">
-                R$ {(turnoResumo?.saldo_inicial || 0).toFixed(2)}
-              </strong>
-              <span className="text-xs text-gray-400 block mt-1">Fundo de troco de abertura</span>
-            </div>
+          <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {metrics.map(metric => (
+              <article
+                key={metric.label}
+                className={`rounded-[18px] border p-4 ${
+                  metric.label === 'Saldo esperado'
+                    ? 'border-[#196b55] bg-[#0b211b]'
+                    : 'border-[#252b28] bg-[#111412]'
+                }`}
+              >
+                <span className="text-[9px] font-bold uppercase tracking-[0.14em] text-zinc-500">
+                  {metric.label}
+                </span>
+                <strong className={`mt-2 block text-xl font-bold tabular-nums ${metric.accent ? 'text-[#54d9b3]' : 'text-[#f5f4ef]'}`}>
+                  {formatCurrency(metric.value)}
+                </strong>
+                <span className="mt-1 block text-[11px] text-zinc-500">{metric.help}</span>
+              </article>
+            ))}
+          </section>
 
-            <div className="bg-[#18181B] hover:bg-[#1C1C1F] border border-[#27272A] p-4 rounded-xl space-y-1 shadow-sm transition-colors">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block">Total de Vendas</span>
-              <strong className="text-xl font-mono font-bold text-[#10b981] block mt-0.5">
-                R$ {(turnoResumo?.total_vendas || 0).toFixed(2)}
-              </strong>
-              <span className="text-xs text-emerald-400/80 block mt-1">{turnoResumo?.total_pedidos_pagos || 0} comanda(s) paga(s)</span>
-            </div>
-
-            <div className="bg-[#18181B] hover:bg-[#1C1C1F] border border-[#27272A] p-4 rounded-xl space-y-1 shadow-sm transition-colors">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400/90 block">Vendas em Dinheiro</span>
-              <strong className="text-xl font-mono font-bold text-amber-300 block mt-0.5">
-                R$ {(turnoResumo?.total_dinheiro || 0).toFixed(2)}
-              </strong>
-              <span className="text-xs text-amber-400/70 block mt-1">Entradas físicas em caixa</span>
-            </div>
-
-            <div className="bg-[#18181B] hover:bg-[#1C1C1F] border border-[#27272A] p-4 rounded-xl space-y-1 relative overflow-hidden shadow-sm transition-colors">
-              <div className="absolute -right-2 -bottom-2 opacity-10 text-[#10b981]">
-                <DollarSign size={60} />
+          <section className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+            <article className="rounded-[18px] border border-[#252b28] bg-[#111412] p-4">
+              <div className="flex items-center gap-2 border-b border-[#252b28] pb-3">
+                <CreditCard size={15} className="text-[#54d9b3]" />
+                <h3 className="text-[10px] font-bold uppercase tracking-[0.13em] text-zinc-300">Recebimentos do turno</h3>
               </div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-[#10b981] block">Saldo Esperado em Caixa</span>
-              <strong className="text-xl font-mono font-bold text-[#10b981] block mt-0.5">
-                R$ {(turnoResumo?.saldo_esperado_dinheiro || 0).toFixed(2)}
-              </strong>
-              <span className="text-xs text-emerald-400/80 block mt-1 font-mono">Inicial + Dinheiro + Supr. - Sangrias</span>
-            </div>
-          </div>
-
-          {/* Secondary Details Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {/* Payment Methods Breakdown */}
-            <div className="bg-[#18181B] border border-[#27272A] p-4 rounded-xl space-y-3 text-left shadow-sm">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-gray-300 border-b border-[#27272A] pb-2">
-                Meios de Pagamento (Turno)
-              </h4>
-              <div className="space-y-2 text-xs font-mono">
-                <div className="flex justify-between items-center text-gray-300">
-                  <span>💵 Dinheiro:</span>
-                  <strong className="text-white font-mono">R$ {(turnoResumo?.total_dinheiro || 0).toFixed(2)}</strong>
-                </div>
-                <div className="flex justify-between items-center text-gray-300">
-                  <span>📱 Pix:</span>
-                  <strong className="text-[#10b981] font-mono">R$ {(turnoResumo?.total_pix || 0).toFixed(2)}</strong>
-                </div>
-                <div className="flex justify-between items-center text-gray-300">
-                  <span>💳 Cartão:</span>
-                  <strong className="text-amber-300 font-mono">R$ {(turnoResumo?.total_cartao || 0).toFixed(2)}</strong>
-                </div>
-              </div>
-            </div>
-
-            {/* Suprimentos & Sangrias Breakdown */}
-            <div className="bg-[#18181B] border border-[#27272A] p-4 rounded-xl space-y-3 text-left shadow-sm">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-gray-300 border-b border-[#27272A] pb-2">
-                Movimentações de Troco
-              </h4>
-              <div className="space-y-2 text-xs font-mono">
-                <div className="flex justify-between items-center text-emerald-400">
-                  <span className="flex items-center gap-1"><ArrowDownRight size={14} /> Suprimentos:</span>
-                  <strong>+ R$ {(turnoResumo?.total_suprimentos || 0).toFixed(2)}</strong>
-                </div>
-                <div className="flex justify-between items-center text-rose-400">
-                  <span className="flex items-center gap-1"><ArrowUpRight size={14} /> Sangrias:</span>
-                  <strong>- R$ {(turnoResumo?.total_sangrias || 0).toFixed(2)}</strong>
-                </div>
-              </div>
-            </div>
-
-            {/* Operational Metadata */}
-            <div className="bg-[#18181B] border border-[#27272A] p-4 rounded-xl space-y-3 text-left shadow-sm">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-gray-300 border-b border-[#27272A] pb-2">
-                Operador & Tempo
-              </h4>
-              <div className="space-y-1.5 text-xs text-gray-300">
-                <div className="flex items-center gap-1.5">
-                  <User size={14} className="text-gray-400" />
-                  <span>Responsável: <strong className="text-white">{turnoResumo?.operador_nome || '—'}</strong></span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Clock size={14} className="text-gray-400" />
-                  <span>Aberto em: <strong className="text-white font-mono">{turnoResumo?.aberto_em ? new Date(turnoResumo.aberto_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '—'}</strong></span>
-                </div>
-                {turnoResumo?.ultima_movimentacao && (
-                  <div className="pt-2 text-xs text-gray-400 border-t border-[#27272A]">
-                    Última mov: <strong className="text-gray-200">{turnoResumo.ultima_movimentacao.tipo.toUpperCase()}</strong> R$ {Number(turnoResumo.ultima_movimentacao.valor).toFixed(2)} ({turnoResumo.ultima_movimentacao.descricao})
+              <div className="mt-3 space-y-3 text-xs">
+                {[
+                  { label: 'Dinheiro', value: turnoResumo.total_dinheiro, icon: Banknote },
+                  { label: 'Pix', value: turnoResumo.total_pix, icon: QrCode },
+                  { label: 'Cartões', value: turnoResumo.total_cartao, icon: CreditCard },
+                ].map(method => (
+                  <div key={method.label} className="flex items-center justify-between gap-3">
+                    <span className="flex items-center gap-2 text-zinc-400"><method.icon size={14} /> {method.label}</span>
+                    <strong className="font-semibold tabular-nums text-[#f5f4ef]">{formatCurrency(method.value)}</strong>
                   </div>
+                ))}
+              </div>
+            </article>
+
+            <article className="rounded-[18px] border border-[#252b28] bg-[#111412] p-4">
+              <div className="flex items-center gap-2 border-b border-[#252b28] pb-3">
+                <Calculator size={15} className="text-[#54d9b3]" />
+                <h3 className="text-[10px] font-bold uppercase tracking-[0.13em] text-zinc-300">Composição do dinheiro</h3>
+              </div>
+              <div className="mt-3 space-y-3 text-xs">
+                <div className="flex items-center justify-between text-zinc-400">
+                  <span className="flex items-center gap-2"><ArrowDownRight size={14} /> Suprimentos</span>
+                  <strong className="tabular-nums text-[#f5f4ef]">+ {formatCurrency(turnoResumo.total_suprimentos)}</strong>
+                </div>
+                <div className="flex items-center justify-between text-zinc-400">
+                  <span className="flex items-center gap-2"><ArrowUpRight size={14} /> Sangrias</span>
+                  <strong className="tabular-nums text-[#f5f4ef]">− {formatCurrency(turnoResumo.total_sangrias)}</strong>
+                </div>
+                <p className="border-t border-[#252b28] pt-3 text-[10px] leading-relaxed text-zinc-500">
+                  Saldo inicial + dinheiro + suprimentos − sangrias.
+                </p>
+              </div>
+            </article>
+
+            <article className="rounded-[18px] border border-[#252b28] bg-[#111412] p-4">
+              <div className="flex items-center gap-2 border-b border-[#252b28] pb-3">
+                <User size={15} className="text-[#54d9b3]" />
+                <h3 className="text-[10px] font-bold uppercase tracking-[0.13em] text-zinc-300">Responsável e atividade</h3>
+              </div>
+              <div className="mt-3 space-y-2 text-xs text-zinc-400">
+                <p>Operador: <strong className="text-[#f5f4ef]">{turnoResumo.operador_nome || '—'}</strong></p>
+                <p>
+                  Abertura: <strong className="text-[#f5f4ef]">
+                    {turnoResumo.aberto_em
+                      ? new Date(turnoResumo.aberto_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+                      : '—'}
+                  </strong>
+                </p>
+                {turnoResumo.ultima_movimentacao && (
+                  <p className="border-t border-[#252b28] pt-2 text-[10px] leading-relaxed text-zinc-500">
+                    Última movimentação: {turnoResumo.ultima_movimentacao.tipo} · {formatCurrency(turnoResumo.ultima_movimentacao.valor)}
+                  </p>
                 )}
               </div>
-            </div>
-          </div>
+            </article>
+          </section>
         </>
       )}
     </div>
   );
 };
-

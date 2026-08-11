@@ -424,6 +424,12 @@ class CaixaTurno(Base):
             "status IS NULL OR status IN ('aberto', 'fechado')",
             name="ck_caixa_turnos_status",
         ),
+        Index(
+            "uq_caixa_turnos_tenant_open",
+            "restaurante_id",
+            unique=True,
+            postgresql_where=text("status = 'aberto'"),
+        ).ddl_if(dialect="postgresql"),
     )
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
@@ -458,6 +464,20 @@ class CaixaMovimentacao(Base):
         Index(
             "ix_caixa_movimentacoes_usuario_fk",
             "usuario_id",
+        ).ddl_if(dialect="postgresql"),
+        Index(
+            "ix_caixa_movimentacoes_tenant_turno_tipo",
+            "restaurante_id",
+            "turno_id",
+            "tipo",
+            postgresql_include=("valor",),
+        ).ddl_if(dialect="postgresql"),
+        Index(
+            "ix_caixa_movimentacoes_tenant_turno_latest",
+            "restaurante_id",
+            "turno_id",
+            text("criado_em DESC"),
+            text("id DESC"),
         ).ddl_if(dialect="postgresql"),
     )
     
@@ -511,6 +531,14 @@ class Pagamento(Base):
             "ix_pagamentos_tenant_cliente_fk",
             "restaurante_id",
             "cliente_id",
+        ).ddl_if(dialect="postgresql"),
+        Index(
+            "ix_pagamentos_tenant_turno_aprovado_metodo",
+            "restaurante_id",
+            "turno_id",
+            "metodo",
+            postgresql_where=text("status = 'aprovado'"),
+            postgresql_include=("valor", "comanda_id"),
         ).ddl_if(dialect="postgresql"),
     )
     

@@ -3,7 +3,14 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.database import engine, Base, SessionLocal, current_restaurante_id
 from app.security import create_access_token
-from app.models import Restaurante, Usuario, CaixaTurno, CaixaMovimentacao, Pagamento
+from app.models import (
+    Restaurante,
+    Usuario,
+    Comanda,
+    CaixaTurno,
+    CaixaMovimentacao,
+    Pagamento,
+)
 
 client = TestClient(app)
 
@@ -37,9 +44,14 @@ def caixa_test_setup():
             db.add(user)
             db.commit()
 
-        # Clean existing open shifts for 888
+        # Clean test financial records in FK-safe order.
+        db.query(Pagamento).filter(Pagamento.restaurante_id == 888).delete()
         db.query(CaixaMovimentacao).filter(CaixaMovimentacao.restaurante_id == 888).delete()
         db.query(CaixaTurno).filter(CaixaTurno.restaurante_id == 888).delete()
+        db.query(Comanda).filter(
+            Comanda.restaurante_id == 888,
+            Comanda.id.like("cmd-caixa-resumo-%"),
+        ).delete(synchronize_session=False)
         db.commit()
     finally:
         current_restaurante_id.reset(token_var)
@@ -77,6 +89,121 @@ def test_abrir_turno_e_obter_resumo():
     assert resumo["status"] == "aberto"
     assert resumo["saldo_inicial"] == 100.0
     assert resumo["saldo_esperado_dinheiro"] == 100.0
+
+
+def test_resumo_concilia_pagamentos_e_movimentacoes_sem_arredondamento_incorreto():
+    headers = get_auth_headers()
+    response = client.post(
+        "/caixa/turno/abrir",
+        json={"saldo_inicial": 100.0},
+        headers=headers,
+    )
+    assert response.status_code == 201
+    turno_id = response.json()["id"]
+
+    db = SessionLocal()
+    token_var = current_restaurante_id.set(888)
+    try:
+        comandas = [
+            Comanda(
+                id=f"cmd-caixa-resumo-{numero}",
+                restaurante_id=888,
+                garcom_id="usr_caixa_888",
+                numero_pedido=numero,
+            )
+            for numero in (8801, 8802)
+        ]
+        db.add_all(comandas)
+        db.flush()
+
+        db.add_all([
+            Pagamento(
+                id="pag-caixa-resumo-dinheiro-1",
+                restaurante_id=888,
+                comanda_id=comandas[0].id,
+                turno_id=turno_id,
+                valor=10.10,
+                metodo="dinheiro",
+                status="aprovado",
+                idempotency_key="caixa-resumo-dinheiro-1",
+            ),
+            Pagamento(
+                id="pag-caixa-resumo-dinheiro-2",
+                restaurante_id=888,
+                comanda_id=comandas[0].id,
+                turno_id=turno_id,
+                valor=20.20,
+                metodo="dinheiro",
+                status="aprovado",
+                idempotency_key="caixa-resumo-dinheiro-2",
+            ),
+            Pagamento(
+                id="pag-caixa-resumo-pix",
+                restaurante_id=888,
+                comanda_id=comandas[1].id,
+                turno_id=turno_id,
+                valor=30.30,
+                metodo="pix",
+                status="aprovado",
+                idempotency_key="caixa-resumo-pix",
+            ),
+            Pagamento(
+                id="pag-caixa-resumo-cartao",
+                restaurante_id=888,
+                comanda_id=comandas[1].id,
+                turno_id=turno_id,
+                valor=40.40,
+                metodo="cartao_credito",
+                status="aprovado",
+                idempotency_key="caixa-resumo-cartao",
+            ),
+            Pagamento(
+                id="pag-caixa-resumo-cancelado",
+                restaurante_id=888,
+                comanda_id=comandas[1].id,
+                turno_id=turno_id,
+                valor=999.99,
+                metodo="dinheiro",
+                status="cancelado",
+                idempotency_key="caixa-resumo-cancelado",
+            ),
+            CaixaMovimentacao(
+                restaurante_id=888,
+                turno_id=turno_id,
+                usuario_id="usr_caixa_888",
+                tipo="suprimento",
+                valor=5.05,
+                descricao="Teste de conciliação",
+            ),
+            CaixaMovimentacao(
+                restaurante_id=888,
+                turno_id=turno_id,
+                usuario_id="usr_caixa_888",
+                tipo="sangria",
+                valor=2.02,
+                descricao="Teste de conciliação",
+            ),
+        ])
+        db.commit()
+    finally:
+        current_restaurante_id.reset(token_var)
+        db.close()
+
+    resumo_response = client.get("/caixa/turno-atual/resumo", headers=headers)
+    assert resumo_response.status_code == 200
+    resumo = resumo_response.json()
+    assert resumo["total_vendas"] == 101.0
+    assert resumo["total_dinheiro"] == 30.30
+    assert resumo["total_pix"] == 30.30
+    assert resumo["total_cartao"] == 40.40
+    assert resumo["total_pedidos_pagos"] == 2
+    assert resumo["total_suprimentos"] == 5.05
+    assert resumo["total_sangrias"] == 2.02
+    assert resumo["saldo_esperado_dinheiro"] == 133.33
+    assert (
+        resumo["total_dinheiro"] + resumo["total_pix"] + resumo["total_cartao"]
+        == resumo["total_vendas"]
+    )
 
 
 def test_suprimento_e_sangria_flow():

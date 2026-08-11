@@ -82,6 +82,9 @@ interface CaixaPanelProps {
   pagamentosPendentes?: any[];
   onRefreshPagamentosPendentes?: () => Promise<void>;
   isWsConnected?: boolean;
+  turnoResumo: CaixaTurnoResumo | null;
+  isTurnoResumoLoading: boolean;
+  onRefreshTurnoResumo: () => Promise<void>;
   liveProdutos?: Product[];
   liveCategorias?: CatalogCategory[];
   catalogReady?: boolean;
@@ -219,6 +222,13 @@ const isTableCheckoutOrder = (order: Order | null | undefined) => {
   return !['delivery', 'entrega', 'retirada'].includes(normalizedType);
 };
 
+const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+}).format(Number(value) || 0);
+
 interface OperationalHeroProps {
   id: string;
   eyebrow: string;
@@ -272,6 +282,9 @@ export function CaixaPanel({
   pagamentosPendentes = [],
   onRefreshPagamentosPendentes,
   isWsConnected = false,
+  turnoResumo,
+  isTurnoResumoLoading,
+  onRefreshTurnoResumo,
   liveProdutos = [],
   liveCategorias = [],
   catalogReady = false,
@@ -754,7 +767,6 @@ export function CaixaPanel({
   const [selectedContagemId, setSelectedContagemId] = useState<string | null>(null);
 
   // Caixa Reorganization States
-  const [turnoResumo, setTurnoResumo] = useState<CaixaTurnoResumo | null>(null);
   const [caixaMovimentacoes, setCaixaMovimentacoes] = useState<CaixaMovimentacao[]>([]);
   const [fechamentoResult, setFechamentoResult] = useState<FechamentoCaixaResult | null>(null);
   const [showSangriaModal, setShowSangriaModal] = useState<boolean>(false);
@@ -2333,17 +2345,7 @@ export function CaixaPanel({
   }, [activeTab, activeSubTab]);
 
   // Caixa API Handlers
-  const fetchTurnoResumo = async () => {
-    try {
-      const res = await fetch(`${apiBaseUrl}/caixa/turno-atual/resumo`, { headers: authHeaders });
-      if (res.ok) {
-        const data = await res.json();
-        setTurnoResumo(data);
-      }
-    } catch (e) {
-      console.error("Erro ao buscar resumo do turno:", e);
-    }
-  };
+  const fetchTurnoResumo = onRefreshTurnoResumo;
 
   const fetchCaixaMovimentacoes = async () => {
     try {
@@ -2356,6 +2358,14 @@ export function CaixaPanel({
       console.error("Erro ao buscar movimentações de caixa:", e);
     }
   };
+
+  useEffect(() => {
+    const handleCashUpdated = () => {
+      void fetchCaixaMovimentacoes();
+    };
+    window.addEventListener('koma_cash_updated', handleCashUpdated);
+    return () => window.removeEventListener('koma_cash_updated', handleCashUpdated);
+  }, [apiBaseUrl, authHeaders]);
 
   const handleRegistrarSangria = async (payload: { valor: number; motivo: string; observacao: string }) => {
     const res = await fetch(`${apiBaseUrl}/caixa/sangria`, {
@@ -7388,13 +7398,28 @@ export function CaixaPanel({
 
           {/* MÓDULO CAIXA REORGANIZADO */}
           {activeTab === 'financeiro' && (activeSubTab === 'turno_atual' || activeSubTab === 'fluxo') && (
-            <CaixaTurnoAtualTab
-              turnoResumo={turnoResumo}
-              isLoading={isLoading}
-              onRefresh={fetchTurnoResumo}
-              onNavigateToFechamento={() => setActiveSubTab('fechamento')}
-              onOpenNovoTurnoModal={() => setShowAbrirModal(true)}
-            />
+            <div className="orders-workspace space-y-4">
+              <OperationalHero
+                id="cash-heading"
+                eyebrow="CAIXA / CONFERÊNCIA AO VIVO"
+                title="Seu caixa,"
+                accent="sob controle"
+                description="Vendas, recebimentos e troco conciliados em um só lugar."
+                metrics={[
+                  { label: 'vendas no turno', value: turnoResumo ? turnoResumo.total_pedidos_pagos : '—' },
+                  { label: 'movimentações', value: turnoResumo ? caixaMovimentacoes.length : '—' },
+                  { label: 'saldo em caixa', value: turnoResumo ? formatCurrency(turnoResumo.saldo_esperado_dinheiro).replace('R$', '').trim() : '—' },
+                ]}
+                isConnected={isWsConnected}
+              />
+              <CaixaTurnoAtualTab
+                turnoResumo={turnoResumo}
+                isLoading={isTurnoResumoLoading}
+                onRefresh={fetchTurnoResumo}
+                onNavigateToFechamento={() => setActiveSubTab('fechamento')}
+                onOpenNovoTurnoModal={() => setShowAbrirModal(true)}
+              />
+            </div>
           )}
 
           {activeTab === 'financeiro' && (activeSubTab === 'movimentacoes' || activeSubTab === 'ajustes' || activeSubTab === 'suprimento' || activeSubTab === 'sangria') && (

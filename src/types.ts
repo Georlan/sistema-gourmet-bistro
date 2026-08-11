@@ -136,6 +136,7 @@ export interface CaixaTurnoResumo {
   operador_nome?: string | null;
   aberto_em?: string | null;
   tempo_aberto_minutos: number;
+  turno_esquecido?: boolean;
   saldo_inicial: number;
   total_vendas: number;
   total_dinheiro: number;
@@ -145,6 +146,7 @@ export interface CaixaTurnoResumo {
   total_suprimentos: number;
   saldo_esperado_dinheiro: number;
   total_pedidos_pagos: number;
+  comandas_abertas_count?: number;
   ultima_movimentacao?: {
     id: number;
     tipo: string;
