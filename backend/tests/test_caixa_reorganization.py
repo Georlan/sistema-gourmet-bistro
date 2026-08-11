@@ -53,6 +53,10 @@ def caixa_test_setup():
             Comanda.restaurante_id == 888,
             Comanda.id.like("cmd-caixa-resumo-%"),
         ).delete(synchronize_session=False)
+        db.query(Comanda).filter(
+            Comanda.restaurante_id == 888,
+            Comanda.id.like("cmd-caixa-integrity-%"),
+        ).delete(synchronize_session=False)
         db.commit()
     finally:
         current_restaurante_id.reset(token_var)
@@ -198,6 +202,7 @@ def test_resumo_concilia_pagamentos_e_movimentacoes_sem_arredondamento_incorreto
     assert resumo["total_pix"] == 30.30
     assert resumo["total_cartao"] == 40.40
     assert resumo["total_pedidos_pagos"] == 2
+    assert resumo["comandas_abertas_count"] == 2
     assert resumo["total_suprimentos"] == 5.05
     assert resumo["total_sangrias"] == 2.02
     assert resumo["saldo_esperado_dinheiro"] == 133.33
@@ -296,6 +301,121 @@ def test_fechamento_caixa_conferencia_cega():
     res_post_suprimento = client.post("/caixa/suprimento", json={"valor": 10.0, "motivo": "Teste"}, headers=headers)
     assert res_post_suprimento.status_code == 400
     assert "Não há nenhum turno de caixa aberto" in res_post_suprimento.json()["detail"]
+
+
+def test_fechamento_bloqueia_comandas_e_pagamentos_pendentes():
+    headers = get_auth_headers()
+    open_response = client.post(
+        "/caixa/turno/abrir",
+        json={"saldo_inicial": 100.0},
+        headers=headers,
+    )
+    assert open_response.status_code == 201
+    turno_id = open_response.json()["id"]
+
+    db = SessionLocal()
+    token_var = current_restaurante_id.set(888)
+    try:
+        comanda = Comanda(
+            id="cmd-caixa-integrity-pending",
+            restaurante_id=888,
+            garcom_id="usr_caixa_888",
+            numero_pedido=8890,
+            fechada=False,
+        )
+        db.add(comanda)
+        db.flush()
+        db.add(Pagamento(
+            id="pag-caixa-integrity-pending",
+            restaurante_id=888,
+            comanda_id=comanda.id,
+            turno_id=turno_id,
+            valor=25.0,
+            metodo="dinheiro",
+            status="pendente",
+            idempotency_key="caixa-integrity-pending",
+        ))
+        db.commit()
+    finally:
+        current_restaurante_id.reset(token_var)
+        db.close()
+
+    response = client.post(
+        "/caixa/fechamento",
+        json={
+            "declarado_dinheiro": 100.0,
+            "declarado_cartao": 0.0,
+            "declarado_pix": 0.0,
+            "observacao": "Tentativa com pendências",
+        },
+        headers=headers,
+    )
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert "1 pagamento(s) aguardando confirmação" in detail
+    assert "1 comanda(s) ainda aberta(s)" in detail
+
+    resumo = client.get("/caixa/turno-atual/resumo", headers=headers).json()
+    assert resumo["status"] == "aberto"
+    assert resumo["comandas_abertas_count"] == 1
+
+
+def test_aprovacao_rejeita_pagamento_de_turno_encerrado():
+    headers = get_auth_headers()
+    open_response = client.post(
+        "/caixa/turno/abrir",
+        json={"saldo_inicial": 50.0},
+        headers=headers,
+    )
+    assert open_response.status_code == 201
+    turno_id = open_response.json()["id"]
+
+    close_response = client.post(
+        "/caixa/fechamento",
+        json={
+            "declarado_dinheiro": 50.0,
+            "declarado_cartao": 0.0,
+            "declarado_pix": 0.0,
+            "observacao": "Turno encerrado",
+        },
+        headers=headers,
+    )
+    assert close_response.status_code == 200
+
+    db = SessionLocal()
+    token_var = current_restaurante_id.set(888)
+    try:
+        comanda = Comanda(
+            id="cmd-caixa-integrity-closed",
+            restaurante_id=888,
+            garcom_id="usr_caixa_888",
+            numero_pedido=8891,
+            fechada=True,
+            fechado_em=datetime.now(timezone.utc),
+        )
+        db.add(comanda)
+        db.flush()
+        db.add(Pagamento(
+            id="pag-caixa-integrity-closed-turn",
+            restaurante_id=888,
+            comanda_id=comanda.id,
+            turno_id=turno_id,
+            valor=10.0,
+            metodo="dinheiro",
+            status="pendente",
+            idempotency_key="caixa-integrity-closed-turn",
+        ))
+        db.commit()
+    finally:
+        current_restaurante_id.reset(token_var)
+        db.close()
+
+    response = client.post(
+        "/caixa/pagamentos/pag-caixa-integrity-closed-turn/aprovar",
+        headers=headers,
+    )
+    assert response.status_code == 409
+    assert "turno já encerrado" in response.json()["detail"]
 
 
 def test_historico_movimentacoes_limita_100_e_inclui_operador():

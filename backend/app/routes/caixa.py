@@ -121,6 +121,14 @@ def _totais_financeiros_turno(
     }
 
 
+def _comandas_abertas_count(db: Session, restaurante_id: int) -> int:
+    """Conta contas ainda operacionais usando a mesma fonte de verdade do PDV."""
+    return int(db.query(func.count(Comanda.id)).filter(
+        Comanda.restaurante_id == restaurante_id,
+        Comanda.fechada == False,
+    ).scalar() or 0)
+
+
 def _atividades_recentes_turno(
     db: Session,
     restaurante_id: int,
@@ -391,6 +399,7 @@ def obter_resumo_turno_atual(
             total_suprimentos=0.0,
             saldo_esperado_dinheiro=0.0,
             total_pedidos_pagos=0,
+            comandas_abertas_count=_comandas_abertas_count(db, rest_id),
             atividades_recentes=[],
             ultima_movimentacao=None,
             resumo_dia=None
@@ -440,6 +449,7 @@ def obter_resumo_turno_atual(
         total_suprimentos=totals["total_suprimentos"],
         saldo_esperado_dinheiro=totals["saldo_esperado_dinheiro"],
         total_pedidos_pagos=totals["total_pedidos_pagos"],
+        comandas_abertas_count=_comandas_abertas_count(db, rest_id),
         atividades_recentes=atividades_recentes,
         ultima_movimentacao=ult_mov,
         resumo_dia={
@@ -739,6 +749,27 @@ def fechar_turno_caixa(
     if req.declarado_dinheiro < 0 or req.declarado_cartao < 0 or req.declarado_pix < 0:
         raise HTTPException(status_code=400, detail="Os valores declarados não podem ser negativos.")
 
+    pagamentos_pendentes = int(db.query(func.count(Pagamento.id)).filter(
+        Pagamento.restaurante_id == rest_id,
+        Pagamento.turno_id == turno.id,
+        Pagamento.status == "pendente",
+    ).scalar() or 0)
+    comandas_abertas = _comandas_abertas_count(db, rest_id)
+    if pagamentos_pendentes or comandas_abertas:
+        pendencias = []
+        if pagamentos_pendentes:
+            pendencias.append(f"{pagamentos_pendentes} pagamento(s) aguardando confirmação")
+        if comandas_abertas:
+            pendencias.append(f"{comandas_abertas} comanda(s) ainda aberta(s)")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Resolva as pendências antes de fechar o caixa: "
+                + " e ".join(pendencias)
+                + "."
+            ),
+        )
+
     totals = _totais_financeiros_turno(db, rest_id, turno)
     esperado_dinheiro = totals["saldo_esperado_dinheiro"]
     esperado_pix = totals["total_pix"]
@@ -1037,7 +1068,7 @@ def registrar_pagamento_mesa(
     turno = db.query(CaixaTurno).filter(
         CaixaTurno.restaurante_id == rest_id,
         CaixaTurno.status == "aberto",
-    ).first()
+    ).with_for_update().first()
     if not turno:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1325,7 +1356,7 @@ def registrar_pagamento_comanda(
     turno = db.query(CaixaTurno).filter(
         CaixaTurno.restaurante_id == rest_id,
         CaixaTurno.status == "aberto"
-    ).first()
+    ).with_for_update().first()
     if not turno:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1559,6 +1590,23 @@ def aprovar_pagamento(
     """Aprova um pagamento pendente em dinheiro, debitando os valores e liquidando a comanda."""
     check_caixa_permission(current_user)
     rest_id = require_tenant_id()
+    pagamento_ref = db.query(Pagamento).filter(
+        Pagamento.restaurante_id == rest_id,
+        Pagamento.id == pagamento_id,
+    ).first()
+    if not pagamento_ref:
+        raise HTTPException(status_code=404, detail="Pagamento não encontrado")
+
+    turno = db.query(CaixaTurno).filter(
+        CaixaTurno.restaurante_id == rest_id,
+        CaixaTurno.id == pagamento_ref.turno_id,
+    ).with_for_update().first()
+    if turno is None or turno.status != "aberto":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Este pagamento pertence a um turno já encerrado e não pode mais ser aprovado.",
+        )
+
     pagamento = db.query(Pagamento).filter(
         Pagamento.restaurante_id == rest_id,
         Pagamento.id == pagamento_id,

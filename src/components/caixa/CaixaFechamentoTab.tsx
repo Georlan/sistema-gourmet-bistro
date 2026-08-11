@@ -1,35 +1,147 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import clsx from 'clsx';
-import { Lock, CheckCircle2, AlertCircle, DollarSign, CreditCard, Smartphone, Check } from 'lucide-react';
-import { FechamentoCaixaResult } from '../../types';
+import {
+  AlertCircle,
+  ArrowRight,
+  Check,
+  CheckCircle2,
+  ClipboardCheck,
+  CreditCard,
+  DollarSign,
+  Lock,
+  ReceiptText,
+  RefreshCw,
+  Smartphone,
+  Wifi,
+  WifiOff,
+} from 'lucide-react';
+import { CaixaTurnoResumo, FechamentoCaixaResult } from '../../types';
 
 interface CaixaFechamentoTabProps {
   isTurnoAberto: boolean;
   fechamentoResult: FechamentoCaixaResult | null;
-  onConfirmFechamento: (payload: { declarado_dinheiro: number; declarado_cartao: number; declarado_pix: number; observacao: string }) => Promise<void>;
+  turnoResumo: CaixaTurnoResumo | null;
+  pendingPaymentsCount: number;
+  pendingPaymentsTotal: number;
+  isConnected: boolean;
+  onConfirmFechamento: (payload: {
+    declarado_dinheiro: number;
+    declarado_cartao: number;
+    declarado_pix: number;
+    observacao: string;
+  }) => Promise<void>;
   onOpenNovoTurnoModal?: () => void;
+  onRefresh?: () => Promise<void> | void;
+  onNavigateToPendingPayments?: () => void;
+  onNavigateToOpenComandas?: () => void;
 }
+
+const money = new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+});
+
+const formatMoney = (value: number) => money.format(Number(value) || 0);
+
+const valueFromInput = (value: string): number | '' => {
+  if (value === '') return '';
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : '';
+};
+
+interface CountFieldProps {
+  id: string;
+  label: string;
+  help: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  value: number | '';
+  required?: boolean;
+  onChange: (value: number | '') => void;
+}
+
+const CountField: React.FC<CountFieldProps> = ({
+  id,
+  label,
+  help,
+  icon: Icon,
+  value,
+  required,
+  onChange,
+}) => (
+  <label htmlFor={id} className="block rounded-2xl border border-[#252b28] bg-[#111512] p-4 transition-colors focus-within:border-[#1f8f70]">
+    <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-300">
+      <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#1f5948] bg-[#0c2a22] text-[#54d9b3]">
+        <Icon size={15} />
+      </span>
+      <span>{label}{required ? <span className="ml-1 text-[#54d9b3]">*</span> : null}</span>
+    </span>
+    <span className="mt-3 flex items-center rounded-xl border border-[#242925] bg-[#090c0a] px-3 focus-within:border-[#2a9f7d]">
+      <span className="text-sm font-semibold text-zinc-500">R$</span>
+      <input
+        id={id}
+        type="number"
+        inputMode="decimal"
+        step="0.01"
+        min="0"
+        required={required}
+        placeholder="0,00"
+        value={value}
+        onChange={(event) => onChange(valueFromInput(event.target.value))}
+        className="min-w-0 flex-1 bg-transparent px-2 py-3 text-lg font-semibold tabular-nums text-white outline-none placeholder:text-zinc-700"
+      />
+    </span>
+    <span className="mt-2 block text-[10px] leading-relaxed text-zinc-500">{help}</span>
+  </label>
+);
 
 export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
   isTurnoAberto,
   fechamentoResult,
+  turnoResumo,
+  pendingPaymentsCount,
+  pendingPaymentsTotal,
+  isConnected,
   onConfirmFechamento,
-  onOpenNovoTurnoModal
+  onOpenNovoTurnoModal,
+  onRefresh,
+  onNavigateToPendingPayments,
+  onNavigateToOpenComandas,
 }) => {
   const [declaradoDinheiro, setDeclaradoDinheiro] = useState<number | ''>('');
   const [declaradoCartao, setDeclaradoCartao] = useState<number | ''>('');
   const [declaradoPix, setDeclaradoPix] = useState<number | ''>('');
-  const [observacao, setObservacao] = useState<string>('');
-
-  const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [observacao, setObservacao] = useState('');
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const handlePreSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const openAccountsCount = turnoResumo?.comandas_abertas_count ?? 0;
+  const hasBlockingPending = pendingPaymentsCount > 0 || openAccountsCount > 0;
+  const declaredTotal = useMemo(
+    () => Number(declaradoDinheiro || 0) + Number(declaradoCartao || 0) + Number(declaradoPix || 0),
+    [declaradoCartao, declaradoDinheiro, declaradoPix],
+  );
+
+  const handleRefresh = async () => {
+    if (!onRefresh || isRefreshing) return;
+    try {
+      setIsRefreshing(true);
+      await onRefresh();
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const handlePreSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
     setErrorMsg(null);
     if (declaradoDinheiro === '' || Number(declaradoDinheiro) < 0) {
       setErrorMsg('Informe o valor físico contado em dinheiro.');
+      return;
+    }
+    if (hasBlockingPending) {
+      setErrorMsg('Resolva as contas e confirmações pendentes antes de fechar o turno.');
       return;
     }
     setShowConfirmModal(true);
@@ -43,11 +155,11 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
         declarado_dinheiro: Number(declaradoDinheiro || 0),
         declarado_cartao: Number(declaradoCartao || 0),
         declarado_pix: Number(declaradoPix || 0),
-        observacao: observacao.trim()
+        observacao: observacao.trim(),
       });
       setShowConfirmModal(false);
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Erro ao processar fechamento de caixa.');
+    } catch (error: unknown) {
+      setErrorMsg(error instanceof Error ? error.message : 'Erro ao processar fechamento de caixa.');
       setShowConfirmModal(false);
     } finally {
       setIsSubmitting(false);
@@ -55,286 +167,230 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
   };
 
   if (!isTurnoAberto && fechamentoResult) {
-    // Post-Closure Audit Summary Screen
-    const diffTot = fechamentoResult.diferenca_total;
-    const isExact = Math.abs(diffTot) < 0.01;
-    const isSobra = diffTot > 0;
+    const difference = fechamentoResult.diferenca_total;
+    const isExact = Math.abs(difference) < 0.01;
+    const isSurplus = difference > 0;
+    const rows = [
+      ['Dinheiro', fechamentoResult.esperado_dinheiro, fechamentoResult.declarado_dinheiro, fechamentoResult.diferenca_dinheiro],
+      ['Cartões', fechamentoResult.esperado_cartao, fechamentoResult.declarado_cartao, fechamentoResult.diferenca_cartao],
+      ['Pix', fechamentoResult.esperado_pix, fechamentoResult.declarado_pix, fechamentoResult.diferenca_pix],
+    ] as const;
 
     return (
-      <div className="space-y-5 text-left animate-fade-in max-w-3xl mx-auto">
-        <div className="bg-[#0E1015] border border-[#1C1F28] rounded-3xl p-6 space-y-5 shadow-lg shadow-black/40">
-          <div className="flex items-center justify-between border-b border-[#1C1F28] pb-3">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(280px,.5fr)]">
+        <section className="overflow-hidden rounded-3xl border border-[#252b28] bg-[#0d100f]">
+          <header className="flex flex-col gap-4 border-b border-[#252b28] p-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-emerald-950/60 text-emerald-400/90 border border-emerald-900/40 rounded-2xl">
-                <CheckCircle2 size={24} />
-              </div>
+              <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[#1f7058] bg-[#0d3026] text-[#54d9b3]">
+                <CheckCircle2 size={22} />
+              </span>
               <div>
-                <h3 className="font-serif text-base font-bold text-white">Fechamento do Caixa Concluído</h3>
-                <p className="text-[10px] text-gray-400 font-mono">
-                  Turno #{fechamentoResult.turno_id} encerrado por {fechamentoResult.fechado_por_nome} às {new Date(fechamentoResult.fechado_em).toLocaleTimeString('pt-BR')}
+                <h2 className="text-base font-bold text-white">Turno encerrado com segurança</h2>
+                <p className="mt-0.5 text-[11px] text-zinc-500">
+                  Caixa #{fechamentoResult.turno_id} · {fechamentoResult.fechado_por_nome} · {new Date(fechamentoResult.fechado_em).toLocaleString('pt-BR')}
                 </p>
               </div>
             </div>
-            <span className="px-3 py-1 bg-[#151720] border border-[#252836] text-gray-300 rounded-full text-[9px] font-bold uppercase tracking-wider">
-              Turno Encerrado
+            <span className="w-fit rounded-full border border-[#2d3531] bg-[#151a17] px-3 py-1 text-[9px] font-bold uppercase tracking-wider text-zinc-300">
+              Conferência concluída
             </span>
-          </div>
+          </header>
 
-          {/* Result Alert Badge */}
-          <div className={clsx(
-            'p-4 rounded-2xl border text-xs flex items-center justify-between font-mono',
-            isExact ? 'bg-emerald-950/50 border-emerald-900/40 text-emerald-300' : isSobra ? 'bg-sky-950/50 border-sky-900/40 text-sky-300' : 'bg-rose-950/50 border-rose-900/40 text-rose-300'
-          )}>
-            <div>
-              <strong className="block text-sm uppercase tracking-wider font-sans font-bold">
-                {isExact ? '✓ Caixa Exato (Sem Divergência)' : isSobra ? '▲ Sobra de Caixa' : '▼ Falta / Quebra de Caixa'}
+          <div className="p-5">
+            <div className={clsx(
+              'mb-4 flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between',
+              isExact ? 'border-[#1f7058] bg-[#0d3026]' : 'border-[#4c332f] bg-[#241715]',
+            )}>
+              <div>
+                <strong className={clsx('block text-sm', isExact ? 'text-[#54d9b3]' : 'text-[#f0b3aa]')}>
+                  {isExact ? 'Caixa conferido sem divergência' : isSurplus ? 'Sobra identificada na conferência' : 'Falta identificada na conferência'}
+                </strong>
+                <span className="mt-1 block text-[10px] text-zinc-400">
+                  {isExact ? 'Os valores contados conferem com os registros do sistema.' : 'A diferença ficou registrada no fechamento para auditoria.'}
+                </span>
+              </div>
+              <strong className={clsx('text-xl tabular-nums', isExact ? 'text-[#54d9b3]' : 'text-[#f0b3aa]')}>
+                {difference > 0 ? '+' : ''}{formatMoney(difference)}
               </strong>
-              <span className="text-[10px] text-gray-300">
-                {isExact ? 'Valores contados equivalem exatamente ao esperado no sistema.' : isSobra ? `Declarado superior ao esperado por R$ ${diffTot.toFixed(2)}` : `Declarado inferior ao esperado por R$ ${Math.abs(diffTot).toFixed(2)}`}
-              </span>
             </div>
-            <span className="text-xl font-bold font-mono">
-              {isExact ? 'R$ 0,00' : `${isSobra ? '+' : '-'} R$ ${Math.abs(diffTot).toFixed(2)}`}
-            </span>
-          </div>
 
-          {/* Audit Comparison Table */}
-          <div className="overflow-x-auto border border-[#252836] rounded-2xl">
-            <table className="w-full text-left text-xs font-mono">
-              <thead>
-                <tr className="bg-[#151720] border-b border-[#252836] text-gray-400 uppercase text-[9px] tracking-wider">
-                  <th className="p-3">Meio de Pagamento</th>
-                  <th className="p-3">Esperado (Sistema)</th>
-                  <th className="p-3">Declarado (Contado)</th>
-                  <th className="p-3 text-right">Diferença (Sobra/Falta)</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#1C1F28] text-gray-200">
-                <tr>
-                  <td className="p-3 font-sans font-semibold">💵 Dinheiro</td>
-                  <td className="p-3">R$ {fechamentoResult.esperado_dinheiro.toFixed(2)}</td>
-                  <td className="p-3 font-bold text-white">R$ {fechamentoResult.declarado_dinheiro.toFixed(2)}</td>
-                  <td className={clsx('p-3 text-right font-bold', fechamentoResult.diferenca_dinheiro >= 0 ? 'text-[#059669]' : 'text-rose-400/90')}>
-                    {fechamentoResult.diferenca_dinheiro >= 0 ? '+' : ''} R$ {fechamentoResult.diferenca_dinheiro.toFixed(2)}
-                  </td>
-                </tr>
-                <tr>
-                  <td className="p-3 font-sans font-semibold">💳 Cartão</td>
-                  <td className="p-3">R$ {fechamentoResult.esperado_cartao.toFixed(2)}</td>
-                  <td className="p-3 font-bold text-white">R$ {fechamentoResult.declarado_cartao.toFixed(2)}</td>
-                  <td className={clsx('p-3 text-right font-bold', fechamentoResult.diferenca_cartao >= 0 ? 'text-[#059669]' : 'text-rose-400/90')}>
-                    {fechamentoResult.diferenca_cartao >= 0 ? '+' : ''} R$ {fechamentoResult.diferenca_cartao.toFixed(2)}
-                  </td>
-                </tr>
-                <tr>
-                  <td className="p-3 font-sans font-semibold">📱 Pix</td>
-                  <td className="p-3">R$ {fechamentoResult.esperado_pix.toFixed(2)}</td>
-                  <td className="p-3 font-bold text-white">R$ {fechamentoResult.declarado_pix.toFixed(2)}</td>
-                  <td className={clsx('p-3 text-right font-bold', fechamentoResult.diferenca_pix >= 0 ? 'text-[#059669]' : 'text-rose-400/90')}>
-                    {fechamentoResult.diferenca_pix >= 0 ? '+' : ''} R$ {fechamentoResult.diferenca_pix.toFixed(2)}
-                  </td>
-                </tr>
-                <tr className="bg-[#151720] font-bold border-t border-[#252836]">
-                  <td className="p-3 font-sans uppercase text-[10px] text-gray-300">TOTAL GERAL</td>
-                  <td className="p-3 text-gray-300">R$ {fechamentoResult.total_esperado.toFixed(2)}</td>
-                  <td className="p-3 text-white">R$ {fechamentoResult.total_declarado.toFixed(2)}</td>
-                  <td className={clsx('p-3 text-right font-bold text-sm', isExact ? 'text-[#059669]' : isSobra ? 'text-sky-400/90' : 'text-rose-400/90')}>
-                    {diffTot >= 0 ? '+' : ''} R$ {diffTot.toFixed(2)}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            <div className="overflow-x-auto rounded-2xl border border-[#252b28]">
+              <table className="w-full min-w-[620px] text-left text-xs">
+                <thead className="bg-[#141815] text-[9px] uppercase tracking-wider text-zinc-500">
+                  <tr>
+                    <th className="p-3">Meio</th>
+                    <th className="p-3">Sistema</th>
+                    <th className="p-3">Contado</th>
+                    <th className="p-3 text-right">Diferença</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#252b28] text-zinc-300">
+                  {rows.map(([label, expected, declared, rowDifference]) => (
+                    <tr key={label}>
+                      <td className="p-3 font-semibold text-white">{label}</td>
+                      <td className="p-3 tabular-nums">{formatMoney(expected)}</td>
+                      <td className="p-3 tabular-nums">{formatMoney(declared)}</td>
+                      <td className={clsx('p-3 text-right font-semibold tabular-nums', Math.abs(rowDifference) < 0.01 ? 'text-[#54d9b3]' : 'text-[#f0b3aa]')}>
+                        {rowDifference > 0 ? '+' : ''}{formatMoney(rowDifference)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="border-t border-[#303832] bg-[#141815] text-sm font-bold text-white">
+                  <tr>
+                    <td className="p-3">Total</td>
+                    <td className="p-3 tabular-nums">{formatMoney(fechamentoResult.total_esperado)}</td>
+                    <td className="p-3 tabular-nums">{formatMoney(fechamentoResult.total_declarado)}</td>
+                    <td className="p-3 text-right tabular-nums">{difference > 0 ? '+' : ''}{formatMoney(difference)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
           </div>
+        </section>
 
+        <aside className="flex flex-col justify-between rounded-3xl border border-[#252b28] bg-[#0d100f] p-5">
+          <div>
+            <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[#54d9b3]">Próximo turno</p>
+            <h3 className="mt-2 text-lg font-bold text-white">Caixa pronto para recomeçar</h3>
+            <p className="mt-2 text-xs leading-relaxed text-zinc-500">O fechamento foi gravado e os valores permanecerão disponíveis no histórico do caixa.</p>
+          </div>
           {onOpenNovoTurnoModal && (
-            <div className="pt-2 text-center">
-              <button
-                type="button"
-                onClick={onOpenNovoTurnoModal}
-                className="px-6 py-2.5 bg-[#046c4e] hover:bg-[#035238] text-emerald-100 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-md border border-emerald-700/30 inline-flex items-center gap-2"
-              >
-                <DollarSign size={16} />
-                <span>Abrir Novo Turno de Caixa</span>
-              </button>
-            </div>
+            <button type="button" onClick={onOpenNovoTurnoModal} className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#1f8f70] bg-[#0f6f55] px-4 py-3 text-xs font-bold text-white transition-colors hover:bg-[#128364]">
+              <DollarSign size={16} /> Abrir novo turno
+            </button>
           )}
-        </div>
+        </aside>
       </div>
     );
   }
 
   if (!isTurnoAberto) {
     return (
-      <div className="bg-[#0E1015] border border-[#1C1F28] rounded-3xl p-8 text-center space-y-3 max-w-xl mx-auto">
-        <div className="w-12 h-12 rounded-2xl bg-[#0D0F14] border border-[#1C1F28] flex items-center justify-center mx-auto text-gray-400">
-          <Lock size={24} />
-        </div>
-        <h4 className="font-serif text-sm font-bold text-white">Nenhum turno aberto para fechamento</h4>
-        <p className="text-xs text-gray-400">
-          O caixa está fechado. Abra um novo turno para operar o caixa e realizar fechamentos ao fim do expediente.
-        </p>
+      <section className="rounded-3xl border border-[#252b28] bg-[#0d100f] p-8 text-center">
+        <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-[#2d3531] bg-[#151a17] text-zinc-400"><Lock size={22} /></span>
+        <h2 className="mt-4 text-base font-bold text-white">Nenhum turno aberto</h2>
+        <p className="mx-auto mt-2 max-w-lg text-xs leading-relaxed text-zinc-500">Abra o caixa para registrar vendas, movimentações e realizar a conferência ao final do expediente.</p>
         {onOpenNovoTurnoModal && (
-          <button
-            type="button"
-            onClick={onOpenNovoTurnoModal}
-            className="px-5 py-2 bg-[#046c4e] hover:bg-[#035238] text-emerald-100 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm border border-emerald-700/30 inline-flex items-center gap-1.5"
-          >
-            <DollarSign size={14} />
-            <span>Abrir Caixa</span>
+          <button type="button" onClick={onOpenNovoTurnoModal} className="mt-5 inline-flex items-center gap-2 rounded-xl border border-[#1f8f70] bg-[#0f6f55] px-5 py-2.5 text-xs font-bold text-white hover:bg-[#128364]">
+            <DollarSign size={15} /> Abrir caixa
           </button>
         )}
-      </div>
+      </section>
     );
   }
 
   return (
-    <div className="space-y-5 text-left animate-fade-in max-w-2xl mx-auto">
-      {/* Blind Audit Form Header */}
-      <div className="bg-[#0E1015] border border-[#1C1F28] rounded-3xl p-6 space-y-4 shadow-lg shadow-black/40">
-        <div className="border-b border-[#1C1F28] pb-3">
-          <div className="flex items-center gap-2">
-            <h3 className="font-serif text-sm font-bold text-white">Fechamento de Caixa (Conferência Cega)</h3>
-            <span className="px-2.5 py-0.5 bg-amber-950/60 text-amber-400/90 border border-amber-900/40 rounded-full text-[8px] font-bold uppercase">
-              Blind Audit
-            </span>
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,.55fr)]">
+      <section className="rounded-3xl border border-[#252b28] bg-[#0d100f] p-5 sm:p-6">
+        <div className="flex flex-col gap-3 border-b border-[#252b28] pb-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[#54d9b3]">Conferência cega</p>
+            <h2 className="mt-1 text-lg font-bold text-white">Conte antes de comparar</h2>
+            <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-zinc-500">Informe o que existe na gaveta e nos comprovantes. Os valores esperados só aparecem depois da confirmação.</p>
           </div>
-          <p className="text-[10px] text-gray-400 mt-0.5">
-            Insira os valores contados fisicamente no caixa. O saldo do sistema será comparado apenas após a confirmação.
-          </p>
+          <button type="button" onClick={handleRefresh} disabled={!onRefresh || isRefreshing} className="inline-flex w-fit items-center gap-2 rounded-xl border border-[#2d3531] bg-[#151a17] px-3 py-2 text-[10px] font-semibold text-zinc-300 hover:border-[#3a4540] hover:text-white disabled:opacity-50">
+            <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} /> Atualizar dados
+          </button>
         </div>
 
         {errorMsg && (
-          <div className="p-3 bg-rose-950/60 border border-rose-900/40 rounded-xl text-rose-300 text-xs flex items-center gap-2">
-            <AlertCircle size={16} className="shrink-0 text-rose-400" />
+          <div className="mt-4 flex items-start gap-2 rounded-xl border border-[#5d2b31] bg-[#251316] p-3 text-xs text-[#f0b3aa]" role="alert">
+            <AlertCircle size={16} className="mt-0.5 shrink-0" />
             <span>{errorMsg}</span>
           </div>
         )}
 
-        <form onSubmit={handlePreSubmit} className="space-y-4">
-          {/* Dinheiro físico contado */}
-          <div className="space-y-1 bg-[#151720] p-3.5 rounded-2xl border border-[#252836]">
-            <label className="text-[10px] font-bold text-gray-300 uppercase tracking-wider flex items-center gap-1.5">
-              <DollarSign size={14} className="text-[#059669]" />
-              <span>Dinheiro Físico Contado (R$) <span className="text-rose-400">*</span></span>
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              required
-              placeholder="0,00"
-              value={declaradoDinheiro}
-              onChange={(e) => setDeclaradoDinheiro(e.target.value === '' ? '' : parseFloat(e.target.value))}
-              className="w-full px-3.5 py-2 bg-[#0D0F14] border border-[#1A1C24] rounded-xl text-white text-base font-mono focus:outline-none focus:border-emerald-500"
-            />
-            <span className="text-[8px] text-gray-500 block">Conte todas as notas e moedas presentes na gaveta.</span>
+        <form onSubmit={handlePreSubmit} className="mt-5">
+          <div className="grid gap-3 md:grid-cols-3">
+            <CountField id="closing-cash" label="Dinheiro contado" help="Notas e moedas presentes na gaveta." icon={DollarSign} value={declaradoDinheiro} required onChange={setDeclaradoDinheiro} />
+            <CountField id="closing-card" label="Comprovantes de cartão" help="Total das maquininhas de débito e crédito." icon={CreditCard} value={declaradoCartao} onChange={setDeclaradoCartao} />
+            <CountField id="closing-pix" label="Comprovantes Pix" help="Total confirmado nos recebimentos Pix." icon={Smartphone} value={declaradoPix} onChange={setDeclaradoPix} />
           </div>
 
-          {/* Comprovantes de cartão */}
-          <div className="space-y-1 bg-[#151720] p-3.5 rounded-2xl border border-[#252836]">
-            <label className="text-[10px] font-bold text-gray-300 uppercase tracking-wider flex items-center gap-1.5">
-              <CreditCard size={14} className="text-amber-400/90" />
-              <span>Comprovantes de Cartão / Maquininha (R$)</span>
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              placeholder="0,00"
-              value={declaradoCartao}
-              onChange={(e) => setDeclaradoCartao(e.target.value === '' ? '' : parseFloat(e.target.value))}
-              className="w-full px-3.5 py-2 bg-[#0D0F14] border border-[#1A1C24] rounded-xl text-white text-base font-mono focus:outline-none focus:border-emerald-500"
-            />
-            <span className="text-[8px] text-gray-500 block">Soma dos comprovantes das máquinas de débito e crédito.</span>
-          </div>
+          <label htmlFor="closing-note" className="mt-4 block">
+            <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-zinc-500">Observação do fechamento <span className="normal-case tracking-normal">(opcional)</span></span>
+            <textarea id="closing-note" rows={3} maxLength={500} placeholder="Registre uma informação útil para a conferência deste turno" value={observacao} onChange={(event) => setObservacao(event.target.value)} className="mt-2 w-full resize-none rounded-xl border border-[#252b28] bg-[#111512] px-3 py-3 text-xs text-white outline-none placeholder:text-zinc-700 focus:border-[#2a9f7d]" />
+          </label>
 
-          {/* Pix total */}
-          <div className="space-y-1 bg-[#151720] p-3.5 rounded-2xl border border-[#252836]">
-            <label className="text-[10px] font-bold text-gray-300 uppercase tracking-wider flex items-center gap-1.5">
-              <Smartphone size={14} className="text-sky-400/90" />
-              <span>Comprovantes Pix (R$)</span>
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              placeholder="0,00"
-              value={declaradoPix}
-              onChange={(e) => setDeclaradoPix(e.target.value === '' ? '' : parseFloat(e.target.value))}
-              className="w-full px-3.5 py-2 bg-[#0D0F14] border border-[#1A1C24] rounded-xl text-white text-base font-mono focus:outline-none focus:border-emerald-500"
-            />
+          <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-[#252b28] bg-[#111512] p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-zinc-500">Total declarado</span>
+              <strong className="mt-1 block text-xl tabular-nums text-white">{formatMoney(declaredTotal)}</strong>
+            </div>
+            <button type="submit" disabled={hasBlockingPending || isSubmitting} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#1f8f70] bg-[#0f6f55] px-5 py-3 text-xs font-bold text-white transition-colors hover:bg-[#128364] disabled:cursor-not-allowed disabled:border-[#2d3531] disabled:bg-[#1a1f1c] disabled:text-zinc-600">
+              <Lock size={15} /> Revisar e fechar caixa <ArrowRight size={15} />
+            </button>
           </div>
-
-          {/* Observação */}
-          <div className="space-y-1">
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Observações do Fechamento (Opcional):</label>
-            <textarea
-              rows={2}
-              placeholder="ex: Diferença explicada por troco trocado com cliente..."
-              value={observacao}
-              onChange={(e) => setObservacao(e.target.value)}
-              className="w-full px-3 py-2 bg-[#151720] border border-[#252836] rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500 resize-none"
-            />
-          </div>
-
-          <button
-            type="submit"
-            className="w-full py-3 bg-[#046c4e] hover:bg-[#035238] text-emerald-100 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-md shadow-emerald-950/40 border border-emerald-700/30 flex items-center justify-center gap-2"
-          >
-            <Lock size={16} />
-            <span>Prosseguir para Confirmação do Fechamento</span>
-          </button>
         </form>
-      </div>
+      </section>
 
-      {/* Confirmation Modal */}
+      <aside className="rounded-3xl border border-[#252b28] bg-[#0d100f] p-5">
+        <div className="flex items-center justify-between border-b border-[#252b28] pb-4">
+          <div>
+            <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[#54d9b3]">Validação do turno</p>
+            <h2 className="mt-1 text-base font-bold text-white">Antes de fechar</h2>
+          </div>
+          {isConnected ? <Wifi size={17} className="text-[#54d9b3]" /> : <WifiOff size={17} className="text-zinc-500" />}
+        </div>
+
+        <div className="mt-4 space-y-3">
+          <div className={clsx('rounded-2xl border p-4', pendingPaymentsCount > 0 ? 'border-[#4b3430] bg-[#211816]' : 'border-[#254c40] bg-[#101d18]')}>
+            <div className="flex items-start justify-between gap-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-current/20 text-[#54d9b3]"><ReceiptText size={17} /></span>
+              <strong className="text-xl tabular-nums text-white">{pendingPaymentsCount}</strong>
+            </div>
+            <h3 className="mt-3 text-xs font-bold text-white">Pagamentos aguardando confirmação</h3>
+            <p className="mt-1 text-[10px] text-zinc-500">{pendingPaymentsCount > 0 ? `${formatMoney(pendingPaymentsTotal)} ainda precisa ser conferido.` : 'Nenhum recebimento pendente neste momento.'}</p>
+            {pendingPaymentsCount > 0 && onNavigateToPendingPayments && (
+              <button type="button" onClick={onNavigateToPendingPayments} className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-bold text-[#54d9b3] hover:text-white">Resolver pagamentos <ArrowRight size={13} /></button>
+            )}
+          </div>
+
+          <div className={clsx('rounded-2xl border p-4', openAccountsCount > 0 ? 'border-[#4b3430] bg-[#211816]' : 'border-[#254c40] bg-[#101d18]')}>
+            <div className="flex items-start justify-between gap-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-current/20 text-[#54d9b3]"><ClipboardCheck size={17} /></span>
+              <strong className="text-xl tabular-nums text-white">{openAccountsCount}</strong>
+            </div>
+            <h3 className="mt-3 text-xs font-bold text-white">Comandas ainda abertas</h3>
+            <p className="mt-1 text-[10px] text-zinc-500">{openAccountsCount > 0 ? 'Finalize as contas para não levar valores ao próximo turno.' : 'Todas as comandas estão finalizadas.'}</p>
+            {openAccountsCount > 0 && onNavigateToOpenComandas && (
+              <button type="button" onClick={onNavigateToOpenComandas} className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-bold text-[#54d9b3] hover:text-white">Revisar comandas <ArrowRight size={13} /></button>
+            )}
+          </div>
+        </div>
+
+        <div className={clsx('mt-4 flex items-start gap-3 rounded-2xl border p-4', hasBlockingPending ? 'border-[#4b3430] bg-[#211816]' : 'border-[#1f7058] bg-[#0d3026]')}>
+          {hasBlockingPending ? <AlertCircle size={18} className="mt-0.5 shrink-0 text-[#f0b3aa]" /> : <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-[#54d9b3]" />}
+          <div>
+            <strong className={clsx('block text-xs', hasBlockingPending ? 'text-[#f0b3aa]' : 'text-[#54d9b3]')}>{hasBlockingPending ? 'Fechamento bloqueado com segurança' : 'Turno pronto para conferência'}</strong>
+            <p className="mt-1 text-[10px] leading-relaxed text-zinc-400">{hasBlockingPending ? 'Resolva as pendências acima. O sistema também valida tudo novamente no servidor.' : 'A confirmação fará uma última validação no servidor antes de encerrar.'}</p>
+          </div>
+        </div>
+      </aside>
+
       {showConfirmModal && (
-        <div
-          onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmModal(false); }}
-          className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto cursor-pointer"
-        >
-          <div className="w-full max-w-md bg-[#0E1015] border border-[#1C1F28] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
-            <div className="flex items-center gap-3 border-b border-[#1C1F28] pb-3">
-              <div className="p-2 bg-amber-950/60 text-amber-400/90 border border-amber-900/40 rounded-xl">
-                <AlertCircle size={20} />
-              </div>
+        <div onClick={(event) => { if (event.target === event.currentTarget && !isSubmitting) setShowConfirmModal(false); }} className="fixed inset-0 z-50 flex cursor-pointer items-center justify-center overflow-y-auto bg-black/80 p-4 backdrop-blur-sm">
+          <div role="dialog" aria-modal="true" aria-labelledby="confirm-closing-title" className="my-8 w-full max-w-md cursor-default rounded-3xl border border-[#2d3531] bg-[#0d100f] p-5 shadow-2xl">
+            <div className="flex items-start gap-3 border-b border-[#252b28] pb-4">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[#1f7058] bg-[#0d3026] text-[#54d9b3]"><Lock size={18} /></span>
               <div>
-                <h4 className="font-serif text-sm font-bold text-white">Confirmar Fechamento do Caixa?</h4>
-                <p className="text-[9px] text-gray-400">Esta ação irá encerrar o turno de caixa ativo definitivamente.</p>
+                <h2 id="confirm-closing-title" className="text-base font-bold text-white">Confirmar encerramento do turno?</h2>
+                <p className="mt-1 text-[10px] leading-relaxed text-zinc-500">Depois de confirmar, os lançamentos deste turno ficam encerrados e a conferência será exibida.</p>
               </div>
             </div>
 
-            <div className="bg-[#151720] p-3 rounded-2xl border border-[#252836] text-xs font-mono space-y-1">
-              <div className="flex justify-between text-gray-300">
-                <span>Dinheiro Declarado:</span>
-                <strong className="text-white">R$ {Number(declaradoDinheiro || 0).toFixed(2)}</strong>
-              </div>
-              <div className="flex justify-between text-gray-300">
-                <span>Cartão Declarado:</span>
-                <strong className="text-white">R$ {Number(declaradoCartao || 0).toFixed(2)}</strong>
-              </div>
-              <div className="flex justify-between text-gray-300">
-                <span>Pix Declarado:</span>
-                <strong className="text-white">R$ {Number(declaradoPix || 0).toFixed(2)}</strong>
-              </div>
-            </div>
+            <dl className="mt-4 space-y-2 rounded-2xl border border-[#252b28] bg-[#111512] p-4 text-xs">
+              <div className="flex justify-between gap-3 text-zinc-400"><dt>Dinheiro contado</dt><dd className="font-semibold tabular-nums text-white">{formatMoney(Number(declaradoDinheiro || 0))}</dd></div>
+              <div className="flex justify-between gap-3 text-zinc-400"><dt>Comprovantes de cartão</dt><dd className="font-semibold tabular-nums text-white">{formatMoney(Number(declaradoCartao || 0))}</dd></div>
+              <div className="flex justify-between gap-3 text-zinc-400"><dt>Comprovantes Pix</dt><dd className="font-semibold tabular-nums text-white">{formatMoney(Number(declaradoPix || 0))}</dd></div>
+              <div className="flex justify-between gap-3 border-t border-[#252b28] pt-2 text-white"><dt className="font-bold">Total declarado</dt><dd className="font-bold tabular-nums text-[#54d9b3]">{formatMoney(declaredTotal)}</dd></div>
+            </dl>
 
-            <div className="flex gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowConfirmModal(false)}
-                className="flex-1 py-2.5 border border-[#252836] hover:border-zinc-700 bg-[#151720] text-gray-400 hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                disabled={isSubmitting}
-                onClick={handleExecuteFechamento}
-                className="flex-1 py-2.5 bg-[#046c4e] hover:bg-[#035238] disabled:opacity-50 text-emerald-100 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer shadow-sm border border-emerald-700/30 flex items-center justify-center gap-1.5"
-              >
-                <Check size={14} />
-                <span>{isSubmitting ? 'Encerrando...' : 'Confirmar Fechamento'}</span>
+            <div className="mt-4 flex gap-2">
+              <button type="button" onClick={() => setShowConfirmModal(false)} disabled={isSubmitting} className="flex-1 rounded-xl border border-[#2d3531] bg-[#151a17] px-3 py-3 text-xs font-bold text-zinc-300 hover:text-white disabled:opacity-50">Voltar e conferir</button>
+              <button type="button" onClick={handleExecuteFechamento} disabled={isSubmitting} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-[#1f8f70] bg-[#0f6f55] px-3 py-3 text-xs font-bold text-white hover:bg-[#128364] disabled:opacity-50">
+                <Check size={15} /> {isSubmitting ? 'Encerrando...' : 'Confirmar fechamento'}
               </button>
             </div>
           </div>

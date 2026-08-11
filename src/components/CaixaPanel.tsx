@@ -7357,12 +7357,45 @@ export function CaixaPanel({
           )}
 
           {activeTab === 'financeiro' && (activeSubTab === 'fechamento' || activeSubTab === 'conferencia') && (
-            <CaixaFechamentoTab
-              isTurnoAberto={turnoResumo?.status === 'aberto'}
-              fechamentoResult={fechamentoResult}
-              onConfirmFechamento={handleConfirmarFechamento}
-              onOpenNovoTurnoModal={() => setShowAbrirModal(true)}
-            />
+            <div className="orders-workspace space-y-4">
+              <OperationalHero
+                id="cash-closing-heading"
+                eyebrow="CAIXA / ENCERRAMENTO SEGURO"
+                title="Feche o turno,"
+                accent="sem surpresa"
+                description="Conte, confira as pendências e encerre com rastreabilidade."
+                metrics={[
+                  { label: 'turno', value: turnoResumo?.status === 'aberto' ? 'Aberto' : 'Fechado' },
+                  { label: 'operador', value: turnoResumo?.operador_nome || '—' },
+                  { label: 'pendências', value: pagamentosPendentes.length + (turnoResumo?.comandas_abertas_count ?? 0) },
+                ]}
+                isConnected={isWsConnected}
+              />
+              <CaixaFechamentoTab
+                isTurnoAberto={turnoResumo?.status === 'aberto'}
+                fechamentoResult={fechamentoResult}
+                turnoResumo={turnoResumo}
+                pendingPaymentsCount={pagamentosPendentes.length}
+                pendingPaymentsTotal={pendingPaymentsTotal}
+                isConnected={isWsConnected}
+                onConfirmFechamento={handleConfirmarFechamento}
+                onOpenNovoTurnoModal={() => setShowAbrirModal(true)}
+                onRefresh={async () => {
+                  await Promise.all([
+                    fetchTurnoResumo(),
+                    onRefreshPagamentosPendentes?.(),
+                  ]);
+                }}
+                onNavigateToPendingPayments={() => {
+                  setActiveTab('operacao');
+                  setActiveSubTab('pedidos');
+                }}
+                onNavigateToOpenComandas={() => {
+                  setActiveTab('operacao');
+                  setActiveSubTab('pedidos');
+                }}
+              />
+            </div>
           )}
 
           {/* PAINEL FISCAL NFC-e (dados estáticos de exemplo — implementação futura) */}
