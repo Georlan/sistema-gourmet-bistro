@@ -770,6 +770,7 @@ class CardapioPublicProductResponse(BaseModel):
     descricao: str = ""
     preco: float
     imagem_url: str = ""
+    imagens_galeria: List[str] = Field(default_factory=list)
     categoria_id: str
 
 

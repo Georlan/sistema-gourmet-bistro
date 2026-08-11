@@ -1,158 +1,166 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import clsx from 'clsx';
-import { Edit3, Trash2, Plus } from 'lucide-react';
+import {
+  ChefHat,
+  Edit3,
+  GlassWater,
+  Layers3,
+  Plus,
+  Printer,
+  Search,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { CategoriaModal, DeleteCategoryModal, CategoryData } from './CategoriaModal';
 
 interface CardapioCategoriasTabProps {
-  apiCategorias: any[];
+  apiCategorias: CategoryData[];
   apiBaseUrl: string;
   authHeaders: Record<string, string>;
   fetchCategorias: () => Promise<void>;
   showToast?: (message: string, type?: 'success' | 'error') => void;
+  onCreateRequest?: number;
 }
+
+const destinationMeta = {
+  COZINHA: {
+    label: 'Cozinha',
+    description: 'Os pedidos desta categoria saem na produção.',
+    icon: ChefHat,
+    className: 'border-orange-400/15 bg-orange-400/[0.06] text-orange-300',
+  },
+  BAR: {
+    label: 'Bar',
+    description: 'Os pedidos desta categoria saem no bar.',
+    icon: GlassWater,
+    className: 'border-sky-400/15 bg-sky-400/[0.06] text-sky-300',
+  },
+  NENHUM: {
+    label: 'Sem impressão',
+    description: 'A categoria não gera uma via de preparação.',
+    icon: Printer,
+    className: 'border-zinc-600/30 bg-zinc-800/35 text-zinc-400',
+  },
+} as const;
 
 export function CardapioCategoriasTab({
   apiCategorias,
   apiBaseUrl,
   authHeaders,
   fetchCategorias,
-  showToast
+  showToast,
+  onCreateRequest,
 }: CardapioCategoriasTabProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<CategoryData | null>(null);
-
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deletingCategory, setDeletingCategory] = useState<CategoryData | null>(null);
+  const [search, setSearch] = useState('');
+
+  React.useEffect(() => {
+    if (!onCreateRequest) return;
+    setEditingCategory(null);
+    setModalOpen(true);
+  }, [onCreateRequest]);
+
+  const filteredCategories = useMemo(() => {
+    const normalized = search.trim().toLocaleLowerCase('pt-BR');
+    if (!normalized) return apiCategorias;
+    return apiCategorias.filter((category) => category.nome.toLocaleLowerCase('pt-BR').includes(normalized));
+  }, [apiCategorias, search]);
 
   const handleOpenCreate = () => {
     setEditingCategory(null);
     setModalOpen(true);
   };
 
-  const handleOpenEdit = (cat: CategoryData) => {
-    setEditingCategory(cat);
-    setModalOpen(true);
-  };
-
-  const handleOpenDelete = (cat: CategoryData) => {
-    setDeletingCategory(cat);
-    setDeleteModalOpen(true);
-  };
-
   const handleDeleteConfirm = async () => {
     if (!deletingCategory) return;
     try {
-      const res = await fetch(`${apiBaseUrl}/produtos/categorias/${deletingCategory.id}`, {
+      const response = await fetch(`${apiBaseUrl}/produtos/categorias/${deletingCategory.id}`, {
         method: 'DELETE',
-        headers: authHeaders
+        headers: authHeaders,
       });
-
-      if (res.ok) {
-        if (showToast) showToast('Categoria excluída com sucesso!', 'success');
-        await fetchCategorias();
-      } else {
-        const errData = await res.json().catch(() => ({}));
-        if (showToast) showToast(`Erro: ${errData.detail || 'Falha ao excluir.'}`, 'error');
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        showToast?.(payload.detail || 'Não foi possível excluir a categoria.', 'error');
+        return;
       }
-    } catch (e) {
-      console.error(e);
-      if (showToast) showToast('Erro de conexão ao excluir categoria.', 'error');
+      showToast?.('Categoria excluída.', 'success');
+      await fetchCategorias();
+    } catch (error) {
+      console.error(error);
+      showToast?.('Erro de conexão ao excluir categoria.', 'error');
     }
   };
 
   return (
-    <div className={clsx('space-y-4', 'animate-fade-in', 'text-left')}>
-      {/* Header */}
-      <div className={clsx('flex', 'justify-between', 'items-center')}>
-        <div>
-          <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'text-base', 'block')}>Categorias do Cardápio</span>
-          <span className={clsx('text-[9px]', 'text-gray-500')}>{apiCategorias.length} categorias cadastradas</span>
+    <div className="mx-auto w-full max-w-[1500px] space-y-5 pb-8 text-left animate-fade-in">
+      <section className="relative overflow-hidden rounded-[26px] border border-emerald-300/10 bg-[radial-gradient(circle_at_92%_0%,rgba(16,185,129,.13),transparent_34%),linear-gradient(135deg,#121713_0%,#0d100e_68%,#101311_100%)] p-5 shadow-[0_24px_70px_rgba(0,0,0,.24)] sm:p-6">
+        <div className="relative z-10 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div className="max-w-2xl">
+            <p className="mb-2 flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.22em] text-emerald-300">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" /> Organização do cardápio
+            </p>
+            <h1 className="text-xl font-black tracking-[-0.035em] text-white sm:text-2xl">Categorias simples de encontrar e preparar.</h1>
+            <p className="mt-2 max-w-xl text-[11px] leading-relaxed text-zinc-400 sm:text-xs">
+              Organize os produtos e escolha onde cada grupo será impresso quando um pedido entrar.
+            </p>
+          </div>
+          <button type="button" onClick={handleOpenCreate} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 py-2.5 text-[10px] font-black text-[#07110d] shadow-[0_10px_30px_rgba(16,185,129,.2)] transition-colors hover:bg-emerald-300">
+            <Plus size={14} /> Nova categoria
+          </button>
         </div>
-        <button
-          onClick={handleOpenCreate}
-          className={clsx('flex', 'items-center', 'gap-1.5', 'px-3', 'py-1.5', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'rounded-xl', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-md')}
-        >
-          <Plus size={12} />
-          Nova Categoria
-        </button>
-      </div>
+      </section>
 
-      {/* Categories Table */}
-      <div className={clsx('bg-[#121214]/50', 'border', 'border-[#27272A]', 'rounded-3xl', 'overflow-hidden')}>
-        <div className={clsx('overflow-x-auto')}>
-          <table className={clsx('w-full', 'text-left', 'border-collapse', 'font-sans', 'text-[11px]')}>
-            <thead>
-              <tr className={clsx('border-b', 'border-[#27272A]', 'bg-[#18181B]/50', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider')}>
-                <th className={clsx('p-4')}>Nome</th>
-                <th className={clsx('p-4')}>Impressão</th>
-                <th className={clsx('p-4', 'text-right')}>Ações</th>
-              </tr>
-            </thead>
-            <tbody className={clsx('divide-y', 'divide-[#27272A]/40')}>
-              {apiCategorias.map((cat) => (
-                <tr key={cat.id} className={clsx('hover:bg-[#1C1C1F]/30', 'transition-colors', 'text-white')}>
-                  <td className={clsx('p-4', 'font-semibold')}>{cat.nome}</td>
-                  <td className={clsx('p-4')}>
-                    <span className={clsx('px-2.5', 'py-1', 'text-[9px]', 'font-bold', 'rounded-lg', 'border', 
-                      cat.destino_impressao === 'COZINHA' 
-                        ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' 
-                        : cat.destino_impressao === 'BAR' 
-                          ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' 
-                          : 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20'
-                    )}>
-                      {cat.destino_impressao === 'COZINHA' ? '🍳 Cozinha' : cat.destino_impressao === 'BAR' ? '🍹 Bar' : '🚫 Não Imprime'}
-                    </span>
-                  </td>
-                  <td className={clsx('p-4', 'text-right')}>
-                    <div className="flex items-center justify-end gap-1.5">
-                      <button
-                        onClick={() => handleOpenEdit(cat)}
-                        className="flex items-center gap-1 px-2.5 py-1.5 border border-zinc-800 hover:border-zinc-700 bg-zinc-900/60 hover:bg-zinc-800 text-gray-300 hover:text-white rounded-xl transition-all cursor-pointer font-semibold text-[10px]"
-                      >
-                        <Edit3 size={11} />
-                        Editar
-                      </button>
-                      <button
-                        onClick={() => handleOpenDelete(cat)}
-                        className="flex items-center gap-1 px-2.5 py-1.5 border border-red-900/40 hover:border-red-600/30 bg-red-950/30 hover:bg-red-900/40 text-red-400 hover:text-red-300 rounded-xl transition-all cursor-pointer font-semibold text-[10px]"
-                      >
-                        <Trash2 size={11} />
-                        Excluir
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {apiCategorias.length === 0 && (
-                <tr>
-                  <td colSpan={3} className="p-8 text-center text-gray-500 text-xs italic">
-                    Nenhuma categoria cadastrada. Clique em "Nova Categoria" acima para criar a primeira.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+      <section className="flex flex-col gap-3 rounded-[22px] border border-white/[0.065] bg-[#101311] p-3.5 sm:flex-row sm:items-center sm:justify-between sm:p-4">
+        <div className="flex items-center gap-3">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-300/10 bg-emerald-300/[0.05] text-emerald-300"><Layers3 size={16} /></span>
+          <div><strong className="block font-mono text-lg leading-none text-white">{apiCategorias.length}</strong><span className="mt-1 block text-[9px] text-zinc-500">categorias cadastradas</span></div>
         </div>
-      </div>
+        <div className="relative w-full sm:max-w-sm">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-600" size={15} />
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar categoria…" className="h-11 w-full rounded-xl border border-white/[0.07] bg-black/20 pl-10 pr-10 text-[11px] text-white outline-none placeholder:text-zinc-600 focus:border-emerald-400/30" />
+          {search && <button type="button" onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1 text-zinc-600 hover:text-white" aria-label="Limpar busca"><X size={13} /></button>}
+        </div>
+      </section>
 
-      {/* Categoria Modal (Create & Edit) */}
-      <CategoriaModal
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-        categoryToEdit={editingCategory}
-        apiBaseUrl={apiBaseUrl}
-        authHeaders={authHeaders}
-        onSuccess={fetchCategorias}
-        showToast={showToast}
-      />
+      {filteredCategories.length === 0 ? (
+        <div className="flex min-h-64 flex-col items-center justify-center rounded-[22px] border border-dashed border-white/10 bg-[#101311] px-6 text-center">
+          <Layers3 size={28} className="text-zinc-700" />
+          <strong className="mt-4 text-sm text-zinc-300">Nenhuma categoria encontrada</strong>
+          <p className="mt-1 text-[10px] text-zinc-600">Ajuste a busca ou crie uma nova categoria.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {filteredCategories.map((category) => {
+            const meta = destinationMeta[category.destino_impressao as keyof typeof destinationMeta] || destinationMeta.NENHUM;
+            const Icon = meta.icon;
+            return (
+              <article key={category.id} className="group flex min-h-[160px] flex-col justify-between rounded-[22px] border border-white/[0.07] bg-[#101311] p-4 shadow-[0_18px_50px_rgba(0,0,0,.16)] transition-colors hover:border-white/[0.11]">
+                <div>
+                  <div className="flex items-start justify-between gap-3">
+                    <span className={clsx('flex h-10 w-10 items-center justify-center rounded-xl border', meta.className)}><Icon size={16} /></span>
+                    <span className="max-w-[60%] truncate rounded-full border border-white/[0.07] bg-black/20 px-2 py-1 font-mono text-[8px] text-zinc-600">{category.id}</span>
+                  </div>
+                  <h2 className="mt-4 text-sm font-bold text-zinc-100">{category.nome}</h2>
+                  <p className="mt-1 text-[10px] leading-relaxed text-zinc-500">{meta.description}</p>
+                </div>
+                <div className="mt-4 flex items-center justify-between border-t border-white/[0.055] pt-3">
+                  <span className={clsx('text-[9px] font-bold', meta.className.split(' ').at(-1))}>{meta.label}</span>
+                  <div className="flex items-center gap-1">
+                    <button type="button" onClick={() => { setEditingCategory(category); setModalOpen(true); }} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[9px] font-bold text-zinc-400 transition-colors hover:bg-white/[0.05] hover:text-white"><Edit3 size={12} /> Editar</button>
+                    <button type="button" onClick={() => { setDeletingCategory(category); setDeleteModalOpen(true); }} className="rounded-lg p-2 text-zinc-600 transition-colors hover:bg-rose-500/10 hover:text-rose-300" title="Excluir categoria" aria-label={`Excluir ${category.nome}`}><Trash2 size={13} /></button>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
 
-      {/* Delete Category Confirmation Modal */}
-      <DeleteCategoryModal
-        isOpen={deleteModalOpen}
-        categoryName={deletingCategory?.nome || ''}
-        onClose={() => setDeleteModalOpen(false)}
-        onConfirm={handleDeleteConfirm}
-      />
+      <CategoriaModal isOpen={modalOpen} onClose={() => setModalOpen(false)} categoryToEdit={editingCategory} apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onSuccess={fetchCategorias} showToast={showToast} />
+      <DeleteCategoryModal isOpen={deleteModalOpen} categoryName={deletingCategory?.nome || ''} onClose={() => setDeleteModalOpen(false)} onConfirm={handleDeleteConfirm} />
     </div>
   );
 }
