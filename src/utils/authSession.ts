@@ -22,6 +22,18 @@ export function saveOperatorSession(token: string, user: any): void {
   localStorage.setItem(SESSION_KEY, JSON.stringify(session));
   localStorage.setItem('koma_caixa_token', token);
   localStorage.setItem('token', token);
+  // O app operacional e o WebSocket compartilham estas chaves legadas.
+  // Mantê-las sincronizadas evita uma sessão HTTP válida sem identidade para
+  // o canal em tempo real após login, ativação do caixa ou atualização.
+  if (user?.id != null) {
+    localStorage.setItem('koma_caixa_id', String(user.id));
+  }
+  if (user?.nome) {
+    localStorage.setItem('koma_caixa_name', String(user.nome));
+  }
+  if (user?.role) {
+    localStorage.setItem('koma_caixa_role', String(user.role));
+  }
 }
 
 // Recupera a sessão do operador e limpa automaticamente se tiver mais de 24h
@@ -64,6 +76,8 @@ export function clearOperatorSession(): void {
   localStorage.removeItem(SESSION_KEY);
   localStorage.removeItem('koma_caixa_token');
   localStorage.removeItem('token');
+  localStorage.removeItem('koma_caixa_id');
+  localStorage.removeItem('koma_caixa_name');
   localStorage.removeItem('koma_caixa_user_id');
   localStorage.removeItem('koma_caixa_user_name');
   localStorage.removeItem('koma_caixa_role');

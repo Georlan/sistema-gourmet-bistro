@@ -123,16 +123,22 @@ export default function App() {
   });
   const [activeWaiterId, setActiveWaiterId] = useState<string>(() => {
     const key = portal === 'caixa' ? "koma_caixa_id" : "koma_waiter_id";
-    return localStorage.getItem(key) || "";
+    const storedId = localStorage.getItem(key);
+    if (storedId || portal !== 'caixa') return storedId || "";
+    return String(getOperatorSession()?.user?.id || "");
   });
   const [activeWaiterNome, setActiveWaiterNome] = useState<string>(() => {
     const key = portal === 'caixa' ? "koma_caixa_name" : "koma_waiter_name";
-    return localStorage.getItem(key) || "";
+    const storedName = localStorage.getItem(key);
+    if (storedName || portal !== 'caixa') return storedName || "";
+    return String(getOperatorSession()?.user?.nome || "");
   });
   const activeWaiter = { id: activeWaiterId, nome: activeWaiterNome };
   const [activeRole, setActiveRole] = useState<AppRole>(() => {
     if (portal === 'caixa') {
-      return (localStorage.getItem("koma_caixa_role") as AppRole) || 'caixa';
+      return (localStorage.getItem("koma_caixa_role") as AppRole)
+        || (getOperatorSession()?.user?.role as AppRole)
+        || 'caixa';
     }
     return 'garcom';
   });
@@ -325,11 +331,22 @@ export default function App() {
       const roleKey = newPortal === 'caixa' ? "koma_caixa_role" : "koma_user_role";
 
       setIsAuthenticated(!!localStorage.getItem(tokenKey));
-      setActiveWaiterId(localStorage.getItem(idKey) || "");
-      setActiveWaiterNome(localStorage.getItem(nameKey) || "");
+      const operatorSession = newPortal === 'caixa' ? getOperatorSession() : null;
+      setActiveWaiterId(
+        localStorage.getItem(idKey)
+        || String(operatorSession?.user?.id || "")
+      );
+      setActiveWaiterNome(
+        localStorage.getItem(nameKey)
+        || String(operatorSession?.user?.nome || "")
+      );
 
       if (newPortal === 'caixa') {
-        setActiveRole((localStorage.getItem(roleKey) as AppRole) || 'caixa');
+        setActiveRole(
+          (localStorage.getItem(roleKey) as AppRole)
+          || (operatorSession?.user?.role as AppRole)
+          || 'caixa'
+        );
       } else {
         setActiveRole('garcom');
       }

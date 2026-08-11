@@ -148,7 +148,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
     <div className="relative sm:h-full">
       {/* 1. VIEW: CART (CARRINHO DE COMPRAS) */}
       {view === 'cart' && (
-        <div className="bg-[#121214] sm:border sm:border-[#27272A] sm:rounded-3xl p-3 sm:p-5 flex flex-col sm:h-full max-w-2xl mx-auto border-0 rounded-none overflow-visible sm:overflow-hidden min-h-0">
+        <div className="bg-[#121214] sm:border sm:border-[#27272A] sm:rounded-3xl p-3 pb-28 sm:p-5 flex flex-col sm:h-full max-w-2xl mx-auto border-0 rounded-none overflow-visible sm:overflow-hidden min-h-0">
           <div className="flex flex-col sm:h-full justify-between min-h-0">
             
             {/* Cart Header */}
@@ -417,11 +417,33 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                     id="submit-draft-order-btn"
                     disabled={isSubmitting}
                     onClick={() => onSubmitDraft(orderType)}
-                    className="w-full min-h-12 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/10 transition-colors cursor-pointer uppercase tracking-wider font-sans border border-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="hidden sm:flex w-full min-h-12 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-sm items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/10 transition-colors cursor-pointer uppercase tracking-wider font-sans border border-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <span>{isSubmitting ? 'Lançando...' : 'Lançar Pedido'}</span>
                     <ArrowRight size={14} />
                   </button>
+                </div>
+
+                {/* No celular, total e ação permanecem ao alcance do polegar. */}
+                <div className="sm:hidden fixed inset-x-0 bottom-0 z-[80] border-t border-emerald-500/20 bg-[#121214]/95 px-3 pt-2 pb-[calc(0.65rem+env(safe-area-inset-bottom))] shadow-[0_-12px_30px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+                  <div className="mx-auto flex max-w-2xl items-center gap-3">
+                    <div className="min-w-[92px]">
+                      <span className="block text-[9px] font-bold uppercase tracking-wider text-gray-400">Total</span>
+                      <span className="block font-mono text-lg font-bold leading-tight text-emerald-400">
+                        R$ {draftTotal.toFixed(2)}
+                      </span>
+                    </div>
+                    <button
+                      id="submit-draft-order-btn-mobile"
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={() => onSubmitDraft(orderType)}
+                      className="flex min-h-12 flex-1 items-center justify-center gap-1.5 rounded-xl border border-emerald-400/30 bg-emerald-500 px-4 py-3 text-sm font-bold uppercase tracking-wide text-black shadow-lg shadow-emerald-500/10 transition-colors hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <span>{isSubmitting ? 'Lançando...' : 'Lançar pedido'}</span>
+                      <ArrowRight size={15} />
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -435,7 +457,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
           <div className="space-y-3 sm:space-y-4">
             
             {/* Header: Title and Back button */}
-            <div className="flex items-center justify-between gap-3 pb-3 border-b border-[#27272A]">
+            <div className="sticky top-0 z-40 -mx-3 flex items-center justify-between gap-3 border-b border-[#27272A] bg-[#121214]/95 px-3 pb-3 pt-1 shadow-[0_8px_18px_rgba(0,0,0,0.28)] backdrop-blur-xl sm:static sm:mx-0 sm:bg-transparent sm:px-0 sm:pt-0 sm:shadow-none sm:backdrop-blur-none">
               <div className="min-w-0">
                 <div>
                   <h3 className="font-serif text-lg sm:text-xl font-bold text-white tracking-tight">Adicionar itens</h3>
