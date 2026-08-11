@@ -780,6 +780,8 @@ export function CaixaPanel({
 
   // Caixa Reorganization States
   const [caixaMovimentacoes, setCaixaMovimentacoes] = useState<CaixaMovimentacao[]>([]);
+  const [isCaixaMovimentacoesLoading, setIsCaixaMovimentacoesLoading] = useState(false);
+  const caixaMovimentacoesRequestRef = useRef(0);
   const [fechamentoResult, setFechamentoResult] = useState<FechamentoCaixaResult | null>(null);
   const [showSangriaModal, setShowSangriaModal] = useState<boolean>(false);
   const [showSuprimentoModal, setShowSuprimentoModal] = useState<boolean>(false);
@@ -2359,17 +2361,26 @@ export function CaixaPanel({
   // Caixa API Handlers
   const fetchTurnoResumo = onRefreshTurnoResumo;
 
-  const fetchCaixaMovimentacoes = async () => {
+  const fetchCaixaMovimentacoes = useCallback(async () => {
+    const requestId = ++caixaMovimentacoesRequestRef.current;
+    setIsCaixaMovimentacoesLoading(true);
     try {
       const res = await fetch(`${apiBaseUrl}/caixa/movimentacoes`, { headers: authHeaders });
-      if (res.ok) {
-        const data = await res.json();
+      if (!res.ok) throw new Error(`Falha ao consultar movimentações (${res.status})`);
+      const data: CaixaMovimentacao[] = await res.json();
+      if (requestId === caixaMovimentacoesRequestRef.current) {
         setCaixaMovimentacoes(data);
       }
-    } catch (e) {
-      console.error("Erro ao buscar movimentações de caixa:", e);
+    } catch (error) {
+      if (requestId === caixaMovimentacoesRequestRef.current) {
+        console.error('Erro ao buscar movimentações de caixa:', error);
+      }
+    } finally {
+      if (requestId === caixaMovimentacoesRequestRef.current) {
+        setIsCaixaMovimentacoesLoading(false);
+      }
     }
-  };
+  }, [apiBaseUrl, authHeaders]);
 
   useEffect(() => {
     const handleCashUpdated = () => {
@@ -2377,7 +2388,7 @@ export function CaixaPanel({
     };
     window.addEventListener('koma_cash_updated', handleCashUpdated);
     return () => window.removeEventListener('koma_cash_updated', handleCashUpdated);
-  }, [apiBaseUrl, authHeaders]);
+  }, [fetchCaixaMovimentacoes]);
 
   const handleRegistrarSangria = async (payload: { valor: number; motivo: string; observacao: string }) => {
     const res = await fetch(`${apiBaseUrl}/caixa/sangria`, {
@@ -7447,7 +7458,8 @@ export function CaixaPanel({
           {activeTab === 'financeiro' && (activeSubTab === 'movimentacoes' || activeSubTab === 'ajustes' || activeSubTab === 'suprimento' || activeSubTab === 'sangria') && (
             <CaixaMovimentacoesTab
               movimentacoes={caixaMovimentacoes}
-              isLoading={isLoading}
+              turnoResumo={turnoResumo}
+              isLoading={isCaixaMovimentacoesLoading}
               onOpenSangriaModal={() => setShowSangriaModal(true)}
               onOpenSuprimentoModal={() => setShowSuprimentoModal(true)}
               onRefresh={fetchCaixaMovimentacoes}
