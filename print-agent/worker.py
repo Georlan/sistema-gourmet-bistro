@@ -5,7 +5,7 @@ Gerencia a execução em loop (polling + heartbeat) com resiliência e idempotê
 
 import time
 import logging
-from config import AgentConfig
+from config import AgentConfig, is_automatic_printer_name
 from api_client import KomaApiClient
 from journal import PrintJournal
 from adapters import get_adapter
@@ -16,6 +16,41 @@ log = logging.getLogger("print-agent.worker")
 RECONCILIATION_INTERVAL_SECONDS = 5.0
 DIAGNOSTIC_REFRESH_INTERVAL_SECONDS = 5.0
 NOT_READY_LOG_INTERVAL_SECONDS = 30.0
+
+
+def bind_single_ready_windows_usb(
+    config: AgentConfig,
+    diagnostics: dict,
+) -> str:
+    """Seleciona automaticamente uma única fila USB pronta no Windows."""
+    if str(diagnostics.get("platform") or "").casefold() != "windows":
+        return ""
+    current = str(config.printers.get("PADRAO") or "Padrão")
+    if not is_automatic_printer_name(current):
+        return ""
+
+    ready_usb = [
+        printer
+        for printer in diagnostics.get("printers") or []
+        if (
+            isinstance(printer, dict)
+            and printer.get("connection") == "usb"
+            and printer.get("available") is True
+            and printer.get("present") is True
+            and printer.get("configured") is True
+            and str(printer.get("name") or "").strip()
+        )
+    ]
+    if len(ready_usb) != 1:
+        return ""
+    printer_name = str(ready_usb[0]["name"]).strip()
+    config.remember_printer(printer_name)
+    log.info(
+        "[IMPRESSORA] Fila USB '%s' selecionada automaticamente sem "
+        "alterar a impressora padrão do Windows.",
+        printer_name,
+    )
+    return printer_name
 
 
 def _diagnostics_have_ready_printer(diagnostics: dict) -> bool:
@@ -165,6 +200,19 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
                 latest_diagnostics = refreshed_diagnostics
                 last_diagnostics_refresh = now
 
+                try:
+                    if bind_single_ready_windows_usb(
+                        config,
+                        latest_diagnostics,
+                    ):
+                        diagnostics_changed = True
+                except (OSError, ValueError) as exc:
+                    log.warning(
+                        "[IMPRESSORA] Não foi possível memorizar a fila "
+                        "USB detectada: %s",
+                        exc,
+                    )
+
             # 1. Enviar heartbeat periódico ou imediatamente quando o cabo,
             # a fila ou a disponibilidade física mudarem.
             if (
@@ -199,6 +247,28 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
                             adapter,
                             command,
                         )
+                        selected_printer = str(
+                            command_result.get("printer_name") or ""
+                        ).strip()
+                        if command_result.get("success") and selected_printer:
+                            try:
+                                config.remember_printer(selected_printer)
+                            except (OSError, ValueError) as exc:
+                                log.exception(
+                                    "[IMPRESSORA] Falha ao memorizar a fila "
+                                    "selecionada."
+                                )
+                                command_result = {
+                                    **command_result,
+                                    "success": False,
+                                    "code": "printer_config_save_failed",
+                                    "message": (
+                                        "A impressora foi encontrada, mas o "
+                                        "Kôma não conseguiu salvar a escolha "
+                                        "neste computador."
+                                    ),
+                                    "error": str(exc)[:200],
+                                }
                         last_command_id = command_id
                         last_command_result = command_result
 

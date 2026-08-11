@@ -7,22 +7,72 @@ $venvDir = Join-Path $installDir ".venv"
 $taskName = "KomaPrintAgent"
 $protocolRoot = "HKCU:\\Software\\Classes\\koma-print"
 
+function Get-KomaPythonPath($command) {
+    if ($command.Source) { return $command.Source }
+    return $command.FullName
+}
+
+function Test-KomaPython($command) {
+    if (-not $command) { return $false }
+    $executable = Get-KomaPythonPath $command
+    try {
+        if ($command.Name -eq "py.exe") {
+            $versionText = (& $executable -3 --version 2>&1 | Out-String)
+        } else {
+            $versionText = (& $executable --version 2>&1 | Out-String)
+        }
+        if ($LASTEXITCODE -ne 0 -or $versionText -notmatch 'Python\s+(\d+)\.(\d+)') {
+            return $false
+        }
+        $major = [int]$Matches[1]
+        $minor = [int]$Matches[2]
+        return ($major -gt 3 -or ($major -eq 3 -and $minor -ge 10))
+    } catch {
+        return $false
+    }
+}
+
 # Remove registros antigos antes de reinstalar. Isso impede que um protocolo
 # quebrado continue abrindo o PowerShell em ciclo quando a tarefa nao existe.
 Remove-Item -Path $protocolRoot -Recurse -Force -ErrorAction SilentlyContinue
 
 $pythonCommand = Get-Command py -ErrorAction SilentlyContinue
-if (-not $pythonCommand) {
+if (-not (Test-KomaPython $pythonCommand)) {
     $pythonCommand = Get-Command python -ErrorAction SilentlyContinue
 }
-if (-not $pythonCommand) {
-    throw "Python 3.10 ou superior nao foi encontrado no Windows."
+if (-not (Test-KomaPython $pythonCommand)) {
+    $pythonCommand = $null
+    $winget = Get-Command winget -ErrorAction SilentlyContinue
+    if (-not $winget) {
+        throw "Python 3.10+ nao foi encontrado e o Windows Package Manager (winget) nao esta disponivel. Instale Python e execute novamente."
+    }
+    Write-Host "[KOMA] Python nao encontrado. Instalando Python 3.12 para este usuario..."
+    & $winget.Source install --id Python.Python.3.12 -e --scope user --silent --accept-package-agreements --accept-source-agreements
+    if ($LASTEXITCODE -ne 0) {
+        throw "A instalacao automatica do Python falhou. Instale Python 3.10+ e execute novamente."
+    }
+    $pythonCommand = Get-Command py -ErrorAction SilentlyContinue
+    if (-not (Test-KomaPython $pythonCommand)) {
+        $pythonCommand = Get-Command python -ErrorAction SilentlyContinue
+    }
+    if (-not (Test-KomaPython $pythonCommand)) {
+        $pythonCommand = $null
+        $pythonExecutable = Get-ChildItem (Join-Path $env:LOCALAPPDATA "Programs\Python") -Filter python.exe -Recurse -ErrorAction SilentlyContinue |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+        if (Test-KomaPython $pythonExecutable) {
+            $pythonCommand = $pythonExecutable
+        }
+    }
+    if (-not $pythonCommand) {
+        throw "Python foi instalado, mas o executavel ainda nao foi localizado. Reinicie o Windows e execute novamente."
+    }
 }
 
 $requiredFiles = @(
     "main.py", "config.py", "pairing.py", "worker.py", "dispatcher.py",
     "api_client.py", "journal.py", "requirements.txt",
-    "koma-print-launcher.ps1"
+    "koma-print-launcher.ps1", "check-windows.ps1"
 )
 $adapterFiles = @(
     "__init__.py", "base.py", "escpos.py", "file.py", "linux.py", "windows.py"
@@ -57,7 +107,8 @@ if (-not (Test-Path $venvPython)) {
     if ($pythonCommand.Name -eq "py.exe") {
         & $pythonCommand.Source -3 -m venv $venvDir
     } else {
-        & $pythonCommand.Source -m venv $venvDir
+        $pythonSource = Get-KomaPythonPath $pythonCommand
+        & $pythonSource -m venv $venvDir
     }
 }
 & $venvPython -m pip install --disable-pip-version-check --quiet -r (Join-Path $installDir "requirements.txt")
@@ -104,4 +155,9 @@ Set-Item -Path $commandKey -Value ("wscript.exe `"{0}`" `"%1`"" -f $protocolLaun
 
 Write-Host ""
 Write-Host "[OK] Impressao instalada e configurada para iniciar com o Windows."
-Write-Host "[OK] Conecte a impressora USB e use o botao de busca no Koma."
+Write-Host "[OK] O Koma nao alterou a impressora padrao usada por outros aplicativos."
+Write-Host "[OK] Se houver uma unica fila USB pronta, ela sera vinculada automaticamente."
+Write-Host "[OK] Com mais de uma impressora, escolha a fila no painel do Koma."
+Write-Host ""
+Write-Host "[KOMA] Executando verificacao final..."
+& powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $installDir "check-windows.ps1")

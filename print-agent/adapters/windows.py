@@ -415,7 +415,7 @@ class WindowsPrinterAdapter(BasePrinterAdapter):
         requested_name: str = "",
         requested_uri: str = "",
     ) -> Dict[str, Any]:
-        """Reescaneia o PnP, seleciona a fila física e a torna padrão."""
+        """Reescaneia o PnP e prepara a fila física sem mudar o padrão."""
         if sys.platform != "win32" or not self._win32print:
             diagnostics = self.get_diagnostics()
             return {
@@ -501,7 +501,6 @@ class WindowsPrinterAdapter(BasePrinterAdapter):
 
         activation_error = None
         try:
-            self._win32print.SetDefaultPrinter(selected_name)
             handle = self._win32print.OpenPrinter(selected_name)
             try:
                 self._win32print.SetPrinter(
@@ -523,9 +522,10 @@ class WindowsPrinterAdapter(BasePrinterAdapter):
                 selected_name,
                 exc,
             )
-            # Algumas políticas do Windows impedem SetDefaultPrinter/Resume,
-            # embora a fila continue aceitando RAW. O diagnóstico renovado é
-            # a fonte de verdade para decidir o resultado.
+            # Algumas políticas do Windows impedem Resume, embora a fila
+            # continue aceitando RAW. O diagnóstico renovado é a fonte de
+            # verdade para decidir o resultado. O Kôma nunca troca a
+            # impressora padrão, que pode pertencer ao Anota AI ou a outro app.
 
         refreshed = self.get_diagnostics()
         ready = any(
@@ -548,7 +548,10 @@ class WindowsPrinterAdapter(BasePrinterAdapter):
                 (
                     "Impressora USB já estava conectada e pronta para uso."
                     if activation_error
-                    else "Impressora USB conectada e pronta para uso."
+                    else (
+                        "Impressora USB conectada ao Kôma sem alterar a "
+                        "impressora padrão do Windows."
+                    )
                 )
                 if ready
                 else (

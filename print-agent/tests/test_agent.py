@@ -20,11 +20,13 @@ from api_client import KomaApiClient
 from journal import PrintJournal
 from adapters.file import FilePrinterAdapter
 from adapters.windows import (
+    WindowsPrinterAdapter,
     _is_virtual_printer,
     _matches_present_usb_device,
 )
 from adapters import get_adapter
 from worker import (
+    bind_single_ready_windows_usb,
     execute_agent_command,
     run_agent_loop,
     process_unconfirmed_journal_jobs,
@@ -495,6 +497,85 @@ def test_windows_virtual_printers_are_filtered():
     ) is True
     assert _is_virtual_printer("OneNote", "nul:") is True
     assert _is_virtual_printer("G250", "USB001") is False
+
+
+def test_config_remembers_printer_without_losing_other_settings(temp_dir):
+    config_path = os.path.join(temp_dir, "config.json")
+    with open(config_path, "w", encoding="utf-8") as config_file:
+        config_file.write(
+            '{"api_url":"https://api.test","printers":'
+            '{"PADRAO":"Padrão","BAR":"Bar Thermal"}}'
+        )
+
+    config = AgentConfig.load(config_path)
+    config.remember_printer("EPSON TM-T20")
+    reloaded = AgentConfig.load(config_path)
+
+    assert reloaded.api_url == "https://api.test"
+    assert reloaded.printers == {
+        "PADRAO": "EPSON TM-T20",
+        "BAR": "Bar Thermal",
+    }
+
+
+def test_worker_auto_binds_single_ready_windows_usb(temp_dir):
+    config = AgentConfig(config_path=os.path.join(temp_dir, "config.json"))
+    diagnostics = {
+        "platform": "windows",
+        "printers": [
+            {
+                "name": "EPSON TM-T20",
+                "connection": "usb",
+                "available": True,
+                "present": True,
+                "configured": True,
+            }
+        ],
+    }
+
+    assert bind_single_ready_windows_usb(config, diagnostics) == (
+        "EPSON TM-T20"
+    )
+    assert AgentConfig.load(config.config_path).printers["PADRAO"] == (
+        "EPSON TM-T20"
+    )
+
+
+def test_windows_connect_does_not_change_system_default():
+    adapter = WindowsPrinterAdapter()
+    spooler = MagicMock()
+    adapter._win32print = spooler
+    diagnostics = {
+        "adapter": "windows",
+        "platform": "windows",
+        "default_printer": "Anota AI",
+        "error": None,
+        "printers": [
+            {
+                "name": "EPSON TM-T20",
+                "connection": "usb",
+                "uri": "USB001",
+                "is_default": False,
+                "available": True,
+                "present": True,
+                "configured": True,
+            }
+        ],
+    }
+    adapter.get_diagnostics = MagicMock(return_value=diagnostics)
+
+    with (
+        patch("adapters.windows.sys.platform", "win32"),
+        patch("adapters.windows._rescan_windows_usb_devices"),
+    ):
+        result = adapter.connect_usb(
+            requested_name="EPSON TM-T20",
+            requested_uri="USB001",
+        )
+
+    assert result["success"] is True
+    spooler.SetDefaultPrinter.assert_not_called()
+    spooler.OpenPrinter.assert_called_once_with("EPSON TM-T20")
 
 
 def test_api_client_reuses_http_session():
