@@ -308,6 +308,7 @@ class WindowsPrinterAdapter(BasePrinterAdapter):
                 | win32print.PRINTER_ENUM_CONNECTIONS
             )
             printers = []
+            configured_usb_candidates = []
             present_usb_devices = _present_windows_usb_printers()
             matched_usb_devices: set[str] = set()
             for printer_info in win32print.EnumPrinters(flags)[:10]:
@@ -378,16 +379,37 @@ class WindowsPrinterAdapter(BasePrinterAdapter):
                 else:
                     present = spooler_available
 
-                printers.append(
-                    {
-                        "name": str(name)[:200],
-                        "connection": connection,
-                        "uri": port_name[:300] or None,
-                        "is_default": name == default_printer,
-                        "available": bool(present and spooler_available),
-                        "present": present,
-                        "configured": True,
-                    }
+                printer = {
+                    "name": str(name)[:200],
+                    "connection": connection,
+                    "uri": port_name[:300] or None,
+                    "is_default": name == default_printer,
+                    "available": bool(present and spooler_available),
+                    "present": present,
+                    "configured": True,
+                }
+                printers.append(printer)
+                if connection == "usb":
+                    configured_usb_candidates.append(
+                        (printer, spooler_available)
+                    )
+
+            # Alguns drivers genéricos expõem nomes diferentes no PnP e no
+            # Spooler (por exemplo, dispositivo USB genérico e fila G250).
+            # Quando existe exatamente um de cada, a relação é inequívoca e
+            # devemos reutilizar a fila instalada em vez de criar outra fila
+            # apontando para a mesma porta USB00x.
+            if (
+                len(present_usb_devices) == 1
+                and len(configured_usb_candidates) == 1
+            ):
+                configured_printer, spooler_available = (
+                    configured_usb_candidates[0]
+                )
+                configured_printer["present"] = True
+                configured_printer["available"] = bool(spooler_available)
+                matched_usb_devices.add(
+                    present_usb_devices[0]["instance_id"]
                 )
 
             for device in present_usb_devices:
