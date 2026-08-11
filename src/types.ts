@@ -129,6 +129,17 @@ export interface CaixaMovimentacao {
   criado_em: string;
 }
 
+export interface CaixaAtividadeRecente {
+  id: string;
+  tipo: 'recebimento' | 'suprimento' | 'sangria' | string;
+  valor: number;
+  metodo?: string | null;
+  origem: string;
+  descricao: string;
+  operador_nome?: string | null;
+  criado_em: string;
+}
+
 export interface CaixaTurnoResumo {
   turno_id?: number | null;
   status: 'aberto' | 'fechado' | 'sem_turno' | string;
@@ -146,6 +157,7 @@ export interface CaixaTurnoResumo {
   total_suprimentos: number;
   saldo_esperado_dinheiro: number;
   total_pedidos_pagos: number;
+  atividades_recentes?: CaixaAtividadeRecente[];
   comandas_abertas_count?: number;
   ultima_movimentacao?: {
     id: number;

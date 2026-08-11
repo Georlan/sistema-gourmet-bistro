@@ -204,6 +204,16 @@ def test_resumo_concilia_pagamentos_e_movimentacoes_sem_arredondamento_incorreto
         resumo["total_dinheiro"] + resumo["total_pix"] + resumo["total_cartao"]
         == resumo["total_vendas"]
     )
+    atividades = resumo["atividades_recentes"]
+    assert len(atividades) == 6
+    assert {atividade["tipo"] for atividade in atividades} == {
+        "recebimento",
+        "suprimento",
+        "sangria",
+    }
+    assert sum(1 for atividade in atividades if atividade["tipo"] == "recebimento") == 4
+    assert all(atividade["valor"] != 999.99 for atividade in atividades)
+    assert all(atividade["origem"] for atividade in atividades)
 
 
 def test_suprimento_e_sangria_flow():

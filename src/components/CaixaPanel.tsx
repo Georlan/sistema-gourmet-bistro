@@ -229,6 +229,14 @@ const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', {
   maximumFractionDigits: 2,
 }).format(Number(value) || 0);
 
+const formatDuration = (minutes: number) => {
+  const safeMinutes = Math.max(0, Number(minutes) || 0);
+  if (safeMinutes < 60) return `${safeMinutes} min`;
+  const hours = Math.floor(safeMinutes / 60);
+  const remainingMinutes = safeMinutes % 60;
+  return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}min` : `${hours}h`;
+};
+
 interface OperationalHeroProps {
   id: string;
   eyebrow: string;
@@ -301,6 +309,10 @@ export function CaixaPanel({
   const currentPlan = getSubscriptionPlan(currentPlanId);
   const hasPrinting = currentPlanId !== 'pocket';
   const hasOnlineMenu = currentPlanId === 'premium' || restauranteConfig?.cardapio_online_addon === true;
+  const pendingPaymentsTotal = useMemo(
+    () => pagamentosPendentes.reduce((total, payment) => total + (Number(payment?.valor) || 0), 0),
+    [pagamentosPendentes],
+  );
 
 
   // Fullscreen / Modo PDV state
@@ -7406,17 +7418,27 @@ export function CaixaPanel({
                 accent="sob controle"
                 description="Vendas, recebimentos e troco conciliados em um só lugar."
                 metrics={[
-                  { label: 'vendas no turno', value: turnoResumo ? turnoResumo.total_pedidos_pagos : '—' },
-                  { label: 'movimentações', value: turnoResumo ? caixaMovimentacoes.length : '—' },
-                  { label: 'saldo em caixa', value: turnoResumo ? formatCurrency(turnoResumo.saldo_esperado_dinheiro).replace('R$', '').trim() : '—' },
+                  { label: 'turno', value: turnoResumo?.status === 'aberto' ? 'Aberto' : 'Fechado' },
+                  { label: 'operador', value: turnoResumo?.operador_nome || '—' },
+                  { label: 'aberto há', value: turnoResumo?.status === 'aberto' ? formatDuration(turnoResumo.tempo_aberto_minutos) : '—' },
                 ]}
                 isConnected={isWsConnected}
               />
               <CaixaTurnoAtualTab
                 turnoResumo={turnoResumo}
                 isLoading={isTurnoResumoLoading}
+                isConnected={isWsConnected}
+                pendingPaymentsCount={pagamentosPendentes.length}
+                pendingPaymentsTotal={pendingPaymentsTotal}
                 onRefresh={fetchTurnoResumo}
                 onNavigateToFechamento={() => setActiveSubTab('fechamento')}
+                onNavigateToMovimentacoes={() => setActiveSubTab('movimentacoes')}
+                onNavigateToPendingPayments={() => {
+                  setActiveTab('operacao');
+                  setActiveSubTab('pedidos');
+                }}
+                onOpenSangriaModal={() => setShowSangriaModal(true)}
+                onOpenSuprimentoModal={() => setShowSuprimentoModal(true)}
                 onOpenNovoTurnoModal={() => setShowAbrirModal(true)}
               />
             </div>

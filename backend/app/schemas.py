@@ -335,6 +335,7 @@ class CaixaTurnoResumoResponse(BaseModel):
     total_suprimentos: float = 0.0
     saldo_esperado_dinheiro: float = 0.0
     total_pedidos_pagos: int = 0
+    atividades_recentes: List[dict] = Field(default_factory=list)
     ultima_movimentacao: Optional[dict] = None
     resumo_dia: Optional[dict] = None
 

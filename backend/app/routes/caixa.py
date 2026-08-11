@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
-from sqlalchemy import case, func
+from sqlalchemy import and_, case, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from typing import List, Optional, Union
@@ -119,6 +119,100 @@ def _totais_financeiros_turno(
             saldo_inicial + total_dinheiro + total_suprimentos - total_sangrias
         ),
     }
+
+
+def _atividades_recentes_turno(
+    db: Session,
+    restaurante_id: int,
+    turno: CaixaTurno,
+    limite: int = 10,
+) -> tuple[list[dict], Optional[dict]]:
+    """Combina os últimos recebimentos e ajustes sem carregar o histórico inteiro."""
+    limite_seguro = max(1, min(limite, 20))
+
+    pagamentos = db.query(Pagamento, Comanda).join(
+        Comanda,
+        and_(
+            Pagamento.restaurante_id == Comanda.restaurante_id,
+            Pagamento.comanda_id == Comanda.id,
+        ),
+    ).filter(
+        Pagamento.restaurante_id == restaurante_id,
+        Pagamento.turno_id == turno.id,
+        Pagamento.status == "aprovado",
+    ).order_by(
+        Pagamento.criado_em.desc(),
+        Pagamento.id.desc(),
+    ).limit(limite_seguro).all()
+
+    movimentacoes = db.query(CaixaMovimentacao, Usuario).outerjoin(
+        Usuario,
+        and_(
+            CaixaMovimentacao.usuario_id == Usuario.id,
+            CaixaMovimentacao.restaurante_id == Usuario.restaurante_id,
+        ),
+    ).filter(
+        CaixaMovimentacao.restaurante_id == restaurante_id,
+        CaixaMovimentacao.turno_id == turno.id,
+    ).order_by(
+        CaixaMovimentacao.criado_em.desc(),
+        CaixaMovimentacao.id.desc(),
+    ).limit(limite_seguro).all()
+
+    atividades: list[dict] = []
+    for pagamento, comanda in pagamentos:
+        tipo_comanda = (comanda.tipo or "").strip().lower()
+        if comanda.mesa_id:
+            origem = f"Mesa {comanda.mesa_id}"
+        elif "retirada" in tipo_comanda:
+            origem = f"Retirada #{comanda.numero_pedido}"
+        elif tipo_comanda in {"entrega", "delivery"}:
+            origem = f"Delivery #{comanda.numero_pedido}"
+        else:
+            origem = f"Pedido #{comanda.numero_pedido}"
+
+        atividades.append({
+            "id": f"pagamento:{pagamento.id}",
+            "tipo": "recebimento",
+            "valor": pagamento.valor,
+            "metodo": pagamento.metodo,
+            "origem": origem,
+            "descricao": "Venda recebida",
+            "operador_nome": None,
+            "criado_em": pagamento.criado_em,
+        })
+
+    for movimentacao, usuario in movimentacoes:
+        atividades.append({
+            "id": f"movimentacao:{movimentacao.id}",
+            "tipo": movimentacao.tipo,
+            "valor": movimentacao.valor,
+            "metodo": "dinheiro",
+            "origem": "Caixa",
+            "descricao": movimentacao.descricao or movimentacao.observacao or "Movimentação manual",
+            "operador_nome": usuario.nome if usuario else None,
+            "criado_em": movimentacao.criado_em,
+        })
+
+    def timestamp_utc(atividade: dict) -> float:
+        criado_em = atividade.get("criado_em")
+        if not criado_em:
+            return 0.0
+        if criado_em.tzinfo is None:
+            criado_em = criado_em.replace(tzinfo=datetime.timezone.utc)
+        return criado_em.timestamp()
+
+    ultima_movimentacao = next(
+        (
+            atividade
+            for atividade in atividades
+            if atividade["tipo"] in {"suprimento", "sangria"}
+        ),
+        None,
+    )
+    atividades.sort(key=timestamp_utc, reverse=True)
+    return atividades[:limite_seguro], ultima_movimentacao
+
 
 def check_caixa_permission(
     user: Usuario,
@@ -297,6 +391,7 @@ def obter_resumo_turno_atual(
             total_suprimentos=0.0,
             saldo_esperado_dinheiro=0.0,
             total_pedidos_pagos=0,
+            atividades_recentes=[],
             ultima_movimentacao=None,
             resumo_dia=None
         )
@@ -305,6 +400,11 @@ def obter_resumo_turno_atual(
     operador_nome = operador.nome if operador else "Operador"
 
     totals = _totais_financeiros_turno(db, rest_id, turno)
+    atividades_recentes, ultima_atividade_caixa = _atividades_recentes_turno(
+        db,
+        rest_id,
+        turno,
+    )
 
     now_utc = datetime.datetime.now(datetime.timezone.utc)
     aberto_dt = turno.aberto_em
@@ -313,22 +413,14 @@ def obter_resumo_turno_atual(
     tempo_minutos = int((now_utc - aberto_dt).total_seconds() / 60)
 
     ult_mov = None
-    m_top = db.query(CaixaMovimentacao).filter(
-        CaixaMovimentacao.restaurante_id == rest_id,
-        CaixaMovimentacao.turno_id == turno.id,
-    ).order_by(CaixaMovimentacao.criado_em.desc(), CaixaMovimentacao.id.desc()).first()
-    if m_top:
-        u_mov = db.query(Usuario).filter_by(
-            id=m_top.usuario_id,
-            restaurante_id=rest_id,
-        ).first() if m_top.usuario_id else None
+    if ultima_atividade_caixa:
         ult_mov = {
-            "id": m_top.id,
-            "tipo": m_top.tipo,
-            "valor": m_top.valor,
-            "descricao": m_top.descricao or m_top.observacao or "",
-            "criado_em": m_top.criado_em.isoformat() if m_top.criado_em else None,
-            "operador_nome": u_mov.nome if u_mov else operador_nome
+            "id": int(ultima_atividade_caixa["id"].split(":")[-1]),
+            "tipo": ultima_atividade_caixa["tipo"],
+            "valor": ultima_atividade_caixa["valor"],
+            "descricao": ultima_atividade_caixa["descricao"],
+            "criado_em": ultima_atividade_caixa["criado_em"],
+            "operador_nome": ultima_atividade_caixa["operador_nome"] or operador_nome,
         }
 
     return CaixaTurnoResumoResponse(
@@ -348,6 +440,7 @@ def obter_resumo_turno_atual(
         total_suprimentos=totals["total_suprimentos"],
         saldo_esperado_dinheiro=totals["saldo_esperado_dinheiro"],
         total_pedidos_pagos=totals["total_pedidos_pagos"],
+        atividades_recentes=atividades_recentes,
         ultima_movimentacao=ult_mov,
         resumo_dia={
             "total_vendas": totals["total_vendas"],
