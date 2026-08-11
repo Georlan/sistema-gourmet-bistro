@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import or_, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -16,6 +16,7 @@ from ..security import (
     verify_password,
 )
 from ..services.whatsapp import enviar_texto_whatsapp
+from ..websocket_manager import manager
 
 logger = logging.getLogger("koma.auth")
 
@@ -122,7 +123,11 @@ def login(login_data: LoginRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/ativar", response_model=LoginResponse)
-def ativar_conta(payload: AtivarContaRequest, db: Session = Depends(get_db)):
+def ativar_conta(
+    payload: AtivarContaRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
     """
     Ativa a conta do usuário através do token_convite.
     Recebe email e senha, valida unicidade do e-mail, salva a senha e mude o status para 'ativo'.
@@ -194,6 +199,15 @@ def ativar_conta(payload: AtivarContaRequest, db: Session = Depends(get_db)):
     
     db.commit()
     db.refresh(usuario)
+    background_tasks.add_task(
+        manager.broadcast,
+        {
+            "event": "team_updated",
+            "detail": {"action": "activated", "user_id": usuario.id},
+        },
+        restaurante_id=usuario.restaurante_id,
+        target_audience="internal",
+    )
     
     access_token = create_access_token(subject=usuario.id, restaurante_id=usuario.restaurante_id)
     

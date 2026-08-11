@@ -1281,7 +1281,6 @@ export function CaixaPanel({
   const [permTransferItems, setPermTransferItems] = useState(true);
   const [permClientCall, setPermClientCall] = useState(false);
   const [permShowIdleTables, setPermShowIdleTables] = useState(true);
-  const [idleTimeThreshold, setIdleTimeThreshold] = useState(30);
 
   // Printer Messages State
   const [printHeader, setPrintHeader] = useState("Kôma Gourmet Bistrô");
@@ -2372,6 +2371,12 @@ export function CaixaPanel({
     fetchMotoboys();
     fetchConfiguracoes();
   }, []);
+
+  useEffect(() => {
+    const refreshTeam = () => void fetchSystemUsers();
+    window.addEventListener('koma_team_updated', refreshTeam);
+    return () => window.removeEventListener('koma_team_updated', refreshTeam);
+  }, [apiBaseUrl, authHeaders.Authorization]);
 
   // Contingência apenas quando o WebSocket estiver indisponível. Com a conexão
   // saudável, os eventos são a fonte de verdade e não há polling concorrente.
@@ -5994,19 +5999,14 @@ export function CaixaPanel({
                     {
                       label: 'permissões ativas',
                       value: [
-                        permDelivery, permEdit, permAddCharges, permCancel,
-                        permShowStatus, permOpenEmpty, permAutoPrint,
-                        permCloseAccount, permDiscount, permSurcharge,
-                        permPeopleCount, permTransferTables, permTransferItems,
-                        permClientCall, permShowIdleTables
+                        permDelivery, permEdit, permCancel, permShowStatus,
+                        permAutoPrint, permCloseAccount, permTransferTables,
+                        permTransferItems
                       ].filter(Boolean).length
                     },
                     { label: 'impressão de pedido', value: permAutoPrint ? 'Automática' : 'Manual' },
                     { label: 'fechamento no app', value: permCloseAccount ? 'Permitido' : 'Bloqueado' },
-                    {
-                      label: 'alerta de ociosidade',
-                      value: permShowIdleTables ? `${idleTimeThreshold} min` : 'Desativado'
-                    }
+                    { label: 'integrações pendentes', value: 7 }
                   ]}
                 />
               )}
@@ -6166,21 +6166,24 @@ export function CaixaPanel({
                   {configSalSubTab === 'pedido' && (
                     <div className={clsx('space-y-3.5', 'animate-scale-in')}>
                       {[
-                        { title: "Permitir que garçom faça lançamentos de pedidos de delivery", desc: "Ao ativar, garçons podem criar comandas com canais externos no salão.", checked: permDelivery, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_delivery: val }) },
-                        { title: "Permitir que Garçons editem pedidos", desc: "Permite atualizar observações ou acrescentar itens em comandas já enviadas.", checked: permEdit, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_editar: val }) },
-                        { title: "Permitir que Garçons editem cobranças adicionais", desc: "Permite retirar/colocar taxas extras, como couvert artístico ou consumação mínima.", checked: permAddCharges, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_taxas: val }) },
-                        { title: "Permitir que garçons cancelem pedidos", desc: "Permite a exclusão direta de itens ou comandas pelo aplicativo sem aprovação do gerente.", checked: permCancel, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_cancelar: val }) },
-                        { title: "Permitir exibição de status de pedidos no mapa de mesas", desc: "Gera ícones de produção ('Em preparo', 'Pronto') sobre as mesas no mapa.", checked: permShowStatus, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_status: val }) },
-                        { title: "Permitir que garçons abram comandas sem pedido", desc: "Permite reservar uma mesa com status 'ocupada' sem lançar nenhum item.", checked: permOpenEmpty, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_abrir_vazia: val }) },
-                        { title: "Permitir impressão automática dos pedidos feitos pelo Garçom", desc: "Dispara a via térmica de produção no balcão imediatamente após o garçom confirmar.", checked: permAutoPrint, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_print: val }) }
+                        { title: "Permitir que garçom faça lançamentos de pedidos de delivery", desc: "Ao ativar, garçons podem criar comandas com canais externos no salão.", checked: permDelivery, available: true, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_delivery: val }) },
+                        { title: "Permitir que Garçons editem pedidos", desc: "Permite atualizar observações ou acrescentar itens em comandas já enviadas.", checked: permEdit, available: true, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_editar: val }) },
+                        { title: "Permitir que Garçons editem cobranças adicionais", desc: "Permite retirar/colocar taxas extras, como couvert artístico ou consumação mínima.", checked: permAddCharges, available: false, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_taxas: val }) },
+                        { title: "Permitir que garçons cancelem pedidos", desc: "Permite o cancelamento direto de itens pelo aplicativo sem aprovação do gerente.", checked: permCancel, available: true, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_cancelar: val }) },
+                        { title: "Permitir exibição de status de pedidos no mapa de mesas", desc: "Gera ícones de produção ('Em preparo', 'Pronto') sobre as mesas no mapa.", checked: permShowStatus, available: true, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_status: val }) },
+                        { title: "Permitir que garçons abram comandas sem pedido", desc: "Permite reservar uma mesa com status 'ocupada' sem lançar nenhum item.", checked: permOpenEmpty, available: false, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_abrir_vazia: val }) },
+                        { title: "Permitir impressão automática dos pedidos feitos pelo Garçom", desc: "Dispara a via térmica de produção no balcão imediatamente após o garçom confirmar.", checked: permAutoPrint, available: true, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_print: val }) }
                       ].map((item, idx) => (
                         <div key={idx} className={clsx('flex', 'justify-between', 'items-start', 'gap-4')}>
                           <div className="space-y-0.5">
-                            <strong className={clsx('text-white', 'block', 'font-semibold')}>{item.title}</strong>
+                            <div className="flex items-center gap-2">
+                              <strong className={clsx(item.available ? 'text-white' : 'text-gray-400', 'block', 'font-semibold')}>{item.title}</strong>
+                              {!item.available && <span className="rounded-full border border-amber-700/40 bg-amber-900/20 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide text-amber-400">Integração pendente</span>}
+                            </div>
                             <span className={clsx('text-[9px]', 'text-gray-500', 'block', 'leading-relaxed')}>{item.desc}</span>
                           </div>
-                          <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer', 'shrink-0', 'mt-0.5')}>
-                            <input type="checkbox" checked={item.checked} onChange={(e) => item.onChange(e.target.checked)} className={clsx('sr-only', 'peer')} />
+                          <label className={clsx('relative', 'inline-flex', 'items-center', item.available ? 'cursor-pointer' : 'cursor-not-allowed opacity-45', 'shrink-0', 'mt-0.5')}>
+                            <input type="checkbox" checked={item.checked} disabled={!item.available} onChange={(e) => item.onChange(e.target.checked)} className={clsx('sr-only', 'peer')} />
                             <div className={clsx('w-8', 'h-4.5', 'bg-[#27272A]', 'peer-focus:outline-none', 'rounded-full', 'peer', 'peer-checked:after:translate-x-full', 'peer-checked:after:border-white', "after:content-['']", 'after:absolute', 'after:top-[2px]', 'after:left-[2px]', 'after:bg-white', 'after:border-gray-300', 'after:border', 'after:rounded-full', 'after:h-3.5', 'after:w-3.5', 'after:transition-all', 'peer-checked:bg-emerald-600')}></div>
                           </label>
                         </div>
@@ -6191,17 +6194,20 @@ export function CaixaPanel({
                   {configSalSubTab === 'fechamento' && (
                     <div className={clsx('space-y-3.5', 'animate-scale-in')}>
                       {[
-                        { title: "Permitir que Garçom feche a conta", desc: "Autoriza o garçom a encerrar a mesa e dar a baixa definitiva no consumo.", checked: permCloseAccount, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_fechar: val }) },
-                        { title: "Permitir que Garçom aplique desconto", desc: "Habilita a aplicação de porcentagem de desconto na conta final direto pelo aplicativo.", checked: permDiscount, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_desconto: val }) },
-                        { title: "Permitir que Garçom aplique acréscimo", desc: "Habilita a adição de valores extras ou gorjetas no fechamento da conta pelo app.", checked: permSurcharge, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_acrescimo: val }) }
+                        { title: "Permitir que Garçom feche a conta", desc: "Autoriza o garçom a encerrar a mesa e dar a baixa definitiva no consumo.", checked: permCloseAccount, available: true, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_fechar: val }) },
+                        { title: "Permitir que Garçom aplique desconto", desc: "Habilita a aplicação de porcentagem de desconto na conta final direto pelo aplicativo.", checked: permDiscount, available: false, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_desconto: val }) },
+                        { title: "Permitir que Garçom aplique acréscimo", desc: "Habilita a adição de valores extras ou gorjetas no fechamento da conta pelo app.", checked: permSurcharge, available: false, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_acrescimo: val }) }
                       ].map((item, idx) => (
                         <div key={idx} className={clsx('flex', 'justify-between', 'items-start', 'gap-4')}>
                           <div className="space-y-0.5">
-                            <strong className={clsx('text-white', 'block', 'font-semibold')}>{item.title}</strong>
+                            <div className="flex items-center gap-2">
+                              <strong className={clsx(item.available ? 'text-white' : 'text-gray-400', 'block', 'font-semibold')}>{item.title}</strong>
+                              {!item.available && <span className="rounded-full border border-amber-700/40 bg-amber-900/20 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide text-amber-400">Integração pendente</span>}
+                            </div>
                             <span className={clsx('text-[9px]', 'text-gray-500', 'block', 'leading-relaxed')}>{item.desc}</span>
                           </div>
-                          <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer', 'shrink-0', 'mt-0.5')}>
-                            <input type="checkbox" checked={item.checked} onChange={(e) => item.onChange(e.target.checked)} className={clsx('sr-only', 'peer')} />
+                          <label className={clsx('relative', 'inline-flex', 'items-center', item.available ? 'cursor-pointer' : 'cursor-not-allowed opacity-45', 'shrink-0', 'mt-0.5')}>
+                            <input type="checkbox" checked={item.checked} disabled={!item.available} onChange={(e) => item.onChange(e.target.checked)} className={clsx('sr-only', 'peer')} />
                             <div className={clsx('w-8', 'h-4.5', 'bg-[#27272A]', 'peer-focus:outline-none', 'rounded-full', 'peer', 'peer-checked:after:translate-x-full', 'peer-checked:after:border-white', "after:content-['']", 'after:absolute', 'after:top-[2px]', 'after:left-[2px]', 'after:bg-white', 'after:border-gray-300', 'after:border', 'after:rounded-full', 'after:h-3.5', 'after:w-3.5', 'after:transition-all', 'peer-checked:bg-emerald-600')}></div>
                           </label>
                         </div>
@@ -6212,34 +6218,26 @@ export function CaixaPanel({
                   {configSalSubTab === 'atendimento' && (
                     <div className={clsx('space-y-3.5', 'animate-scale-in')}>
                       {[
-                        { title: "Permitir que o garçom informe quantas pessoas vão sentar à mesa", desc: "Abre pergunta inicial na abertura da mesa para cálculo automático do consumo/taxa individual.", checked: permPeopleCount, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_pessoas: val }) },
-                        { title: "Permitir que Garçom transfira mesas e comandas", desc: "Permite realocar todo o consumo de uma mesa para outra mesa vazia.", checked: permTransferTables, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_transferir_mesa: val }) },
-                        { title: "Permitir que Garçom transfira pedidos e pagamentos para mesas ocupadas", desc: "Mover itens isolados ou repassar contas a pagar entre comanda de clientes sentados.", checked: permTransferItems, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_transferir_item: val }) },
-                        { title: "Permitir que Cliente chame Garçom na mesa", desc: "Dispara notificações no painel do garçom se o cliente apertar o botão no cardápio digital QR Code.", checked: permClientCall, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_chamar: val }) },
-                        { title: "Permitir exibição de mesas ociosas", desc: "Destaca no mapa mesas sem novos pedidos há mais tempo.", checked: permShowIdleTables, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_ociosas: val }) }
+                        { title: "Permitir que o garçom informe quantas pessoas vão sentar à mesa", desc: "Abre pergunta inicial na abertura da mesa para cálculo automático do consumo/taxa individual.", checked: permPeopleCount, available: false, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_pessoas: val }) },
+                        { title: "Permitir que Garçom transfira mesas e comandas", desc: "Permite realocar todo o consumo de uma mesa para outra mesa vazia.", checked: permTransferTables, available: true, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_transferir_mesa: val }) },
+                        { title: "Permitir que Garçom transfira pedidos e pagamentos para mesas ocupadas", desc: "Mover itens isolados ou repassar contas a pagar entre comanda de clientes sentados.", checked: permTransferItems, available: true, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_transferir_item: val }) },
+                        { title: "Permitir que Cliente chame Garçom na mesa", desc: "Dispara notificações no painel do garçom se o cliente apertar o botão no cardápio digital QR Code.", checked: permClientCall, available: false, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_chamar: val }) },
+                        { title: "Permitir exibição de mesas ociosas", desc: "Destaca no mapa mesas sem novos pedidos há mais tempo.", checked: permShowIdleTables, available: false, onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_ociosas: val }) }
                       ].map((item, idx) => (
                         <div key={idx} className={clsx('flex', 'justify-between', 'items-start', 'gap-4')}>
                           <div className="space-y-0.5">
-                            <strong className={clsx('text-white', 'block', 'font-semibold')}>{item.title}</strong>
+                            <div className="flex items-center gap-2">
+                              <strong className={clsx(item.available ? 'text-white' : 'text-gray-400', 'block', 'font-semibold')}>{item.title}</strong>
+                              {!item.available && <span className="rounded-full border border-amber-700/40 bg-amber-900/20 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide text-amber-400">Integração pendente</span>}
+                            </div>
                             <span className={clsx('text-[9px]', 'text-gray-500', 'block', 'leading-relaxed')}>{item.desc}</span>
                           </div>
-                          <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer', 'shrink-0', 'mt-0.5')}>
-                            <input type="checkbox" checked={item.checked} onChange={(e) => item.onChange(e.target.checked)} className={clsx('sr-only', 'peer')} />
+                          <label className={clsx('relative', 'inline-flex', 'items-center', item.available ? 'cursor-pointer' : 'cursor-not-allowed opacity-45', 'shrink-0', 'mt-0.5')}>
+                            <input type="checkbox" checked={item.checked} disabled={!item.available} onChange={(e) => item.onChange(e.target.checked)} className={clsx('sr-only', 'peer')} />
                             <div className={clsx('w-8', 'h-4.5', 'bg-[#27272A]', 'peer-focus:outline-none', 'rounded-full', 'peer', 'peer-checked:after:translate-x-full', 'peer-checked:after:border-white', "after:content-['']", 'after:absolute', 'after:top-[2px]', 'after:left-[2px]', 'after:bg-white', 'after:border-gray-300', 'after:border', 'after:rounded-full', 'after:h-3.5', 'after:w-3.5', 'after:transition-all', 'peer-checked:bg-emerald-600')}></div>
                           </label>
                         </div>
                       ))}
-
-                      {permShowIdleTables && (
-                        <div className={clsx('p-3', 'bg-[#1C1C1F]', 'rounded-xl', 'border', 'border-[#27272A]', 'space-y-1.5', 'animate-scale-in')}>
-                          <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Tempo de Ociosidade Limite (Minutos):</label>
-                          <div className={clsx('flex', 'items-center', 'gap-2')}>
-                            <button type="button" onClick={() => setIdleTimeThreshold(Math.max(5, idleTimeThreshold - 5))} className={clsx('px-2.5', 'py-1', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'text-white', 'font-bold', 'cursor-pointer')}>-</button>
-                            <span className={clsx('text-white', 'font-mono', 'font-bold', 'text-xs')}>{idleTimeThreshold} min</span>
-                            <button type="button" onClick={() => setIdleTimeThreshold(idleTimeThreshold + 5)} className={clsx('px-2.5', 'py-1', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'text-white', 'font-bold', 'cursor-pointer')}>+</button>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   )}
 

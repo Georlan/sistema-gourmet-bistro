@@ -19,6 +19,7 @@ interface MesaCardProps {
   hasPendingPayment?: boolean;
   mergedSources?: number[];
   mergedIntoMesaId?: number | null;
+  showOperationalStatus?: boolean;
 }
 
 export const MesaCard = React.memo<MesaCardProps>(({
@@ -31,6 +32,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
   hasPendingPayment = false,
   mergedSources = [],
   mergedIntoMesaId = null,
+  showOperationalStatus = true,
 }) => {
   const totalValue = getTableTotal(orders);
   let status: 'livre' | 'ocupada' | 'pronto' | 'entregue' | 'mesclada' = 'livre';
@@ -44,7 +46,9 @@ export const MesaCard = React.memo<MesaCardProps>(({
     const hasReady = activeItems.some((item) => item.status === 'pronto');
     const hasPreparing = activeItems.some((item) => item.status === 'preparando');
     const allDelivered = activeItems.length > 0 && !hasReady && !hasPreparing;
-    status = hasReady ? 'pronto' : hasPreparing ? 'ocupada' : allDelivered ? 'entregue' : 'ocupada';
+    status = showOperationalStatus
+      ? (hasReady ? 'pronto' : hasPreparing ? 'ocupada' : allDelivered ? 'entregue' : 'ocupada')
+      : 'ocupada';
   }
 
   const statusConfig = {

@@ -833,6 +833,9 @@ export default function App() {
           if (eventName === "customers_updated") {
             window.dispatchEvent(new Event('koma_customers_updated'));
           }
+          if (eventName === "team_updated") {
+            window.dispatchEvent(new Event('koma_team_updated'));
+          }
           if (eventName === "catalog_updated") {
             scheduleRealtimeRefresh({ catalog: true });
           }
@@ -2403,6 +2406,7 @@ export default function App() {
             onTableClick={handleTableClick}
             tableFilter={tableFilter}
             onFilterChange={setTableFilter}
+            showOperationalStatus={restauranteConfig?.perm_garcom_status !== false}
           />
         )}
 

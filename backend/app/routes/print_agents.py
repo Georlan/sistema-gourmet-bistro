@@ -1395,15 +1395,29 @@ def register_agent(
 
 @router.post("/heartbeat")
 def agent_heartbeat(
+    background_tasks: BackgroundTasks,
     req: Optional[HeartbeatRequest] = None,
     agent: PrintAgentToken = Depends(get_current_agent),
     db: Session = Depends(get_db),
 ):
     """Heartbeat enviado periodicamente pelo agente local."""
     now = datetime.datetime.now(datetime.timezone.utc)
+    previous_heartbeat_age = _age_seconds(agent.last_seen_at, now)
+    presence_changed = (
+        previous_heartbeat_age is None
+        or previous_heartbeat_age > AGENT_ONLINE_THRESHOLD_SECONDS
+    )
+    diagnostics_changed = False
     agent.last_seen_at = now
     if req and req.diagnostics:
-        agent.printer_diagnostics = req.diagnostics.model_dump()
+        diagnostics = req.diagnostics.model_dump()
+        previous_diagnostics = (
+            dict(agent.printer_diagnostics)
+            if isinstance(agent.printer_diagnostics, Mapping)
+            else None
+        )
+        diagnostics_changed = previous_diagnostics != diagnostics
+        agent.printer_diagnostics = diagnostics
         agent.diagnostics_updated_at = now
 
     command = (
@@ -1414,6 +1428,11 @@ def agent_heartbeat(
     if _expire_stale_agent_command(agent, now):
         command = None
     db.commit()
+    if presence_changed or diagnostics_changed:
+        _schedule_print_monitor_refresh(
+            background_tasks,
+            agent.restaurante_id,
+        )
     return {
         "status": "ok",
         "agent_id": agent.agent_id,

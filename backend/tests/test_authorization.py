@@ -9,9 +9,19 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base, get_db, current_restaurante_id
-from app.models import ConfiguracaoRestaurante, Restaurante, Usuario
+from app.models import (
+    Categoria,
+    Comanda,
+    ConfiguracaoRestaurante,
+    Item,
+    Lancamento,
+    Produto,
+    Restaurante,
+    Usuario,
+)
 from app.security import get_password_hash
 from app.main import app
+from app.routes import auth as auth_route
 
 DB_FILE = "./test_authorization.db"
 SQLALCHEMY_DATABASE_URL = f"sqlite:///{DB_FILE}"
@@ -239,6 +249,171 @@ def test_invite_activation_rejects_weak_password():
         user = db.get(Usuario, "u-pendente")
         assert user.status == "pendente_ativacao"
         assert user.email is None
+
+
+def test_invite_activation_broadcasts_team_refresh(monkeypatch):
+    events = []
+
+    async def capture_broadcast(message, *args, **kwargs):
+        events.append((message, args, kwargs))
+
+    monkeypatch.setattr(auth_route.manager, "broadcast", capture_broadcast)
+    client = TestClient(app)
+
+    response = client.post(
+        "/auth/ativar",
+        json={
+            "token_convite": "invite-pendente",
+            "email": "pendente@koma.test",
+            "senha": "senha1234",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    assert len(events) == 1
+    message, _, kwargs = events[0]
+    assert message["event"] == "team_updated"
+    assert message["detail"]["user_id"] == "u-pendente"
+    assert kwargs["restaurante_id"] == 1
+    assert kwargs["target_audience"] == "internal"
+
+
+@pytest.mark.parametrize(
+    ("permission", "method", "path", "payload"),
+    [
+        (
+            "perm_garcom_delivery",
+            "post",
+            "/comandas/",
+            {"mesa_id": None, "garcom_id": "u-garcom", "tipo": "Retirada"},
+        ),
+        (
+            "perm_garcom_editar",
+            "put",
+            "/comandas/itens/inexistente",
+            {"observacao": "teste"},
+        ),
+        (
+            "perm_garcom_cancelar",
+            "put",
+            "/comandas/itens/inexistente/cancelar",
+            None,
+        ),
+        (
+            "perm_garcom_fechar",
+            "put",
+            "/comandas/inexistente/fechar",
+            None,
+        ),
+        (
+            "perm_garcom_transferir_mesa",
+            "post",
+            "/comandas/inexistente/transferir/1",
+            None,
+        ),
+        (
+            "perm_garcom_transferir_item",
+            "post",
+            "/comandas/itens/inexistente/transferir/1",
+            None,
+        ),
+    ],
+)
+def test_waiter_operational_settings_are_enforced_by_routes(
+    permission,
+    method,
+    path,
+    payload,
+):
+    with TestingSessionLocal() as db:
+        config = db.query(ConfiguracaoRestaurante).filter_by(
+            restaurante_id=1,
+        ).one()
+        setattr(config, permission, False)
+        db.commit()
+
+    client = TestClient(app)
+    headers = get_auth_headers(client, "garcom", "123")
+    response = client.request(method, path, headers=headers, json=payload)
+
+    assert response.status_code == 403, response.text
+    assert "Permissão negada" in response.json()["detail"]
+
+
+def test_waiter_setting_does_not_restrict_manager_roles():
+    with TestingSessionLocal() as db:
+        config = db.query(ConfiguracaoRestaurante).filter_by(
+            restaurante_id=1,
+        ).one()
+        config.perm_garcom_fechar = False
+        db.commit()
+
+    client = TestClient(app)
+    headers = get_auth_headers(client, "caixa", "123")
+    response = client.put(
+        "/comandas/inexistente/fechar",
+        headers=headers,
+    )
+
+    assert response.status_code == 404, response.text
+
+
+def test_waiter_cannot_append_items_when_edit_permission_is_disabled():
+    with TestingSessionLocal() as db:
+        config = db.query(ConfiguracaoRestaurante).filter_by(
+            restaurante_id=1,
+        ).one()
+        config.perm_garcom_editar = False
+        db.add(Categoria(
+            id="cat-auth",
+            restaurante_id=1,
+            nome="Categoria Auth",
+            destino_impressao="COZINHA",
+        ))
+        db.add(Produto(
+            id="prod-auth",
+            restaurante_id=1,
+            nome="Produto Auth",
+            categoria_id="cat-auth",
+            preco=10,
+            ativo=True,
+        ))
+        db.add(Comanda(
+            id="c-auth-existente",
+            restaurante_id=1,
+            mesa_id=None,
+            garcom_id="u-garcom",
+            tipo="Retirada",
+            numero_pedido=1,
+            fechada=False,
+        ))
+        db.add(Lancamento(
+            id="l-auth-existente",
+            restaurante_id=1,
+            comanda_id="c-auth-existente",
+            garcom_id="u-garcom",
+        ))
+        db.add(Item(
+            id="i-auth-existente",
+            restaurante_id=1,
+            comanda_id="c-auth-existente",
+            lancamento_id="l-auth-existente",
+            produto_id="prod-auth",
+            preco_unit=10,
+            status="preparando",
+        ))
+        db.commit()
+
+    client = TestClient(app)
+    headers = get_auth_headers(client, "garcom", "123")
+    response = client.post(
+        "/comandas/c-auth-existente/lancamentos",
+        headers=headers,
+        json={"garcom_id": "u-garcom", "itens": []},
+    )
+
+    assert response.status_code == 403, response.text
+    assert "Permissão negada" in response.json()["detail"]
 
 
 @pytest.mark.parametrize("username", ["gerente", "caixa"])
