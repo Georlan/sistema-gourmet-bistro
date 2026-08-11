@@ -4551,6 +4551,15 @@
   color: var(--koma-black);
   background: #eceeea;
 }
+.koma-plans-billing { display: grid; justify-items: center; gap: 0.65rem; max-width: 1480px; margin: 0 auto 3.25rem; }
+.koma-plans-billing-switch { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem; background: #dfe2dd; border: 1px solid #c9cdc7; border-radius: 999px; }
+.koma-plans-billing-switch button { display: inline-flex; min-height: 42px; align-items: center; justify-content: center; gap: 0.55rem; padding: 0.65rem 1.05rem; color: #525852; background: transparent; border: 0; border-radius: 999px; font-family: var(--koma-accent); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.06em; cursor: pointer; transition: color 180ms ease, background-color 180ms ease, transform 180ms ease; }
+.koma-plans-billing-switch button:hover { color: var(--koma-black); }
+.koma-plans-billing-switch button.is-active { color: var(--koma-black); background: var(--koma-green); }
+.koma-plans-billing-switch button:active { transform: scale(0.98); }
+.koma-plans-billing-switch button:focus-visible { outline: 2px solid var(--koma-black); outline-offset: 2px; }
+.koma-plans-billing-switch button span { padding: 0.28rem 0.45rem; color: var(--koma-green); background: var(--koma-black); border-radius: 999px; font-size: 0.55rem; letter-spacing: 0.04em; }
+.koma-plans-billing > p { min-height: 1rem; margin: 0; color: #666d67; font-size: 0.72rem; }
 .koma-plans-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; max-width: 1480px; margin: 0 auto; align-items: stretch; }
 .koma-plan-card { display: flex; flex-direction: column; min-height: 650px; padding: clamp(1.5rem, 2.8vw, 2.75rem); background: var(--koma-offwhite); border: 1px solid var(--koma-line-light); }
 .koma-plan-card--featured { color: var(--koma-white); background: var(--koma-black); border-color: var(--koma-black); transform: translateY(-1.25rem); }
@@ -4565,6 +4574,8 @@
 .koma-plan-price strong { font-family: var(--koma-display); font-size: clamp(4.5rem, 7vw, 7rem); line-height: 0.8; letter-spacing: -0.06em; }
 .koma-plan-price small { color: var(--koma-muted-light); }
 .koma-plan-card--featured .koma-plan-price small { color: var(--koma-muted-dark); }
+.koma-plan-billing-note { min-height: 1.1rem; margin: 0.65rem 0 0; color: var(--koma-muted-light); font-size: 0.68rem; }
+.koma-plan-card--featured .koma-plan-billing-note { color: var(--koma-muted-dark); }
 .koma-plan-card ul { list-style: none; padding: 0; margin: 1.5rem 0 2rem; }
 .koma-plan-card li { position: relative; padding: 0.7rem 0 0.7rem 1.35rem; font-size: 0.88rem; line-height: 1.4; }
 .koma-plan-card li::before {
@@ -5004,6 +5015,9 @@
   .koma-plan-card { min-height: 0; padding: 1.35rem; }
   .koma-plan-tagline { min-height: 0; }
   .koma-plan-price strong { font-size: clamp(4rem, 19vw, 5.5rem); }
+  .koma-plans-billing { margin-bottom: 2.25rem; }
+  .koma-plans-billing-switch { width: 100%; max-width: 330px; }
+  .koma-plans-billing-switch button { flex: 1 1 0; min-width: 0; padding-inline: 0.7rem; }
   .koma-footer { padding-inline: var(--koma-section-x); }
 }
 
