@@ -151,6 +151,9 @@ class MesaUpdate(BaseModel):
     nome: Optional[str] = None
     capacidade: Optional[int] = Field(default=None, ge=1)
 
+class CancelarConsumoMesaRequest(BaseModel):
+    motivo: str = Field(min_length=3, max_length=300)
+
 class MesaResponse(MesaBase):
     model_config = ConfigDict(from_attributes=True)
 

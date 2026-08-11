@@ -474,6 +474,54 @@ export function CaixaPanel({
 
   const [selectedKanbanOrder, setSelectedKanbanOrder] = useState<any>(null);
   const [quickActionsOrder, setQuickActionsOrder] = useState<Order | null>(null);
+  const [cancelTableTarget, setCancelTableTarget] = useState<{
+    mesaId: number;
+    comandas: number;
+    itens: number;
+    total: number;
+  } | null>(null);
+  const [cancelTableReason, setCancelTableReason] = useState('');
+  const [isCancellingTable, setIsCancellingTable] = useState(false);
+
+  const openCancelTableConfirmation = (mesaId: number) => {
+    const tableOrders = orders.filter(order => Number(order.mesaId) === Number(mesaId));
+    const activeItems = tableOrders.flatMap(order => order.itens || [])
+      .filter(item => (item.status as string) !== 'cancelado');
+    setCancelTableTarget({
+      mesaId,
+      comandas: tableOrders.length,
+      itens: activeItems.length,
+      total: activeItems.reduce((sum, item) => sum + (Number(item.preco) || 0), 0),
+    });
+    setCancelTableReason('');
+    setSelectedKanbanOrder(null);
+  };
+
+  const handleCancelTableConsumption = async () => {
+    if (!cancelTableTarget || cancelTableReason.trim().length < 3 || isCancellingTable) return;
+    setIsCancellingTable(true);
+    try {
+      const response = await fetch(`${apiBaseUrl}/mesas/${cancelTableTarget.mesaId}/cancelar-consumo`, {
+        method: 'POST',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ motivo: cancelTableReason.trim() }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.detail || 'Não foi possível cancelar o consumo.');
+
+      setCancelTableTarget(null);
+      setCancelTableReason('');
+      await onRefreshOrders();
+      showToast(
+        `Mesa ${data.mesa_id} liberada. ${data.itens_cancelados} item(ns) cancelado(s), sem lançamento no caixa.`,
+        'success',
+      );
+    } catch (error: any) {
+      showToast(error?.message || 'Não foi possível cancelar o consumo.', 'error');
+    } finally {
+      setIsCancellingTable(false);
+    }
+  };
 
   const buildTableCheckoutOrder = (tableComandas: Order[]): Order | null => {
     if (tableComandas.length === 0) return null;
@@ -9372,7 +9420,8 @@ export function CaixaPanel({
                 </button>
 
                 {selectedKanbanOrder.mesaId && selectedKanbanOrder.mesaId > 0 && (
-                  <div className="flex gap-2 w-full">
+                  <div className="space-y-2 w-full">
+                    <div className="flex gap-2 w-full">
                     <button
                       type="button"
                       onClick={async () => {
@@ -9424,9 +9473,62 @@ export function CaixaPanel({
                       <Printer size={13} />
                       <span>Só Valores</span>
                     </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openCancelTableConfirmation(Number(selectedKanbanOrder.mesaId))}
+                      className="flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-rose-900/40 bg-rose-950/15 px-3 text-[10px] font-bold text-rose-300 transition-colors hover:bg-rose-950/30"
+                    >
+                      <Trash2 size={13} />
+                      Cancelar consumo e liberar mesa
+                    </button>
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cancelTableTarget && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm">
+          <div role="dialog" aria-modal="true" aria-labelledby="cancel-table-title" className="w-full max-w-md space-y-4 rounded-3xl border border-rose-900/50 bg-[#141312] p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-3 border-b border-white/[0.07] pb-4">
+              <div>
+                <span className="font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-rose-400">Ação irreversível</span>
+                <h3 id="cancel-table-title" className="mt-1 text-lg font-bold text-white">Liberar Mesa {cancelTableTarget.mesaId} sem receber?</h3>
+                <p className="mt-1 text-[11px] leading-relaxed text-zinc-400">O histórico será preservado como cancelado, mas nenhum valor entrará no caixa ou no faturamento.</p>
+              </div>
+              <button type="button" onClick={() => setCancelTableTarget(null)} disabled={isCancellingTable} className="rounded-lg p-2 text-zinc-500 hover:bg-white/[0.05] hover:text-white disabled:opacity-40" aria-label="Fechar">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-xl border border-white/[0.07] bg-black/20 p-3"><strong className="block font-mono text-sm text-white">{cancelTableTarget.comandas}</strong><span className="text-[9px] text-zinc-500">comandas</span></div>
+              <div className="rounded-xl border border-white/[0.07] bg-black/20 p-3"><strong className="block font-mono text-sm text-white">{cancelTableTarget.itens}</strong><span className="text-[9px] text-zinc-500">itens</span></div>
+              <div className="rounded-xl border border-white/[0.07] bg-black/20 p-3"><strong className="block font-mono text-sm text-rose-300">{cancelTableTarget.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong><span className="text-[9px] text-zinc-500">cancelados</span></div>
+            </div>
+
+            <label className="block space-y-1.5">
+              <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-400">Motivo obrigatório</span>
+              <textarea
+                autoFocus
+                maxLength={300}
+                rows={3}
+                value={cancelTableReason}
+                onChange={event => setCancelTableReason(event.target.value)}
+                placeholder="Ex.: pedido lançado por engano"
+                className="w-full resize-none rounded-xl border border-[#343936] bg-[#0b0e0c] px-3 py-2.5 text-sm text-white outline-none placeholder:text-zinc-700 focus:border-rose-500/60"
+              />
+            </label>
+
+            <div className="flex flex-col-reverse gap-2 sm:flex-row">
+              <button type="button" onClick={() => setCancelTableTarget(null)} disabled={isCancellingTable} className="min-h-11 flex-1 rounded-xl border border-[#343936] text-xs font-bold text-zinc-400 hover:text-white disabled:opacity-40">Manter atendimento</button>
+              <button type="button" onClick={handleCancelTableConsumption} disabled={cancelTableReason.trim().length < 3 || isCancellingTable} className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-rose-600 px-3 text-xs font-extrabold text-white hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-40">
+                {isCancellingTable ? <RefreshCw className="animate-spin" size={14} /> : <Trash2 size={14} />}
+                {isCancellingTable ? 'Liberando…' : 'Cancelar e liberar'}
+              </button>
             </div>
           </div>
         </div>

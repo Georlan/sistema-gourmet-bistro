@@ -1237,12 +1237,19 @@ def fechar_comanda(
     # Verifica se há saldo devedor
     if force:
         ensure_permission(current_garcom, "comandas:forcar_fechamento")
-    else:
-        if valor_pago < subtotal and valor_pago < total_com_taxa:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, 
-                detail=f"Não é possível fechar uma comanda com saldo em aberto. Valor devido: R${subtotal:.2f} (ou R${total_com_taxa:.2f} com taxa). Valor pago: R${valor_pago:.2f}"
-            )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "O fechamento forçado de uma comanda isolada foi desativado. "
+                "Use a ação 'Cancelar consumo e liberar mesa', que cancela todas "
+                "as comandas abertas da mesa com auditoria."
+            ),
+        )
+    if valor_pago < subtotal and valor_pago < total_com_taxa:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Não é possível fechar uma comanda com saldo em aberto. Valor devido: R${subtotal:.2f} (ou R${total_com_taxa:.2f} com taxa). Valor pago: R${valor_pago:.2f}"
+        )
 
     comanda.fechada = True
     comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)

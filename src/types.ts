@@ -33,7 +33,7 @@ export interface OrderItem {
   observacao: string;
   clienteNome: string;
   cliente_nome?: string;
-  status: 'preparando' | 'pronto' | 'entregue';
+  status: 'preparando' | 'pronto' | 'entregue' | 'cancelado';
   pago?: boolean;
   lancamentoId?: string;
   comandaId?: string;

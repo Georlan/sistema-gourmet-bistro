@@ -1,6 +1,11 @@
 import datetime
 
-from app.printer_service import ESC_FONT_A, ESC_FONT_B, PrinterService
+from app.printer_service import (
+    ESC_BOLD_ON,
+    ESC_DOUBLE_HEIGHT_ON,
+    ESC_FONT_A,
+    PrinterService,
+)
 
 
 def _service() -> PrinterService:
@@ -49,10 +54,15 @@ def test_kitchen_ticket_groups_people_and_repeated_items_once():
     assert "003 -" not in ticket
     assert "DESCRIÇÃO:" not in ticket
     assert "OBS: SEM BACON" in ticket
-    assert f"{ESC_FONT_B}   OBS: SEM BACON{ESC_FONT_A}" in ticket
+    assert f"{ESC_FONT_A}   OBS: SEM BACON{ESC_FONT_A}" in ticket
     assert "TOTAL DE ITENS:" not in ticket
     assert "CONSUMO NO LOCAL" in ticket
     assert "PIZZARIA BELLA ITALIA" in ticket
+    assert f"{ESC_DOUBLE_HEIGHT_ON}{ESC_BOLD_ON}PEDIDO: #305" in ticket
+    assert (
+        f"{ESC_FONT_A}{ESC_DOUBLE_HEIGHT_ON}{ESC_BOLD_ON}2x Cheese Bacon"
+        in ticket
+    )
 
 
 def test_values_receipt_groups_quantity_and_shows_each_person_subtotal():
@@ -122,6 +132,10 @@ def test_values_receipt_groups_quantity_and_shows_each_person_subtotal():
     assert "MESA: 3" in ticket
     assert "ABERTURA: 18:00" in ticket
     assert "R$ 82,00" in ticket
+    assert (
+        f"{ESC_DOUBLE_HEIGHT_ON}{ESC_BOLD_ON}3x HAMBÚRGUER TRADICIONAL"
+        in ticket
+    )
 
 
 def test_full_receipt_keeps_complete_header_unchanged():
@@ -232,7 +246,7 @@ def test_full_receipt_keeps_product_description_and_distinct_notes():
     assert "DESCRIÇÃO:" not in ticket
     assert "OBS: SEM BACON" in ticket
     assert "OBS: COM BACON" in ticket
-    assert f"{ESC_FONT_B}   OBS: SEM BACON{ESC_FONT_A}" in ticket
+    assert f"{ESC_FONT_A}   OBS: SEM BACON{ESC_FONT_A}" in ticket
     assert "cada)" not in ticket
 
 

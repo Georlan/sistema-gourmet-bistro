@@ -123,6 +123,16 @@ def _append_amount_line(lines: list[str], left: str, right: str, width: int) -> 
         lines.append(f"   {continuation}"[:width])
 
 
+def _append_large_amount_line(
+    lines: list[str], left: str, right: str, width: int
+) -> None:
+    """Destaca itens/valores sem perder a largura útil da bobina."""
+    first_line = len(lines)
+    _append_amount_line(lines, left, right, width)
+    lines[first_line] = ESC_DOUBLE_HEIGHT_ON + ESC_BOLD_ON + lines[first_line]
+    lines[-1] += ESC_BOLD_OFF + ESC_NORMAL_SIZE
+
+
 # AJUSTADO: Função utilitária segura para buscar chaves/atributos em dicts ou objetos SQLAlchemy
 def safe_get(obj, key, default=""):
     if obj is None:
@@ -229,7 +239,13 @@ class PrinterService:
             lines.append(ESC_BOLD_ON + align_center("REIMPRESSÃO", width) + ESC_BOLD_OFF)
         lines.append(draw_separator("=", width))
         mesa_str = f"MESA: {mesa_id}" if mesa_id is not None else "SEM MESA"
-        lines.append(split_justified(f"PEDIDO: #{num_pedido}", mesa_str, width))
+        lines.append(
+            ESC_DOUBLE_HEIGHT_ON
+            + ESC_BOLD_ON
+            + split_justified(f"PEDIDO: #{num_pedido}", mesa_str, width)
+            + ESC_BOLD_OFF
+            + ESC_NORMAL_SIZE
+        )
         lines.append(
             split_justified(
                 f"DATA: {now.strftime('%d/%m/%Y')}",
@@ -302,9 +318,12 @@ class PrinterService:
                     f"   {part}"[:width] for part in item_lines[1:]
                 )
                 rendered_item_lines[0] = (
-                    ESC_FONT_A + ESC_BOLD_ON + rendered_item_lines[0]
+                    ESC_FONT_A
+                    + ESC_DOUBLE_HEIGHT_ON
+                    + ESC_BOLD_ON
+                    + rendered_item_lines[0]
                 )
-                rendered_item_lines[-1] += ESC_BOLD_OFF
+                rendered_item_lines[-1] += ESC_BOLD_OFF + ESC_NORMAL_SIZE
                 lines.extend(rendered_item_lines)
 
                 if observacao:
@@ -313,10 +332,10 @@ class PrinterService:
                         observacao.upper(),
                         width,
                         "   OBS: ",
-                        ESC_FONT_B,
+                        ESC_FONT_A,
                     )
 
-        lines.append(ESC_FONT_B)
+        lines.append(ESC_FONT_A)
         lines.append(draw_separator("-", width))
         if print_footer:
             _append_wrapped(lines, print_footer, width)
@@ -388,7 +407,13 @@ class PrinterService:
             lines.append(draw_separator("=", width))
 
             mesa_str = f"MESA: {mesa_id}" if mesa_id is not None else "SEM MESA"
-            lines.append(split_justified(f"PEDIDO: #{num_pedido}", mesa_str, width))
+            lines.append(
+                ESC_DOUBLE_HEIGHT_ON
+                + ESC_BOLD_ON
+                + split_justified(f"PEDIDO: #{num_pedido}", mesa_str, width)
+                + ESC_BOLD_OFF
+                + ESC_NORMAL_SIZE
+            )
             lines.append(
                 split_justified(
                     f"DATA: {now.strftime('%d/%m/%Y')}",
@@ -473,7 +498,7 @@ class PrinterService:
                     product_name,
                 )
                 left = f"{qty}x {printable_name.upper()}"
-                _append_amount_line(
+                _append_large_amount_line(
                     lines,
                     left,
                     _format_brl(item_total),
@@ -485,7 +510,7 @@ class PrinterService:
                         observation.upper(),
                         width,
                         "   OBS: ",
-                        ESC_FONT_B,
+                        ESC_FONT_A,
                     )
 
             grand_total += client_subtotal
@@ -529,13 +554,15 @@ class PrinterService:
             final_total = grand_total
 
         lines.append(
-            ESC_BOLD_ON
+            ESC_DOUBLE_HEIGHT_ON
+            + ESC_BOLD_ON
             + split_justified(
                 "TOTAL GERAL DA MESA:",
                 _format_brl(final_total),
                 width,
             )
             + ESC_BOLD_OFF
+            + ESC_NORMAL_SIZE
         )
         lines.append(draw_separator("=", width))
 

@@ -5,8 +5,22 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from ..database import get_db, current_restaurante_id, require_tenant_id
-from ..models import Mesa, ObservacaoPredefinida, Comanda, Item, Usuario
-from ..schemas import MesaResponse, MesaUpdate, MesaCreate, ObservacaoPredefinidaResponse
+from ..models import (
+    Mesa,
+    ObservacaoPredefinida,
+    Comanda,
+    Item,
+    Usuario,
+    Pagamento,
+    ActivityLog,
+)
+from ..schemas import (
+    MesaResponse,
+    MesaUpdate,
+    MesaCreate,
+    CancelarConsumoMesaRequest,
+    ObservacaoPredefinidaResponse,
+)
 from ..security import get_current_garcom_optional, get_current_user, require_permission
 from ..websocket_manager import manager
 
@@ -142,6 +156,113 @@ def delete_mesa(
         rest_id,
     )
     return
+
+
+@router.post("/{mesa_id}/cancelar-consumo")
+def cancelar_consumo_mesa(
+    mesa_id: int,
+    payload: CancelarConsumoMesaRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("comandas:forcar_fechamento")),
+):
+    """Cancela todo o consumo aberto de uma mesa sem gerar recebimento.
+
+    O histórico é preservado: itens são marcados como cancelados e comandas são
+    fechadas. Pagamentos existentes bloqueiam a operação para evitar apagar um
+    consumo que já produziu efeito financeiro.
+    """
+    rest_id = require_tenant_id()
+    motivo = " ".join(payload.motivo.split())
+    if len(motivo) < 3:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Informe um motivo válido com pelo menos 3 caracteres.",
+        )
+
+    mesa = db.query(Mesa).filter(
+        Mesa.restaurante_id == rest_id,
+        Mesa.id == mesa_id,
+    ).first()
+    if not mesa:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mesa não encontrada")
+
+    comandas = (
+        db.query(Comanda)
+        .filter(
+            Comanda.restaurante_id == rest_id,
+            Comanda.mesa_id == mesa_id,
+            Comanda.fechada == False,
+        )
+        .with_for_update()
+        .all()
+    )
+    if not comandas:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A mesa já está livre e não possui consumo aberto.",
+        )
+
+    comanda_ids = [comanda.id for comanda in comandas]
+    pagamento_existente = db.query(Pagamento.id).filter(
+        Pagamento.restaurante_id == rest_id,
+        Pagamento.comanda_id.in_(comanda_ids),
+        or_(Pagamento.status.is_(None), Pagamento.status != "cancelado"),
+    ).first()
+    valor_pago_legado = any(float(comanda.valor_pago or 0) > 0 for comanda in comandas)
+    if pagamento_existente or valor_pago_legado:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Há pagamento registrado nesta mesa. Cancele ou estorne o "
+                "recebimento antes de liberar a mesa sem contabilizar o consumo."
+            ),
+        )
+
+    itens_ativos = [
+        item
+        for comanda in comandas
+        for item in comanda.itens
+        if item.status != "cancelado"
+    ]
+    total_cancelado = round(sum(float(item.preco_unit or 0) for item in itens_ativos), 2)
+    fechado_em = datetime.datetime.now(datetime.timezone.utc)
+
+    for item in itens_ativos:
+        item.status = "cancelado"
+        item.cancelado_por = current_user.id
+    for comanda in comandas:
+        comanda.fechada = True
+        comanda.fechado_em = fechado_em
+        comanda.status_comanda = None
+
+    db.add(ActivityLog(
+        restaurante_id=rest_id,
+        garcom_id=current_user.id,
+        action="CANCEL_TABLE_CONSUMPTION",
+        details=(
+            f"Mesa {mesa_id}: {len(comandas)} comanda(s), {len(itens_ativos)} "
+            f"item(ns), total R$ {total_cancelado:.2f}. Motivo: {motivo}"
+        ),
+    ))
+    db.commit()
+
+    background_tasks.add_task(
+        manager.broadcast,
+        {
+            "event": "MESA_ATUALIZADA",
+            "data": {"mesa_id": mesa_id, "status": "livre", "comanda_id": None},
+        },
+        rest_id,
+    )
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, rest_id)
+    return {
+        "status": "cancelado",
+        "mesa_id": mesa_id,
+        "comandas_canceladas": len(comandas),
+        "itens_cancelados": len(itens_ativos),
+        "total_cancelado": total_cancelado,
+    }
 
 
 # ----------------- OBSERVATIONS ENDPOINTS -----------------

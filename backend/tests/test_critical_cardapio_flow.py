@@ -1,3 +1,4 @@
+import uuid
 import pytest
 from fastapi.testclient import TestClient
 from app.main import app
@@ -14,6 +15,8 @@ from app.models import (
     Cliente,
     OtpChallenge,
     CaixaTurno,
+    Item,
+    ActivityLog,
 )
 from app.security import create_access_token
 from app.services.customer_auth import create_customer_access_token
@@ -772,6 +775,115 @@ def test_caixa_pode_recusar_pedido_antes_da_producao():
         assert comanda.delivery_status == "recusado"
         assert comanda.fechada is True
         assert all(item.status == "cancelado" for item in comanda.itens)
+    finally:
+        db.close()
+
+
+def _criar_pedido_de_mesa_para_cancelamento(mesa_id: int):
+    db = SessionLocal()
+    token_var = current_restaurante_id.set(100)
+    try:
+        db.add(Mesa(
+            id=mesa_id,
+            capacidade=4,
+            nome=f"Mesa {mesa_id}",
+            restaurante_id=100,
+        ))
+        db.commit()
+    finally:
+        current_restaurante_id.reset(token_var)
+        db.close()
+
+    token = create_access_token(
+        subject="usr_cardapio_100",
+        restaurante_id=100,
+        role="admin",
+    )
+    response = client.post(
+        "/comandas/venda-direta",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "mesa_id": mesa_id,
+            "garcom_id": "usr_cardapio_100",
+            "tipo": "Consumo no Local",
+            "itens": [{
+                "produto_id": "prod-cardapio-test",
+                "observacao": "Pedido lançado por engano",
+                "cliente_nome": "Consumo Geral",
+            }],
+        },
+    )
+    assert response.status_code == 201
+    return response.json()["id"], token
+
+
+def test_cancelar_consumo_libera_mesa_sem_contabilizar_valor():
+    mesa_id = 1000 + uuid.uuid4().int % 1_000_000
+    comanda_id, token = _criar_pedido_de_mesa_para_cancelamento(mesa_id)
+
+    response = client.post(
+        f"/mesas/{mesa_id}/cancelar-consumo",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"motivo": "Lançamento de teste"},
+    )
+    assert response.status_code == 200
+    assert response.json()["mesa_id"] == mesa_id
+    assert response.json()["comandas_canceladas"] == 1
+    assert response.json()["itens_cancelados"] == 1
+    assert response.json()["total_cancelado"] == 25.0
+
+    db = SessionLocal()
+    try:
+        comanda = db.query(Comanda).filter(Comanda.id == comanda_id).one()
+        assert comanda.fechada is True
+        assert float(comanda.valor_pago or 0) == 0
+        assert all(item.status == "cancelado" for item in comanda.itens)
+        assert all(item.cancelado_por == "usr_cardapio_100" for item in comanda.itens)
+        audit = db.query(ActivityLog).filter(
+            ActivityLog.restaurante_id == 100,
+            ActivityLog.action == "CANCEL_TABLE_CONSUMPTION",
+            ActivityLog.details.contains(f"Mesa {mesa_id}"),
+        ).one()
+        assert "Lançamento de teste" in audit.details
+    finally:
+        db.close()
+
+    abertas = client.get(
+        f"/comandas/?mesa_id={mesa_id}&fechada=false",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert abertas.status_code == 200
+    assert abertas.json() == []
+
+
+def test_cancelar_consumo_bloqueia_mesa_com_valor_pago():
+    mesa_id = 1000 + uuid.uuid4().int % 1_000_000
+    comanda_id, token = _criar_pedido_de_mesa_para_cancelamento(mesa_id)
+
+    db = SessionLocal()
+    try:
+        comanda = db.query(Comanda).filter(Comanda.id == comanda_id).one()
+        comanda.valor_pago = 10
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.post(
+        f"/mesas/{mesa_id}/cancelar-consumo",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"motivo": "Tentativa inválida"},
+    )
+    assert response.status_code == 409
+    assert "pagamento registrado" in response.json()["detail"].lower()
+
+    db = SessionLocal()
+    try:
+        comanda = db.query(Comanda).filter(Comanda.id == comanda_id).one()
+        assert comanda.fechada is False
+        assert db.query(Item).filter(
+            Item.comanda_id == comanda_id,
+            Item.status != "cancelado",
+        ).count() == 1
     finally:
         db.close()
 

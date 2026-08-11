@@ -147,7 +147,9 @@ class Settings:
         raise RuntimeError("A variável de ambiente 'ENCRYPTION_KEY' é obrigatória e não foi configurada.")
 
     # Hardware/Printer
-    PRINTER_WIDTH: int = int(os.getenv("PRINTER_WIDTH", "40"))
+    # A G250/ESC-POS de 80 mm comporta 48 colunas em Font A. O valor antigo
+    # (40) deixava uma faixa grande do papel sem uso e comprimía a leitura.
+    PRINTER_WIDTH: int = int(os.getenv("PRINTER_WIDTH", "48"))
 
     KOMA_TEST_PREMIUM_RESTAURANTE_IDS: str = os.getenv(
         "KOMA_TEST_PREMIUM_RESTAURANTE_IDS",
