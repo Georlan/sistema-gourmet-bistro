@@ -41,6 +41,10 @@ from ..services.clientes import (
     normalizar_telefone_cliente,
 )
 from ..subscription import subscription_has_printing
+from ..waiter_permissions import (
+    require_waiter_permission,
+    waiter_permission_enabled,
+)
 
 logger = logging.getLogger("koma.orders")
 
@@ -434,6 +438,15 @@ def abrir_comanda(comanda_in: ComandaCreate, background_tasks: BackgroundTasks, 
     """
     Abre uma nova comanda para uma mesa (ou sem mesa para retirada).
     """
+    if comanda_in.tipo.strip().lower() in {
+        "delivery", "entrega", "retirada", "viagem"
+    }:
+        require_waiter_permission(
+            db,
+            current_user,
+            "perm_garcom_delivery",
+        )
+
     # 1. Validar se a mesa existe (se mesa_id for informado)
     if comanda_in.mesa_id is not None:
         mesa = db.query(Mesa).filter(Mesa.id == comanda_in.mesa_id).first()
@@ -557,6 +570,12 @@ async def criar_venda_direta(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Tipo de pedido inválido. Use Mesa, Delivery ou Retirada.",
+        )
+    if tipo_pedido in {"Entrega", "Retirada"}:
+        require_waiter_permission(
+            db,
+            current_user,
+            "perm_garcom_delivery",
         )
     if tipo_pedido == "Consumo no Local" and venda_in.mesa_id is None:
         raise HTTPException(
@@ -735,7 +754,11 @@ async def criar_venda_direta(
             }, tenant_id=current_user.tenant_id)
 
         # Enfileira impressões se houver itens para cozinha
-        if itens_cozinha:
+        if itens_cozinha and waiter_permission_enabled(
+            db,
+            current_user,
+            "perm_garcom_print",
+        ):
             try:
                 from ..domain.printing import PrintDocumentService
                 from ..domain.printing.models import OrderPrintData, PrintItem as DomainPrintItem
@@ -864,6 +887,17 @@ def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_ta
                 detail="Comanda já fechada. Reabra antes de lançar novos itens."
             )
 
+    has_existing_items = db.query(Item.id).filter(
+        Item.comanda_id == comanda.id,
+        Item.status != "cancelado",
+    ).first() is not None
+    if has_existing_items:
+        require_waiter_permission(
+            db,
+            current_user,
+            "perm_garcom_editar",
+        )
+
     # 3. Validar se o garçom existe
     garcom = db.query(Usuario).filter(Usuario.id == lancamento_in.garcom_id).first()
     if not garcom:
@@ -941,7 +975,11 @@ def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_ta
                 "cliente_nome": it.cliente_nome
             })
             
-        if should_print:
+        if should_print and waiter_permission_enabled(
+            db,
+            current_user,
+            "perm_garcom_print",
+        ):
             from ..printer_service import printer_service
             print_preferences = _get_print_preferences(
                 db,
@@ -996,6 +1034,12 @@ def dividir_comanda(comanda_id: str, itens_ids: List[str], novo_identificador: s
     """
     Divide itens de uma comanda aberta criando uma comanda separada (com mesmo número de pedido).
     """
+    require_waiter_permission(
+        db,
+        current_user,
+        "perm_garcom_transferir_item",
+    )
+
     # 1. Validar comanda original
     comanda_origem = db.query(Comanda).filter(Comanda.id == comanda_id).first()
     if not comanda_origem:
@@ -1068,6 +1112,12 @@ def transferir_comanda(comanda_id: str, nova_mesa_id: int, background_tasks: Bac
     """
     Transfere uma comanda inteira para outra mesa.
     """
+    require_waiter_permission(
+        db,
+        current_user,
+        "perm_garcom_transferir_mesa",
+    )
+
     # 1. Validar comanda
     comanda = db.query(Comanda).filter(Comanda.id == comanda_id).first()
     if not comanda:
@@ -1112,6 +1162,11 @@ def fechar_comanda(
     Fecha a comanda. Aceita qualquer operador autenticado (garçom ou caixa).
     """
 
+    require_waiter_permission(
+        db,
+        current_garcom,
+        "perm_garcom_fechar",
+    )
     rest_id = require_tenant_id()
     comanda = db.query(Comanda).filter(
         Comanda.restaurante_id == rest_id,
@@ -1215,6 +1270,11 @@ def cancelar_item(
     Se for o único item ativo da comanda, o garçom não pode cancelar.
     """
 
+    require_waiter_permission(
+        db,
+        current_garcom,
+        "perm_garcom_cancelar",
+    )
     item = db.query(Item).filter(Item.id == item_id).first()
     if not item:
         raise HTTPException(
@@ -1273,6 +1333,12 @@ def transferir_item(
     Se a mesa de destino já possuir uma comanda aberta, associa o item a ela.
     Caso contrário, abre uma nova comanda na mesa de destino e associa o item a ela.
     """
+    require_waiter_permission(
+        db,
+        current_user,
+        "perm_garcom_transferir_item",
+    )
+
     # 1. Buscar item
     item = db.query(Item).filter(Item.id == item_id).first()
     if not item:
@@ -1339,6 +1405,11 @@ def update_item_details(
     Permite atualizar as observações ou o nome do cliente de um item na comanda ativa.
     Respeita a permissão 'perm_garcom_editar' configurada na retaguarda.
     """
+    require_waiter_permission(
+        db,
+        current_garcom,
+        "perm_garcom_editar",
+    )
     item = db.query(Item).filter(Item.id == item_id).first()
     if not item:
         raise HTTPException(
@@ -1354,16 +1425,6 @@ def update_item_details(
             detail="Não é possível editar itens de uma comanda já fechada"
         )
         
-    # Verificar permissão do garçom
-    config = db.query(ConfiguracaoRestaurante).filter(
-        ConfiguracaoRestaurante.restaurante_id == current_garcom.restaurante_id
-    ).first()
-    if config and not config.perm_garcom_editar and current_garcom.cargo == "garcom":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permissão negada para editar itens na comanda. Contate o Gerente."
-        )
-
     try:
         if update_data.observacao is not None:
             item.observacao = update_data.observacao
@@ -2002,6 +2063,11 @@ def mesclar_comandas(
     """
     Mescla o consumo da mesa de origem na mesa de destino.
     """
+    require_waiter_permission(
+        db,
+        current_user,
+        "perm_garcom_transferir_mesa",
+    )
     rest_id = require_tenant_id()
     if mesa_origem_id == mesa_destino_id:
         raise HTTPException(
@@ -2094,6 +2160,11 @@ def desmesclar_comanda(
     """
     Desmembra uma comanda mesclada de volta para a sua mesa de origem.
     """
+    require_waiter_permission(
+        db,
+        current_user,
+        "perm_garcom_transferir_mesa",
+    )
     rest_id = require_tenant_id()
     comanda = db.query(Comanda).filter(
         Comanda.restaurante_id == rest_id,

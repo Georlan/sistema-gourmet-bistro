@@ -19,6 +19,7 @@ export interface MesasViewProps {
   onTableClick?: (tableId: number) => void;
   tableFilter?: 'todos' | 'livres' | 'ocupadas' | 'prontas';
   onFilterChange?: (filter: 'todos' | 'livres' | 'ocupadas' | 'prontas') => void;
+  showOperationalStatus?: boolean;
   readOnly?: boolean;
 }
 
@@ -33,6 +34,7 @@ export function MesasView({
   onTableClick,
   tableFilter: externalFilter,
   onFilterChange,
+  showOperationalStatus = true,
   readOnly = false,
 }: MesasViewProps) {
   const [internalFilter, setInternalFilter] = useState<'todos' | 'livres' | 'ocupadas' | 'prontas'>('todos');
@@ -40,11 +42,11 @@ export function MesasView({
 
   const tableRows = useMemo(() => (salonTables || []).map((table) => {
     const tableOrders = orders.filter((order) => order.mesaId === table.id);
-    const isReady = tableOrders
+    const isReady = showOperationalStatus && tableOrders
       .flatMap((order) => order.itens || [])
       .some((item) => (item.status as string) === 'pronto');
     return { table, tableOrders, isReady };
-  }), [orders, salonTables]);
+  }), [orders, salonTables, showOperationalStatus]);
 
   const counts = useMemo(() => ({
     todos: tableRows.length,
@@ -185,6 +187,7 @@ export function MesasView({
               hasPendingPayment={hasPendingPayment}
               mergedSources={mergedSources}
               mergedIntoMesaId={mergedIntoMesaId}
+              showOperationalStatus={showOperationalStatus}
             />
           );
         })}

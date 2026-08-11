@@ -24,6 +24,7 @@ interface MenuPanelProps {
   liveCategorias?: CatalogCategory[];
   catalogReady?: boolean;
   isSubmitting?: boolean;
+  allowExternalOrders?: boolean;
 }
 
 export const MenuPanel: React.FC<MenuPanelProps> = ({
@@ -41,6 +42,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
   liveCategorias = [],
   catalogReady = false,
   isSubmitting = false,
+  allowExternalOrders = true,
 }) => {
   // Navigation state: starts showing the Cart (carrinho) by default
   const [view, setView] = useState<'cart' | 'menu'>('cart');
@@ -77,6 +79,12 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
   const [configObs, setConfigObs] = useState<string>('');
   const [configClient, setConfigClient] = useState<string>('');
   const [orderType, setOrderType] = useState<'Consumo no Local' | 'Retirada'>('Consumo no Local');
+
+  React.useEffect(() => {
+    if (!allowExternalOrders && orderType !== 'Consumo no Local') {
+      setOrderType('Consumo no Local');
+    }
+  }, [allowExternalOrders, orderType]);
 
 
 
@@ -364,7 +372,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                   {/* Order Type Toggle Selector */}
                   <div className="space-y-1.5 font-sans">
                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Tipo do Pedido:</span>
-                    <div className="grid grid-cols-2 bg-[#121214] border border-[#27272A] rounded-xl p-1">
+                    <div className={`${allowExternalOrders ? 'grid-cols-2' : 'grid-cols-1'} grid bg-[#121214] border border-[#27272A] rounded-xl p-1`}>
                       <button
                         type="button"
                         onClick={() => setOrderType('Consumo no Local')}
@@ -376,6 +384,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                       >
                         Consumo no Local
                       </button>
+                      {allowExternalOrders && (
                       <button
                         type="button"
                         onClick={() => setOrderType('Retirada')}
@@ -387,6 +396,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                       >
                         Retirada (Balcão)
                       </button>
+                      )}
                     </div>
                   </div>
 

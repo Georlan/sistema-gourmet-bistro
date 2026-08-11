@@ -522,6 +522,55 @@ def test_only_heartbeat_updates_agent_last_seen():
         db.close()
 
 
+def test_heartbeat_broadcasts_only_when_presence_or_printer_changes(monkeypatch):
+    events = []
+
+    async def capture_broadcast(message, *args, **kwargs):
+        events.append((message, args, kwargs))
+
+    monkeypatch.setattr(
+        print_agents_route.manager,
+        "broadcast",
+        capture_broadcast,
+    )
+    client = TestClient(app)
+    diagnostics = {
+        "adapter": "linux",
+        "platform": "linux",
+        "default_printer": "G250",
+        "printers": [
+            {
+                "name": "G250",
+                "connection": "usb",
+                "uri": "usb://GERTEC/G250",
+                "is_default": True,
+                "available": True,
+                "present": True,
+                "configured": True,
+            }
+        ],
+    }
+
+    first = client.post(
+        "/api/print-agents/heartbeat",
+        headers={"X-Agent-Token": "token_agent_1"},
+        json={"diagnostics": diagnostics},
+    )
+    second = client.post(
+        "/api/print-agents/heartbeat",
+        headers={"X-Agent-Token": "token_agent_1"},
+        json={"diagnostics": diagnostics},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert len(events) == 1
+    message, _, kwargs = events[0]
+    assert message == {"event": "print_monitor_updated"}
+    assert kwargs["restaurante_id"] == 1
+    assert kwargs["target_audience"] == "internal"
+
+
 def test_legacy_heartbeat_without_body_remains_accepted():
     client = TestClient(app)
 

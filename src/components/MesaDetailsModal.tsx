@@ -103,6 +103,15 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
   const [confirmClear, setConfirmClear] = useState<boolean>(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [expandedOrders, setExpandedOrders] = useState<Record<string, boolean>>({});
+  const canTransferTables = activeRole !== 'garcom'
+    || Boolean(restauranteConfig?.perm_garcom_transferir_mesa);
+  const canTransferItems = activeRole !== 'garcom'
+    || Boolean(restauranteConfig?.perm_garcom_transferir_item);
+  const canCreateExternalOrder = activeRole !== 'garcom'
+    || Boolean(restauranteConfig?.perm_garcom_delivery);
+  const canAppendOrderItems = activeRole !== 'garcom'
+    || orders.length === 0
+    || Boolean(restauranteConfig?.perm_garcom_editar);
 
   // Lock background scroll when modal is active
   React.useEffect(() => {
@@ -231,6 +240,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
             <span>Consumo Ativo</span>
           </button>
 
+          {canAppendOrderItems && (
           <button
             id="tab-lancamento-btn"
             type="button"
@@ -249,8 +259,9 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
               <span className="h-2 w-2 rounded-full bg-rose-900/40 border border-rose-800/50 animate-ping"></span>
             )}
           </button>
+          )}
 
-          {orders.length > 0 && (
+          {orders.length > 0 && (canTransferTables || canTransferItems) && (
             <button
               id="tab-transferir-btn"
               type="button"
@@ -258,7 +269,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
               aria-selected={activeTab === 'transferir'}
               onClick={() => {
                 setActiveTab('transferir');
-                setTransferType('total');
+                setTransferType(canTransferTables ? 'total' : 'parcial');
               }}
               className={`w-full sm:w-auto min-h-11 sm:min-h-0 px-2 sm:px-4.5 py-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider font-sans whitespace-nowrap border ${
                 activeTab === 'transferir' 
@@ -271,7 +282,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
             </button>
           )}
 
-          {orders.length > 0 && onMergeTables && (
+          {orders.length > 0 && onMergeTables && canTransferTables && (
             <button
               id="tab-mesclar-btn"
               type="button"
@@ -488,6 +499,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                                         <Edit2 size={12} />
                                       </button>
                                     )}
+                                    {canTransferItems && (
                                     <button
                                       type="button"
                                       onClick={() => {
@@ -508,6 +520,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                                     >
                                       <Move size={12} />
                                     </button>
+                                    )}
                                     
                                     {(!(activeRole === 'garcom' && !restauranteConfig?.perm_garcom_cancelar)) && (
                                       <button
@@ -613,19 +626,20 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                           <span>Prévia e Extrato</span>
                         </button>
 
+                        {(canTransferTables || canTransferItems) && (
                         <div className="grid grid-cols-2 gap-2">
                           <button
                             type="button"
                             onClick={() => {
                               setActiveTab('transferir');
-                              setTransferType('total');
+                              setTransferType(canTransferTables ? 'total' : 'parcial');
                             }}
                             className="py-2.5 bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] hover:border-[#10b981]/30 text-white rounded-xl font-bold text-[10px] flex items-center justify-center gap-1.5 transition-colors cursor-pointer uppercase tracking-wider font-sans"
                           >
                             <Move size={11} className="text-[#10b981]" />
                             <span>Transferir</span>
                           </button>
-                          {onMergeTables && (
+                          {onMergeTables && canTransferTables && (
                             <button
                               type="button"
                               onClick={() => {
@@ -639,8 +653,9 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                             </button>
                           )}
                         </div>
+                        )}
 
-                        {onCloseTable && !(activeRole === 'garcom' && !restauranteConfig?.perm_garcom_fechar_mesa) && (
+                        {onCloseTable && !(activeRole === 'garcom' && !restauranteConfig?.perm_garcom_fechar) && (
                           <button
                             id="close-table-btn-consumo"
                             onClick={() => {
@@ -688,6 +703,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
               liveProdutos={liveProdutos}
               liveCategorias={liveCategorias}
               catalogReady={catalogReady}
+              allowExternalOrders={canCreateExternalOrder}
             />
           )}
 
@@ -706,6 +722,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
 
               {/* Selector for transfer type */}
               <div className="flex bg-[#121214] p-1 border border-[#27272A] rounded-xl font-sans text-xs">
+                {canTransferTables && (
                 <button
                   type="button"
                   onClick={() => {
@@ -718,6 +735,8 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                 >
                   Mesa Inteira
                 </button>
+                )}
+                {canTransferItems && (
                 <button
                   type="button"
                   onClick={() => setTransferType('parcial')}
@@ -727,6 +746,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                 >
                   Selecionar Itens
                 </button>
+                )}
               </div>
 
               {/* If partial, show items checklist */}
