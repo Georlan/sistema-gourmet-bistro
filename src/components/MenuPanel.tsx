@@ -52,6 +52,22 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
   const [showSettings, setShowSettings] = useState<boolean>(false);
   const [expandedDraftObs, setExpandedDraftObs] = useState<string | null>(null);
 
+  const scrollPanelToTop = () => {
+    requestAnimationFrame(() => {
+      document.getElementById('mesa-details-scroll-body')?.scrollTo({ top: 0, behavior: 'auto' });
+    });
+  };
+
+  const openCartReview = () => {
+    setView('cart');
+    scrollPanelToTop();
+  };
+
+  const openMenu = () => {
+    setView('menu');
+    scrollPanelToTop();
+  };
+
   const categoriesList = React.useMemo(() => {
     const activeCategoryIds = new Set(
       liveProdutos
@@ -138,6 +154,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
     if (!selectedProductToConfigure) return;
     onAddToDraft(selectedProductToConfigure, configQty, configObs, configClient);
     setSelectedProductToConfigure(null);
+    openCartReview();
   };
 
   // Total draft count and price
@@ -152,7 +169,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
           <div className="flex flex-col sm:h-full justify-between min-h-0">
             
             {/* Cart Header */}
-            <div className="flex items-center justify-between gap-3 pb-3 border-b border-[#27272A] shrink-0 mb-3">
+            <div className="sticky top-0 z-40 -mx-3 -mt-3 mb-3 flex shrink-0 items-center justify-between gap-3 border-b border-[#27272A] bg-[#121214] px-3 pb-3 pt-3 shadow-[0_8px_18px_rgba(0,0,0,0.28)] sm:static sm:mx-0 sm:mt-0 sm:bg-transparent sm:px-0 sm:pt-0 sm:shadow-none">
               <div className="flex items-center gap-1.5 text-white">
                 <ShoppingCart size={18} className="text-[#10b981]" />
                 <div>
@@ -163,7 +180,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setView('menu')}
+                  onClick={openMenu}
                   className="min-h-10 px-3 py-2 bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-bold rounded-xl transition-colors cursor-pointer flex items-center gap-1 border border-emerald-400 shadow-sm"
                 >
                   <Plus size={13} />
@@ -182,7 +199,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                 <p className="text-xs text-gray-400 max-w-[260px] leading-relaxed">Escolha os produtos da Mesa {tableId}.</p>
                 <button
                   type="button"
-                  onClick={() => setView('menu')}
+                  onClick={openMenu}
                   className="min-h-11 px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 border border-emerald-400 text-black rounded-xl text-xs font-bold transition-colors cursor-pointer"
                 >
                   Abrir cardápio
@@ -457,7 +474,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
           <div className="space-y-3 sm:space-y-4">
             
             {/* Header: Title and Back button */}
-            <div className="sticky top-0 z-40 -mx-3 flex items-center justify-between gap-3 border-b border-[#27272A] bg-[#121214]/95 px-3 pb-3 pt-1 shadow-[0_8px_18px_rgba(0,0,0,0.28)] backdrop-blur-xl sm:static sm:mx-0 sm:bg-transparent sm:px-0 sm:pt-0 sm:shadow-none sm:backdrop-blur-none">
+            <div className="sticky top-0 z-40 -mx-3 -mt-3 flex items-center justify-between gap-3 border-b border-[#27272A] bg-[#121214] px-3 pb-3 pt-3 shadow-[0_8px_18px_rgba(0,0,0,0.28)] sm:static sm:mx-0 sm:mt-0 sm:bg-transparent sm:px-0 sm:pt-0 sm:shadow-none">
               <div className="min-w-0">
                 <div>
                   <h3 className="font-serif text-lg sm:text-xl font-bold text-white tracking-tight">Adicionar itens</h3>
@@ -468,7 +485,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
               <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   type="button"
-                  onClick={() => setView('cart')}
+                  onClick={openCartReview}
                   className={`min-h-10 px-3 py-2 text-xs font-bold rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 shadow-sm border ${
                     totalDraftQty > 0
                       ? 'bg-emerald-500 text-black border-emerald-400 hover:bg-emerald-400'
