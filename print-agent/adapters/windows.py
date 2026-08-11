@@ -33,6 +33,13 @@ VIRTUAL_PORT_MARKERS = (
 )
 
 
+def _hidden_process_flags() -> int:
+    """Impede que subprocessos do agente exibam consoles no Windows."""
+    if sys.platform != "win32":
+        return 0
+    return int(getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000))
+
+
 def _normalize_device_name(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", (value or "").casefold())
 
@@ -58,6 +65,7 @@ def _rescan_windows_usb_devices() -> None:
             timeout=20,
             check=False,
             text=True,
+            creationflags=_hidden_process_flags(),
         )
     except (OSError, subprocess.TimeoutExpired):
         pass
@@ -85,6 +93,7 @@ def _windows_usb_ports() -> list[str]:
             timeout=8,
             check=False,
             text=True,
+            creationflags=_hidden_process_flags(),
         )
     except (OSError, subprocess.TimeoutExpired):
         return []
@@ -149,6 +158,7 @@ def _install_generic_usb_queue(
             timeout=20,
             check=False,
             text=True,
+            creationflags=_hidden_process_flags(),
         )
     except (OSError, subprocess.TimeoutExpired):
         return False, None
@@ -194,6 +204,7 @@ def _present_windows_usb_printers() -> list[dict[str, str]]:
             timeout=6,
             check=False,
             text=True,
+            creationflags=_hidden_process_flags(),
         )
     except (OSError, subprocess.TimeoutExpired):
         return []
