@@ -830,6 +830,23 @@ export function CaixaPanel({
     payment: salonTableCards.filter(card => card.hasPendingPayment).length,
   }), [salonTableCards]);
 
+  const pdvTableOptions = useMemo(() => salonTableCards
+    .map((card) => {
+      const normalizedStatus = String(card.table.status || '').trim().toLowerCase();
+      const isOccupied = card.isOccupied
+        || card.hasPendingPayment
+        || ['ocupada', 'ocupado', 'pronta', 'pronto', 'aguardando_pagamento'].includes(normalizedStatus);
+
+      return {
+        ...card,
+        isOccupied,
+        label: card.table.nome?.trim() || `Mesa ${card.table.id}`,
+      };
+    })
+    .sort((left, right) => left.table.id - right.table.id), [salonTableCards]);
+
+  const pdvOccupiedTableCount = pdvTableOptions.filter(option => option.isOccupied).length;
+
   const visibleSalonTableCards = useMemo(() => salonTableCards.filter((card) => {
     if (tableStatusFilter === 'free') return !card.isOccupied && !card.isMerged;
     if (tableStatusFilter === 'occupied') return card.isOccupied && !card.hasPendingPayment;
@@ -999,6 +1016,8 @@ export function CaixaPanel({
   const [pdvDeliveryAddress, setPdvDeliveryAddress] = useState('');
   const [pdvDeliveryTaxa, setPdvDeliveryTaxa] = useState('0.00');
   const [pdvTargetMesaId, setPdvTargetMesaId] = useState<number>(0);
+  const selectedPdvTableOption = pdvTableOptions.find(option => option.table.id === pdvTargetMesaId);
+  const pdvCartItemCount = pdvCart.reduce((sum, item) => sum + item.quantity, 0);
 
   useEffect(() => {
     if (pdvOrderType === 'mesa') {
@@ -4794,7 +4813,25 @@ export function CaixaPanel({
 
           {/* VIEW 2: PDV (Pedidos Balcão) */}
           {activeSubTab === 'balcao' && (
-            <div className="h-full min-h-0 flex flex-col xl:flex-row gap-3 sm:gap-4 overflow-hidden relative">
+            <div className="orders-workspace h-full min-h-0 flex flex-col gap-3 sm:gap-4">
+              <section className="orders-hero shrink-0" aria-labelledby="counter-heading">
+                <div className="orders-hero__copy">
+                  <p className="orders-eyebrow"><span /> CAIXA / LANÇAMENTO RÁPIDO</p>
+                  <h1 id="counter-heading">Venda direta, <em>sem atrito</em></h1>
+                  <p>Escolha os itens, indique o destino e envie para a cozinha.</p>
+                </div>
+                <div className="orders-hero__metrics" aria-label="Resumo do lançamento">
+                  <div><strong>{sellableProducts.length}</strong><span>no cardápio</span></div>
+                  <div><strong>{pdvOccupiedTableCount}</strong><span>mesas ocupadas</span></div>
+                  <div><strong>{pdvCartItemCount}</strong><span>no pedido</span></div>
+                  <div className={isWsConnected ? 'is-live' : 'is-offline'}>
+                    <span className="orders-live-dot" />
+                    <span>{isWsConnected ? 'Tempo real ativo' : 'Reconectando'}</span>
+                  </div>
+                </div>
+              </section>
+
+              <div className="min-h-0 flex-1 flex flex-col xl:flex-row gap-3 sm:gap-4 overflow-hidden relative">
 
               {/* Mobile sub-tab toggle */}
               <div className="flex xl:hidden gap-1 p-1 bg-white/[0.025] border border-white/[0.08] rounded-xl shrink-0">
@@ -4820,7 +4857,7 @@ export function CaixaPanel({
                   }`}
                 >
                   <ShoppingCart size={14} />
-                  <span>Carrinho ({pdvCart.reduce((sum, item) => sum + item.quantity, 0)})</span>
+                  <span>Carrinho ({pdvCartItemCount})</span>
                 </button>
               </div>
 
@@ -4926,7 +4963,7 @@ export function CaixaPanel({
                     <span>Pedido atual</span>
                   </span>
                   <span className="bg-[#00b894]/10 text-[#4fe0bc] font-bold px-2.5 py-1 rounded-full font-mono text-[9px]">
-                    {pdvCart.reduce((sum, item) => sum + item.quantity, 0)} itens
+                    {pdvCartItemCount} itens
                   </span>
                 </div>
 
@@ -5062,21 +5099,68 @@ export function CaixaPanel({
                   </div>
 
                   {pdvOrderType === 'mesa' && (
-                    <div className="space-y-1">
-                      <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Mesa Destino:</label>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <label htmlFor="pdv-target-table" className="block text-[8px] font-bold uppercase tracking-wider text-zinc-400">
+                          Mesa de destino
+                        </label>
+                        <span className="text-[8px] text-zinc-600">
+                          {pdvOccupiedTableCount} em atendimento
+                        </span>
+                      </div>
                       <select
+                        id="pdv-target-table"
                         value={pdvTargetMesaId || ''}
                         onChange={(e) => setPdvTargetMesaId(Number(e.target.value) || 0)}
-                        className={clsx('w-full', 'px-2', 'py-1.5', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-lg', 'focus:outline-none', 'text-white', 'text-[10px]')}
+                        aria-describedby="pdv-table-selection-help"
+                        className="min-h-10 w-full rounded-xl border border-white/[0.09] bg-[#090d0b] px-3 text-[10px] font-semibold text-white outline-none transition-colors focus:border-[#00b894]/70 focus:ring-2 focus:ring-[#00b894]/10"
                         required
                       >
-                        <option value="">-- Selecione uma mesa --</option>
-                        {(salonTables || []).map(t => (
-                          <option key={t.id} value={t.id}>
-                            Mesa {t.id} {t.nome ? `(${t.nome})` : ''}
+                        <option value="">Selecione uma mesa</option>
+                        {pdvTableOptions.map(option => (
+                          <option key={option.table.id} value={option.table.id}>
+                            {option.isOccupied ? '●' : '○'} {option.label}
+                            {option.table.nome ? ` · Mesa ${option.table.id}` : ''}
+                            {option.isOccupied
+                              ? ` · em atendimento${option.total > 0 ? ` · R$ ${option.total.toFixed(2).replace('.', ',')}` : ''}`
+                              : ' · livre'}
                           </option>
                         ))}
                       </select>
+
+                      <div
+                        id="pdv-table-selection-help"
+                        className={clsx(
+                          'flex min-h-10 items-center gap-2.5 rounded-xl border px-3 py-2 text-left',
+                          selectedPdvTableOption?.isOccupied
+                            ? 'border-[#00b894]/20 bg-[#00b894]/[0.07]'
+                            : 'border-white/[0.07] bg-white/[0.02]'
+                        )}
+                      >
+                        <span
+                          aria-hidden="true"
+                          className={clsx(
+                            'h-2 w-2 shrink-0 rounded-full',
+                            selectedPdvTableOption?.isOccupied ? 'bg-[#00b894]' : 'bg-zinc-600'
+                          )}
+                        />
+                        <div className="min-w-0">
+                          <strong className="block text-[9px] font-semibold text-zinc-200">
+                            {!selectedPdvTableOption
+                              ? 'Escolha onde este pedido será lançado'
+                              : selectedPdvTableOption.isOccupied
+                                ? `${selectedPdvTableOption.label} já está em atendimento`
+                                : `${selectedPdvTableOption.label} está livre`}
+                          </strong>
+                          <span className="mt-0.5 block text-[8px] leading-relaxed text-zinc-500">
+                            {selectedPdvTableOption?.isOccupied
+                              ? 'Você pode continuar: os novos itens serão adicionados ao atendimento da mesa.'
+                              : selectedPdvTableOption
+                                ? 'O primeiro lançamento abrirá o atendimento automaticamente.'
+                                : 'Mesas ocupadas continuam disponíveis e aparecem identificadas na lista.'}
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   )}
 
@@ -5172,7 +5256,7 @@ export function CaixaPanel({
                 >
                   <span className="text-xs flex items-center gap-2">
                     <ShoppingCart size={16} />
-                    <span>{pdvCart.reduce((s, i) => s + i.quantity, 0)} itens no carrinho</span>
+                    <span>{pdvCartItemCount} itens no carrinho</span>
                   </span>
                   <span className="text-xs font-mono font-extrabold bg-black/30 px-3 py-1 rounded-xl">
                     R$ {pdvCart.reduce((sum, item) => sum + (item.product.preco * item.quantity), 0).toFixed(2)} →
@@ -5180,6 +5264,7 @@ export function CaixaPanel({
                 </button>
               )}
 
+              </div>
             </div>
           )}
 
