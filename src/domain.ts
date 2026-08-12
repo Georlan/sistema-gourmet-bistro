@@ -57,13 +57,61 @@ export function getCustomerSubtotals(orders: Order[]): { name: string; total: nu
 }
 
 /**
+ * Normalizes any timestamp input (number, ISO string, clock HH:MM string, Date)
+ * into a valid unix timestamp in milliseconds, handling timezone offsets.
+ */
+export function normalizeOperationalTimestamp(raw: unknown, now: number = Date.now()): number | null {
+  if (!raw) return null;
+  let ts: number;
+  if (typeof raw === 'number') {
+    if (!Number.isFinite(raw) || raw <= 0) return null;
+    ts = raw < 1_000_000_000_000 ? raw * 1000 : raw;
+  } else if (typeof raw === 'string') {
+    const str = raw.trim();
+    if (!str) return null;
+    const timeMatch = str.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+    if (timeMatch) {
+      const candidate = new Date(now);
+      candidate.setHours(Number(timeMatch[1]), Number(timeMatch[2]), Number(timeMatch[3] || 0), 0);
+      if (candidate.getTime() > now + 30_000) {
+        candidate.setDate(candidate.getDate() - 1);
+      }
+      return candidate.getTime();
+    }
+    const isoStr = str.replace(' ', 'T');
+    const parsed = Date.parse(isoStr);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      const fallback = Date.parse(str);
+      if (!Number.isFinite(fallback) || fallback <= 0) return null;
+      ts = fallback;
+    } else {
+      ts = parsed;
+    }
+  } else if (raw instanceof Date) {
+    ts = raw.getTime();
+  } else {
+    return null;
+  }
+
+  // Adjust for timezone offset mismatch if timestamp is in future relative to now
+  if (ts > now + 30_000) {
+    const diffHours = Math.round((ts - now) / 3_600_000);
+    if (diffHours >= 1 && diffHours <= 14) {
+      ts -= diffHours * 3_600_000;
+    }
+  }
+
+  return ts <= now ? ts : now;
+}
+
+/**
  * Gets the elapsed time since the first order was made.
  * Returns formatted string like "45m" or "1h 12m" or "--".
  */
-export function formatElapsedTime(firstOrderTimestamp: number | undefined, currentTime: number): string {
-  if (!firstOrderTimestamp) return '--';
-  const diffMs = currentTime - firstOrderTimestamp;
-  if (diffMs < 0) return '0m';
+export function formatElapsedTime(firstOrderTimestamp: number | string | Date | undefined | null, currentTime: number = Date.now()): string {
+  const ts = normalizeOperationalTimestamp(firstOrderTimestamp, currentTime);
+  if (ts === null) return '--';
+  const diffMs = Math.max(0, currentTime - ts);
 
   const diffMins = Math.floor(diffMs / 60000);
   if (diffMins < 60) {

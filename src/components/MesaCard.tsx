@@ -6,7 +6,7 @@
 import React from 'react';
 import { CirclePlus, Clock3, FileText, GitMerge, ReceiptText, UsersRound } from 'lucide-react';
 import { Table, Order } from '../types';
-import { getTableTotal, formatElapsedTime } from '../domain';
+import { getTableTotal, formatElapsedTime, normalizeOperationalTimestamp } from '../domain';
 
 interface MesaCardProps {
   table: Table;
@@ -41,7 +41,13 @@ export const MesaCard = React.memo<MesaCardProps>(({
   if (mergedIntoMesaId) {
     status = 'mesclada';
   } else if (orders.length > 0) {
-    firstOrderTimestamp = Math.min(...orders.map((order) => order.timestamp));
+    const validTimestamps = orders
+      .map((order) => (order as any).created_at || order.timestamp)
+      .map((t) => normalizeOperationalTimestamp(t, currentTime))
+      .filter((t): t is number => t !== null);
+    if (validTimestamps.length > 0) {
+      firstOrderTimestamp = Math.min(...validTimestamps);
+    }
     const activeItems = orders.flatMap((order) => order.itens.filter((item) => (item.status as string) !== 'cancelado'));
     const hasReady = activeItems.some((item) => item.status === 'pronto');
     const hasPreparing = activeItems.some((item) => item.status === 'preparando');

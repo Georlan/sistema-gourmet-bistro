@@ -6,7 +6,7 @@
 import React, { useState } from 'react';
 import { X, Clock, Receipt, PlusCircle, Move, ShoppingBag, Printer, Trash2, ArrowLeft, Edit2, GitMerge } from 'lucide-react';
 import { Table, Order, DraftItem, AppSettings, Product, AppRole, OrderItem } from '../types';
-import { getTableTotal, getCustomerSubtotals, formatElapsedTime } from '../domain';
+import { getTableTotal, getCustomerSubtotals, formatElapsedTime, normalizeOperationalTimestamp } from '../domain';
 import { MenuPanel } from './MenuPanel';
 import { TABLES, RESTAURANT_CONFIG } from '../data';
 import type { CatalogCategory } from '../catalog/catalog';
@@ -23,32 +23,32 @@ interface MesaDetailsModalProps {
   currentTime: number;
   onClose: () => void;
   onUpdateSettings: (settings: AppSettings) => void;
-  onAddToDraft: (product: Product, quantity?: number, observacao?: string, clienteNome?: string) => void;
-  onRemoveFromDraft: (draftItemId: string) => void;
-  onUpdateDraftItem: (draftItemId: string, fields: Partial<DraftItem>) => void;
-  onSubmitDraft: (orderType: 'Consumo no Local' | 'Retirada' | 'Entrega') => void;
+  onAddToDraft: (tableId: number, produtoId: string, nome: string, preco: number, clienteNome?: string) => void;
+  onRemoveFromDraft: (tableId: number, draftItemId: string) => void;
+  onUpdateDraftItem: (tableId: number, draftItemId: string, updates: Partial<DraftItem>) => void;
+  onSubmitDraft: (tableId: number) => void;
   otherWaitersServing?: string[];
-  onTransferTable: (targetTableId: number) => void;
-  onTransferItem: (itemId: string, targetTableId: number) => void;
-  onTransferItems: (itemIds: string[], targetTableId: number) => void;
-  onCancelItem: (itemId: string) => void;
-  onCloseTable: () => void;
-  onSettleCustomer: (customerName: string) => void;
-  onDeliverItem: (orderId: string, itemId: string) => void;
+  onTransferTable: (fromTableId: number, toTableId: number) => void;
+  onTransferItem: (fromTableId: number, toTableId: number, itemId: string) => void;
+  onTransferItems: (fromTableId: number, toTableId: number, itemIds: string[]) => void;
+  onCancelItem: (tableId: number, itemId: string) => void;
+  onCloseTable: (tableId: number) => void;
+  onSettleCustomer?: (tableId: number, customerName: string) => void;
+  onDeliverItem?: (tableId: number, itemId: string) => void;
   historicClients?: string[];
   restaurantName?: string;
-  onClearTableOrders?: () => void;
-  onPrintReceipt?: (apenasValores?: boolean) => Promise<void>;
-  onPrintKitchenLaunch?: (lancamentoId: string) => Promise<void>;
+  onClearTableOrders?: (tableId: number) => void;
+  onPrintReceipt?: (tableId: number, apenasValores?: boolean) => void;
+  onPrintKitchenLaunch?: (tableId: number, orderId?: string) => void;
   salonTables?: Table[];
   liveProdutos?: Product[];
   liveCategorias?: CatalogCategory[];
   catalogReady?: boolean;
   restauranteConfig?: any;
-  onUpdateItemDetails?: (itemId: string, observacao: string, clienteNome: string, quantidadeAdicional?: number) => Promise<void>;
+  onUpdateItemDetails?: (tableId: number, itemId: string, updates: { clienteNome?: string; observacao?: string }) => void;
   isSubmitting?: boolean;
   onMergeTables?: (sourceTableId: number, targetTableId: number) => void;
-  onUnmergeTable?: (comandaId: string) => void;
+  onUnmergeTable?: (targetTableId: number) => void;
 }
 
 export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
@@ -125,7 +125,11 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
   const customerSubtotals = getCustomerSubtotals(orders);
 
   // Find oldest order timestamp
-  const firstTimestamp = orders.length > 0 ? Math.min(...orders.map(o => o.timestamp)) : undefined;
+  const validTimestamps = orders
+    .map(o => (o as any).created_at || o.timestamp)
+    .map(t => normalizeOperationalTimestamp(t, currentTime))
+    .filter((t): t is number => t !== null);
+  const firstTimestamp = validTimestamps.length > 0 ? Math.min(...validTimestamps) : undefined;
   const permanenceTime = formatElapsedTime(firstTimestamp, currentTime);
 
   // Get other tables that are available for transfer (any table except the original one)
