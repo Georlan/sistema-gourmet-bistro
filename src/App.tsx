@@ -44,12 +44,30 @@ const LOCAL_STORAGE_HIST_CLIENTS_KEY = 'koma_historic_clients_v3';
 const MANAGEMENT_ROLES = new Set<AppRole>(['admin', 'gerente', 'caixa']);
 const isManagementRole = (role: AppRole) => MANAGEMENT_ROLES.has(role);
 
-const parseBackendDateTime = (dateStr: string): number => {
+const parseBackendDateTime = (dateStr: any): number => {
   if (!dateStr) return Date.now();
-  if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !/-\d{2}:\d{2}$/.test(dateStr)) {
-    return new Date(dateStr + 'Z').getTime();
+  if (typeof dateStr === 'number') {
+    return dateStr < 1_000_000_000_000 ? dateStr * 1000 : dateStr;
   }
-  return new Date(dateStr).getTime();
+  const str = String(dateStr).trim();
+  if (!str) return Date.now();
+
+  const timeMatch = str.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (timeMatch) {
+    const now = new Date();
+    const candidate = new Date(now);
+    candidate.setHours(Number(timeMatch[1]), Number(timeMatch[2]), Number(timeMatch[3] || 0), 0);
+    if (candidate.getTime() > now.getTime() + 60_000) candidate.setDate(candidate.getDate() - 1);
+    return candidate.getTime();
+  }
+
+  const isoStr = str.replace(' ', 'T');
+  const parsed = Date.parse(isoStr);
+  if (!Number.isNaN(parsed) && parsed > 0) {
+    return parsed;
+  }
+  const fallback = Date.parse(str);
+  return (!Number.isNaN(fallback) && fallback > 0) ? fallback : Date.now();
 };
 
 const aplicarMascaraTelefoneInput = (valor: string) => {

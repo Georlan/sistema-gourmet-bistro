@@ -334,6 +334,7 @@ class PrinterService:
                         "   OBS: ",
                         ESC_FONT_A,
                     )
+                lines.append("")
 
         lines.append(ESC_FONT_A)
         lines.append(draw_separator("-", width))
@@ -376,6 +377,13 @@ class PrinterService:
         now = datetime.datetime.now()
         if apenas_valores and mesa_id is not None:
             opening_time = opened_at or now
+            if isinstance(opening_time, datetime.datetime) and opening_time.tzinfo is not None:
+                opening_time = opening_time.astimezone()
+            opening_str = (
+                opening_time.strftime("%H:%M")
+                if isinstance(opening_time, (datetime.datetime, datetime.date))
+                else str(opening_time)[:5]
+            )
             lines.append(
                 ESC_BOLD_ON
                 + align_center("FECHAMENTO", width)
@@ -386,7 +394,7 @@ class PrinterService:
                 ESC_BOLD_ON
                 + split_justified(
                     f"MESA: {mesa_id}",
-                    f"ABERTURA: {opening_time.strftime('%H:%M')}",
+                    f"ABERTURA: {opening_str}",
                     width,
                 )
                 + ESC_BOLD_OFF
@@ -512,6 +520,7 @@ class PrinterService:
                         "   OBS: ",
                         ESC_FONT_A,
                     )
+                lines.append("")
 
             grand_total += client_subtotal
             lines.append(draw_separator("-", width))
