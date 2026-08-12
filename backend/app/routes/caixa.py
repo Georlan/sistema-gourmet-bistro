@@ -206,9 +206,17 @@ def _atividades_recentes_turno(
         criado_em = atividade.get("criado_em")
         if not criado_em:
             return 0.0
-        if criado_em.tzinfo is None:
-            criado_em = criado_em.replace(tzinfo=datetime.timezone.utc)
-        return criado_em.timestamp()
+        if isinstance(criado_em, (int, float)):
+            return float(criado_em)
+        if isinstance(criado_em, datetime.datetime):
+            return criado_em.timestamp()
+        if isinstance(criado_em, str):
+            try:
+                dt = datetime.datetime.fromisoformat(criado_em.replace("Z", "+00:00"))
+                return dt.timestamp()
+            except Exception:
+                return 0.0
+        return 0.0
 
     ultima_movimentacao = next(
         (
@@ -415,11 +423,14 @@ def obter_resumo_turno_atual(
         turno,
     )
 
-    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    now_local = datetime.datetime.now()
     aberto_dt = turno.aberto_em
-    if aberto_dt.tzinfo is None:
-        aberto_dt = aberto_dt.replace(tzinfo=datetime.timezone.utc)
-    tempo_minutos = int((now_utc - aberto_dt).total_seconds() / 60)
+    if isinstance(aberto_dt, datetime.datetime):
+        if aberto_dt.tzinfo is not None:
+            aberto_dt = aberto_dt.astimezone().replace(tzinfo=None)
+        tempo_minutos = max(0, int((now_local - aberto_dt).total_seconds() / 60))
+    else:
+        tempo_minutos = 0
 
     ult_mov = None
     if ultima_atividade_caixa:

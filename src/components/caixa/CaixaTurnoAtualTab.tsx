@@ -14,6 +14,7 @@ import {
   WifiOff,
 } from 'lucide-react';
 import { CaixaAtividadeRecente, CaixaTurnoResumo } from '../../types';
+import { normalizeOperationalTimestamp } from '../../domain';
 
 interface CaixaTurnoAtualTabProps {
   turnoResumo: CaixaTurnoResumo | null;
@@ -81,8 +82,9 @@ const ActivityIcon = ({ type }: { type: string }) => {
 
 const ActivityRow = ({ activity }: { activity: CaixaAtividadeRecente }) => {
   const isWithdrawal = activity.tipo === 'sangria';
-  const date = new Date(activity.criado_em);
-  const validDate = !Number.isNaN(date.getTime());
+  const timestamp = normalizeOperationalTimestamp(activity.criado_em);
+  const date = timestamp !== null ? new Date(timestamp) : null;
+  const validDate = date !== null && !Number.isNaN(date.getTime());
   const method = activity.metodo ? paymentMethodLabel[activity.metodo] || activity.metodo : null;
 
   return (
@@ -99,7 +101,7 @@ const ActivityRow = ({ activity }: { activity: CaixaAtividadeRecente }) => {
           <strong className="truncate text-xs text-[#f5f4ef]">
             {activityLabel[activity.tipo] || activity.descricao}
           </strong>
-          <span className="text-[10px] text-zinc-600">{validDate ? timeFormatter.format(date) : '—'}</span>
+          <span className="text-[10px] text-zinc-600">{validDate ? timeFormatter.format(date!) : '—'}</span>
         </span>
         <span className="mt-0.5 block truncate text-[11px] text-zinc-500">
           {activity.origem}{method ? ` · ${method}` : ''}{activity.operador_nome ? ` · ${activity.operador_nome}` : ''}
