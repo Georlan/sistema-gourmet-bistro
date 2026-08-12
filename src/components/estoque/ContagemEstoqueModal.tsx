@@ -81,7 +81,7 @@ export const ContagemEstoqueModal: React.FC<ContagemEstoqueModalProps> = ({
   const handleSave = async (status: 'rascunho' | 'confirmada') => {
     setErrorMsg(null);
     if (selectedItems.length === 0) {
-      setErrorMsg('Selecione ao menos um insumo para a contagem.');
+      setErrorMsg('Selecione ao menos um ingrediente para a contagem.');
       return;
     }
 
@@ -144,7 +144,7 @@ export const ContagemEstoqueModal: React.FC<ContagemEstoqueModalProps> = ({
                 <Search size={14} className="absolute left-3 top-2.5 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="Buscar insumo..."
+                  placeholder="Buscar ingrediente..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full pl-9 pr-3 py-1.5 bg-[#121214] border border-[#27272A] rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
@@ -177,7 +177,7 @@ export const ContagemEstoqueModal: React.FC<ContagemEstoqueModalProps> = ({
             <thead className="sticky top-0 bg-[#1C1C1F] border-b border-[#27272A] text-gray-400 uppercase tracking-wider font-bold z-10">
               <tr>
                 {!isAlreadyConfirmed && <th className="p-3 w-10 text-center">Incluir</th>}
-                <th className="p-3">Insumo</th>
+                <th className="p-3">Ingrediente</th>
                 <th className="p-3 font-mono">Qtd Sistema</th>
                 <th className="p-3 font-mono">Qtd Contada</th>
                 <th className="p-3 font-mono">Divergência</th>

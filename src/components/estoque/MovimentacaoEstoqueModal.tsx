@@ -29,7 +29,7 @@ export const MovimentacaoEstoqueModal: React.FC<MovimentacaoEstoqueModalProps> =
     setErrorMsg(null);
 
     if (!insumoId) {
-      setErrorMsg('Selecione um insumo.');
+      setErrorMsg('Selecione um ingrediente.');
       return;
     }
     if (quantidade <= 0) {
@@ -42,7 +42,7 @@ export const MovimentacaoEstoqueModal: React.FC<MovimentacaoEstoqueModalProps> =
     }
 
     if (['perda', 'ajuste_negativo'].includes(tipo) && (saldoAtual - quantidade < 0)) {
-      setErrorMsg(`Saldo insuficiente! O insumo possui apenas ${saldoAtual} ${selectedInsumo?.unidade_medida || 'un'} em estoque.`);
+      setErrorMsg(`Saldo insuficiente! O ingrediente possui apenas ${saldoAtual} ${selectedInsumo?.unidade_medida || 'un'} em estoque.`);
       return;
     }
 
@@ -90,14 +90,14 @@ export const MovimentacaoEstoqueModal: React.FC<MovimentacaoEstoqueModalProps> =
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Insumo Select */}
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Insumo:</label>
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Ingrediente:</label>
             <select
               value={insumoId}
               onChange={(e) => setInsumoId(e.target.value)}
               required
               className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
             >
-              <option value="">-- Selecione o Insumo --</option>
+              <option value="">-- Selecione o Ingrediente --</option>
               {insumos.map(i => (
                 <option key={i.id} value={i.id}>
                   {i.nome} (Atual: {i.estoque_atual} {i.unidade_medida})

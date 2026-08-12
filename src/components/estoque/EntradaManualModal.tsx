@@ -100,28 +100,26 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
       }
     }
 
-    const payload = {
-      distribuidor_id: isNovoDistribuidor ? null : (distribuidorId || null),
-      distribuidor_nome_fantasia: isNovoDistribuidor ? distribuidorNome : null,
-      distribuidor_cnpj: isNovoDistribuidor ? distribuidorCnpj : null,
-      numero_documento: numeroDocumento,
-      data_emissao: dataEmissao,
-      observacao: observacao,
-      itens: itens.map(i => ({
-        insumo_id: i.is_novo_insumo ? `ins-${i.insumo_nome.toLowerCase().trim().replace(/\s+/g, '-')}` : i.insumo_id,
-        insumo_nome: i.is_novo_insumo ? i.insumo_nome : null,
-        quantidade: Number(i.quantidade),
-        unidade_medida: i.unidade_medida,
-        custo_unitario: Number(i.custo_unitario)
-      }))
-    };
-
     try {
       setIsSubmitting(true);
+      const payload = {
+        nota_fiscal: numeroDocumento,
+        data_entrada: dataEmissao,
+        distribuidor_id: distribuidorId || null,
+        observacao: observacao.trim() || null,
+        itens: itens.map(i => ({
+          insumo_id: i.is_novo_insumo ? `ins-${i.insumo_nome.toLowerCase().trim().replace(/\s+/g, '-')}` : i.insumo_id,
+          insumo_nome: i.is_novo_insumo ? i.insumo_nome : null,
+          quantidade: Number(i.quantidade),
+          unidade_medida: i.unidade_medida,
+          custo_unitario: Number(i.custo_unitario)
+        }))
+      };
+
       await onSubmit(payload);
       onClose();
     } catch (err: any) {
-      setErrorMsg(err.message || 'Erro ao registrar entrada manual.');
+      setErrorMsg(err.message || 'Erro ao registrar entrada de estoque.');
     } finally {
       setIsSubmitting(false);
     }
@@ -132,12 +130,12 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto cursor-pointer"
     >
-      <div className="w-full max-w-3xl bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8 max-h-[90vh] flex flex-col">
-        {/* Modal Header */}
+      <div className="w-full max-w-4xl bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8 max-h-[90vh] flex flex-col">
+        {/* Header */}
         <div className="flex justify-between items-center pb-2 border-b border-[#27272A] shrink-0">
           <div>
             <h3 className="font-serif text-sm font-bold text-white">Nova Entrada Manual de Estoque</h3>
-            <p className="text-[9px] text-gray-400">Registre recebimento de insumos com recálculo de custo médio ponderado.</p>
+            <p className="text-[9px] text-gray-400">Registre recebimento de ingredientes com recálculo de custo médio ponderado.</p>
           </div>
           <button type="button" onClick={onClose} className="p-1 text-gray-400 hover:text-white transition-colors cursor-pointer">
             <X size={16} />
@@ -244,18 +242,18 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
                         onChange={(e) => handleItemChange(idx, 'insumo_id', e.target.value)}
                         className="w-full px-2.5 py-1.5 bg-[#121214] border border-[#27272A] rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
                       >
-                        <option value="">-- Selecione o Insumo --</option>
+                        <option value="">-- Selecione o Ingrediente --</option>
                         {insumos.map(ins => (
                           <option key={ins.id} value={ins.id}>{ins.nome} ({ins.unidade_medida}) - Atual: {ins.estoque_atual}</option>
                         ))}
-                        <option value="novo">+ Cadastrar Novo Insumo Inline</option>
+                        <option value="novo">+ Cadastrar Novo Ingrediente Inline</option>
                       </select>
                     ) : (
                       <div className="flex items-center gap-1">
                         <input
                           type="text"
                           required
-                          placeholder="Nome do Novo Insumo"
+                          placeholder="Nome do Novo Ingrediente"
                           value={item.insumo_nome}
                           onChange={(e) => handleItemChange(idx, 'insumo_nome', e.target.value)}
                           className="w-full px-2.5 py-1.5 bg-[#121214] border border-[#27272A] rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"

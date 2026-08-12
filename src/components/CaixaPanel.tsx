@@ -1670,17 +1670,17 @@ export function CaixaPanel({
     }
 
     if (itemList.length === 0) {
-      return <p className="orders-card__items font-medium text-[11px] text-slate-400 italic p-2 rounded-lg">Nenhum item adicionado</p>;
+      return <p className={clsx('orders-card__items', 'font-medium', 'text-[11px]', 'text-slate-400', 'italic', 'p-2', 'rounded-lg')}>Nenhum item adicionado</p>;
     }
 
     const visibleItems = isExpanded ? itemList : itemList.slice(0, 3);
     const hiddenCount = itemList.length - 3;
 
     return (
-      <div className="orders-card__items space-y-0.5 p-2 rounded-lg">
+      <div className={clsx('orders-card__items', 'space-y-0.5', 'p-2', 'rounded-lg')}>
         <ul className="space-y-0.5">
           {visibleItems.map((it, idx) => (
-            <li key={idx} className="font-medium text-xs text-slate-200 flex items-center justify-between font-sans truncate">
+            <li key={idx} className={clsx('font-medium', 'text-xs', 'text-slate-200', 'flex', 'items-center', 'justify-between', 'font-sans', 'truncate')}>
               <span className="truncate">{it.qty}× {it.name}</span>
             </li>
           ))}
@@ -1689,7 +1689,7 @@ export function CaixaPanel({
           <button
             type="button"
             onClick={(e) => onToggle(cardId, e)}
-            className="mt-0.5 text-[11px] font-bold text-[#10B981] hover:text-emerald-300 underline cursor-pointer block transition-all"
+            className={clsx('mt-0.5', 'text-[11px]', 'font-bold', 'text-[#10B981]', 'hover:text-emerald-300', 'underline', 'cursor-pointer', 'block', 'transition-all')}
           >
             {isExpanded ? "▲ Recolher itens" : `+ ${hiddenCount} mais itens (expandir)`}
           </button>
@@ -2390,17 +2390,17 @@ export function CaixaPanel({
       });
 
       if (res.ok) {
-        alert(isNew ? 'Insumo cadastrado com sucesso!' : 'Insumo atualizado com sucesso!');
+        alert(isNew ? 'Ingrediente cadastrado com sucesso!' : 'Ingrediente atualizado com sucesso!');
         setShowNewInsumoModal(false);
         setShowEditInsumoModal(false);
         refreshEstoqueData();
       } else {
         const err = await res.json();
-        alert(err.detail || 'Erro ao salvar insumo.');
+        alert(err.detail || 'Erro ao salvar ingrediente.');
       }
     } catch (e) {
       console.error(e);
-      alert('Erro de conexão ao salvar insumo.');
+      alert('Erro de conexão ao salvar ingrediente.');
     }
   };
 
@@ -3500,7 +3500,7 @@ export function CaixaPanel({
 
     if (status === 'pronto') {
       return (
-        <span className="px-2 py-0.5 text-[8px] font-bold rounded font-mono bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+        <span className={clsx('px-2', 'py-0.5', 'text-[8px]', 'font-bold', 'rounded', 'font-mono', 'bg-emerald-500/15', 'text-emerald-400', 'border', 'border-emerald-500/30')}>
           ✓ PRONTO
         </span>
       );
@@ -3736,24 +3736,24 @@ export function CaixaPanel({
       <SidebarProvider className="contents">
         {/* MOBILE SIDEBAR */}
         {isMobileSidebarOpen && (
-          <div className="fixed inset-0 z-50 flex lg:hidden animate-fade-in">
+          <div className={clsx('fixed', 'inset-0', 'z-50', 'flex', 'lg:hidden', 'animate-fade-in')}>
             <div
               onClick={() => setIsMobileSidebarOpen(false)}
-              className="fixed inset-0 bg-black/80 backdrop-blur-sm"
+              className={clsx('fixed', 'inset-0', 'bg-black/80', 'backdrop-blur-sm')}
             />
-            <Sidebar className="cashier-sidebar cashier-sidebar--mobile relative w-[17rem] max-w-[88vw] flex flex-col justify-between shrink-0 h-full z-10 shadow-2xl overflow-y-auto">
-              <SidebarHeader className="cashier-sidebar__header p-3">
+            <Sidebar className={clsx('cashier-sidebar', 'cashier-sidebar--mobile', 'relative', 'w-[17rem]', 'max-w-[88vw]', 'flex', 'flex-col', 'justify-between', 'shrink-0', 'h-full', 'z-10', 'shadow-2xl', 'overflow-y-auto')}>
+              <SidebarHeader className={clsx('cashier-sidebar__header', 'p-3')}>
                 <div className="cashier-sidebar__brand-row">
                   <div className="cashier-sidebar__brand">
                     <span className="cashier-sidebar__logo-wrap">
-                      <img src={logoImg} alt="Kôma" className="w-7 h-7 object-contain" />
+                      <img src={logoImg} alt="Kôma" className={clsx('w-7', 'h-7', 'object-contain')} />
                     </span>
                     <span className="cashier-sidebar__brand-copy">
                       <strong>Kôma</strong>
                       <small>Gestão do restaurante</small>
                     </span>
                   </div>
-                  <div className="flex items-center gap-1.5">
+                  <div className={clsx('flex', 'items-center', 'gap-1.5')}>
                     <button
                       type="button"
                       onClick={() => {
@@ -3794,7 +3794,7 @@ export function CaixaPanel({
                         setShowAbrirModal(true);
                         setIsMobileSidebarOpen(false);
                       }}
-                      className="cashier-shift-card__action is-open"
+                      className={clsx('cashier-shift-card__action', 'is-open')}
                     >
                       Abrir caixa
                     </button>
@@ -3802,7 +3802,7 @@ export function CaixaPanel({
                 </div>
               </SidebarHeader>
 
-              <SidebarContent className="cashier-sidebar__content p-2">
+              <SidebarContent className={clsx('cashier-sidebar__content', 'p-2')}>
                 {CASHIER_SIDEBAR_GROUPS.map((group) => (
                   <SidebarGroup key={group.category}>
                     <SidebarGroupLabel className="cashier-nav-group-label">
@@ -3843,7 +3843,7 @@ export function CaixaPanel({
                 ))}
               </SidebarContent>
 
-              <SidebarFooter className="cashier-sidebar__footer p-3">
+              <SidebarFooter className={clsx('cashier-sidebar__footer', 'p-3')}>
                 <div className="cashier-font-control">
                   <span className="cashier-font-control__label">Tamanho do texto</span>
                   <div className="cashier-font-control__options">
@@ -3876,12 +3876,12 @@ export function CaixaPanel({
         )}
 
         {/* DESKTOP SIDEBAR - SHADCN COMPOSABLE ARCHITECTURE */}
-        <Sidebar className="cashier-sidebar hidden lg:flex w-[17rem] flex-col justify-between shrink-0">
-          <SidebarHeader className="cashier-sidebar__header p-3.5">
+        <Sidebar className={clsx('cashier-sidebar', 'hidden', 'lg:flex', 'w-[17rem]', 'flex-col', 'justify-between', 'shrink-0')}>
+          <SidebarHeader className={clsx('cashier-sidebar__header', 'p-3.5')}>
             <div className="cashier-sidebar__brand-row">
               <div className="cashier-sidebar__brand">
                 <span className="cashier-sidebar__logo-wrap">
-                  <img src={logoImg} alt="Kôma" className="w-7 h-7 object-contain" />
+                  <img src={logoImg} alt="Kôma" className={clsx('w-7', 'h-7', 'object-contain')} />
                 </span>
                 <span className="cashier-sidebar__brand-copy">
                   <strong>Kôma</strong>
@@ -3913,7 +3913,7 @@ export function CaixaPanel({
               {turno?.status !== 'aberto' && (
                 <button
                   onClick={() => setShowAbrirModal(true)}
-                  className="cashier-shift-card__action is-open"
+                  className={clsx('cashier-shift-card__action', 'is-open')}
                 >
                   Abrir caixa
                 </button>
@@ -3922,7 +3922,7 @@ export function CaixaPanel({
           </SidebarHeader>
 
           {/* Sidebar Content */}
-          <SidebarContent className="cashier-sidebar__content p-2">
+          <SidebarContent className={clsx('cashier-sidebar__content', 'p-2')}>
             {CASHIER_SIDEBAR_GROUPS.map((group) => (
               <SidebarGroup key={group.category}>
                 <SidebarGroupLabel className="cashier-nav-group-label">
@@ -3964,7 +3964,7 @@ export function CaixaPanel({
           </SidebarContent>
 
           {/* Sidebar Footer */}
-          <SidebarFooter className="cashier-sidebar__footer p-3">
+          <SidebarFooter className={clsx('cashier-sidebar__footer', 'p-3')}>
             <div className="cashier-font-control">
               <span className="cashier-font-control__label">Tamanho do texto</span>
               <div className="cashier-font-control__options">
@@ -3999,11 +3999,11 @@ export function CaixaPanel({
       <main className={clsx('cashier-main', 'flex-1', 'bg-[#09090B]', 'flex', 'flex-col', 'overflow-hidden', 'w-full')}>
         {/* Top header bar */}
         <header className={clsx('cashier-topbar', 'h-14', 'border-b', 'border-[#27272A]', 'bg-[#121214]', 'px-4', 'sm:px-6', 'flex', 'items-center', 'justify-between', 'shrink-0')}>
-          <div className="flex items-center gap-2 truncate">
+          <div className={clsx('flex', 'items-center', 'gap-2', 'truncate')}>
             <button
               type="button"
               onClick={() => setIsMobileSidebarOpen(true)}
-              className="lg:hidden p-1.5 bg-[#1C1C1F] hover:bg-[#27272A] text-emerald-400 rounded-xl border border-[#27272A] flex items-center justify-center cursor-pointer shrink-0"
+              className={clsx('lg:hidden', 'p-1.5', 'bg-[#1C1C1F]', 'hover:bg-[#27272A]', 'text-emerald-400', 'rounded-xl', 'border', 'border-[#27272A]', 'flex', 'items-center', 'justify-center', 'cursor-pointer', 'shrink-0')}
               title="Abrir Menu do Caixa"
               id="btn-mobile-caixa-sidebar-open"
             >
@@ -4025,7 +4025,7 @@ export function CaixaPanel({
           </div>
 
           {/* Botão MODO PDV / FULLSCREEN */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className={clsx('flex', 'items-center', 'gap-2', 'shrink-0')}>
             <button
               type="button"
               onClick={toggleFullscreen}
@@ -4039,7 +4039,7 @@ export function CaixaPanel({
               id="btn-modo-pdv-fullscreen"
             >
               {isFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-              <span className="hidden sm:inline">{isFullscreen ? "Sair da Tela Cheia" : "Modo PDV"}</span>
+              <span className={clsx('hidden', 'sm:inline')}>{isFullscreen ? "Sair da Tela Cheia" : "Modo PDV"}</span>
             </button>
           </div>
         </header>
@@ -4105,7 +4105,7 @@ export function CaixaPanel({
           ))}
 
           {activeTab === 'estoque' && [
-            { id: 'insumos', label: 'Insumos' },
+            { id: 'insumos', label: 'Ingredientes' },
             { id: 'entradas', label: 'Entradas' },
             { id: 'movimentacoes', label: 'Movimentações' },
             { id: 'contagem', label: 'Contagem' },
@@ -4280,23 +4280,23 @@ export function CaixaPanel({
 
               {/* ALERTA DE PAGAMENTO PENDENTE EM DINHEIRO (GARÇOM) */}
               {pagamentosPendentes.length > 0 && (
-                <div className="bg-[#1C1C1F] border-2 border-amber-500/40 p-4 rounded-2xl space-y-3 animate-pulse-subtle">
-                  <div className="flex items-center gap-2 text-amber-500 font-bold uppercase tracking-wider text-[10px]">
+                <div className={clsx('bg-[#1C1C1F]', 'border-2', 'border-amber-500/40', 'p-4', 'rounded-2xl', 'space-y-3', 'animate-pulse-subtle')}>
+                  <div className={clsx('flex', 'items-center', 'gap-2', 'text-amber-500', 'font-bold', 'uppercase', 'tracking-wider', 'text-[10px]')}>
                     <AlertTriangle size={14} />
                     <span>Confirmação de Dinheiro Pendente ({pagamentosPendentes.length})</span>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className={clsx('grid', 'grid-cols-1', 'md:grid-cols-2', 'gap-3')}>
                     {pagamentosPendentes.map((pag) => {
                       const comandaMesa = orders.find(o => o.id === pag.comanda_id);
                       const mesaNum = comandaMesa ? comandaMesa.mesaId : '?';
                       return (
-                        <div key={pag.id} className="bg-[#09090B] border border-[#27272A] p-3 rounded-xl flex justify-between items-center gap-4 text-[11px] text-left">
+                        <div key={pag.id} className={clsx('bg-[#09090B]', 'border', 'border-[#27272A]', 'p-3', 'rounded-xl', 'flex', 'justify-between', 'items-center', 'gap-4', 'text-[11px]', 'text-left')}>
                           <div>
-                            <span className="text-gray-400 block">Mesa {mesaNum}</span>
-                            <span className="font-bold text-white block">{formatCurrency(pag.valor)} em Dinheiro</span>
-                            <span className="text-[9.5px] text-[#10b981] block font-mono">Garçom solicitante: {pag.nome_cliente || 'Garçom'}</span>
+                            <span className={clsx('text-gray-400', 'block')}>Mesa {mesaNum}</span>
+                            <span className={clsx('font-bold', 'text-white', 'block')}>{formatCurrency(pag.valor)} em Dinheiro</span>
+                            <span className={clsx('text-[9.5px]', 'text-[#10b981]', 'block', 'font-mono')}>Garçom solicitante: {pag.nome_cliente || 'Garçom'}</span>
                           </div>
-                          <div className="flex gap-2">
+                          <div className={clsx('flex', 'gap-2')}>
                             <button
                               type="button"
                               onClick={async () => {
@@ -4318,7 +4318,7 @@ export function CaixaPanel({
                                   if (onRefreshPagamentosPendentes) onRefreshPagamentosPendentes();
                                 }
                               }}
-                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[9px] uppercase tracking-wider transition-all cursor-pointer"
+                              className={clsx('px-3', 'py-1.5', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'rounded-lg', 'font-bold', 'text-[9px]', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}
                             >
                               Confirmar Recebimento
                             </button>
@@ -4343,7 +4343,7 @@ export function CaixaPanel({
                                   if (onRefreshPagamentosPendentes) onRefreshPagamentosPendentes();
                                 }
                               }}
-                              className="px-3 py-1.5 bg-rose-950/30 border border-rose-900/35 text-rose-400 hover:bg-rose-900/20 hover:text-white rounded-lg font-bold text-[9px] transition-all cursor-pointer"
+                              className={clsx('px-3', 'py-1.5', 'bg-rose-950/30', 'border', 'border-rose-900/35', 'text-rose-400', 'hover:bg-rose-900/20', 'hover:text-white', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer')}
                             >
                               Rejeitar
                             </button>
@@ -4356,10 +4356,10 @@ export function CaixaPanel({
               )}
 
               {/* Controls bar with Search Input */}
-              <div className="orders-toolbar sticky top-0 z-20">
+              <div className={clsx('orders-toolbar', 'sticky', 'top-0', 'z-20')}>
                 {/* Search Bar Component */}
-                <div className="orders-search relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                <div className={clsx('orders-search', 'relative')}>
+                  <Search className={clsx('absolute', 'left-3', 'top-1/2', '-translate-y-1/2', 'w-4', 'h-4', 'text-zinc-500')} />
                   <input
                     type="text"
                     value={searchQuery}
@@ -4391,7 +4391,7 @@ export function CaixaPanel({
                       type="checkbox"
                       checked={autoAccept}
                       onChange={(e) => setAutoAccept(e.target.checked)}
-                      className="sr-only peer"
+                      className={clsx('sr-only', 'peer')}
                       aria-label="Aceitar pedidos online automaticamente"
                     />
                     <span className="orders-switch" aria-hidden="true"><span /></span>
@@ -4421,73 +4421,73 @@ export function CaixaPanel({
               {/* ── FLOATING DRAWER: Pedidos Pendentes ─────────────────────────────── */}
               {isDrawerOpen && (
                 <div
-                  className="fixed inset-0 z-50 flex"
+                  className={clsx('fixed', 'inset-0', 'z-50', 'flex')}
                   onClick={() => setIsDrawerOpen(false)}
                 >
                   {/* Backdrop */}
-                  <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+                  <div className={clsx('absolute', 'inset-0', 'bg-black/60', 'backdrop-blur-sm')} />
                   {/* Drawer panel */}
                   <div
-                    className="relative ml-auto h-full w-full max-w-sm bg-[#0F0F11] border-l border-[#27272A] flex flex-col shadow-2xl"
+                    className={clsx('relative', 'ml-auto', 'h-full', 'w-full', 'max-w-sm', 'bg-[#0F0F11]', 'border-l', 'border-[#27272A]', 'flex', 'flex-col', 'shadow-2xl')}
                     onClick={e => e.stopPropagation()}
                   >
                     {/* Drawer header */}
-                    <div className="flex items-center justify-between px-5 py-4 border-b border-[#27272A] shrink-0">
+                    <div className={clsx('flex', 'items-center', 'justify-between', 'px-5', 'py-4', 'border-b', 'border-[#27272A]', 'shrink-0')}>
                       <div>
-                        <h2 className="font-bold text-white text-sm">Pedidos aguardando aceite</h2>
-                        <p className="text-[10px] text-gray-400 mt-0.5">Aceite ou recuse cada pedido antes de produzir</p>
+                        <h2 className={clsx('font-bold', 'text-white', 'text-sm')}>Pedidos aguardando aceite</h2>
+                        <p className={clsx('text-[10px]', 'text-gray-400', 'mt-0.5')}>Aceite ou recuse cada pedido antes de produzir</p>
                       </div>
                       <button
                         type="button"
                         onClick={() => setIsDrawerOpen(false)}
-                        className="p-1.5 rounded-lg bg-[#1C1C1F] border border-[#27272A] text-gray-400 hover:text-white cursor-pointer"
+                        className={clsx('p-1.5', 'rounded-lg', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'text-gray-400', 'hover:text-white', 'cursor-pointer')}
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                       </button>
                     </div>
 
                     {/* Drawer body */}
-                    <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                    <div className={clsx('flex-1', 'overflow-y-auto', 'p-4', 'space-y-3')}>
                       {deliveryOrders.filter(o => o.status === 'pendente').length === 0 ? (
-                        <div className="flex flex-col items-center justify-center h-40 text-gray-500 text-[11px] italic">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="mb-3 opacity-40"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                        <div className={clsx('flex', 'flex-col', 'items-center', 'justify-center', 'h-40', 'text-gray-500', 'text-[11px]', 'italic')}>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={clsx('mb-3', 'opacity-40')}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
                           Nenhum pedido pendente
                         </div>
                       ) : (
                         deliveryOrders.filter(o => o.status === 'pendente').map((order) => (
-                          <div key={order.id} className="orders-pending-card p-4 rounded-xl space-y-3">
-                            <div className="flex justify-between items-start">
+                          <div key={order.id} className={clsx('orders-pending-card', 'p-4', 'rounded-xl', 'space-y-3')}>
+                            <div className={clsx('flex', 'justify-between', 'items-start')}>
                               <div>
-                                <div className="flex flex-wrap gap-1 mb-1">
-                                  <span className="orders-card__chip is-primary">
+                                <div className={clsx('flex', 'flex-wrap', 'gap-1', 'mb-1')}>
+                                  <span className={clsx('orders-card__chip', 'is-primary')}>
                                     {order.modalidade === 'delivery' ? 'Delivery' : 'Retirada'}
                                   </span>
-                                  <span className="orders-card__chip is-muted">
+                                  <span className={clsx('orders-card__chip', 'is-muted')}>
                                     {order.canal}
                                   </span>
                                 </div>
-                                <strong className="text-white text-sm block">{order.cliente}</strong>
-                                <span className="text-[10px] text-gray-400 block">{order.telefone}</span>
+                                <strong className={clsx('text-white', 'text-sm', 'block')}>{order.cliente}</strong>
+                                <span className={clsx('text-[10px]', 'text-gray-400', 'block')}>{order.telefone}</span>
                               </div>
                               <div className="text-right">
                                 <span className="orders-card__price">{formatCurrency(order.total)}</span>
-                                <span className="text-[9px] text-gray-500">{order.criadoEm}</span>
-                                {order.numeroPedido && <span className="text-[8px] text-gray-600 font-mono block">#{order.numeroPedido}</span>}
+                                <span className={clsx('text-[9px]', 'text-gray-500')}>{order.criadoEm}</span>
+                                {order.numeroPedido && <span className={clsx('text-[8px]', 'text-gray-600', 'font-mono', 'block')}>#{order.numeroPedido}</span>}
                               </div>
                             </div>
 
-                            <p className="text-[10px] text-gray-300 bg-[#09090B] p-2 rounded border border-[#27272A]/30 leading-relaxed font-mono">
+                            <p className={clsx('text-[10px]', 'text-gray-300', 'bg-[#09090B]', 'p-2', 'rounded', 'border', 'border-[#27272A]/30', 'leading-relaxed', 'font-mono')}>
                               {order.itens}
                             </p>
 
                             {order.endereco && (
-                              <span className="text-[10px] text-gray-400 flex items-start gap-1">
-                                <MapPin size={11} className="shrink-0 text-emerald-300/80 mt-0.5" />
+                              <span className={clsx('text-[10px]', 'text-gray-400', 'flex', 'items-start', 'gap-1')}>
+                                <MapPin size={11} className={clsx('shrink-0', 'text-emerald-300/80', 'mt-0.5')} />
                                 <span>{order.endereco}</span>
                               </span>
                             )}
 
-                            <div className="flex gap-2 pt-1">
+                            <div className={clsx('flex', 'gap-2', 'pt-1')}>
                               <button
                                 type="button"
                                 onClick={async () => {
@@ -4520,28 +4520,28 @@ export function CaixaPanel({
 
               {/* Kanban operacional universal: mesas, pedidos online e finalização. */}
               <div
-                className="orders-board flex-1 gap-3 overflow-x-auto snap-x snap-mandatory pb-3 scrollbar-thin scrollbar-thumb-zinc-800"
+                className={clsx('orders-board', 'flex-1', 'gap-3', 'overflow-x-auto', 'snap-x', 'snap-mandatory', 'pb-3', 'scrollbar-thin', 'scrollbar-thumb-zinc-800')}
                 style={ordersBoardStyle}
               >
 
 
                 {/* COLUMN 1: Em produção */}
                 <div className={clsx('orders-column orders-column--salon flex flex-col overflow-hidden snap-center', filteredCol1.length === 0 && 'is-empty')}>
-                  <div className="orders-column__header px-4 py-2.5 flex justify-between items-center shrink-0">
+                  <div className={clsx('orders-column__header', 'px-4', 'py-2.5', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
                     <div>
                       <span className="orders-column__number">01 / SALÃO</span>
                       <span className={clsx('font-bold', 'text-white', 'font-sans', 'block', 'text-sm')}>Mesas em Atendimento</span>
-                      <span className="text-xs text-gray-400 block mt-0.5 font-normal">Lançados pelo garçom ou caixa</span>
+                      <span className={clsx('text-xs', 'text-gray-400', 'block', 'mt-0.5', 'font-normal')}>Lançados pelo garçom ou caixa</span>
                     </div>
                     <span className="orders-column__count">
                       {filteredCol1.length}
                     </span>
                   </div>
 
-                  <div className="orders-column__body p-2.5 sm:p-3 flex-1 overflow-y-auto space-y-2.5">
+                  <div className={clsx('orders-column__body', 'p-2.5', 'sm:p-3', 'flex-1', 'overflow-y-auto', 'space-y-2.5')}>
                     {filteredCol1.length === 0 ? (
-                      <div className="orders-empty-state py-16 text-center text-gray-400 text-xs space-y-1">
-                        <ClipboardList size={20} className="mx-auto opacity-40 mb-2 text-emerald-400" />
+                      <div className={clsx('orders-empty-state', 'py-16', 'text-center', 'text-gray-400', 'text-xs', 'space-y-1')}>
+                        <ClipboardList size={20} className={clsx('mx-auto', 'opacity-40', 'mb-2', 'text-emerald-400')} />
                         <p>{searchQuery ? "Nenhum pedido encontrado para a busca" : "Nenhum pedido local em produção"}</p>
                       </div>
                     ) : (
@@ -4564,26 +4564,26 @@ export function CaixaPanel({
                               )}
                             >
                               {/* LINHA 1 (Top Bar do Card) */}
-                              <div className="flex justify-between items-center gap-2">
-                                <div className="flex items-center gap-1.5 flex-wrap">
+                              <div className={clsx('flex', 'justify-between', 'items-center', 'gap-2')}>
+                                <div className={clsx('flex', 'items-center', 'gap-1.5', 'flex-wrap')}>
                                   <span className={clsx('orders-card__chip', sla.badgeClass)}>
                                     {sla.label}
                                   </span>
-                                  <span className="orders-card__chip is-primary">
+                                  <span className={clsx('orders-card__chip', 'is-primary')}>
                                     {order.mesaId && order.mesaId > 0 ? `MESA ${order.mesaId}` : 'BALCÃO'}
                                   </span>
                                   {tableMovement.transferredFromMesaIds.length > 0 && (
-                                    <span className="orders-card__chip is-muted">
+                                    <span className={clsx('orders-card__chip', 'is-muted')}>
                                       ↪ Transferida da M{tableMovement.transferredFromMesaIds.join(', M')}
                                     </span>
                                   )}
                                   {tableMovement.mergedMesaIds.length > 0 && (
-                                    <span className="orders-card__chip is-muted">
+                                    <span className={clsx('orders-card__chip', 'is-muted')}>
                                       ⛓ Mesclada com M{tableMovement.mergedMesaIds.join(', M')}
                                     </span>
                                   )}
                                 </div>
-                                <div className="flex items-center gap-1 shrink-0">
+                                <div className={clsx('flex', 'items-center', 'gap-1', 'shrink-0')}>
                                   <button
                                     type="button"
                                     onClick={(e) => handleQuickPrintOrder(order, e)}
@@ -4643,7 +4643,7 @@ export function CaixaPanel({
                                     setIsLoading(false);
                                   }
                                 }}
-                                className="orders-card__action w-full py-2 px-3 h-8 sm:h-9 font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5"
+                                className={clsx('orders-card__action', 'w-full', 'py-2', 'px-3', 'h-8', 'sm:h-9', 'font-bold', 'text-xs', 'sm:text-sm', 'rounded-xl', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1.5')}
                               >
                                 <Check size={13} />
                                 <span>Pronto para pagamento</span>
@@ -4658,21 +4658,21 @@ export function CaixaPanel({
 
                 {/* COLUMN 2: pedidos online aceitos, delivery ou retirada. */}
                 <div className={clsx('orders-column orders-column--digital flex flex-col overflow-hidden snap-center', filteredDigitalProduction.length === 0 && 'is-empty')}>
-                  <div className="orders-column__header px-4 py-2.5 flex justify-between items-center shrink-0">
+                  <div className={clsx('orders-column__header', 'px-4', 'py-2.5', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
                     <div>
                       <span className="orders-column__number">02 / DIGITAL</span>
                       <span className={clsx('font-bold', 'text-white', 'font-sans', 'block', 'text-sm')}>Delivery e Retirada</span>
-                      <span className="text-xs text-gray-400 block mt-0.5 font-normal">Pedidos aceitos e em preparo</span>
+                      <span className={clsx('text-xs', 'text-gray-400', 'block', 'mt-0.5', 'font-normal')}>Pedidos aceitos e em preparo</span>
                     </div>
                     <span className="orders-column__count">
                       {filteredDigitalProduction.length}
                     </span>
                   </div>
 
-                  <div className="orders-column__body p-2.5 sm:p-3 flex-1 overflow-y-auto space-y-2.5">
+                  <div className={clsx('orders-column__body', 'p-2.5', 'sm:p-3', 'flex-1', 'overflow-y-auto', 'space-y-2.5')}>
                     {filteredDigitalProduction.length === 0 ? (
-                      <div className="orders-empty-state py-16 text-center text-gray-400 text-xs space-y-1">
-                        <Globe size={20} className="mx-auto opacity-40 mb-2 text-emerald-300" />
+                      <div className={clsx('orders-empty-state', 'py-16', 'text-center', 'text-gray-400', 'text-xs', 'space-y-1')}>
+                        <Globe size={20} className={clsx('mx-auto', 'opacity-40', 'mb-2', 'text-emerald-300')} />
                         <p>{searchQuery ? "Nenhum pedido encontrado para a busca" : "Nenhum pedido online em preparo"}</p>
                       </div>
                     ) : (
@@ -4695,17 +4695,17 @@ export function CaixaPanel({
                               )}
                             >
                               {/* LINHA 1 (Top Bar do Card) */}
-                              <div className="flex justify-between items-center gap-2">
-                                <div className="flex items-center gap-1.5 flex-wrap">
+                              <div className={clsx('flex', 'justify-between', 'items-center', 'gap-2')}>
+                                <div className={clsx('flex', 'items-center', 'gap-1.5', 'flex-wrap')}>
                                   <span className={clsx('orders-card__chip', sla.badgeClass)}>
                                     {sla.label}
                                   </span>
-                                  <span className="orders-card__chip is-primary">{badgeText}</span>
-                                  <span className="orders-card__chip is-muted">
+                                  <span className={clsx('orders-card__chip', 'is-primary')}>{badgeText}</span>
+                                  <span className={clsx('orders-card__chip', 'is-muted')}>
                                     {order.canal}
                                   </span>
                                 </div>
-                                <div className="flex items-center gap-1 shrink-0">
+                                <div className={clsx('flex', 'items-center', 'gap-1', 'shrink-0')}>
                                   <button
                                     type="button"
                                     onClick={(e) => handleQuickPrintOrder(order, e)}
@@ -4740,8 +4740,8 @@ export function CaixaPanel({
                               {renderCompactItemsList(order.itens, cardId, isExpanded, toggleCardExpansion)}
 
                               {isDeliveryOrder && order.endereco && (
-                                <span className="font-normal text-xs text-gray-400 flex items-center gap-1 truncate">
-                                  <MapPin size={11} className="shrink-0 text-emerald-300/80" />
+                                <span className={clsx('font-normal', 'text-xs', 'text-gray-400', 'flex', 'items-center', 'gap-1', 'truncate')}>
+                                  <MapPin size={11} className={clsx('shrink-0', 'text-emerald-300/80')} />
                                   <span className="truncate">{order.endereco}</span>
                                 </span>
                               )}
@@ -4753,7 +4753,7 @@ export function CaixaPanel({
                                   if (isLoading) return;
                                   handleUpdateDeliveryStatus(order.id, 'transito');
                                 }}
-                                className="orders-card__action w-full py-2 px-3 h-8 sm:h-9 font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5"
+                                className={clsx('orders-card__action', 'w-full', 'py-2', 'px-3', 'h-8', 'sm:h-9', 'font-bold', 'text-xs', 'sm:text-sm', 'rounded-xl', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1.5')}
                               >
                                 <Check size={13} />
                                 <span>{buttonText === 'SAIU PARA ENTREGA' ? 'Saiu para entrega' : 'Pronto para retirada'}</span>
@@ -4768,21 +4768,21 @@ export function CaixaPanel({
 
                 {/* COLUMN 3: pagamento e finalização de todas as modalidades. */}
                 <div className={clsx('orders-column orders-column--closing flex flex-col overflow-hidden snap-center', filteredCol2Table.length === 0 && filteredDeliveryFinalization.length === 0 && 'is-empty')}>
-                  <div className="orders-column__header px-4 py-2.5 flex justify-between items-center shrink-0">
+                  <div className={clsx('orders-column__header', 'px-4', 'py-2.5', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
                     <div>
                       <span className="orders-column__number">03 / FECHAMENTO</span>
                       <span className={clsx('font-bold', 'text-white', 'font-sans', 'block', 'text-sm')}>Prontos para concluir</span>
-                      <span className="text-xs text-gray-400 block mt-0.5 font-normal">Receba ou finalize conforme a modalidade</span>
+                      <span className={clsx('text-xs', 'text-gray-400', 'block', 'mt-0.5', 'font-normal')}>Receba ou finalize conforme a modalidade</span>
                     </div>
                     <span className="orders-column__count">
                       {filteredCol2Table.length + filteredDeliveryFinalization.length}
                     </span>
                   </div>
 
-                  <div className="orders-column__body p-2.5 sm:p-3 flex-1 overflow-y-auto space-y-2.5">
+                  <div className={clsx('orders-column__body', 'p-2.5', 'sm:p-3', 'flex-1', 'overflow-y-auto', 'space-y-2.5')}>
                     {filteredCol2Table.length === 0 && filteredDeliveryFinalization.length === 0 ? (
-                      <div className="orders-empty-state py-16 text-center text-gray-400 text-xs space-y-1">
-                        <Check size={20} className="mx-auto opacity-40 mb-2 text-emerald-300" />
+                      <div className={clsx('orders-empty-state', 'py-16', 'text-center', 'text-gray-400', 'text-xs', 'space-y-1')}>
+                        <Check size={20} className={clsx('mx-auto', 'opacity-40', 'mb-2', 'text-emerald-300')} />
                         <p>{searchQuery ? "Nenhum pedido encontrado para a busca" : "Nenhum pedido aguardando finalização"}</p>
                       </div>
                     ) : (
@@ -4810,24 +4810,24 @@ export function CaixaPanel({
                               )}
                             >
                               {/* LINHA 1 (Top Bar do Card) */}
-                              <div className="flex justify-between items-center gap-2">
-                                <div className="flex items-center gap-1.5 flex-wrap">
+                              <div className={clsx('flex', 'justify-between', 'items-center', 'gap-2')}>
+                                <div className={clsx('flex', 'items-center', 'gap-1.5', 'flex-wrap')}>
                                   <span className={clsx('orders-card__chip', sla.badgeClass)}>
                                     {sla.label}
                                   </span>
                                   <span className={clsx('orders-card__chip', contaPedida ? 'is-attention' : 'is-primary')}>{badgeText}</span>
                                   {tableMovement.transferredFromMesaIds.length > 0 && (
-                                    <span className="orders-card__chip is-muted">
+                                    <span className={clsx('orders-card__chip', 'is-muted')}>
                                       ↪ Transferida da M{tableMovement.transferredFromMesaIds.join(', M')}
                                     </span>
                                   )}
                                   {tableMovement.mergedMesaIds.length > 0 && (
-                                    <span className="orders-card__chip is-muted">
+                                    <span className={clsx('orders-card__chip', 'is-muted')}>
                                       ⛓ Mesclada com M{tableMovement.mergedMesaIds.join(', M')}
                                     </span>
                                   )}
                                 </div>
-                                <div className="flex items-center gap-1 shrink-0">
+                                <div className={clsx('flex', 'items-center', 'gap-1', 'shrink-0')}>
                                   <button
                                     type="button"
                                     onClick={(e) => handleQuickPrintOrder(order, e)}
@@ -4862,7 +4862,7 @@ export function CaixaPanel({
                               </div>
 
                               {pendingTableItems > 0 && (
-                                <div className="flex items-center gap-2 rounded-lg border border-amber-400/25 bg-amber-500/10 px-2.5 py-2 text-[11px] font-semibold text-amber-200">
+                                <div className={clsx('flex', 'items-center', 'gap-2', 'rounded-lg', 'border', 'border-amber-400/25', 'bg-amber-500/10', 'px-2.5', 'py-2', 'text-[11px]', 'font-semibold', 'text-amber-200')}>
                                   <Clock size={13} className="shrink-0" />
                                   <span>
                                     Esta mesa ainda tem {pendingTableItems} {pendingTableItems === 1 ? 'item em preparo' : 'itens em preparo'}.
@@ -4899,7 +4899,7 @@ export function CaixaPanel({
                                     Math.max(0, total - Number(checkoutOrder.valorPago || 0)).toFixed(2)
                                   );
                                 }}
-                                className="orders-card__action w-full py-2 px-3 h-8 sm:h-9 font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5"
+                                className={clsx('orders-card__action', 'w-full', 'py-2', 'px-3', 'h-8', 'sm:h-9', 'font-bold', 'text-xs', 'sm:text-sm', 'rounded-xl', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1.5')}
                               >
                                 <Check size={13} /><span>Abrir pagamento</span>
                               </button>
@@ -4926,17 +4926,17 @@ export function CaixaPanel({
                                 sla.borderTopClass
                               )}
                             >
-                              <div className="flex justify-between items-center gap-2">
-                                <div className="flex items-center gap-1.5 flex-wrap">
+                              <div className={clsx('flex', 'justify-between', 'items-center', 'gap-2')}>
+                                <div className={clsx('flex', 'items-center', 'gap-1.5', 'flex-wrap')}>
                                   <span className={clsx('orders-card__chip', sla.badgeClass)}>
                                     {sla.label}
                                   </span>
-                                  <span className="orders-card__chip is-primary">{badgeText}</span>
-                                  <span className="orders-card__chip is-muted">
+                                  <span className={clsx('orders-card__chip', 'is-primary')}>{badgeText}</span>
+                                  <span className={clsx('orders-card__chip', 'is-muted')}>
                                     {order.canal}
                                   </span>
                                 </div>
-                                <div className="flex items-center gap-1 shrink-0">
+                                <div className={clsx('flex', 'items-center', 'gap-1', 'shrink-0')}>
                                   <button
                                     type="button"
                                     onClick={(e) => handleQuickPrintOrder(order, e)}
@@ -4971,8 +4971,8 @@ export function CaixaPanel({
                               {renderCompactItemsList(order.itens, cardId, isExpanded, toggleCardExpansion)}
 
                               {isDeliveryOrder && order.endereco && (
-                                <span className="font-normal text-xs text-gray-400 flex items-center gap-1 truncate">
-                                  <MapPin size={11} className="shrink-0 text-emerald-300/80" />
+                                <span className={clsx('font-normal', 'text-xs', 'text-gray-400', 'flex', 'items-center', 'gap-1', 'truncate')}>
+                                  <MapPin size={11} className={clsx('shrink-0', 'text-emerald-300/80')} />
                                   <span className="truncate">{order.endereco}</span>
                                 </span>
                               )}
@@ -5006,7 +5006,7 @@ export function CaixaPanel({
                                     handleFinalizarPedido(order.id);
                                   }
                                 }}
-                                className="orders-card__action w-full py-2 px-3 h-8 sm:h-9 font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5"
+                                className={clsx('orders-card__action', 'w-full', 'py-2', 'px-3', 'h-8', 'sm:h-9', 'font-bold', 'text-xs', 'sm:text-sm', 'rounded-xl', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1.5')}
                               >
                                 <Check size={13} /><span>{order.pago ? 'Finalizar pedido' : 'Receber e finalizar'}</span>
                               </button>
@@ -5024,7 +5024,7 @@ export function CaixaPanel({
 
           {/* VIEW 2: PDV (Pedidos Balcão) */}
           {activeSubTab === 'balcao' && (
-            <div className="orders-workspace h-full min-h-0 flex flex-col gap-3 sm:gap-4">
+            <div className={clsx('orders-workspace', 'h-full', 'min-h-0', 'flex', 'flex-col', 'gap-3', 'sm:gap-4')}>
               <OperationalBanner
                 id="counter-heading"
                 eyebrow="VENDA / NOVO PEDIDO"
@@ -5043,10 +5043,10 @@ export function CaixaPanel({
                 isConnected={isWsConnected}
               />
 
-              <div className="min-h-0 flex-1 flex flex-col xl:flex-row gap-3 sm:gap-4 overflow-hidden relative">
+              <div className={clsx('min-h-0', 'flex-1', 'flex', 'flex-col', 'xl:flex-row', 'gap-3', 'sm:gap-4', 'overflow-hidden', 'relative')}>
 
               {/* Mobile sub-tab toggle */}
-              <div className="flex xl:hidden gap-1 p-1 bg-white/[0.025] border border-white/[0.08] rounded-xl shrink-0">
+              <div className={clsx('flex', 'xl:hidden', 'gap-1', 'p-1', 'bg-white/[0.025]', 'border', 'border-white/[0.08]', 'rounded-xl', 'shrink-0')}>
                 <button
                   type="button"
                   onClick={() => setBalcaoMobileView('produtos')}
@@ -5075,39 +5075,39 @@ export function CaixaPanel({
 
               {/* Product grid column */}
               <div className={`min-w-0 flex-1 ${balcaoMobileView === 'produtos' ? 'flex' : 'hidden xl:flex'} flex-col gap-3 overflow-hidden w-full`}>
-                <div className="shrink-0 rounded-2xl border border-white/[0.08] bg-[#0d110f] p-2.5 sm:p-3 space-y-2.5">
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 relative">
-                      <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+                <div className={clsx('shrink-0', 'rounded-2xl', 'border', 'border-white/[0.08]', 'bg-[#0d110f]', 'p-2.5', 'sm:p-3', 'space-y-2.5')}>
+                  <div className={clsx('flex', 'items-center', 'gap-2')}>
+                    <div className={clsx('flex-1', 'relative')}>
+                      <Search size={15} className={clsx('absolute', 'left-3.5', 'top-1/2', '-translate-y-1/2', 'text-zinc-500', 'pointer-events-none')} />
                       <input
                         id="pdv-search-input"
                         type="text"
                         placeholder="Buscar item, descrição ou código"
                         value={pdvSearch}
                         onChange={(e) => setPdvSearch(e.target.value)}
-                        className="w-full h-10 pl-10 pr-20 bg-black/25 border border-white/[0.09] rounded-xl focus:outline-none focus:border-[#00b894]/70 focus:ring-2 focus:ring-[#00b894]/10 text-sm text-white placeholder:text-zinc-600 transition-colors"
+                        className={clsx('w-full', 'h-10', 'pl-10', 'pr-20', 'bg-black/25', 'border', 'border-white/[0.09]', 'rounded-xl', 'focus:outline-none', 'focus:border-[#00b894]/70', 'focus:ring-2', 'focus:ring-[#00b894]/10', 'text-sm', 'text-white', 'placeholder:text-zinc-600', 'transition-colors')}
                       />
-                      <span className="hidden sm:inline-flex absolute right-2.5 top-1/2 -translate-y-1/2 px-2 py-1 rounded-md border border-white/[0.08] bg-white/[0.035] text-[8px] font-mono text-zinc-500">F1</span>
+                      <span className={clsx('hidden', 'sm:inline-flex', 'absolute', 'right-2.5', 'top-1/2', '-translate-y-1/2', 'px-2', 'py-1', 'rounded-md', 'border', 'border-white/[0.08]', 'bg-white/[0.035]', 'text-[8px]', 'font-mono', 'text-zinc-500')}>F1</span>
                     </div>
                     {pdvSearch && (
                       <button
                         type="button"
                         onClick={() => setPdvSearch('')}
-                        className="h-10 px-3 bg-white/[0.035] border border-white/[0.08] rounded-xl text-xs text-zinc-400 hover:text-white cursor-pointer"
+                        className={clsx('h-10', 'px-3', 'bg-white/[0.035]', 'border', 'border-white/[0.08]', 'rounded-xl', 'text-xs', 'text-zinc-400', 'hover:text-white', 'cursor-pointer')}
                       >
                         Limpar
                       </button>
                     )}
                   </div>
 
-                  <div className="flex min-w-0 items-center gap-1.5">
+                  <div className={clsx('flex', 'min-w-0', 'items-center', 'gap-1.5')}>
                     {pdvCategoryScrollState.hasOverflow && (
                       <button
                         type="button"
                         onClick={() => scrollPdvCategories(-1)}
                         disabled={!pdvCategoryScrollState.canScrollLeft}
                         aria-label="Ver categorias anteriores"
-                        className="hidden size-8 shrink-0 items-center justify-center rounded-lg border border-white/[0.09] bg-white/[0.035] text-zinc-300 transition-colors hover:border-[#00b894]/40 hover:text-[#40e0bd] disabled:cursor-not-allowed disabled:opacity-25 sm:flex"
+                        className={clsx('hidden', 'size-8', 'shrink-0', 'items-center', 'justify-center', 'rounded-lg', 'border', 'border-white/[0.09]', 'bg-white/[0.035]', 'text-zinc-300', 'transition-colors', 'hover:border-[#00b894]/40', 'hover:text-[#40e0bd]', 'disabled:cursor-not-allowed', 'disabled:opacity-25', 'sm:flex')}
                       >
                         <ChevronLeft size={15} />
                       </button>
@@ -5126,7 +5126,7 @@ export function CaixaPanel({
                         event.stopPropagation();
                         pdvCategorySuppressClickRef.current = false;
                       }}
-                      className="flex min-w-0 flex-1 cursor-grab select-none items-center gap-1.5 overflow-x-auto pb-0.5 active:cursor-grabbing [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                      className={clsx('flex', 'min-w-0', 'flex-1', 'cursor-grab', 'select-none', 'items-center', 'gap-1.5', 'overflow-x-auto', 'pb-0.5', 'active:cursor-grabbing', '[scrollbar-width:none]', '[&::-webkit-scrollbar]:hidden')}
                       aria-label="Filtrar por categoria"
                     >
                     <button
@@ -5137,7 +5137,7 @@ export function CaixaPanel({
                         : 'bg-transparent border-white/[0.08] text-zinc-400 hover:text-white hover:border-white/[0.16]'
                         }`}
                     >
-                      Todos <span className="ml-1 opacity-65">{sellableProducts.length}</span>
+                      Todos <span className={clsx('ml-1', 'opacity-65')}>{sellableProducts.length}</span>
                     </button>
                     {pdvCategories.map(catObj => (
                       <button
@@ -5159,7 +5159,7 @@ export function CaixaPanel({
                         onClick={() => scrollPdvCategories(1)}
                         disabled={!pdvCategoryScrollState.canScrollRight}
                         aria-label="Ver próximas categorias"
-                        className="hidden size-8 shrink-0 items-center justify-center rounded-lg border border-white/[0.09] bg-white/[0.035] text-zinc-300 transition-colors hover:border-[#00b894]/40 hover:text-[#40e0bd] disabled:cursor-not-allowed disabled:opacity-25 sm:flex"
+                        className={clsx('hidden', 'size-8', 'shrink-0', 'items-center', 'justify-center', 'rounded-lg', 'border', 'border-white/[0.09]', 'bg-white/[0.035]', 'text-zinc-300', 'transition-colors', 'hover:border-[#00b894]/40', 'hover:text-[#40e0bd]', 'disabled:cursor-not-allowed', 'disabled:opacity-25', 'sm:flex')}
                       >
                         <ChevronRight size={15} />
                       </button>
@@ -5167,9 +5167,9 @@ export function CaixaPanel({
                   </div>
                 </div>
 
-                <div className="flex-1 min-h-0 overflow-y-auto pr-1 overscroll-contain">
+                <div className={clsx('flex-1', 'min-h-0', 'overflow-y-auto', 'pr-1', 'overscroll-contain')}>
                   {filteredProducts.length > 0 ? (
-                  <div className="grid grid-cols-1 min-[430px]:grid-cols-2 md:grid-cols-3 2xl:grid-cols-4 gap-2.5 pb-2">
+                  <div className={clsx('grid', 'grid-cols-1', 'min-[430px]:grid-cols-2', 'md:grid-cols-3', '2xl:grid-cols-4', 'gap-2.5', 'pb-2')}>
                     {filteredProducts.map((p) => {
                       const productLabel = splitProductLabel(p.nome);
                       return (
@@ -5177,19 +5177,19 @@ export function CaixaPanel({
                         type="button"
                         key={p.id}
                         onClick={() => handlePdvAddToCart(p)}
-                        className="relative min-h-[112px] bg-[#0d110f] border border-white/[0.08] hover:border-[#00b894]/45 active:border-[#00b894] p-3.5 rounded-2xl flex flex-col justify-between gap-3 cursor-pointer group transition-colors text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00b894]/50"
+                        className={clsx('relative', 'min-h-[112px]', 'bg-[#0d110f]', 'border', 'border-white/[0.08]', 'hover:border-[#00b894]/45', 'active:border-[#00b894]', 'p-3.5', 'rounded-2xl', 'flex', 'flex-col', 'justify-between', 'gap-3', 'cursor-pointer', 'group', 'transition-colors', 'text-left', 'focus:outline-none', 'focus-visible:ring-2', 'focus-visible:ring-[#00b894]/50')}
                       >
                         {p.imagem && (
-                          <img src={p.imagem} alt="" loading="lazy" className="w-full h-20 object-cover rounded-xl" />
+                          <img src={p.imagem} alt="" loading="lazy" className={clsx('w-full', 'h-20', 'object-cover', 'rounded-xl')} />
                         )}
                         <div className="min-h-[34px]">
-                          {productLabel.code && <span className="mb-1 block font-mono text-[8px] font-bold tracking-[0.14em] text-zinc-600">CÓD. {productLabel.code}</span>}
-                          <h4 className="font-semibold text-zinc-100 text-xs sm:text-[13px] group-hover:text-white transition-colors leading-snug line-clamp-2">{productLabel.name}</h4>
-                          {p.descricao && <p className="text-[9px] sm:text-[10px] text-zinc-500 mt-1 line-clamp-1 leading-tight">{p.descricao}</p>}
+                          {productLabel.code && <span className={clsx('mb-1', 'block', 'font-mono', 'text-[8px]', 'font-bold', 'tracking-[0.14em]', 'text-zinc-600')}>CÓD. {productLabel.code}</span>}
+                          <h4 className={clsx('font-semibold', 'text-zinc-100', 'text-xs', 'sm:text-[13px]', 'group-hover:text-white', 'transition-colors', 'leading-snug', 'line-clamp-2')}>{productLabel.name}</h4>
+                          {p.descricao && <p className={clsx('text-[9px]', 'sm:text-[10px]', 'text-zinc-500', 'mt-1', 'line-clamp-1', 'leading-tight')}>{p.descricao}</p>}
                         </div>
-                        <div className="flex justify-between items-center border-t border-white/[0.06] pt-2.5">
-                          <span className="font-semibold text-white font-mono text-xs">R$ {p.preco.toFixed(2).replace('.', ',')}</span>
-                          <span className="inline-flex items-center gap-1 text-[9px] font-bold text-[#4fe0bc] group-hover:text-[#75ebce]">
+                        <div className={clsx('flex', 'justify-between', 'items-center', 'border-t', 'border-white/[0.06]', 'pt-2.5')}>
+                          <span className={clsx('font-semibold', 'text-white', 'font-mono', 'text-xs')}>R$ {p.preco.toFixed(2).replace('.', ',')}</span>
+                          <span className={clsx('inline-flex', 'items-center', 'gap-1', 'text-[9px]', 'font-bold', 'text-[#4fe0bc]', 'group-hover:text-[#75ebce]')}>
                             <Plus size={13} /> Adicionar
                           </span>
                         </div>
@@ -5197,12 +5197,12 @@ export function CaixaPanel({
                     )})}
                   </div>
                   ) : (
-                    <div className="h-full min-h-52 rounded-2xl border border-dashed border-white/[0.09] bg-white/[0.015] flex flex-col items-center justify-center text-center px-6">
-                      <Search size={22} className="text-zinc-700 mb-3" />
-                      <strong className="text-sm text-zinc-300">
+                    <div className={clsx('h-full', 'min-h-52', 'rounded-2xl', 'border', 'border-dashed', 'border-white/[0.09]', 'bg-white/[0.015]', 'flex', 'flex-col', 'items-center', 'justify-center', 'text-center', 'px-6')}>
+                      <Search size={22} className={clsx('text-zinc-700', 'mb-3')} />
+                      <strong className={clsx('text-sm', 'text-zinc-300')}>
                         {catalogReady ? 'Nenhum item encontrado' : 'Carregando cardápio…'}
                       </strong>
-                      <span className="mt-1 text-[10px] text-zinc-600">
+                      <span className={clsx('mt-1', 'text-[10px]', 'text-zinc-600')}>
                         {catalogReady && pdvSearch ? 'Tente buscar por outro nome ou escolha outra categoria.' : catalogReady ? 'Cadastre ou ative itens na área Cardápio.' : 'Os itens aparecerão aqui em instantes.'}
                       </span>
                     </div>
@@ -5212,30 +5212,30 @@ export function CaixaPanel({
 
               {/* Shopping cart sidebar */}
               <div className={`w-full xl:w-[350px] 2xl:w-[380px] bg-[#0d110f] border border-white/[0.08] rounded-2xl ${balcaoMobileView === 'carrinho' ? 'flex' : 'hidden xl:flex'} ${pdvCart.length === 0 ? 'xl:self-start' : ''} flex-col overflow-hidden shrink-0`}>
-                <div className="bg-white/[0.025] px-4 py-3.5 border-b border-white/[0.07] flex justify-between items-center shrink-0">
-                  <span className="font-semibold text-white flex items-center gap-2">
-                    <span className="w-8 h-8 rounded-xl bg-[#00b894]/10 border border-[#00b894]/15 inline-flex items-center justify-center"><ShoppingCart size={15} className="text-[#4fe0bc]" /></span>
+                <div className={clsx('bg-white/[0.025]', 'px-4', 'py-3.5', 'border-b', 'border-white/[0.07]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
+                  <span className={clsx('font-semibold', 'text-white', 'flex', 'items-center', 'gap-2')}>
+                    <span className={clsx('w-8', 'h-8', 'rounded-xl', 'bg-[#00b894]/10', 'border', 'border-[#00b894]/15', 'inline-flex', 'items-center', 'justify-center')}><ShoppingCart size={15} className="text-[#4fe0bc]" /></span>
                     <span>Pedido atual</span>
                   </span>
-                  <span className="bg-[#00b894]/10 text-[#4fe0bc] font-bold px-2.5 py-1 rounded-full font-mono text-[9px]">
+                  <span className={clsx('bg-[#00b894]/10', 'text-[#4fe0bc]', 'font-bold', 'px-2.5', 'py-1', 'rounded-full', 'font-mono', 'text-[9px]')}>
                     {pdvCartItemCount} itens
                   </span>
                 </div>
 
                 <div className={clsx('flex-1', 'overflow-y-auto', 'p-3', 'space-y-2')}>
                   {pdvCart.length === 0 ? (
-                    <div className="h-full min-h-44 flex flex-col items-center justify-center text-center px-6 text-zinc-600">
-                      <ShoppingCart size={22} className="mb-3 opacity-60" />
-                      <p className="text-xs font-semibold text-zinc-400">Comece escolhendo um item</p>
-                      <p className="text-[9px] mt-1">Toque em “Adicionar” para montar o pedido.</p>
+                    <div className={clsx('h-full', 'min-h-44', 'flex', 'flex-col', 'items-center', 'justify-center', 'text-center', 'px-6', 'text-zinc-600')}>
+                      <ShoppingCart size={22} className={clsx('mb-3', 'opacity-60')} />
+                      <p className={clsx('text-xs', 'font-semibold', 'text-zinc-400')}>Comece escolhendo um item</p>
+                      <p className={clsx('text-[9px]', 'mt-1')}>Toque em “Adicionar” para montar o pedido.</p>
                     </div>
                   ) : (
                     pdvCart.map((item, idx) => (
-                      <div key={`${item.product.id}-${idx}`} className="bg-white/[0.025] p-3 rounded-xl border border-white/[0.07] space-y-2.5">
+                      <div key={`${item.product.id}-${idx}`} className={clsx('bg-white/[0.025]', 'p-3', 'rounded-xl', 'border', 'border-white/[0.07]', 'space-y-2.5')}>
                         <div className={clsx('flex', 'justify-between', 'items-start')}>
                           <div className="space-y-0.5">
-                            <strong className="text-zinc-100 text-xs block truncate max-w-48">{item.product.nome}</strong>
-                            <span className="text-[9px] text-[#4fe0bc] font-mono">R$ {item.product.preco.toFixed(2).replace('.', ',')} / un.</span>
+                            <strong className={clsx('text-zinc-100', 'text-xs', 'block', 'truncate', 'max-w-48')}>{item.product.nome}</strong>
+                            <span className={clsx('text-[9px]', 'text-[#4fe0bc]', 'font-mono')}>R$ {item.product.preco.toFixed(2).replace('.', ',')} / un.</span>
                           </div>
                           <button
                             onClick={() => handlePdvRemoveCartItem(idx)}
@@ -5285,7 +5285,7 @@ export function CaixaPanel({
                           if (presets.length === 0) return null;
                           const parts = item.obs ? item.obs.split(',').map(p => p.trim()) : [];
                           return (
-                            <div className="flex flex-wrap gap-1 mt-2 justify-end">
+                            <div className={clsx('flex', 'flex-wrap', 'gap-1', 'mt-2', 'justify-end')}>
                               {presets.map(preset => {
                                 const isActive = parts.some(p => p.toLowerCase() === preset.toLowerCase());
                                 return (
@@ -5355,11 +5355,11 @@ export function CaixaPanel({
 
                   {pdvOrderType === 'mesa' && (
                     <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-3">
-                        <label htmlFor="pdv-target-table" className="block text-[8px] font-bold uppercase tracking-wider text-zinc-400">
+                      <div className={clsx('flex', 'items-center', 'justify-between', 'gap-3')}>
+                        <label htmlFor="pdv-target-table" className={clsx('block', 'text-[8px]', 'font-bold', 'uppercase', 'tracking-wider', 'text-zinc-400')}>
                           Mesa de destino
                         </label>
-                        <span className="text-[8px] text-zinc-600">
+                        <span className={clsx('text-[8px]', 'text-zinc-600')}>
                           {pdvOccupiedTableCount} em atendimento
                         </span>
                       </div>
@@ -5428,7 +5428,7 @@ export function CaixaPanel({
                                 ? `${selectedPdvTableOption.label} já está em atendimento`
                                 : `${selectedPdvTableOption.label} está livre`}
                           </strong>
-                          <span className="mt-0.5 block text-[8px] leading-relaxed text-zinc-500">
+                          <span className={clsx('mt-0.5', 'block', 'text-[8px]', 'leading-relaxed', 'text-zinc-500')}>
                             {selectedPdvTableOption?.isOccupied
                               ? 'Você pode continuar: os novos itens serão adicionados ao atendimento da mesa.'
                               : selectedPdvTableOption
@@ -5442,7 +5442,7 @@ export function CaixaPanel({
 
                   {(pdvOrderType === 'retirada' || pdvOrderType === 'entrega') && (
                     <div className="space-y-2">
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className={clsx('grid', 'grid-cols-2', 'gap-2')}>
                         <div className="space-y-1">
                           <label className={clsx('text-[8px]', 'text-gray-400', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Telefone:</label>
                           <input
@@ -5512,7 +5512,7 @@ export function CaixaPanel({
                     id="pdv-submit-btn"
                     type="submit"
                     disabled={pdvCart.length === 0 || isLoading}
-                    className="w-full min-h-11 py-2 bg-[#00b894] hover:bg-[#13c9a0] text-[#06110d] rounded-xl border border-transparent font-bold text-[10px] uppercase tracking-wider transition-colors cursor-pointer flex flex-col items-center justify-center gap-0.5 disabled:cursor-not-allowed disabled:border-[#272c29] disabled:bg-[#151816] disabled:text-zinc-600"
+                    className={clsx('w-full', 'min-h-11', 'py-2', 'bg-[#00b894]', 'hover:bg-[#13c9a0]', 'text-[#06110d]', 'rounded-xl', 'border', 'border-transparent', 'font-bold', 'text-[10px]', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer', 'flex', 'flex-col', 'items-center', 'justify-center', 'gap-0.5', 'disabled:cursor-not-allowed', 'disabled:border-[#272c29]', 'disabled:bg-[#151816]', 'disabled:text-zinc-600')}
                   >
                     <div className={clsx('flex', 'items-center', 'gap-1')}>
                       <Check size={12} />
@@ -5528,13 +5528,13 @@ export function CaixaPanel({
                 <button
                   type="button"
                   onClick={() => setBalcaoMobileView('carrinho')}
-                  className="xl:hidden fixed bottom-4 left-4 right-4 z-40 py-3 px-5 bg-[#00b894] hover:bg-[#13c9a0] text-[#06110d] font-bold rounded-2xl shadow-2xl flex items-center justify-between border border-[#4fe0bc]/30 animate-fade-in cursor-pointer"
+                  className={clsx('xl:hidden', 'fixed', 'bottom-4', 'left-4', 'right-4', 'z-40', 'py-3', 'px-5', 'bg-[#00b894]', 'hover:bg-[#13c9a0]', 'text-[#06110d]', 'font-bold', 'rounded-2xl', 'shadow-2xl', 'flex', 'items-center', 'justify-between', 'border', 'border-[#4fe0bc]/30', 'animate-fade-in', 'cursor-pointer')}
                 >
-                  <span className="text-xs flex items-center gap-2">
+                  <span className={clsx('text-xs', 'flex', 'items-center', 'gap-2')}>
                     <ShoppingCart size={16} />
                     <span>{pdvCartItemCount} itens no carrinho</span>
                   </span>
-                  <span className="text-xs font-mono font-extrabold bg-black/30 px-3 py-1 rounded-xl">
+                  <span className={clsx('text-xs', 'font-mono', 'font-extrabold', 'bg-black/30', 'px-3', 'py-1', 'rounded-xl')}>
                     {formatCurrency(pdvCart.reduce((sum, item) => sum + (item.product.preco * item.quantity), 0))} →
                   </span>
                 </button>
@@ -5546,7 +5546,7 @@ export function CaixaPanel({
 
           {/* VIEW 3: MAPA DE MESAS (Salão) */}
           {activeSubTab === 'mesas' && (
-            <div className="orders-workspace flex h-full min-h-0 flex-col gap-3">
+            <div className={clsx('orders-workspace', 'flex', 'h-full', 'min-h-0', 'flex-col', 'gap-3')}>
               <OperationalBanner
                 id="tables-heading"
                 eyebrow="OPERAÇÃO DO SALÃO"
@@ -5561,9 +5561,9 @@ export function CaixaPanel({
                 isConnected={isWsConnected}
               />
 
-              <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[22px] border border-[#252b28] bg-[#0d100f]">
-                <div className="flex flex-col gap-2 border-b border-[#252b28] px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
-                  <div className="flex max-w-full gap-1 overflow-x-auto rounded-xl bg-[#080a09] p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <section className={clsx('flex', 'min-h-0', 'flex-1', 'flex-col', 'overflow-hidden', 'rounded-[22px]', 'border', 'border-[#252b28]', 'bg-[#0d100f]')}>
+                <div className={clsx('flex', 'flex-col', 'gap-2', 'border-b', 'border-[#252b28]', 'px-3', 'py-3', 'sm:flex-row', 'sm:items-center', 'sm:justify-between', 'sm:px-4')}>
+                  <div className={clsx('flex', 'max-w-full', 'gap-1', 'overflow-x-auto', 'rounded-xl', 'bg-[#080a09]', 'p-1', '[scrollbar-width:none]', '[&::-webkit-scrollbar]:hidden')}>
                     {[
                       { id: 'all' as const, label: 'Todas', count: tableStatusCounts.all, dot: 'bg-zinc-500' },
                       { id: 'free' as const, label: 'Livres', count: tableStatusCounts.free, dot: 'bg-[#45b995]' },
@@ -5587,35 +5587,35 @@ export function CaixaPanel({
                         )}
                       >
                         <span className={clsx('mr-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle', filter.dot)} aria-hidden="true" />
-                        {filter.label} <span className="ml-1 font-mono opacity-70">{filter.count}</span>
+                        {filter.label} <span className={clsx('ml-1', 'font-mono', 'opacity-70')}>{filter.count}</span>
                       </button>
                     ))}
                   </div>
                 </div>
 
-                <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
+                <div className={clsx('min-h-0', 'flex-1', 'overflow-y-auto', 'p-3', 'sm:p-4')}>
                   {salonTableCards.length === 0 ? (
-                    <div className="flex min-h-56 items-center justify-center text-center">
+                    <div className={clsx('flex', 'min-h-56', 'items-center', 'justify-center', 'text-center')}>
                       {fetchError ? (
-                        <div className="max-w-md space-y-2 rounded-2xl border border-rose-900/40 bg-rose-950/15 p-5">
-                          <AlertTriangle className="mx-auto text-rose-400" size={20} />
-                          <strong className="block text-sm text-white">Não foi possível carregar o salão</strong>
-                          <p className="break-words font-mono text-[10px] leading-relaxed text-zinc-400">{fetchError}</p>
+                        <div className={clsx('max-w-md', 'space-y-2', 'rounded-2xl', 'border', 'border-rose-900/40', 'bg-rose-950/15', 'p-5')}>
+                          <AlertTriangle className={clsx('mx-auto', 'text-rose-400')} size={20} />
+                          <strong className={clsx('block', 'text-sm', 'text-white')}>Não foi possível carregar o salão</strong>
+                          <p className={clsx('break-words', 'font-mono', 'text-[10px]', 'leading-relaxed', 'text-zinc-400')}>{fetchError}</p>
                         </div>
                       ) : (
-                        <div className="space-y-2 text-zinc-500">
-                          <ClipboardList className="mx-auto text-[#10b981]" size={22} />
-                          <strong className="block text-sm text-zinc-200">Nenhuma mesa cadastrada</strong>
+                        <div className={clsx('space-y-2', 'text-zinc-500')}>
+                          <ClipboardList className={clsx('mx-auto', 'text-[#10b981]')} size={22} />
+                          <strong className={clsx('block', 'text-sm', 'text-zinc-200')}>Nenhuma mesa cadastrada</strong>
                           <p className="text-xs">Revise a configuração do salão antes de iniciar a operação.</p>
                         </div>
                       )}
                     </div>
                   ) : visibleSalonTableCards.length === 0 ? (
-                    <div className="flex min-h-56 items-center justify-center text-center text-xs text-zinc-500">
+                    <div className={clsx('flex', 'min-h-56', 'items-center', 'justify-center', 'text-center', 'text-xs', 'text-zinc-500')}>
                       Nenhuma mesa neste filtro.
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 gap-2.5 min-[420px]:grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
+                    <div className={clsx('grid', 'grid-cols-1', 'gap-2.5', 'min-[420px]:grid-cols-2', 'sm:grid-cols-3', 'xl:grid-cols-4', '2xl:grid-cols-6')}>
                       {visibleSalonTableCards.map((card) => {
                         const { table, displayMesaId, tableOrders, isMerged, isOccupied, hasPendingPayment, total } = card;
                         const originId = tableOrders.find(order => order.mesaOrigemId && Number(order.mesaOrigemId) !== Number(displayMesaId))?.mesaOrigemId;
@@ -5640,20 +5640,20 @@ export function CaixaPanel({
                               !isOccupied && !isMerged && 'border-[#292e2c] bg-[#111412] hover:border-[#2a5e50]'
                             )}
                           >
-                            <div className="flex items-start justify-between gap-2">
+                            <div className={clsx('flex', 'items-start', 'justify-between', 'gap-2')}>
                               <div className="min-w-0">
-                                <span className="block font-mono text-[8px] font-bold uppercase tracking-[0.2em] text-zinc-600">Mesa</span>
-                                <div className="mt-0.5 flex items-baseline gap-2">
-                                  <strong className="text-2xl font-extrabold leading-none text-white">{table.id}</strong>
+                                <span className={clsx('block', 'font-mono', 'text-[8px]', 'font-bold', 'uppercase', 'tracking-[0.2em]', 'text-zinc-600')}>Mesa</span>
+                                <div className={clsx('mt-0.5', 'flex', 'items-baseline', 'gap-2')}>
+                                  <strong className={clsx('text-2xl', 'font-extrabold', 'leading-none', 'text-white')}>{table.id}</strong>
                                   {table.nome && table.nome !== `Mesa ${table.id}` && (
-                                    <span className="truncate text-[10px] font-medium text-zinc-400">{table.nome}</span>
+                                    <span className={clsx('truncate', 'text-[10px]', 'font-medium', 'text-zinc-400')}>{table.nome}</span>
                                   )}
                                 </div>
                               </div>
                             </div>
 
                             <div className="space-y-2">
-                              <div className="flex flex-wrap items-center gap-1.5">
+                              <div className={clsx('flex', 'flex-wrap', 'items-center', 'gap-1.5')}>
                                 <span className={clsx(
                                   'rounded-full border px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider',
                                   isMerged && 'border-zinc-700 bg-zinc-900 text-zinc-500',
@@ -5670,16 +5670,16 @@ export function CaixaPanel({
                                   />
                                   {statusLabel}
                                 </span>
-                                <span className="flex items-center gap-1 text-[9px] text-zinc-500">
+                                <span className={clsx('flex', 'items-center', 'gap-1', 'text-[9px]', 'text-zinc-500')}>
                                   <Users size={10} /> {table.capacidade || 4} lugares
                                 </span>
                               </div>
 
                               {isOccupied ? (
-                                <div className="flex items-end justify-between gap-2">
+                                <div className={clsx('flex', 'items-end', 'justify-between', 'gap-2')}>
                                   {tableOrders.length > 0 ? (
                                     <>
-                                      <span className="text-[9px] text-zinc-500">Consumo atual</span>
+                                      <span className={clsx('text-[9px]', 'text-zinc-500')}>Consumo atual</span>
                                       <strong className={clsx(
                                         'font-mono text-sm',
                                         hasPendingPayment ? 'text-[#efb2bc]' : 'text-[#e4a3ac]'
@@ -5688,22 +5688,22 @@ export function CaixaPanel({
                                       </strong>
                                     </>
                                   ) : (
-                                    <span className="text-[9px] text-zinc-500">Sincronizando atendimento…</span>
+                                    <span className={clsx('text-[9px]', 'text-zinc-500')}>Sincronizando atendimento…</span>
                                   )}
                                 </div>
                               ) : (
-                                <span className="block text-[10px] text-zinc-600">Pronta para receber clientes</span>
+                                <span className={clsx('block', 'text-[10px]', 'text-zinc-600')}>Pronta para receber clientes</span>
                               )}
 
                               {(originId || transferredFromId) && (
-                                <span className="block truncate text-[9px] text-zinc-500">
+                                <span className={clsx('block', 'truncate', 'text-[9px]', 'text-zinc-500')}>
                                   {originId ? `Unida à Mesa ${originId}` : `Transferida da Mesa ${transferredFromId}`}
                                 </span>
                               )}
                             </div>
 
                             {!isMerged && (
-                              <div className="flex gap-1.5 border-t border-white/[0.06] pt-2.5">
+                              <div className={clsx('flex', 'gap-1.5', 'border-t', 'border-white/[0.06]', 'pt-2.5')}>
                                 {isOccupied ? (
                                   hasPendingPayment ? (
                                     <button
@@ -5723,7 +5723,7 @@ export function CaixaPanel({
                                         const checkoutTotal = subtotal * (1.0 + (taxaServicoAtiva ? serviceTaxRate / 100 : 0));
                                         setPaymentValor(Math.max(0, checkoutTotal - Number(checkoutOrder.valorPago || 0)).toFixed(2));
                                       }}
-                                      className="flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#874550] bg-[#4b222b] px-2 text-[9px] font-extrabold uppercase tracking-wide text-[#f0b5bd] transition-colors hover:bg-[#5a2933] disabled:cursor-wait disabled:opacity-45"
+                                      className={clsx('flex', 'min-h-9', 'flex-1', 'items-center', 'justify-center', 'gap-1.5', 'rounded-lg', 'border', 'border-[#874550]', 'bg-[#4b222b]', 'px-2', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wide', 'text-[#f0b5bd]', 'transition-colors', 'hover:bg-[#5a2933]', 'disabled:cursor-wait', 'disabled:opacity-45')}
                                     >
                                       <CreditCard size={12} />
                                       Receber conta
@@ -5733,7 +5733,7 @@ export function CaixaPanel({
                                       type="button"
                                       disabled={tableOrders.length === 0}
                                       onClick={() => tableOrders[0] && setSelectedKanbanOrder(tableOrders[0])}
-                                      className="flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#6b2e38] bg-[#241317] px-2 text-[9px] font-extrabold uppercase tracking-wide text-[#e4a3ac] transition-colors hover:bg-[#32181e] disabled:cursor-wait disabled:opacity-45"
+                                      className={clsx('flex', 'min-h-9', 'flex-1', 'items-center', 'justify-center', 'gap-1.5', 'rounded-lg', 'border', 'border-[#6b2e38]', 'bg-[#241317]', 'px-2', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wide', 'text-[#e4a3ac]', 'transition-colors', 'hover:bg-[#32181e]', 'disabled:cursor-wait', 'disabled:opacity-45')}
                                     >
                                       <Receipt size={12} />
                                       Ver comanda
@@ -5748,7 +5748,7 @@ export function CaixaPanel({
                                       setBalcaoMobileView('produtos');
                                       setActiveSubTab('balcao');
                                     }}
-                                    className="flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#24483e] bg-[#101815] px-2 text-[9px] font-extrabold uppercase tracking-wide text-[#6ee7b7] transition-colors hover:bg-[#153028]"
+                                    className={clsx('flex', 'min-h-9', 'flex-1', 'items-center', 'justify-center', 'gap-1.5', 'rounded-lg', 'border', 'border-[#24483e]', 'bg-[#101815]', 'px-2', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wide', 'text-[#6ee7b7]', 'transition-colors', 'hover:bg-[#153028]')}
                                   >
                                     <Plus size={12} />
                                     Abrir pedido
@@ -5928,7 +5928,7 @@ export function CaixaPanel({
                       </div>
                     ))}
                     {(generalStats?.top_itens ?? []).length === 0 && (
-                      <div className="py-8 text-center text-gray-500 italic text-[10px]">Nenhum item vendido no período</div>
+                      <div className={clsx('py-8', 'text-center', 'text-gray-500', 'italic', 'text-[10px]')}>Nenhum item vendido no período</div>
                     )}
                   </div>
                 </div>
@@ -6043,11 +6043,11 @@ export function CaixaPanel({
                             </td>
                             <td className="py-2.5">
                               {statusVal === 'ativo' ? (
-                                <span className="px-2 py-0.5 text-[8px] font-bold rounded uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                <span className={clsx('px-2', 'py-0.5', 'text-[8px]', 'font-bold', 'rounded', 'uppercase', 'tracking-wider', 'bg-emerald-500/10', 'text-emerald-400', 'border', 'border-emerald-500/20')}>
                                   Ativo
                                 </span>
                               ) : (
-                                <span className="px-2 py-0.5 text-[8px] font-bold rounded uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                                <span className={clsx('px-2', 'py-0.5', 'text-[8px]', 'font-bold', 'rounded', 'uppercase', 'tracking-wider', 'bg-amber-500/10', 'text-amber-400', 'border', 'border-amber-500/20')}>
                                   Pendente de Ativação
                                 </span>
                               )}
@@ -6056,7 +6056,7 @@ export function CaixaPanel({
                               {isPendente && (
                                 <button
                                   onClick={() => handleResendInvite(user)}
-                                  className="px-2 py-1 text-[8px] font-bold bg-[#1C1C1F] hover:bg-[#27272A] text-gray-300 hover:text-white rounded-lg border border-[#27272A] transition-all cursor-pointer flex items-center gap-1"
+                                  className={clsx('px-2', 'py-1', 'text-[8px]', 'font-bold', 'bg-[#1C1C1F]', 'hover:bg-[#27272A]', 'text-gray-300', 'hover:text-white', 'rounded-lg', 'border', 'border-[#27272A]', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'gap-1')}
                                   title="Reenviar link de ativação via WhatsApp"
                                 >
                                   <Send size={10} />
@@ -6141,7 +6141,7 @@ export function CaixaPanel({
           {/* VIEW 7: CONFIGURAÇÕES SALÃO (Impressão, App Garçom e Taxa) */}
           {(activeTab === 'impressao_salao' || activeSubTab === 'impressoras') && (
             <div className="space-y-5">
-              <div className="flex flex-wrap gap-1.5 rounded-xl border border-[#27272A] bg-[#09090B] p-1 w-fit">
+              <div className={clsx('flex', 'flex-wrap', 'gap-1.5', 'rounded-xl', 'border', 'border-[#27272A]', 'bg-[#09090B]', 'p-1', 'w-fit')}>
                 {[
                   { id: 'impressao', label: 'Impressão', icon: Printer },
                   { id: 'mesas', label: 'Mesas', icon: Users },
@@ -6174,10 +6174,10 @@ export function CaixaPanel({
               </div>
 
               {printingSettingsTab === 'impressao' && !hasPrinting && (
-                <div className="bg-[#121214] border border-amber-500/20 rounded-3xl p-8 text-center max-w-xl mx-auto space-y-3">
-                  <Lock size={24} className="text-amber-400 mx-auto" />
-                  <h3 className="text-white font-bold">Impressão não incluída no Kôma Pocket</h3>
-                  <p className="text-[10px] text-gray-400">
+                <div className={clsx('bg-[#121214]', 'border', 'border-amber-500/20', 'rounded-3xl', 'p-8', 'text-center', 'max-w-xl', 'mx-auto', 'space-y-3')}>
+                  <Lock size={24} className={clsx('text-amber-400', 'mx-auto')} />
+                  <h3 className={clsx('text-white', 'font-bold')}>Impressão não incluída no Kôma Pocket</h3>
+                  <p className={clsx('text-[10px]', 'text-gray-400')}>
                     App do Garçom e Taxa de Serviço continuam disponíveis nas abas acima. Migre para o Kôma Pro ou Premium para liberar impressão.
                   </p>
                   <button
@@ -6186,7 +6186,7 @@ export function CaixaPanel({
                       setActiveTab('assinatura_pix');
                       setActiveSubTab('planos');
                     }}
-                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold uppercase cursor-pointer"
+                    className={clsx('px-4', 'py-2', 'rounded-xl', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'text-[10px]', 'font-bold', 'uppercase', 'cursor-pointer')}
                   >
                     Comparar planos
                   </button>
@@ -6254,11 +6254,11 @@ export function CaixaPanel({
               )}
 
               {printingSettingsTab === 'mesas' && (
-                <section className="overflow-hidden rounded-[22px] border border-[#27272A] bg-[#101311]">
-                  <header className="flex flex-col gap-3 border-b border-[#27272A] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                <section className={clsx('overflow-hidden', 'rounded-[22px]', 'border', 'border-[#27272A]', 'bg-[#101311]')}>
+                  <header className={clsx('flex', 'flex-col', 'gap-3', 'border-b', 'border-[#27272A]', 'px-4', 'py-4', 'sm:flex-row', 'sm:items-center', 'sm:justify-between', 'sm:px-5')}>
                     <div>
-                      <h3 className="text-sm font-bold text-white">Configuração das mesas</h3>
-                      <p className="mt-1 text-[10px] text-zinc-500">Cadastre, nomeie e defina a capacidade. A ocupação continua sendo controlada pelas comandas.</p>
+                      <h3 className={clsx('text-sm', 'font-bold', 'text-white')}>Configuração das mesas</h3>
+                      <p className={clsx('mt-1', 'text-[10px]', 'text-zinc-500')}>Cadastre, nomeie e defina a capacidade. A ocupação continua sendo controlada pelas comandas.</p>
                     </div>
                     <button
                       type="button"
@@ -6266,26 +6266,26 @@ export function CaixaPanel({
                         setTableFormError('');
                         setShowAddMesaModal(true);
                       }}
-                      className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-[#10b981] px-4 text-[9px] font-extrabold uppercase tracking-wider text-[#07110e] transition-colors hover:bg-[#35c99a]"
+                      className={clsx('inline-flex', 'min-h-10', 'items-center', 'justify-center', 'gap-1.5', 'rounded-xl', 'bg-[#10b981]', 'px-4', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wider', 'text-[#07110e]', 'transition-colors', 'hover:bg-[#35c99a]')}
                     >
                       <Plus size={13} /> Adicionar mesa
                     </button>
                   </header>
 
                   {salonTables.length === 0 ? (
-                    <div className="flex min-h-48 flex-col items-center justify-center px-5 text-center">
+                    <div className={clsx('flex', 'min-h-48', 'flex-col', 'items-center', 'justify-center', 'px-5', 'text-center')}>
                       <Users size={22} className="text-zinc-700" />
-                      <strong className="mt-3 text-xs text-zinc-300">Nenhuma mesa cadastrada</strong>
-                      <span className="mt-1 text-[10px] text-zinc-600">Adicione a primeira mesa para liberar a operação do salão.</span>
+                      <strong className={clsx('mt-3', 'text-xs', 'text-zinc-300')}>Nenhuma mesa cadastrada</strong>
+                      <span className={clsx('mt-1', 'text-[10px]', 'text-zinc-600')}>Adicione a primeira mesa para liberar a operação do salão.</span>
                     </div>
                   ) : (
-                    <div className="grid gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+                    <div className={clsx('grid', 'gap-2', 'p-4', 'sm:grid-cols-2', 'lg:grid-cols-3', '2xl:grid-cols-4')}>
                       {[...salonTables].sort((a, b) => a.id - b.id).map(table => (
-                        <article key={table.id} className="flex items-center justify-between gap-3 rounded-2xl border border-[#292e2c] bg-[#151816] p-3.5">
+                        <article key={table.id} className={clsx('flex', 'items-center', 'justify-between', 'gap-3', 'rounded-2xl', 'border', 'border-[#292e2c]', 'bg-[#151816]', 'p-3.5')}>
                           <div className="min-w-0">
-                            <span className="block font-mono text-[8px] font-bold uppercase tracking-[0.18em] text-zinc-600">Mesa {table.id}</span>
-                            <strong className="mt-0.5 block truncate text-xs text-zinc-100">{table.nome || `Mesa ${table.id}`}</strong>
-                            <span className="mt-1 flex items-center gap-1 text-[9px] text-zinc-500"><Users size={10} /> {table.capacidade || 4} lugares</span>
+                            <span className={clsx('block', 'font-mono', 'text-[8px]', 'font-bold', 'uppercase', 'tracking-[0.18em]', 'text-zinc-600')}>Mesa {table.id}</span>
+                            <strong className={clsx('mt-0.5', 'block', 'truncate', 'text-xs', 'text-zinc-100')}>{table.nome || `Mesa ${table.id}`}</strong>
+                            <span className={clsx('mt-1', 'flex', 'items-center', 'gap-1', 'text-[9px]', 'text-zinc-500')}><Users size={10} /> {table.capacidade || 4} lugares</span>
                           </div>
                           <button
                             type="button"
@@ -6297,7 +6297,7 @@ export function CaixaPanel({
                               setTableFormError('');
                             }}
                             aria-label={`Editar Mesa ${table.id}`}
-                            className="rounded-lg border border-white/[0.07] bg-white/[0.025] p-2 text-zinc-500 transition-colors hover:border-[#10b981]/30 hover:text-[#6ee7b7]"
+                            className={clsx('rounded-lg', 'border', 'border-white/[0.07]', 'bg-white/[0.025]', 'p-2', 'text-zinc-500', 'transition-colors', 'hover:border-[#10b981]/30', 'hover:text-[#6ee7b7]')}
                           >
                             <Edit3 size={13} />
                           </button>
@@ -6402,9 +6402,9 @@ export function CaixaPanel({
                       ].map((item, idx) => (
                         <div key={idx} className={clsx('flex', 'justify-between', 'items-start', 'gap-4')}>
                           <div className="space-y-0.5">
-                            <div className="flex items-center gap-2">
+                            <div className={clsx('flex', 'items-center', 'gap-2')}>
                               <strong className={clsx(item.available ? 'text-white' : 'text-gray-400', 'block', 'font-semibold')}>{item.title}</strong>
-                              {!item.available && <span className="rounded-full border border-amber-700/40 bg-amber-900/20 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide text-amber-400">Integração pendente</span>}
+                              {!item.available && <span className={clsx('rounded-full', 'border', 'border-amber-700/40', 'bg-amber-900/20', 'px-2', 'py-0.5', 'text-[8px]', 'font-bold', 'uppercase', 'tracking-wide', 'text-amber-400')}>Integração pendente</span>}
                             </div>
                             <span className={clsx('text-[9px]', 'text-gray-500', 'block', 'leading-relaxed')}>{item.desc}</span>
                           </div>
@@ -6426,9 +6426,9 @@ export function CaixaPanel({
                       ].map((item, idx) => (
                         <div key={idx} className={clsx('flex', 'justify-between', 'items-start', 'gap-4')}>
                           <div className="space-y-0.5">
-                            <div className="flex items-center gap-2">
+                            <div className={clsx('flex', 'items-center', 'gap-2')}>
                               <strong className={clsx(item.available ? 'text-white' : 'text-gray-400', 'block', 'font-semibold')}>{item.title}</strong>
-                              {!item.available && <span className="rounded-full border border-amber-700/40 bg-amber-900/20 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide text-amber-400">Integração pendente</span>}
+                              {!item.available && <span className={clsx('rounded-full', 'border', 'border-amber-700/40', 'bg-amber-900/20', 'px-2', 'py-0.5', 'text-[8px]', 'font-bold', 'uppercase', 'tracking-wide', 'text-amber-400')}>Integração pendente</span>}
                             </div>
                             <span className={clsx('text-[9px]', 'text-gray-500', 'block', 'leading-relaxed')}>{item.desc}</span>
                           </div>
@@ -6452,9 +6452,9 @@ export function CaixaPanel({
                       ].map((item, idx) => (
                         <div key={idx} className={clsx('flex', 'justify-between', 'items-start', 'gap-4')}>
                           <div className="space-y-0.5">
-                            <div className="flex items-center gap-2">
+                            <div className={clsx('flex', 'items-center', 'gap-2')}>
                               <strong className={clsx(item.available ? 'text-white' : 'text-gray-400', 'block', 'font-semibold')}>{item.title}</strong>
-                              {!item.available && <span className="rounded-full border border-amber-700/40 bg-amber-900/20 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide text-amber-400">Integração pendente</span>}
+                              {!item.available && <span className={clsx('rounded-full', 'border', 'border-amber-700/40', 'bg-amber-900/20', 'px-2', 'py-0.5', 'text-[8px]', 'font-bold', 'uppercase', 'tracking-wide', 'text-amber-400')}>Integração pendente</span>}
                             </div>
                             <span className={clsx('text-[9px]', 'text-gray-500', 'block', 'leading-relaxed')}>{item.desc}</span>
                           </div>
@@ -6475,10 +6475,10 @@ export function CaixaPanel({
               {printingSettingsTab === 'impressao' && hasPrinting && (
               <div className={clsx('bg-[#0f1210]', 'border', 'border-[#252b28]', 'rounded-[22px]', 'p-5', 'grid', 'grid-cols-1', 'xl:grid-cols-2', 'gap-6')}>
                 <div className="space-y-4">
-                  <div className="flex items-start justify-between gap-3 border-b border-[#252b28] pb-3">
+                  <div className={clsx('flex', 'items-start', 'justify-between', 'gap-3', 'border-b', 'border-[#252b28]', 'pb-3')}>
                     <div>
-                      <h3 className="text-sm font-bold text-white">Personalização do cupom</h3>
-                      <p className="mt-1 text-[9px] text-zinc-500">Uma configuração central para caixa, comandas e impressão automática.</p>
+                      <h3 className={clsx('text-sm', 'font-bold', 'text-white')}>Personalização do cupom</h3>
+                      <p className={clsx('mt-1', 'text-[9px]', 'text-zinc-500')}>Uma configuração central para caixa, comandas e impressão automática.</p>
                     </div>
                     <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[8px] font-bold ${
                       printSettingsSaveState === 'error'
@@ -6566,98 +6566,98 @@ export function CaixaPanel({
 
                 {/* Prévia aproximada: a largura final depende da impressora. */}
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-serif font-bold text-gray-300">
+                  <div className={clsx('flex', 'items-center', 'justify-between', 'gap-2')}>
+                    <span className={clsx('font-serif', 'font-bold', 'text-gray-300')}>
                       Prévia aproximada
                     </span>
-                    <span className="rounded-full border border-[#27272A] px-2 py-1 text-[8px] text-gray-500">
+                    <span className={clsx('rounded-full', 'border', 'border-[#27272A]', 'px-2', 'py-1', 'text-[8px]', 'text-gray-500')}>
                       exemplo em escala
                     </span>
                   </div>
-                  <div className="mx-auto w-full max-w-[380px] bg-[#FFFFFC] text-black px-5 py-4 rounded-sm border border-gray-300 font-mono text-[10px] leading-[1.25] shadow-[0_14px_30px_rgba(0,0,0,0.35)]">
+                  <div className={clsx('mx-auto', 'w-full', 'max-w-[380px]', 'bg-[#FFFFFC]', 'text-black', 'px-5', 'py-4', 'rounded-sm', 'border', 'border-gray-300', 'font-mono', 'text-[10px]', 'leading-[1.25]', 'shadow-[0_14px_30px_rgba(0,0,0,0.35)]')}>
                     {printNamePosition === 'cabecalho' && printHeader && (
                       <>
-                        <div className="text-center font-bold uppercase text-[12px] leading-tight">
+                        <div className={clsx('text-center', 'font-bold', 'uppercase', 'text-[12px]', 'leading-tight')}>
                           {printHeader}
                         </div>
-                        <div className="border-t border-dashed border-gray-500 my-1.5" />
+                        <div className={clsx('border-t', 'border-dashed', 'border-gray-500', 'my-1.5')} />
                       </>
                     )}
 
-                    <div className="text-center font-bold text-[12px]">
+                    <div className={clsx('text-center', 'font-bold', 'text-[12px]')}>
                       CONSUMO NO LOCAL
                     </div>
-                    <div className="border-t border-dashed border-gray-500 my-1.5" />
-                    <div className="flex justify-between">
+                    <div className={clsx('border-t', 'border-dashed', 'border-gray-500', 'my-1.5')} />
+                    <div className={clsx('flex', 'justify-between')}>
                       <span>PEDIDO: #305</span>
                       <span>MESA: 3</span>
                     </div>
-                    <div className="flex justify-between">
+                    <div className={clsx('flex', 'justify-between')}>
                       <span>DATA: 28/07/2026</span>
                       <span>HORA: 18:01</span>
                     </div>
                     <div>GARÇOM: GEORLAN</div>
-                    <div className="border-t border-dashed border-gray-500 my-1.5" />
+                    <div className={clsx('border-t', 'border-dashed', 'border-gray-500', 'my-1.5')} />
 
                     <div className="space-y-1">
-                      <div className="flex justify-between gap-3">
+                      <div className={clsx('flex', 'justify-between', 'gap-3')}>
                         <span>3x HAMBÚRGUER TRADICIONAL</span>
                         <span className="shrink-0">R$ 57,00</span>
                       </div>
-                      <div className="pl-3 text-[8px] text-gray-700">
+                      <div className={clsx('pl-3', 'text-[8px]', 'text-gray-700')}>
                         OBS: SEM CHEDDAR
                       </div>
-                      <div className="flex justify-between gap-3">
+                      <div className={clsx('flex', 'justify-between', 'gap-3')}>
                         <span>2x HEINEKEN LONG NECK</span>
                         <span className="shrink-0">R$ 24,00</span>
                       </div>
-                      <div className="flex justify-between gap-3">
+                      <div className={clsx('flex', 'justify-between', 'gap-3')}>
                         <span>1x BAGUETE DE COSTELA</span>
                         <span className="shrink-0">R$ 36,00</span>
                       </div>
-                      <div className="pl-3 text-[8px] text-gray-700">
+                      <div className={clsx('pl-3', 'text-[8px]', 'text-gray-700')}>
                         OBS: SEM SALADA
                       </div>
                     </div>
 
-                    <div className="border-t border-dashed border-gray-500 my-1.5" />
-                    <div className="text-center font-bold">CLIENTE: PAULO</div>
-                    <div className="flex justify-between gap-3">
+                    <div className={clsx('border-t', 'border-dashed', 'border-gray-500', 'my-1.5')} />
+                    <div className={clsx('text-center', 'font-bold')}>CLIENTE: PAULO</div>
+                    <div className={clsx('flex', 'justify-between', 'gap-3')}>
                       <span>1x CHEESE BACON</span>
                       <span className="shrink-0">R$ 25,00</span>
                     </div>
-                    <div className="flex justify-between gap-3">
+                    <div className={clsx('flex', 'justify-between', 'gap-3')}>
                       <span>1x HAMBÚRGUER SUÍNO</span>
                       <span className="shrink-0">R$ 19,00</span>
                     </div>
-                    <div className="border-t border-dashed border-gray-500 my-1.5" />
-                    <div className="flex justify-between">
+                    <div className={clsx('border-t', 'border-dashed', 'border-gray-500', 'my-1.5')} />
+                    <div className={clsx('flex', 'justify-between')}>
                       <span>SUBTOTAL CONSUMO GERAL</span>
                       <span>R$ 117,00</span>
                     </div>
-                    <div className="flex justify-between">
+                    <div className={clsx('flex', 'justify-between')}>
                       <span>SUBTOTAL PAULO</span>
                       <span>R$ 44,00</span>
                     </div>
-                    <div className="border-y border-double border-gray-700 my-1.5 py-1 flex justify-between font-bold text-[11px]">
+                    <div className={clsx('border-y', 'border-double', 'border-gray-700', 'my-1.5', 'py-1', 'flex', 'justify-between', 'font-bold', 'text-[11px]')}>
                       <span>TOTAL GERAL DA MESA</span>
                       <span>R$ 161,00</span>
                     </div>
 
-                    <div className="text-center text-[9px] mt-2">
+                    <div className={clsx('text-center', 'text-[9px]', 'mt-2')}>
                       <span className="block">Gerenciado por Kôma</span>
                       <span className="block">Documento não fiscal</span>
                       {printFooter && (
-                        <span className="block mt-1 uppercase">{printFooter}</span>
+                        <span className={clsx('block', 'mt-1', 'uppercase')}>{printFooter}</span>
                       )}
                       {printNamePosition === 'rodape' && printHeader && (
-                        <span className="block font-bold mt-1 uppercase">
+                        <span className={clsx('block', 'font-bold', 'mt-1', 'uppercase')}>
                           {printHeader}
                         </span>
                       )}
                     </div>
                   </div>
-                  <p className="text-[8px] leading-relaxed text-gray-500">
+                  <p className={clsx('text-[8px]', 'leading-relaxed', 'text-gray-500')}>
                     O nome, a posição e o rodapé acima atualizam esta simulação. A impressão real usa o formatador do servidor e ajusta as quebras à largura da térmica.
                   </p>
                 </div>
@@ -7021,7 +7021,7 @@ export function CaixaPanel({
               <div className={clsx('lg:col-span-1', 'bg-[#121214]', 'border', 'border-[#27272A]', 'p-5', 'rounded-3xl', 'space-y-4', 'h-fit')}>
                 <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Simulador de Custos (CMV)</span>
                 <p className={clsx('text-[10px]', 'text-gray-400', 'leading-relaxed')}>
-                  Cruza a quantidade e preço médio de compras de insumos para definir a margem de lucro de cada prato.
+                  Cruza a quantidade e preço médio de compras de ingredientes para definir a margem de lucro de cada prato.
                 </p>
                 <div className={clsx('space-y-3.5', 'text-[10px]', 'font-mono')}>
                   <div className={clsx('p-3', 'bg-[#1C1C1F]', 'rounded-2xl', 'border', 'border-[#27272A]/50', 'space-y-2')}>
@@ -7031,7 +7031,7 @@ export function CaixaPanel({
                     <div className={clsx('flex', 'justify-between')}><span>Queijo Cheddar 30g:</span> <span>R$ 1.10</span></div>
                     <div className={clsx('flex', 'justify-between')}><span>Embalagem + Caixa:</span> <span>R$ 1.20</span></div>
                     <div className={clsx('border-t', 'border-[#27272A]/60', 'pt-2', 'flex', 'justify-between', 'font-bold', 'text-white')}>
-                      <span>Custo Total Insumos:</span>
+                      <span>Custo Total Ingredientes:</span>
                       <span>R$ 8.00</span>
                     </div>
                     <div className={clsx('flex', 'justify-between', 'text-emerald-400', 'font-bold')}>
@@ -7051,7 +7051,7 @@ export function CaixaPanel({
                         <th className="p-3">Nome</th>
                         <th className="p-3">Categoria</th>
                         <th className={clsx('p-3', 'font-mono')}>Preço de Venda</th>
-                        <th className={clsx('p-3', 'font-mono')}>Custo Insumos</th>
+                        <th className={clsx('p-3', 'font-mono')}>Custo Ingredientes</th>
                         <th className={clsx('p-3', 'text-right')}>Margem de Lucro</th>
                       </tr>
                     </thead>
@@ -7301,7 +7301,7 @@ export function CaixaPanel({
                             <span title="Item publicado no catálogo do cardápio" className={`text-[8px] font-bold px-2 py-0.5 rounded-full ${(prod as any).ativo !== false ? 'bg-emerald-600/15 text-emerald-400 border border-emerald-500/20' : 'bg-zinc-800 text-zinc-400 border border-zinc-700'}`}>
                               {(prod as any).ativo !== false ? '🟢 No Cardápio' : '🔴 Oculto'}
                             </span>
-                            <div className="flex gap-1 pl-2">
+                            <div className={clsx('flex', 'gap-1', 'pl-2')}>
                               <button
                                 onClick={() => {
                                   setEditingProduct(null);
@@ -7317,7 +7317,7 @@ export function CaixaPanel({
                                   setProdFormAtivo(true);
                                   setShowProductModal(true);
                                 }}
-                                className="p-1 hover:bg-[#27272A] rounded text-emerald-400 hover:text-emerald-300 transition-all cursor-pointer border border-transparent"
+                                className={clsx('p-1', 'hover:bg-[#27272A]', 'rounded', 'text-emerald-400', 'hover:text-emerald-300', 'transition-all', 'cursor-pointer', 'border', 'border-transparent')}
                                 title="Duplicar Produto (Criar variação)"
                               >
                                 <Copy size={11} />
@@ -7337,7 +7337,7 @@ export function CaixaPanel({
                                   setProdFormAtivo((prod as any).ativo !== false);
                                   setShowProductModal(true);
                                 }}
-                                className="p-1 hover:bg-[#27272A] rounded text-gray-400 hover:text-white transition-all cursor-pointer border border-transparent"
+                                className={clsx('p-1', 'hover:bg-[#27272A]', 'rounded', 'text-gray-400', 'hover:text-white', 'transition-all', 'cursor-pointer', 'border', 'border-transparent')}
                                 title="Editar Produto"
                               >
                                 <Edit3 size={11} />
@@ -7361,7 +7361,7 @@ export function CaixaPanel({
                                     }
                                   }
                                 }}
-                                className="p-1 hover:bg-red-950/20 rounded text-red-400 hover:text-red-300 transition-all cursor-pointer border border-transparent"
+                                className={clsx('p-1', 'hover:bg-red-950/20', 'rounded', 'text-red-400', 'hover:text-red-300', 'transition-all', 'cursor-pointer', 'border', 'border-transparent')}
                                 title="Excluir Produto"
                               >
                                 <Trash2 size={11} />
@@ -7442,26 +7442,26 @@ export function CaixaPanel({
               byCat[cat].push(p);
             });
             return (
-              <div className="space-y-4 animate-fade-in text-left w-full">
+              <div className={clsx('space-y-4', 'animate-fade-in', 'text-left', 'w-full')}>
                 {/* Header */}
-                <div className="flex justify-between items-center">
+                <div className={clsx('flex', 'justify-between', 'items-center')}>
                   <div>
-                    <h3 className="font-serif font-bold text-slate-100 text-sm sm:text-base block">Disponibilidade Rápida do Cardápio</h3>
-                    <p className="text-xs text-slate-400 block mt-0.5">Itens pausados não aparecem no aplicativo do garçom.</p>
+                    <h3 className={clsx('font-serif', 'font-bold', 'text-slate-100', 'text-sm', 'sm:text-base', 'block')}>Disponibilidade Rápida do Cardápio</h3>
+                    <p className={clsx('text-xs', 'text-slate-400', 'block', 'mt-0.5')}>Itens pausados não aparecem no aplicativo do garçom.</p>
                   </div>
                 </div>
 
                 {/* Search */}
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 w-4 h-4" />
+                  <Search className={clsx('absolute', 'left-3', 'top-1/2', '-translate-y-1/2', 'text-zinc-500', 'w-4', 'h-4')} />
                   <input
                     value={disponibilidadeSearch}
                     onChange={e => setDisponibilidadeSearch(e.target.value)}
                     placeholder="Pesquisar produto..."
-                    className="w-full pl-9 pr-8 py-2 bg-[#121316] border border-[#252832] rounded-xl text-white text-xs sm:text-sm placeholder-zinc-500 focus:outline-none focus:border-[#059669] focus:ring-1 focus:ring-[#059669] transition-all"
+                    className={clsx('w-full', 'pl-9', 'pr-8', 'py-2', 'bg-[#121316]', 'border', 'border-[#252832]', 'rounded-xl', 'text-white', 'text-xs', 'sm:text-sm', 'placeholder-zinc-500', 'focus:outline-none', 'focus:border-[#059669]', 'focus:ring-1', 'focus:ring-[#059669]', 'transition-all')}
                   />
                   {disponibilidadeSearch && (
-                    <button onClick={() => setDisponibilidadeSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white cursor-pointer">
+                    <button onClick={() => setDisponibilidadeSearch('')} className={clsx('absolute', 'right-3', 'top-1/2', '-translate-y-1/2', 'text-zinc-400', 'hover:text-white', 'cursor-pointer')}>
                       <X size={13} />
                     </button>
                   )}
@@ -7474,14 +7474,14 @@ export function CaixaPanel({
                     .sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true, sensitivity: 'base' }));
                   if (prods.length === 0) return null;
                   return (
-                    <div key={catObj.id} className="bg-[#121214]/60 border border-[#27272A] rounded-2xl overflow-hidden w-full shadow-sm">
-                      <div className="bg-[#18181B] px-4 py-3 border-b border-[#27272A] flex justify-between items-center gap-3">
-                        <div className="flex items-baseline gap-2">
-                          <span className="font-bold text-[#10b981] text-xs sm:text-sm uppercase tracking-wider">{catObj.nome}</span>
-                          <span className="text-xs text-gray-400">({prods.length} {prods.length === 1 ? 'item' : 'itens'})</span>
+                    <div key={catObj.id} className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-2xl', 'overflow-hidden', 'w-full', 'shadow-sm')}>
+                      <div className={clsx('bg-[#18181B]', 'px-4', 'py-3', 'border-b', 'border-[#27272A]', 'flex', 'justify-between', 'items-center', 'gap-3')}>
+                        <div className={clsx('flex', 'items-baseline', 'gap-2')}>
+                          <span className={clsx('font-bold', 'text-[#10b981]', 'text-xs', 'sm:text-sm', 'uppercase', 'tracking-wider')}>{catObj.nome}</span>
+                          <span className={clsx('text-xs', 'text-gray-400')}>({prods.length} {prods.length === 1 ? 'item' : 'itens'})</span>
                         </div>
                         
-                        <div className="flex items-center gap-2">
+                        <div className={clsx('flex', 'items-center', 'gap-2')}>
                           <button
                             type="button"
                             onClick={async () => {
@@ -7501,7 +7501,7 @@ export function CaixaPanel({
                                 }
                               }
                             }}
-                            className="px-2.5 py-1 border border-rose-500/20 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-bold rounded-lg transition-all cursor-pointer uppercase tracking-wider"
+                            className={clsx('px-2.5', 'py-1', 'border', 'border-rose-500/20', 'bg-rose-500/10', 'hover:bg-rose-500/20', 'text-rose-400', 'text-xs', 'font-bold', 'rounded-lg', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider')}
                           >
                             Pausar Categoria
                           </button>
@@ -7524,7 +7524,7 @@ export function CaixaPanel({
                                 }
                               }
                             }}
-                            className="px-2.5 py-1 border border-emerald-500/20 bg-emerald-500/10 hover:bg-emerald-500/20 text-[#10b981] text-xs font-bold rounded-lg transition-all cursor-pointer uppercase tracking-wider"
+                            className={clsx('px-2.5', 'py-1', 'border', 'border-emerald-500/20', 'bg-emerald-500/10', 'hover:bg-emerald-500/20', 'text-[#10b981]', 'text-xs', 'font-bold', 'rounded-lg', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider')}
                           >
                             Ativar Categoria
                           </button>
@@ -7532,7 +7532,7 @@ export function CaixaPanel({
                       </div>
 
                       {/* Grid de 2 a 3 colunas preenchendo 100% da página */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-3 w-full">
+                      <div className={clsx('grid', 'grid-cols-1', 'md:grid-cols-2', 'lg:grid-cols-3', 'gap-3', 'p-3', 'w-full')}>
                         {prods.map(prod => {
                           const isAtivo = (prod as any).ativo !== false;
                           const codigoFormatado = `#${String(prod.id).padStart(3, '0')}`;
@@ -7545,7 +7545,7 @@ export function CaixaPanel({
                                 !isAtivo && 'opacity-70'
                               )}
                             >
-                              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                              <div className={clsx('flex', 'items-center', 'gap-2.5', 'min-w-0', 'flex-1')}>
                                 {(prod as any).imagem && (
                                   <img
                                     src={(prod as any).imagem}
@@ -7553,14 +7553,14 @@ export function CaixaPanel({
                                     className={clsx('w-10 h-10 rounded-lg object-cover shrink-0', !isAtivo && 'opacity-40 grayscale')}
                                   />
                                 )}
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-center gap-1.5 truncate">
-                                    <span className="text-xs text-gray-400 font-mono shrink-0">{codigoFormatado}</span>
+                                <div className={clsx('min-w-0', 'flex-1')}>
+                                  <div className={clsx('flex', 'items-center', 'gap-1.5', 'truncate')}>
+                                    <span className={clsx('text-xs', 'text-gray-400', 'font-mono', 'shrink-0')}>{codigoFormatado}</span>
                                     <span className={clsx('text-sm font-bold truncate', isAtivo ? 'text-white' : 'text-gray-400 line-through')}>
                                       {prod.nome}
                                     </span>
                                   </div>
-                                  <span className="text-xs font-mono font-bold text-[#10b981] mt-0.5 block">
+                                  <span className={clsx('text-xs', 'font-mono', 'font-bold', 'text-[#10b981]', 'mt-0.5', 'block')}>
                                     R$ {prod.preco.toFixed(2)}
                                   </span>
                                 </div>
@@ -7596,7 +7596,7 @@ export function CaixaPanel({
                   );
                 })}
                 {filtered.length === 0 && (
-                  <div className="py-16 text-center text-slate-400 italic text-xs">
+                  <div className={clsx('py-16', 'text-center', 'text-slate-400', 'italic', 'text-xs')}>
                     Nenhum produto encontrado para "{disponibilidadeSearch}".
                   </div>
                 )}
@@ -7620,8 +7620,8 @@ export function CaixaPanel({
           {activeTab === 'estoque' && activeSubTab === 'insumos' && (
             <div className={clsx('animate-fade-in', 'space-y-4', 'text-left')}>
               <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-3')}>
-                <div className="flex justify-between items-center border-b border-[#27272A] pb-2">
-                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300')}>Insumos</span>
+                <div className={clsx('flex', 'justify-between', 'items-center', 'border-b', 'border-[#27272A]', 'pb-2')}>
+                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300')}>Ingredientes</span>
                   <button
                     type="button"
                     onClick={() => {
@@ -7633,14 +7633,14 @@ export function CaixaPanel({
                       setInsumoFormCusto(0);
                       setShowNewInsumoModal(true);
                     }}
-                    className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm"
+                    className={clsx('px-3', 'py-1', 'bg-emerald-600', 'hover:bg-emerald-500', 'text-white', 'rounded-lg', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-sm')}
                   >
-                    + Novo Insumo
+                    + Novo Ingrediente
                   </button>
                   <button
                     type="button"
                     onClick={() => setActiveSubTab('entradas')}
-                    className="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-emerald-400 border border-emerald-500/30 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm flex items-center gap-1"
+                    className={clsx('px-3', 'py-1', 'bg-zinc-800', 'hover:bg-zinc-700', 'text-emerald-400', 'border', 'border-emerald-500/30', 'rounded-lg', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-sm', 'flex', 'items-center', 'gap-1')}
                     title="Importar Nota Fiscal Eletrônica XML"
                   >
                     <Upload size={11} />
@@ -7651,7 +7651,7 @@ export function CaixaPanel({
                   <table className={clsx('w-full', 'text-left', 'text-[10px]')}>
                     <thead>
                       <tr className={clsx('bg-[#1C1C1F]', 'border-b', 'border-[#27272A]', 'text-gray-400', 'uppercase', 'tracking-wider', 'font-bold')}>
-                        <th className="p-3">Insumo</th>
+                        <th className="p-3">Ingrediente</th>
                         <th className={clsx('p-3', 'font-mono')}>Estoque Atual</th>
                         <th className={clsx('p-3', 'font-mono')}>Mínimo</th>
                         <th className={clsx('p-3', 'font-mono')}>Custo Médio</th>
@@ -7661,24 +7661,24 @@ export function CaixaPanel({
                     </thead>
                     <tbody className={clsx('divide-y', 'divide-[#27272A]/40')}>
                       {estoqueInsumos.length === 0 ? (
-                        <tr><td colSpan={6} className="p-8 text-center text-gray-500 italic">Nenhum insumo cadastrado. Clique em Novo Insumo ou importe uma NF-e para começar.</td></tr>
+                        <tr><td colSpan={6} className={clsx('p-8', 'text-center', 'text-gray-500', 'italic')}>Nenhum ingrediente cadastrado. Clique em Novo Ingrediente ou importe uma NF-e para começar.</td></tr>
                       ) : estoqueInsumos.map(ins => {
                         const isLow = ins.estoque_atual <= ins.estoque_minimo;
                         return (
                           <tr key={ins.id} className={clsx('transition-colors', isLow ? 'bg-amber-500/5 hover:bg-amber-500/10' : 'hover:bg-[#1C1C1F]/20')}>
-                            <td className={clsx('p-3', 'font-semibold', 'text-white')}>{ins.nome} <span className="text-[8px] text-gray-500 block font-mono">ID: {ins.id}</span></td>
+                            <td className={clsx('p-3', 'font-semibold', 'text-white')}>{ins.nome} <span className={clsx('text-[8px]', 'text-gray-500', 'block', 'font-mono')}>ID: {ins.id}</span></td>
                             <td className={clsx('p-3', 'font-mono', isLow ? 'text-amber-400' : 'text-emerald-400')}>
                               {ins.estoque_atual.toFixed(2)} <span className="text-gray-500">{ins.unidade_medida}</span>
                             </td>
                             <td className={clsx('p-3', 'font-mono', 'text-gray-400')}>{ins.estoque_minimo.toFixed(2)} <span className="text-gray-600">{ins.unidade_medida}</span></td>
                             <td className={clsx('p-3', 'font-mono', 'text-gray-300')}>R$ {ins.preco_medio_custo.toFixed(2)}</td>
-                            <td className="p-3 text-right">
+                            <td className={clsx('p-3', 'text-right')}>
                               {isLow
-                                ? <span className="px-2 py-0.5 bg-amber-500/15 text-amber-400 rounded-full text-[8px] font-bold uppercase">⚠ Baixo</span>
-                                : <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 rounded-full text-[8px] font-bold uppercase">✓ Ok</span>
+                                ? <span className={clsx('px-2', 'py-0.5', 'bg-amber-500/15', 'text-amber-400', 'rounded-full', 'text-[8px]', 'font-bold', 'uppercase')}>⚠ Baixo</span>
+                                : <span className={clsx('px-2', 'py-0.5', 'bg-emerald-500/10', 'text-emerald-400', 'rounded-full', 'text-[8px]', 'font-bold', 'uppercase')}>✓ Ok</span>
                               }
                             </td>
-                            <td className="p-3 text-right space-x-1.5 whitespace-nowrap">
+                            <td className={clsx('p-3', 'text-right', 'space-x-1.5', 'whitespace-nowrap')}>
                               <button
                                 onClick={() => {
                                   setSelectedInsumo(ins);
@@ -7687,7 +7687,7 @@ export function CaixaPanel({
                                   setAjusteJustificativa('');
                                   setShowAjusteInsumoModal(true);
                                 }}
-                                className="px-2 py-0.5 border border-zinc-800 hover:border-zinc-700 bg-zinc-900/50 hover:bg-zinc-800 text-gray-300 hover:text-white rounded-md transition-all cursor-pointer font-bold"
+                                className={clsx('px-2', 'py-0.5', 'border', 'border-zinc-800', 'hover:border-zinc-700', 'bg-zinc-900/50', 'hover:bg-zinc-800', 'text-gray-300', 'hover:text-white', 'rounded-md', 'transition-all', 'cursor-pointer', 'font-bold')}
                               >
                                 Ajustar
                               </button>
@@ -7701,7 +7701,7 @@ export function CaixaPanel({
                                   setInsumoFormCusto(ins.preco_medio_custo);
                                   setShowEditInsumoModal(true);
                                 }}
-                                className="px-2 py-0.5 border border-zinc-800 hover:border-zinc-700 bg-zinc-900/50 hover:bg-[#1C1C1F] text-emerald-400 hover:text-emerald-300 rounded-md transition-all cursor-pointer font-bold"
+                                className={clsx('px-2', 'py-0.5', 'border', 'border-zinc-800', 'hover:border-zinc-700', 'bg-zinc-900/50', 'hover:bg-[#1C1C1F]', 'text-emerald-400', 'hover:text-emerald-300', 'rounded-md', 'transition-all', 'cursor-pointer', 'font-bold')}
                               >
                                 Editar
                               </button>
@@ -7788,7 +7788,7 @@ export function CaixaPanel({
           {/* LIVE VIEW: DISTRIBUIDORES */}
           {activeTab === 'estoque' && activeSubTab === 'fornecedores' && (
             <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'text-left', 'animate-fade-in')}>
-              <div className="flex justify-between items-center border-b border-[#27272A] pb-2">
+              <div className={clsx('flex', 'justify-between', 'items-center', 'border-b', 'border-[#27272A]', 'pb-2')}>
                 <span className={clsx('font-serif', 'font-bold', 'text-gray-300')}>Fornecedores</span>
                 <button
                   type="button"
@@ -7800,7 +7800,7 @@ export function CaixaPanel({
                     setDistFormLeadTime(3);
                     setShowNewDistModal(true);
                   }}
-                  className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm"
+                  className={clsx('px-3', 'py-1', 'bg-emerald-600', 'hover:bg-emerald-500', 'text-white', 'rounded-lg', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-sm')}
                 >
                   + Novo Fornecedor
                 </button>
@@ -7818,14 +7818,14 @@ export function CaixaPanel({
                   </thead>
                   <tbody className={clsx('divide-y', 'divide-[#27272A]/40')}>
                     {distribuidores.length === 0 ? (
-                      <tr><td colSpan={5} className="p-8 text-center text-gray-500 italic">Nenhum fornecedor cadastrado. Clique em Novo Fornecedor ou importe uma NF-e.</td></tr>
+                      <tr><td colSpan={5} className={clsx('p-8', 'text-center', 'text-gray-500', 'italic')}>Nenhum fornecedor cadastrado. Clique em Novo Fornecedor ou importe uma NF-e.</td></tr>
                     ) : distribuidores.map(dist => (
                       <tr key={dist.id} className={clsx('hover:bg-[#1C1C1F]/20', 'transition-colors')}>
-                        <td className={clsx('p-3.5', 'font-bold', 'text-white')}>{dist.nome_fantasia || '—'} <span className="text-[8px] text-gray-500 block font-mono">ID: {dist.id}</span></td>
+                        <td className={clsx('p-3.5', 'font-bold', 'text-white')}>{dist.nome_fantasia || '—'} <span className={clsx('text-[8px]', 'text-gray-500', 'block', 'font-mono')}>ID: {dist.id}</span></td>
                         <td className={clsx('p-3.5', 'text-gray-400')}>{dist.razao_social || '—'}</td>
                         <td className={clsx('p-3.5', 'font-mono', 'text-gray-400')}>{dist.cnpj}</td>
                         <td className={clsx('p-3.5', 'text-gray-400', 'text-right', 'font-mono')}>{dist.lead_time_dias ?? '—'} dias</td>
-                        <td className="p-3.5 text-right space-x-1.5 whitespace-nowrap">
+                        <td className={clsx('p-3.5', 'text-right', 'space-x-1.5', 'whitespace-nowrap')}>
                           <button
                             onClick={() => {
                               setSelectedDist(dist);
@@ -7835,13 +7835,13 @@ export function CaixaPanel({
                               setDistFormLeadTime(dist.lead_time_dias ?? 3);
                               setShowEditDistModal(true);
                             }}
-                            className="px-2 py-0.5 border border-zinc-800 hover:border-zinc-700 bg-zinc-900/50 hover:bg-[#1C1C1F] text-emerald-400 hover:text-emerald-300 rounded-md transition-all cursor-pointer font-bold"
+                            className={clsx('px-2', 'py-0.5', 'border', 'border-zinc-800', 'hover:border-zinc-700', 'bg-zinc-900/50', 'hover:bg-[#1C1C1F]', 'text-emerald-400', 'hover:text-emerald-300', 'rounded-md', 'transition-all', 'cursor-pointer', 'font-bold')}
                           >
                             Editar
                           </button>
                           <button
                             onClick={() => handleDeleteDistribuidor(dist.id)}
-                            className="px-2 py-0.5 border border-red-950/40 hover:border-red-600/30 bg-red-950/20 hover:bg-red-900/25 text-red-400 hover:text-white rounded-md transition-all cursor-pointer font-bold"
+                            className={clsx('px-2', 'py-0.5', 'border', 'border-red-950/40', 'hover:border-red-600/30', 'bg-red-950/20', 'hover:bg-red-900/25', 'text-red-400', 'hover:text-white', 'rounded-md', 'transition-all', 'cursor-pointer', 'font-bold')}
                           >
                             Excluir
                           </button>
@@ -7856,7 +7856,7 @@ export function CaixaPanel({
 
           {/* MÓDULO CAIXA REORGANIZADO */}
           {activeTab === 'financeiro' && (activeSubTab === 'turno_atual' || activeSubTab === 'fluxo') && (
-            <div className="orders-workspace space-y-4">
+            <div className={clsx('orders-workspace', 'space-y-4')}>
               <OperationalBanner
                 id="cash-heading"
                 eyebrow="CAIXA / CONFERÊNCIA AO VIVO"
@@ -7903,7 +7903,7 @@ export function CaixaPanel({
           )}
 
           {activeTab === 'financeiro' && (activeSubTab === 'fechamento' || activeSubTab === 'conferencia') && (
-            <div className="orders-workspace space-y-4">
+            <div className={clsx('orders-workspace', 'space-y-4')}>
               <OperationalBanner
                 id="cash-closing-heading"
                 eyebrow="CAIXA / ENCERRAMENTO SEGURO"
@@ -7991,7 +7991,7 @@ export function CaixaPanel({
           {/* CRM CLIENTES — REAL DATA */}
           {activeTab === 'clientes' && ['clientes', 'crm', 'banco_clientes', 'fidelidade', 'programa_fidelidade'].includes(activeSubTab) && (
             <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4', 'text-left', 'animate-fade-in', 'max-w-3xl')}>
-              <div className="flex justify-between items-center border-b border-[#27272A] pb-2">
+              <div className={clsx('flex', 'justify-between', 'items-center', 'border-b', 'border-[#27272A]', 'pb-2')}>
                 <span className={clsx('font-serif', 'font-bold', 'text-gray-300')}>CRM — Cadastro de Clientes</span>
                 <button
                   type="button"
@@ -8001,7 +8001,7 @@ export function CaixaPanel({
                     setNewCrmSaldo('0');
                     setShowNewCrmModal(true);
                   }}
-                  className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm"
+                  className={clsx('px-3', 'py-1', 'bg-emerald-600', 'hover:bg-emerald-500', 'text-white', 'rounded-lg', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-sm')}
                 >
                   + Novo Cliente
                 </button>
@@ -8033,7 +8033,7 @@ export function CaixaPanel({
                               setCrmFormPontos(user.pontos || 0);
                               setCrmFormCashback(user.saldoCashback || 0);
                             }}
-                            className="px-2.5 py-1 border border-zinc-800 hover:border-zinc-700 bg-zinc-900/50 hover:bg-zinc-800 text-gray-300 hover:text-white rounded-lg transition-all cursor-pointer font-bold"
+                            className={clsx('px-2.5', 'py-1', 'border', 'border-zinc-800', 'hover:border-zinc-700', 'bg-zinc-900/50', 'hover:bg-zinc-800', 'text-gray-300', 'hover:text-white', 'rounded-lg', 'transition-all', 'cursor-pointer', 'font-bold')}
                           >
                             Editar
                           </button>
@@ -8042,7 +8042,7 @@ export function CaixaPanel({
                     ))}
                     {loyaltyUsers.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="p-8 text-center text-gray-500">
+                        <td colSpan={4} className={clsx('p-8', 'text-center', 'text-gray-500')}>
                           Nenhum cliente cadastrado. O primeiro cadastro feito aqui, no balcão ou no cardápio aparecerá automaticamente.
                         </td>
                       </tr>
@@ -8479,10 +8479,10 @@ export function CaixaPanel({
 
           {/* CONFIGURAÇÃO CARDÁPIO DIGITAL WHITELABEL */}
           {(activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital') && !hasOnlineMenu && (
-            <div className="bg-[#121214] border border-amber-500/20 rounded-3xl p-8 text-center max-w-xl mx-auto space-y-3">
-              <Lock size={24} className="text-amber-400 mx-auto" />
-              <h3 className="text-white font-bold">Cardápio online não incluído neste plano</h3>
-              <p className="text-[10px] text-gray-400">
+            <div className={clsx('bg-[#121214]', 'border', 'border-amber-500/20', 'rounded-3xl', 'p-8', 'text-center', 'max-w-xl', 'mx-auto', 'space-y-3')}>
+              <Lock size={24} className={clsx('text-amber-400', 'mx-auto')} />
+              <h3 className={clsx('text-white', 'font-bold')}>Cardápio online não incluído neste plano</h3>
+              <p className={clsx('text-[10px]', 'text-gray-400')}>
                 No Kôma Pro, ele pode ser contratado por R$ {ONLINE_MENU_ADDON.price}/mês. No Kôma Premium, link, QR Code e gaveta de aceite já estão incluídos.
               </p>
               <button
@@ -8491,7 +8491,7 @@ export function CaixaPanel({
                   setActiveTab('assinatura_pix');
                   setActiveSubTab('planos');
                 }}
-                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold uppercase cursor-pointer"
+                className={clsx('px-4', 'py-2', 'rounded-xl', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'text-[10px]', 'font-bold', 'uppercase', 'cursor-pointer')}
               >
                 Ver opções
               </button>
@@ -8521,15 +8521,15 @@ export function CaixaPanel({
                 </div>
 
                 {/* Cores */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className={clsx('grid', 'grid-cols-1', 'sm:grid-cols-2', 'gap-4')}>
                   <div className="space-y-1.5">
                     <label className={clsx('text-[10px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Cor Primária (Tema):</label>
-                    <div className="flex gap-2">
+                    <div className={clsx('flex', 'gap-2')}>
                       <input
                         type="color"
                         value={cardapioCorPrimaria}
                         onChange={(e) => setCardapioCorPrimaria(e.target.value)}
-                        className="w-10 h-10 p-0 border border-[#27272A] rounded-xl bg-transparent cursor-pointer"
+                        className={clsx('w-10', 'h-10', 'p-0', 'border', 'border-[#27272A]', 'rounded-xl', 'bg-transparent', 'cursor-pointer')}
                       />
                       <input
                         type="text"
@@ -8542,12 +8542,12 @@ export function CaixaPanel({
 
                   <div className="space-y-1.5">
                     <label className={clsx('text-[10px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'block')}>Cor de Fundo:</label>
-                    <div className="flex gap-2">
+                    <div className={clsx('flex', 'gap-2')}>
                       <input
                         type="color"
                         value={cardapioCorFundo}
                         onChange={(e) => setCardapioCorFundo(e.target.value)}
-                        className="w-10 h-10 p-0 border border-[#27272A] rounded-xl bg-transparent cursor-pointer"
+                        className={clsx('w-10', 'h-10', 'p-0', 'border', 'border-[#27272A]', 'rounded-xl', 'bg-transparent', 'cursor-pointer')}
                       />
                       <input
                         type="text"
@@ -8684,12 +8684,12 @@ export function CaixaPanel({
                     {selectedOrder.mesaId > 0 ? `Mesa ${selectedOrder.mesaId}` : `Pedido Balcão`}
                   </h3>
                   {selectedOrder.mesaOrigemId && Number(selectedOrder.mesaOrigemId) !== Number(selectedOrder.mesaId) && (
-                    <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-300 border border-emerald-500/25 rounded-full">
+                    <span className={clsx('inline-flex', 'items-center', 'gap-1', 'mt-1', 'px-2', 'py-0.5', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'bg-emerald-500/10', 'text-emerald-300', 'border', 'border-emerald-500/25', 'rounded-full')}>
                       🔗 Mesclado de Mesa {selectedOrder.mesaOrigemId}
                     </span>
                   )}
                   {selectedOrder.mesaTransferidaDe && Number(selectedOrder.mesaTransferidaDe) !== Number(selectedOrder.mesaId) && (
-                    <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-purple-500/10 text-purple-300 border border-purple-500/25 rounded-full">
+                    <span className={clsx('inline-flex', 'items-center', 'gap-1', 'mt-1', 'px-2', 'py-0.5', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'bg-purple-500/10', 'text-purple-300', 'border', 'border-purple-500/25', 'rounded-full')}>
                       🔗 Transferido da Mesa {selectedOrder.mesaTransferidaDe}
                     </span>
                   )}
@@ -8709,7 +8709,7 @@ export function CaixaPanel({
                   <div className={clsx('flex', 'items-center', 'justify-between', 'border-b', 'border-[#27272A]', 'pb-1.5')}>
                     <div>
                       <h4 className={clsx('font-serif', 'font-bold', 'text-gray-300')}>Extrato Consumo</h4>
-                      <span className="text-[8px] text-gray-500">
+                      <span className={clsx('text-[8px]', 'text-gray-500')}>
                         Marque itens para pagá-los juntos ou deixe tudo desmarcado para receber qualquer valor.
                       </span>
                     </div>
@@ -8840,7 +8840,7 @@ export function CaixaPanel({
                   {/* BOTÕES DE REIMPRESSÃO DO EXTRATO */}
                   <div className={clsx('bg-[#121214]/40', 'border', 'border-[#27272A]/50', 'p-4', 'rounded-2xl', 'space-y-3', 'text-left')}>
                     <span className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Reimpressão de Extrato</span>
-                    <div className="flex gap-2">
+                    <div className={clsx('flex', 'gap-2')}>
                       <button
                         type="button"
                         onClick={async () => {
@@ -8973,10 +8973,10 @@ export function CaixaPanel({
                       </div>
                     </div>
 
-                    <div className="space-y-1.5 font-sans">
+                    <div className={clsx('space-y-1.5', 'font-sans')}>
                       <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Valor a Lançar (R$):</label>
-                      <div className="flex gap-2">
-                        <div className="relative flex-1">
+                      <div className={clsx('flex', 'gap-2')}>
+                        <div className={clsx('relative', 'flex-1')}>
                           <span className={clsx('absolute', 'left-3.5', 'top-2.5', 'text-gray-400', 'font-mono', 'text-[11px]')}>R$</span>
                           <input
                             type="number"
@@ -9045,8 +9045,8 @@ export function CaixaPanel({
 
                     {/* BOTÕES DE ATALHO DE CÉDULAS (CASH SHORTCUTS) */}
                     <div className="space-y-1">
-                      <label className="text-[8px] font-bold text-gray-500 uppercase tracking-wider block">Atalhos de Cédulas:</label>
-                      <div className="flex flex-wrap gap-1">
+                      <label className={clsx('text-[8px]', 'font-bold', 'text-gray-500', 'uppercase', 'tracking-wider', 'block')}>Atalhos de Cédulas:</label>
+                      <div className={clsx('flex', 'flex-wrap', 'gap-1')}>
                         {[2, 5, 10, 20, 50, 100, 200].map((val) => (
                           <button
                             key={val}
@@ -9055,7 +9055,7 @@ export function CaixaPanel({
                               setSelectedItemIds([]);
                               setPaymentValor(val.toFixed(2));
                             }}
-                            className="px-2.5 py-1 bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] rounded-lg text-[9px] font-bold text-gray-300 font-mono transition-all cursor-pointer hover:border-gray-500 hover:text-white"
+                            className={clsx('px-2.5', 'py-1', 'bg-[#1C1C1F]', 'hover:bg-[#27272A]', 'border', 'border-[#27272A]', 'rounded-lg', 'text-[9px]', 'font-bold', 'text-gray-300', 'font-mono', 'transition-all', 'cursor-pointer', 'hover:border-gray-500', 'hover:text-white')}
                           >
                             R$ {val}
                           </button>
@@ -9063,7 +9063,7 @@ export function CaixaPanel({
                       </div>
                     </div>
 
-                    <div className="space-y-1.5 font-sans">
+                    <div className={clsx('space-y-1.5', 'font-sans')}>
                       <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Celular do cliente (Opcional - Fidelidade):</label>
                       <input
                         type="tel"
@@ -9099,8 +9099,8 @@ export function CaixaPanel({
                             'shadow-md',
                             'shadow-emerald-950/20'
                           )}>
-                            <span className="font-bold uppercase text-[9px] tracking-wider text-emerald-400">Troco devido:</span>
-                            <span className="font-extrabold text-sm text-emerald-200">R$ {troco.toFixed(2)}</span>
+                            <span className={clsx('font-bold', 'uppercase', 'text-[9px]', 'tracking-wider', 'text-emerald-400')}>Troco devido:</span>
+                            <span className={clsx('font-extrabold', 'text-sm', 'text-emerald-200')}>R$ {troco.toFixed(2)}</span>
                           </div>
                         );
                       }
@@ -9119,7 +9119,7 @@ export function CaixaPanel({
                             setSplitPeople('1');
                             setPaymentValor(getCheckoutBalance(selectedOrder).toFixed(2));
                           }}
-                          className="shrink-0 rounded-lg border border-[#10b981]/30 px-2 py-1 text-[8px] font-bold uppercase hover:bg-[#10b981]/10"
+                          className={clsx('shrink-0', 'rounded-lg', 'border', 'border-[#10b981]/30', 'px-2', 'py-1', 'text-[8px]', 'font-bold', 'uppercase', 'hover:bg-[#10b981]/10')}
                         >
                           Limpar
                         </button>
@@ -9160,18 +9160,18 @@ export function CaixaPanel({
             onClick={(e) => {
               if (e.target === e.currentTarget && !tableMutation) setShowAddMesaModal(false);
             }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+            className={clsx('fixed', 'inset-0', 'z-50', 'flex', 'items-center', 'justify-center', 'bg-black/80', 'p-4', 'backdrop-blur-sm')}
           >
-            <form onSubmit={handleAddMesaSubmit} className="w-full max-w-md overflow-hidden rounded-[24px] border border-[#2b312e] bg-[#141715] shadow-2xl animate-scale-in">
-              <div className="flex items-start justify-between border-b border-[#2b312e] px-5 py-4 sm:px-6">
-                <div className="flex items-center gap-3">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#10b981]/20 bg-[#10b981]/10 text-[#6ee7b7]">
+            <form onSubmit={handleAddMesaSubmit} className={clsx('w-full', 'max-w-md', 'overflow-hidden', 'rounded-[24px]', 'border', 'border-[#2b312e]', 'bg-[#141715]', 'shadow-2xl', 'animate-scale-in')}>
+              <div className={clsx('flex', 'items-start', 'justify-between', 'border-b', 'border-[#2b312e]', 'px-5', 'py-4', 'sm:px-6')}>
+                <div className={clsx('flex', 'items-center', 'gap-3')}>
+                  <span className={clsx('flex', 'h-10', 'w-10', 'items-center', 'justify-center', 'rounded-xl', 'border', 'border-[#10b981]/20', 'bg-[#10b981]/10', 'text-[#6ee7b7]')}>
                     <Plus size={18} />
                   </span>
                   <div>
-                    <span className="block font-mono text-[8px] font-bold uppercase tracking-[0.2em] text-[#10b981]">Estrutura do salão</span>
-                    <h3 className="mt-0.5 text-lg font-bold text-white">Adicionar mesa</h3>
-                    <p className="mt-0.5 text-[10px] text-zinc-500">Ela ficará disponível no caixa e no app do garçom.</p>
+                    <span className={clsx('block', 'font-mono', 'text-[8px]', 'font-bold', 'uppercase', 'tracking-[0.2em]', 'text-[#10b981]')}>Estrutura do salão</span>
+                    <h3 className={clsx('mt-0.5', 'text-lg', 'font-bold', 'text-white')}>Adicionar mesa</h3>
+                    <p className={clsx('mt-0.5', 'text-[10px]', 'text-zinc-500')}>Ela ficará disponível no caixa e no app do garçom.</p>
                   </div>
                 </div>
                 <button
@@ -9179,16 +9179,16 @@ export function CaixaPanel({
                   disabled={tableMutation !== null}
                   onClick={() => setShowAddMesaModal(false)}
                   aria-label="Fechar"
-                  className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-white/[0.05] hover:text-white disabled:opacity-40"
+                  className={clsx('rounded-lg', 'p-2', 'text-zinc-500', 'transition-colors', 'hover:bg-white/[0.05]', 'hover:text-white', 'disabled:opacity-40')}
                 >
                   <X size={16} />
                 </button>
               </div>
 
-              <div className="space-y-4 px-5 py-5 sm:px-6">
-                <div className="grid grid-cols-2 gap-3">
+              <div className={clsx('space-y-4', 'px-5', 'py-5', 'sm:px-6')}>
+                <div className={clsx('grid', 'grid-cols-2', 'gap-3')}>
                   <label className="space-y-1.5">
-                    <span className="block text-[9px] font-bold uppercase tracking-wider text-zinc-400">Número da mesa</span>
+                    <span className={clsx('block', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'text-zinc-400')}>Número da mesa</span>
                   <input
                     type="number"
                     min="1"
@@ -9196,11 +9196,11 @@ export function CaixaPanel({
                     placeholder="Ex: 31"
                     value={newMesaId}
                     onChange={(e) => { setNewMesaId(e.target.value); setTableFormError(''); }}
-                    className="w-full rounded-xl border border-[#303633] bg-[#0c0f0d] px-3 py-3 font-mono text-sm text-white outline-none transition-colors placeholder:text-zinc-700 focus:border-[#10b981]/60"
+                    className={clsx('w-full', 'rounded-xl', 'border', 'border-[#303633]', 'bg-[#0c0f0d]', 'px-3', 'py-3', 'font-mono', 'text-sm', 'text-white', 'outline-none', 'transition-colors', 'placeholder:text-zinc-700', 'focus:border-[#10b981]/60')}
                   />
                   </label>
                   <label className="space-y-1.5">
-                    <span className="block text-[9px] font-bold uppercase tracking-wider text-zinc-400">Lugares</span>
+                    <span className={clsx('block', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'text-zinc-400')}>Lugares</span>
                   <input
                     type="number"
                     min="1"
@@ -9208,43 +9208,43 @@ export function CaixaPanel({
                     placeholder="Ex: 4"
                     value={newMesaCap}
                     onChange={(e) => { setNewMesaCap(e.target.value); setTableFormError(''); }}
-                    className="w-full rounded-xl border border-[#303633] bg-[#0c0f0d] px-3 py-3 font-mono text-sm text-white outline-none transition-colors placeholder:text-zinc-700 focus:border-[#10b981]/60"
+                    className={clsx('w-full', 'rounded-xl', 'border', 'border-[#303633]', 'bg-[#0c0f0d]', 'px-3', 'py-3', 'font-mono', 'text-sm', 'text-white', 'outline-none', 'transition-colors', 'placeholder:text-zinc-700', 'focus:border-[#10b981]/60')}
                   />
                   </label>
                 </div>
 
-                <label className="block space-y-1.5">
-                  <span className="block text-[9px] font-bold uppercase tracking-wider text-zinc-400">Nome de referência <span className="normal-case text-zinc-600">(opcional)</span></span>
+                <label className={clsx('block', 'space-y-1.5')}>
+                  <span className={clsx('block', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'text-zinc-400')}>Nome de referência <span className={clsx('normal-case', 'text-zinc-600')}>(opcional)</span></span>
                   <input
                     type="text"
                     maxLength={80}
                     placeholder="Ex.: Varanda, Deck ou Mesa VIP"
                     value={newMesaNome}
                     onChange={(e) => { setNewMesaNome(e.target.value); setTableFormError(''); }}
-                    className="w-full rounded-xl border border-[#303633] bg-[#0c0f0d] px-3 py-3 text-sm text-white outline-none transition-colors placeholder:text-zinc-700 focus:border-[#10b981]/60"
+                    className={clsx('w-full', 'rounded-xl', 'border', 'border-[#303633]', 'bg-[#0c0f0d]', 'px-3', 'py-3', 'text-sm', 'text-white', 'outline-none', 'transition-colors', 'placeholder:text-zinc-700', 'focus:border-[#10b981]/60')}
                   />
                 </label>
 
                 {tableFormError && (
-                  <div role="alert" className="flex gap-2 rounded-xl border border-rose-900/40 bg-rose-950/20 p-3 text-[11px] leading-relaxed text-rose-300">
-                    <AlertTriangle className="mt-0.5 shrink-0" size={14} />
+                  <div role="alert" className={clsx('flex', 'gap-2', 'rounded-xl', 'border', 'border-rose-900/40', 'bg-rose-950/20', 'p-3', 'text-[11px]', 'leading-relaxed', 'text-rose-300')}>
+                    <AlertTriangle className={clsx('mt-0.5', 'shrink-0')} size={14} />
                     {tableFormError}
                   </div>
                 )}
 
-                <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row">
+                <div className={clsx('flex', 'flex-col-reverse', 'gap-2', 'pt-1', 'sm:flex-row')}>
                   <button
                     type="button"
                     disabled={tableMutation !== null}
                     onClick={() => setShowAddMesaModal(false)}
-                    className="min-h-11 flex-1 rounded-xl border border-[#303633] bg-[#0c0f0d] px-4 text-xs font-bold text-zinc-400 transition-colors hover:text-white disabled:opacity-40"
+                    className={clsx('min-h-11', 'flex-1', 'rounded-xl', 'border', 'border-[#303633]', 'bg-[#0c0f0d]', 'px-4', 'text-xs', 'font-bold', 'text-zinc-400', 'transition-colors', 'hover:text-white', 'disabled:opacity-40')}
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
                     disabled={tableMutation !== null}
-                    className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#10b981] px-4 text-xs font-extrabold text-[#07110e] transition-colors hover:bg-[#35c99a] disabled:cursor-wait disabled:opacity-60"
+                    className={clsx('flex', 'min-h-11', 'flex-1', 'items-center', 'justify-center', 'gap-2', 'rounded-xl', 'bg-[#10b981]', 'px-4', 'text-xs', 'font-extrabold', 'text-[#07110e]', 'transition-colors', 'hover:bg-[#35c99a]', 'disabled:cursor-wait', 'disabled:opacity-60')}
                   >
                     {tableMutation === 'create' ? <RefreshCw className="animate-spin" size={14} /> : <Check size={14} />}
                     {tableMutation === 'create' ? 'Adicionando…' : 'Adicionar mesa'}
@@ -9267,7 +9267,7 @@ export function CaixaPanel({
                 setIsConfirmingDelete(false);
               }
             }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+            className={clsx('fixed', 'inset-0', 'z-50', 'flex', 'items-center', 'justify-center', 'bg-black/80', 'p-4', 'backdrop-blur-sm')}
           >
             <form
               onSubmit={async (event) => {
@@ -9290,17 +9290,17 @@ export function CaixaPanel({
                   setTableMutation(null);
                 }
               }}
-              className="w-full max-w-md overflow-hidden rounded-[24px] border border-[#2b312e] bg-[#141715] shadow-2xl animate-scale-in"
+              className={clsx('w-full', 'max-w-md', 'overflow-hidden', 'rounded-[24px]', 'border', 'border-[#2b312e]', 'bg-[#141715]', 'shadow-2xl', 'animate-scale-in')}
             >
-              <div className="flex items-start justify-between border-b border-[#2b312e] px-5 py-4 sm:px-6">
-                <div className="flex items-center gap-3">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#10b981]/20 bg-[#10b981]/10 font-mono text-base font-extrabold text-[#6ee7b7]">
+              <div className={clsx('flex', 'items-start', 'justify-between', 'border-b', 'border-[#2b312e]', 'px-5', 'py-4', 'sm:px-6')}>
+                <div className={clsx('flex', 'items-center', 'gap-3')}>
+                  <span className={clsx('flex', 'h-10', 'w-10', 'items-center', 'justify-center', 'rounded-xl', 'border', 'border-[#10b981]/20', 'bg-[#10b981]/10', 'font-mono', 'text-base', 'font-extrabold', 'text-[#6ee7b7]')}>
                     {editingTable.id}
                   </span>
                   <div>
-                    <span className="block font-mono text-[8px] font-bold uppercase tracking-[0.2em] text-[#10b981]">Configuração da mesa</span>
-                    <h3 className="mt-0.5 text-lg font-bold text-white">Editar Mesa {editingTable.id}</h3>
-                    <p className="mt-0.5 text-[10px] text-zinc-500">
+                    <span className={clsx('block', 'font-mono', 'text-[8px]', 'font-bold', 'uppercase', 'tracking-[0.2em]', 'text-[#10b981]')}>Configuração da mesa</span>
+                    <h3 className={clsx('mt-0.5', 'text-lg', 'font-bold', 'text-white')}>Editar Mesa {editingTable.id}</h3>
+                    <p className={clsx('mt-0.5', 'text-[10px]', 'text-zinc-500')}>
                       {editingTableRuntime?.isOccupied ? 'Em atendimento agora' : 'Livre e disponível no salão'}
                     </p>
                   </div>
@@ -9313,28 +9313,28 @@ export function CaixaPanel({
                     setIsConfirmingDelete(false);
                   }} 
                   aria-label="Fechar"
-                  className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-white/[0.05] hover:text-white disabled:opacity-40"
+                  className={clsx('rounded-lg', 'p-2', 'text-zinc-500', 'transition-colors', 'hover:bg-white/[0.05]', 'hover:text-white', 'disabled:opacity-40')}
                 >
                   <X size={16} />
                 </button>
               </div>
 
-              <div className="space-y-4 px-5 py-5 sm:px-6">
+              <div className={clsx('space-y-4', 'px-5', 'py-5', 'sm:px-6')}>
                 {isConfirmingDelete ? (
-                <div className="space-y-4 rounded-2xl border border-rose-900/40 bg-rose-950/20 p-4 text-center">
-                  <span className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-rose-500/10 text-rose-400"><Trash2 size={17} /></span>
+                <div className={clsx('space-y-4', 'rounded-2xl', 'border', 'border-rose-900/40', 'bg-rose-950/20', 'p-4', 'text-center')}>
+                  <span className={clsx('mx-auto', 'flex', 'h-10', 'w-10', 'items-center', 'justify-center', 'rounded-full', 'bg-rose-500/10', 'text-rose-400')}><Trash2 size={17} /></span>
                   <div>
-                    <strong className="block text-sm text-white">Remover Mesa {editingTable.id}?</strong>
-                    <p className="mt-1 text-[11px] leading-relaxed text-zinc-400">
+                    <strong className={clsx('block', 'text-sm', 'text-white')}>Remover Mesa {editingTable.id}?</strong>
+                    <p className={clsx('mt-1', 'text-[11px]', 'leading-relaxed', 'text-zinc-400')}>
                       Ela sairá do salão em todos os dispositivos. O histórico de pedidos será preservado.
                   </p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className={clsx('flex', 'gap-2')}>
                     <button 
                       type="button" 
                       onClick={() => setIsConfirmingDelete(false)} 
                       disabled={tableMutation !== null}
-                      className="min-h-10 flex-1 rounded-xl border border-[#303633] bg-[#0c0f0d] text-xs font-bold text-zinc-400 transition-colors hover:text-white disabled:opacity-40"
+                      className={clsx('min-h-10', 'flex-1', 'rounded-xl', 'border', 'border-[#303633]', 'bg-[#0c0f0d]', 'text-xs', 'font-bold', 'text-zinc-400', 'transition-colors', 'hover:text-white', 'disabled:opacity-40')}
                     >
                       Manter mesa
                     </button>
@@ -9357,7 +9357,7 @@ export function CaixaPanel({
                         }
                       }}
                       disabled={tableMutation !== null}
-                      className="flex min-h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-rose-600 text-xs font-bold text-white transition-colors hover:bg-rose-500 disabled:cursor-wait disabled:opacity-60"
+                      className={clsx('flex', 'min-h-10', 'flex-1', 'items-center', 'justify-center', 'gap-2', 'rounded-xl', 'bg-rose-600', 'text-xs', 'font-bold', 'text-white', 'transition-colors', 'hover:bg-rose-500', 'disabled:cursor-wait', 'disabled:opacity-60')}
                     >
                       {tableMutation === 'delete' && <RefreshCw className="animate-spin" size={13} />}
                       {tableMutation === 'delete' ? 'Removendo…' : 'Remover'}
@@ -9366,24 +9366,24 @@ export function CaixaPanel({
                 </div>
               ) : (
                 <>
-                  <div className="space-y-4 text-left">
-                    <label className="block space-y-1.5">
-                      <span className="block text-[9px] font-bold uppercase tracking-wider text-zinc-400">Nome de referência</span>
+                  <div className={clsx('space-y-4', 'text-left')}>
+                    <label className={clsx('block', 'space-y-1.5')}>
+                      <span className={clsx('block', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'text-zinc-400')}>Nome de referência</span>
                       <input
                         type="text"
                         maxLength={80}
                         placeholder={`Mesa ${editingTable.id}`}
                         value={editTableNome}
                         onChange={(e) => { setEditTableNome(e.target.value); setTableFormError(''); }}
-                        className="w-full rounded-xl border border-[#303633] bg-[#0c0f0d] px-3 py-3 text-sm text-white outline-none transition-colors placeholder:text-zinc-700 focus:border-[#10b981]/60"
+                        className={clsx('w-full', 'rounded-xl', 'border', 'border-[#303633]', 'bg-[#0c0f0d]', 'px-3', 'py-3', 'text-sm', 'text-white', 'outline-none', 'transition-colors', 'placeholder:text-zinc-700', 'focus:border-[#10b981]/60')}
                       />
-                      <span className="block text-[9px] text-zinc-600">Use um nome simples, como “Varanda” ou “Deck”.</span>
+                      <span className={clsx('block', 'text-[9px]', 'text-zinc-600')}>Use um nome simples, como “Varanda” ou “Deck”.</span>
                     </label>
 
-                    <label className="block space-y-1.5">
-                      <span className="block text-[9px] font-bold uppercase tracking-wider text-zinc-400">Capacidade</span>
+                    <label className={clsx('block', 'space-y-1.5')}>
+                      <span className={clsx('block', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'text-zinc-400')}>Capacidade</span>
                       <div className="relative">
-                        <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600" size={14} />
+                        <Users className={clsx('absolute', 'left-3', 'top-1/2', '-translate-y-1/2', 'text-zinc-600')} size={14} />
                       <input
                         type="number"
                         min="1"
@@ -9391,33 +9391,33 @@ export function CaixaPanel({
                         placeholder="Ex: 4"
                         value={editTableCap}
                         onChange={(e) => { setEditTableCap(e.target.value); setTableFormError(''); }}
-                        className="w-full rounded-xl border border-[#303633] bg-[#0c0f0d] py-3 pl-9 pr-3 font-mono text-sm text-white outline-none transition-colors placeholder:text-zinc-700 focus:border-[#10b981]/60"
+                        className={clsx('w-full', 'rounded-xl', 'border', 'border-[#303633]', 'bg-[#0c0f0d]', 'py-3', 'pl-9', 'pr-3', 'font-mono', 'text-sm', 'text-white', 'outline-none', 'transition-colors', 'placeholder:text-zinc-700', 'focus:border-[#10b981]/60')}
                       />
                       </div>
                     </label>
                   </div>
 
                   {tableFormError && (
-                    <div role="alert" className="flex gap-2 rounded-xl border border-rose-900/40 bg-rose-950/20 p-3 text-[11px] leading-relaxed text-rose-300">
-                      <AlertTriangle className="mt-0.5 shrink-0" size={14} />
+                    <div role="alert" className={clsx('flex', 'gap-2', 'rounded-xl', 'border', 'border-rose-900/40', 'bg-rose-950/20', 'p-3', 'text-[11px]', 'leading-relaxed', 'text-rose-300')}>
+                      <AlertTriangle className={clsx('mt-0.5', 'shrink-0')} size={14} />
                       {tableFormError}
                     </div>
                   )}
 
-                  <div className="space-y-3 pt-1">
-                    <div className="flex flex-col-reverse gap-2 sm:flex-row">
+                  <div className={clsx('space-y-3', 'pt-1')}>
+                    <div className={clsx('flex', 'flex-col-reverse', 'gap-2', 'sm:flex-row')}>
                       <button 
                         type="button" 
                         onClick={() => setEditingTable(null)} 
                         disabled={tableMutation !== null}
-                        className="min-h-11 flex-1 rounded-xl border border-[#303633] bg-[#0c0f0d] px-4 text-xs font-bold text-zinc-400 transition-colors hover:text-white disabled:opacity-40"
+                        className={clsx('min-h-11', 'flex-1', 'rounded-xl', 'border', 'border-[#303633]', 'bg-[#0c0f0d]', 'px-4', 'text-xs', 'font-bold', 'text-zinc-400', 'transition-colors', 'hover:text-white', 'disabled:opacity-40')}
                       >
                         Cancelar
                       </button>
                       <button 
                         type="submit"
                         disabled={tableMutation !== null}
-                        className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#10b981] px-4 text-xs font-extrabold text-[#07110e] transition-colors hover:bg-[#35c99a] disabled:cursor-wait disabled:opacity-60"
+                        className={clsx('flex', 'min-h-11', 'flex-1', 'items-center', 'justify-center', 'gap-2', 'rounded-xl', 'bg-[#10b981]', 'px-4', 'text-xs', 'font-extrabold', 'text-[#07110e]', 'transition-colors', 'hover:bg-[#35c99a]', 'disabled:cursor-wait', 'disabled:opacity-60')}
                       >
                         {tableMutation === 'update' ? <RefreshCw className="animate-spin" size={14} /> : <Check size={14} />}
                         {tableMutation === 'update' ? 'Salvando…' : 'Salvar alterações'}
@@ -9428,7 +9428,7 @@ export function CaixaPanel({
                       type="button"
                       onClick={() => setIsConfirmingDelete(true)}
                       disabled={Boolean(editingTableRuntime?.isOccupied) || tableMutation !== null}
-                      className="flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-rose-900/30 bg-rose-950/10 px-3 text-[10px] font-bold text-rose-400 transition-colors hover:bg-rose-950/25 disabled:cursor-not-allowed disabled:border-zinc-800 disabled:bg-transparent disabled:text-zinc-600"
+                      className={clsx('flex', 'min-h-10', 'w-full', 'items-center', 'justify-center', 'gap-1.5', 'rounded-xl', 'border', 'border-rose-900/30', 'bg-rose-950/10', 'px-3', 'text-[10px]', 'font-bold', 'text-rose-400', 'transition-colors', 'hover:bg-rose-950/25', 'disabled:cursor-not-allowed', 'disabled:border-zinc-800', 'disabled:bg-transparent', 'disabled:text-zinc-600')}
                     >
                       <Trash2 size={12} />
                       {editingTableRuntime?.isOccupied ? 'Finalize o atendimento para remover' : 'Remover mesa do salão'}
@@ -9446,21 +9446,21 @@ export function CaixaPanel({
       {selectedKanbanOrder && (
         <div
           onClick={(e) => { if (e.target === e.currentTarget) setSelectedKanbanOrder(null); }}
-          className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 cursor-pointer"
+          className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4', 'cursor-pointer')}
         >
-          <div className="orders-detail-modal w-full max-w-md rounded-3xl p-5 space-y-3 text-left relative animate-scale-in">
+          <div className={clsx('orders-detail-modal', 'w-full', 'max-w-md', 'rounded-3xl', 'p-5', 'space-y-3', 'text-left', 'relative', 'animate-scale-in')}>
             {/* Header */}
-            <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
+            <div className={clsx('flex', 'justify-between', 'items-center', 'pb-2', 'border-b', 'border-[#27272A]')}>
               <div>
-                <h3 className="font-serif text-sm font-bold text-white">
+                <h3 className={clsx('font-serif', 'text-sm', 'font-bold', 'text-white')}>
                   {selectedKanbanOrder.mesaId && selectedKanbanOrder.mesaId > 0 ? `Detalhes: Mesa ${selectedKanbanOrder.mesaId}` : 'Detalhes: Balcão'}
                 </h3>
-                <span className="text-[9px] text-gray-500 font-mono block mt-0.5">Lote: #{selectedKanbanOrder.id.slice(-4)}</span>
+                <span className={clsx('text-[9px]', 'text-gray-500', 'font-mono', 'block', 'mt-0.5')}>Lote: #{selectedKanbanOrder.id.slice(-4)}</span>
               </div>
               <button
                 type="button"
                 onClick={() => setSelectedKanbanOrder(null)}
-                className="p-1 text-gray-400 hover:text-white transition-colors cursor-pointer"
+                className={clsx('p-1', 'text-gray-400', 'hover:text-white', 'transition-colors', 'cursor-pointer')}
               >
                 <X size={16} />
               </button>
@@ -9470,48 +9470,48 @@ export function CaixaPanel({
             {/* Itens e info extras */}
             <div className="space-y-3">
               {selectedKanbanOrder.mesaOrigemId && Number(selectedKanbanOrder.mesaOrigemId) !== Number(selectedKanbanOrder.mesaId) && (
-                <div className="bg-emerald-950/20 p-3 rounded-2xl border border-emerald-900/40 text-xs text-emerald-300 flex items-center justify-between shadow-sm font-sans">
+                <div className={clsx('bg-emerald-950/20', 'p-3', 'rounded-2xl', 'border', 'border-emerald-900/40', 'text-xs', 'text-emerald-300', 'flex', 'items-center', 'justify-between', 'shadow-sm', 'font-sans')}>
                   <div>
-                    <strong className="text-emerald-400 block text-[9px] uppercase tracking-wider font-bold">Consumo Mesclado:</strong>
+                    <strong className={clsx('text-emerald-400', 'block', 'text-[9px]', 'uppercase', 'tracking-wider', 'font-bold')}>Consumo Mesclado:</strong>
                     <span className="leading-relaxed">Este lote possui consumo mesclado da <strong>Mesa {selectedKanbanOrder.mesaOrigemId}</strong> para a <strong>Mesa {selectedKanbanOrder.mesaId}</strong>.</span>
                   </div>
-                  <span className="text-lg shrink-0 pl-2">🔗</span>
+                  <span className={clsx('text-lg', 'shrink-0', 'pl-2')}>🔗</span>
                 </div>
               )}
 
               {selectedKanbanOrder.mesaTransferidaDe && Number(selectedKanbanOrder.mesaTransferidaDe) !== Number(selectedKanbanOrder.mesaId) && (
-                <div className="bg-purple-950/20 p-3 rounded-2xl border border-purple-900/40 text-xs text-purple-300 flex items-center justify-between shadow-sm font-sans animate-pulse-subtle">
+                <div className={clsx('bg-purple-950/20', 'p-3', 'rounded-2xl', 'border', 'border-purple-900/40', 'text-xs', 'text-purple-300', 'flex', 'items-center', 'justify-between', 'shadow-sm', 'font-sans', 'animate-pulse-subtle')}>
                   <div>
-                    <strong className="text-purple-400 block text-[9px] uppercase tracking-wider font-bold">Consumo Transferido:</strong>
+                    <strong className={clsx('text-purple-400', 'block', 'text-[9px]', 'uppercase', 'tracking-wider', 'font-bold')}>Consumo Transferido:</strong>
                     <span className="leading-relaxed">Este lote foi transferido da <strong>Mesa {selectedKanbanOrder.mesaTransferidaDe}</strong> para a <strong>Mesa {selectedKanbanOrder.mesaId}</strong>.</span>
                   </div>
-                  <span className="text-lg shrink-0 pl-2">🔄</span>
+                  <span className={clsx('text-lg', 'shrink-0', 'pl-2')}>🔄</span>
                 </div>
               )}
 
               {selectedKanbanOrder.identificador && (
-                <div className="bg-[#1C1C1F] p-2.5 rounded-xl border border-[#27272A] text-xs text-gray-300">
-                  <strong className="text-white block text-[10px] uppercase tracking-wider text-gray-400">Cliente:</strong>
+                <div className={clsx('bg-[#1C1C1F]', 'p-2.5', 'rounded-xl', 'border', 'border-[#27272A]', 'text-xs', 'text-gray-300')}>
+                  <strong className={clsx('text-white', 'block', 'text-[10px]', 'uppercase', 'tracking-wider', 'text-gray-400')}>Cliente:</strong>
                   {selectedKanbanOrder.identificador}
                 </div>
               )}
 
-              <div className="space-y-2 max-h-48 overflow-y-auto">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Itens do Lote:</span>
+              <div className={clsx('space-y-2', 'max-h-48', 'overflow-y-auto')}>
+                <span className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Itens do Lote:</span>
                 {selectedKanbanOrder.itens.map((item: any, idx: number) => (
-                  <div key={idx} className="flex justify-between items-start bg-[#1C1C1F]/40 p-2.5 rounded-xl border border-[#27272A]/40 text-xs">
+                  <div key={idx} className={clsx('flex', 'justify-between', 'items-start', 'bg-[#1C1C1F]/40', 'p-2.5', 'rounded-xl', 'border', 'border-[#27272A]/40', 'text-xs')}>
                     <div>
                       <strong className="text-white">{item.nome || item.produto?.nome}</strong>
-                      {item.observacao && <span className="block text-[10px] text-emerald-200/70 mt-0.5">Obs: {item.observacao}</span>}
-                      {item.cliente_nome && item.cliente_nome !== 'Consumo Geral' && <span className="block text-[9px] text-gray-400 mt-0.5">Para: {item.cliente_nome}</span>}
+                      {item.observacao && <span className={clsx('block', 'text-[10px]', 'text-emerald-200/70', 'mt-0.5')}>Obs: {item.observacao}</span>}
+                      {item.cliente_nome && item.cliente_nome !== 'Consumo Geral' && <span className={clsx('block', 'text-[9px]', 'text-gray-400', 'mt-0.5')}>Para: {item.cliente_nome}</span>}
                     </div>
-                    <span className="text-[10px] font-mono bg-[#27272A] text-gray-300 px-1.5 py-0.5 rounded capitalize">{item.status}</span>
+                    <span className={clsx('text-[10px]', 'font-mono', 'bg-[#27272A]', 'text-gray-300', 'px-1.5', 'py-0.5', 'rounded', 'capitalize')}>{item.status}</span>
                   </div>
                 ))}
               </div>
 
               {/* Botões de impressão */}
-              <div className="flex flex-col gap-2 pt-1">
+              <div className={clsx('flex', 'flex-col', 'gap-2', 'pt-1')}>
                 <button
                   type="button"
                   onClick={async () => {
@@ -9540,8 +9540,8 @@ export function CaixaPanel({
                 </button>
 
                 {selectedKanbanOrder.mesaId && selectedKanbanOrder.mesaId > 0 && (
-                  <div className="space-y-2 w-full">
-                    <div className="flex gap-2 w-full">
+                  <div className={clsx('space-y-2', 'w-full')}>
+                    <div className={clsx('flex', 'gap-2', 'w-full')}>
                     <button
                       type="button"
                       onClick={async () => {
@@ -9562,7 +9562,7 @@ export function CaixaPanel({
                           showToast("Erro ao imprimir comanda inteira.", 'error');
                         }
                       }}
-                      className="flex-1 py-2.5 bg-[#1C1C1F] hover:bg-[#27272A] text-gray-300 hover:text-white font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-[#27272A] shadow-lg"
+                      className={clsx('flex-1', 'py-2.5', 'bg-[#1C1C1F]', 'hover:bg-[#27272A]', 'text-gray-300', 'hover:text-white', 'font-bold', 'text-xs', 'rounded-xl', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'text-center', 'flex', 'items-center', 'justify-center', 'gap-1.5', 'border', 'border-[#27272A]', 'shadow-lg')}
                     >
                       <Printer size={13} />
                       <span>Comanda Inteira</span>
@@ -9588,7 +9588,7 @@ export function CaixaPanel({
                           showToast("Erro ao imprimir apenas valores.", 'error');
                         }
                       }}
-                      className="flex-1 py-2.5 bg-[#1C1C1F] hover:bg-[#27272A] text-gray-300 hover:text-white font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-[#27272A] shadow-lg"
+                      className={clsx('flex-1', 'py-2.5', 'bg-[#1C1C1F]', 'hover:bg-[#27272A]', 'text-gray-300', 'hover:text-white', 'font-bold', 'text-xs', 'rounded-xl', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'text-center', 'flex', 'items-center', 'justify-center', 'gap-1.5', 'border', 'border-[#27272A]', 'shadow-lg')}
                     >
                       <Printer size={13} />
                       <span>Só Valores</span>
@@ -9597,7 +9597,7 @@ export function CaixaPanel({
                     <button
                       type="button"
                       onClick={() => openCancelTableConfirmation(Number(selectedKanbanOrder.mesaId))}
-                      className="flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-rose-900/40 bg-rose-950/15 px-3 text-[10px] font-bold text-rose-300 transition-colors hover:bg-rose-950/30"
+                      className={clsx('flex', 'min-h-10', 'w-full', 'items-center', 'justify-center', 'gap-2', 'rounded-xl', 'border', 'border-rose-900/40', 'bg-rose-950/15', 'px-3', 'text-[10px]', 'font-bold', 'text-rose-300', 'transition-colors', 'hover:bg-rose-950/30')}
                     >
                       <Trash2 size={13} />
                       Cancelar consumo e liberar mesa
@@ -9611,27 +9611,27 @@ export function CaixaPanel({
       )}
 
       {cancelTableTarget && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm">
-          <div role="dialog" aria-modal="true" aria-labelledby="cancel-table-title" className="w-full max-w-md space-y-4 rounded-3xl border border-rose-900/50 bg-[#141312] p-5 shadow-2xl">
-            <div className="flex items-start justify-between gap-3 border-b border-white/[0.07] pb-4">
+        <div className={clsx('fixed', 'inset-0', 'z-[60]', 'flex', 'items-center', 'justify-center', 'bg-black/90', 'p-4', 'backdrop-blur-sm')}>
+          <div role="dialog" aria-modal="true" aria-labelledby="cancel-table-title" className={clsx('w-full', 'max-w-md', 'space-y-4', 'rounded-3xl', 'border', 'border-rose-900/50', 'bg-[#141312]', 'p-5', 'shadow-2xl')}>
+            <div className={clsx('flex', 'items-start', 'justify-between', 'gap-3', 'border-b', 'border-white/[0.07]', 'pb-4')}>
               <div>
-                <span className="font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-rose-400">Ação irreversível</span>
-                <h3 id="cancel-table-title" className="mt-1 text-lg font-bold text-white">Liberar Mesa {cancelTableTarget.mesaId} sem receber?</h3>
-                <p className="mt-1 text-[11px] leading-relaxed text-zinc-400">O histórico será preservado como cancelado, mas nenhum valor entrará no caixa ou no faturamento.</p>
+                <span className={clsx('font-mono', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-[0.18em]', 'text-rose-400')}>Ação irreversível</span>
+                <h3 id="cancel-table-title" className={clsx('mt-1', 'text-lg', 'font-bold', 'text-white')}>Liberar Mesa {cancelTableTarget.mesaId} sem receber?</h3>
+                <p className={clsx('mt-1', 'text-[11px]', 'leading-relaxed', 'text-zinc-400')}>O histórico será preservado como cancelado, mas nenhum valor entrará no caixa ou no faturamento.</p>
               </div>
-              <button type="button" onClick={() => setCancelTableTarget(null)} disabled={isCancellingTable} className="rounded-lg p-2 text-zinc-500 hover:bg-white/[0.05] hover:text-white disabled:opacity-40" aria-label="Fechar">
+              <button type="button" onClick={() => setCancelTableTarget(null)} disabled={isCancellingTable} className={clsx('rounded-lg', 'p-2', 'text-zinc-500', 'hover:bg-white/[0.05]', 'hover:text-white', 'disabled:opacity-40')} aria-label="Fechar">
                 <X size={16} />
               </button>
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
-              <div className="rounded-xl border border-white/[0.07] bg-black/20 p-3"><strong className="block font-mono text-sm text-white">{cancelTableTarget.comandas}</strong><span className="text-[9px] text-zinc-500">comandas</span></div>
-              <div className="rounded-xl border border-white/[0.07] bg-black/20 p-3"><strong className="block font-mono text-sm text-white">{cancelTableTarget.itens}</strong><span className="text-[9px] text-zinc-500">itens</span></div>
-              <div className="rounded-xl border border-white/[0.07] bg-black/20 p-3"><strong className="block font-mono text-sm text-rose-300">{cancelTableTarget.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong><span className="text-[9px] text-zinc-500">cancelados</span></div>
+            <div className={clsx('grid', 'grid-cols-3', 'gap-2')}>
+              <div className={clsx('rounded-xl', 'border', 'border-white/[0.07]', 'bg-black/20', 'p-3')}><strong className={clsx('block', 'font-mono', 'text-sm', 'text-white')}>{cancelTableTarget.comandas}</strong><span className={clsx('text-[9px]', 'text-zinc-500')}>comandas</span></div>
+              <div className={clsx('rounded-xl', 'border', 'border-white/[0.07]', 'bg-black/20', 'p-3')}><strong className={clsx('block', 'font-mono', 'text-sm', 'text-white')}>{cancelTableTarget.itens}</strong><span className={clsx('text-[9px]', 'text-zinc-500')}>itens</span></div>
+              <div className={clsx('rounded-xl', 'border', 'border-white/[0.07]', 'bg-black/20', 'p-3')}><strong className={clsx('block', 'font-mono', 'text-sm', 'text-rose-300')}>{cancelTableTarget.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong><span className={clsx('text-[9px]', 'text-zinc-500')}>cancelados</span></div>
             </div>
 
-            <label className="block space-y-1.5">
-              <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-400">Motivo obrigatório</span>
+            <label className={clsx('block', 'space-y-1.5')}>
+              <span className={clsx('text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'text-zinc-400')}>Motivo obrigatório</span>
               <textarea
                 autoFocus
                 maxLength={300}
@@ -9639,13 +9639,13 @@ export function CaixaPanel({
                 value={cancelTableReason}
                 onChange={event => setCancelTableReason(event.target.value)}
                 placeholder="Ex.: pedido lançado por engano"
-                className="w-full resize-none rounded-xl border border-[#343936] bg-[#0b0e0c] px-3 py-2.5 text-sm text-white outline-none placeholder:text-zinc-700 focus:border-rose-500/60"
+                className={clsx('w-full', 'resize-none', 'rounded-xl', 'border', 'border-[#343936]', 'bg-[#0b0e0c]', 'px-3', 'py-2.5', 'text-sm', 'text-white', 'outline-none', 'placeholder:text-zinc-700', 'focus:border-rose-500/60')}
               />
             </label>
 
-            <div className="flex flex-col-reverse gap-2 sm:flex-row">
-              <button type="button" onClick={() => setCancelTableTarget(null)} disabled={isCancellingTable} className="min-h-11 flex-1 rounded-xl border border-[#343936] text-xs font-bold text-zinc-400 hover:text-white disabled:opacity-40">Manter atendimento</button>
-              <button type="button" onClick={handleCancelTableConsumption} disabled={cancelTableReason.trim().length < 3 || isCancellingTable} className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-rose-600 px-3 text-xs font-extrabold text-white hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-40">
+            <div className={clsx('flex', 'flex-col-reverse', 'gap-2', 'sm:flex-row')}>
+              <button type="button" onClick={() => setCancelTableTarget(null)} disabled={isCancellingTable} className={clsx('min-h-11', 'flex-1', 'rounded-xl', 'border', 'border-[#343936]', 'text-xs', 'font-bold', 'text-zinc-400', 'hover:text-white', 'disabled:opacity-40')}>Manter atendimento</button>
+              <button type="button" onClick={handleCancelTableConsumption} disabled={cancelTableReason.trim().length < 3 || isCancellingTable} className={clsx('flex', 'min-h-11', 'flex-1', 'items-center', 'justify-center', 'gap-2', 'rounded-xl', 'bg-rose-600', 'px-3', 'text-xs', 'font-extrabold', 'text-white', 'hover:bg-rose-500', 'disabled:cursor-not-allowed', 'disabled:opacity-40')}>
                 {isCancellingTable ? <RefreshCw className="animate-spin" size={14} /> : <Trash2 size={14} />}
                 {isCancellingTable ? 'Liberando…' : 'Cancelar e liberar'}
               </button>
@@ -9658,17 +9658,17 @@ export function CaixaPanel({
       {showProductModal && (
         <div
           onClick={(e) => { if (e.target === e.currentTarget) setShowProductModal(false); }}
-          className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto cursor-pointer"
+          className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4', 'overflow-y-auto', 'cursor-pointer')}
         >
-          <div className="w-full max-w-md bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
-            <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
-              <h3 className="font-serif text-sm font-bold text-white font-serif">
+          <div className={clsx('w-full', 'max-w-md', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-6', 'space-y-4', 'text-left', 'shadow-2xl', 'relative', 'animate-scale-in', 'my-8')}>
+            <div className={clsx('flex', 'justify-between', 'items-center', 'pb-2', 'border-b', 'border-[#27272A]')}>
+              <h3 className={clsx('font-serif', 'text-sm', 'font-bold', 'text-white', 'font-serif')}>
                 {editingProduct ? 'Editar Produto' : 'Novo Produto'}
               </h3>
               <button 
                 type="button" 
                 onClick={() => setShowProductModal(false)} 
-                className="p-1 text-gray-400 hover:text-white transition-colors cursor-pointer border border-transparent"
+                className={clsx('p-1', 'text-gray-400', 'hover:text-white', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}
               >
                 <X size={16} />
               </button>
@@ -9723,37 +9723,37 @@ export function CaixaPanel({
                   setIsLoading(false);
                 }
               }}
-              className="space-y-4 text-xs"
+              className={clsx('space-y-4', 'text-xs')}
             >
               {!editingProduct && (
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Código/Ref do Produto (ID único):</label>
+                  <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Código/Ref do Produto (ID único):</label>
                   <input
                     type="text"
                     required
                     placeholder="Ex: 001, 104, burger-duplo"
                     value={prodFormId}
                     onChange={(e) => setProdFormId(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]')}
                   />
                 </div>
               )}
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Nome do Produto:</label>
+                <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Nome do Produto:</label>
                 <input
                   type="text"
                   required
                   placeholder="Ex: Cheeseburger Duplo"
                   value={prodFormNome}
                   onChange={(e) => setProdFormNome(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                  className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]')}
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className={clsx('grid', 'grid-cols-2', 'gap-3')}>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Preço (R$):</label>
+                  <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Preço (R$):</label>
                   <input
                     type="number"
                     step="0.01"
@@ -9761,17 +9761,17 @@ export function CaixaPanel({
                     placeholder="25.90"
                     value={prodFormPreco}
                     onChange={(e) => setProdFormPreco(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981] font-mono text-[11px]"
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono', 'text-[11px]')}
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Categoria:</label>
-                  <div className="flex gap-1.5">
+                  <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Categoria:</label>
+                  <div className={clsx('flex', 'gap-1.5')}>
                     <select
                       required
                       value={prodFormCategoriaId}
                       onChange={(e) => setProdFormCategoriaId(e.target.value)}
-                      className="flex-1 px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                      className={clsx('flex-1', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]')}
                     >
                       <option value="" disabled>Selecione...</option>
                       {apiCategorias.map((cat) => (
@@ -9782,7 +9782,7 @@ export function CaixaPanel({
                       type="button"
                       onClick={() => setShowCategoryModal(true)}
                       title="Criar nova categoria"
-                      className="px-3 bg-[#10b981]/10 hover:bg-[#10b981]/20 text-[#10b981] border border-[#10b981]/20 hover:border-[#10b981]/30 rounded-xl font-bold text-sm cursor-pointer transition-colors"
+                      className={clsx('px-3', 'bg-[#10b981]/10', 'hover:bg-[#10b981]/20', 'text-[#10b981]', 'border', 'border-[#10b981]/20', 'hover:border-[#10b981]/30', 'rounded-xl', 'font-bold', 'text-sm', 'cursor-pointer', 'transition-colors')}
                     >
                       +
                     </button>
@@ -9791,64 +9791,64 @@ export function CaixaPanel({
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Descrição / Ingredientes:</label>
+                <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Descrição / Ingredientes:</label>
                 <textarea
                   placeholder="Hambúrguer bovino 150g, queijo cheddar derretido..."
                   value={prodFormDescricao}
                   onChange={(e) => setProdFormDescricao(e.target.value)}
                   rows={2}
-                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                  className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]')}
                 />
               </div>
 
               <div className="space-y-2">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">URLs das Imagens do Produto (Até 3 fotos):</label>
+                <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>URLs das Imagens do Produto (Até 3 fotos):</label>
                 <input
                   type="text"
                   placeholder="Foto 1 (Principal): https://exemplo.com/foto1.jpg"
                   value={prodFormImagem}
                   onChange={(e) => setProdFormImagem(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white text-xs focus:outline-none focus:border-[#10b981]"
+                  className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-xs', 'focus:outline-none', 'focus:border-[#10b981]')}
                 />
                 <input
                   type="text"
                   placeholder="Foto 2 (Opcional): https://exemplo.com/foto2.jpg"
                   value={prodFormImagem2}
                   onChange={(e) => setProdFormImagem2(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white text-xs focus:outline-none focus:border-[#10b981]"
+                  className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-xs', 'focus:outline-none', 'focus:border-[#10b981]')}
                 />
                 <input
                   type="text"
                   placeholder="Foto 3 (Opcional): https://exemplo.com/foto3.jpg"
                   value={prodFormImagem3}
                   onChange={(e) => setProdFormImagem3(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white text-xs focus:outline-none focus:border-[#10b981]"
+                  className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-xs', 'focus:outline-none', 'focus:border-[#10b981]')}
                 />
               </div>
 
-              <div className="flex items-center gap-2 py-1">
+              <div className={clsx('flex', 'items-center', 'gap-2', 'py-1')}>
                 <input
                   type="checkbox"
                   id="prod-form-ativo"
                   checked={prodFormAtivo}
                   onChange={(e) => setProdFormAtivo(e.target.checked)}
-                  className="rounded border-[#27272A] text-emerald-500 focus:ring-emerald-500 h-4 w-4 bg-[#121214]"
+                  className={clsx('rounded', 'border-[#27272A]', 'text-emerald-500', 'focus:ring-emerald-500', 'h-4', 'w-4', 'bg-[#121214]')}
                 />
-                <label htmlFor="prod-form-ativo" className="text-[10px] font-bold text-gray-300 uppercase tracking-wider cursor-pointer">Disponível em estoque (Ativo)</label>
+                <label htmlFor="prod-form-ativo" className={clsx('text-[10px]', 'font-bold', 'text-gray-300', 'uppercase', 'tracking-wider', 'cursor-pointer')}>Disponível em estoque (Ativo)</label>
               </div>
 
-              <div className="flex gap-2 pt-2">
+              <div className={clsx('flex', 'gap-2', 'pt-2')}>
                 <button
                   type="button"
                   onClick={() => setShowProductModal(false)}
-                  className="flex-1 py-2 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] text-white rounded-xl font-bold cursor-pointer transition-colors"
+                  className={clsx('flex-1', 'py-2', 'bg-[#121214]', 'hover:bg-[#27272A]', 'border', 'border-[#27272A]', 'text-white', 'rounded-xl', 'font-bold', 'cursor-pointer', 'transition-colors')}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="flex-1 py-2 bg-[#10b981] hover:bg-[#059669] text-[#121214] rounded-xl font-bold cursor-pointer transition-colors disabled:opacity-50"
+                  className={clsx('flex-1', 'py-2', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'rounded-xl', 'font-bold', 'cursor-pointer', 'transition-colors', 'disabled:opacity-50')}
                 >
                   {isLoading ? 'Salvando...' : 'Salvar'}
                 </button>
@@ -9877,17 +9877,17 @@ export function CaixaPanel({
       {editingCrmUser && (
         <div
           onClick={(e) => { if (e.target === e.currentTarget) setEditingCrmUser(null); }}
-          className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto cursor-pointer"
+          className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4', 'overflow-y-auto', 'cursor-pointer')}
         >
-          <div className="w-full max-w-md bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
-            <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
-              <h3 className="font-serif text-sm font-bold text-white">
+          <div className={clsx('w-full', 'max-w-md', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-6', 'space-y-4', 'text-left', 'shadow-2xl', 'relative', 'animate-scale-in', 'my-8')}>
+            <div className={clsx('flex', 'justify-between', 'items-center', 'pb-2', 'border-b', 'border-[#27272A]')}>
+              <h3 className={clsx('font-serif', 'text-sm', 'font-bold', 'text-white')}>
                 Editar Cliente CRM
               </h3>
               <button 
                 type="button" 
                 onClick={() => setEditingCrmUser(null)} 
-                className="p-1 text-gray-400 hover:text-white transition-colors cursor-pointer border border-transparent"
+                className={clsx('p-1', 'text-gray-400', 'hover:text-white', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}
               >
                 <X size={16} />
               </button>
@@ -9907,7 +9907,7 @@ export function CaixaPanel({
               className="space-y-4"
             >
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Telefone / WhatsApp:</label>
+                <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Telefone / WhatsApp:</label>
                 <input
                   type="tel"
                   inputMode="numeric"
@@ -9916,60 +9916,60 @@ export function CaixaPanel({
                   placeholder="(00) 00000-0000"
                   value={crmFormTelefone}
                   onChange={(e) => setCrmFormTelefone(aplicarMascaraTelefoneInput(e.target.value))}
-                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                  className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]')}
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Nome:</label>
+                <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Nome:</label>
                 <input
                   type="text"
                   required
                   value={crmFormNome}
                   onChange={(e) => setCrmFormNome(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                  className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]')}
                 />
               </div>
 
               {/* EDITABLE FIELDS */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className={clsx('grid', 'grid-cols-2', 'gap-4')}>
                 {fidelidadeConfig.tipo_recompensa === 'PONTOS' ? (
-                  <div className="space-y-1 col-span-2">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Saldo de Pontos (Ajuste):</label>
+                  <div className={clsx('space-y-1', 'col-span-2')}>
+                    <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Saldo de Pontos (Ajuste):</label>
                     <input
                       type="number"
                       required
                       value={crmFormPontos}
                       onChange={(e) => setCrmFormPontos(Number(e.target.value))}
-                      className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981] font-mono text-xs"
+                      className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono', 'text-xs')}
                     />
                   </div>
                 ) : (
-                  <div className="space-y-1 col-span-2">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Saldo Cashback R$ (Ajuste):</label>
+                  <div className={clsx('space-y-1', 'col-span-2')}>
+                    <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Saldo Cashback R$ (Ajuste):</label>
                     <input
                       type="number"
                       step="0.01"
                       required
                       value={crmFormCashback}
                       onChange={(e) => setCrmFormCashback(Number(e.target.value))}
-                      className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981] font-mono text-xs"
+                      className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono', 'text-xs')}
                     />
                   </div>
                 )}
               </div>
 
-              <div className="flex gap-2 pt-2">
+              <div className={clsx('flex', 'gap-2', 'pt-2')}>
                 <button
                   type="button"
                   onClick={() => setEditingCrmUser(null)}
-                  className="flex-1 py-2 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] text-white rounded-xl font-bold cursor-pointer transition-colors"
+                  className={clsx('flex-1', 'py-2', 'bg-[#121214]', 'hover:bg-[#27272A]', 'border', 'border-[#27272A]', 'text-white', 'rounded-xl', 'font-bold', 'cursor-pointer', 'transition-colors')}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2 bg-[#10b981] hover:bg-[#059669] text-[#121214] rounded-xl font-bold cursor-pointer transition-colors"
+                  className={clsx('flex-1', 'py-2', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'rounded-xl', 'font-bold', 'cursor-pointer', 'transition-colors')}
                 >
                   Salvar Alterações
                 </button>
@@ -9982,17 +9982,17 @@ export function CaixaPanel({
       {showNewCrmModal && (
         <div
           onClick={(e) => { if (e.target === e.currentTarget) setShowNewCrmModal(false); }}
-          className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto cursor-pointer"
+          className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4', 'overflow-y-auto', 'cursor-pointer')}
         >
-          <div className="w-full max-w-md bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
-            <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
-              <h3 className="font-serif text-sm font-bold text-white">
+          <div className={clsx('w-full', 'max-w-md', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-6', 'space-y-4', 'text-left', 'shadow-2xl', 'relative', 'animate-scale-in', 'my-8')}>
+            <div className={clsx('flex', 'justify-between', 'items-center', 'pb-2', 'border-b', 'border-[#27272A]')}>
+              <h3 className={clsx('font-serif', 'text-sm', 'font-bold', 'text-white')}>
                 Cadastrar Novo Cliente
               </h3>
               <button 
                 type="button" 
                 onClick={() => setShowNewCrmModal(false)} 
-                className="p-1 text-gray-400 hover:text-white transition-colors cursor-pointer border border-transparent"
+                className={clsx('p-1', 'text-gray-400', 'hover:text-white', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}
               >
                 <X size={16} />
               </button>
@@ -10011,7 +10011,7 @@ export function CaixaPanel({
               className="space-y-4"
             >
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Telefone / WhatsApp:</label>
+                <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Telefone / WhatsApp:</label>
                 <input
                   type="tel"
                   inputMode="numeric"
@@ -10020,23 +10020,23 @@ export function CaixaPanel({
                   placeholder="(00) 00000-0000"
                   value={newCrmTelefone}
                   onChange={(e) => setNewCrmTelefone(aplicarMascaraTelefoneInput(e.target.value))}
-                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                  className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]')}
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Nome:</label>
+                <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Nome:</label>
                 <input
                   type="text"
                   required
                   value={newCrmNome}
                   onChange={(e) => setNewCrmNome(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                  className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]')}
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>
                   {fidelidadeConfig.tipo_recompensa === 'PONTOS' ? 'Pontos Iniciais:' : 'Cashback Inicial R$:'}
                 </label>
                 <input
@@ -10044,21 +10044,21 @@ export function CaixaPanel({
                   step={fidelidadeConfig.tipo_recompensa === 'PONTOS' ? '1' : '0.01'}
                   value={newCrmSaldo}
                   onChange={(e) => setNewCrmSaldo(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981] font-mono text-xs"
+                  className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono', 'text-xs')}
                 />
               </div>
 
-              <div className="flex gap-2 pt-2">
+              <div className={clsx('flex', 'gap-2', 'pt-2')}>
                 <button
                   type="button"
                   onClick={() => setShowNewCrmModal(false)}
-                  className="flex-1 py-2 border border-zinc-800 hover:border-zinc-700 bg-zinc-950 text-gray-400 hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                  className={clsx('flex-1', 'py-2', 'border', 'border-zinc-800', 'hover:border-zinc-700', 'bg-zinc-950', 'text-gray-400', 'hover:text-white', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2 bg-[#10b981] hover:bg-[#059669] text-[#121214] rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                  className={clsx('flex-1', 'py-2', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
                 >
                   Salvar
                 </button>
@@ -10071,17 +10071,17 @@ export function CaixaPanel({
       {showNewInsumoModal && (
         <div
           onClick={(e) => { if (e.target === e.currentTarget) setShowNewInsumoModal(false); }}
-          className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto cursor-pointer"
+          className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4', 'overflow-y-auto', 'cursor-pointer')}
         >
-          <div className="w-full max-w-md bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
-            <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
-              <h3 className="font-serif text-sm font-bold text-white">
-                Cadastrar Novo Insumo
+          <div className={clsx('w-full', 'max-w-md', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-6', 'space-y-4', 'text-left', 'shadow-2xl', 'relative', 'animate-scale-in', 'my-8')}>
+            <div className={clsx('flex', 'justify-between', 'items-center', 'pb-2', 'border-b', 'border-[#27272A]')}>
+              <h3 className={clsx('font-serif', 'text-sm', 'font-bold', 'text-white')}>
+                Cadastrar Novo Ingrediente
               </h3>
               <button 
                 type="button" 
                 onClick={() => setShowNewInsumoModal(false)} 
-                className="p-1 text-gray-400 hover:text-white transition-colors cursor-pointer border border-transparent"
+                className={clsx('p-1', 'text-gray-400', 'hover:text-white', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}
               >
                 <X size={16} />
               </button>
@@ -10098,93 +10098,93 @@ export function CaixaPanel({
               }}
               className="space-y-4"
             >
-              <div className="grid grid-cols-2 gap-4">
+              <div className={clsx('grid', 'grid-cols-2', 'gap-4')}>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">ID do Insumo (slug):</label>
+                  <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>ID do Ingrediente (slug):</label>
                   <input
                     type="text"
                     required
                     placeholder="ex: carne-bovina"
                     value={insumoFormId}
                     onChange={(e) => setInsumoFormId(e.target.value.toLowerCase().replace(/\s+/g, '-'))}
-                    className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981] font-mono text-xs"
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono', 'text-xs')}
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Nome do Insumo:</label>
+                  <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Nome do Ingrediente:</label>
                   <input
                     type="text"
                     required
                     placeholder="ex: Contra Filé"
                     value={insumoFormNome}
                     onChange={(e) => setInsumoFormNome(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]')}
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className={clsx('grid', 'grid-cols-3', 'gap-4')}>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Unidade:</label>
+                  <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Unidade:</label>
                   <input
                     type="text"
                     required
                     placeholder="ex: kg, un, l"
                     value={insumoFormUnidade}
                     onChange={(e) => setInsumoFormUnidade(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]')}
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Mínimo:</label>
+                  <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Mínimo:</label>
                   <input
                     type="number"
                     required
                     value={insumoFormMinimo}
                     onChange={(e) => setInsumoFormMinimo(Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981] font-mono"
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono')}
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Máximo:</label>
+                  <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Máximo:</label>
                   <input
                     type="number"
                     required
                     value={insumoFormMaximo}
                     onChange={(e) => setInsumoFormMaximo(Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981] font-mono"
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono')}
                   />
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Preço de Custo Médio (R$):</label>
+                <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Preço de Custo Médio (R$):</label>
                 <input
                   type="number"
                   step="0.01"
                   required
                   value={insumoFormCusto}
                   onChange={(e) => setInsumoFormCusto(Number(e.target.value))}
-                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981] font-mono text-xs"
+                  className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono', 'text-xs')}
                 />
               </div>
 
-              <div className="flex gap-2 pt-2">
+              <div className={clsx('flex', 'gap-2', 'pt-2')}>
                 <button
                   type="button"
                   onClick={() => setShowNewInsumoModal(false)}
-                  className="flex-1 py-2 border border-zinc-800 hover:border-zinc-700 bg-zinc-950 text-gray-400 hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                  className={clsx('flex-1', 'py-2', 'border', 'border-zinc-800', 'hover:border-zinc-700', 'bg-zinc-950', 'text-gray-400', 'hover:text-white', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2 bg-[#10b981] hover:bg-[#059669] text-[#121214] rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                  className={clsx('flex-1', 'py-2', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
                 >
-                  Criar Insumo
+                  Criar Ingrediente
                 </button>
               </div>
             </form>
@@ -10195,17 +10195,17 @@ export function CaixaPanel({
       {showEditInsumoModal && selectedInsumo && (
         <div
           onClick={(e) => { if (e.target === e.currentTarget) setShowEditInsumoModal(false); }}
-          className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto cursor-pointer"
+          className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4', 'overflow-y-auto', 'cursor-pointer')}
         >
-          <div className="w-full max-w-md bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
-            <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
-              <h3 className="font-serif text-sm font-bold text-white">
-                Editar Insumo
+          <div className={clsx('w-full', 'max-w-md', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-6', 'space-y-4', 'text-left', 'shadow-2xl', 'relative', 'animate-scale-in', 'my-8')}>
+            <div className={clsx('flex', 'justify-between', 'items-center', 'pb-2', 'border-b', 'border-[#27272A]')}>
+              <h3 className={clsx('font-serif', 'text-sm', 'font-bold', 'text-white')}>
+                Editar Ingrediente
               </h3>
               <button 
                 type="button" 
                 onClick={() => setShowEditInsumoModal(false)} 
-                className="p-1 text-gray-400 hover:text-white transition-colors cursor-pointer border border-transparent"
+                className={clsx('p-1', 'text-gray-400', 'hover:text-white', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}
               >
                 <X size={16} />
               </button>
@@ -10223,84 +10223,84 @@ export function CaixaPanel({
               className="space-y-4"
             >
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block font-mono">ID (Não editável):</label>
+                <label className={clsx('text-[10px]', 'font-bold', 'text-gray-500', 'uppercase', 'tracking-wider', 'block', 'font-mono')}>ID (Não editável):</label>
                 <input
                   type="text"
                   disabled
                   value={selectedInsumo.id}
-                  className="w-full px-3 py-2 bg-[#1C1C1F]/40 border border-[#27272A]/50 rounded-xl text-gray-500 font-mono text-xs opacity-60"
+                  className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]/40', 'border', 'border-[#27272A]/50', 'rounded-xl', 'text-gray-500', 'font-mono', 'text-xs', 'opacity-60')}
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Nome do Insumo:</label>
+                <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Nome do Ingrediente:</label>
                 <input
                   type="text"
                   required
                   value={insumoFormNome}
                   onChange={(e) => setInsumoFormNome(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                  className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]')}
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className={clsx('grid', 'grid-cols-3', 'gap-4')}>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Unidade:</label>
+                  <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Unidade:</label>
                   <input
                     type="text"
                     required
                     value={insumoFormUnidade}
                     onChange={(e) => setInsumoFormUnidade(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]')}
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Mínimo:</label>
+                  <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Mínimo:</label>
                   <input
                     type="number"
                     required
                     value={insumoFormMinimo}
                     onChange={(e) => setInsumoFormMinimo(Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981] font-mono"
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono')}
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Máximo:</label>
+                  <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Máximo:</label>
                   <input
                     type="number"
                     required
                     value={insumoFormMaximo}
                     onChange={(e) => setInsumoFormMaximo(Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981] font-mono"
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono')}
                   />
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Preço de Custo Médio (R$):</label>
+                <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Preço de Custo Médio (R$):</label>
                 <input
                   type="number"
                   step="0.01"
                   required
                   value={insumoFormCusto}
                   onChange={(e) => setInsumoFormCusto(Number(e.target.value))}
-                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981] font-mono text-xs"
+                  className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono', 'text-xs')}
                 />
               </div>
 
-              <div className="flex gap-2 pt-2">
+              <div className={clsx('flex', 'gap-2', 'pt-2')}>
                 <button
                   type="button"
                   onClick={() => setShowEditInsumoModal(false)}
-                  className="flex-1 py-2 border border-zinc-800 hover:border-zinc-700 bg-zinc-950 text-gray-400 hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                  className={clsx('flex-1', 'py-2', 'border', 'border-zinc-800', 'hover:border-zinc-700', 'bg-zinc-950', 'text-gray-400', 'hover:text-white', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2 bg-[#10b981] hover:bg-[#059669] text-[#121214] rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                  className={clsx('flex-1', 'py-2', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
                 >
                   Salvar Alterações
                 </button>
@@ -10313,17 +10313,17 @@ export function CaixaPanel({
       {showAjusteInsumoModal && selectedInsumo && (
         <div
           onClick={(e) => { if (e.target === e.currentTarget) setShowAjusteInsumoModal(false); }}
-          className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto cursor-pointer"
+          className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4', 'overflow-y-auto', 'cursor-pointer')}
         >
-          <div className="w-full max-w-md bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
-            <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
-              <h3 className="font-serif text-sm font-bold text-white">
+          <div className={clsx('w-full', 'max-w-md', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-6', 'space-y-4', 'text-left', 'shadow-2xl', 'relative', 'animate-scale-in', 'my-8')}>
+            <div className={clsx('flex', 'justify-between', 'items-center', 'pb-2', 'border-b', 'border-[#27272A]')}>
+              <h3 className={clsx('font-serif', 'text-sm', 'font-bold', 'text-white')}>
                 Ajustar Estoque: {selectedInsumo.nome}
               </h3>
               <button 
                 type="button" 
                 onClick={() => setShowAjusteInsumoModal(false)} 
-                className="p-1 text-gray-400 hover:text-white transition-colors cursor-pointer border border-transparent"
+                className={clsx('p-1', 'text-gray-400', 'hover:text-white', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}
               >
                 <X size={16} />
               </button>
@@ -10341,8 +10341,8 @@ export function CaixaPanel({
               className="space-y-4"
             >
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Tipo de Ajuste:</label>
-                <div className="grid grid-cols-2 gap-2">
+                <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Tipo de Ajuste:</label>
+                <div className={clsx('grid', 'grid-cols-2', 'gap-2')}>
                   <button
                     type="button"
                     onClick={() => setAjusteTipo('ENTRADA')}
@@ -10371,40 +10371,40 @@ export function CaixaPanel({
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Quantidade ({selectedInsumo.unidade_medida}):</label>
+                <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Quantidade ({selectedInsumo.unidade_medida}):</label>
                 <input
                   type="number"
                   step="0.01"
                   required
                   value={ajusteQtd}
                   onChange={(e) => setAjusteQtd(Number(e.target.value))}
-                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981] font-mono text-xs"
+                  className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono', 'text-xs')}
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Justificativa:</label>
+                <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Justificativa:</label>
                 <input
                   type="text"
                   required
                   placeholder="ex: Ajuste de inventário / Perda por validade"
                   value={ajusteJustificativa}
                   onChange={(e) => setAjusteJustificativa(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                  className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]')}
                 />
               </div>
 
-              <div className="flex gap-2 pt-2">
+              <div className={clsx('flex', 'gap-2', 'pt-2')}>
                 <button
                   type="button"
                   onClick={() => setShowAjusteInsumoModal(false)}
-                  className="flex-1 py-2 border border-zinc-800 hover:border-zinc-700 bg-zinc-950 text-gray-400 hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                  className={clsx('flex-1', 'py-2', 'border', 'border-zinc-800', 'hover:border-zinc-700', 'bg-zinc-950', 'text-gray-400', 'hover:text-white', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2 bg-[#10b981] hover:bg-[#059669] text-[#121214] rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                  className={clsx('flex-1', 'py-2', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
                 >
                   Confirmar Ajuste
                 </button>
@@ -10417,17 +10417,17 @@ export function CaixaPanel({
       {showNewDistModal && (
         <div
           onClick={(e) => { if (e.target === e.currentTarget) setShowNewDistModal(false); }}
-          className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto cursor-pointer"
+          className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4', 'overflow-y-auto', 'cursor-pointer')}
         >
-          <div className="w-full max-w-md bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
-            <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
-              <h3 className="font-serif text-sm font-bold text-white">
+          <div className={clsx('w-full', 'max-w-md', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-6', 'space-y-4', 'text-left', 'shadow-2xl', 'relative', 'animate-scale-in', 'my-8')}>
+            <div className={clsx('flex', 'justify-between', 'items-center', 'pb-2', 'border-b', 'border-[#27272A]')}>
+              <h3 className={clsx('font-serif', 'text-sm', 'font-bold', 'text-white')}>
                 Cadastrar Novo Fornecedor
               </h3>
               <button 
                 type="button" 
                 onClick={() => setShowNewDistModal(false)} 
-                className="p-1 text-gray-400 hover:text-white transition-colors cursor-pointer border border-transparent"
+                className={clsx('p-1', 'text-gray-400', 'hover:text-white', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}
               >
                 <X size={16} />
               </button>
@@ -10444,78 +10444,78 @@ export function CaixaPanel({
               }}
               className="space-y-4"
             >
-              <div className="grid grid-cols-2 gap-4">
+              <div className={clsx('grid', 'grid-cols-2', 'gap-4')}>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">ID (slug):</label>
+                  <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>ID (slug):</label>
                   <input
                     type="text"
                     required
                     placeholder="ex: ambev"
                     value={distFormId}
                     onChange={(e) => setDistFormId(e.target.value.toLowerCase().replace(/\s+/g, '-'))}
-                    className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981] font-mono text-xs"
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono', 'text-xs')}
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Nome Fantasia:</label>
+                  <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Nome Fantasia:</label>
                   <input
                     type="text"
                     required
                     placeholder="ex: Ambev"
                     value={distFormNomeFantasia}
                     onChange={(e) => setDistFormNomeFantasia(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]')}
                   />
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Razão Social:</label>
+                <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Razão Social:</label>
                 <input
                   type="text"
                   placeholder="ex: Companhia de Bebidas das Américas"
                   value={distFormRazaoSocial}
                   onChange={(e) => setDistFormRazaoSocial(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                  className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]')}
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className={clsx('grid', 'grid-cols-2', 'gap-4')}>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">CNPJ:</label>
+                  <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>CNPJ:</label>
                   <input
                     type="text"
                     placeholder="00.000.000/0000-00"
                     value={distFormCnpj}
                     onChange={(e) => setDistFormCnpj(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981] font-mono text-xs"
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono', 'text-xs')}
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Lead Time (dias):</label>
+                  <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Lead Time (dias):</label>
                   <input
                     type="number"
                     required
                     value={distFormLeadTime}
                     onChange={(e) => setDistFormLeadTime(Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981] font-mono"
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono')}
                   />
                 </div>
               </div>
 
-              <div className="flex gap-2 pt-2">
+              <div className={clsx('flex', 'gap-2', 'pt-2')}>
                 <button
                   type="button"
                   onClick={() => setShowNewDistModal(false)}
-                  className="flex-1 py-2 border border-zinc-800 hover:border-zinc-700 bg-zinc-955 text-gray-400 hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                  className={clsx('flex-1', 'py-2', 'border', 'border-zinc-800', 'hover:border-zinc-700', 'bg-zinc-955', 'text-gray-400', 'hover:text-white', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2 bg-[#10b981] hover:bg-[#059669] text-[#121214] rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                  className={clsx('flex-1', 'py-2', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
                 >
                   Salvar
                 </button>
@@ -10528,17 +10528,17 @@ export function CaixaPanel({
       {showEditDistModal && selectedDist && (
         <div
           onClick={(e) => { if (e.target === e.currentTarget) setShowEditDistModal(false); }}
-          className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto cursor-pointer"
+          className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4', 'overflow-y-auto', 'cursor-pointer')}
         >
-          <div className="w-full max-w-md bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
-            <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
-              <h3 className="font-serif text-sm font-bold text-white">
+          <div className={clsx('w-full', 'max-w-md', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-6', 'space-y-4', 'text-left', 'shadow-2xl', 'relative', 'animate-scale-in', 'my-8')}>
+            <div className={clsx('flex', 'justify-between', 'items-center', 'pb-2', 'border-b', 'border-[#27272A]')}>
+              <h3 className={clsx('font-serif', 'text-sm', 'font-bold', 'text-white')}>
                 Editar Fornecedor: {selectedDist.nome_fantasia}
               </h3>
               <button 
                 type="button" 
                 onClick={() => setShowEditDistModal(false)} 
-                className="p-1 text-gray-400 hover:text-white transition-colors cursor-pointer border border-transparent"
+                className={clsx('p-1', 'text-gray-400', 'hover:text-white', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}
               >
                 <X size={16} />
               </button>
@@ -10556,70 +10556,70 @@ export function CaixaPanel({
               className="space-y-4"
             >
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block font-mono">ID (Não editável):</label>
+                <label className={clsx('text-[10px]', 'font-bold', 'text-gray-500', 'uppercase', 'tracking-wider', 'block', 'font-mono')}>ID (Não editável):</label>
                 <input
                   type="text"
                   disabled
                   value={selectedDist.id}
-                  className="w-full px-3 py-2 bg-[#1C1C1F]/40 border border-[#27272A]/50 rounded-xl text-gray-500 font-mono text-xs opacity-60"
+                  className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]/40', 'border', 'border-[#27272A]/50', 'rounded-xl', 'text-gray-500', 'font-mono', 'text-xs', 'opacity-60')}
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Nome Fantasia:</label>
+                <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Nome Fantasia:</label>
                 <input
                   type="text"
                   required
                   value={distFormNomeFantasia}
                   onChange={(e) => setDistFormNomeFantasia(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                  className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]')}
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Razão Social:</label>
+                <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Razão Social:</label>
                 <input
                   type="text"
                   value={distFormRazaoSocial}
                   onChange={(e) => setDistFormRazaoSocial(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981]"
+                  className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]')}
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className={clsx('grid', 'grid-cols-2', 'gap-4')}>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">CNPJ:</label>
+                  <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>CNPJ:</label>
                   <input
                     type="text"
                     value={distFormCnpj}
                     onChange={(e) => setDistFormCnpj(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981] font-mono text-xs"
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono', 'text-xs')}
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Lead Time (dias):</label>
+                  <label className={clsx('text-[10px]', 'font-bold', 'text-gray-400', 'uppercase', 'tracking-wider', 'block')}>Lead Time (dias):</label>
                   <input
                     type="number"
                     required
                     value={distFormLeadTime}
                     onChange={(e) => setDistFormLeadTime(Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white focus:outline-none focus:border-[#10b981] font-mono"
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono')}
                   />
                 </div>
               </div>
 
-              <div className="flex gap-2 pt-2">
+              <div className={clsx('flex', 'gap-2', 'pt-2')}>
                 <button
                   type="button"
                   onClick={() => setShowEditDistModal(false)}
-                  className="flex-1 py-2 border border-zinc-800 hover:border-zinc-700 bg-zinc-950 text-gray-400 hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                  className={clsx('flex-1', 'py-2', 'border', 'border-zinc-800', 'hover:border-zinc-700', 'bg-zinc-950', 'text-gray-400', 'hover:text-white', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2 bg-[#10b981] hover:bg-[#059669] text-[#121214] rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                  className={clsx('flex-1', 'py-2', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
                 >
                   Salvar Alterações
                 </button>
@@ -10801,31 +10801,31 @@ export function CaixaPanel({
 
       {/* OPERATOR MENU DRAWER OVERLAY */}
       {isOperatorDrawerOpen && (
-        <div className="fixed inset-0 z-[9998] flex justify-start animate-fade-in">
+        <div className={clsx('fixed', 'inset-0', 'z-[9998]', 'flex', 'justify-start', 'animate-fade-in')}>
           {/* Backdrop escuro com clique para fechar */}
           <div
             onClick={() => setIsOperatorDrawerOpen(false)}
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm transition-opacity cursor-pointer"
+            className={clsx('fixed', 'inset-0', 'bg-black/80', 'backdrop-blur-sm', 'transition-opacity', 'cursor-pointer')}
           />
 
           {/* Drawer Lateral - Modernized Shadcn Dark Theme */}
-          <div className="relative w-80 max-w-[85vw] h-full bg-[#121214] border-r border-[#27272A] shadow-2xl flex flex-col justify-between z-10 overflow-y-auto p-5 text-white font-sans">
+          <div className={clsx('relative', 'w-80', 'max-w-[85vw]', 'h-full', 'bg-[#121214]', 'border-r', 'border-[#27272A]', 'shadow-2xl', 'flex', 'flex-col', 'justify-between', 'z-10', 'overflow-y-auto', 'p-5', 'text-white', 'font-sans')}>
             <div className="space-y-5">
               {/* Header do Drawer */}
-              <div className="flex items-center justify-between border-b border-[#27272A] pb-4">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+              <div className={clsx('flex', 'items-center', 'justify-between', 'border-b', 'border-[#27272A]', 'pb-4')}>
+                <div className={clsx('flex', 'items-center', 'gap-2.5')}>
+                  <div className={clsx('p-2', 'rounded-xl', 'bg-emerald-500/10', 'border', 'border-emerald-500/30', 'text-emerald-400')}>
                     <SlidersHorizontal size={18} />
                   </div>
                   <div>
-                    <h3 className="font-bold text-base text-white font-serif">Opções do Caixa</h3>
-                    <span className="text-xs text-gray-400 block">Sessão e Preferências</span>
+                    <h3 className={clsx('font-bold', 'text-base', 'text-white', 'font-serif')}>Opções do Caixa</h3>
+                    <span className={clsx('text-xs', 'text-gray-400', 'block')}>Sessão e Preferências</span>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setIsOperatorDrawerOpen(false)}
-                  className="p-1.5 text-gray-400 hover:text-white bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] rounded-xl cursor-pointer transition-all"
+                  className={clsx('p-1.5', 'text-gray-400', 'hover:text-white', 'bg-[#1C1C1F]', 'hover:bg-[#27272A]', 'border', 'border-[#27272A]', 'rounded-xl', 'cursor-pointer', 'transition-all')}
                   title="Fechar Menu"
                 >
                   <X size={16} />
@@ -10833,19 +10833,19 @@ export function CaixaPanel({
               </div>
 
               {/* 1. SEÇÃO GARÇOM / OPERADOR EM ATENDIMENTO */}
-              <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-4 space-y-3.5 shadow-md">
-                <span className="text-[9px] uppercase tracking-wider text-gray-400 font-extrabold block">
+              <div className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-2xl', 'p-4', 'space-y-3.5', 'shadow-md')}>
+                <span className={clsx('text-[9px]', 'uppercase', 'tracking-wider', 'text-gray-400', 'font-extrabold', 'block')}>
                   Garçom / Operador em Atendimento
                 </span>
-                <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-800 flex items-center justify-center font-bold text-white text-lg shadow-md shrink-0 font-serif border border-emerald-500/30">
+                <div className={clsx('flex', 'items-center', 'gap-3')}>
+                  <div className={clsx('h-12', 'w-12', 'rounded-2xl', 'bg-gradient-to-br', 'from-emerald-600', 'to-teal-800', 'flex', 'items-center', 'justify-center', 'font-bold', 'text-white', 'text-lg', 'shadow-md', 'shrink-0', 'font-serif', 'border', 'border-emerald-500/30')}>
                     {(activeWaiterNome || "G").charAt(0).toUpperCase()}
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <strong className="font-bold text-base text-white block truncate">
+                  <div className={clsx('min-w-0', 'flex-1')}>
+                    <strong className={clsx('font-bold', 'text-base', 'text-white', 'block', 'truncate')}>
                       {activeWaiterNome || "Georlan"}
                     </strong>
-                    <span className="text-xs text-emerald-400 font-medium block">
+                    <span className={clsx('text-xs', 'text-emerald-400', 'font-medium', 'block')}>
                       Operador de Caixa / Gerência
                     </span>
                   </div>
@@ -10855,7 +10855,7 @@ export function CaixaPanel({
                   variant="default"
                   iconType="logout"
                   onClick={handleLogoutOperator}
-                  className="w-full font-bold uppercase tracking-wider text-xs py-2.5"
+                  className={clsx('w-full', 'font-bold', 'uppercase', 'tracking-wider', 'text-xs', 'py-2.5')}
                 >
                   LOGOUT / TROCAR OPERADOR
                 </LoginButton>
@@ -10878,32 +10878,32 @@ export function CaixaPanel({
                 const liveFreeTablesCount = Math.max(0, liveTotalTablesCount - liveOccupiedTablesCount);
 
                 return (
-                  <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-4 space-y-3 shadow-md">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[9px] uppercase tracking-wider text-gray-400 font-extrabold block">
+                  <div className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-2xl', 'p-4', 'space-y-3', 'shadow-md')}>
+                    <div className={clsx('flex', 'items-center', 'justify-between')}>
+                      <span className={clsx('text-[9px]', 'uppercase', 'tracking-wider', 'text-gray-400', 'font-extrabold', 'block')}>
                         Status do Salão ao Vivo
                       </span>
-                      <span className="text-[9px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold uppercase flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                      <span className={clsx('text-[9px]', 'font-mono', 'text-emerald-400', 'bg-emerald-500/10', 'border', 'border-emerald-500/30', 'px-2', 'py-0.5', 'rounded-full', 'font-bold', 'uppercase', 'flex', 'items-center', 'gap-1')}>
+                        <span className={clsx('w-1.5', 'h-1.5', 'rounded-full', 'bg-emerald-400', 'animate-ping')} />
                         Tempo Real
                       </span>
                     </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className="bg-[#121214] border border-[#27272A] p-2.5 rounded-xl text-center shadow-xs">
-                        <span className="text-[9px] text-gray-400 block font-medium">LIVRES</span>
-                        <strong className="text-lg font-bold text-emerald-400 font-mono">
+                    <div className={clsx('grid', 'grid-cols-3', 'gap-2')}>
+                      <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-2.5', 'rounded-xl', 'text-center', 'shadow-xs')}>
+                        <span className={clsx('text-[9px]', 'text-gray-400', 'block', 'font-medium')}>LIVRES</span>
+                        <strong className={clsx('text-lg', 'font-bold', 'text-emerald-400', 'font-mono')}>
                           {liveFreeTablesCount}
                         </strong>
                       </div>
-                      <div className="bg-[#121214] border border-[#27272A] p-2.5 rounded-xl text-center shadow-xs">
-                        <span className="text-[9px] text-gray-400 block font-medium">OCUPADAS</span>
-                        <strong className="text-lg font-bold text-amber-400 font-mono">
+                      <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-2.5', 'rounded-xl', 'text-center', 'shadow-xs')}>
+                        <span className={clsx('text-[9px]', 'text-gray-400', 'block', 'font-medium')}>OCUPADAS</span>
+                        <strong className={clsx('text-lg', 'font-bold', 'text-amber-400', 'font-mono')}>
                           {liveOccupiedTablesCount}
                         </strong>
                       </div>
-                      <div className="bg-[#121214] border border-[#27272A] p-2.5 rounded-xl text-center shadow-xs">
-                        <span className="text-[9px] text-gray-400 block font-medium">TOTAL</span>
-                        <strong className="text-lg font-bold text-sky-400 font-mono">
+                      <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-2.5', 'rounded-xl', 'text-center', 'shadow-xs')}>
+                        <span className={clsx('text-[9px]', 'text-gray-400', 'block', 'font-medium')}>TOTAL</span>
+                        <strong className={clsx('text-lg', 'font-bold', 'text-sky-400', 'font-mono')}>
                           {liveTotalTablesCount}
                         </strong>
                       </div>
@@ -10913,8 +10913,8 @@ export function CaixaPanel({
               })()}
 
               {/* 3. SEÇÃO ATALHOS DE ATENDIMENTO */}
-              <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-4 space-y-2.5 shadow-md">
-                <span className="text-[9px] uppercase tracking-wider text-gray-400 font-extrabold block">
+              <div className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-2xl', 'p-4', 'space-y-2.5', 'shadow-md')}>
+                <span className={clsx('text-[9px]', 'uppercase', 'tracking-wider', 'text-gray-400', 'font-extrabold', 'block')}>
                   Atalhos de Atendimento
                 </span>
                 <button
@@ -10923,13 +10923,13 @@ export function CaixaPanel({
                     if (onRefreshOrders) onRefreshOrders();
                     showToast("Salão e pedidos sincronizados em tempo real!", "success");
                   }}
-                  className="w-full py-2.5 px-3 bg-[#121214] hover:bg-[#27272A]/50 border border-[#27272A] text-gray-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-between group"
+                  className={clsx('w-full', 'py-2.5', 'px-3', 'bg-[#121214]', 'hover:bg-[#27272A]/50', 'border', 'border-[#27272A]', 'text-gray-200', 'hover:text-white', 'rounded-xl', 'text-xs', 'font-bold', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'justify-between', 'group')}
                 >
-                  <div className="flex items-center gap-2">
-                    <RefreshCw size={14} className="text-emerald-400 group-hover:rotate-180 transition-transform duration-500" />
+                  <div className={clsx('flex', 'items-center', 'gap-2')}>
+                    <RefreshCw size={14} className={clsx('text-emerald-400', 'group-hover:rotate-180', 'transition-transform', 'duration-500')} />
                     <span>Sincronizar Salão e Pedidos</span>
                   </div>
-                  <ChevronRight size={14} className="text-gray-500 group-hover:text-white" />
+                  <ChevronRight size={14} className={clsx('text-gray-500', 'group-hover:text-white')} />
                 </button>
 
                 <button
@@ -10938,25 +10938,25 @@ export function CaixaPanel({
                     toggleFullscreen();
                     setIsOperatorDrawerOpen(false);
                   }}
-                  className="w-full py-2.5 px-3 bg-[#121214] hover:bg-[#27272A]/50 border border-[#27272A] text-gray-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-between group"
+                  className={clsx('w-full', 'py-2.5', 'px-3', 'bg-[#121214]', 'hover:bg-[#27272A]/50', 'border', 'border-[#27272A]', 'text-gray-200', 'hover:text-white', 'rounded-xl', 'text-xs', 'font-bold', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'justify-between', 'group')}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className={clsx('flex', 'items-center', 'gap-2')}>
                     {isFullscreen ? <Minimize2 size={14} className="text-sky-400" /> : <Maximize2 size={14} className="text-sky-400" />}
                     <span>{isFullscreen ? "Sair do Modo PDV" : "Modo PDV Imersivo"}</span>
                   </div>
-                  <ChevronRight size={14} className="text-gray-500 group-hover:text-white" />
+                  <ChevronRight size={14} className={clsx('text-gray-500', 'group-hover:text-white')} />
                 </button>
               </div>
 
               {/* 4. SEÇÃO EXIBIÇÃO E PREFERÊNCIAS */}
-              <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-4 space-y-3 shadow-md">
-                <span className="text-[9px] uppercase tracking-wider text-gray-400 font-extrabold block">
+              <div className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-2xl', 'p-4', 'space-y-3', 'shadow-md')}>
+                <span className={clsx('text-[9px]', 'uppercase', 'tracking-wider', 'text-gray-400', 'font-extrabold', 'block')}>
                   Exibição e Preferências
                 </span>
                 
                 <div className="space-y-1.5">
-                  <span className="text-xs text-gray-300 font-medium block">Tamanho da Fonte:</span>
-                  <div className="grid grid-cols-3 gap-1 bg-[#121214] p-1 rounded-xl border border-[#27272A]">
+                  <span className={clsx('text-xs', 'text-gray-300', 'font-medium', 'block')}>Tamanho da Fonte:</span>
+                  <div className={clsx('grid', 'grid-cols-3', 'gap-1', 'bg-[#121214]', 'p-1', 'rounded-xl', 'border', 'border-[#27272A]')}>
                     {(['padrao', 'grande', 'gigante'] as const).map((sz) => (
                       <button
                         key={sz}
@@ -10976,11 +10976,11 @@ export function CaixaPanel({
             </div>
 
             {/* RODAPÉ */}
-            <div className="pt-5 border-t border-[#27272A] text-center space-y-1">
-              <span className="text-xs font-bold text-gray-400 block font-mono">
+            <div className={clsx('pt-5', 'border-t', 'border-[#27272A]', 'text-center', 'space-y-1')}>
+              <span className={clsx('text-xs', 'font-bold', 'text-gray-400', 'block', 'font-mono')}>
                 Kôma v3.5 • Dark Engine
               </span>
-              <span className="text-[10px] text-gray-500 block">
+              <span className={clsx('text-[10px]', 'text-gray-500', 'block')}>
                 Sistema PDV Gourmet Multi-Tenant
               </span>
             </div>
