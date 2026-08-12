@@ -28,6 +28,7 @@ import { RelatoriosVisaoGeralTab } from './relatorios/RelatoriosVisaoGeralTab';
 import { RelatoriosProdutosTab } from './relatorios/RelatoriosProdutosTab';
 import { EquipeDesempenhoTab } from './equipe/EquipeDesempenhoTab';
 import { EquipeCargosTab } from './equipe/EquipeCargosTab';
+import { normalizeOperationalTimestamp } from '../domain';
 import { PrintMonitorPanel } from './printing/PrintMonitorPanel';
 import { CardapioCategoriasTab } from './cardapio/CardapioCategoriasTab';
 import { CardapioProdutosTab } from './cardapio/CardapioProdutosTab';
@@ -235,23 +236,6 @@ const formatCompactCurrency = (value: number) => new Intl.NumberFormat('pt-BR', 
   currency: 'BRL',
   maximumFractionDigits: 0,
 }).format(Number(value) || 0);
-
-const normalizeOperationalTimestamp = (value: unknown): number | null => {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value < 1_000_000_000_000 ? value * 1000 : value;
-  }
-  if (typeof value !== 'string' || !value.trim()) return null;
-  const clockMatch = value.trim().match(/^(\d{1,2}):(\d{2})$/);
-  if (clockMatch) {
-    const now = new Date();
-    const candidate = new Date(now);
-    candidate.setHours(Number(clockMatch[1]), Number(clockMatch[2]), 0, 0);
-    if (candidate.getTime() > now.getTime()) candidate.setDate(candidate.getDate() - 1);
-    return candidate.getTime();
-  }
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? parsed : null;
-};
 
 const formatOldestAge = (values: unknown[]) => {
   const timestamps = values

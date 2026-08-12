@@ -2,6 +2,7 @@ import datetime
 import textwrap
 from typing import List, Optional
 from .config import settings
+from .timezone_utils import get_operational_now, to_operational_local_time
 
 def align_left(text: str, width: int) -> str:
     return text.ljust(width)[:width]
@@ -214,7 +215,7 @@ class PrinterService:
         brand = _single_line(restaurant_name or "KÔMA GOURMET BISTRÔ")
         order_type = _order_type_label(tipo, mesa_id)
         garcom_str = _single_line(garcom_nome or "CAIXA").upper()
-        now = datetime.datetime.now()
+        now = get_operational_now()
 
         lines.append(ESC_TIGHT_LINE + ESC_FONT_A)
         lines.append(draw_separator("=", width))
@@ -374,11 +375,11 @@ class PrinterService:
         header_text = _single_line(print_header or "KÔMA GOURMET BISTRÔ")
 
         lines.append(draw_separator("=", width))
-        now = datetime.datetime.now()
+        now = get_operational_now()
         if apenas_valores and mesa_id is not None:
             opening_time = opened_at or now
             if isinstance(opening_time, datetime.datetime) and opening_time.tzinfo is not None:
-                opening_time = opening_time.astimezone()
+                opening_time = to_operational_local_time(opening_time)
             opening_str = (
                 opening_time.strftime("%H:%M")
                 if isinstance(opening_time, (datetime.datetime, datetime.date))
@@ -602,7 +603,7 @@ class PrinterService:
         lines.append(f"TELEFONE: {mask_phone(comanda.delivery_telefone)}")
         lines.append(f"PEDIDO: #{comanda.numero_pedido} | ENTREGA")
         lines.append(f"MOTOBOY: {motoboy_nome.upper()}")
-        lines.append(f"DATA: {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}")
+        lines.append(f"DATA: {get_operational_now().strftime('%d/%m/%Y %H:%M')}")
         lines.append(draw_separator("-", width))
         
         # Items List
@@ -648,7 +649,7 @@ class PrinterService:
         
         lines.append(f"CLIENTE: {comanda.identificador.upper() if comanda.identificador else 'NÃO INFORMADO'}")
         lines.append(f"PEDIDO: #{comanda.numero_pedido} | ENTREGA")
-        lines.append(f"DATA: {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}")
+        lines.append(f"DATA: {get_operational_now().strftime('%d/%m/%Y %H:%M')}")
         lines.append(draw_separator("-", width))
         
         # Items List
@@ -674,7 +675,7 @@ class PrinterService:
         lines.append(f"TELEFONE: {mask_phone(comanda.delivery_telefone)}")
         lines.append(f"PEDIDO: #{comanda.numero_pedido}")
         lines.append(f"MOTOBOY: {motoboy_nome.upper()}")
-        lines.append(f"DATA: {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}")
+        lines.append(f"DATA: {get_operational_now().strftime('%d/%m/%Y %H:%M')}")
         lines.append(draw_separator("-", width))
         
         # Items and Pricing

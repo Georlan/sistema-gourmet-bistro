@@ -156,7 +156,8 @@ class PrintService:
         itens_db = db.query(Item).filter(Item.comanda_id == comanda_id, Item.status != "cancelado").all()
         print_items = [PrintService._parse_item(item) for item in itens_db]
 
-        horario_str = comanda.criado_em.strftime("%d/%m %H:%M") if comanda.criado_em else ""
+        from app.timezone_utils import format_operational_time
+        horario_str = format_operational_time(comanda.criado_em, "%d/%m %H:%M")
 
         doc_type_enum = DocumentType(document_type.upper()) if isinstance(document_type, str) else document_type
 

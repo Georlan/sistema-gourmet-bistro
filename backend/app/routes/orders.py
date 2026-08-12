@@ -7,6 +7,7 @@ from typing import List, Optional, Any
 import logging
 
 from ..database import get_db, current_restaurante_id, require_tenant_id
+from ..timezone_utils import get_operational_now
 from ..models import (
     Comanda,
     Mesa,
@@ -302,7 +303,7 @@ def enqueue_initial_production_for_order(
         garcom_nome=(
             comanda.criada_por.nome if comanda.criada_por else "CAIXA"
         ),
-        horario=datetime.datetime.now().strftime("%H:%M"),
+        horario=get_operational_now().strftime("%H:%M"),
         itens=print_items,
     )) or {}
 
@@ -810,7 +811,7 @@ async def criar_venda_direta(
                     mesa=str(venda_in.mesa_id) if venda_in.mesa_id else "BALCAO",
                     tipo_pedido=tipo_pedido,
                     garcom_nome=garcom.nome if garcom else "CAIXA",
-                    horario=datetime.datetime.now().strftime("%H:%M"),
+                    horario=get_operational_now().strftime("%H:%M"),
                     itens=p_items,
                     restaurante_nome="KÔMA"
                 )

@@ -357,7 +357,8 @@ def imprimir_recibo_mesa(
         num_pedido = first_comanda.numero_pedido
         tipo = first_comanda.tipo
         garcom_nome = first_comanda.criada_por.nome if first_comanda.criada_por else "Garçom"
-        opened_at = min(
+        from ..timezone_utils import to_operational_local_time
+        opened_at_raw = min(
             (
                 comanda.criado_em
                 for comanda in comandas
@@ -365,6 +366,7 @@ def imprimir_recibo_mesa(
             ),
             default=None,
         )
+        opened_at = to_operational_local_time(opened_at_raw)
         
         from ..models import ConfiguracaoRestaurante
         config = db.query(ConfiguracaoRestaurante).filter(
