@@ -313,7 +313,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
         </div>
 
         {/* MODAL BODY */}
-        <div id="mesa-details-scroll-body" className="p-3 sm:p-6 overflow-y-auto flex-1 bg-[#18181B] space-y-4">
+        <div id="mesa-details-scroll-body" className={`overflow-y-auto flex-1 bg-[#18181B] space-y-4 ${activeTab === 'lancamento' ? 'p-0 sm:p-6' : 'p-3 sm:p-6'}`}>
           
           {/* Concurrency Alert Banner */}
           {otherWaitersServing.length > 0 && (
