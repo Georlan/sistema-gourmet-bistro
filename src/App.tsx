@@ -275,6 +275,13 @@ export default function App() {
   const turnoResumoRequestRef = useRef(0);
 
   const fetchTurnoResumo = useCallback(async () => {
+    const tokenKey = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
+    if (!isAuthenticated || !localStorage.getItem(tokenKey)) {
+      setTurnoResumo(null);
+      setIsTurnoResumoLoading(false);
+      return;
+    }
+
     // O resumo financeiro pertence ao caixa. Evita 403 no portal do garçom
     // sem enfraquecer a autorização do backend.
     if (!isManagementRole(activeRole)) {
@@ -300,7 +307,7 @@ export default function App() {
         setIsTurnoResumoLoading(false);
       }
     }
-  }, [activeRole, getAuthHeaders]);
+  }, [activeRole, getAuthHeaders, isAuthenticated, portal]);
 
   useEffect(() => {
     fetchConfig();
