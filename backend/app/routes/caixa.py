@@ -1847,7 +1847,6 @@ def atualizar_configuracoes(
 
 
 # ----------------- CONFIGURAÇÕES WHITELABEL DO RESTAURANTE -----------------
-from ..database import current_restaurante_id
 from ..models import Restaurante
 from ..schemas import RestauranteConfigResponse, RestauranteConfigUpdate
 
@@ -1857,30 +1856,27 @@ from ..schemas import RestauranteConfigResponse, RestauranteConfigUpdate
 def obter_configuracao_restaurante(
     tenant_id: Optional[Union[int, str]] = None,
     db: Session = Depends(get_db),
-    current_user: Optional[Usuario] = Depends(get_current_garcom_optional)
+    current_user: Usuario = Depends(get_current_user),
 ):
     """Obtém as configurações whitelabel de personalização do restaurante ativo."""
-    rest_id = None
-    slug = None
-    if tenant_id:
-        if str(tenant_id).isdigit():
-            rest_id = int(tenant_id)
-        else:
-            slug = str(tenant_id)
-
-    if not rest_id and not slug:
-        rest_id = current_restaurante_id.get() or (current_user.tenant_id if current_user else None) or (current_user.restaurante_id if current_user else None)
-    
-    restaurante = None
-    if slug:
-        restaurante = db.query(Restaurante).filter(Restaurante.slug == slug).first()
-    if not restaurante and rest_id:
-        restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
+    rest_id = require_tenant_id()
+    restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
 
     if not restaurante:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Restaurante não encontrado."
+        )
+
+    # Mantém compatibilidade com URLs antigas, mas o parâmetro nunca escolhe
+    # o tenant. Ele só pode confirmar o restaurante autenticado no JWT.
+    if tenant_id is not None and str(tenant_id) not in {
+        str(restaurante.id),
+        str(restaurante.slug),
+    }:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Restaurante não encontrado.",
         )
         
     return restaurante
@@ -1900,18 +1896,21 @@ def atualizar_configuracao_restaurante(
     current_user: Usuario = Depends(require_permission("configuracoes:administrar"))
 ):
     """Atualiza e persiste as configurações whitelabel de personalização do restaurante ativo."""
-    rest_id = tenant_id or getattr(current_user, "restaurante_id", None) or getattr(current_user, "tenant_id", None) or current_restaurante_id.get()
-    if not rest_id:
+    rest_id = require_tenant_id()
+
+    # O restaurante é sempre o do JWT. Um ID divergente recebe 404 para não
+    # revelar se o recurso de outro tenant existe.
+    if tenant_id is not None and tenant_id != rest_id:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Restaurante não identificado na sessão do usuário."
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Restaurante não encontrado.",
         )
     
     restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
     if not restaurante:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Restaurante não encontrado para atualização."
+            detail="Restaurante não encontrado."
         )
         
     if config_in.nome is not None:
