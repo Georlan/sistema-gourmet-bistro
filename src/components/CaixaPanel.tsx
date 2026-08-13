@@ -7889,12 +7889,12 @@ export function CaixaPanel({
                 id="cash-closing-heading"
                 eyebrow="CAIXA / ENCERRAMENTO SEGURO"
                 title="Feche o turno,"
-                accent="sem surpresa"
-                description="Conte, confira as pendências e encerre com rastreabilidade."
+                accent="sem retrabalho"
+                description="Valores esperados, divergências e pendências em uma única conferência."
                 metrics={[
                   { label: 'aberto há', value: turnoResumo?.status === 'aberto' ? formatDuration(turnoResumo.tempo_aberto_minutos) : '—' },
                   { label: 'último recebimento', value: latestReceiptTime },
-                  { label: 'modo de conferência', value: 'Contagem cega', valueClassName: 'text-sky-300' },
+                  { label: 'modo de conferência', value: 'Assistida', valueClassName: 'text-[#54d9b3]' },
                 ]}
                 isConnected={isWsConnected}
               />

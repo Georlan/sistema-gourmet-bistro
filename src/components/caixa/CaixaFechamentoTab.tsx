@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import clsx from 'clsx';
 import {
   AlertCircle,
@@ -12,6 +12,7 @@ import {
   ReceiptText,
   RefreshCw,
   Smartphone,
+  Zap,
   Wifi,
   WifiOff,
 } from 'lucide-react';
@@ -56,8 +57,10 @@ interface CountFieldProps {
   help: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
   value: number | '';
+  expected: number;
   required?: boolean;
   onChange: (value: number | '') => void;
+  onUseExpected: () => void;
 }
 
 const CountField: React.FC<CountFieldProps> = ({
@@ -66,34 +69,55 @@ const CountField: React.FC<CountFieldProps> = ({
   help,
   icon: Icon,
   value,
+  expected,
   required,
   onChange,
-}) => (
-  <label htmlFor={id} className="block rounded-2xl border border-[#252b28] bg-[#111512] p-4 transition-colors focus-within:border-[#1f8f70]">
-    <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-300">
-      <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#1f5948] bg-[#0c2a22] text-[#54d9b3]">
-        <Icon size={15} />
-      </span>
-      <span>{label}{required ? <span className="ml-1 text-[#54d9b3]">*</span> : null}</span>
-    </span>
-    <span className="mt-3 flex items-center rounded-xl border border-[#242925] bg-[#090c0a] px-3 focus-within:border-[#2a9f7d]">
-      <span className="text-sm font-semibold text-zinc-500">R$</span>
-      <input
-        id={id}
-        type="number"
-        inputMode="decimal"
-        step="0.01"
-        min="0"
-        required={required}
-        placeholder="0,00"
-        value={value}
-        onChange={(event) => onChange(valueFromInput(event.target.value))}
-        className="min-w-0 flex-1 bg-transparent px-2 py-3 text-lg font-semibold tabular-nums text-white outline-none placeholder:text-zinc-700"
-      />
-    </span>
-    <span className="mt-2 block text-[10px] leading-relaxed text-zinc-500">{help}</span>
-  </label>
-);
+  onUseExpected,
+}) => {
+  const difference = value === '' ? null : Number(value) - expected;
+  const isExact = difference !== null && Math.abs(difference) < 0.01;
+
+  return (
+    <div className="rounded-2xl border border-[#252b28] bg-[#111512] p-4 transition-colors focus-within:border-[#1f8f70]">
+      <div className="flex items-start justify-between gap-3">
+        <label htmlFor={id} className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-300">
+          <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#1f5948] bg-[#0c2a22] text-[#54d9b3]">
+            <Icon size={15} />
+          </span>
+          <span>{label}{required ? <span className="ml-1 text-[#54d9b3]">*</span> : null}</span>
+        </label>
+        <button type="button" onClick={onUseExpected} className="rounded-lg border border-[#275f4d] bg-[#0d3026] px-2.5 py-1.5 text-[9px] font-bold text-[#54d9b3] transition-colors hover:border-[#3ba982] hover:text-white">
+          Usar {formatMoney(expected)}
+        </button>
+      </div>
+      <label htmlFor={id} className="mt-3 flex items-center rounded-xl border border-[#242925] bg-[#090c0a] px-3 focus-within:border-[#2a9f7d]">
+        <span className="text-sm font-semibold text-zinc-500">R$</span>
+        <input
+          id={id}
+          type="number"
+          inputMode="decimal"
+          step="0.01"
+          min="0"
+          required={required}
+          placeholder="0,00"
+          value={value}
+          onChange={(event) => onChange(valueFromInput(event.target.value))}
+          onFocus={(event) => event.currentTarget.select()}
+          className="min-w-0 flex-1 appearance-none bg-transparent px-2 py-3 text-lg font-semibold tabular-nums text-white outline-none placeholder:text-zinc-700 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        />
+      </label>
+      <div className="mt-2 flex items-center justify-between gap-3 text-[10px]">
+        <span className="leading-relaxed text-zinc-500">{help}</span>
+        <span className={clsx(
+          'shrink-0 font-semibold tabular-nums',
+          difference === null ? 'text-zinc-500' : isExact ? 'text-[#54d9b3]' : 'text-[#f0b3aa]',
+        )}>
+          {difference === null ? `Esperado ${formatMoney(expected)}` : isExact ? 'Confere' : `${difference > 0 ? '+' : ''}${formatMoney(difference)}`}
+        </span>
+      </div>
+    </div>
+  );
+};
 
 export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
   isTurnoAberto,
@@ -119,10 +143,32 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
 
   const openAccountsCount = turnoResumo?.comandas_abertas_count ?? 0;
   const hasBlockingPending = pendingPaymentsCount > 0 || openAccountsCount > 0;
+  const expectedCash = Number(turnoResumo?.saldo_esperado_dinheiro || 0);
+  const expectedCard = Number(turnoResumo?.total_cartao || 0);
+  const expectedPix = Number(turnoResumo?.total_pix || 0);
+  const expectedTotal = expectedCash + expectedCard + expectedPix;
+  const hasMissingDeclarations = [declaradoDinheiro, declaradoCartao, declaradoPix].some((value) => value === '');
   const declaredTotal = useMemo(
     () => Number(declaradoDinheiro || 0) + Number(declaradoCartao || 0) + Number(declaradoPix || 0),
     [declaradoCartao, declaradoDinheiro, declaradoPix],
   );
+  const liveDifference = declaredTotal - expectedTotal;
+
+  useEffect(() => {
+    setDeclaradoDinheiro('');
+    setDeclaradoCartao('');
+    setDeclaradoPix('');
+    setObservacao('');
+    setShowConfirmModal(false);
+    setErrorMsg(null);
+  }, [turnoResumo?.turno_id]);
+
+  const useExpectedValues = () => {
+    setDeclaradoDinheiro(expectedCash);
+    setDeclaradoCartao(expectedCard);
+    setDeclaradoPix(expectedPix);
+    setErrorMsg(null);
+  };
 
   const handleRefresh = async () => {
     if (!onRefresh || isRefreshing) return;
@@ -137,8 +183,8 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
   const handlePreSubmit = (event: React.FormEvent) => {
     event.preventDefault();
     setErrorMsg(null);
-    if (declaradoDinheiro === '' || Number(declaradoDinheiro) < 0) {
-      setErrorMsg('Informe o valor físico contado em dinheiro.');
+    if (hasMissingDeclarations) {
+      setErrorMsg('Confira os três meios de pagamento antes de continuar.');
       return;
     }
     if (hasBlockingPending) {
@@ -286,13 +332,18 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
       <section className="rounded-3xl border border-[#252b28] bg-[#0d100f] p-5 sm:p-6">
         <div className="flex flex-col gap-3 border-b border-[#252b28] pb-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[#54d9b3]">Conferência cega</p>
-            <h2 className="mt-1 text-lg font-bold text-white">Conte antes de comparar</h2>
-            <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-zinc-500">Informe o que existe na gaveta e nos comprovantes. Os valores esperados só aparecem depois da confirmação.</p>
+            <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[#54d9b3]">Conferência assistida</p>
+            <h2 className="mt-1 text-lg font-bold text-white">Confira e feche mais rápido</h2>
+            <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-zinc-500">Compare cada meio com o sistema. Use os valores esperados e altere apenas quando houver divergência.</p>
           </div>
-          <button type="button" onClick={handleRefresh} disabled={!onRefresh || isRefreshing} className="inline-flex w-fit items-center gap-2 rounded-xl border border-[#2d3531] bg-[#151a17] px-3 py-2 text-[10px] font-semibold text-zinc-300 hover:border-[#3a4540] hover:text-white disabled:opacity-50">
-            <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} /> Atualizar dados
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={handleRefresh} disabled={!onRefresh || isRefreshing} className="inline-flex w-fit items-center gap-2 rounded-xl border border-[#2d3531] bg-[#151a17] px-3 py-2 text-[10px] font-semibold text-zinc-300 hover:border-[#3a4540] hover:text-white disabled:opacity-50">
+              <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} /> Atualizar
+            </button>
+            <button type="button" onClick={useExpectedValues} className="inline-flex w-fit items-center gap-2 rounded-xl border border-[#1f8f70] bg-[#0f6f55] px-3 py-2 text-[10px] font-bold text-white transition-colors hover:bg-[#128364]">
+              <Zap size={14} /> Preencher esperados
+            </button>
+          </div>
         </div>
 
         {errorMsg && (
@@ -303,23 +354,29 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
         )}
 
         <form onSubmit={handlePreSubmit} className="mt-5">
-          <div className="grid gap-3 md:grid-cols-3">
-            <CountField id="closing-cash" label="Dinheiro contado" help="Notas e moedas presentes na gaveta." icon={DollarSign} value={declaradoDinheiro} required onChange={setDeclaradoDinheiro} />
-            <CountField id="closing-card" label="Comprovantes de cartão" help="Total das maquininhas de débito e crédito." icon={CreditCard} value={declaradoCartao} onChange={setDeclaradoCartao} />
-            <CountField id="closing-pix" label="Comprovantes Pix" help="Total confirmado nos recebimentos Pix." icon={Smartphone} value={declaradoPix} onChange={setDeclaradoPix} />
+          <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+            <CountField id="closing-cash" label="Dinheiro na gaveta" help="Fundo + vendas + suprimentos − sangrias." icon={DollarSign} value={declaradoDinheiro} expected={expectedCash} required onChange={setDeclaradoDinheiro} onUseExpected={() => setDeclaradoDinheiro(expectedCash)} />
+            <CountField id="closing-card" label="Cartões" help="Débito e crédito registrados no turno." icon={CreditCard} value={declaradoCartao} expected={expectedCard} required onChange={setDeclaradoCartao} onUseExpected={() => setDeclaradoCartao(expectedCard)} />
+            <CountField id="closing-pix" label="Pix" help="Recebimentos Pix aprovados no turno." icon={Smartphone} value={declaradoPix} expected={expectedPix} required onChange={setDeclaradoPix} onUseExpected={() => setDeclaradoPix(expectedPix)} />
           </div>
 
           <label htmlFor="closing-note" className="mt-4 block">
             <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-zinc-500">Observação do fechamento <span className="normal-case tracking-normal">(opcional)</span></span>
-            <textarea id="closing-note" rows={3} maxLength={500} placeholder="Registre uma informação útil para a conferência deste turno" value={observacao} onChange={(event) => setObservacao(event.target.value)} className="mt-2 w-full resize-none rounded-xl border border-[#252b28] bg-[#111512] px-3 py-3 text-xs text-white outline-none placeholder:text-zinc-700 focus:border-[#2a9f7d]" />
+            <textarea id="closing-note" rows={2} maxLength={500} placeholder="Ex.: comprovante ausente, valor deixado para troco..." value={observacao} onChange={(event) => setObservacao(event.target.value)} className="mt-2 w-full resize-none rounded-xl border border-[#252b28] bg-[#111512] px-3 py-3 text-xs text-white outline-none placeholder:text-zinc-700 focus:border-[#2a9f7d]" />
           </label>
 
           <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-[#252b28] bg-[#111512] p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-zinc-500">Total declarado</span>
-              <strong className="mt-1 block text-xl tabular-nums text-white">{formatMoney(declaredTotal)}</strong>
+            <div className="grid grid-cols-3 gap-x-2 gap-y-1 sm:gap-x-5">
+              <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-zinc-500">Esperado</span>
+              <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-zinc-500">Declarado</span>
+              <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-zinc-500">Diferença</span>
+              <strong className="text-sm tabular-nums text-zinc-300 sm:text-base">{formatMoney(expectedTotal)}</strong>
+              <strong className="text-sm tabular-nums text-white sm:text-base">{hasMissingDeclarations ? '—' : formatMoney(declaredTotal)}</strong>
+              <strong className={clsx('text-sm tabular-nums sm:text-base', hasMissingDeclarations ? 'text-zinc-600' : Math.abs(liveDifference) < 0.01 ? 'text-[#54d9b3]' : 'text-[#f0b3aa]')}>
+                {hasMissingDeclarations ? '—' : `${liveDifference > 0 ? '+' : ''}${formatMoney(liveDifference)}`}
+              </strong>
             </div>
-            <button type="submit" disabled={hasBlockingPending || isSubmitting} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#1f8f70] bg-[#0f6f55] px-5 py-3 text-xs font-bold text-white transition-colors hover:bg-[#128364] disabled:cursor-not-allowed disabled:border-[#2d3531] disabled:bg-[#1a1f1c] disabled:text-zinc-600">
+            <button type="submit" disabled={hasBlockingPending || hasMissingDeclarations || isSubmitting} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#1f8f70] bg-[#0f6f55] px-5 py-3 text-xs font-bold text-white transition-colors hover:bg-[#128364] disabled:cursor-not-allowed disabled:border-[#2d3531] disabled:bg-[#1a1f1c] disabled:text-zinc-600">
               <Lock size={15} /> Revisar e fechar caixa <ArrowRight size={15} />
             </button>
           </div>
@@ -381,12 +438,30 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
               </div>
             </div>
 
-            <dl className="mt-4 space-y-2 rounded-2xl border border-[#252b28] bg-[#111512] p-4 text-xs">
-              <div className="flex justify-between gap-3 text-zinc-400"><dt>Dinheiro contado</dt><dd className="font-semibold tabular-nums text-white">{formatMoney(Number(declaradoDinheiro || 0))}</dd></div>
-              <div className="flex justify-between gap-3 text-zinc-400"><dt>Comprovantes de cartão</dt><dd className="font-semibold tabular-nums text-white">{formatMoney(Number(declaradoCartao || 0))}</dd></div>
-              <div className="flex justify-between gap-3 text-zinc-400"><dt>Comprovantes Pix</dt><dd className="font-semibold tabular-nums text-white">{formatMoney(Number(declaradoPix || 0))}</dd></div>
-              <div className="flex justify-between gap-3 border-t border-[#252b28] pt-2 text-white"><dt className="font-bold">Total declarado</dt><dd className="font-bold tabular-nums text-[#54d9b3]">{formatMoney(declaredTotal)}</dd></div>
-            </dl>
+            <div className="mt-4 overflow-hidden rounded-2xl border border-[#252b28] bg-[#111512] text-[10px]">
+              <div className="grid grid-cols-[1fr_repeat(3,auto)] gap-x-3 border-b border-[#252b28] px-4 py-2 font-bold uppercase tracking-wider text-zinc-600">
+                <span>Meio</span><span>Esperado</span><span>Informado</span><span>Dif.</span>
+              </div>
+              {[
+                ['Dinheiro', expectedCash, Number(declaradoDinheiro || 0)],
+                ['Cartão', expectedCard, Number(declaradoCartao || 0)],
+                ['Pix', expectedPix, Number(declaradoPix || 0)],
+              ].map(([label, expected, declared]) => {
+                const rowDifference = Number(declared) - Number(expected);
+                return (
+                  <div key={String(label)} className="grid grid-cols-[1fr_repeat(3,auto)] gap-x-3 border-b border-[#252b28] px-4 py-2.5 tabular-nums last:border-0">
+                    <strong className="text-zinc-300">{label}</strong>
+                    <span className="text-zinc-500">{formatMoney(Number(expected))}</span>
+                    <span className="text-white">{formatMoney(Number(declared))}</span>
+                    <span className={Math.abs(rowDifference) < 0.01 ? 'text-[#54d9b3]' : 'text-[#f0b3aa]'}>{rowDifference > 0 ? '+' : ''}{formatMoney(rowDifference)}</span>
+                  </div>
+                );
+              })}
+              <div className="flex items-center justify-between bg-[#141815] px-4 py-3 text-xs font-bold text-white">
+                <span>Diferença total</span>
+                <span className={Math.abs(liveDifference) < 0.01 ? 'text-[#54d9b3]' : 'text-[#f0b3aa]'}>{liveDifference > 0 ? '+' : ''}{formatMoney(liveDifference)}</span>
+              </div>
+            </div>
 
             <div className="mt-4 flex gap-2">
               <button type="button" onClick={() => setShowConfirmModal(false)} disabled={isSubmitting} className="flex-1 rounded-xl border border-[#2d3531] bg-[#151a17] px-3 py-3 text-xs font-bold text-zinc-300 hover:text-white disabled:opacity-50">Voltar e conferir</button>
