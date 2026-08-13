@@ -84,6 +84,27 @@ def test_upload_asset_unauthenticated():
     assert response.status_code == 401
 
 
+@patch("httpx.AsyncClient.post")
+def test_upload_asset_fails_safely_without_supabase_url(mock_post, test_setup):
+    from app.config import settings
+
+    original_url = settings.SUPABASE_URL
+    settings.SUPABASE_URL = ""
+    try:
+        headers = {"Authorization": f"Bearer {test_setup['token']}"}
+        response = client.post(
+            "/api/cardapio-digital/assets/logo",
+            headers=headers,
+            files={"file": ("logo.png", VALID_PNG_BYTES, "image/png")},
+        )
+    finally:
+        settings.SUPABASE_URL = original_url
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Armazenamento de imagens não configurado."
+    mock_post.assert_not_called()
+
+
 def test_upload_asset_invalid_mime(test_setup):
     headers = {"Authorization": f"Bearer {test_setup['token']}"}
     response = client.post(
