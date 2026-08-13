@@ -13,21 +13,56 @@
   --color-text-app: var(--color-brand-text, #ffffff);
   --color-card-app: var(--color-brand-card, #121420);
   --color-accent-app: var(--color-brand-accent, #00b894);
+
+  /* Kôma semantic theme colors. Components should prefer these roles over raw hex values. */
+  --color-koma-page: var(--koma-surface-page);
+  --color-koma-canvas: var(--koma-surface-canvas);
+  --color-koma-shell: var(--koma-surface-shell);
+  --color-koma-panel: var(--koma-surface-panel);
+  --color-koma-raised: var(--koma-surface-raised);
+  --color-koma-input: var(--koma-surface-input);
+  --color-koma-foreground: var(--koma-text-primary);
+  --color-koma-secondary: var(--koma-text-secondary);
+  --color-koma-muted: var(--koma-text-muted);
+  --color-koma-subtle: var(--koma-text-subtle);
+  --color-koma-border-subtle: var(--koma-border-subtle);
+  --color-koma-border: var(--koma-border-default);
+  --color-koma-border-strong: var(--koma-border-strong);
+  --color-koma-accent: var(--koma-accent);
 }
 
-:root {
+:root,
+[data-koma-theme="dark"] {
   --color-brand-primary: #00b894;
   --color-brand-bg: #090a0f;
   --color-brand-text: #ffffff;
   --color-brand-secondary: #121420;
   --color-brand-card: #121420;
   --color-brand-accent: #00b894;
+
+  /* Theme contract — keep feature components independent from a specific palette. */
+  --koma-surface-page: #121417;
+  --koma-surface-canvas: #080a09;
+  --koma-surface-shell: #090a09;
+  --koma-surface-panel: #101311;
+  --koma-surface-raised: #151916;
+  --koma-surface-input: #090c0a;
+  --koma-text-primary: #f3f6f4;
+  --koma-text-secondary: #c2cbc6;
+  --koma-text-muted: #8e9993;
+  --koma-text-subtle: #71717a;
+  --koma-border-subtle: rgba(255, 255, 255, 0.07);
+  --koma-border-default: rgba(231, 238, 234, 0.1);
+  --koma-border-strong: rgba(231, 238, 234, 0.16);
+  --koma-accent: #00c996;
+  --koma-focus-ring: rgba(0, 201, 150, 0.34);
+  color-scheme: dark;
 }
 
 /* Luxury Fine Dining Color Palettes - Setup as Rich Dark theme */
 body {
-  background-color: #121417;
-  color: #f8fafc;
+  background-color: var(--koma-surface-page);
+  color: var(--koma-text-primary);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -37,19 +72,21 @@ body {
 .waiter-shell {
   background:
     radial-gradient(circle at 88% 6%, rgba(0, 184, 148, 0.07), transparent 25rem),
-    linear-gradient(180deg, #090a09 0%, #0b0c0b 58%, #090a09 100%);
+    linear-gradient(180deg, var(--koma-surface-shell) 0%, #0b0c0b 58%, var(--koma-surface-shell) 100%);
+  color: var(--koma-text-primary);
 }
 
 /* Cashier workspace — same editorial language as the public landing page. */
 .cashier-shell {
-  --cashier-ink: #080a09;
-  --cashier-surface: #101311;
-  --cashier-surface-raised: #151916;
-  --cashier-line: rgba(231, 238, 234, 0.1);
-  --cashier-line-strong: rgba(231, 238, 234, 0.16);
-  --cashier-muted: #8e9993;
-  --cashier-accent: #00c996;
+  --cashier-ink: var(--koma-surface-canvas);
+  --cashier-surface: var(--koma-surface-panel);
+  --cashier-surface-raised: var(--koma-surface-raised);
+  --cashier-line: var(--koma-border-default);
+  --cashier-line-strong: var(--koma-border-strong);
+  --cashier-muted: var(--koma-text-muted);
+  --cashier-accent: var(--koma-accent);
   background: var(--cashier-ink);
+  color: var(--koma-text-primary);
 }
 
 .cashier-sidebar {
