@@ -41,6 +41,19 @@ def test_setup():
             rest.slug = "sistema-gourmet-bistro"
             db.commit()
 
+        other_rest = db.query(Restaurante).filter(Restaurante.id == 998).first()
+        if not other_rest:
+            other_rest = Restaurante(
+                id=998,
+                nome="Restaurante Isolado 998",
+                plano="bistro",
+                slug="restaurante-isolado-998",
+            )
+            db.add(other_rest)
+        else:
+            other_rest.nome = "Restaurante Isolado 998"
+            other_rest.slug = "restaurante-isolado-998"
+
         # Create test user for tenant 999
         user = db.query(Usuario).filter(Usuario.email == "test999@koma.com").first()
         if not user:
@@ -252,6 +265,65 @@ def test_update_caixa_config_cardapio_success(test_setup):
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == 999
+
+
+def test_caixa_config_cardapio_legacy_path_requires_authentication():
+    response = client.get("/caixa/config-cardapio/998")
+
+    assert response.status_code == 401
+
+
+@pytest.mark.parametrize("tenant_ref", ["998", "restaurante-isolado-998"])
+def test_caixa_config_cardapio_cannot_read_another_tenant(
+    test_setup,
+    tenant_ref,
+):
+    headers = {"Authorization": f"Bearer {test_setup['token']}"}
+
+    response = client.get(
+        f"/caixa/config-cardapio/{tenant_ref}",
+        headers=headers,
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Restaurante não encontrado."
+
+
+@pytest.mark.parametrize("method", ["put", "post"])
+def test_caixa_config_cardapio_cannot_update_another_tenant(
+    test_setup,
+    method,
+):
+    headers = {"Authorization": f"Bearer {test_setup['token']}"}
+
+    response = getattr(client, method)(
+        "/caixa/config-cardapio/998",
+        headers=headers,
+        json={"nome": "Nome indevidamente alterado"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Restaurante não encontrado."
+
+    db = SessionLocal()
+    token_var = current_restaurante_id.set(998)
+    try:
+        other_rest = db.query(Restaurante).filter(Restaurante.id == 998).one()
+        assert other_rest.nome == "Restaurante Isolado 998"
+    finally:
+        current_restaurante_id.reset(token_var)
+        db.close()
+
+
+def test_caixa_config_cardapio_accepts_own_legacy_path(test_setup):
+    headers = {"Authorization": f"Bearer {test_setup['token']}"}
+
+    response = client.get("/caixa/config-cardapio/999", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["id"] == 999
+
+
 def test_get_whitelabel_config_by_slug_success(test_setup):
     response = client.get("/api/cardapio-digital/config?slug=sistema-gourmet-bistro")
     assert response.status_code == 200
