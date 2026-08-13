@@ -114,11 +114,13 @@ def setup_database():
         ))
         db.add_all([
             ConfiguracaoRestaurante(
+                id=301,
                 restaurante_id=1,
                 nicho="hamburgueria",
                 taxa_servico_padrao=10.0,
             ),
             ConfiguracaoRestaurante(
+                id=302,
                 restaurante_id=2,
                 nicho="pizzaria",
                 taxa_servico_padrao=12.0,
@@ -617,6 +619,8 @@ def test_configuracoes_cannot_be_redirected_to_another_tenant(monkeypatch):
     )
 
     assert response.status_code == 200
+    assert response.json()["id"] == 301
+    assert response.json()["restaurante_id"] == 1
     assert response.json()["nicho"] == "hamburgueria"
     assert response.json()["taxa_servico_padrao"] == 10.0
     assert response.json()["plano"] == "bistro"

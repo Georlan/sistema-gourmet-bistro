@@ -412,6 +412,7 @@ class CaixaTurnoDetalhe(CaixaTurnoResponse):
 # ----------------- WHITE-LABEL & HYBRID IA -----------------
 class ConfiguracaoRestauranteResponse(BaseModel):
     id: int
+    restaurante_id: int
     nicho: str
     mapa_mesas_ativo: bool
     delivery_ativo: bool

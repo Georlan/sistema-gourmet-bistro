@@ -7063,8 +7063,8 @@ export function CaixaPanel({
               produtos={apiProdutos}
               categorias={apiCategorias}
               catalogReady={catalogReady || apiProdutos.length > 0 || apiCategorias.length > 0}
-              previewUrl={hasOnlineMenu && restauranteConfig?.id
-                ? `${window.location.origin}/cardapio?restaurante_id=${encodeURIComponent(String(restauranteConfig.id))}`
+              previewUrl={hasOnlineMenu && restauranteConfig?.restaurante_id
+                ? `${window.location.origin}/cardapio?restaurante_id=${encodeURIComponent(String(restauranteConfig.restaurante_id))}`
                 : undefined}
               onCreateProduct={() => {
                 setEditingProduct(null);
