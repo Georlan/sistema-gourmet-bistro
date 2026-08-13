@@ -18,7 +18,6 @@ from fastapi import (
 from pydantic import BaseModel, Field
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
-from zoneinfo import ZoneInfo
 
 from ..database import (
     SessionLocal,
@@ -29,6 +28,7 @@ from ..database import (
 from ..models import PrintJob, PrintAgentToken, Usuario
 from ..security import require_permission
 from ..websocket_manager import manager
+from ..timezone_utils import OPERATIONAL_TIMEZONE
 
 router = APIRouter(prefix="/api/print-agents", tags=["Print Agents"])
 log = logging.getLogger("koma.print_agents")
@@ -64,12 +64,7 @@ PRINT_JOB_MAX_UNRESOLVED_AGE_SECONDS = _positive_int_env(
     "KOMA_PRINT_MAX_UNRESOLVED_AGE_SECONDS",
     6 * 60 * 60,
 )
-try:
-    PRINT_HISTORY_TIMEZONE = ZoneInfo(
-        os.getenv("KOMA_PRINT_TIMEZONE", "America/Fortaleza")
-    )
-except Exception:
-    PRINT_HISTORY_TIMEZONE = ZoneInfo("America/Fortaleza")
+PRINT_HISTORY_TIMEZONE = OPERATIONAL_TIMEZONE
 
 ORDER_REFERENCE_PATTERNS = (
     re.compile(

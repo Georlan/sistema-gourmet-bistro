@@ -39,6 +39,7 @@ import { AssinaturaPixTab } from './assinatura/AssinaturaPixTab';
 import { OperationalBanner } from './shared/OperationalBanner';
 import { normalizeCatalogSnapshot, type CatalogCategory } from '../catalog/catalog';
 import { getProductPresets, obterNomeCategoria, smartSearchMatch } from '../domain';
+import { formatBackendTime, localCalendarDate } from '../utils/dateTime';
 import { API } from '../config/caixaService';
 import {
   ONLINE_MENU_ADDON,
@@ -623,7 +624,7 @@ export function CaixaPanel({
             data_abertura: (comanda as any).data_abertura || rawTableTimestamp,
             aberto_em: (comanda as any).aberto_em || rawTableTimestamp,
             created_at: comanda.created_at || (comanda as any).criadoEm || rawTableTimestamp,
-            timestamp: comanda.timestamp || (typeof rawTableTimestamp === 'number' ? rawTableTimestamp : Date.parse(rawTableTimestamp || '')),
+            timestamp: normalizeOperationalTimestamp(comanda.timestamp || rawTableTimestamp) ?? Date.now(),
             criadoEm: (comanda as any).criadoEm || comanda.created_at,
             mesa: mesaEntity,
             itens: preparingItems
@@ -702,8 +703,8 @@ export function CaixaPanel({
         if (!oldestComandaTime) {
           oldestComandaTime = cTime;
         } else if (cTime) {
-          const t1 = typeof cTime === 'number' ? cTime : Date.parse(cTime);
-          const t2 = typeof oldestComandaTime === 'number' ? oldestComandaTime : Date.parse(oldestComandaTime);
+          const t1 = normalizeOperationalTimestamp(cTime) ?? Number.NaN;
+          const t2 = normalizeOperationalTimestamp(oldestComandaTime) ?? Number.NaN;
           if (!isNaN(t1) && (isNaN(t2) || t1 < t2)) {
             oldestComandaTime = cTime;
           }
@@ -727,7 +728,7 @@ export function CaixaPanel({
         data_abertura: (firstComanda as any).data_abertura || oldestComandaTime,
         aberto_em: (firstComanda as any).aberto_em || oldestComandaTime,
         created_at: firstComanda.created_at || (firstComanda as any).criadoEm || oldestComandaTime,
-        timestamp: firstComanda.timestamp || (typeof oldestComandaTime === 'number' ? oldestComandaTime : Date.parse(oldestComandaTime || '')),
+        timestamp: normalizeOperationalTimestamp(firstComanda.timestamp || oldestComandaTime) ?? Date.now(),
         criadoEm: (firstComanda as any).criadoEm || firstComanda.created_at,
         mesa: mesaEntity,
         valorPago: entries.reduce((sum, e) => sum + (e.comanda.valorPago || 0), 0),
@@ -1547,22 +1548,13 @@ export function CaixaPanel({
       (Array.isArray(card.itens) && card.itens.length > 0 && Math.min(
         ...card.itens.map((i: any) => {
           const t = i.criadoEm || i.created_at || i.timestamp;
-          if (typeof t === 'number') return t;
-          if (typeof t === 'string') { const p = Date.parse(t); return isNaN(p) ? Infinity : p; }
-          return Infinity;
+          return normalizeOperationalTimestamp(t) ?? Infinity;
         }).filter((t: number) => t < Infinity)
       ));
 
     if (!timestamp) return 'AGORA';
 
-    let start = 0;
-    if (typeof timestamp === 'number') start = timestamp;
-    else if (typeof timestamp === 'string') {
-      const p = Date.parse(timestamp);
-      start = isNaN(p) ? 0 : p;
-    } else if (timestamp instanceof Date) {
-      start = timestamp.getTime();
-    }
+    const start = normalizeOperationalTimestamp(timestamp) ?? 0;
 
     if (!start || isNaN(start)) return 'AGORA';
 
@@ -1582,15 +1574,7 @@ export function CaixaPanel({
   function calcularMinutosDecorridos(timestamp: any, agora: number): number {
     if (!timestamp) return 0;
 
-    let dataInicio = 0;
-    if (typeof timestamp === 'number') {
-      dataInicio = timestamp;
-    } else if (typeof timestamp === 'string') {
-      const parsed = Date.parse(timestamp);
-      dataInicio = isNaN(parsed) ? 0 : parsed;
-    } else if (timestamp instanceof Date) {
-      dataInicio = timestamp.getTime();
-    }
+    const dataInicio = normalizeOperationalTimestamp(timestamp, agora) ?? 0;
 
     if (!dataInicio || isNaN(dataInicio)) return 0;
 
@@ -1767,11 +1751,8 @@ export function CaixaPanel({
       .reduce((sum: number, it: any) => sum + (it.preco_unit || it.preco || 0), 0);
     const total = subtotal + (c.delivery_taxa || 0);
 
-    let criadoEm = "12:00";
-    try {
-      const date = new Date(c.criado_em);
-      criadoEm = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false });
-    } catch (e) { }
+    const parsedTime = formatBackendTime(c.criado_em);
+    const criadoEm = parsedTime === '—' ? '12:00' : parsedTime;
 
     let canal: 'ifood' | 'site' | 'whats' = 'site';
     if (c.identificador && c.identificador.toLowerCase().includes('ifood')) {
@@ -2632,8 +2613,8 @@ export function CaixaPanel({
     const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(endDate.getDate() - parseInt(desempenhoRange));
-    const startStr = startDate.toISOString().split('T')[0];
-    const endStr = endDate.toISOString().split('T')[0];
+    const startStr = localCalendarDate(startDate);
+    const endStr = localCalendarDate(endDate);
 
     if (activeTab === 'financeiro') {
       fetchTurnoResumo();

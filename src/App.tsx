@@ -23,6 +23,7 @@ import { KitchenPanel } from './components/KitchenPanel';
 import LandingPage from './landing/LandingPage';
 import { API_BASE_URL } from './config/api';
 import { saveOperatorSession, getOperatorSession, clearOperatorSession } from './utils/authSession';
+import { parseBackendTimestamp } from './utils/dateTime';
 
 const MemoizedCaixaPanel = React.lazy(() =>
   import('./components/CaixaPanel').then(module => ({
@@ -45,29 +46,7 @@ const MANAGEMENT_ROLES = new Set<AppRole>(['admin', 'gerente', 'caixa']);
 const isManagementRole = (role: AppRole) => MANAGEMENT_ROLES.has(role);
 
 const parseBackendDateTime = (dateStr: any): number => {
-  if (!dateStr) return Date.now();
-  if (typeof dateStr === 'number') {
-    return dateStr < 1_000_000_000_000 ? dateStr * 1000 : dateStr;
-  }
-  const str = String(dateStr).trim();
-  if (!str) return Date.now();
-
-  const timeMatch = str.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
-  if (timeMatch) {
-    const now = new Date();
-    const candidate = new Date(now);
-    candidate.setHours(Number(timeMatch[1]), Number(timeMatch[2]), Number(timeMatch[3] || 0), 0);
-    if (candidate.getTime() > now.getTime() + 60_000) candidate.setDate(candidate.getDate() - 1);
-    return candidate.getTime();
-  }
-
-  const isoStr = str.replace(' ', 'T');
-  const parsed = Date.parse(isoStr);
-  if (!Number.isNaN(parsed) && parsed > 0) {
-    return parsed;
-  }
-  const fallback = Date.parse(str);
-  return (!Number.isNaN(fallback) && fallback > 0) ? fallback : Date.now();
+  return parseBackendTimestamp(dateStr)?.getTime() ?? Date.now();
 };
 
 const aplicarMascaraTelefoneInput = (valor: string) => {

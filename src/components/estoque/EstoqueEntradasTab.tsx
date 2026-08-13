@@ -2,6 +2,7 @@ import React from 'react';
 import clsx from 'clsx';
 import { FileText, Plus, RefreshCw } from 'lucide-react';
 import { EntradaEstoque, Distribuidor, Insumo } from '../../types';
+import { formatBackendDateTime } from '../../utils/dateTime';
 
 interface EstoqueEntradasTabProps {
   entradas: EntradaEstoque[];
@@ -122,7 +123,7 @@ export const EstoqueEntradasTab: React.FC<EstoqueEntradasTabProps> = ({
                   {entradas.map((ent) => (
                     <tr key={ent.id} className="hover:bg-[#1C1C1F]/20 transition-colors">
                       <td className="p-3 text-gray-400 whitespace-nowrap font-mono">
-                        {new Date(ent.created_at).toLocaleDateString('pt-BR')} {new Date(ent.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        {formatBackendDateTime(ent.created_at)}
                       </td>
                       <td className="p-3 font-bold text-white font-mono">{ent.numero_documento || 'S/N'}</td>
                       <td className="p-3 text-gray-300 font-medium">{ent.distribuidor?.nome_fantasia || '—'}</td>
@@ -145,7 +146,7 @@ export const EstoqueEntradasTab: React.FC<EstoqueEntradasTabProps> = ({
                   {notasEntradaXml.filter(n => !entradas.some(e => e.numero_documento === n.numero_nota)).map((nota) => (
                     <tr key={nota.id} className="hover:bg-[#1C1C1F]/20 transition-colors opacity-90">
                       <td className="p-3 text-gray-400 whitespace-nowrap font-mono">
-                        {nota.data_emissao ? new Date(nota.data_emissao).toLocaleDateString('pt-BR') : '—'}
+                        {nota.data_emissao ? formatBackendDateTime(nota.data_emissao, { dateStyle: 'short' }) : '—'}
                       </td>
                       <td className="p-3 font-bold text-white font-mono">NF-{nota.numero_nota}</td>
                       <td className="p-3 text-gray-300 font-medium">{nota.distribuidor?.nome_fantasia || '—'}</td>

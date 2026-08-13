@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import clsx from 'clsx';
 import { Plus, Filter, ArrowUpRight, ArrowDownLeft, AlertTriangle, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { MovimentacaoEstoque, Insumo } from '../../types';
+import { formatBackendDateTime, parseBackendTimestamp } from '../../utils/dateTime';
 
 interface EstoqueMovimentacoesTabProps {
   movimentacoes: MovimentacaoEstoque[];
@@ -26,8 +27,9 @@ export const EstoqueMovimentacoesTab: React.FC<EstoqueMovimentacoesTabProps> = (
   const filteredMovs = movimentacoes.filter(m => {
     if (filterInsumoId && m.insumo_id !== filterInsumoId) return false;
     if (filterTipo !== 'todos' && m.tipo !== filterTipo) return false;
-    if (filterDataInicio && new Date(m.created_at) < new Date(filterDataInicio)) return false;
-    if (filterDataFim && new Date(m.created_at) > new Date(`${filterDataFim}T23:59:59`)) return false;
+    const createdAt = parseBackendTimestamp(m.created_at);
+    if (filterDataInicio && (!createdAt || createdAt < new Date(`${filterDataInicio}T00:00:00`))) return false;
+    if (filterDataFim && (!createdAt || createdAt > new Date(`${filterDataFim}T23:59:59.999`))) return false;
     return true;
   });
 
@@ -83,14 +85,14 @@ export const EstoqueMovimentacoesTab: React.FC<EstoqueMovimentacoesTabProps> = (
         <div className="space-y-1">
           <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
             <Filter size={10} />
-            <span>Insumo</span>
+            <span>Ingrediente</span>
           </label>
           <select
             value={filterInsumoId}
             onChange={(e) => setFilterInsumoId(e.target.value)}
             className="w-full px-2.5 py-1.5 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
           >
-            <option value="">Todos os Insumos</option>
+            <option value="">Todos os ingredientes</option>
             {insumos.map(i => (
               <option key={i.id} value={i.id}>{i.nome}</option>
             ))}
@@ -141,7 +143,7 @@ export const EstoqueMovimentacoesTab: React.FC<EstoqueMovimentacoesTabProps> = (
             <thead>
               <tr className="bg-[#1C1C1F] border-b border-[#27272A] text-gray-400 uppercase tracking-wider font-bold">
                 <th className="p-3">Data / Hora</th>
-                <th className="p-3">Insumo</th>
+                <th className="p-3">Ingrediente</th>
                 <th className="p-3">Tipo</th>
                 <th className="p-3 font-mono">Qtd</th>
                 <th className="p-3 font-mono">Saldo Ant. ➔ Novo</th>
@@ -161,7 +163,7 @@ export const EstoqueMovimentacoesTab: React.FC<EstoqueMovimentacoesTabProps> = (
                 filteredMovs.map((mov) => (
                   <tr key={mov.id} className="hover:bg-[#1C1C1F]/20 transition-colors">
                     <td className="p-3 text-gray-400 whitespace-nowrap font-mono">
-                      {new Date(mov.created_at).toLocaleDateString('pt-BR')} {new Date(mov.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                      {formatBackendDateTime(mov.created_at)}
                     </td>
                     <td className="p-3 font-bold text-white">
                       {mov.insumo?.nome || mov.insumo_id}

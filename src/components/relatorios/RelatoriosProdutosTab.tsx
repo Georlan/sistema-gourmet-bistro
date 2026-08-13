@@ -3,6 +3,7 @@ import clsx from 'clsx';
 import { Package, Search, Calendar as CalendarIcon, Download, Filter, BarChart2 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { PeriodoCalendarioModal } from './PeriodoCalendarioModal';
+import { localCalendarDate } from '../../utils/dateTime';
 
 interface RelatoriosProdutosTabProps {
   apiBaseUrl: string;
@@ -46,8 +47,8 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
     const start = new Date();
     start.setDate(end.getDate() - 30);
     return {
-      inicio: start.toISOString().split('T')[0],
-      fim: end.toISOString().split('T')[0],
+      inicio: localCalendarDate(start),
+      fim: localCalendarDate(end),
     };
   };
 

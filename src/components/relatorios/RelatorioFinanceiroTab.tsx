@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DollarSign, TrendingUp, Filter, RefreshCw, BarChart3, AlertCircle, PieChart as PieIcon } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { localCalendarDate } from '../../utils/dateTime';
 
 interface RelatorioFinanceiroTabProps {
   apiBaseUrl: string;
@@ -39,8 +40,8 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
       const startDate = new Date();
       startDate.setDate(endDate.getDate() - parseInt(periodoDias));
 
-      const startStr = startDate.toISOString().split('T')[0];
-      const endStr = endDate.toISOString().split('T')[0];
+      const startStr = localCalendarDate(startDate);
+      const endStr = localCalendarDate(endDate);
 
       const res = await fetch(`${apiBaseUrl}/comandas/estatisticas/geral?data_inicio=${startStr}&data_fim=${endStr}`, {
         headers: authHeaders

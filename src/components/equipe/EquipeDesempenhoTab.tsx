@@ -3,6 +3,7 @@ import clsx from 'clsx';
 import { Award, Calendar as CalendarIcon, Download, ShoppingBag, DollarSign, Percent, Filter, BarChart2 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { PeriodoCalendarioModal } from '../relatorios/PeriodoCalendarioModal';
+import { localCalendarDate } from '../../utils/dateTime';
 
 interface EquipeDesempenhoTabProps {
   apiBaseUrl: string;
@@ -69,8 +70,8 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
     const start = new Date();
     start.setDate(end.getDate() - 30);
     return {
-      inicio: start.toISOString().split('T')[0],
-      fim: end.toISOString().split('T')[0],
+      inicio: localCalendarDate(start),
+      fim: localCalendarDate(end),
     };
   };
 

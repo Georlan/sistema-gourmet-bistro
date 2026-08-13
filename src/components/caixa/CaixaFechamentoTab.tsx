@@ -16,6 +16,7 @@ import {
   WifiOff,
 } from 'lucide-react';
 import { CaixaTurnoResumo, FechamentoCaixaResult } from '../../types';
+import { formatBackendDateTime } from '../../utils/dateTime';
 
 interface CaixaFechamentoTabProps {
   isTurnoAberto: boolean;
@@ -187,7 +188,7 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
               <div>
                 <h2 className="text-base font-bold text-white">Turno encerrado com segurança</h2>
                 <p className="mt-0.5 text-[11px] text-zinc-500">
-                  Caixa #{fechamentoResult.turno_id} · {fechamentoResult.fechado_por_nome} · {new Date(fechamentoResult.fechado_em).toLocaleString('pt-BR')}
+                  Caixa #{fechamentoResult.turno_id} · {fechamentoResult.fechado_por_nome} · {formatBackendDateTime(fechamentoResult.fechado_em)}
                 </p>
               </div>
             </div>

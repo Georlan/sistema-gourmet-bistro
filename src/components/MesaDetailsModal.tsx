@@ -10,6 +10,7 @@ import { getTableTotal, getCustomerSubtotals, formatElapsedTime, normalizeOperat
 import { MenuPanel } from './MenuPanel';
 import { TABLES, RESTAURANT_CONFIG } from '../data';
 import type { CatalogCategory } from '../catalog/catalog';
+import { formatBackendDateTime, formatBackendTime } from '../utils/dateTime';
 
 interface MesaDetailsModalProps {
   table: Table;
@@ -23,32 +24,32 @@ interface MesaDetailsModalProps {
   currentTime: number;
   onClose: () => void;
   onUpdateSettings: (settings: AppSettings) => void;
-  onAddToDraft: (tableId: number, produtoId: string, nome: string, preco: number, clienteNome?: string) => void;
-  onRemoveFromDraft: (tableId: number, draftItemId: string) => void;
-  onUpdateDraftItem: (tableId: number, draftItemId: string, updates: Partial<DraftItem>) => void;
-  onSubmitDraft: (tableId: number) => void;
+  onAddToDraft: (product: Product, quantity?: number, observacao?: string, clienteNome?: string) => void;
+  onRemoveFromDraft: (draftItemId: string) => void;
+  onUpdateDraftItem: (draftItemId: string, updates: Partial<DraftItem>) => void;
+  onSubmitDraft: (orderType: 'Consumo no Local' | 'Retirada' | 'Entrega') => void;
   otherWaitersServing?: string[];
-  onTransferTable: (fromTableId: number, toTableId: number) => void;
-  onTransferItem: (fromTableId: number, toTableId: number, itemId: string) => void;
-  onTransferItems: (fromTableId: number, toTableId: number, itemIds: string[]) => void;
-  onCancelItem: (tableId: number, itemId: string) => void;
-  onCloseTable: (tableId: number) => void;
-  onSettleCustomer?: (tableId: number, customerName: string) => void;
-  onDeliverItem?: (tableId: number, itemId: string) => void;
+  onTransferTable: (targetTableId: number) => void;
+  onTransferItem: (itemId: string, targetTableId: number) => void;
+  onTransferItems: (itemIds: string[], targetTableId: number) => void;
+  onCancelItem: (itemId: string) => void;
+  onCloseTable: () => void;
+  onSettleCustomer?: (customerName: string) => void;
+  onDeliverItem?: (orderId: string, itemId: string) => void;
   historicClients?: string[];
   restaurantName?: string;
-  onClearTableOrders?: (tableId: number) => void;
-  onPrintReceipt?: (tableId: number, apenasValores?: boolean) => void;
-  onPrintKitchenLaunch?: (tableId: number, orderId?: string) => void;
+  onClearTableOrders?: () => void;
+  onPrintReceipt?: (apenasValores?: boolean) => void | Promise<void>;
+  onPrintKitchenLaunch?: (orderId: string) => void | Promise<void>;
   salonTables?: Table[];
   liveProdutos?: Product[];
   liveCategorias?: CatalogCategory[];
   catalogReady?: boolean;
   restauranteConfig?: any;
-  onUpdateItemDetails?: (tableId: number, itemId: string, updates: { clienteNome?: string; observacao?: string }) => void;
+  onUpdateItemDetails?: (itemId: string, observacao: string, clienteNome: string, quantidadeAdicional?: number) => void | Promise<void>;
   isSubmitting?: boolean;
   onMergeTables?: (sourceTableId: number, targetTableId: number) => void;
-  onUnmergeTable?: (targetTableId: number) => void;
+  onUnmergeTable?: (comandaId: string) => void;
 }
 
 export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
@@ -396,7 +397,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                             </div>
                             <div className="flex items-center gap-3">
                               <span className="text-[10px] text-gray-400 font-mono font-bold">
-                                {new Date(order.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                {formatBackendTime(order.timestamp)}
                               </span>
                               
                               {order.mesaOrigemId && onUnmergeTable && (
@@ -1259,7 +1260,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
               <div className="space-y-1 border-b border-dashed border-[#27272A] pb-3">
                 <p><strong>LOTE:</strong> #{selectedOrderToPrint.id.slice(-4)}</p>
                 {selectedOrderToPrint.tipo && <p><strong>TIPO:</strong> {selectedOrderToPrint.tipo.toUpperCase()}</p>}
-                <p><strong>DATA:</strong> {new Date(selectedOrderToPrint.timestamp).toLocaleDateString('pt-BR')} {new Date(selectedOrderToPrint.timestamp).toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})}</p>
+                <p><strong>DATA:</strong> {formatBackendDateTime(selectedOrderToPrint.timestamp)}</p>
                 <p><strong>MESA:</strong> #{table.id}</p>
                 <p><strong>ATENDIMENTO:</strong> {selectedOrderToPrint.garcomNome}</p>
               </div>

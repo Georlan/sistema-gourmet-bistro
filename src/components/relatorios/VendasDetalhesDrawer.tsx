@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import clsx from 'clsx';
 import { X, Search, Download, ShoppingBag } from 'lucide-react';
+import { formatBackendDateTime } from '../../utils/dateTime';
 
 export interface VendaDetalheItem {
   id: number;
@@ -132,7 +133,7 @@ export const VendasDetalhesDrawer: React.FC<VendasDetalhesDrawerProps> = ({
                 {filteredVendas.map((v) => (
                   <tr key={v.id} className="hover:bg-[#1C1C1F]/40 transition-colors">
                     <td className="p-3 font-mono text-gray-300">
-                      {new Date(v.data_hora).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+                      {formatBackendDateTime(v.data_hora)}
                     </td>
                     <td className="p-3 font-mono font-bold text-white">#{v.numero_pedido}</td>
                     <td className="p-3 font-mono font-extrabold text-[#10b981]">

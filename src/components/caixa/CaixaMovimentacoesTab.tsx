@@ -11,6 +11,12 @@ import {
 } from 'lucide-react';
 import { CaixaMovimentacao, CaixaTurnoResumo } from '../../types';
 import { OperationalBanner } from '../shared/OperationalBanner';
+import {
+  formatBackendDateTime,
+  formatBackendTime,
+  localCalendarDate,
+  parseBackendTimestamp,
+} from '../../utils/dateTime';
 
 interface CaixaMovimentacoesTabProps {
   movimentacoes: CaixaMovimentacao[];
@@ -47,9 +53,9 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
     return movimentacoes.filter(movimentacao => {
       if (filterTipo !== 'todos' && movimentacao.tipo !== filterTipo) return false;
 
-      const createdAt = new Date(movimentacao.criado_em);
-      if (filterDataInicio && createdAt < new Date(`${filterDataInicio}T00:00:00`)) return false;
-      if (filterDataFim && createdAt > new Date(`${filterDataFim}T23:59:59.999`)) return false;
+      const createdAt = parseBackendTimestamp(movimentacao.criado_em);
+      if (filterDataInicio && (!createdAt || createdAt < new Date(`${filterDataInicio}T00:00:00`))) return false;
+      if (filterDataFim && (!createdAt || createdAt > new Date(`${filterDataFim}T23:59:59.999`))) return false;
 
       if (normalizedSearch) {
         const searchable = [
@@ -77,11 +83,11 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
 
   const latestMovementTime = useMemo(() => {
     const latestTimestamp = filteredMovs.reduce((latest, movimentacao) => {
-      const timestamp = new Date(movimentacao.criado_em).getTime();
+      const timestamp = parseBackendTimestamp(movimentacao.criado_em)?.getTime() ?? Number.NaN;
       return Number.isFinite(timestamp) ? Math.max(latest, timestamp) : latest;
     }, 0);
     return latestTimestamp > 0
-      ? new Date(latestTimestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+      ? formatBackendTime(latestTimestamp)
       : '—';
   }, [filteredMovs]);
 
@@ -99,7 +105,7 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
   const exportCsv = () => {
     const header = ['Data e hora', 'Tipo', 'Valor', 'Saldo anterior', 'Saldo posterior', 'Descrição', 'Observação', 'Operador'];
     const rows = filteredMovs.map(movimentacao => [
-      new Date(movimentacao.criado_em).toLocaleString('pt-BR'),
+      formatBackendDateTime(movimentacao.criado_em),
       movimentacao.tipo,
       Number(movimentacao.valor).toFixed(2),
       Number(movimentacao.saldo_anterior || 0).toFixed(2),
@@ -112,7 +118,7 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = `movimentacoes-caixa-${new Date().toISOString().slice(0, 10)}.csv`;
+    anchor.download = `movimentacoes-caixa-${localCalendarDate()}.csv`;
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
@@ -183,11 +189,17 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
             <ul className="divide-y divide-[#202522]">
               {filteredMovs.map(movimentacao => {
                 const isSupply = movimentacao.tipo === 'suprimento';
-                const date = new Date(movimentacao.criado_em);
+                const dateLabel = formatBackendDateTime(movimentacao.criado_em, {
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                });
                 return (
                   <li key={movimentacao.id} className="grid gap-3 px-4 py-3.5 transition-colors hover:bg-white/[0.015] sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center sm:px-5">
                     <span className={clsx('flex h-9 w-9 items-center justify-center rounded-xl border', isSupply ? 'border-[#145c49] bg-[#0b2d25] text-[#54d9b3]' : 'border-[#543535] bg-[#211414] text-[#dfabab]')}>{isSupply ? <ArrowDownRight size={15} /> : <ArrowUpRight size={15} />}</span>
-                    <span className="min-w-0"><span className="flex flex-wrap items-center gap-x-2 gap-y-0.5"><strong className="truncate text-xs text-[#f5f4ef]">{movimentacao.descricao || (isSupply ? 'Suprimento' : 'Sangria')}</strong><span className="text-[9px] text-zinc-600">{date.toLocaleDateString('pt-BR')} · {date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span></span><span className="mt-0.5 block truncate text-[10px] text-zinc-500">{movimentacao.usuario_nome || 'Operador'}{movimentacao.observacao ? ` · ${movimentacao.observacao}` : ''}</span><span className="mt-1 block text-[9px] tabular-nums text-zinc-600">Saldo: {formatCurrency(Number(movimentacao.saldo_anterior || 0))} → {formatCurrency(Number(movimentacao.saldo_posterior || 0))}</span></span>
+                    <span className="min-w-0"><span className="flex flex-wrap items-center gap-x-2 gap-y-0.5"><strong className="truncate text-xs text-[#f5f4ef]">{movimentacao.descricao || (isSupply ? 'Suprimento' : 'Sangria')}</strong><span className="text-[9px] text-zinc-600">{dateLabel}</span></span><span className="mt-0.5 block truncate text-[10px] text-zinc-500">{movimentacao.usuario_nome || 'Operador'}{movimentacao.observacao ? ` · ${movimentacao.observacao}` : ''}</span><span className="mt-1 block text-[9px] tabular-nums text-zinc-600">Saldo: {formatCurrency(Number(movimentacao.saldo_anterior || 0))} → {formatCurrency(Number(movimentacao.saldo_posterior || 0))}</span></span>
                     <strong className={clsx('whitespace-nowrap text-sm font-bold tabular-nums sm:text-right', isSupply ? 'text-[#54d9b3]' : 'text-[#dfabab]')}>{isSupply ? '+' : '−'} {formatCurrency(Number(movimentacao.valor))}</strong>
                   </li>
                 );

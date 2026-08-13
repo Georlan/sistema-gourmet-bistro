@@ -39,6 +39,7 @@ from ..services.clientes import (
     registrar_movimento_fidelidade,
 )
 from ..services.whatsapp import enviar_texto_whatsapp
+from ..timezone_utils import elapsed_minutes_since, to_utc
 
 logger = logging.getLogger("koma.caixa")
 
@@ -209,11 +210,13 @@ def _atividades_recentes_turno(
         if isinstance(criado_em, (int, float)):
             return float(criado_em)
         if isinstance(criado_em, datetime.datetime):
-            return criado_em.timestamp()
+            normalized = to_utc(criado_em)
+            return normalized.timestamp() if normalized else 0.0
         if isinstance(criado_em, str):
             try:
                 dt = datetime.datetime.fromisoformat(criado_em.replace("Z", "+00:00"))
-                return dt.timestamp()
+                normalized = to_utc(dt)
+                return normalized.timestamp() if normalized else 0.0
             except Exception:
                 return 0.0
         return 0.0
@@ -423,14 +426,7 @@ def obter_resumo_turno_atual(
         turno,
     )
 
-    now_local = datetime.datetime.now()
-    aberto_dt = turno.aberto_em
-    if isinstance(aberto_dt, datetime.datetime):
-        if aberto_dt.tzinfo is not None:
-            aberto_dt = aberto_dt.astimezone().replace(tzinfo=None)
-        tempo_minutos = max(0, int((now_local - aberto_dt).total_seconds() / 60))
-    else:
-        tempo_minutos = 0
+    tempo_minutos = elapsed_minutes_since(turno.aberto_em)
 
     ult_mov = None
     if ultima_atividade_caixa:

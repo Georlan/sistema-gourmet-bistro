@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import clsx from 'clsx';
 import { Calendar as CalendarIcon, X } from 'lucide-react';
+import { localCalendarDate } from '../../utils/dateTime';
 
 interface PeriodoCalendarioModalProps {
   onClose: () => void;
@@ -23,8 +24,8 @@ export const PeriodoCalendarioModal: React.FC<PeriodoCalendarioModalProps> = ({
     const start = new Date();
     start.setDate(end.getDate() - days + 1);
 
-    const startStr = start.toISOString().split('T')[0];
-    const endStr = end.toISOString().split('T')[0];
+    const startStr = localCalendarDate(start);
+    const endStr = localCalendarDate(end);
 
     onApply(startStr, endStr);
     onClose();

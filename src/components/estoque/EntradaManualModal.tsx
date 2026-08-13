@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
 import { Distribuidor, Insumo } from '../../types';
+import { localCalendarDate } from '../../utils/dateTime';
 
 interface ItemFormState {
   insumo_id: string;
@@ -29,7 +30,7 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
   const [distribuidorNome, setDistribuidorNome] = useState<string>('');
   const [distribuidorCnpj, setDistribuidorCnpj] = useState<string>('');
   const [numeroDocumento, setNumeroDocumento] = useState<string>('');
-  const [dataEmissao, setDataEmissao] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [dataEmissao, setDataEmissao] = useState<string>(localCalendarDate());
   const [observacao, setObservacao] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -87,7 +88,7 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
     for (let idx = 0; idx < itens.length; idx++) {
       const item = itens[idx];
       if (!item.insumo_id || (item.is_novo_insumo && !item.insumo_nome.trim())) {
-        setErrorMsg(`Selecione ou informe o nome do insumo no item ${idx + 1}.`);
+        setErrorMsg(`Selecione ou informe o nome do ingrediente no item ${idx + 1}.`);
         return;
       }
       if (item.quantidade <= 0) {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import clsx from 'clsx';
+import { localCalendarDate } from '../../utils/dateTime';
 import {
   TrendingUp,
   ShoppingBag,
@@ -59,8 +60,8 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
     const start = new Date();
     start.setDate(end.getDate() - 30);
     return {
-      inicio: start.toISOString().split('T')[0],
-      fim: end.toISOString().split('T')[0],
+      inicio: localCalendarDate(start),
+      fim: localCalendarDate(end),
     };
   };
 

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Plus, ClipboardCheck, CheckCircle2, Clock, Eye } from 'lucide-react';
 import { SessaoContagemEstoque } from '../../types';
+import { formatBackendDateTime } from '../../utils/dateTime';
 
 interface EstoqueContagemTabProps {
   contagens: SessaoContagemEstoque[];
@@ -57,7 +58,7 @@ export const EstoqueContagemTab: React.FC<EstoqueContagemTabProps> = ({
                 contagens.map((c) => (
                   <tr key={c.id} className="hover:bg-[#1C1C1F]/20 transition-colors">
                     <td className="p-3 text-gray-400 whitespace-nowrap font-mono">
-                      {new Date(c.created_at).toLocaleDateString('pt-BR')} {new Date(c.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                      {formatBackendDateTime(c.created_at)}
                     </td>
                     <td className="p-3 font-bold text-white font-mono">
                       #{c.id.slice(0, 8)}
@@ -73,10 +74,10 @@ export const EstoqueContagemTab: React.FC<EstoqueContagemTabProps> = ({
                         </span>
                       )}
                     </td>
-                    <td className="p-3 font-mono font-bold text-white">{c.itens?.length || 0} insumos</td>
+                    <td className="p-3 font-mono font-bold text-white">{c.itens?.length || 0} ingredientes</td>
                     <td className="p-3 text-gray-300 max-w-xs truncate">{c.observacao || '—'}</td>
                     <td className="p-3 text-gray-400 font-mono text-[9px]">
-                      {c.confirmada_em ? new Date(c.confirmada_em).toLocaleDateString('pt-BR') : '—'}
+                      {c.confirmada_em ? formatBackendDateTime(c.confirmada_em, { dateStyle: 'short' }) : '—'}
                     </td>
                     <td className="p-3 text-right">
                       <button

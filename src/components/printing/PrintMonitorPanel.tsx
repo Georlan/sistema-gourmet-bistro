@@ -16,6 +16,7 @@ import {
   Wrench
 } from 'lucide-react';
 import { OperationalBanner } from '../shared/OperationalBanner';
+import { parseBackendTimestamp } from '../../utils/dateTime';
 
 interface DetectedPrinter {
   name: string;
@@ -177,8 +178,8 @@ function formatAge(seconds: number | null): string {
 
 function formatDate(value: string | null): string {
   if (!value) return '—';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '—' : dateTimeFormatter.format(date);
+  const date = parseBackendTimestamp(value);
+  return date ? dateTimeFormatter.format(date) : '—';
 }
 
 function friendlyDocumentType(value: string): string {
@@ -279,8 +280,8 @@ export function PrintMonitorPanel({
     .find(item => item.command) || null;
   const pendingCommandAgeMs = activePendingCommand?.requestedAt
     ? (
-        new Date(monitorData?.generated_at || Date.now()).getTime()
-        - new Date(activePendingCommand.requestedAt).getTime()
+        (parseBackendTimestamp(monitorData?.generated_at || Date.now())?.getTime() ?? Date.now())
+        - (parseBackendTimestamp(activePendingCommand.requestedAt)?.getTime() ?? Date.now())
       )
     : 0;
   const usbSearchUiTimeoutMs = (
@@ -313,15 +314,15 @@ export function PrintMonitorPanel({
       .map(agent => agent.last_command_result)
       .filter((result): result is AgentCommandResult => Boolean(result))
       .sort((left, right) => (
-        new Date(right.completed_at).getTime()
-        - new Date(left.completed_at).getTime()
+        (parseBackendTimestamp(right.completed_at)?.getTime() ?? 0)
+        - (parseBackendTimestamp(left.completed_at)?.getTime() ?? 0)
       ));
     const latestResult = completedResults[0];
     const latestResultIsRecent = Boolean(
       latestResult
       && (
-        new Date(monitorData.generated_at).getTime()
-        - new Date(latestResult.completed_at).getTime()
+        (parseBackendTimestamp(monitorData.generated_at)?.getTime() ?? 0)
+        - (parseBackendTimestamp(latestResult.completed_at)?.getTime() ?? 0)
       ) <= 120_000
     );
     const completed = pendingCommandId
@@ -359,9 +360,9 @@ export function PrintMonitorPanel({
       return agent.diagnostics_fresh;
     }
     if (!agent.diagnostics_updated_at) return false;
-    const updatedAt = new Date(agent.diagnostics_updated_at).getTime();
+    const updatedAt = parseBackendTimestamp(agent.diagnostics_updated_at)?.getTime() ?? Number.NaN;
     const generatedAt = monitorData?.generated_at
-      ? new Date(monitorData.generated_at).getTime()
+      ? (parseBackendTimestamp(monitorData.generated_at)?.getTime() ?? Number.NaN)
       : Date.now();
     return (
       Number.isFinite(updatedAt)

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
-from sqlalchemy import or_, text
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from typing import List
@@ -33,20 +33,20 @@ def _lookup_user_before_tenant(db: Session, identifier: str):
             text("SELECT id, restaurante_id, senha_hash FROM koma_internal.auth_user(:identifier)"),
             {"identifier": identifier},
         ).mappings().first()
-    usuario = db.query(Usuario).filter(
-        or_(
-            Usuario.email == identifier,
-            Usuario.telefone == identifier,
-            Usuario.usuario == identifier,
-        )
-    ).first()
-    if not usuario:
-        return None
-    return {
-        "id": usuario.id,
-        "restaurante_id": usuario.restaurante_id,
-        "senha_hash": usuario.senha_hash,
-    }
+    # O fallback SQLite precisa ignorar o filtro ORM de tenant exatamente como
+    # a função interna do PostgreSQL. Retorna somente os três campos mínimos.
+    return db.execute(
+        text(
+            """
+            SELECT id, restaurante_id, senha_hash
+            FROM usuarios
+            WHERE lower(coalesce(email, '')) = :identifier
+               OR telefone = :identifier
+            LIMIT 1
+            """
+        ),
+        {"identifier": identifier},
+    ).mappings().first()
 
 
 def _lookup_invite_before_tenant(db: Session, token: str):
@@ -55,10 +55,17 @@ def _lookup_invite_before_tenant(db: Session, token: str):
             text("SELECT id, restaurante_id FROM koma_internal.auth_invite(:token)"),
             {"token": token},
         ).mappings().first()
-    usuario = db.query(Usuario).filter(Usuario.token_convite == token).first()
-    if not usuario:
-        return None
-    return {"id": usuario.id, "restaurante_id": usuario.restaurante_id}
+    return db.execute(
+        text(
+            """
+            SELECT id, restaurante_id
+            FROM usuarios
+            WHERE token_convite = :token
+            LIMIT 1
+            """
+        ),
+        {"token": token},
+    ).mappings().first()
 
 @router.post("/login", response_model=LoginResponse)
 def login(login_data: LoginRequest, db: Session = Depends(get_db)):

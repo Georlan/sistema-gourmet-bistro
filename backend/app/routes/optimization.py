@@ -22,6 +22,13 @@ from ..services.clientes import (
     registrar_movimento_fidelidade,
 )
 from ..websocket_manager import manager
+from ..timezone_utils import (
+    get_operational_now,
+    operational_day_bounds_utc,
+    parse_operational_filter_datetime,
+    to_database_utc,
+    to_operational_local_time,
+)
 
 logger = logging.getLogger("koma.optimization")
 
@@ -65,38 +72,33 @@ def get_pico_horarios(
     """
     Retorna os horários de pico de comandas do restaurante.
     """
-    # Use SQLAlchemy expression language to be database-agnostic (works on both SQLite and PostgreSQL)
-    from sqlalchemy import func, extract
-    from ..models import Comanda
+    from collections import Counter
 
-    # Extract day of week (0=Sunday to 6=Saturday) and hour of day
-    # Note: SQLite and PostgreSQL differ slightly in exact representation,
-    # but SQLAlchemy's extract handles the translation.
-    query_obj = db.query(
-        extract('dow', Comanda.fechado_em).label('dia_semana'),
-        extract('hour', Comanda.fechado_em).label('hora'),
-        func.count(Comanda.id).label('total_pedidos')
-    ).filter(
+    rest_id = require_tenant_id()
+    timestamps = db.query(Comanda.fechado_em).filter(
+        Comanda.restaurante_id == rest_id,
         Comanda.fechada == True,
-        Comanda.fechado_em.isnot(None)
-    ).group_by(
-        'dia_semana', 'hora'
-    ).order_by(
-        func.count(Comanda.id).desc()
+        Comanda.fechado_em.isnot(None),
     ).all()
+
+    # Agrupar depois da conversão mantém o resultado igual em SQLite e
+    # PostgreSQL e impede que 18h UTC apareça como pico às 18h no Ceará.
+    counts: Counter[tuple[int, int]] = Counter()
+    for (closed_at,) in timestamps:
+        local_dt = to_operational_local_time(closed_at)
+        if local_dt:
+            # Python: segunda=0; a API histórica do Kôma usa domingo=0.
+            day_index = (local_dt.weekday() + 1) % 7
+            counts[(day_index, local_dt.hour)] += 1
 
     results = []
     dias = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"]
-    for row in query_obj:
-        # PostgreSQL extract('dow') returns float/numeric, SQLite returns int/string.
-        # Cast to integer safely.
-        dia_idx = int(row[0]) if row[0] is not None else 0
-        hora_val = int(row[1]) if row[1] is not None else 0
+    for (dia_idx, hora_val), total in counts.most_common():
         results.append({
             "dia_semana_label": dias[dia_idx % 7],
             "dia_semana": dia_idx % 7,
             "hora": f"{hora_val:02d}h",
-            "total_pedidos": row[2]
+            "total_pedidos": total,
         })
     return results
 
@@ -110,40 +112,30 @@ def get_estatisticas_geral(
     """
     Retorna estatísticas consolidadas de vendas para o painel de BI (dashboard financeiro).
     """
-    import datetime
     from ..database import current_restaurante_id, require_tenant_id
     from ..models import Pagamento, Comanda, Produto
     
     rest_id = require_tenant_id()
     
-    def parse_date(date_str: Optional[str]):
-        if not date_str:
-            return None
-        for fmt in ('%Y-%m-%d', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%dT%H:%M:%S.%fZ', '%Y-%m-%d %H:%M:%S'):
-            try:
-                clean_str = date_str.replace('Z', '')
-                if '.' in clean_str:
-                    clean_str = clean_str.split('.')[0]
-                return datetime.datetime.strptime(clean_str, fmt)
-            except ValueError:
-                continue
-        try:
-            return datetime.datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-        except Exception:
-            return None
-
-    dt_inicio = parse_date(data_inicio)
-    dt_fim = parse_date(data_fim)
+    dt_inicio = parse_operational_filter_datetime(data_inicio)
+    fim_eh_dia = bool(data_fim and len(data_fim.strip()) == 10)
+    dt_fim = parse_operational_filter_datetime(data_fim, end_of_day=fim_eh_dia)
+    db_inicio = to_database_utc(dt_inicio)
+    db_fim = to_database_utc(dt_fim)
 
     # 1. Total faturamento
     pags_query = db.query(Pagamento).filter(
         Pagamento.restaurante_id == rest_id,
         Pagamento.status == "aprovado"
     )
-    if dt_inicio:
-        pags_query = pags_query.filter(Pagamento.criado_em >= dt_inicio)
-    if dt_fim:
-        pags_query = pags_query.filter(Pagamento.criado_em <= dt_fim)
+    if db_inicio:
+        pags_query = pags_query.filter(Pagamento.criado_em >= db_inicio)
+    if db_fim:
+        pags_query = pags_query.filter(
+            Pagamento.criado_em < db_fim
+            if fim_eh_dia
+            else Pagamento.criado_em <= db_fim
+        )
         
     pags = pags_query.all()
     faturamento = sum(p.valor for p in pags)
@@ -153,13 +145,14 @@ def get_estatisticas_geral(
 
     # 1b. Faturamento de hoje
     import sqlalchemy as sa
-    today_start = datetime.datetime.combine(datetime.date.today(), datetime.time.min)
-    today_end = datetime.datetime.combine(datetime.date.today(), datetime.time.max)
+    today_start, today_end = operational_day_bounds_utc(get_operational_now().date())
+    today_start = to_database_utc(today_start)
+    today_end = to_database_utc(today_end)
     faturamento_hoje = db.query(sa.func.sum(Pagamento.valor)).filter(
         Pagamento.restaurante_id == rest_id,
         Pagamento.status == "aprovado",
         Pagamento.criado_em >= today_start,
-        Pagamento.criado_em <= today_end
+        Pagamento.criado_em < today_end
     ).scalar() or 0.0
     
     from sqlalchemy.orm import joinedload
@@ -172,10 +165,14 @@ def get_estatisticas_geral(
         Comanda.restaurante_id == rest_id,
         Comanda.fechada == True
     )
-    if dt_inicio:
-        comandas_query = comandas_query.filter(Comanda.fechado_em >= dt_inicio)
-    if dt_fim:
-        comandas_query = comandas_query.filter(Comanda.fechado_em <= dt_fim)
+    if db_inicio:
+        comandas_query = comandas_query.filter(Comanda.fechado_em >= db_inicio)
+    if db_fim:
+        comandas_query = comandas_query.filter(
+            Comanda.fechado_em < db_fim
+            if fim_eh_dia
+            else Comanda.fechado_em <= db_fim
+        )
         
     comandas = comandas_query.all()
     total_pedidos = len(comandas)
@@ -193,7 +190,8 @@ def get_estatisticas_geral(
     
     for c in comandas:
         if c.fechado_em:
-            wday = c.fechado_em.strftime('%w')
+            local_closed_at = to_operational_local_time(c.fechado_em)
+            wday = local_closed_at.strftime('%w')
             dia_label = dias[int(wday)]
             is_delivery = c.tipo == "Delivery"
             if is_delivery:
@@ -525,24 +523,11 @@ def get_garcons_relatorio(
     
     rest_id = require_tenant_id()
     
-    def parse_date(date_str: Optional[str]):
-        if not date_str:
-            return None
-        for fmt in ('%Y-%m-%d', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%dT%H:%M:%S.%fZ', '%Y-%m-%d %H:%M:%S'):
-            try:
-                clean_str = date_str.replace('Z', '')
-                if '.' in clean_str:
-                    clean_str = clean_str.split('.')[0]
-                return datetime.datetime.strptime(clean_str, fmt)
-            except ValueError:
-                continue
-        try:
-            return datetime.datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-        except Exception:
-            return None
-
-    dt_inicio = parse_date(data_inicio)
-    dt_fim = parse_date(data_fim)
+    dt_inicio = parse_operational_filter_datetime(data_inicio)
+    fim_eh_dia = bool(data_fim and len(data_fim.strip()) == 10)
+    dt_fim = parse_operational_filter_datetime(data_fim, end_of_day=fim_eh_dia)
+    db_inicio = to_database_utc(dt_inicio)
+    db_fim = to_database_utc(dt_fim)
 
     garcons = db.query(Usuario).filter(
         Usuario.restaurante_id == rest_id,
@@ -557,10 +542,14 @@ def get_garcons_relatorio(
             Comanda.garcom_id == g.id,
             Comanda.fechada == True
         )
-        if dt_inicio:
-            comandas_query = comandas_query.filter(Comanda.fechado_em >= dt_inicio)
-        if dt_fim:
-            comandas_query = comandas_query.filter(Comanda.fechado_em <= dt_fim)
+        if db_inicio:
+            comandas_query = comandas_query.filter(Comanda.fechado_em >= db_inicio)
+        if db_fim:
+            comandas_query = comandas_query.filter(
+                Comanda.fechado_em < db_fim
+                if fim_eh_dia
+                else Comanda.fechado_em <= db_fim
+            )
             
         comandas = comandas_query.all()
         pedidos_atendidos = len(comandas)
