@@ -58,6 +58,38 @@ def normalize_cors_origin(raw: str) -> str:
     return f"{scheme}://{hostname}{port_suffix}"
 
 
+def normalize_supabase_url(raw: str, environment: str) -> str:
+    """Valida a URL do projeto sem assumir silenciosamente um tenant externo."""
+    value = (raw or "").strip()
+    env = (environment or "production").strip().lower()
+
+    if not value:
+        return ""
+
+    try:
+        parts = urlsplit(value)
+        port = parts.port
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError("SUPABASE_URL inválida: formato incorreto.") from exc
+
+    allowed_schemes = {"http", "https"} if env in {"development", "test"} else {"https"}
+    if parts.scheme.lower() not in allowed_schemes or not parts.hostname:
+        raise RuntimeError(
+            "SUPABASE_URL inválida: use uma URL HTTPS válida em produção."
+        )
+    if parts.username or parts.password:
+        raise RuntimeError("SUPABASE_URL inválida: credenciais não são permitidas.")
+    if parts.path not in {"", "/"} or parts.query or parts.fragment:
+        raise RuntimeError(
+            "SUPABASE_URL inválida: informe apenas a origem, sem caminho, consulta ou fragmento."
+        )
+
+    scheme = parts.scheme.lower()
+    hostname = parts.hostname.lower()
+    port_suffix = f":{port}" if port is not None else ""
+    return f"{scheme}://{hostname}{port_suffix}"
+
+
 class Settings:
     PROJECT_NAME: str = "Haute Cuisine Controller - Kôma"
     PROJECT_VERSION: str = "3.5"
@@ -174,7 +206,10 @@ class Settings:
     META_OTP_TEMPLATE_NAME: str = os.getenv("META_OTP_TEMPLATE_NAME", "koma_otp")
 
     # Supabase (Storage & Service Role)
-    SUPABASE_URL: str = os.getenv("SUPABASE_URL", "https://iiowhekvahxiepwcdidm.supabase.co")
+    SUPABASE_URL: str = normalize_supabase_url(
+        os.getenv("SUPABASE_URL", ""),
+        os.getenv("ENVIRONMENT", "production"),
+    )
     SUPABASE_SERVICE_ROLE_KEY: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", os.getenv("SUPABASE_SERVICE_KEY", ""))
 
     if os.getenv("ENVIRONMENT") != "test":
