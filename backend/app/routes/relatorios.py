@@ -2,8 +2,8 @@ import datetime
 import calendar
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func, extract, and_
+from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from ..database import get_db, require_tenant_id
 from ..models import (
@@ -11,25 +11,69 @@ from ..models import (
     ConfiguracaoRestaurante, Pagamento, Restaurante
 )
 from ..security import require_permission
+from ..timezone_utils import (
+    get_operational_now,
+    operational_day_bounds_utc,
+    to_database_utc,
+    to_operational_local_time,
+)
 
 router = APIRouter(prefix="/relatorios", tags=["relatorios"])
 
 
-def parse_date(date_str: Optional[str]):
-    if not date_str:
-        return None
-    clean_str = date_str.replace('Z', '')
-    if '.' in clean_str:
-        clean_str = clean_str.split('.')[0]
-    for fmt in ('%Y-%m-%d', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M:%S'):
-        try:
-            return datetime.datetime.strptime(clean_str, fmt)
-        except ValueError:
-            continue
+def _report_period(
+    data_inicio: Optional[str],
+    data_fim: Optional[str],
+) -> tuple[datetime.datetime, datetime.datetime, datetime.date, datetime.date]:
+    """Resolve um período de calendário local para o intervalo UTC [início, fim)."""
+    local_today = get_operational_now().date()
     try:
-        return datetime.datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-    except Exception:
-        return None
+        start_day = datetime.date.fromisoformat(data_inicio) if data_inicio else local_today - datetime.timedelta(days=30)
+        end_day = datetime.date.fromisoformat(data_fim) if data_fim else local_today
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Período inválido. Use datas no formato AAAA-MM-DD.") from exc
+
+    if start_day > end_day:
+        raise HTTPException(status_code=400, detail="A data inicial não pode ser posterior à data final.")
+
+    start_utc, _ = operational_day_bounds_utc(start_day)
+    _, end_utc = operational_day_bounds_utc(end_day)
+    return to_database_utc(start_utc), to_database_utc(end_utc), start_day, end_day
+
+
+def _approved_payments(
+    db: Session,
+    restaurante_id: int,
+    start_utc: datetime.datetime,
+    end_utc: datetime.datetime,
+) -> List[Pagamento]:
+    return db.query(Pagamento).filter(
+        Pagamento.restaurante_id == restaurante_id,
+        Pagamento.status == "aprovado",
+        Pagamento.criado_em >= start_utc,
+        Pagamento.criado_em < end_utc,
+    ).order_by(Pagamento.criado_em, Pagamento.id).all()
+
+
+def _orders_from_payments(payments: List[Pagamento]) -> Dict[str, Dict[str, Any]]:
+    """Consolida pagamentos no grão correto: uma venda por comanda paga."""
+    orders: Dict[str, Dict[str, Any]] = {}
+    for payment in payments:
+        if not payment.comanda_id:
+            continue
+        key = str(payment.comanda_id)
+        order = orders.setdefault(key, {
+            "comanda_id": key,
+            "total": 0.0,
+            "paid_at": payment.criado_em,
+            "methods": set(),
+        })
+        order["total"] += float(payment.valor or 0.0)
+        if payment.criado_em and (not order["paid_at"] or payment.criado_em > order["paid_at"]):
+            order["paid_at"] = payment.criado_em
+        if payment.metodo:
+            order["methods"].add(payment.metodo)
+    return orders
 
 
 @router.get("/visao-geral")
@@ -41,48 +85,28 @@ def get_relatorio_visao_geral(
 ):
     rest_id = require_tenant_id()
 
-    # Parse date range or default to last 30 days
-    dt_fim = parse_date(data_fim) or datetime.datetime.now()
-    dt_inicio = parse_date(data_inicio) or (dt_fim - datetime.timedelta(days=30))
+    db_inicio, db_fim, start_day, end_day = _report_period(data_inicio, data_fim)
+    payments_curr = _approved_payments(db, rest_id, db_inicio, db_fim)
+    orders_curr = _orders_from_payments(payments_curr)
 
-    # Duration of selected window in days
-    period_days = max(1, (dt_fim - dt_inicio).days + 1)
-    prev_inicio = dt_inicio - datetime.timedelta(days=period_days)
-    prev_fim = dt_inicio - datetime.timedelta(seconds=1)
+    total_pedidos = len(orders_curr)
+    faturamento_total = sum(order["total"] for order in orders_curr.values())
+    ticket_medio = faturamento_total / total_pedidos if total_pedidos else 0.0
 
-    # 1. Main period closed comandas with eager loading
-    comandas_curr = db.query(Comanda).options(joinedload(Comanda.itens)).filter(
-        Comanda.restaurante_id == rest_id,
-        Comanda.fechada == True,
-        Comanda.fechado_em >= dt_inicio,
-        Comanda.fechado_em <= dt_fim
-    ).all()
-
-    total_pedidos = len(comandas_curr)
-    faturamento_total = 0.0
-    for c in comandas_curr:
-        for item in c.itens:
-            if item.status != "cancelado":
-                p_unit = float(getattr(item, 'preco_unit', getattr(item, 'preco_unitario', 0.0)) or 0.0)
-                faturamento_total += p_unit * int(getattr(item, "quantidade", 1) or 1)
-
-    ticket_medio = faturamento_total / total_pedidos if total_pedidos > 0 else 0.0
-
-    # 2. Previous period closed comandas with eager loading
-    comandas_prev = db.query(Comanda).options(joinedload(Comanda.itens)).filter(
-        Comanda.restaurante_id == rest_id,
-        Comanda.fechada == True,
-        Comanda.fechado_em >= prev_inicio,
-        Comanda.fechado_em <= prev_fim
-    ).all()
-
-    pedidos_prev = len(comandas_prev)
-    fat_prev = 0.0
-    for c in comandas_prev:
-        for item in c.itens:
-            if item.status != "cancelado":
-                p_unit = float(getattr(item, 'preco_unit', getattr(item, 'preco_unitario', 0.0)) or 0.0)
-                fat_prev += p_unit * int(getattr(item, "quantidade", 1) or 1)
+    period_days = (end_day - start_day).days + 1
+    prev_start_day = start_day - datetime.timedelta(days=period_days)
+    prev_end_day = start_day - datetime.timedelta(days=1)
+    prev_inicio, _ = operational_day_bounds_utc(prev_start_day)
+    _, prev_fim = operational_day_bounds_utc(prev_end_day)
+    payments_prev = _approved_payments(
+        db,
+        rest_id,
+        to_database_utc(prev_inicio),
+        to_database_utc(prev_fim),
+    )
+    orders_prev = _orders_from_payments(payments_prev)
+    pedidos_prev = len(orders_prev)
+    fat_prev = sum(order["total"] for order in orders_prev.values())
 
     var_fat_pct = ((faturamento_total - fat_prev) / fat_prev * 100.0) if fat_prev > 0 else 0.0
     var_pedidos_pct = ((total_pedidos - pedidos_prev) / pedidos_prev * 100.0) if pedidos_prev > 0 else 0.0
@@ -93,23 +117,20 @@ def get_relatorio_visao_geral(
     ).first()
     meta_mensal = float(config.meta_mensal or 0.0) if config else 0.0
 
-    now = datetime.datetime.now()
-    month_start = datetime.datetime(now.year, now.month, 1, 0, 0, 0)
-    month_days = calendar.monthrange(now.year, now.month)[1]
-    day_of_month = now.day
-
-    comandas_mes = db.query(Comanda).options(joinedload(Comanda.itens)).filter(
-        Comanda.restaurante_id == rest_id,
-        Comanda.fechada == True,
-        Comanda.fechado_em >= month_start
-    ).all()
-
-    meta_realizada = 0.0
-    for c in comandas_mes:
-        for item in c.itens:
-            if item.status != "cancelado":
-                p_unit = float(getattr(item, 'preco_unit', getattr(item, 'preco_unitario', 0.0)) or 0.0)
-                meta_realizada += p_unit * int(getattr(item, "quantidade", 1) or 1)
+    today = get_operational_now().date()
+    month_start_day = today.replace(day=1)
+    month_days = calendar.monthrange(today.year, today.month)[1]
+    month_end_day = today.replace(day=month_days)
+    month_start_utc, _ = operational_day_bounds_utc(month_start_day)
+    _, month_end_utc = operational_day_bounds_utc(month_end_day)
+    payments_month = _approved_payments(
+        db,
+        rest_id,
+        to_database_utc(month_start_utc),
+        to_database_utc(month_end_utc),
+    )
+    meta_realizada = sum(float(payment.valor or 0.0) for payment in payments_month)
+    day_of_month = today.day
 
     meta_restante = max(0.0, meta_mensal - meta_realizada)
     meta_percentual = round((meta_realizada / meta_mensal * 100.0), 1) if meta_mensal > 0 else 0.0
@@ -123,34 +144,37 @@ def get_relatorio_visao_geral(
         Cliente.restaurante_id == rest_id
     ).scalar() or 0
 
-    # 5. Sales by day (Plano Bistrô: "Pedidos por dia", strictly no delivery)
+    # 5. Vendas por dia operacional. Antes da primeira venda real, zeros não
+    # representam operação e só poluem gráficos e exportações.
     vendas_diarias_map: Dict[str, Dict[str, Any]] = {}
-    cur_date = dt_inicio.date()
-    end_date = dt_fim.date()
-
-    while cur_date <= end_date:
+    local_paid_dates = [
+        to_operational_local_time(order["paid_at"]).date()
+        for order in orders_curr.values()
+        if order["paid_at"]
+    ]
+    effective_start = max(start_day, min(local_paid_dates)) if local_paid_dates else None
+    cur_date = effective_start
+    while cur_date is not None and cur_date <= end_day:
         d_str = cur_date.strftime("%Y-%m-%d")
         vendas_diarias_map[d_str] = {"data": d_str, "total": 0.0, "quantidade_pedidos": 0}
         cur_date += datetime.timedelta(days=1)
 
-    for c in comandas_curr:
-        if c.fechado_em:
-            d_str = c.fechado_em.strftime("%Y-%m-%d")
+    for order in orders_curr.values():
+        if order["paid_at"]:
+            d_str = to_operational_local_time(order["paid_at"]).strftime("%Y-%m-%d")
             if d_str in vendas_diarias_map:
                 vendas_diarias_map[d_str]["quantidade_pedidos"] += 1
-                c_fat = sum(float(getattr(i, 'preco_unit', getattr(i, 'preco_unitario', 0.0)) or 0.0) * int(getattr(i, "quantidade", 1) or 1) for i in c.itens if i.status != "cancelado")
-                vendas_diarias_map[d_str]["total"] += c_fat
+                vendas_diarias_map[d_str]["total"] += order["total"]
 
     vendas_por_dia = sorted(list(vendas_diarias_map.values()), key=lambda x: x["data"])
 
     # 6. Peak hours (Horários de pico: 00h to 23h)
     pico_map = {h: {"hora": f"{h:02d}h", "total_pedidos": 0, "faturamento": 0.0} for h in range(24)}
-    for c in comandas_curr:
-        if c.fechado_em:
-            h = c.fechado_em.hour
+    for order in orders_curr.values():
+        if order["paid_at"]:
+            h = to_operational_local_time(order["paid_at"]).hour
             pico_map[h]["total_pedidos"] += 1
-            c_fat = sum(float(getattr(i, 'preco_unit', getattr(i, 'preco_unitario', 0.0)) or 0.0) * int(getattr(i, "quantidade", 1) or 1) for i in c.itens if i.status != "cancelado")
-            pico_map[h]["faturamento"] += c_fat
+            pico_map[h]["faturamento"] += order["total"]
 
     horarios_pico = list(pico_map.values())
 
@@ -209,46 +233,38 @@ def get_vendas_detalhes(
     current_user: Usuario = Depends(require_permission("relatorios:consultar"))
 ):
     rest_id = require_tenant_id()
-    dt_fim = parse_date(data_fim) or datetime.datetime.now()
-    dt_inicio = parse_date(data_inicio) or (dt_fim - datetime.timedelta(days=30))
+    db_inicio, db_fim, _, _ = _report_period(data_inicio, data_fim)
+    payments = _approved_payments(db, rest_id, db_inicio, db_fim)
+    paid_orders = _orders_from_payments(payments)
+    if not paid_orders:
+        return []
 
     comandas = db.query(Comanda).filter(
         Comanda.restaurante_id == rest_id,
-        Comanda.fechada == True,
-        Comanda.fechado_em >= dt_inicio,
-        Comanda.fechado_em <= dt_fim
-    ).order_by(Comanda.fechado_em.desc()).all()
+        Comanda.id.in_(paid_orders.keys()),
+    ).all()
 
     # Pre-fetch garçons map
     users = db.query(Usuario).filter(Usuario.restaurante_id == rest_id).all()
     user_map = {u.id: u.nome for u in users}
 
-    # Pre-fetch payments map
-    payments = db.query(Pagamento).filter(
-        Pagamento.restaurante_id == rest_id,
-        Pagamento.status == "aprovado"
-    ).all()
-    comanda_payment_map: Dict[str, str] = {}
-    for p in payments:
-        if p.comanda_id and p.metodo:
-            comanda_payment_map[str(p.comanda_id)] = p.metodo
-
     result = []
     for c in comandas:
-        c_fat = sum(float(getattr(i, 'preco_unit', getattr(i, 'preco_unitario', 0.0)) or 0.0) * int(getattr(i, "quantidade", 1) or 1) for i in c.itens if i.status != "cancelado")
+        order = paid_orders[str(c.id)]
         operador = user_map.get(c.garcom_id, "Operador Caixa")
-        forma_pag = comanda_payment_map.get(str(c.id), "Dinheiro / Cartão")
+        methods = sorted(order["methods"])
+        forma_pag = " + ".join(methods) if methods else "Não informado"
         result.append({
             "id": str(c.id),
-            "data_hora": c.fechado_em.isoformat() if c.fechado_em else c.criado_em.isoformat(),
+            "data_hora": order["paid_at"].isoformat(),
             "numero_pedido": c.numero_pedido if hasattr(c, 'numero_pedido') and c.numero_pedido else (getattr(c, 'numero', str(c.id))),
-            "valor_total": round(c_fat, 2),
+            "valor_total": round(order["total"], 2),
             "forma_pagamento": forma_pag,
             "operador": operador,
             "status": "Concluído"
         })
 
-    return result
+    return sorted(result, key=lambda row: row["data_hora"], reverse=True)
 
 
 @router.get("/produtos")
@@ -262,8 +278,8 @@ def get_relatorio_produtos(
     current_user: Usuario = Depends(require_permission("relatorios:consultar"))
 ):
     rest_id = require_tenant_id()
-    dt_fim = parse_date(data_fim) or datetime.datetime.now()
-    dt_inicio = parse_date(data_inicio) or (dt_fim - datetime.timedelta(days=30))
+    db_inicio, db_fim, _, _ = _report_period(data_inicio, data_fim)
+    paid_orders = _orders_from_payments(_approved_payments(db, rest_id, db_inicio, db_fim))
 
     # All products of tenant
     prod_query = db.query(Produto).filter(Produto.restaurante_id == rest_id)
@@ -279,13 +295,13 @@ def get_relatorio_produtos(
     cat_map = {str(c.id): c.nome for c in cats}
 
     # Aggregate item sales from closed comandas in date range
-    items = db.query(ComandaItem).join(Comanda).filter(
-        Comanda.restaurante_id == rest_id,
-        Comanda.fechada == True,
-        Comanda.fechado_em >= dt_inicio,
-        Comanda.fechado_em <= dt_fim,
-        ComandaItem.status != "cancelado"
-    ).all()
+    items = []
+    if paid_orders:
+        items = db.query(ComandaItem).filter(
+            ComandaItem.restaurante_id == rest_id,
+            ComandaItem.comanda_id.in_(paid_orders.keys()),
+            ComandaItem.status != "cancelado",
+        ).all()
 
     prod_sales: Dict[str, Dict[str, Any]] = {}
     for item in items:
@@ -339,8 +355,14 @@ def get_equipe_desempenho(
     current_user: Usuario = Depends(require_permission("relatorios:consultar"))
 ):
     rest_id = require_tenant_id()
-    dt_fim = parse_date(data_fim) or datetime.datetime.now()
-    dt_inicio = parse_date(data_inicio) or (dt_fim - datetime.timedelta(days=30))
+    db_inicio, db_fim, _, _ = _report_period(data_inicio, data_fim)
+    paid_orders = _orders_from_payments(_approved_payments(db, rest_id, db_inicio, db_fim))
+    paid_comandas = []
+    if paid_orders:
+        paid_comandas = db.query(Comanda).filter(
+            Comanda.restaurante_id == rest_id,
+            Comanda.id.in_(paid_orders.keys()),
+        ).all()
 
     # Service tax config
     config = db.query(ConfiguracaoRestaurante).filter(
@@ -371,22 +393,9 @@ def get_equipe_desempenho(
             if member_role not in COMMERCIAL_ROLES:
                 continue
 
-        # Closed comandas for this member as garçom
-        comandas = db.query(Comanda).filter(
-            Comanda.restaurante_id == rest_id,
-            Comanda.garcom_id == str(member.id),
-            Comanda.fechada == True,
-            Comanda.fechado_em >= dt_inicio,
-            Comanda.fechado_em <= dt_fim
-        ).all()
-
+        comandas = [c for c in paid_comandas if c.garcom_id == str(member.id)]
         pedidos_atendidos = len(comandas)
-        fat = 0.0
-        for c in comandas:
-            for item in c.itens:
-                if item.status != "cancelado":
-                    p_unit = float(getattr(item, 'preco_unit', getattr(item, 'preco_unitario', 0.0)) or 0.0)
-                    fat += p_unit * int(getattr(item, "quantidade", 1) or 1)
+        fat = sum(paid_orders[str(c.id)]["total"] for c in comandas)
 
         t_medio = fat / pedidos_atendidos if pedidos_atendidos > 0 else 0.0
         # Commission is PROPORTIONAL to the member's individual sales!

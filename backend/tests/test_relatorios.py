@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from app.database import Base, get_db, current_restaurante_id
 from app.models import (
     Usuario, Produto, Categoria, Comanda, Item,
-    ConfiguracaoRestaurante, Lancamento, Restaurante
+    CaixaTurno, ConfiguracaoRestaurante, Lancamento, Pagamento, Restaurante
 )
 from app.security import get_password_hash
 from app.main import app
@@ -77,6 +77,12 @@ def setup_database():
             restaurante_id=1, meta_mensal=5000.0,
             taxa_servico_padrao=10.0, taxa_servico_ativa=True
         ))
+        db.add(CaixaTurno(
+            id=1, restaurante_id=1, aberto_por_id="u-admin",
+            aberto_em=datetime.datetime.now() - datetime.timedelta(days=16),
+            fechado_em=datetime.datetime.now() - datetime.timedelta(days=14),
+            fechado_por_id="u-admin", saldo_inicial=0.0, status="fechado",
+        ))
         db.flush()
 
         # --- Comanda fechada há 15 dias (DENTRO do período de 30 dias) ---
@@ -100,6 +106,11 @@ def setup_database():
                     produto_id="p-1", preco_unit=25.0, status="entregue", restaurante_id=1))
         db.add(Item(id="item-1b", comanda_id="cmd-1", lancamento_id="lan-1",
                     produto_id="p-1", preco_unit=25.0, status="entregue", restaurante_id=1))
+        db.add(Pagamento(
+            id="pay-1", restaurante_id=1, comanda_id="cmd-1", turno_id=1,
+            valor=50.0, metodo="pix", status="aprovado", criado_em=past15,
+            idempotency_key="report-pay-1",
+        ))
 
         # --- Comanda FORA do período (90 dias atrás) ---
         past90 = now - datetime.timedelta(days=90)
@@ -117,6 +128,11 @@ def setup_database():
 
         db.add(Item(id="item-old", comanda_id="cmd-old", lancamento_id="lan-2",
                     produto_id="p-1", preco_unit=25.0, status="entregue", restaurante_id=1))
+        db.add(Pagamento(
+            id="pay-old", restaurante_id=1, comanda_id="cmd-old", turno_id=1,
+            valor=25.0, metodo="dinheiro", status="aprovado", criado_em=past90,
+            idempotency_key="report-pay-old",
+        ))
 
         db.commit()
         db.close()
@@ -156,6 +172,9 @@ def test_relatorios_full_suite():
     for key in ("faturamento_total", "total_pedidos", "ticket_medio", "meta_mensal", "vendas_por_dia", "horarios_pico"):
         assert key in data, f"Campo '{key}' ausente em visao-geral"
     assert data["meta_mensal"] == 10000.0
+    assert data["total_pedidos"] == 1
+    assert data["faturamento_total"] == 50.0
+    assert data["ticket_medio"] == 50.0
 
     resp = client.get("/relatorios/vendas-detalhes", headers=headers)
     assert resp.status_code == 200
@@ -176,6 +195,73 @@ def test_relatorios_full_suite():
     assert "motoboy" not in roles, "motoboy não deve aparecer no plano Bistrô"
     assert "garcom"  in roles,     "garcom deve aparecer"
     assert "caixa"   in roles,     "caixa deve aparecer"
+
+
+def test_visao_geral_uses_local_payment_day_and_ignores_empty_comandas():
+    db = TestingSessionLocal()
+    try:
+        paid_at_utc = datetime.datetime(2026, 8, 12, 2, 31, 17)
+        opened_at_utc = datetime.datetime(2026, 8, 11, 21, 30)
+        db.add(Comanda(
+            id="cmd-real", restaurante_id=1, garcom_id="u-garcom",
+            fechada=True, fechado_em=paid_at_utc, criado_em=opened_at_utc,
+            numero_pedido=30, valor_pago=100.0,
+        ))
+        db.add(Comanda(
+            id="cmd-empty", restaurante_id=1, garcom_id="u-garcom",
+            fechada=True, fechado_em=datetime.datetime(2026, 8, 12, 17, 42),
+            criado_em=datetime.datetime(2026, 8, 12, 17, 40),
+            numero_pedido=31, valor_pago=0.0,
+        ))
+        db.flush()
+        db.add(Lancamento(
+            id="lan-real", comanda_id="cmd-real", garcom_id="u-garcom",
+            timestamp=opened_at_utc,
+        ))
+        db.flush()
+        db.add(Item(
+            id="item-real", comanda_id="cmd-real", lancamento_id="lan-real",
+            produto_id="p-1", preco_unit=100.0, status="entregue", restaurante_id=1,
+        ))
+        db.add(Pagamento(
+            id="pay-real", restaurante_id=1, comanda_id="cmd-real", turno_id=1,
+            valor=100.0, metodo="pix", status="aprovado", criado_em=paid_at_utc,
+            idempotency_key="report-pay-real",
+        ))
+        db.commit()
+    finally:
+        db.close()
+
+    client = TestClient(app)
+    headers = get_auth_headers(client, "admin", "123")
+    day11 = client.get(
+        "/relatorios/visao-geral?data_inicio=2026-08-11&data_fim=2026-08-11",
+        headers=headers,
+    )
+    assert day11.status_code == 200
+    data = day11.json()
+    assert data["total_pedidos"] == 1
+    assert data["faturamento_total"] == 100.0
+    assert data["ticket_medio"] == 100.0
+    assert data["vendas_por_dia"] == [{
+        "data": "2026-08-11",
+        "total": 100.0,
+        "quantidade_pedidos": 1,
+    }]
+    assert next(row for row in data["horarios_pico"] if row["hora"] == "23h") == {
+        "hora": "23h",
+        "total_pedidos": 1,
+        "faturamento": 100.0,
+    }
+
+    day12 = client.get(
+        "/relatorios/visao-geral?data_inicio=2026-08-12&data_fim=2026-08-12",
+        headers=headers,
+    )
+    assert day12.status_code == 200
+    assert day12.json()["total_pedidos"] == 0
+    assert day12.json()["faturamento_total"] == 0.0
+    assert day12.json()["vendas_por_dia"] == []
 
 
 # ---------------------------------------------------------------------------
