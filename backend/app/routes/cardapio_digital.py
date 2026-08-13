@@ -101,6 +101,16 @@ def _supabase_storage_headers(content_type: Optional[str] = None) -> dict:
     return headers
 
 
+def _supabase_storage_url() -> str:
+    storage_url = settings.SUPABASE_URL.rstrip("/")
+    if not storage_url:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Armazenamento de imagens não configurado.",
+        )
+    return storage_url
+
+
 def resolve_restaurant_id(
     restaurante_id: Optional[str],
     slug: Optional[str],
@@ -390,7 +400,7 @@ async def upload_cardapio_asset(
         )
 
     object_path = f"{rest_id}/{asset_type}/{uuid.uuid4().hex}.{extension}"
-    storage_url = settings.SUPABASE_URL.rstrip("/")
+    storage_url = _supabase_storage_url()
     upload_url = (
         f"{storage_url}/storage/v1/object/cardapio-assets/"
         f"{quote(object_path, safe='/')}"
@@ -483,7 +493,7 @@ async def delete_cardapio_asset(
     )
     if object_path:
         delete_url = (
-            f"{settings.SUPABASE_URL.rstrip('/')}"
+            f"{_supabase_storage_url()}"
             "/storage/v1/object/cardapio-assets"
         )
         try:
