@@ -259,69 +259,57 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                 : 'text-gray-400 hover:text-white border-transparent'
             }`}
           >
-            <Utensils size={14} className="text-emerald-400" />
-            <span className="sm:hidden">Lançar</span>
-            <span className="hidden sm:inline">La Carte (Lançar)</span>
-            {draftCount > 0 && (
-              <span className="bg-emerald-500 text-zinc-950 text-[10px] w-4.5 h-4.5 rounded-full flex items-center justify-center font-mono font-black ml-0.5">
-                {draftCount}
+            <PlusCircle size={14} className="text-emerald-400" />
+            <span className="sm:hidden">Novo pedido</span>
+            <span className="hidden sm:inline">Lançar Pedido</span>
+            {draftItems.length > 0 && (
+              <span className="min-w-5 h-5 px-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[9px] font-mono flex items-center justify-center">
+                {draftItems.reduce((total, item) => total + (item.quantidade || 1), 0)}
               </span>
             )}
           </button>
           )}
 
-          {canCloseAccount && (
-          <button
-            id="tab-fechamento-btn"
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'fechamento'}
-            onClick={() => setActiveTab('fechamento')}
-            className={`w-full sm:w-auto min-h-11 sm:min-h-0 px-2 sm:px-4.5 py-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider font-sans whitespace-nowrap border ${
-              activeTab === 'fechamento' 
-                ? 'bg-koma-raised text-emerald-400 shadow-sm border-koma-border' 
-                : 'text-gray-400 hover:text-white border-transparent'
-            }`}
-          >
-            <CheckCircle size={14} className="text-emerald-400" />
-            <span>Fechamento</span>
-          </button>
+          {orders.length > 0 && (canTransferTables || canTransferItems) && (
+            <button
+              id="tab-transferir-btn"
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'transferir'}
+              onClick={() => {
+                setActiveTab('transferir');
+                setTransferType(canTransferTables ? 'total' : 'parcial');
+              }}
+              className={`w-full sm:w-auto min-h-11 sm:min-h-0 px-2 sm:px-4.5 py-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider font-sans whitespace-nowrap border ${
+                activeTab === 'transferir' 
+                  ? 'bg-koma-raised text-emerald-400 shadow-sm border-koma-border' 
+                  : 'text-gray-400 hover:text-white border-transparent'
+              }`}
+            >
+              <Move size={14} className="text-emerald-400" />
+              <span>Transferência</span>
+            </button>
           )}
 
-          {canTransferGeneral && (
-          <button
-            id="tab-transferencia-btn"
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'transferencia'}
-            onClick={() => setActiveTab('transferencia')}
-            className={`w-full sm:w-auto min-h-11 sm:min-h-0 px-2 sm:px-4.5 py-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider font-sans whitespace-nowrap border ${
-              activeTab === 'transferencia' 
-                ? 'bg-koma-raised text-rose-400 shadow-sm border-koma-border' 
-                : 'text-gray-400 hover:text-white border-transparent'
-            }`}
-          >
-            <ArrowRightLeft size={14} className="text-rose-400" />
-            <span>Transferência</span>
-          </button>
-          )}
-
-          {canTransferTables && (
-          <button
-            id="tab-mesclar-btn"
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'mesclar'}
-            onClick={() => setActiveTab('mesclar')}
-            className={`w-full sm:w-auto min-h-11 sm:min-h-0 px-2 sm:px-4.5 py-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider font-sans whitespace-nowrap border ${
-              activeTab === 'mesclar' 
-                ? 'bg-koma-raised text-rose-400 shadow-sm border-koma-border' 
-                : 'text-gray-400 hover:text-white border-transparent'
-            }`}
-          >
-            <Merge size={14} className="text-rose-400" />
-            <span>Mesclar Mesas</span>
-          </button>
+          {orders.length > 0 && onMergeTables && canTransferTables && (
+            <button
+              id="tab-mesclar-btn"
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'mesclar'}
+              onClick={() => {
+                setActiveTab('mesclar');
+                setTransferType('mesclar');
+              }}
+              className={`w-full sm:w-auto min-h-11 sm:min-h-0 px-2 sm:px-4.5 py-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider font-sans whitespace-nowrap border ${
+                activeTab === 'mesclar' 
+                  ? 'bg-koma-raised text-emerald-400 shadow-sm border-koma-border' 
+                  : 'text-gray-400 hover:text-white border-transparent'
+              }`}
+            >
+              <GitMerge size={14} className="text-emerald-400" />
+              <span>Mesclar</span>
+            </button>
           )}
         </div>
 
