@@ -52,7 +52,7 @@ export const SuprimentoModal: React.FC<SuprimentoModalProps> = ({
             <h3 className="font-serif text-sm font-bold text-koma-foreground">Novo Suprimento de Caixa</h3>
             <p className="text-[9px] text-koma-subtle">Aporte de fundo de troco extra no caixa aberto.</p>
           </div>
-          <button type="button" onClick={onClose} className="p-1 text-koma-subtle hover:text-white transition-colors cursor-pointer">
+          <button type="button" onClick={onClose} className="p-1 text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer">
             <X size={16} />
           </button>
         </div>
@@ -111,7 +111,7 @@ export const SuprimentoModal: React.FC<SuprimentoModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2 border border-koma-border hover:border-zinc-700 bg-koma-raised text-koma-subtle hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+              className="flex-1 py-2 border border-koma-border hover:border-zinc-700 bg-koma-raised text-koma-subtle hover:text-koma-foreground rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
             >
               Cancelar
             </button>

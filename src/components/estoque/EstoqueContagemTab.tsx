@@ -83,7 +83,7 @@ export const EstoqueContagemTab: React.FC<EstoqueContagemTabProps> = ({
                       <button
                         type="button"
                         onClick={() => onOpenNovaContagemModal(c.id)}
-                        className="px-2.5 py-1 bg-koma-raised hover:bg-zinc-700 text-gray-200 hover:text-white rounded-lg text-[9px] font-bold transition-all cursor-pointer inline-flex items-center gap-1 border border-koma-border"
+                        className="px-2.5 py-1 bg-koma-raised hover:bg-zinc-700 text-gray-200 hover:text-koma-foreground rounded-lg text-[9px] font-bold transition-all cursor-pointer inline-flex items-center gap-1 border border-koma-border"
                       >
                         {c.status === 'confirmada' ? <Eye size={12} /> : <ClipboardCheck size={12} />}
                         <span>{c.status === 'confirmada' ? 'Visualizar' : 'Editar / Confirmar'}</span>

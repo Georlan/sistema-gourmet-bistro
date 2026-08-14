@@ -66,7 +66,7 @@ export function ManagerPinModal({
       <div className="bg-koma-card border border-amber-500/20 rounded-2xl w-full max-w-sm p-6 shadow-2xl text-koma-foreground relative">
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-koma-subtle hover:text-white transition-colors"
+          className="absolute top-4 right-4 text-koma-subtle hover:text-koma-foreground transition-colors"
         >
           <X size={20} />
         </button>

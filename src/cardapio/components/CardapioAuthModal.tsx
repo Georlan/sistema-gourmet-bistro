@@ -229,7 +229,7 @@ export default function CardapioAuthModal({
               <button
                 type="button"
                 onClick={() => { setStep("identify"); setErrorMessage(""); }}
-                className="inline-flex items-center gap-1 text-[10px] font-bold text-koma-subtle hover:text-white transition cursor-pointer"
+                className="inline-flex items-center gap-1 text-[10px] font-bold text-koma-subtle hover:text-koma-foreground transition cursor-pointer"
               >
                 <ArrowLeft className="h-3.5 w-3.5" /> Alterar número
               </button>

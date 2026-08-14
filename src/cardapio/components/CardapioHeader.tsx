@@ -161,7 +161,7 @@ export default function CardapioHeader({
                       href={s.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex h-6 w-6 items-center justify-center rounded-full border border-slate-500/10 bg-slate-500/5 text-text-app/60 hover:text-white hover:border-transparent transition-all duration-200"
+                      className="flex h-6 w-6 items-center justify-center rounded-full border border-slate-500/10 bg-slate-500/5 text-text-app/60 hover:text-koma-foreground hover:border-transparent transition-all duration-200"
                       onMouseEnter={(e) => {
                         e.currentTarget.style.backgroundColor = activeBrand.colors.primary;
                       }}
@@ -281,7 +281,7 @@ export default function CardapioHeader({
                       href={s.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex h-6.5 w-6.5 items-center justify-center rounded-full border border-slate-500/10 bg-card-app text-text-app/40 hover:text-white transition duration-200"
+                      className="flex h-6.5 w-6.5 items-center justify-center rounded-full border border-slate-500/10 bg-card-app text-text-app/40 hover:text-koma-foreground transition duration-200"
                       onMouseEnter={(e) => {
                         e.currentTarget.style.backgroundColor = activeBrand.colors.primary;
                       }}

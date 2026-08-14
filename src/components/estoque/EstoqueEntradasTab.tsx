@@ -79,7 +79,7 @@ export const EstoqueEntradasTab: React.FC<EstoqueEntradasTabProps> = ({
         <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 space-y-2 text-left">
           <div className="flex justify-between items-center">
             <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">✓ NF-e Importada com Sucesso</span>
-            <button onClick={onResetXmlState} className="text-[10px] text-koma-subtle hover:text-white cursor-pointer">Fechar</button>
+            <button onClick={onResetXmlState} className="text-[10px] text-koma-subtle hover:text-koma-foreground cursor-pointer">Fechar</button>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-[10px] text-koma-secondary pt-1 font-mono">
             <div>Fornecedor: <strong className="text-koma-foreground">{xmlUploadState.result.fornecedor}</strong></div>
@@ -93,7 +93,7 @@ export const EstoqueEntradasTab: React.FC<EstoqueEntradasTabProps> = ({
       {xmlUploadState.error && (
         <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 flex justify-between items-center text-red-400 text-xs">
           <span>✗ Erro na importação: {xmlUploadState.error}</span>
-          <button onClick={onResetXmlState} className="text-[10px] text-koma-subtle hover:text-white cursor-pointer">Fechar</button>
+          <button onClick={onResetXmlState} className="text-[10px] text-koma-subtle hover:text-koma-foreground cursor-pointer">Fechar</button>
         </div>
       )}
 

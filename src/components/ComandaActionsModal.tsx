@@ -95,7 +95,7 @@ export const ComandaActionsModal: React.FC<ComandaActionsModalProps> = ({
             type="button"
             onClick={onClose}
             disabled={isAnyLoading}
-            className="p-1.5 rounded-full text-koma-subtle hover:text-white hover:bg-[#27272A] transition-colors cursor-pointer disabled:opacity-50"
+            className="p-1.5 rounded-full text-koma-subtle hover:text-koma-foreground hover:bg-[#27272A] transition-colors cursor-pointer disabled:opacity-50"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -180,7 +180,7 @@ export const ComandaActionsModal: React.FC<ComandaActionsModalProps> = ({
                   className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
                     selected
                       ? 'bg-emerald-500/15 border-emerald-500 text-emerald-400'
-                      : 'bg-koma-card border-koma-border text-koma-subtle hover:text-white hover:border-gray-600'
+                      : 'bg-koma-card border-koma-border text-koma-subtle hover:text-koma-foreground hover:border-gray-600'
                   }`}
                 >
                   {label}
@@ -197,7 +197,7 @@ export const ComandaActionsModal: React.FC<ComandaActionsModalProps> = ({
               type="button"
               disabled={isAnyLoading}
               onClick={handlePrintKitchen}
-              className="py-3 px-3 bg-koma-card hover:bg-[#27272A] border border-koma-border text-gray-200 hover:text-white rounded-xl text-xs font-bold cursor-pointer transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              className="py-3 px-3 bg-koma-card hover:bg-[#27272A] border border-koma-border text-gray-200 hover:text-koma-foreground rounded-xl text-xs font-bold cursor-pointer transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {loadingKitchen ? (
                 <svg className="animate-spin h-4 w-4 text-emerald-400" fill="none" viewBox="0 0 24 24">
@@ -216,7 +216,7 @@ export const ComandaActionsModal: React.FC<ComandaActionsModalProps> = ({
               type="button"
               disabled={isAnyLoading}
               onClick={handlePrintBill}
-              className="py-3 px-3 bg-koma-card hover:bg-[#27272A] border border-koma-border text-gray-200 hover:text-white rounded-xl text-xs font-bold cursor-pointer transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              className="py-3 px-3 bg-koma-card hover:bg-[#27272A] border border-koma-border text-gray-200 hover:text-koma-foreground rounded-xl text-xs font-bold cursor-pointer transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {loadingBill ? (
                 <svg className="animate-spin h-4 w-4 text-emerald-400" fill="none" viewBox="0 0 24 24">

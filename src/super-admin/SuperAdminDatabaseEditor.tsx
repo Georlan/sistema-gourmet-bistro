@@ -450,7 +450,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
               setNewColumnData({ name: "", type: "text" });
               setIsAddColumnOpen(true);
             }}
-            className="bg-koma-page border border-[#1e293b]/40 hover:border-slate-600 p-2 rounded text-koma-secondary hover:text-white cursor-pointer text-xs font-mono font-bold flex items-center gap-1.5 transition-colors"
+            className="bg-koma-page border border-[#1e293b]/40 hover:border-slate-600 p-2 rounded text-koma-secondary hover:text-koma-foreground cursor-pointer text-xs font-mono font-bold flex items-center gap-1.5 transition-colors"
             title="Adicionar uma nova coluna de dados na tabela"
           >
             <Plus className="w-3.5 h-3.5 text-[#00b894]" />
@@ -460,7 +460,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
           <button
             onClick={handleBackup}
             disabled={isBackingUp}
-            className="bg-koma-page border border-[#1e293b]/40 hover:border-slate-700 hover:bg-[#121420]/40 p-2 rounded text-koma-subtle hover:text-white transition-all cursor-pointer text-xs font-mono font-bold flex items-center gap-1.5 shadow-[0_0_8px_rgba(0,0,0,0.5)]"
+            className="bg-koma-page border border-[#1e293b]/40 hover:border-slate-700 hover:bg-[#121420]/40 p-2 rounded text-koma-subtle hover:text-koma-foreground transition-all cursor-pointer text-xs font-mono font-bold flex items-center gap-1.5 shadow-[0_0_8px_rgba(0,0,0,0.5)]"
             title="Executar backup instantâneo de segurança"
           >
             {isBackingUp ? (
@@ -474,7 +474,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
           <button
             onClick={() => fetchTableData(selectedTable)}
             disabled={isLoading}
-            className="bg-koma-page border border-[#1e293b]/40 hover:border-[#334155] p-2 rounded text-koma-subtle hover:text-white transition-colors cursor-pointer"
+            className="bg-koma-page border border-[#1e293b]/40 hover:border-[#334155] p-2 rounded text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer"
             title="Recarregar dados"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin text-[#00b894]" : ""}`} />
@@ -502,7 +502,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
             </div>
             <button 
               onClick={() => setBackupResult(null)}
-              className="text-koma-muted hover:text-white text-[10px] font-bold underline cursor-pointer"
+              className="text-koma-muted hover:text-koma-foreground text-[10px] font-bold underline cursor-pointer"
             >
               FECHAR
             </button>
@@ -527,7 +527,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
             </div>
             <button 
               onClick={() => setDbEditError(null)}
-              className="text-red-400 hover:text-white text-[10px] font-bold underline ml-4 shrink-0 cursor-pointer"
+              className="text-red-400 hover:text-koma-foreground text-[10px] font-bold underline ml-4 shrink-0 cursor-pointer"
             >
               FECHAR
             </button>
@@ -551,7 +551,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
               </div>
               <button 
                 onClick={() => setSqlSuggestion(null)}
-                className="text-amber-400 hover:text-white text-[10px] font-bold underline cursor-pointer"
+                className="text-amber-400 hover:text-koma-foreground text-[10px] font-bold underline cursor-pointer"
               >
                 OCULTAR
               </button>
@@ -582,7 +582,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
           className={`pb-2 px-1 cursor-pointer border-b-2 transition-all ${
             activeTab === "spreadsheet" 
               ? "text-[#00b894] border-[#00b894]" 
-              : "text-koma-subtle border-transparent hover:text-white"
+              : "text-koma-subtle border-transparent hover:text-koma-foreground"
           }`}
         >
           [ PLANILHA DE DADOS ]
@@ -595,7 +595,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
           className={`pb-2 px-1 cursor-pointer border-b-2 transition-all flex items-center gap-1.5 ${
             activeTab === "audit" 
               ? "text-amber-500 border-amber-500" 
-              : "text-koma-subtle border-transparent hover:text-white"
+              : "text-koma-subtle border-transparent hover:text-koma-foreground"
           }`}
         >
           <History className="w-3.5 h-3.5 shrink-0" />
@@ -621,7 +621,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
                 className={`w-full text-left font-mono text-xs px-3 py-2 rounded transition-all cursor-pointer flex flex-col justify-center space-y-0.5 ${
                   selectedTable === tbl 
                     ? "bg-[#1a1f2e] text-[#00b894] border-l-2 border-[#00b894] font-bold" 
-                    : "text-koma-subtle hover:bg-black/40 hover:text-white"
+                    : "text-koma-subtle hover:bg-black/40 hover:text-koma-foreground"
                 }`}
               >
                 <span className="truncate">{tbl.toUpperCase()}</span>
@@ -862,7 +862,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
                 <button 
                   type="button"
                   onClick={() => setIsAddRowOpen(false)}
-                  className="text-koma-muted hover:text-white cursor-pointer"
+                  className="text-koma-muted hover:text-koma-foreground cursor-pointer"
                 >
                   [FECHAR]
                 </button>
@@ -917,7 +917,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
                   <button
                     type="button"
                     onClick={() => setIsAddRowOpen(false)}
-                    className="px-3.5 py-2 rounded bg-koma-page border border-[#1e293b]/40 hover:border-slate-600 text-koma-subtle hover:text-white cursor-pointer"
+                    className="px-3.5 py-2 rounded bg-koma-page border border-[#1e293b]/40 hover:border-slate-600 text-koma-subtle hover:text-koma-foreground cursor-pointer"
                   >
                     CANCELAR
                   </button>
@@ -951,7 +951,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
                 <button 
                   type="button"
                   onClick={() => setIsAddColumnOpen(false)}
-                  className="text-koma-muted hover:text-white cursor-pointer"
+                  className="text-koma-muted hover:text-koma-foreground cursor-pointer"
                 >
                   [FECHAR]
                 </button>
@@ -998,7 +998,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
                   <button
                     type="button"
                     onClick={() => setIsAddColumnOpen(false)}
-                    className="px-3.5 py-2 rounded bg-koma-page border border-[#1e293b]/40 hover:border-slate-600 text-koma-subtle hover:text-white cursor-pointer"
+                    className="px-3.5 py-2 rounded bg-koma-page border border-[#1e293b]/40 hover:border-slate-600 text-koma-subtle hover:text-koma-foreground cursor-pointer"
                   >
                     CANCELAR
                   </button>
@@ -1029,7 +1029,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
             <button
               onClick={fetchAuditLog}
               disabled={isFetchingAudit}
-              className="bg-koma-page hover:bg-zinc-950 border border-slate-800 text-koma-secondary hover:text-white px-3 py-1.5 rounded cursor-pointer transition-all flex items-center gap-1.5"
+              className="bg-koma-page hover:bg-zinc-950 border border-slate-800 text-koma-secondary hover:text-koma-foreground px-3 py-1.5 rounded cursor-pointer transition-all flex items-center gap-1.5"
             >
               <RefreshCw className={`w-3.5 h-3.5 text-amber-500 ${isFetchingAudit ? "animate-spin" : ""}`} />
               RECARREGAR AUDITORIA
@@ -1131,7 +1131,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
                 <button
                   type="button"
                   onClick={() => setPendingCellEdit(null)}
-                  className="bg-koma-card hover:bg-zinc-800 border border-zinc-700/50 px-3 py-2 rounded text-koma-subtle hover:text-white cursor-pointer transition-colors"
+                  className="bg-koma-card hover:bg-zinc-800 border border-zinc-700/50 px-3 py-2 rounded text-koma-subtle hover:text-koma-foreground cursor-pointer transition-colors"
                 >
                   Cancelar
                 </button>
@@ -1179,7 +1179,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
                 <button
                   type="button"
                   onClick={() => setShowColumnConfirm(false)}
-                  className="bg-koma-card hover:bg-zinc-800 border border-zinc-700/50 px-3 py-2 rounded text-koma-subtle hover:text-white cursor-pointer transition-colors"
+                  className="bg-koma-card hover:bg-zinc-800 border border-zinc-700/50 px-3 py-2 rounded text-koma-subtle hover:text-koma-foreground cursor-pointer transition-colors"
                 >
                   Cancelar
                 </button>

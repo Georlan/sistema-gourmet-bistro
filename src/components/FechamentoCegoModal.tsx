@@ -68,7 +68,7 @@ export function FechamentoCegoModal({
         <button
           onClick={onClose}
           disabled={loading}
-          className="absolute top-4 right-4 text-koma-subtle hover:text-white transition-colors disabled:opacity-50"
+          className="absolute top-4 right-4 text-koma-subtle hover:text-koma-foreground transition-colors disabled:opacity-50"
         >
           <X size={20} />
         </button>

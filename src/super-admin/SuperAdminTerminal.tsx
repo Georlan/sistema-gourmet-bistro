@@ -253,7 +253,7 @@ export default function SuperAdminTerminal({
                 className={`px-3 py-1.5 text-[9px] font-mono rounded cursor-pointer transition-all ${
                   activeSentryTab === "issues" 
                     ? "bg-[#00b894] text-black font-bold" 
-                    : "text-koma-subtle hover:text-white"
+                    : "text-koma-subtle hover:text-koma-foreground"
                 }`}
               >
                 SENTRY REAL ISSUES
@@ -263,7 +263,7 @@ export default function SuperAdminTerminal({
                 className={`px-3 py-1.5 text-[9px] font-mono rounded cursor-pointer transition-all ${
                   activeSentryTab === "stream" 
                     ? "bg-[#00b894] text-black font-bold" 
-                    : "text-koma-subtle hover:text-white"
+                    : "text-koma-subtle hover:text-koma-foreground"
                 }`}
               >
                 LOCAL LOG STREAM
@@ -314,7 +314,7 @@ export default function SuperAdminTerminal({
                 {/* Clear logs */}
                 <button
                   onClick={onClearLogs}
-                  className="bg-koma-card border border-[#1e293b]/40 hover:border-[#334155] p-1.5 rounded text-koma-subtle hover:text-white transition-colors cursor-pointer"
+                  className="bg-koma-card border border-[#1e293b]/40 hover:border-[#334155] p-1.5 rounded text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer"
                   title="Limpar logs"
                 >
                   <Trash2 className="w-3.5 h-3.5" />

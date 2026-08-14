@@ -200,7 +200,7 @@ export function CardapioProdutosTab({
             <button type="button" onClick={() => onDuplicateProduct(product)} className="rounded-lg p-2 text-koma-subtle transition-colors hover:bg-white/[0.05] hover:text-emerald-300 cursor-pointer" title="Duplicar produto" aria-label={`Duplicar ${product.nome}`}>
               <Copy size={14} />
             </button>
-            <button type="button" onClick={() => onEditProduct(product)} className="rounded-lg p-2 text-koma-subtle transition-colors hover:bg-white/[0.05] hover:text-white cursor-pointer" title="Editar produto" aria-label={`Editar ${product.nome}`}>
+            <button type="button" onClick={() => onEditProduct(product)} className="rounded-lg p-2 text-koma-subtle transition-colors hover:bg-white/[0.05] hover:text-koma-foreground cursor-pointer" title="Editar produto" aria-label={`Editar ${product.nome}`}>
               <Edit3 size={14} />
             </button>
             <button type="button" onClick={() => void onRemoveProduct(product)} className="rounded-lg p-2 text-koma-subtle transition-colors hover:bg-rose-500/10 hover:text-rose-300 cursor-pointer" title="Remover do cardápio" aria-label={`Remover ${product.nome} do cardápio`}>
@@ -270,7 +270,7 @@ export function CardapioProdutosTab({
           <div className="relative flex-1">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-koma-muted" size={15} />
             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por nome, descrição ou código…" className="h-11 w-full rounded-xl border border-koma-border bg-koma-input pl-10 pr-10 text-[11px] text-koma-foreground outline-none transition-colors placeholder:text-zinc-500 focus:border-emerald-400/30" />
-            {search && <button type="button" onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1 text-koma-muted hover:text-white cursor-pointer" aria-label="Limpar busca"><X size={13} /></button>}
+            {search && <button type="button" onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1 text-koma-muted hover:text-koma-foreground cursor-pointer" aria-label="Limpar busca"><X size={13} /></button>}
           </div>
           <div className="grid grid-cols-3 rounded-xl border border-koma-border bg-koma-input p-1 lg:w-auto">
             {([

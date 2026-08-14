@@ -395,7 +395,7 @@ export default function SuperAdminTenantControl({
               <button
                 onClick={refreshTenants}
                 disabled={isLoading}
-                className="bg-black/60 border border-[#1e293b]/40 hover:border-[#00b894] p-1.5 rounded text-koma-subtle hover:text-white transition-colors cursor-pointer"
+                className="bg-black/60 border border-[#1e293b]/40 hover:border-[#00b894] p-1.5 rounded text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer"
                 title="Sincronizar Supabase"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin text-[#00b894]" : ""}`} />
@@ -642,7 +642,7 @@ export default function SuperAdminTenantControl({
                     setShowFlushConfirmModal(false);
                     setPendingFlushTenant(null);
                   }}
-                  className="bg-koma-card hover:bg-zinc-800 border border-zinc-700/50 px-3 py-2 rounded text-koma-subtle hover:text-white cursor-pointer transition-colors"
+                  className="bg-koma-card hover:bg-zinc-800 border border-zinc-700/50 px-3 py-2 rounded text-koma-subtle hover:text-koma-foreground cursor-pointer transition-colors"
                 >
                   Cancelar
                 </button>

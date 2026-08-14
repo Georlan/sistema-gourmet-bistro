@@ -76,7 +76,7 @@ export function MesasView({
 
   return (
     <div className="w-full text-koma-foreground font-sans select-none space-y-4 sm:space-y-5">
-      <section className="waiter-salon-stage relative overflow-hidden rounded-[24px] sm:rounded-[30px] border border-white/[0.08] bg-koma-panel px-4 py-5 sm:px-7 sm:py-6 lg:px-9 lg:py-7">
+      <section className="waiter-salon-stage relative overflow-hidden rounded-[24px] sm:rounded-[30px] border border-koma-border bg-koma-panel px-4 py-5 sm:px-7 sm:py-6 lg:px-9 lg:py-7">
         <div className="waiter-salon-stage__plane" aria-hidden="true" />
         <span className="waiter-salon-stage__word" aria-hidden="true">SALÃO</span>
 
@@ -97,7 +97,7 @@ export function MesasView({
             </p>
           </div>
 
-          <div className="grid grid-cols-3 gap-px overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.08] w-full xl:w-auto xl:min-w-[470px]">
+          <div className="grid grid-cols-3 gap-px overflow-hidden rounded-2xl border border-koma-border bg-white/[0.08] w-full xl:w-auto xl:min-w-[470px]">
             <div className="bg-koma-panel px-3 py-3 sm:px-4 sm:py-3.5">
               <div className="flex items-center gap-1.5 text-koma-muted">
                 <Grid2X2 size={12} />
@@ -123,7 +123,7 @@ export function MesasView({
         </div>
       </section>
 
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 border-b border-white/[0.07] pb-4">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 border-b border-koma-border-subtle pb-4">
         <div className="flex items-center gap-2 text-koma-subtle">
           <Activity size={14} className="text-[#00b894]" />
           <span className="text-[10px] font-bold uppercase tracking-[0.14em]">Estrutura física do salão</span>
@@ -143,7 +143,7 @@ export function MesasView({
                 } ${
                   isActive
                     ? 'bg-[#00b894] text-[#04100c] border-[#00b894] shadow-[0_8px_24px_rgba(0,184,148,0.16)]'
-                    : 'bg-white/[0.035] text-koma-subtle hover:text-white hover:bg-white/[0.07] border-white/[0.08]'
+                    : 'bg-white/[0.035] text-koma-subtle hover:text-koma-foreground hover:bg-white/[0.07] border-koma-border'
                 }`}
               >
                 {filter.label} <span className={`font-mono text-[9px] ${isActive ? 'text-[#063f32]' : 'text-zinc-600'}`}>{filter.count}</span>
@@ -155,7 +155,7 @@ export function MesasView({
 
       <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-3.5 w-full">
         {filteredRows.length === 0 ? (
-          <div className="col-span-full py-16 rounded-2xl border border-dashed border-white/[0.09] text-center text-koma-muted text-sm">
+          <div className="col-span-full py-16 rounded-2xl border border-dashed border-koma-border text-center text-koma-muted text-sm">
             Nenhuma mesa encontrada neste status.
           </div>
         ) : filteredRows.map(({ table, tableOrders }) => {

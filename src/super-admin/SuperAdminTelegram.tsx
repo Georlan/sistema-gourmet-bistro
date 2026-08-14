@@ -394,7 +394,7 @@ export default function SuperAdminTelegram({
                   onClick={() => {
                     onTriggerTelegramAlert(demo.text);
                   }}
-                  className="bg-koma-page hover:bg-zinc-900/80 border border-[#1e293b]/40 hover:border-slate-700 text-left p-2.5 rounded text-[11px] font-mono text-koma-secondary hover:text-white transition-all cursor-pointer flex flex-col justify-between"
+                  className="bg-koma-page hover:bg-zinc-900/80 border border-[#1e293b]/40 hover:border-slate-700 text-left p-2.5 rounded text-[11px] font-mono text-koma-secondary hover:text-koma-foreground transition-all cursor-pointer flex flex-col justify-between"
                 >
                   <span className="text-[#00b894] font-bold mb-1">{demo.label}</span>
                   <span className="text-[9px] text-koma-muted line-clamp-1">{demo.text}</span>

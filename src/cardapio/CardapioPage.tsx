@@ -1022,7 +1022,7 @@ export default function CardapioPage() {
                         localStorage.removeItem("koma_active_order");
                         setActiveOrder(null);
                       }}
-                      className="px-3 py-1.5 bg-slate-500/10 hover:bg-slate-500/20 text-koma-subtle hover:text-white text-xs font-bold rounded-xl transition cursor-pointer"
+                      className="px-3 py-1.5 bg-slate-500/10 hover:bg-slate-500/20 text-koma-subtle hover:text-koma-foreground text-xs font-bold rounded-xl transition cursor-pointer"
                       id="btn-new-order-clear"
                     >
                       Fazer Novo Pedido
@@ -1490,7 +1490,7 @@ export default function CardapioPage() {
               </div>
               <div className="flex flex-col items-start leading-tight">
                 <span className="text-[11px] font-black uppercase tracking-wide">Ver Sacola</span>
-                <span className="text-[10px] font-medium text-white/80">{cartCount} {cartCount === 1 ? 'item' : 'itens'}</span>
+                <span className="text-[10px] font-medium text-koma-foreground/80">{cartCount} {cartCount === 1 ? 'item' : 'itens'}</span>
               </div>
             </div>
             {/* Right: total + arrow */}
@@ -1498,7 +1498,7 @@ export default function CardapioPage() {
               <span className="text-sm font-black">
                 {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cartTotal)}
               </span>
-              <ArrowRight className="h-4 w-4 text-white/80" />
+              <ArrowRight className="h-4 w-4 text-koma-foreground/80" />
             </div>
           </button>
         </div>

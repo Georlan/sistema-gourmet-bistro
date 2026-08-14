@@ -64,7 +64,7 @@ export const EstoqueMovimentacoesTab: React.FC<EstoqueMovimentacoesTabProps> = (
           <button
             type="button"
             onClick={onRefreshMovimentacoes}
-            className="p-2 border border-koma-border hover:bg-koma-raised text-koma-subtle hover:text-white rounded-xl transition-all cursor-pointer"
+            className="p-2 border border-koma-border hover:bg-koma-raised text-koma-subtle hover:text-koma-foreground rounded-xl transition-all cursor-pointer"
             title="Atualizar Movimentações"
           >
             <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />

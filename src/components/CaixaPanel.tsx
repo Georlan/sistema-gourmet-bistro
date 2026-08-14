@@ -3728,7 +3728,7 @@ export function CaixaPanel({
   };
 
   return (
-    <div className={`cashier-shell flex w-full h-screen bg-koma-page text-white overflow-hidden font-sans selection:bg-[#10b981]/30 text-xs ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''
+    <div className={`cashier-shell flex w-full h-screen bg-koma-page text-koma-foreground overflow-hidden font-sans selection:bg-[#10b981]/30 text-xs ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''
       }`}>
 
       {/* TOAST DE FEEDBACK NÃO-BLOQUEANTE */}
@@ -4094,7 +4094,7 @@ export function CaixaPanel({
                 'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border',
                 isFullscreen
                   ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30'
-                  : 'bg-koma-raised text-koma-secondary border-koma-border hover:bg-koma-card hover:text-white'
+                  : 'bg-koma-raised text-koma-secondary border-koma-border hover:bg-koma-card hover:text-koma-foreground'
               )}
               title={isFullscreen ? "Sair do Modo PDV Tela Cheia" : "Entrar no Modo PDV Tela Cheia"}
               aria-label={isFullscreen ? "Sair do modo PDV em tela cheia" : "Entrar no modo PDV em tela cheia"}
@@ -4125,7 +4125,7 @@ export function CaixaPanel({
                 onClick={() => setActiveSubTab(sub.id)}
                 className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${isSubActive
                   ? 'bg-emerald-600/15 text-[#10b981] border border-emerald-500/20 shadow-xs'
-                  : 'text-koma-subtle hover:text-white hover:bg-koma-raised'
+                  : 'text-koma-subtle hover:text-koma-foreground hover:bg-koma-raised'
                   }`}
               >
                 {sub.label}
@@ -4143,7 +4143,7 @@ export function CaixaPanel({
               onClick={() => setActiveSubTab(sub.id)}
               className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${activeSubTab === sub.id
                 ? 'bg-[#046c4e] text-emerald-100 border border-emerald-700/30'
-                : 'text-koma-subtle hover:text-white hover:bg-koma-raised'
+                : 'text-koma-subtle hover:text-koma-foreground hover:bg-koma-raised'
                 }`}
             >
               {sub.label}
@@ -4159,7 +4159,7 @@ export function CaixaPanel({
               onClick={() => setActiveSubTab(sub.id)}
               className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${activeSubTab === sub.id
                 ? 'bg-[#046c4e] text-emerald-100 border border-emerald-700/30'
-                : 'text-koma-subtle hover:text-white hover:bg-koma-raised'
+                : 'text-koma-subtle hover:text-koma-foreground hover:bg-koma-raised'
                 }`}
             >
               {sub.label}
@@ -4184,7 +4184,7 @@ export function CaixaPanel({
                 onClick={() => setActiveSubTab(sub.id)}
                 className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${isSubActive
                   ? 'bg-emerald-600/15 text-[#10b981] border border-emerald-500/20 shadow-xs'
-                  : 'text-koma-subtle hover:text-white hover:bg-koma-panel'
+                  : 'text-koma-subtle hover:text-koma-foreground hover:bg-koma-panel'
                   }`}
               >
                 {sub.label}
@@ -4209,7 +4209,7 @@ export function CaixaPanel({
                 onClick={() => setActiveSubTab(sub.id)}
                 className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${isSubActive
                   ? 'bg-emerald-600/15 text-[#10b981] border border-emerald-500/20 shadow-xs'
-                  : 'text-koma-subtle hover:text-white hover:bg-koma-panel'
+                  : 'text-koma-subtle hover:text-koma-foreground hover:bg-koma-panel'
                   }`}
               >
                 {sub.label}
@@ -4232,7 +4232,7 @@ export function CaixaPanel({
                 onClick={() => setActiveSubTab(sub.id)}
                 className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${isSubActive
                   ? 'bg-emerald-600/15 text-[#10b981] border border-emerald-500/20 shadow-xs'
-                  : 'text-koma-subtle hover:text-white hover:bg-koma-panel'
+                  : 'text-koma-subtle hover:text-koma-foreground hover:bg-koma-panel'
                   }`}
               >
                 {sub.label}
@@ -4260,7 +4260,7 @@ export function CaixaPanel({
                 onClick={() => setActiveSubTab(sub.id)}
                 className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${isSubActive
                   ? 'bg-emerald-600/15 text-[#10b981] border border-emerald-500/20 shadow-xs'
-                  : 'text-koma-subtle hover:text-white hover:bg-koma-panel'
+                  : 'text-koma-subtle hover:text-koma-foreground hover:bg-koma-panel'
                   }`}
               >
                 {sub.label}
@@ -4284,7 +4284,7 @@ export function CaixaPanel({
                 onClick={() => setActiveSubTab(sub.id)}
                 className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${isSubActive
                   ? 'bg-emerald-600/15 text-[#10b981] border border-emerald-500/20 shadow-xs'
-                  : 'text-koma-subtle hover:text-white hover:bg-koma-panel'
+                  : 'text-koma-subtle hover:text-koma-foreground hover:bg-koma-panel'
                   }`}
               >
                 {sub.label}
@@ -4502,7 +4502,7 @@ export function CaixaPanel({
                       <button
                         type="button"
                         onClick={() => setIsDrawerOpen(false)}
-                        className={clsx('p-1.5', 'rounded-lg', 'bg-koma-raised', 'border', 'border-koma-border', 'text-koma-subtle', 'hover:text-white', 'cursor-pointer')}
+                        className={clsx('p-1.5', 'rounded-lg', 'bg-koma-raised', 'border', 'border-koma-border', 'text-koma-subtle', 'hover:text-koma-foreground', 'cursor-pointer')}
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                       </button>
@@ -5128,14 +5128,14 @@ export function CaixaPanel({
               <div className={clsx('min-h-0', 'flex-1', 'flex', 'flex-col', 'xl:flex-row', 'gap-3', 'sm:gap-4', 'overflow-hidden', 'relative')}>
 
               {/* Mobile sub-tab toggle */}
-              <div className={clsx('flex', 'xl:hidden', 'gap-1', 'p-1', 'bg-white/[0.025]', 'border', 'border-white/[0.08]', 'rounded-xl', 'shrink-0')}>
+              <div className={clsx('flex', 'xl:hidden', 'gap-1', 'p-1', 'bg-white/[0.025]', 'border', 'border-koma-border', 'rounded-xl', 'shrink-0')}>
                 <button
                   type="button"
                   onClick={() => setBalcaoMobileView('produtos')}
                   className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                     balcaoMobileView === 'produtos'
                       ? 'bg-[#00b894] text-[#07100d]'
-                      : 'text-koma-subtle hover:text-white'
+                      : 'text-koma-subtle hover:text-koma-foreground'
                   }`}
                 >
                   <Package size={14} />
@@ -5147,7 +5147,7 @@ export function CaixaPanel({
                   className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                     balcaoMobileView === 'carrinho'
                       ? 'bg-[#00b894] text-[#07100d]'
-                      : 'text-koma-subtle hover:text-white'
+                      : 'text-koma-subtle hover:text-koma-foreground'
                   }`}
                 >
                   <ShoppingCart size={14} />
@@ -5157,7 +5157,7 @@ export function CaixaPanel({
 
               {/* Product grid column */}
               <div className={`min-w-0 flex-1 ${balcaoMobileView === 'produtos' ? 'flex' : 'hidden xl:flex'} flex-col gap-3 overflow-hidden w-full`}>
-                <div className={clsx('shrink-0', 'rounded-2xl', 'border', 'border-white/[0.08]', 'bg-[#0d110f]', 'p-2.5', 'sm:p-3', 'space-y-2.5')}>
+                <div className={clsx('shrink-0', 'rounded-2xl', 'border', 'border-koma-border', 'bg-koma-panel', 'p-2.5', 'sm:p-3', 'space-y-2.5')}>
                   <div className={clsx('flex', 'items-center', 'gap-2')}>
                     <div className={clsx('flex-1', 'relative')}>
                       <Search size={15} className={clsx('absolute', 'left-3.5', 'top-1/2', '-translate-y-1/2', 'text-koma-muted', 'pointer-events-none')} />
@@ -5167,15 +5167,15 @@ export function CaixaPanel({
                         placeholder="Buscar item, descrição ou código"
                         value={pdvSearch}
                         onChange={(e) => setPdvSearch(e.target.value)}
-                        className={clsx('w-full', 'h-10', 'pl-10', 'pr-20', 'bg-black/25', 'border', 'border-white/[0.09]', 'rounded-xl', 'focus:outline-none', 'focus:border-[#00b894]/70', 'focus:ring-2', 'focus:ring-[#00b894]/10', 'text-sm', 'text-koma-foreground', 'placeholder:text-zinc-600', 'transition-colors')}
+                        className={clsx('w-full', 'h-10', 'pl-10', 'pr-20', 'bg-black/25', 'border', 'border-koma-border', 'rounded-xl', 'focus:outline-none', 'focus:border-[#00b894]/70', 'focus:ring-2', 'focus:ring-[#00b894]/10', 'text-sm', 'text-koma-foreground', 'placeholder:text-zinc-600', 'transition-colors')}
                       />
-                      <span className={clsx('hidden', 'sm:inline-flex', 'absolute', 'right-2.5', 'top-1/2', '-translate-y-1/2', 'px-2', 'py-1', 'rounded-md', 'border', 'border-white/[0.08]', 'bg-white/[0.035]', 'text-[8px]', 'font-mono', 'text-koma-muted')}>F1</span>
+                      <span className={clsx('hidden', 'sm:inline-flex', 'absolute', 'right-2.5', 'top-1/2', '-translate-y-1/2', 'px-2', 'py-1', 'rounded-md', 'border', 'border-koma-border', 'bg-white/[0.035]', 'text-[8px]', 'font-mono', 'text-koma-muted')}>F1</span>
                     </div>
                     {pdvSearch && (
                       <button
                         type="button"
                         onClick={() => setPdvSearch('')}
-                        className={clsx('h-10', 'px-3', 'bg-white/[0.035]', 'border', 'border-white/[0.08]', 'rounded-xl', 'text-xs', 'text-koma-subtle', 'hover:text-white', 'cursor-pointer')}
+                        className={clsx('h-10', 'px-3', 'bg-white/[0.035]', 'border', 'border-koma-border', 'rounded-xl', 'text-xs', 'text-koma-subtle', 'hover:text-koma-foreground', 'cursor-pointer')}
                       >
                         Limpar
                       </button>
@@ -5189,7 +5189,7 @@ export function CaixaPanel({
                         onClick={() => scrollPdvCategories(-1)}
                         disabled={!pdvCategoryScrollState.canScrollLeft}
                         aria-label="Ver categorias anteriores"
-                        className={clsx('hidden', 'size-8', 'shrink-0', 'items-center', 'justify-center', 'rounded-lg', 'border', 'border-white/[0.09]', 'bg-white/[0.035]', 'text-koma-secondary', 'transition-colors', 'hover:border-[#00b894]/40', 'hover:text-[#40e0bd]', 'disabled:cursor-not-allowed', 'disabled:opacity-25', 'sm:flex')}
+                        className={clsx('hidden', 'size-8', 'shrink-0', 'items-center', 'justify-center', 'rounded-lg', 'border', 'border-koma-border', 'bg-white/[0.035]', 'text-koma-secondary', 'transition-colors', 'hover:border-[#00b894]/40', 'hover:text-[#40e0bd]', 'disabled:cursor-not-allowed', 'disabled:opacity-25', 'sm:flex')}
                       >
                         <ChevronLeft size={15} />
                       </button>
@@ -5216,7 +5216,7 @@ export function CaixaPanel({
                       onClick={() => setPdvSelectedCategory('todos')}
                       className={`h-8 px-3 text-[10px] font-semibold rounded-lg cursor-pointer whitespace-nowrap transition-colors border ${pdvSelectedCategory === 'todos'
                         ? 'bg-[#00b894] text-[#07100d] border-[#00b894]'
-                        : 'bg-transparent border-white/[0.08] text-koma-subtle hover:text-white hover:border-white/[0.16]'
+                        : 'bg-transparent border-koma-border text-koma-subtle hover:text-koma-foreground hover:border-white/[0.16]'
                         }`}
                     >
                       Todos <span className={clsx('ml-1', 'opacity-65')}>{sellableProducts.length}</span>
@@ -5228,7 +5228,7 @@ export function CaixaPanel({
                         onClick={() => setPdvSelectedCategory(catObj.nome)}
                         className={`h-8 px-3 text-[10px] font-semibold rounded-lg cursor-pointer whitespace-nowrap transition-colors border ${pdvSelectedCategory === catObj.nome
                           ? 'bg-[#00b894] text-[#07100d] border-[#00b894]'
-                          : 'bg-transparent border-white/[0.08] text-koma-subtle hover:text-white hover:border-white/[0.16]'
+                          : 'bg-transparent border-koma-border text-koma-subtle hover:text-koma-foreground hover:border-white/[0.16]'
                           }`}
                       >
                         {catObj.nome}
@@ -5241,7 +5241,7 @@ export function CaixaPanel({
                         onClick={() => scrollPdvCategories(1)}
                         disabled={!pdvCategoryScrollState.canScrollRight}
                         aria-label="Ver próximas categorias"
-                        className={clsx('hidden', 'size-8', 'shrink-0', 'items-center', 'justify-center', 'rounded-lg', 'border', 'border-white/[0.09]', 'bg-white/[0.035]', 'text-koma-secondary', 'transition-colors', 'hover:border-[#00b894]/40', 'hover:text-[#40e0bd]', 'disabled:cursor-not-allowed', 'disabled:opacity-25', 'sm:flex')}
+                        className={clsx('hidden', 'size-8', 'shrink-0', 'items-center', 'justify-center', 'rounded-lg', 'border', 'border-koma-border', 'bg-white/[0.035]', 'text-koma-secondary', 'transition-colors', 'hover:border-[#00b894]/40', 'hover:text-[#40e0bd]', 'disabled:cursor-not-allowed', 'disabled:opacity-25', 'sm:flex')}
                       >
                         <ChevronRight size={15} />
                       </button>
@@ -5259,14 +5259,14 @@ export function CaixaPanel({
                         type="button"
                         key={p.id}
                         onClick={() => handlePdvAddToCart(p)}
-                        className={clsx('relative', 'min-h-[112px]', 'bg-[#0d110f]', 'border', 'border-white/[0.08]', 'hover:border-[#00b894]/45', 'active:border-[#00b894]', 'p-3.5', 'rounded-2xl', 'flex', 'flex-col', 'justify-between', 'gap-3', 'cursor-pointer', 'group', 'transition-colors', 'text-left', 'focus:outline-none', 'focus-visible:ring-2', 'focus-visible:ring-[#00b894]/50')}
+                        className={clsx('relative', 'min-h-[112px]', 'bg-koma-panel', 'border', 'border-koma-border', 'hover:border-[#00b894]/45', 'active:border-[#00b894]', 'p-3.5', 'rounded-2xl', 'flex', 'flex-col', 'justify-between', 'gap-3', 'cursor-pointer', 'group', 'transition-colors', 'text-left', 'focus:outline-none', 'focus-visible:ring-2', 'focus-visible:ring-[#00b894]/50')}
                       >
                         {p.imagem && (
                           <img src={p.imagem} alt="" loading="lazy" className={clsx('w-full', 'h-20', 'object-cover', 'rounded-xl')} />
                         )}
                         <div className="min-h-[34px]">
                           {productLabel.code && <span className={clsx('mb-1', 'block', 'font-mono', 'text-[8px]', 'font-bold', 'tracking-[0.14em]', 'text-zinc-600')}>CÓD. {productLabel.code}</span>}
-                          <h4 className={clsx('font-semibold', 'text-zinc-100', 'text-xs', 'sm:text-[13px]', 'group-hover:text-white', 'transition-colors', 'leading-snug', 'line-clamp-2')}>{productLabel.name}</h4>
+                          <h4 className={clsx('font-semibold', 'text-zinc-100', 'text-xs', 'sm:text-[13px]', 'group-hover:text-koma-foreground', 'transition-colors', 'leading-snug', 'line-clamp-2')}>{productLabel.name}</h4>
                           {p.descricao && <p className={clsx('text-[9px]', 'sm:text-[10px]', 'text-koma-muted', 'mt-1', 'line-clamp-1', 'leading-tight')}>{p.descricao}</p>}
                         </div>
                         <div className={clsx('flex', 'justify-between', 'items-center', 'border-t', 'border-white/[0.06]', 'pt-2.5')}>
@@ -5279,7 +5279,7 @@ export function CaixaPanel({
                     )})}
                   </div>
                   ) : (
-                    <div className={clsx('h-full', 'min-h-52', 'rounded-2xl', 'border', 'border-dashed', 'border-white/[0.09]', 'bg-white/[0.015]', 'flex', 'flex-col', 'items-center', 'justify-center', 'text-center', 'px-6')}>
+                    <div className={clsx('h-full', 'min-h-52', 'rounded-2xl', 'border', 'border-dashed', 'border-koma-border', 'bg-white/[0.015]', 'flex', 'flex-col', 'items-center', 'justify-center', 'text-center', 'px-6')}>
                       <Search size={22} className={clsx('text-zinc-700', 'mb-3')} />
                       <strong className={clsx('text-sm', 'text-koma-secondary')}>
                         {catalogReady ? 'Nenhum item encontrado' : 'Carregando cardápio…'}
@@ -5293,8 +5293,8 @@ export function CaixaPanel({
               </div>
 
               {/* Shopping cart sidebar */}
-              <div className={`w-full xl:w-[350px] 2xl:w-[380px] bg-[#0d110f] border border-white/[0.08] rounded-2xl ${balcaoMobileView === 'carrinho' ? 'flex' : 'hidden xl:flex'} ${pdvCart.length === 0 ? 'xl:self-start' : ''} flex-col overflow-hidden shrink-0`}>
-                <div className={clsx('bg-white/[0.025]', 'px-4', 'py-3.5', 'border-b', 'border-white/[0.07]', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
+              <div className={`w-full xl:w-[350px] 2xl:w-[380px] bg-koma-panel border border-koma-border rounded-2xl ${balcaoMobileView === 'carrinho' ? 'flex' : 'hidden xl:flex'} ${pdvCart.length === 0 ? 'xl:self-start' : ''} flex-col overflow-hidden shrink-0`}>
+                <div className={clsx('bg-white/[0.025]', 'px-4', 'py-3.5', 'border-b', 'border-koma-border-subtle', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
                   <span className={clsx('font-semibold', 'text-koma-foreground', 'flex', 'items-center', 'gap-2')}>
                     <span className={clsx('w-8', 'h-8', 'rounded-xl', 'bg-[#00b894]/10', 'border', 'border-[#00b894]/15', 'inline-flex', 'items-center', 'justify-center')}><ShoppingCart size={15} className="text-[#4fe0bc]" /></span>
                     <span>Pedido atual</span>
@@ -5313,7 +5313,7 @@ export function CaixaPanel({
                     </div>
                   ) : (
                     pdvCart.map((item, idx) => (
-                      <div key={`${item.product.id}-${idx}`} className={clsx('bg-white/[0.025]', 'p-3', 'rounded-xl', 'border', 'border-white/[0.07]', 'space-y-2.5')}>
+                      <div key={`${item.product.id}-${idx}`} className={clsx('bg-white/[0.025]', 'p-3', 'rounded-xl', 'border', 'border-koma-border-subtle', 'space-y-2.5')}>
                         <div className={clsx('flex', 'justify-between', 'items-start')}>
                           <div className="space-y-0.5">
                             <strong className={clsx('text-zinc-100', 'text-xs', 'block', 'truncate', 'max-w-48')}>{item.product.nome}</strong>
@@ -5332,7 +5332,7 @@ export function CaixaPanel({
                             <button
                               type="button"
                               onClick={() => handlePdvUpdateCartQty(idx, -1)}
-                              className={clsx('px-2', 'py-1', 'text-koma-subtle', 'hover:text-white', 'cursor-pointer', 'hover:bg-koma-raised')}
+                              className={clsx('px-2', 'py-1', 'text-koma-subtle', 'hover:text-koma-foreground', 'cursor-pointer', 'hover:bg-koma-raised')}
                             >
                               -
                             </button>
@@ -5340,7 +5340,7 @@ export function CaixaPanel({
                             <button
                               type="button"
                               onClick={() => handlePdvUpdateCartQty(idx, 1)}
-                              className={clsx('px-2', 'py-1', 'text-koma-subtle', 'hover:text-white', 'cursor-pointer', 'hover:bg-koma-raised')}
+                              className={clsx('px-2', 'py-1', 'text-koma-subtle', 'hover:text-koma-foreground', 'cursor-pointer', 'hover:bg-koma-raised')}
                             >
                               +
                             </button>
@@ -5425,7 +5425,7 @@ export function CaixaPanel({
                           onClick={() => setPdvOrderType(type.id as any)}
                           className={`py-1.5 rounded-lg text-[9px] font-bold uppercase transition-all cursor-pointer ${pdvOrderType === type.id
                             ? 'bg-[#10b981] text-zinc-950 font-extrabold'
-                            : 'text-koma-subtle hover:text-white'
+                            : 'text-koma-subtle hover:text-koma-foreground'
                             }`}
                         >
                           {type.id === 'retirada' ? 'Retirada' : type.id === 'entrega' ? 'Delivery' : 'Mesa'}
@@ -5455,7 +5455,7 @@ export function CaixaPanel({
                           'min-h-10 w-full rounded-xl border px-3 text-[10px] font-semibold text-koma-foreground outline-none transition-colors focus:ring-2',
                           selectedPdvTableOption?.isOccupied
                             ? 'border-[#6b2d37] bg-[#1b1013] focus:border-[#8a3d49] focus:ring-[#6b2d37]/20'
-                            : 'border-white/[0.09] bg-[#090d0b] focus:border-[#00b894]/70 focus:ring-[#00b894]/10'
+                            : 'border-koma-border bg-koma-input focus:border-[#00b894]/70 focus:ring-[#00b894]/10'
                         )}
                         required
                       >
@@ -5485,7 +5485,7 @@ export function CaixaPanel({
                           'flex min-h-10 items-center gap-2.5 rounded-xl border px-3 py-2 text-left',
                           selectedPdvTableOption?.isOccupied
                             ? 'border-[#6b2d37]/80 bg-[#261317]'
-                            : 'border-white/[0.07] bg-white/[0.02]'
+                            : 'border-koma-border-subtle bg-white/[0.02]'
                         )}
                       >
                         <span
@@ -5742,7 +5742,7 @@ export function CaixaPanel({
                                   isMerged && 'border-koma-border bg-koma-card text-koma-muted',
                                   hasPendingPayment && 'border-[#8a4753] bg-[#4b222b] text-[#efb2bc]',
                                   isOccupied && !hasPendingPayment && 'border-[#6b2e38] bg-[#38191f] text-[#e4a3ac]',
-                                  !isOccupied && !isMerged && 'border-white/[0.07] bg-white/[0.025] text-koma-subtle'
+                                  !isOccupied && !isMerged && 'border-koma-border-subtle bg-white/[0.025] text-koma-subtle'
                                 )}>
                                   <span
                                     className={clsx(
@@ -5897,7 +5897,7 @@ export function CaixaPanel({
                         onClick={() => setDesempenhoRange(r.id as any)}
                         className={`px-3 py-1 text-[9px] font-bold rounded-lg cursor-pointer transition-all ${desempenhoRange === r.id
                           ? 'bg-emerald-600 text-white shadow'
-                          : 'text-koma-subtle hover:text-white'
+                          : 'text-koma-subtle hover:text-koma-foreground'
                           }`}
                       >
                         {r.label}
@@ -6139,7 +6139,7 @@ export function CaixaPanel({
                               {isPendente && (
                                 <button
                                   onClick={() => handleResendInvite(user)}
-                                  className={clsx('px-2', 'py-1', 'text-[8px]', 'font-bold', 'bg-koma-raised', 'hover:bg-koma-card', 'text-koma-secondary', 'hover:text-white', 'rounded-lg', 'border', 'border-koma-border', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'gap-1')}
+                                  className={clsx('px-2', 'py-1', 'text-[8px]', 'font-bold', 'bg-koma-raised', 'hover:bg-koma-card', 'text-koma-secondary', 'hover:text-koma-foreground', 'rounded-lg', 'border', 'border-koma-border', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'gap-1')}
                                   title="Reenviar link de ativação via WhatsApp"
                                 >
                                   <Send size={10} />
@@ -6243,7 +6243,7 @@ export function CaixaPanel({
                       className={`px-3 py-2 text-[9px] font-bold rounded-lg cursor-pointer transition-all flex items-center gap-1.5 ${
                         selected
                           ? 'bg-emerald-600 text-white shadow'
-                          : 'text-koma-subtle hover:text-white'
+                          : 'text-koma-subtle hover:text-koma-foreground'
                       }`}
                     >
                       <Icon size={12} />
@@ -6380,7 +6380,7 @@ export function CaixaPanel({
                               setTableFormError('');
                             }}
                             aria-label={`Editar Mesa ${table.id}`}
-                            className={clsx('rounded-lg', 'border', 'border-white/[0.07]', 'bg-white/[0.025]', 'p-2', 'text-koma-muted', 'transition-colors', 'hover:border-[#10b981]/30', 'hover:text-[#6ee7b7]')}
+                            className={clsx('rounded-lg', 'border', 'border-koma-border-subtle', 'bg-white/[0.025]', 'p-2', 'text-koma-muted', 'transition-colors', 'hover:border-[#10b981]/30', 'hover:text-[#6ee7b7]')}
                           >
                             <Edit3 size={13} />
                           </button>
@@ -6461,7 +6461,7 @@ export function CaixaPanel({
                       onClick={() => setConfigSalSubTab(tab.id as any)}
                       className={`px-3 py-1.5 text-[9px] font-bold rounded-lg cursor-pointer transition-all ${configSalSubTab === tab.id
                         ? 'bg-emerald-600 text-white shadow'
-                        : 'text-koma-subtle hover:text-white'
+                        : 'text-koma-subtle hover:text-koma-foreground'
                         }`}
                     >
                       {tab.label}
@@ -7351,7 +7351,7 @@ export function CaixaPanel({
                   className={clsx('w-full', 'bg-koma-panel', 'border', 'border-koma-border', 'rounded-xl', 'px-3', 'py-2', 'text-[10px]', 'text-koma-foreground', 'placeholder:text-gray-500', 'focus:outline-none', 'focus:border-[#10b981]/50', 'transition-colors')}
                 />
                 {cardapioProdutosSearch && (
-                  <button onClick={() => setCardapioProdutosSearch('')} className={clsx('absolute', 'right-3', 'top-1/2', '-translate-y-1/2', 'text-koma-muted', 'hover:text-white')}>
+                  <button onClick={() => setCardapioProdutosSearch('')} className={clsx('absolute', 'right-3', 'top-1/2', '-translate-y-1/2', 'text-koma-muted', 'hover:text-koma-foreground')}>
                     <X size={11} />
                   </button>
                 )}
@@ -7420,7 +7420,7 @@ export function CaixaPanel({
                                   setProdFormAtivo((prod as any).ativo !== false);
                                   setShowProductModal(true);
                                 }}
-                                className={clsx('p-1', 'hover:bg-[#27272A]', 'rounded', 'text-koma-subtle', 'hover:text-white', 'transition-all', 'cursor-pointer', 'border', 'border-transparent')}
+                                className={clsx('p-1', 'hover:bg-[#27272A]', 'rounded', 'text-koma-subtle', 'hover:text-koma-foreground', 'transition-all', 'cursor-pointer', 'border', 'border-transparent')}
                                 title="Editar Produto"
                               >
                                 <Edit3 size={11} />
@@ -7544,7 +7544,7 @@ export function CaixaPanel({
                     className={clsx('w-full', 'pl-9', 'pr-8', 'py-2', 'bg-[#121316]', 'border', 'border-[#252832]', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'sm:text-sm', 'placeholder-zinc-500', 'focus:outline-none', 'focus:border-[#059669]', 'focus:ring-1', 'focus:ring-[#059669]', 'transition-all')}
                   />
                   {disponibilidadeSearch && (
-                    <button onClick={() => setDisponibilidadeSearch('')} className={clsx('absolute', 'right-3', 'top-1/2', '-translate-y-1/2', 'text-koma-subtle', 'hover:text-white', 'cursor-pointer')}>
+                    <button onClick={() => setDisponibilidadeSearch('')} className={clsx('absolute', 'right-3', 'top-1/2', '-translate-y-1/2', 'text-koma-subtle', 'hover:text-koma-foreground', 'cursor-pointer')}>
                       <X size={13} />
                     </button>
                   )}
@@ -7770,7 +7770,7 @@ export function CaixaPanel({
                                   setAjusteJustificativa('');
                                   setShowAjusteInsumoModal(true);
                                 }}
-                                className={clsx('px-2', 'py-0.5', 'border', 'border-koma-border', 'hover:border-zinc-700', 'bg-zinc-900/50', 'hover:bg-zinc-800', 'text-koma-secondary', 'hover:text-white', 'rounded-md', 'transition-all', 'cursor-pointer', 'font-bold')}
+                                className={clsx('px-2', 'py-0.5', 'border', 'border-koma-border', 'hover:border-zinc-700', 'bg-zinc-900/50', 'hover:bg-zinc-800', 'text-koma-secondary', 'hover:text-koma-foreground', 'rounded-md', 'transition-all', 'cursor-pointer', 'font-bold')}
                               >
                                 Ajustar
                               </button>
@@ -8116,7 +8116,7 @@ export function CaixaPanel({
                               setCrmFormPontos(user.pontos || 0);
                               setCrmFormCashback(user.saldoCashback || 0);
                             }}
-                            className={clsx('px-2.5', 'py-1', 'border', 'border-koma-border', 'hover:border-zinc-700', 'bg-zinc-900/50', 'hover:bg-zinc-800', 'text-koma-secondary', 'hover:text-white', 'rounded-lg', 'transition-all', 'cursor-pointer', 'font-bold')}
+                            className={clsx('px-2.5', 'py-1', 'border', 'border-koma-border', 'hover:border-zinc-700', 'bg-zinc-900/50', 'hover:bg-zinc-800', 'text-koma-secondary', 'hover:text-koma-foreground', 'rounded-lg', 'transition-all', 'cursor-pointer', 'font-bold')}
                           >
                             Editar
                           </button>
@@ -8364,7 +8364,7 @@ export function CaixaPanel({
                       setCopilotDraftResponses(prev => ({ ...prev, [activeChatContactId]: "" }));
                       setCopilotContacts(prev => prev.map(c => c.id === activeChatContactId ? { ...c, pendingAction: false, iaStatus: "Rascunho Limpo" } : c));
                     }}
-                    className={clsx('w-full', 'py-1.5', 'bg-koma-panel', 'hover:bg-[#27272A]', 'border', 'border-koma-border', 'text-koma-subtle', 'hover:text-white', 'rounded-xl', 'text-[8px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}
+                    className={clsx('w-full', 'py-1.5', 'bg-koma-panel', 'hover:bg-[#27272A]', 'border', 'border-koma-border', 'text-koma-subtle', 'hover:text-koma-foreground', 'rounded-xl', 'text-[8px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}
                   >
                     Limpar Rascunhos
                   </button>
@@ -8715,7 +8715,7 @@ export function CaixaPanel({
             <form onSubmit={handleAbrirCaixa} className={clsx('bg-koma-panel', 'border', 'border-koma-border', 'rounded-3xl', 'w-full', 'max-w-sm', 'p-6', 'space-y-5', 'shadow-2xl', 'animate-scale-in')}>
               <div className={clsx('flex', 'justify-between', 'items-center', 'border-b', 'border-koma-border', 'pb-3')}>
                 <h3 className={clsx('font-serif', 'font-bold', 'text-lg', 'text-koma-foreground')}>Abertura de Caixa</h3>
-                <button type="button" onClick={() => setShowAbrirModal(false)} className={clsx('p-1', 'hover:bg-[#27272A]', 'rounded-full', 'text-koma-subtle', 'hover:text-white', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}><X size={16} /></button>
+                <button type="button" onClick={() => setShowAbrirModal(false)} className={clsx('p-1', 'hover:bg-[#27272A]', 'rounded-full', 'text-koma-subtle', 'hover:text-koma-foreground', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}><X size={16} /></button>
               </div>
 
               <div className="space-y-1.5">
@@ -8780,7 +8780,7 @@ export function CaixaPanel({
                 <button
                   type="button"
                   onClick={() => setShowCheckoutModal(false)}
-                  className={clsx('p-1.5', 'hover:bg-[#27272A]', 'rounded-full', 'text-koma-subtle', 'hover:text-white', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}
+                  className={clsx('p-1.5', 'hover:bg-[#27272A]', 'rounded-full', 'text-koma-subtle', 'hover:text-koma-foreground', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}
                   title="Fechar (o pedido permanece na fila)"
                 >
                   <X size={18} />
@@ -9138,7 +9138,7 @@ export function CaixaPanel({
                               setSelectedItemIds([]);
                               setPaymentValor(val.toFixed(2));
                             }}
-                            className={clsx('px-2.5', 'py-1', 'bg-koma-panel', 'hover:bg-[#27272A]', 'border', 'border-koma-border', 'rounded-lg', 'text-[9px]', 'font-bold', 'text-koma-secondary', 'font-mono', 'transition-all', 'cursor-pointer', 'hover:border-gray-500', 'hover:text-white')}
+                            className={clsx('px-2.5', 'py-1', 'bg-koma-panel', 'hover:bg-[#27272A]', 'border', 'border-koma-border', 'rounded-lg', 'text-[9px]', 'font-bold', 'text-koma-secondary', 'font-mono', 'transition-all', 'cursor-pointer', 'hover:border-gray-500', 'hover:text-koma-foreground')}
                           >
                             R$ {val}
                           </button>
@@ -9262,7 +9262,7 @@ export function CaixaPanel({
                   disabled={tableMutation !== null}
                   onClick={() => setShowAddMesaModal(false)}
                   aria-label="Fechar"
-                  className={clsx('rounded-lg', 'p-2', 'text-koma-muted', 'transition-colors', 'hover:bg-white/[0.05]', 'hover:text-white', 'disabled:opacity-40')}
+                  className={clsx('rounded-lg', 'p-2', 'text-koma-muted', 'transition-colors', 'hover:bg-white/[0.05]', 'hover:text-koma-foreground', 'disabled:opacity-40')}
                 >
                   <X size={16} />
                 </button>
@@ -9320,7 +9320,7 @@ export function CaixaPanel({
                     type="button"
                     disabled={tableMutation !== null}
                     onClick={() => setShowAddMesaModal(false)}
-                    className={clsx('min-h-11', 'flex-1', 'rounded-xl', 'border', 'border-[#303633]', 'bg-koma-panel', 'px-4', 'text-xs', 'font-bold', 'text-koma-subtle', 'transition-colors', 'hover:text-white', 'disabled:opacity-40')}
+                    className={clsx('min-h-11', 'flex-1', 'rounded-xl', 'border', 'border-[#303633]', 'bg-koma-panel', 'px-4', 'text-xs', 'font-bold', 'text-koma-subtle', 'transition-colors', 'hover:text-koma-foreground', 'disabled:opacity-40')}
                   >
                     Cancelar
                   </button>
@@ -9396,7 +9396,7 @@ export function CaixaPanel({
                     setIsConfirmingDelete(false);
                   }} 
                   aria-label="Fechar"
-                  className={clsx('rounded-lg', 'p-2', 'text-koma-muted', 'transition-colors', 'hover:bg-white/[0.05]', 'hover:text-white', 'disabled:opacity-40')}
+                  className={clsx('rounded-lg', 'p-2', 'text-koma-muted', 'transition-colors', 'hover:bg-white/[0.05]', 'hover:text-koma-foreground', 'disabled:opacity-40')}
                 >
                   <X size={16} />
                 </button>
@@ -9417,7 +9417,7 @@ export function CaixaPanel({
                       type="button" 
                       onClick={() => setIsConfirmingDelete(false)} 
                       disabled={tableMutation !== null}
-                      className={clsx('min-h-10', 'flex-1', 'rounded-xl', 'border', 'border-[#303633]', 'bg-koma-panel', 'text-xs', 'font-bold', 'text-koma-subtle', 'transition-colors', 'hover:text-white', 'disabled:opacity-40')}
+                      className={clsx('min-h-10', 'flex-1', 'rounded-xl', 'border', 'border-[#303633]', 'bg-koma-panel', 'text-xs', 'font-bold', 'text-koma-subtle', 'transition-colors', 'hover:text-koma-foreground', 'disabled:opacity-40')}
                     >
                       Manter mesa
                     </button>
@@ -9493,7 +9493,7 @@ export function CaixaPanel({
                         type="button" 
                         onClick={() => setEditingTable(null)} 
                         disabled={tableMutation !== null}
-                        className={clsx('min-h-11', 'flex-1', 'rounded-xl', 'border', 'border-[#303633]', 'bg-koma-panel', 'px-4', 'text-xs', 'font-bold', 'text-koma-subtle', 'transition-colors', 'hover:text-white', 'disabled:opacity-40')}
+                        className={clsx('min-h-11', 'flex-1', 'rounded-xl', 'border', 'border-[#303633]', 'bg-koma-panel', 'px-4', 'text-xs', 'font-bold', 'text-koma-subtle', 'transition-colors', 'hover:text-koma-foreground', 'disabled:opacity-40')}
                       >
                         Cancelar
                       </button>
@@ -9543,7 +9543,7 @@ export function CaixaPanel({
               <button
                 type="button"
                 onClick={() => setSelectedKanbanOrder(null)}
-                className={clsx('p-1', 'text-koma-subtle', 'hover:text-white', 'transition-colors', 'cursor-pointer')}
+                className={clsx('p-1', 'text-koma-subtle', 'hover:text-koma-foreground', 'transition-colors', 'cursor-pointer')}
               >
                 <X size={16} />
               </button>
@@ -9645,7 +9645,7 @@ export function CaixaPanel({
                           showToast("Erro ao imprimir comanda inteira.", 'error');
                         }
                       }}
-                      className={clsx('flex-1', 'py-2.5', 'bg-koma-panel', 'hover:bg-[#27272A]', 'text-koma-secondary', 'hover:text-white', 'font-bold', 'text-xs', 'rounded-xl', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'text-center', 'flex', 'items-center', 'justify-center', 'gap-1.5', 'border', 'border-koma-border', 'shadow-lg')}
+                      className={clsx('flex-1', 'py-2.5', 'bg-koma-panel', 'hover:bg-[#27272A]', 'text-koma-secondary', 'hover:text-koma-foreground', 'font-bold', 'text-xs', 'rounded-xl', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'text-center', 'flex', 'items-center', 'justify-center', 'gap-1.5', 'border', 'border-koma-border', 'shadow-lg')}
                     >
                       <Printer size={13} />
                       <span>Comanda Inteira</span>
@@ -9671,7 +9671,7 @@ export function CaixaPanel({
                           showToast("Erro ao imprimir apenas valores.", 'error');
                         }
                       }}
-                      className={clsx('flex-1', 'py-2.5', 'bg-koma-panel', 'hover:bg-[#27272A]', 'text-koma-secondary', 'hover:text-white', 'font-bold', 'text-xs', 'rounded-xl', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'text-center', 'flex', 'items-center', 'justify-center', 'gap-1.5', 'border', 'border-koma-border', 'shadow-lg')}
+                      className={clsx('flex-1', 'py-2.5', 'bg-koma-panel', 'hover:bg-[#27272A]', 'text-koma-secondary', 'hover:text-koma-foreground', 'font-bold', 'text-xs', 'rounded-xl', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'text-center', 'flex', 'items-center', 'justify-center', 'gap-1.5', 'border', 'border-koma-border', 'shadow-lg')}
                     >
                       <Printer size={13} />
                       <span>Só Valores</span>
@@ -9696,21 +9696,21 @@ export function CaixaPanel({
       {cancelTableTarget && (
         <div className={clsx('fixed', 'inset-0', 'z-[60]', 'flex', 'items-center', 'justify-center', 'bg-black/90', 'p-4', 'backdrop-blur-sm')}>
           <div role="dialog" aria-modal="true" aria-labelledby="cancel-table-title" className={clsx('w-full', 'max-w-md', 'space-y-4', 'rounded-3xl', 'border', 'border-rose-900/50', 'bg-[#141312]', 'p-5', 'shadow-2xl')}>
-            <div className={clsx('flex', 'items-start', 'justify-between', 'gap-3', 'border-b', 'border-white/[0.07]', 'pb-4')}>
+            <div className={clsx('flex', 'items-start', 'justify-between', 'gap-3', 'border-b', 'border-koma-border-subtle', 'pb-4')}>
               <div>
                 <span className={clsx('font-mono', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-[0.18em]', 'text-rose-400')}>Ação irreversível</span>
                 <h3 id="cancel-table-title" className={clsx('mt-1', 'text-lg', 'font-bold', 'text-koma-foreground')}>Liberar Mesa {cancelTableTarget.mesaId} sem receber?</h3>
                 <p className={clsx('mt-1', 'text-[11px]', 'leading-relaxed', 'text-koma-subtle')}>O histórico será preservado como cancelado, mas nenhum valor entrará no caixa ou no faturamento.</p>
               </div>
-              <button type="button" onClick={() => setCancelTableTarget(null)} disabled={isCancellingTable} className={clsx('rounded-lg', 'p-2', 'text-koma-muted', 'hover:bg-white/[0.05]', 'hover:text-white', 'disabled:opacity-40')} aria-label="Fechar">
+              <button type="button" onClick={() => setCancelTableTarget(null)} disabled={isCancellingTable} className={clsx('rounded-lg', 'p-2', 'text-koma-muted', 'hover:bg-white/[0.05]', 'hover:text-koma-foreground', 'disabled:opacity-40')} aria-label="Fechar">
                 <X size={16} />
               </button>
             </div>
 
             <div className={clsx('grid', 'grid-cols-3', 'gap-2')}>
-              <div className={clsx('rounded-xl', 'border', 'border-white/[0.07]', 'bg-black/20', 'p-3')}><strong className={clsx('block', 'font-mono', 'text-sm', 'text-koma-foreground')}>{cancelTableTarget.comandas}</strong><span className={clsx('text-[9px]', 'text-koma-muted')}>comandas</span></div>
-              <div className={clsx('rounded-xl', 'border', 'border-white/[0.07]', 'bg-black/20', 'p-3')}><strong className={clsx('block', 'font-mono', 'text-sm', 'text-koma-foreground')}>{cancelTableTarget.itens}</strong><span className={clsx('text-[9px]', 'text-koma-muted')}>itens</span></div>
-              <div className={clsx('rounded-xl', 'border', 'border-white/[0.07]', 'bg-black/20', 'p-3')}><strong className={clsx('block', 'font-mono', 'text-sm', 'text-rose-300')}>{cancelTableTarget.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong><span className={clsx('text-[9px]', 'text-koma-muted')}>cancelados</span></div>
+              <div className={clsx('rounded-xl', 'border', 'border-koma-border-subtle', 'bg-black/20', 'p-3')}><strong className={clsx('block', 'font-mono', 'text-sm', 'text-koma-foreground')}>{cancelTableTarget.comandas}</strong><span className={clsx('text-[9px]', 'text-koma-muted')}>comandas</span></div>
+              <div className={clsx('rounded-xl', 'border', 'border-koma-border-subtle', 'bg-black/20', 'p-3')}><strong className={clsx('block', 'font-mono', 'text-sm', 'text-koma-foreground')}>{cancelTableTarget.itens}</strong><span className={clsx('text-[9px]', 'text-koma-muted')}>itens</span></div>
+              <div className={clsx('rounded-xl', 'border', 'border-koma-border-subtle', 'bg-black/20', 'p-3')}><strong className={clsx('block', 'font-mono', 'text-sm', 'text-rose-300')}>{cancelTableTarget.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong><span className={clsx('text-[9px]', 'text-koma-muted')}>cancelados</span></div>
             </div>
 
             <label className={clsx('block', 'space-y-1.5')}>
@@ -9727,7 +9727,7 @@ export function CaixaPanel({
             </label>
 
             <div className={clsx('flex', 'flex-col-reverse', 'gap-2', 'sm:flex-row')}>
-              <button type="button" onClick={() => setCancelTableTarget(null)} disabled={isCancellingTable} className={clsx('min-h-11', 'flex-1', 'rounded-xl', 'border', 'border-[#343936]', 'text-xs', 'font-bold', 'text-koma-subtle', 'hover:text-white', 'disabled:opacity-40')}>Manter atendimento</button>
+              <button type="button" onClick={() => setCancelTableTarget(null)} disabled={isCancellingTable} className={clsx('min-h-11', 'flex-1', 'rounded-xl', 'border', 'border-[#343936]', 'text-xs', 'font-bold', 'text-koma-subtle', 'hover:text-koma-foreground', 'disabled:opacity-40')}>Manter atendimento</button>
               <button type="button" onClick={handleCancelTableConsumption} disabled={cancelTableReason.trim().length < 3 || isCancellingTable} className={clsx('flex', 'min-h-11', 'flex-1', 'items-center', 'justify-center', 'gap-2', 'rounded-xl', 'bg-rose-600', 'px-3', 'text-xs', 'font-extrabold', 'text-koma-foreground', 'hover:bg-rose-500', 'disabled:cursor-not-allowed', 'disabled:opacity-40')}>
                 {isCancellingTable ? <RefreshCw className="animate-spin" size={14} /> : <Trash2 size={14} />}
                 {isCancellingTable ? 'Liberando…' : 'Cancelar e liberar'}
@@ -9751,7 +9751,7 @@ export function CaixaPanel({
               <button 
                 type="button" 
                 onClick={() => setShowProductModal(false)} 
-                className={clsx('p-1', 'text-koma-subtle', 'hover:text-white', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}
+                className={clsx('p-1', 'text-koma-subtle', 'hover:text-koma-foreground', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}
               >
                 <X size={16} />
               </button>
@@ -9970,7 +9970,7 @@ export function CaixaPanel({
               <button 
                 type="button" 
                 onClick={() => setEditingCrmUser(null)} 
-                className={clsx('p-1', 'text-koma-subtle', 'hover:text-white', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}
+                className={clsx('p-1', 'text-koma-subtle', 'hover:text-koma-foreground', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}
               >
                 <X size={16} />
               </button>
@@ -10075,7 +10075,7 @@ export function CaixaPanel({
               <button 
                 type="button" 
                 onClick={() => setShowNewCrmModal(false)} 
-                className={clsx('p-1', 'text-koma-subtle', 'hover:text-white', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}
+                className={clsx('p-1', 'text-koma-subtle', 'hover:text-koma-foreground', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}
               >
                 <X size={16} />
               </button>
@@ -10135,7 +10135,7 @@ export function CaixaPanel({
                 <button
                   type="button"
                   onClick={() => setShowNewCrmModal(false)}
-                  className={clsx('flex-1', 'py-2', 'border', 'border-koma-border', 'hover:border-zinc-700', 'bg-zinc-950', 'text-koma-subtle', 'hover:text-white', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
+                  className={clsx('flex-1', 'py-2', 'border', 'border-koma-border', 'hover:border-zinc-700', 'bg-zinc-950', 'text-koma-subtle', 'hover:text-koma-foreground', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
                 >
                   Cancelar
                 </button>
@@ -10164,7 +10164,7 @@ export function CaixaPanel({
               <button 
                 type="button" 
                 onClick={() => setShowNewInsumoModal(false)} 
-                className={clsx('p-1', 'text-koma-subtle', 'hover:text-white', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}
+                className={clsx('p-1', 'text-koma-subtle', 'hover:text-koma-foreground', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}
               >
                 <X size={16} />
               </button>
@@ -10259,7 +10259,7 @@ export function CaixaPanel({
                 <button
                   type="button"
                   onClick={() => setShowNewInsumoModal(false)}
-                  className={clsx('flex-1', 'py-2', 'border', 'border-koma-border', 'hover:border-zinc-700', 'bg-koma-raised', 'text-koma-subtle', 'hover:text-white', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
+                  className={clsx('flex-1', 'py-2', 'border', 'border-koma-border', 'hover:border-zinc-700', 'bg-koma-raised', 'text-koma-subtle', 'hover:text-koma-foreground', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
                 >
                   Cancelar
                 </button>
@@ -10288,7 +10288,7 @@ export function CaixaPanel({
               <button 
                 type="button" 
                 onClick={() => setShowEditInsumoModal(false)} 
-                className={clsx('p-1', 'text-koma-subtle', 'hover:text-white', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}
+                className={clsx('p-1', 'text-koma-subtle', 'hover:text-koma-foreground', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}
               >
                 <X size={16} />
               </button>
@@ -10377,7 +10377,7 @@ export function CaixaPanel({
                 <button
                   type="button"
                   onClick={() => setShowEditInsumoModal(false)}
-                  className={clsx('flex-1', 'py-2', 'border', 'border-koma-border', 'hover:border-zinc-700', 'bg-koma-raised', 'text-koma-subtle', 'hover:text-white', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
+                  className={clsx('flex-1', 'py-2', 'border', 'border-koma-border', 'hover:border-zinc-700', 'bg-koma-raised', 'text-koma-subtle', 'hover:text-koma-foreground', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
                 >
                   Cancelar
                 </button>
@@ -10406,7 +10406,7 @@ export function CaixaPanel({
               <button 
                 type="button" 
                 onClick={() => setShowAjusteInsumoModal(false)} 
-                className={clsx('p-1', 'text-koma-subtle', 'hover:text-white', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}
+                className={clsx('p-1', 'text-koma-subtle', 'hover:text-koma-foreground', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}
               >
                 <X size={16} />
               </button>
@@ -10433,7 +10433,7 @@ export function CaixaPanel({
                       'py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider border transition-all cursor-pointer',
                       ajusteTipo === 'ENTRADA'
                         ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400 font-bold'
-                        : 'bg-koma-raised border-koma-border text-koma-subtle hover:text-white font-bold'
+                        : 'bg-koma-raised border-koma-border text-koma-subtle hover:text-koma-foreground font-bold'
                     )}
                   >
                     Entrada (+)
@@ -10445,7 +10445,7 @@ export function CaixaPanel({
                       'py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider border transition-all cursor-pointer',
                       ajusteTipo === 'SAIDA'
                         ? 'bg-red-500/10 border-red-500/60 text-red-400 font-bold'
-                        : 'bg-koma-raised border-koma-border text-koma-subtle hover:text-white font-bold'
+                        : 'bg-koma-raised border-koma-border text-koma-subtle hover:text-koma-foreground font-bold'
                     )}
                   >
                     Saída (-)
@@ -10481,7 +10481,7 @@ export function CaixaPanel({
                 <button
                   type="button"
                   onClick={() => setShowAjusteInsumoModal(false)}
-                  className={clsx('flex-1', 'py-2', 'border', 'border-koma-border', 'hover:border-zinc-700', 'bg-koma-raised', 'text-koma-subtle', 'hover:text-white', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
+                  className={clsx('flex-1', 'py-2', 'border', 'border-koma-border', 'hover:border-zinc-700', 'bg-koma-raised', 'text-koma-subtle', 'hover:text-koma-foreground', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
                 >
                   Cancelar
                 </button>
@@ -10510,7 +10510,7 @@ export function CaixaPanel({
               <button 
                 type="button" 
                 onClick={() => setShowNewDistModal(false)} 
-                className={clsx('p-1', 'text-koma-subtle', 'hover:text-white', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}
+                className={clsx('p-1', 'text-koma-subtle', 'hover:text-koma-foreground', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}
               >
                 <X size={16} />
               </button>
@@ -10592,7 +10592,7 @@ export function CaixaPanel({
                 <button
                   type="button"
                   onClick={() => setShowNewDistModal(false)}
-                  className={clsx('flex-1', 'py-2', 'border', 'border-koma-border', 'hover:border-zinc-700', 'bg-zinc-955', 'text-koma-subtle', 'hover:text-white', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
+                  className={clsx('flex-1', 'py-2', 'border', 'border-koma-border', 'hover:border-zinc-700', 'bg-zinc-955', 'text-koma-subtle', 'hover:text-koma-foreground', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
                 >
                   Cancelar
                 </button>
@@ -10621,7 +10621,7 @@ export function CaixaPanel({
               <button 
                 type="button" 
                 onClick={() => setShowEditDistModal(false)} 
-                className={clsx('p-1', 'text-koma-subtle', 'hover:text-white', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}
+                className={clsx('p-1', 'text-koma-subtle', 'hover:text-koma-foreground', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}
               >
                 <X size={16} />
               </button>
@@ -10696,7 +10696,7 @@ export function CaixaPanel({
                 <button
                   type="button"
                   onClick={() => setShowEditDistModal(false)}
-                  className={clsx('flex-1', 'py-2', 'border', 'border-koma-border', 'hover:border-zinc-700', 'bg-zinc-950', 'text-koma-subtle', 'hover:text-white', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
+                  className={clsx('flex-1', 'py-2', 'border', 'border-koma-border', 'hover:border-zinc-700', 'bg-zinc-950', 'text-koma-subtle', 'hover:text-koma-foreground', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
                 >
                   Cancelar
                 </button>
@@ -10908,7 +10908,7 @@ export function CaixaPanel({
                 <button
                   type="button"
                   onClick={() => setIsOperatorDrawerOpen(false)}
-                  className={clsx('p-1.5', 'text-koma-subtle', 'hover:text-white', 'bg-koma-panel', 'hover:bg-[#27272A]', 'border', 'border-koma-border', 'rounded-xl', 'cursor-pointer', 'transition-all')}
+                  className={clsx('p-1.5', 'text-koma-subtle', 'hover:text-koma-foreground', 'bg-koma-panel', 'hover:bg-[#27272A]', 'border', 'border-koma-border', 'rounded-xl', 'cursor-pointer', 'transition-all')}
                   title="Fechar Menu"
                 >
                   <X size={16} />
@@ -11006,13 +11006,13 @@ export function CaixaPanel({
                     if (onRefreshOrders) onRefreshOrders();
                     showToast("Salão e pedidos sincronizados em tempo real!", "success");
                   }}
-                  className={clsx('w-full', 'py-2.5', 'px-3', 'bg-koma-card', 'hover:bg-[#27272A]/50', 'border', 'border-koma-border', 'text-gray-200', 'hover:text-white', 'rounded-xl', 'text-xs', 'font-bold', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'justify-between', 'group')}
+                  className={clsx('w-full', 'py-2.5', 'px-3', 'bg-koma-card', 'hover:bg-[#27272A]/50', 'border', 'border-koma-border', 'text-gray-200', 'hover:text-koma-foreground', 'rounded-xl', 'text-xs', 'font-bold', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'justify-between', 'group')}
                 >
                   <div className={clsx('flex', 'items-center', 'gap-2')}>
                     <RefreshCw size={14} className={clsx('text-emerald-400', 'group-hover:rotate-180', 'transition-transform', 'duration-500')} />
                     <span>Sincronizar Salão e Pedidos</span>
                   </div>
-                  <ChevronRight size={14} className={clsx('text-koma-muted', 'group-hover:text-white')} />
+                  <ChevronRight size={14} className={clsx('text-koma-muted', 'group-hover:text-koma-foreground')} />
                 </button>
 
                 <button
@@ -11021,13 +11021,13 @@ export function CaixaPanel({
                     toggleFullscreen();
                     setIsOperatorDrawerOpen(false);
                   }}
-                  className={clsx('w-full', 'py-2.5', 'px-3', 'bg-koma-card', 'hover:bg-[#27272A]/50', 'border', 'border-koma-border', 'text-gray-200', 'hover:text-white', 'rounded-xl', 'text-xs', 'font-bold', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'justify-between', 'group')}
+                  className={clsx('w-full', 'py-2.5', 'px-3', 'bg-koma-card', 'hover:bg-[#27272A]/50', 'border', 'border-koma-border', 'text-gray-200', 'hover:text-koma-foreground', 'rounded-xl', 'text-xs', 'font-bold', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'justify-between', 'group')}
                 >
                   <div className={clsx('flex', 'items-center', 'gap-2')}>
                     {isFullscreen ? <Minimize2 size={14} className="text-sky-400" /> : <Maximize2 size={14} className="text-sky-400" />}
                     <span>{isFullscreen ? "Sair do Modo PDV" : "Modo PDV Imersivo"}</span>
                   </div>
-                  <ChevronRight size={14} className={clsx('text-koma-muted', 'group-hover:text-white')} />
+                  <ChevronRight size={14} className={clsx('text-koma-muted', 'group-hover:text-koma-foreground')} />
                 </button>
               </div>
 
@@ -11047,7 +11047,7 @@ export function CaixaPanel({
                         onClick={() => changeFontSize(sz)}
                         className={`py-1 rounded-lg text-xs font-bold uppercase transition-all cursor-pointer ${fontSize === sz
                           ? 'bg-emerald-500 text-zinc-950 shadow-md font-extrabold'
-                          : 'text-koma-subtle hover:text-white'
+                          : 'text-koma-subtle hover:text-koma-foreground'
                           }`}
                       >
                         {sz === 'padrao' ? 'Padrão' : sz === 'grande' ? 'Grande' : 'Gigante'}

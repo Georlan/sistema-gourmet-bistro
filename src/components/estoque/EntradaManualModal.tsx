@@ -138,7 +138,7 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
             <h3 className="font-serif text-sm font-bold text-koma-foreground">Nova Entrada Manual de Estoque</h3>
             <p className="text-[9px] text-koma-subtle">Registre recebimento de ingredientes com recálculo de custo médio ponderado.</p>
           </div>
-          <button type="button" onClick={onClose} className="p-1 text-koma-subtle hover:text-white transition-colors cursor-pointer">
+          <button type="button" onClick={onClose} className="p-1 text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer">
             <X size={16} />
           </button>
         </div>
@@ -262,7 +262,7 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
                         <button
                           type="button"
                           onClick={() => handleItemChange(idx, 'insumo_id', '')}
-                          className="text-[8px] text-koma-subtle hover:text-white whitespace-nowrap cursor-pointer"
+                          className="text-[8px] text-koma-subtle hover:text-koma-foreground whitespace-nowrap cursor-pointer"
                         >
                           Voltar
                         </button>
@@ -353,7 +353,7 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2.5 border border-koma-border hover:border-zinc-700 bg-koma-raised text-koma-subtle hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+              className="flex-1 py-2.5 border border-koma-border hover:border-zinc-700 bg-koma-raised text-koma-subtle hover:text-koma-foreground rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
             >
               Cancelar
             </button>

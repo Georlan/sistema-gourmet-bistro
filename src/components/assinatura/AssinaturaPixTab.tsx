@@ -58,7 +58,7 @@ const PricingSwitch = ({ isYearly, onSwitch }: { isYearly: boolean; onSwitch: (y
           type="button"
           onClick={() => onSwitch(false)}
           className={`relative z-10 w-fit sm:h-10 h-9 rounded-full sm:px-5 px-3 sm:py-1 py-0.5 text-xs font-bold transition-colors cursor-pointer ${
-            !isYearly ? "text-zinc-950" : "text-koma-subtle hover:text-white"
+            !isYearly ? "text-zinc-950" : "text-koma-subtle hover:text-koma-foreground"
           }`}
         >
           {!isYearly && (
@@ -75,7 +75,7 @@ const PricingSwitch = ({ isYearly, onSwitch }: { isYearly: boolean; onSwitch: (y
           type="button"
           onClick={() => onSwitch(true)}
           className={`relative z-10 w-fit sm:h-10 h-9 flex-shrink-0 rounded-full sm:px-5 px-3 sm:py-1 py-0.5 text-xs font-bold transition-colors cursor-pointer ${
-            isYearly ? "text-zinc-950" : "text-koma-subtle hover:text-white"
+            isYearly ? "text-zinc-950" : "text-koma-subtle hover:text-koma-foreground"
           }`}
         >
           {isYearly && (
@@ -176,7 +176,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
             'px-4 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 cursor-pointer',
             activeSubTab === 'meu_plano'
               ? 'bg-emerald-500 text-zinc-950 shadow-lg shadow-emerald-950/40'
-              : 'bg-koma-panel text-koma-subtle hover:text-white border border-koma-border'
+              : 'bg-koma-panel text-koma-subtle hover:text-koma-foreground border border-koma-border'
           )}
         >
           <ShieldCheck size={15} />
@@ -190,7 +190,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
             'px-4 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 cursor-pointer',
             activeSubTab === 'pagamentos'
               ? 'bg-emerald-500 text-zinc-950 shadow-lg shadow-emerald-950/40'
-              : 'bg-koma-panel text-koma-subtle hover:text-white border border-koma-border'
+              : 'bg-koma-panel text-koma-subtle hover:text-koma-foreground border border-koma-border'
           )}
         >
           <CreditCard size={15} />
@@ -204,7 +204,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
             'px-4 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 cursor-pointer',
             activeSubTab === 'planos_upgrade'
               ? 'bg-emerald-500 text-zinc-950 shadow-lg shadow-emerald-950/40'
-              : 'bg-koma-panel text-koma-subtle hover:text-white border border-koma-border'
+              : 'bg-koma-panel text-koma-subtle hover:text-koma-foreground border border-koma-border'
           )}
         >
           <Zap size={15} />
@@ -562,7 +562,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                               'w-full py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors',
                               isPopular
                                 ? 'bg-emerald-500 text-zinc-950 hover:bg-emerald-400'
-                                : 'bg-koma-raised text-gray-200 border border-[#343438] hover:border-emerald-500/50 hover:text-white'
+                                : 'bg-koma-raised text-gray-200 border border-[#343438] hover:border-emerald-500/50 hover:text-koma-foreground'
                             )}
                           >
                             <MessageSquare size={13} />

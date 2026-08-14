@@ -118,7 +118,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
       className={`group relative min-w-0 min-h-[112px] sm:min-h-[132px] overflow-hidden rounded-2xl border p-3 sm:p-4 text-left transition-all duration-200 ${statusConfig.surface} ${statusConfig.border} hover:-translate-y-0.5 hover:shadow-[0_16px_32px_rgba(0,0,0,0.24)] active:translate-y-0 active:scale-[0.98] focus:outline-none focus-visible:ring-2`}
     >
       <span className={`absolute left-0 top-0 h-[3px] w-full ${statusConfig.accent}`} aria-hidden="true" />
-      <span className="absolute -right-5 -top-8 font-serif text-[72px] sm:text-[88px] font-black leading-none text-white/[0.025]" aria-hidden="true">
+      <span className="absolute -right-5 -top-8 font-serif text-[72px] sm:text-[88px] font-black leading-none text-koma-foreground/[0.025]" aria-hidden="true">
         {table.id}
       </span>
 
@@ -140,7 +140,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
           ) : status === 'mesclada' ? (
             <GitMerge size={17} className="shrink-0 text-koma-muted" />
           ) : (
-            <div className="flex items-center gap-1.5 rounded-full border border-white/[0.07] bg-black/20 px-2 py-1">
+            <div className="flex items-center gap-1.5 rounded-full border border-koma-border-subtle bg-black/20 px-2 py-1">
               <span className={`h-1.5 w-1.5 rounded-full ${statusConfig.dot}`} />
               <span className="hidden 2xl:inline text-[8px] font-bold uppercase tracking-wider text-koma-subtle">Ativa</span>
             </div>
@@ -160,7 +160,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
           </div>
 
           {status !== 'livre' && status !== 'mesclada' && (
-            <div className="mt-2 flex items-end justify-between gap-2 border-t border-white/[0.07] pt-2">
+            <div className="mt-2 flex items-end justify-between gap-2 border-t border-koma-border-subtle pt-2">
               <div className="min-w-0 space-y-1">
                 <span className="flex items-center gap-1 text-[9px] sm:text-[10px] font-mono font-bold text-koma-secondary">
                   <Clock3 size={10} className="shrink-0 text-koma-muted" /> {elapsed}

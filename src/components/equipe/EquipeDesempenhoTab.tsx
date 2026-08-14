@@ -194,7 +194,7 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
             type="button"
             onClick={handleExportCsv}
             disabled={!membros.length}
-            className="px-3.5 py-2 bg-koma-raised hover:bg-koma-card border border-koma-border text-koma-secondary hover:text-white rounded-xl text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+            className="px-3.5 py-2 bg-koma-raised hover:bg-koma-card border border-koma-border text-koma-secondary hover:text-koma-foreground rounded-xl text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
           >
             <Download size={14} />
             Exportar CSV

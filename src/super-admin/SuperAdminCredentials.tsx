@@ -990,7 +990,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
             <div className={clsx('flex', 'items-center', 'justify-end', 'gap-3', 'font-mono', 'text-xs', 'mt-2')}>
               <button
                 onClick={() => setShowWarningModal(false)}
-                className={clsx('bg-koma-page', 'hover:bg-zinc-900', 'text-koma-secondary', 'hover:text-white', 'border', 'border-[#1e293b]', 'py-2', 'px-4', 'rounded', 'cursor-pointer', 'transition-all')}
+                className={clsx('bg-koma-page', 'hover:bg-zinc-900', 'text-koma-secondary', 'hover:text-koma-foreground', 'border', 'border-[#1e293b]', 'py-2', 'px-4', 'rounded', 'cursor-pointer', 'transition-all')}
               >
                 CANCELAR E CORRIGIR
               </button>

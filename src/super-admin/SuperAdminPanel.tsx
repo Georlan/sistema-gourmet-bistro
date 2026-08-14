@@ -464,7 +464,7 @@ export default function SuperAdminPanel() {
               )}
               <button
                 onClick={() => setFlashAlert(null)}
-                className="text-koma-subtle hover:text-white font-bold underline text-[10px] px-2 py-1 cursor-pointer"
+                className="text-koma-subtle hover:text-koma-foreground font-bold underline text-[10px] px-2 py-1 cursor-pointer"
               >
                 DESCARTAR
               </button>
@@ -532,7 +532,7 @@ export default function SuperAdminPanel() {
                 className={`w-full text-left font-mono text-xs px-3 py-2.5 rounded transition-all flex items-center justify-between cursor-pointer border ${
                   activeTab === "metrics" 
                     ? "bg-koma-page border-[#00b894] text-koma-foreground font-bold shadow-[0_0_8px_rgba(0,184,148,0.15)]" 
-                    : "border-transparent text-koma-subtle hover:bg-[#090a0f]/60 hover:text-white"
+                    : "border-transparent text-koma-subtle hover:bg-[#090a0f]/60 hover:text-koma-foreground"
                 }`}
               >
                 <div className="flex items-center gap-2.5">
@@ -546,7 +546,7 @@ export default function SuperAdminPanel() {
                 className={`w-full text-left font-mono text-xs px-3 py-2.5 rounded transition-all flex items-center justify-between cursor-pointer border ${
                   activeTab === "webhooks" 
                     ? "bg-koma-page border-[#00b894] text-koma-foreground font-bold shadow-[0_0_8px_rgba(0,184,148,0.15)]" 
-                    : "border-transparent text-koma-subtle hover:bg-[#090a0f]/60 hover:text-white"
+                    : "border-transparent text-koma-subtle hover:bg-[#090a0f]/60 hover:text-koma-foreground"
                 }`}
               >
                 <div className="flex items-center gap-2.5">
@@ -560,7 +560,7 @@ export default function SuperAdminPanel() {
                 className={`w-full text-left font-mono text-xs px-3 py-2.5 rounded transition-all flex items-center justify-between cursor-pointer border ${
                   activeTab === "database" 
                     ? "bg-koma-page border-[#00b894] text-koma-foreground font-bold shadow-[0_0_8px_rgba(0,184,148,0.15)]" 
-                    : "border-transparent text-koma-subtle hover:bg-[#090a0f]/60 hover:text-white"
+                    : "border-transparent text-koma-subtle hover:bg-[#090a0f]/60 hover:text-koma-foreground"
                 }`}
               >
                 <div className="flex items-center gap-2.5">
@@ -574,7 +574,7 @@ export default function SuperAdminPanel() {
                 className={`w-full text-left font-mono text-xs px-3 py-2.5 rounded transition-all flex items-center justify-between cursor-pointer border ${
                   activeTab === "devops" 
                     ? "bg-koma-page border-[#00b894] text-koma-foreground font-bold shadow-[0_0_8px_rgba(0,184,148,0.15)]" 
-                    : "border-transparent text-koma-subtle hover:bg-[#090a0f]/60 hover:text-white"
+                    : "border-transparent text-koma-subtle hover:bg-[#090a0f]/60 hover:text-koma-foreground"
                 }`}
               >
                 <div className="flex items-center gap-2.5">
@@ -588,7 +588,7 @@ export default function SuperAdminPanel() {
                 className={`w-full text-left font-mono text-xs px-3 py-2.5 rounded transition-all flex items-center justify-between cursor-pointer border ${
                   activeTab === "telegram" 
                     ? "bg-koma-page border-[#00b894] text-koma-foreground font-bold shadow-[0_0_8px_rgba(0,184,148,0.15)]" 
-                    : "border-transparent text-koma-subtle hover:bg-[#090a0f]/60 hover:text-white"
+                    : "border-transparent text-koma-subtle hover:bg-[#090a0f]/60 hover:text-koma-foreground"
                 }`}
               >
                 <div className="flex items-center gap-2.5">
@@ -602,7 +602,7 @@ export default function SuperAdminPanel() {
                 className={`w-full text-left font-mono text-xs px-3 py-2.5 rounded transition-all flex items-center justify-between cursor-pointer border ${
                   activeTab === "credentials" 
                     ? "bg-koma-page border-[#00b894] text-koma-foreground font-bold shadow-[0_0_8px_rgba(0,184,148,0.15)]" 
-                    : "border-transparent text-koma-subtle hover:bg-[#090a0f]/60 hover:text-white"
+                    : "border-transparent text-koma-subtle hover:bg-[#090a0f]/60 hover:text-koma-foreground"
                 }`}
               >
                 <div className="flex items-center gap-2.5">
@@ -616,7 +616,7 @@ export default function SuperAdminPanel() {
                 className={`w-full text-left font-mono text-xs px-3 py-2.5 rounded transition-all flex items-center justify-between cursor-pointer border ${
                   activeTab === "whitelabel" 
                     ? "bg-koma-page border-[#00b894] text-koma-foreground font-bold shadow-[0_0_8px_rgba(0,184,148,0.15)]" 
-                    : "border-transparent text-koma-subtle hover:bg-[#090a0f]/60 hover:text-white"
+                    : "border-transparent text-koma-subtle hover:bg-[#090a0f]/60 hover:text-koma-foreground"
                 }`}
               >
                 <div className="flex items-center gap-2.5">

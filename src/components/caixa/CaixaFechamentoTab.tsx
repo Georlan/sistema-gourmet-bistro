@@ -87,7 +87,7 @@ const CountField: React.FC<CountFieldProps> = ({
           </span>
           <span>{label}{required ? <span className="ml-1 text-[#54d9b3]">*</span> : null}</span>
         </label>
-        <button type="button" onClick={onUseExpected} className="rounded-lg border border-[#275f4d] bg-[#0d3026] px-2.5 py-1.5 text-[9px] font-bold text-[#54d9b3] transition-colors hover:border-[#3ba982] hover:text-white">
+        <button type="button" onClick={onUseExpected} className="rounded-lg border border-[#275f4d] bg-[#0d3026] px-2.5 py-1.5 text-[9px] font-bold text-[#54d9b3] transition-colors hover:border-[#3ba982] hover:text-koma-foreground">
           Usar {formatMoney(expected)}
         </button>
       </div>
@@ -363,7 +363,7 @@ ________________________________
             </button>
           )}
           
-          <button type="button" onClick={handlePrintComprovante} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-koma-border-subtle bg-koma-panel px-4 py-3 text-xs font-bold text-koma-secondary transition-colors hover:bg-[#1a201c] hover:text-white">
+          <button type="button" onClick={handlePrintComprovante} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-koma-border-subtle bg-koma-panel px-4 py-3 text-xs font-bold text-koma-secondary transition-colors hover:bg-[#1a201c] hover:text-koma-foreground">
             <Printer size={16} /> Imprimir comprovante
           </button>
         </aside>
@@ -396,7 +396,7 @@ ________________________________
             <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-koma-muted">Compare cada meio com o sistema. Use os valores esperados e altere apenas quando houver divergência.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={handleRefresh} disabled={!onRefresh || isRefreshing} className="inline-flex w-fit items-center gap-2 rounded-xl border border-koma-border-subtle bg-koma-panel px-3 py-2 text-[10px] font-semibold text-koma-secondary hover:border-[#3a4540] hover:text-white disabled:opacity-50">
+            <button type="button" onClick={handleRefresh} disabled={!onRefresh || isRefreshing} className="inline-flex w-fit items-center gap-2 rounded-xl border border-koma-border-subtle bg-koma-panel px-3 py-2 text-[10px] font-semibold text-koma-secondary hover:border-[#3a4540] hover:text-koma-foreground disabled:opacity-50">
               <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} /> Atualizar
             </button>
             <button type="button" onClick={useExpectedValues} className="inline-flex w-fit items-center gap-2 rounded-xl border border-[#1f8f70] bg-[#0f6f55] px-3 py-2 text-[10px] font-bold text-white transition-colors hover:bg-[#128364]">
@@ -462,7 +462,7 @@ ________________________________
             <h3 className="mt-3 text-xs font-bold text-koma-foreground">Pagamentos aguardando confirmação</h3>
             <p className="mt-1 text-[10px] text-koma-muted">{pendingPaymentsCount > 0 ? `${formatMoney(pendingPaymentsTotal)} ainda precisa ser conferido.` : 'Nenhum recebimento pendente neste momento.'}</p>
             {pendingPaymentsCount > 0 && onNavigateToPendingPayments && (
-              <button type="button" onClick={onNavigateToPendingPayments} className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-bold text-[#54d9b3] hover:text-white">Resolver pagamentos <ArrowRight size={13} /></button>
+              <button type="button" onClick={onNavigateToPendingPayments} className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-bold text-[#54d9b3] hover:text-koma-foreground">Resolver pagamentos <ArrowRight size={13} /></button>
             )}
           </div>
 
@@ -474,7 +474,7 @@ ________________________________
             <h3 className="mt-3 text-xs font-bold text-koma-foreground">Comandas ainda abertas</h3>
             <p className="mt-1 text-[10px] text-koma-muted">{openAccountsCount > 0 ? 'Finalize as contas para não levar valores ao próximo turno.' : 'Todas as comandas estão finalizadas.'}</p>
             {openAccountsCount > 0 && onNavigateToOpenComandas && (
-              <button type="button" onClick={onNavigateToOpenComandas} className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-bold text-[#54d9b3] hover:text-white">Revisar comandas <ArrowRight size={13} /></button>
+              <button type="button" onClick={onNavigateToOpenComandas} className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-bold text-[#54d9b3] hover:text-koma-foreground">Revisar comandas <ArrowRight size={13} /></button>
             )}
           </div>
         </div>
@@ -525,7 +525,7 @@ ________________________________
             </div>
 
             <div className="mt-4 flex gap-2">
-              <button type="button" onClick={() => setShowConfirmModal(false)} disabled={isSubmitting} className="flex-1 rounded-xl border border-koma-border-subtle bg-koma-panel px-3 py-3 text-xs font-bold text-koma-secondary hover:text-white disabled:opacity-50">Voltar e conferir</button>
+              <button type="button" onClick={() => setShowConfirmModal(false)} disabled={isSubmitting} className="flex-1 rounded-xl border border-koma-border-subtle bg-koma-panel px-3 py-3 text-xs font-bold text-koma-secondary hover:text-koma-foreground disabled:opacity-50">Voltar e conferir</button>
               <button type="button" onClick={handleExecuteFechamento} disabled={isSubmitting} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-[#1f8f70] bg-[#0f6f55] px-3 py-3 text-xs font-bold text-white hover:bg-[#128364] disabled:opacity-50">
                 <Check size={15} /> {isSubmitting ? 'Encerrando...' : 'Confirmar fechamento'}
               </button>

@@ -52,7 +52,7 @@ export const PeriodoCalendarioModal: React.FC<PeriodoCalendarioModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="p-1 hover:bg-koma-raised rounded-full text-koma-subtle hover:text-white transition-colors cursor-pointer"
+            className="p-1 hover:bg-koma-raised rounded-full text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer"
           >
             <X size={16} />
           </button>
