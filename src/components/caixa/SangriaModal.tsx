@@ -94,9 +94,9 @@ Assinatura do Responsável: _________________
         onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto cursor-pointer"
       >
-        <div className="w-full max-w-md bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
+        <div className="w-full max-w-md bg-koma-dialog border border-koma-border rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
           {/* Header */}
-          <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
+          <div className="flex justify-between items-center pb-2 border-b border-koma-border">
             <div>
               <h3 className="font-serif text-sm font-bold text-white flex items-center gap-2">
                 <ShieldCheck size={18} className="text-amber-400" />
@@ -116,7 +116,7 @@ Assinatura do Responsável: _________________
             </div>
           )}
 
-          <div className="bg-[#1C1C1F]/60 p-3 rounded-2xl border border-[#27272A] text-xs font-mono flex justify-between items-center">
+          <div className="bg-koma-raised p-3 rounded-2xl border border-koma-border text-xs font-mono flex justify-between items-center">
             <span className="text-gray-400 font-sans text-[10px] uppercase font-bold">Saldo em Dinheiro Disponível:</span>
             <strong className="text-emerald-400 font-bold text-sm">R$ {saldoDisponivelDinheiro.toFixed(2)}</strong>
           </div>
@@ -135,7 +135,7 @@ Assinatura do Responsável: _________________
                 placeholder="0,00"
                 value={valor || ''}
                 onChange={(e) => setValor(parseFloat(e.target.value) || 0)}
-                className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white text-sm font-mono focus:outline-none focus:border-amber-500"
+                className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-white text-sm font-mono focus:outline-none focus:border-amber-500"
               />
             </div>
 
@@ -150,7 +150,7 @@ Assinatura do Responsável: _________________
                 placeholder="ex: Pagamento emergencial de hortifrúti, sangria de segurança..."
                 value={motivo}
                 onChange={(e) => setMotivo(e.target.value)}
-                className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white text-xs focus:outline-none focus:border-amber-500"
+                className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-amber-500"
               />
             </div>
 
@@ -162,7 +162,7 @@ Assinatura do Responsável: _________________
                 placeholder="Detalhes adicionais..."
                 value={observacao}
                 onChange={(e) => setObservacao(e.target.value)}
-                className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white text-xs focus:outline-none focus:border-amber-500 resize-none"
+                className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-amber-500 resize-none"
               />
             </div>
 
@@ -171,7 +171,7 @@ Assinatura do Responsável: _________________
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 py-2 border border-zinc-800 hover:border-zinc-700 bg-zinc-900 text-gray-400 hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                className="flex-1 py-2 border border-koma-border hover:border-zinc-700 bg-koma-raised text-gray-400 hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
               >
                 Cancelar
               </button>

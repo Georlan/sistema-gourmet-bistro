@@ -131,9 +131,9 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto cursor-pointer"
     >
-      <div className="w-full max-w-4xl bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8 max-h-[90vh] flex flex-col">
+      <div className="w-full max-w-4xl bg-koma-dialog border border-koma-border rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8 max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex justify-between items-center pb-2 border-b border-[#27272A] shrink-0">
+        <div className="flex justify-between items-center pb-2 border-b border-koma-border shrink-0">
           <div>
             <h3 className="font-serif text-sm font-bold text-white">Nova Entrada Manual de Estoque</h3>
             <p className="text-[9px] text-gray-400">Registre recebimento de ingredientes com recálculo de custo médio ponderado.</p>
@@ -151,14 +151,14 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
 
         <form onSubmit={handleSubmitForm} className="space-y-4 flex-1 overflow-y-auto pr-1">
           {/* Header Info: Fornecedor, Doc, Data */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-[#1C1C1F]/40 p-4 rounded-2xl border border-[#27272A]/60">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-koma-raised p-4 rounded-2xl border border-koma-border">
             <div className="space-y-1 md:col-span-1">
               <div className="flex justify-between items-center">
                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Fornecedor:</label>
                 <button
                   type="button"
                   onClick={() => { setIsNovoDistribuidor(!isNovoDistribuidor); setDistribuidorId(''); }}
-                  className="text-[9px] text-emerald-400 hover:underline"
+                  className="text-[9px] text-emerald-400 hover:underline cursor-pointer"
                 >
                   {isNovoDistribuidor ? 'Selecionar Existente' : '+ Criar Fornecedor'}
                 </button>
@@ -168,7 +168,7 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
                 <select
                   value={distribuidorId}
                   onChange={(e) => setDistribuidorId(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#121214] border border-[#27272A] rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
+                  className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
                 >
                   <option value="">-- Selecione (Opcional) --</option>
                   {distribuidores.map(d => (
@@ -183,14 +183,14 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
                     placeholder="Nome Fantasia do Fornecedor"
                     value={distribuidorNome}
                     onChange={(e) => setDistribuidorNome(e.target.value)}
-                    className="w-full px-3 py-1.5 bg-[#121214] border border-[#27272A] rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
+                    className="w-full px-3 py-1.5 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
                   />
                   <input
                     type="text"
                     placeholder="CNPJ (opcional)"
                     value={distribuidorCnpj}
                     onChange={(e) => setDistribuidorCnpj(e.target.value)}
-                    className="w-full px-3 py-1.5 bg-[#121214] border border-[#27272A] rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500 font-mono"
+                    className="w-full px-3 py-1.5 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500 font-mono"
                   />
                 </div>
               )}
@@ -203,7 +203,7 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
                 placeholder="ex: NF-12345"
                 value={numeroDocumento}
                 onChange={(e) => setNumeroDocumento(e.target.value)}
-                className="w-full px-3 py-2 bg-[#121214] border border-[#27272A] rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500 font-mono"
+                className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500 font-mono"
               />
             </div>
 
@@ -213,7 +213,7 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
                 type="date"
                 value={dataEmissao}
                 onChange={(e) => setDataEmissao(e.target.value)}
-                className="w-full px-3 py-2 bg-[#121214] border border-[#27272A] rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500 font-mono"
+                className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500 font-mono"
               />
             </div>
           </div>
@@ -234,14 +234,14 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
 
             <div className="space-y-2">
               {itens.map((item, idx) => (
-                <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-[#1C1C1F]/60 border border-[#27272A] p-2.5 rounded-2xl">
+                <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-koma-card border border-koma-border p-2.5 rounded-2xl">
                   {/* Insumo selector / inline text */}
                   <div className="col-span-5 space-y-1">
                     {!item.is_novo_insumo ? (
                       <select
                         value={item.insumo_id}
                         onChange={(e) => handleItemChange(idx, 'insumo_id', e.target.value)}
-                        className="w-full px-2.5 py-1.5 bg-[#121214] border border-[#27272A] rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
+                        className="w-full px-2.5 py-1.5 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
                       >
                         <option value="">-- Selecione o Ingrediente --</option>
                         {insumos.map(ins => (
@@ -257,12 +257,12 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
                           placeholder="Nome do Novo Ingrediente"
                           value={item.insumo_nome}
                           onChange={(e) => handleItemChange(idx, 'insumo_nome', e.target.value)}
-                          className="w-full px-2.5 py-1.5 bg-[#121214] border border-[#27272A] rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
+                          className="w-full px-2.5 py-1.5 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
                         />
                         <button
                           type="button"
                           onClick={() => handleItemChange(idx, 'insumo_id', '')}
-                          className="text-[8px] text-gray-400 hover:text-white whitespace-nowrap"
+                          className="text-[8px] text-gray-400 hover:text-white whitespace-nowrap cursor-pointer"
                         >
                           Voltar
                         </button>
@@ -280,7 +280,7 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
                       placeholder="Qtd"
                       value={item.quantidade}
                       onChange={(e) => handleItemChange(idx, 'quantidade', parseFloat(e.target.value) || 0)}
-                      className="w-full px-2.5 py-1.5 bg-[#121214] border border-[#27272A] rounded-xl text-white text-xs text-center focus:outline-none focus:border-emerald-500 font-mono"
+                      className="w-full px-2.5 py-1.5 bg-koma-input border border-koma-border rounded-xl text-white text-xs text-center focus:outline-none focus:border-emerald-500 font-mono"
                     />
                   </div>
 
@@ -289,7 +289,7 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
                     <select
                       value={item.unidade_medida}
                       onChange={(e) => handleItemChange(idx, 'unidade_medida', e.target.value)}
-                      className="w-full px-2 py-1.5 bg-[#121214] border border-[#27272A] rounded-xl text-white text-xs text-center focus:outline-none focus:border-emerald-500"
+                      className="w-full px-2 py-1.5 bg-koma-input border border-koma-border rounded-xl text-white text-xs text-center focus:outline-none focus:border-emerald-500"
                     >
                       <option value="un">un</option>
                       <option value="kg">kg</option>
@@ -309,7 +309,7 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
                       placeholder="R$ Unit"
                       value={item.custo_unitario}
                       onChange={(e) => handleItemChange(idx, 'custo_unitario', parseFloat(e.target.value) || 0)}
-                      className="w-full px-2.5 py-1.5 bg-[#121214] border border-[#27272A] rounded-xl text-white text-xs text-right focus:outline-none focus:border-emerald-500 font-mono"
+                      className="w-full px-2.5 py-1.5 bg-koma-input border border-koma-border rounded-xl text-white text-xs text-right focus:outline-none focus:border-emerald-500 font-mono"
                     />
                   </div>
 
@@ -330,7 +330,7 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
           </div>
 
           {/* Note & Grand Total Footer */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end pt-2 border-t border-[#27272A]">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end pt-2 border-t border-koma-border">
             <div className="md:col-span-2 space-y-1">
               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Observação:</label>
               <input
@@ -338,22 +338,22 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
                 placeholder="ex: Entrega recebida sem avarias pelo estoquista João"
                 value={observacao}
                 onChange={(e) => setObservacao(e.target.value)}
-                className="w-full px-3 py-1.5 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
+                className="w-full px-3 py-1.5 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
               />
             </div>
 
-            <div className="text-right bg-[#1C1C1F]/60 p-3 rounded-2xl border border-[#27272A]">
+            <div className="text-right bg-koma-raised p-3 rounded-2xl border border-koma-border">
               <span className="text-[9px] uppercase tracking-wider text-gray-400 font-bold block">Valor Total Automático</span>
               <strong className="text-sm font-mono text-emerald-400">R$ {valorTotal.toFixed(2)}</strong>
             </div>
           </div>
 
           {/* Modal Actions */}
-          <div className="flex gap-2 pt-2 border-t border-[#27272A] shrink-0">
+          <div className="flex gap-2 pt-2 border-t border-koma-border shrink-0">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2.5 border border-zinc-800 hover:border-zinc-700 bg-zinc-900 text-gray-400 hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+              className="flex-1 py-2.5 border border-koma-border hover:border-zinc-700 bg-koma-raised text-gray-400 hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
             >
               Cancelar
             </button>

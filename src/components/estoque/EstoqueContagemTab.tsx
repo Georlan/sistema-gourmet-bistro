@@ -17,7 +17,7 @@ export const EstoqueContagemTab: React.FC<EstoqueContagemTabProps> = ({
   return (
     <div className="space-y-5 text-left animate-fade-in">
       {/* Header Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-[#121214]/60 border border-[#27272A] p-4 rounded-3xl">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-koma-panel/60 border border-koma-border p-4 rounded-3xl">
         <div>
           <h3 className="font-serif text-sm font-bold text-white">Inventário Físico & Contagem de Estoque</h3>
           <p className="text-[10px] text-gray-400">Realize contagens parciais ou totais, salve rascunhos e confirme ajustes automáticos de divergências.</p>
@@ -33,11 +33,11 @@ export const EstoqueContagemTab: React.FC<EstoqueContagemTabProps> = ({
       </div>
 
       {/* Count Sessions List */}
-      <div className="bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 space-y-3">
-        <div className="overflow-x-auto border border-[#27272A]/40 rounded-2xl">
+      <div className="bg-koma-panel/60 border border-koma-border rounded-3xl p-5 space-y-3">
+        <div className="overflow-x-auto border border-koma-border rounded-2xl">
           <table className="w-full text-left text-[10px]">
             <thead>
-              <tr className="bg-[#1C1C1F] border-b border-[#27272A] text-gray-400 uppercase tracking-wider font-bold">
+              <tr className="bg-koma-raised border-b border-koma-border text-gray-400 uppercase tracking-wider font-bold">
                 <th className="p-3">Data de Início</th>
                 <th className="p-3">ID / Sessão</th>
                 <th className="p-3">Status</th>
@@ -47,7 +47,7 @@ export const EstoqueContagemTab: React.FC<EstoqueContagemTabProps> = ({
                 <th className="p-3 text-right">Ação</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#27272A]/40">
+            <tbody className="divide-y divide-koma-border">
               {contagens.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="p-8 text-center text-gray-500 italic">
@@ -56,7 +56,7 @@ export const EstoqueContagemTab: React.FC<EstoqueContagemTabProps> = ({
                 </tr>
               ) : (
                 contagens.map((c) => (
-                  <tr key={c.id} className="hover:bg-[#1C1C1F]/20 transition-colors">
+                  <tr key={c.id} className="hover:bg-koma-raised/50 transition-colors">
                     <td className="p-3 text-gray-400 whitespace-nowrap font-mono">
                       {formatBackendDateTime(c.created_at)}
                     </td>
@@ -83,7 +83,7 @@ export const EstoqueContagemTab: React.FC<EstoqueContagemTabProps> = ({
                       <button
                         type="button"
                         onClick={() => onOpenNovaContagemModal(c.id)}
-                        className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-gray-200 hover:text-white rounded-lg text-[9px] font-bold transition-all cursor-pointer inline-flex items-center gap-1"
+                        className="px-2.5 py-1 bg-koma-raised hover:bg-zinc-700 text-gray-200 hover:text-white rounded-lg text-[9px] font-bold transition-all cursor-pointer inline-flex items-center gap-1 border border-koma-border"
                       >
                         {c.status === 'confirmada' ? <Eye size={12} /> : <ClipboardCheck size={12} />}
                         <span>{c.status === 'confirmada' ? 'Visualizar' : 'Editar / Confirmar'}</span>

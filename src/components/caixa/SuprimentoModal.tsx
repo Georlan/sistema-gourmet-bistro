@@ -45,9 +45,9 @@ export const SuprimentoModal: React.FC<SuprimentoModalProps> = ({
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto cursor-pointer"
     >
-      <div className="w-full max-w-md bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
+      <div className="w-full max-w-md bg-koma-dialog border border-koma-border rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
         {/* Header */}
-        <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
+        <div className="flex justify-between items-center pb-2 border-b border-koma-border">
           <div>
             <h3 className="font-serif text-sm font-bold text-white">Novo Suprimento de Caixa</h3>
             <p className="text-[9px] text-gray-400">Aporte de fundo de troco extra no caixa aberto.</p>
@@ -78,7 +78,7 @@ export const SuprimentoModal: React.FC<SuprimentoModalProps> = ({
               placeholder="0,00"
               value={valor || ''}
               onChange={(e) => setValor(parseFloat(e.target.value) || 0)}
-              className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white text-sm font-mono focus:outline-none focus:border-emerald-500"
+              className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-white text-sm font-mono focus:outline-none focus:border-emerald-500"
             />
           </div>
 
@@ -90,7 +90,7 @@ export const SuprimentoModal: React.FC<SuprimentoModalProps> = ({
               placeholder="ex: Troco inicial extra para início de pico..."
               value={motivo}
               onChange={(e) => setMotivo(e.target.value)}
-              className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
+              className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
             />
           </div>
 
@@ -102,7 +102,7 @@ export const SuprimentoModal: React.FC<SuprimentoModalProps> = ({
               placeholder="Detalhes adicionais..."
               value={observacao}
               onChange={(e) => setObservacao(e.target.value)}
-              className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500 resize-none"
+              className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500 resize-none"
             />
           </div>
 
@@ -111,7 +111,7 @@ export const SuprimentoModal: React.FC<SuprimentoModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2 border border-zinc-800 hover:border-zinc-700 bg-zinc-900 text-gray-400 hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+              className="flex-1 py-2 border border-koma-border hover:border-zinc-700 bg-koma-raised text-gray-400 hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
             >
               Cancelar
             </button>
@@ -120,7 +120,7 @@ export const SuprimentoModal: React.FC<SuprimentoModalProps> = ({
               disabled={isSubmitting}
               className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer shadow-sm"
             >
-              {isSubmitting ? 'Gravando...' : 'Confirmar Suprimento'}
+              {isSubmitting ? 'Salvando...' : 'Confirmar Suprimento'}
             </button>
           </div>
         </form>

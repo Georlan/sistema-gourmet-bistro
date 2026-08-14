@@ -68,9 +68,9 @@ export const MovimentacaoEstoqueModal: React.FC<MovimentacaoEstoqueModalProps> =
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto cursor-pointer"
     >
-      <div className="w-full max-w-md bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
+      <div className="w-full max-w-md bg-koma-dialog border border-koma-border rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
         {/* Header */}
-        <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
+        <div className="flex justify-between items-center pb-2 border-b border-koma-border">
           <div>
             <h3 className="font-serif text-sm font-bold text-white">Nova Movimentação de Estoque</h3>
             <p className="text-[9px] text-gray-400">Registre perdas ou ajustes com motivo auditável.</p>
@@ -95,7 +95,7 @@ export const MovimentacaoEstoqueModal: React.FC<MovimentacaoEstoqueModalProps> =
               value={insumoId}
               onChange={(e) => setInsumoId(e.target.value)}
               required
-              className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
+              className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
             >
               <option value="">-- Selecione o Ingrediente --</option>
               {insumos.map(i => (
@@ -113,7 +113,7 @@ export const MovimentacaoEstoqueModal: React.FC<MovimentacaoEstoqueModalProps> =
               <select
                 value={tipo}
                 onChange={(e) => setTipo(e.target.value)}
-                className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
+                className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
               >
                 <option value="perda">Perda / Descarte</option>
                 <option value="ajuste_positivo">Ajuste Positivo (+)</option>
@@ -132,7 +132,7 @@ export const MovimentacaoEstoqueModal: React.FC<MovimentacaoEstoqueModalProps> =
                 required
                 value={quantidade}
                 onChange={(e) => setQuantidade(parseFloat(e.target.value) || 0)}
-                className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
+                className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
               />
             </div>
           </div>
@@ -148,7 +148,7 @@ export const MovimentacaoEstoqueModal: React.FC<MovimentacaoEstoqueModalProps> =
               placeholder="ex: Validade vencida, produto danificado no manuseio..."
               value={motivo}
               onChange={(e) => setMotivo(e.target.value)}
-              className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
+              className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
             />
           </div>
 
@@ -160,7 +160,7 @@ export const MovimentacaoEstoqueModal: React.FC<MovimentacaoEstoqueModalProps> =
               placeholder="Detalhes adicionais..."
               value={observacao}
               onChange={(e) => setObservacao(e.target.value)}
-              className="w-full px-3 py-2 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500 resize-none"
+              className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500 resize-none"
             />
           </div>
 
@@ -169,7 +169,7 @@ export const MovimentacaoEstoqueModal: React.FC<MovimentacaoEstoqueModalProps> =
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2 border border-zinc-800 hover:border-zinc-700 bg-zinc-900 text-gray-400 hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+              className="flex-1 py-2 border border-koma-border hover:border-zinc-700 bg-koma-raised text-gray-400 hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
             >
               Cancelar
             </button>
@@ -178,7 +178,7 @@ export const MovimentacaoEstoqueModal: React.FC<MovimentacaoEstoqueModalProps> =
               disabled={isSubmitting}
               className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer shadow-sm"
             >
-              {isSubmitting ? 'Salvando...' : 'Salvar Movimentação'}
+              {isSubmitting ? 'Salvando...' : 'Registrar Movimentação'}
             </button>
           </div>
         </form>

@@ -30,7 +30,7 @@ export const EstoqueEntradasTab: React.FC<EstoqueEntradasTabProps> = ({
   return (
     <div className="space-y-5 text-left animate-fade-in">
       {/* Action Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-[#121214]/60 border border-[#27272A] p-4 rounded-3xl">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-koma-panel/60 border border-koma-border p-4 rounded-3xl">
         <div>
           <h3 className="font-serif text-sm font-bold text-white">Histórico de Entradas de Estoque</h3>
           <p className="text-[10px] text-gray-400">Registre entradas manuais com nota/documento ou importe arquivos XML de NF-e.</p>
@@ -98,11 +98,11 @@ export const EstoqueEntradasTab: React.FC<EstoqueEntradasTabProps> = ({
       )}
 
       {/* Unified Entradas Table */}
-      <div className="bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 space-y-3">
-        <div className="overflow-x-auto border border-[#27272A]/40 rounded-2xl">
+      <div className="bg-koma-panel/60 border border-koma-border rounded-3xl p-5 space-y-3">
+        <div className="overflow-x-auto border border-koma-border rounded-2xl">
           <table className="w-full text-left text-[10px]">
             <thead>
-              <tr className="bg-[#1C1C1F] border-b border-[#27272A] text-gray-400 uppercase tracking-wider font-bold">
+              <tr className="bg-koma-raised border-b border-koma-border text-gray-400 uppercase tracking-wider font-bold">
                 <th className="p-3">Data</th>
                 <th className="p-3">Doc / Nota</th>
                 <th className="p-3">Fornecedor</th>
@@ -111,7 +111,7 @@ export const EstoqueEntradasTab: React.FC<EstoqueEntradasTabProps> = ({
                 <th className="p-3">Itens</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#27272A]/40">
+            <tbody className="divide-y divide-koma-border">
               {entradas.length === 0 && notasEntradaXml.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="p-8 text-center text-gray-500 italic">
@@ -121,7 +121,7 @@ export const EstoqueEntradasTab: React.FC<EstoqueEntradasTabProps> = ({
               ) : (
                 <>
                   {entradas.map((ent) => (
-                    <tr key={ent.id} className="hover:bg-[#1C1C1F]/20 transition-colors">
+                    <tr key={ent.id} className="hover:bg-koma-raised/50 transition-colors">
                       <td className="p-3 text-gray-400 whitespace-nowrap font-mono">
                         {formatBackendDateTime(ent.created_at)}
                       </td>
@@ -144,7 +144,7 @@ export const EstoqueEntradasTab: React.FC<EstoqueEntradasTabProps> = ({
 
                   {/* Existing XML entries fallback list if not in entradas */}
                   {notasEntradaXml.filter(n => !entradas.some(e => e.numero_documento === n.numero_nota)).map((nota) => (
-                    <tr key={nota.id} className="hover:bg-[#1C1C1F]/20 transition-colors opacity-90">
+                    <tr key={nota.id} className="hover:bg-koma-raised/50 transition-colors opacity-90">
                       <td className="p-3 text-gray-400 whitespace-nowrap font-mono">
                         {nota.data_emissao ? formatBackendDateTime(nota.data_emissao, { dateStyle: 'short' }) : '—'}
                       </td>

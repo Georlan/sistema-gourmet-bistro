@@ -55,7 +55,7 @@ export const EstoqueMovimentacoesTab: React.FC<EstoqueMovimentacoesTabProps> = (
   return (
     <div className="space-y-5 text-left animate-fade-in">
       {/* Header Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-[#121214]/60 border border-[#27272A] p-4 rounded-3xl">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-koma-panel/60 border border-koma-border p-4 rounded-3xl">
         <div>
           <h3 className="font-serif text-sm font-bold text-white">Histórico Auditável de Movimentações</h3>
           <p className="text-[10px] text-gray-400">Rastreabilidade completa de entradas, perdas, contagens e ajustes de saldo.</p>
@@ -64,7 +64,7 @@ export const EstoqueMovimentacoesTab: React.FC<EstoqueMovimentacoesTabProps> = (
           <button
             type="button"
             onClick={onRefreshMovimentacoes}
-            className="p-2 border border-[#27272A] hover:bg-[#1C1C1F] text-gray-400 hover:text-white rounded-xl transition-all cursor-pointer"
+            className="p-2 border border-koma-border hover:bg-koma-raised text-gray-400 hover:text-white rounded-xl transition-all cursor-pointer"
             title="Atualizar Movimentações"
           >
             <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
@@ -81,7 +81,7 @@ export const EstoqueMovimentacoesTab: React.FC<EstoqueMovimentacoesTabProps> = (
       </div>
 
       {/* Filter Bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 bg-[#121214]/40 border border-[#27272A] p-3 rounded-2xl">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 bg-koma-raised/60 border border-koma-border p-3 rounded-2xl">
         <div className="space-y-1">
           <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
             <Filter size={10} />
@@ -90,7 +90,7 @@ export const EstoqueMovimentacoesTab: React.FC<EstoqueMovimentacoesTabProps> = (
           <select
             value={filterInsumoId}
             onChange={(e) => setFilterInsumoId(e.target.value)}
-            className="w-full px-2.5 py-1.5 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
+            className="w-full px-2.5 py-1.5 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
           >
             <option value="">Todos os ingredientes</option>
             {insumos.map(i => (
@@ -104,7 +104,7 @@ export const EstoqueMovimentacoesTab: React.FC<EstoqueMovimentacoesTabProps> = (
           <select
             value={filterTipo}
             onChange={(e) => setFilterTipo(e.target.value)}
-            className="w-full px-2.5 py-1.5 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
+            className="w-full px-2.5 py-1.5 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
           >
             <option value="todos">Todos os Tipos</option>
             <option value="entrada">Entradas</option>
@@ -121,7 +121,7 @@ export const EstoqueMovimentacoesTab: React.FC<EstoqueMovimentacoesTabProps> = (
             type="date"
             value={filterDataInicio}
             onChange={(e) => setFilterDataInicio(e.target.value)}
-            className="w-full px-2.5 py-1.5 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
+            className="w-full px-2.5 py-1.5 bg-koma-input border border-koma-border rounded-xl text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
           />
         </div>
 
@@ -131,17 +131,17 @@ export const EstoqueMovimentacoesTab: React.FC<EstoqueMovimentacoesTabProps> = (
             type="date"
             value={filterDataFim}
             onChange={(e) => setFilterDataFim(e.target.value)}
-            className="w-full px-2.5 py-1.5 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
+            className="w-full px-2.5 py-1.5 bg-koma-input border border-koma-border rounded-xl text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
           />
         </div>
       </div>
 
       {/* Audit Log Table */}
-      <div className="bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 space-y-3">
-        <div className="overflow-x-auto border border-[#27272A]/40 rounded-2xl">
+      <div className="bg-koma-panel/60 border border-koma-border rounded-3xl p-5 space-y-3">
+        <div className="overflow-x-auto border border-koma-border rounded-2xl">
           <table className="w-full text-left text-[10px]">
             <thead>
-              <tr className="bg-[#1C1C1F] border-b border-[#27272A] text-gray-400 uppercase tracking-wider font-bold">
+              <tr className="bg-koma-raised border-b border-koma-border text-gray-400 uppercase tracking-wider font-bold">
                 <th className="p-3">Data / Hora</th>
                 <th className="p-3">Ingrediente</th>
                 <th className="p-3">Tipo</th>
@@ -152,7 +152,7 @@ export const EstoqueMovimentacoesTab: React.FC<EstoqueMovimentacoesTabProps> = (
                 <th className="p-3">Origem</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#27272A]/40">
+            <tbody className="divide-y divide-koma-border">
               {filteredMovs.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="p-8 text-center text-gray-500 italic">
@@ -161,7 +161,7 @@ export const EstoqueMovimentacoesTab: React.FC<EstoqueMovimentacoesTabProps> = (
                 </tr>
               ) : (
                 filteredMovs.map((mov) => (
-                  <tr key={mov.id} className="hover:bg-[#1C1C1F]/20 transition-colors">
+                  <tr key={mov.id} className="hover:bg-koma-raised/50 transition-colors">
                     <td className="p-3 text-gray-400 whitespace-nowrap font-mono">
                       {formatBackendDateTime(mov.created_at)}
                     </td>
