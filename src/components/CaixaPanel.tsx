@@ -8590,20 +8590,20 @@ export function CaixaPanel({
           )}
 
           {(activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital') && hasOnlineMenu && (
-            <div className={clsx('bg-koma-card', 'border', 'border-koma-border', 'rounded-3xl', 'p-6', 'text-left', 'max-w-2xl', 'mx-auto', 'space-y-6', 'animate-fade-in')}>
+            <div className={clsx('bg-koma-panel', 'border', 'border-koma-border', 'rounded-3xl', 'p-6', 'text-left', 'max-w-2xl', 'mx-auto', 'space-y-6', 'animate-fade-in', 'shadow-sm')}>
               <div className={clsx('border-b', 'border-koma-border', 'pb-3')}>
                 <span className={clsx('font-serif', 'font-bold', 'text-base', 'text-koma-foreground', 'block')}>Configurações do Cardápio Digital</span>
-                <span className={clsx('text-[10px]', 'text-koma-subtle', 'block', 'mt-1')}>Personalize a identidade visual e comportamento do cardápio digital do cliente (Whitelabel).</span>
+                <span className={clsx('text-[11px]', 'text-koma-muted', 'block', 'mt-1')}>Personalize a identidade visual e comportamento do cardápio digital do cliente (Whitelabel).</span>
               </div>
 
               <div className="space-y-4">
                 {/* Status Override */}
                 <div className="space-y-1.5">
-                  <label className={clsx('text-[10px]', 'font-bold', 'text-koma-secondary', 'uppercase', 'tracking-wider', 'block')}>Status de Funcionamento:</label>
+                  <label className={clsx('text-[10px]', 'font-bold', 'text-koma-muted', 'uppercase', 'tracking-wider', 'block')}>Status de Funcionamento:</label>
                   <select
                     value={cardapioStatusOverride}
                     onChange={(e) => setCardapioStatusOverride(e.target.value)}
-                    className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-page', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'focus:outline-none', 'focus:border-[#10b981]')}
+                    className={clsx('w-full', 'px-3.5', 'py-2.5', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'font-medium', 'focus:outline-none', 'focus:border-emerald-500/60')}
                   >
                     <option value="Automático">Automático (Segue horários de funcionamento)</option>
                     <option value="Forçado Aberto">Forçado Aberto (Sempre aberto para pedidos)</option>
@@ -8614,7 +8614,7 @@ export function CaixaPanel({
                 {/* Cores */}
                 <div className={clsx('grid', 'grid-cols-1', 'sm:grid-cols-2', 'gap-4')}>
                   <div className="space-y-1.5">
-                    <label className={clsx('text-[10px]', 'font-bold', 'text-koma-secondary', 'uppercase', 'tracking-wider', 'block')}>Cor Primária (Tema):</label>
+                    <label className={clsx('text-[10px]', 'font-bold', 'text-koma-muted', 'uppercase', 'tracking-wider', 'block')}>Cor Primária (Tema):</label>
                     <div className={clsx('flex', 'gap-2')}>
                       <input
                         type="color"
@@ -8626,13 +8626,13 @@ export function CaixaPanel({
                         type="text"
                         value={cardapioCorPrimaria}
                         onChange={(e) => setCardapioCorPrimaria(e.target.value)}
-                        className={clsx('flex-1', 'px-3', 'py-2', 'bg-koma-page', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'font-mono')}
+                        className={clsx('flex-1', 'px-3.5', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'font-mono', 'focus:outline-none', 'focus:border-emerald-500/60')}
                       />
                     </div>
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className={clsx('text-[10px]', 'font-bold', 'text-koma-secondary', 'uppercase', 'tracking-wider', 'block')}>Cor de Fundo:</label>
+                    <label className={clsx('text-[10px]', 'font-bold', 'text-koma-muted', 'uppercase', 'tracking-wider', 'block')}>Cor de Fundo:</label>
                     <div className={clsx('flex', 'gap-2')}>
                       <input
                         type="color"
@@ -8644,7 +8644,7 @@ export function CaixaPanel({
                         type="text"
                         value={cardapioCorFundo}
                         onChange={(e) => setCardapioCorFundo(e.target.value)}
-                        className={clsx('flex-1', 'px-3', 'py-2', 'bg-koma-page', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'font-mono')}
+                        className={clsx('flex-1', 'px-3.5', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'font-mono', 'focus:outline-none', 'focus:border-emerald-500/60')}
                       />
                     </div>
                   </div>
@@ -8673,25 +8673,25 @@ export function CaixaPanel({
 
                 {/* Sobre Nós */}
                 <div className="space-y-1.5">
-                  <label className={clsx('text-[10px]', 'font-bold', 'text-koma-secondary', 'uppercase', 'tracking-wider', 'block')}>Sobre Nós:</label>
+                  <label className={clsx('text-[10px]', 'font-bold', 'text-koma-muted', 'uppercase', 'tracking-wider', 'block')}>Sobre Nós:</label>
                   <textarea
                     value={cardapioSobreNos}
                     onChange={(e) => setCardapioSobreNos(e.target.value)}
                     rows={3}
                     placeholder="Breve história ou descrição do restaurante..."
-                    className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-page', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'focus:outline-none', 'focus:border-[#10b981]')}
+                    className={clsx('w-full', 'px-3.5', 'py-2.5', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'focus:outline-none', 'focus:border-emerald-500/60')}
                   />
                 </div>
 
                 {/* Endereço */}
                 <div className="space-y-1.5">
-                  <label className={clsx('text-[10px]', 'font-bold', 'text-koma-secondary', 'uppercase', 'tracking-wider', 'block')}>Endereço Físico:</label>
+                  <label className={clsx('text-[10px]', 'font-bold', 'text-koma-muted', 'uppercase', 'tracking-wider', 'block')}>Endereço Físico:</label>
                   <input
                     type="text"
                     value={cardapioEndereco}
                     onChange={(e) => setCardapioEndereco(e.target.value)}
                     placeholder="Rua Exemplo, 123 - Centro"
-                    className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-page', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'focus:outline-none', 'focus:border-[#10b981]')}
+                    className={clsx('w-full', 'px-3.5', 'py-2.5', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'focus:outline-none', 'focus:border-emerald-500/60')}
                   />
                 </div>
               </div>
@@ -8702,7 +8702,7 @@ export function CaixaPanel({
                   type="button"
                   disabled={isSavingCardapioConfig}
                   onClick={saveCardapioConfig}
-                  className={clsx('px-5', 'py-2.5', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'font-bold', 'rounded-xl', 'text-[9px]', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-lg', 'disabled:opacity-50')}
+                  className={clsx('px-6', 'py-2.5', 'koma-btn-success', 'rounded-xl', 'text-xs', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-sm', 'disabled:opacity-50')}
                 >
                   {isSavingCardapioConfig ? 'Salvando...' : 'Salvar Configurações Whitelabel'}
                 </button>

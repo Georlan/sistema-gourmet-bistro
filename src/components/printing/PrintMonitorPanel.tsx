@@ -152,13 +152,13 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_STYLES: Record<string, string> = {
-  pending: 'border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-300',
-  claimed: 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-300',
-  printing: 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-300',
-  spooler_accepted: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300',
-  failed: 'border-red-500/30 bg-red-500/10 text-red-300',
-  cancelled: 'border-zinc-500/30 bg-zinc-500/10 text-koma-subtle',
-  expired: 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-300'
+  pending: 'koma-badge-info',
+  claimed: 'koma-badge-warning',
+  printing: 'koma-badge-warning',
+  spooler_accepted: 'koma-badge-success',
+  failed: 'koma-badge-danger',
+  cancelled: 'border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300',
+  expired: 'koma-badge-warning'
 };
 
 const dateTimeFormatter = new Intl.DateTimeFormat('pt-BR', {
@@ -685,29 +685,29 @@ export function PrintMonitorPanel({
           {
             label: 'equipamento USB',
             value: equipmentState,
-            valueClassName: hasReadyPrinter ? 'text-emerald-600 dark:text-emerald-300' : 'text-amber-200'
+            valueClassName: hasReadyPrinter ? 'text-emerald-700 dark:text-emerald-400 font-bold' : 'text-amber-800 dark:text-amber-300 font-bold'
           },
           {
             label: queueTotal > 0 ? 'espera mais antiga' : 'fila de impressão',
             value: oldestQueueValue,
-            valueClassName: monitorData?.summary.delayed ? 'text-amber-200' : undefined
+            valueClassName: monitorData?.summary.delayed ? 'text-amber-800 dark:text-amber-300 font-bold' : undefined
           },
           { label: 'último envio', value: latestSentValue },
           {
             label: 'falhas hoje',
             value: monitorData?.summary.failed ?? 0,
-            valueClassName: monitorData?.summary.failed ? 'text-red-300' : undefined
+            valueClassName: monitorData?.summary.failed ? 'text-rose-700 dark:text-rose-300 font-bold' : undefined
           }
         ]}
       />
 
-    <section className="rounded-[22px] border border-koma-border bg-koma-panel p-4 sm:p-5 space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-koma-border pb-4">
-        <div>
-          <div className="flex items-center gap-2 text-sm font-bold text-koma-foreground">
-            <Usb size={18} className="text-emerald-400" />
-            Conexão da impressora USB
-          </div>
+      <section className="space-y-4 text-left" aria-label="Monitor de impressão USB e fila">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <Printer size={16} className="text-emerald-700 dark:text-emerald-400" />
+              <h4 className="font-serif text-sm font-bold text-koma-foreground">Conexão da impressora USB</h4>
+            </div>
           <p className="mt-1 text-[10px] text-koma-muted">
             Controle o equipamento físico sem abrir aplicativos ou configurações do computador.
           </p>
@@ -716,7 +716,7 @@ export function PrintMonitorPanel({
           type="button"
           onClick={() => void loadMonitor(true)}
           disabled={loading}
-          className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#333338] bg-koma-card px-4 py-2 text-[10px] font-bold text-koma-secondary transition hover:border-gray-500 hover:bg-koma-raised disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+          className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-koma-border bg-koma-card px-4 py-2 text-[10px] font-bold text-koma-foreground transition hover:border-emerald-500 hover:bg-koma-raised disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer shadow-xs"
         >
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           Atualizar status
@@ -724,7 +724,7 @@ export function PrintMonitorPanel({
       </div>
 
       {error && (
-        <div role="alert" className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-[10px] text-red-200">
+        <div role="alert" className="rounded-2xl koma-badge-danger px-4 py-3 text-xs">
           {error}
         </div>
       )}
@@ -742,17 +742,17 @@ export function PrintMonitorPanel({
                     : <RefreshCw size={20} className={commandRunning ? 'animate-spin' : ''} />}
             </div>
             <div className="min-w-0">
-              <strong className="block text-sm text-koma-foreground">{diagnostic.title}</strong>
-              <span className="mt-1 block text-[10px] leading-relaxed text-koma-secondary">
+              <strong className="block text-sm font-bold text-koma-foreground">{diagnostic.title}</strong>
+              <span className="mt-1 block text-[10px] leading-relaxed text-koma-foreground/80 font-medium">
                 {diagnostic.detail}
               </span>
               {actionMessage && (
-                <span className={`mt-2 block text-[10px] font-semibold ${
+                <span className={`mt-2 block text-[10px] font-bold ${
                   actionSuccessful === false
-                    ? 'text-red-200'
+                    ? 'text-rose-700 dark:text-rose-300'
                     : actionSuccessful === true
-                      ? 'text-emerald-600 dark:text-emerald-300'
-                      : 'text-sky-200'
+                      ? 'text-emerald-700 dark:text-emerald-300'
+                      : 'text-sky-700 dark:text-sky-300'
                 }`}>
                   {actionMessage}
                 </span>
@@ -762,7 +762,7 @@ export function PrintMonitorPanel({
                   type="button"
                   onClick={() => void handleRetryFailedJobs()}
                   disabled={Boolean(reprintingId)}
-                  className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-xl bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 px-3.5 py-2 text-xs font-bold text-red-200 transition cursor-pointer disabled:opacity-50"
+                  className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-xl koma-btn-danger px-3.5 py-2 text-xs font-bold transition cursor-pointer disabled:opacity-50"
                   id="btn-retry-failed-print-jobs"
                 >
                   <RotateCcw className="h-4 w-4" />
@@ -778,7 +778,7 @@ export function PrintMonitorPanel({
                 type="button"
                 onClick={startLocalAgent}
                 disabled={startingAgent}
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-5 py-2.5 text-[11px] font-extrabold text-[#07130f] transition hover:bg-emerald-400 disabled:cursor-wait disabled:opacity-60 cursor-pointer"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl koma-btn-success px-5 py-2.5 text-xs font-extrabold transition disabled:cursor-wait disabled:opacity-60 cursor-pointer shadow-xs"
               >
                 {startingAgent
                   ? <RefreshCw size={16} className="animate-spin" />
@@ -790,7 +790,7 @@ export function PrintMonitorPanel({
                 type="button"
                 onClick={() => void requestUsbConnection()}
                 disabled={commandRunning || Boolean(pendingCommandId)}
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-5 py-2.5 text-[11px] font-extrabold text-[#07130f] transition hover:bg-emerald-400 disabled:cursor-wait disabled:opacity-60 cursor-pointer"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl koma-btn-success px-5 py-2.5 text-xs font-extrabold transition disabled:cursor-wait disabled:opacity-60 cursor-pointer shadow-xs"
               >
                 {commandRunning || pendingCommandId
                   ? <RefreshCw size={16} className="animate-spin" />
@@ -815,7 +815,7 @@ export function PrintMonitorPanel({
                     ? 'Enviar um cupom real para a impressora USB'
                     : 'Conecte a impressora USB primeiro'
                 }
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#3a3a40] bg-koma-card px-5 py-2.5 text-[11px] font-bold text-koma-foreground transition hover:border-emerald-500/50 hover:bg-koma-raised disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-panel px-5 py-2.5 text-xs font-bold text-koma-foreground transition hover:border-emerald-500 hover:bg-koma-raised disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer shadow-xs"
               >
                 {testInProgress
                   ? <RefreshCw size={16} className="animate-spin" />
@@ -828,37 +828,37 @@ export function PrintMonitorPanel({
       </div>
 
       {monitorData && monitorData.summary.delayed > 0 && (
-        <div className="flex items-start gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-300" />
+        <div className="flex items-start gap-3 rounded-2xl koma-badge-warning px-4 py-3 shadow-xs">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-800 dark:text-amber-300" />
           <div>
-            <strong className="block text-[11px] text-amber-100">
+            <strong className="block text-xs font-bold text-amber-950 dark:text-amber-200">
               Há impressão aguardando há mais de 2 minutos
             </strong>
-            <span className="text-[10px] text-amber-100/70">
+            <span className="text-[10px] text-amber-900/80 dark:text-amber-300/80 font-medium">
               Espera mais antiga: {formatAge(monitorData.summary.oldest_unresolved_seconds)}.
             </span>
           </div>
         </div>
       )}
 
-      <div className="overflow-hidden rounded-2xl border border-[#29292e]">
+      <div className="overflow-hidden rounded-2xl border border-koma-border shadow-xs">
         <button
           type="button"
           onClick={() => setShowQueue(current => !current)}
-          className="flex min-h-12 w-full items-center justify-between gap-3 bg-koma-card px-4 py-3 text-left transition hover:bg-koma-raised cursor-pointer"
+          className="flex min-h-12 w-full items-center justify-between gap-3 bg-koma-panel px-4 py-3 text-left transition hover:bg-koma-raised cursor-pointer"
           aria-expanded={showQueue}
         >
           <span className="flex min-w-0 items-center gap-3">
             <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
               queueTotal || failedJobs.length
-                ? 'bg-amber-400/10 text-amber-600 dark:text-amber-300'
-                : 'bg-emerald-400/10 text-emerald-600 dark:text-emerald-300'
+                ? 'koma-badge-warning'
+                : 'koma-badge-success'
             }`}>
               <Clock3 size={15} />
             </span>
             <span>
-              <strong className="block text-[11px] text-koma-foreground">Fila e recuperação</strong>
-              <span className="block text-[9px] font-normal text-koma-muted">
+              <strong className="block text-xs font-bold text-koma-foreground">Fila e recuperação</strong>
+              <span className="block text-[10px] font-normal text-koma-muted">
                 {queueTotal} em processamento · {failedJobs.length} com falha · limite visual {monitorData?.queue_limit || 50}
               </span>
             </span>
@@ -867,27 +867,27 @@ export function PrintMonitorPanel({
         </button>
 
         {showQueue && (
-          <div className="max-h-72 overflow-auto border-t border-[#29292e] bg-koma-panel">
+          <div className="max-h-72 overflow-auto border-t border-koma-border bg-koma-panel">
             {monitorData?.queue_jobs?.length ? (
-              <div className="divide-y divide-[#242428]">
+              <div className="divide-y divide-koma-border">
                 {monitorData.queue_jobs.map(job => {
                   const displayStatus = job.display_status || job.status;
                   return (
                     <div key={job.id} className="grid grid-cols-[1fr_auto] items-center gap-3 px-4 py-3 sm:grid-cols-[1fr_auto_auto]">
                       <div className="min-w-0">
-                        <strong className="block truncate text-[10px] text-koma-secondary">
+                        <strong className="block truncate text-xs font-bold text-koma-foreground">
                           {job.reference || friendlyDocumentType(job.document_type)}
                         </strong>
-                        <span className="text-[8px] text-koma-muted">
+                        <span className="text-[10px] text-koma-muted font-medium">
                           {friendlyDocumentType(job.document_type)} · {job.destination} · aguardando {formatAge(job.age_seconds)}
                         </span>
                         {job.last_error && (
-                          <span className="mt-1 block truncate text-[8px] text-red-300" title={job.last_error}>
+                          <span className="mt-1 block truncate text-[9px] text-rose-600 dark:text-rose-300 font-medium" title={job.last_error}>
                             {job.last_error}
                           </span>
                         )}
                       </div>
-                      <span className={`inline-flex rounded-full border px-2 py-1 text-[8px] font-bold ${STATUS_STYLES[displayStatus] || STATUS_STYLES.cancelled}`}>
+                      <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[9px] font-bold ${STATUS_STYLES[displayStatus] || STATUS_STYLES.cancelled}`}>
                         {STATUS_LABELS[displayStatus] || displayStatus}
                       </span>
                       {job.status === 'failed' ? (
@@ -895,7 +895,7 @@ export function PrintMonitorPanel({
                           type="button"
                           onClick={() => void handleRetryFailedJobs()}
                           disabled={Boolean(reprintingId)}
-                          className="col-span-2 inline-flex min-h-8 items-center justify-center gap-1.5 rounded-lg border border-red-500/30 px-2.5 py-1 text-[8px] font-bold text-red-200 transition hover:bg-red-500/10 disabled:opacity-50 sm:col-span-1 cursor-pointer"
+                          className="col-span-2 inline-flex min-h-8 items-center justify-center gap-1.5 rounded-lg koma-badge-danger px-2.5 py-1 text-[9px] font-bold transition disabled:opacity-50 sm:col-span-1 cursor-pointer"
                         >
                           <RotateCcw size={10} /> Recuperar
                         </button>
@@ -906,9 +906,9 @@ export function PrintMonitorPanel({
               </div>
             ) : (
               <div className="px-4 py-6 text-center">
-                <CheckCircle2 size={18} className="mx-auto text-emerald-400" />
-                <strong className="mt-2 block text-[10px] text-koma-secondary">Fila vazia</strong>
-                <span className="text-[8px] text-koma-muted">Nenhuma impressão precisa ser recuperada.</span>
+                <CheckCircle2 size={20} className="mx-auto text-emerald-700 dark:text-emerald-400" />
+                <strong className="mt-2 block text-xs font-bold text-koma-foreground">Fila vazia</strong>
+                <span className="text-[10px] text-koma-muted">Nenhuma impressão precisa ser recuperada.</span>
               </div>
             )}
           </div>
@@ -919,11 +919,11 @@ export function PrintMonitorPanel({
         <div className="flex items-center justify-between gap-3">
           <div>
             <h3 className="text-xs font-bold text-koma-foreground">Impressoras físicas no USB</h3>
-            <p className="mt-0.5 text-[9px] text-koma-muted">
+            <p className="mt-0.5 text-[10px] text-koma-muted">
               Filas PDF, fax, OneNote e outros dispositivos virtuais ficam ocultos.
             </p>
           </div>
-          <span className="rounded-full border border-[#303036] px-2.5 py-1 text-[9px] text-koma-subtle">
+          <span className="rounded-full border border-koma-border bg-koma-raised px-2.5 py-1 text-[9px] font-semibold text-koma-muted">
             {presentUsbPrinters.length} conectada(s)
           </span>
         </div>
@@ -936,32 +936,27 @@ export function PrintMonitorPanel({
               && printer.configured === true
             );
             const busy = commandRunning || Boolean(pendingCommandId);
+
             return (
               <div
-                key={`${printer.agentId}:${printer.name}:${index}`}
-                className={`rounded-2xl border p-4 ${
-                  ready
-                    ? 'border-emerald-500/25 bg-emerald-500/[0.07]'
-                    : 'border-amber-500/25 bg-amber-500/[0.07]'
-                }`}
+                key={`${printer.agentId}-${printer.name}-${index}`}
+                className="rounded-2xl border border-koma-border bg-koma-panel p-4 shadow-xs"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 items-start gap-3">
                     <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
                       ready
-                        ? 'bg-emerald-400/15 text-emerald-600 dark:text-emerald-300'
-                        : 'bg-amber-400/15 text-amber-600 dark:text-amber-300'
+                        ? 'koma-badge-success'
+                        : 'bg-koma-raised text-koma-muted'
                     }`}>
-                      <Printer size={17} />
+                      <Usb size={16} />
                     </div>
                     <div className="min-w-0">
-                      <strong className="block truncate text-[11px] text-koma-foreground">
-                        {friendlyPrinterName(printer.name)}
+                      <strong className="block truncate text-xs font-bold text-koma-foreground">
+                        {printer.name}
                       </strong>
-                      <span className={`mt-1 block text-[9px] ${
-                        ready
-                          ? 'text-emerald-600 dark:text-emerald-300'
-                          : 'text-amber-600 dark:text-amber-300'
+                      <span className={`mt-0.5 inline-block text-[9px] font-semibold ${
+                        ready ? 'text-emerald-700 dark:text-emerald-400' : 'text-koma-muted'
                       }`}>
                         {ready
                           ? 'Conectada e pronta'
@@ -970,7 +965,7 @@ export function PrintMonitorPanel({
                     </div>
                   </div>
                   {printer.is_default && (
-                    <span className="shrink-0 rounded-full bg-emerald-400/10 px-2 py-1 text-[8px] font-bold text-emerald-600 dark:text-emerald-300">
+                    <span className="shrink-0 rounded-full koma-badge-success px-2 py-0.5 text-[8px] font-extrabold">
                       PRINCIPAL
                     </span>
                   )}
@@ -986,7 +981,7 @@ export function PrintMonitorPanel({
                       agent => agent.agent_id === printer.agentId
                     )?.supports_usb_commands
                   }
-                  className="mt-4 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#3a3a40] bg-koma-card px-4 py-2 text-[10px] font-bold text-koma-foreground transition hover:border-emerald-500/50 hover:bg-koma-raised disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+                  className="mt-4 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card px-4 py-2 text-xs font-bold text-koma-foreground transition hover:border-emerald-500 hover:bg-koma-raised disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer shadow-xs"
                 >
                   {busy
                     ? <RefreshCw size={14} className="animate-spin" />
@@ -1002,12 +997,12 @@ export function PrintMonitorPanel({
               </div>
             );
           }) : (
-            <div className="md:col-span-2 rounded-2xl border border-dashed border-[#34343a] bg-koma-page px-5 py-8 text-center">
-              <Usb size={24} className="mx-auto text-gray-600" />
-              <strong className="mt-3 block text-[11px] text-koma-secondary">
+            <div className="md:col-span-2 rounded-2xl border-2 border-dashed border-koma-border bg-koma-raised/40 px-5 py-8 text-center">
+              <Usb size={24} className="mx-auto text-koma-muted" />
+              <strong className="mt-3 block text-xs font-bold text-koma-foreground">
                 Nenhuma impressora USB detectada
               </strong>
-              <span className="mt-1 block text-[9px] text-koma-muted">
+              <span className="mt-1 block text-[10px] text-koma-muted">
                 Conecte o cabo ao computador do caixa e use o botão de busca acima.
               </span>
             </div>

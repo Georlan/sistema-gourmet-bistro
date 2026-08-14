@@ -265,17 +265,17 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
               {/* Cota IA */}
               <div className="bg-koma-raised/60 border border-koma-border p-4 rounded-2xl space-y-2">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-koma-secondary flex items-center gap-1.5">
-                    <Bot size={16} className="text-emerald-400" />
+                  <span className="font-bold text-koma-foreground flex items-center gap-1.5">
+                    <Bot size={16} className="text-emerald-700 dark:text-emerald-400" />
                     <span>Chef Virtual / Copiloto IA</span>
                   </span>
-                  <span className="font-mono text-koma-subtle text-[10px]">
+                  <span className="font-mono text-koma-muted text-[10px]">
                     <strong className="text-koma-foreground">{usageData.iaRespostasUsadas}</strong> / {iaQuota} msgs
                   </span>
                 </div>
                 <div className="w-full h-2.5 bg-koma-canvas border border-koma-border rounded-full overflow-hidden p-0.5">
                   <div
-                    className={`h-full rounded-full transition-all duration-500 ${iaPct >= 80 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                    className={`h-full rounded-full transition-all duration-500 ${iaPct >= 80 ? 'bg-amber-500' : 'bg-emerald-600'}`}
                     style={{ width: `${iaPct}%` }}
                   />
                 </div>
@@ -285,17 +285,17 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
               </div>
 
               {/* Cota WhatsApp */}
-              <div className="bg-koma-raised/60 border border-koma-border p-4 rounded-2xl space-y-2 opacity-75">
+              <div className="bg-koma-raised/60 border border-koma-border p-4 rounded-2xl space-y-2">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-koma-secondary flex items-center gap-1.5">
-                    <MessageSquare size={16} className="text-koma-subtle" />
+                  <span className="font-bold text-koma-foreground flex items-center gap-1.5">
+                    <MessageSquare size={16} className="text-koma-muted" />
                     <span>Notificações Automáticas WhatsApp</span>
                   </span>
-                  <span className="font-mono text-amber-400 text-[10px] bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                  <span className="koma-badge-warning px-2.5 py-0.5 rounded-lg text-[9px] font-bold font-mono">
                     Manual via wa.me (Automação em breve)
                   </span>
                 </div>
-                <span className="text-[9px] text-koma-subtle block pt-1">
+                <span className="text-[9px] text-koma-muted block pt-1">
                   Neste plano, o envio de notificações e contatos é realizado via links diretos sem custos adicionais.
                 </span>
               </div>
@@ -303,49 +303,49 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
           </div>
 
           {/* RESUMO COMPACTO DO PLANO ATUAL */}
-          <div className="bg-koma-panel/60 border border-koma-border p-5 rounded-3xl space-y-4">
+          <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4 shadow-sm">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-koma-border pb-4">
               <div>
                 <div className="flex items-center gap-2">
                   <h4 className="font-serif text-base font-bold text-koma-foreground">{currentPlan.name}</h4>
-                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px] font-bold uppercase tracking-wider flex items-center gap-1">
+                  <span className="koma-badge-success px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider flex items-center gap-1">
                     <CheckCircle2 size={11} />
                     <span>Plano Ativo</span>
                   </span>
                 </div>
-                <p className="text-xs text-koma-subtle mt-1">{currentPlan.tagline}</p>
+                <p className="text-xs text-koma-muted mt-1">{currentPlan.tagline}</p>
               </div>
 
               <div className="font-mono text-right">
-                <span className="text-emerald-400 font-bold text-lg">{formatCurrency(currentPlan.price)}</span>
+                <span className="text-emerald-700 dark:text-emerald-400 font-extrabold text-lg">{formatCurrency(currentPlan.price)}</span>
                 <span className="text-koma-muted text-[10px]">/mês</span>
               </div>
             </div>
 
             <div className="flex flex-wrap gap-2 text-[10px] font-mono">
               {isTestPlan && (
-                <span className="px-3 py-1 rounded-xl border border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-300 font-bold">
+                <span className="px-3 py-1 rounded-xl border border-sky-500/30 bg-sky-500/10 text-sky-800 dark:text-sky-300 font-bold">
                   Modo de teste Premium — assinatura não alterada
                 </span>
               )}
               <span className={clsx(
                 'px-3 py-1 rounded-xl border font-bold',
                 hasPrinting
-                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-300'
-                  : 'bg-koma-raised border-koma-border text-koma-subtle'
+                  ? 'koma-badge-success'
+                  : 'bg-koma-raised border-koma-border text-koma-muted'
               )}>
                 {hasPrinting ? '✓ Impressão Automática Incluída' : '✕ Sem Impressão Automática'}
               </span>
               <span className={clsx(
                 'px-3 py-1 rounded-xl border font-bold',
                 hasOnlineMenu
-                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-300'
-                  : 'bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-300'
+                  ? 'koma-badge-success'
+                  : 'koma-badge-warning'
               )}>
                 {hasOnlineMenu ? '✓ Cardápio Digital Ativo' : '⚡ Cardápio Digital Opcional (+R$ 49/mês)'}
               </span>
-              <span className="px-3 py-1 rounded-xl border border-koma-border bg-koma-raised text-koma-secondary">
-                Taxa Pix In-App: <strong className="text-emerald-400">{currentPlan.rates.pixInApp}</strong>
+              <span className="px-3 py-1 rounded-xl border border-koma-border bg-koma-raised text-koma-foreground font-medium">
+                Taxa Pix In-App: <strong className="text-emerald-700 dark:text-emerald-400 font-bold">{currentPlan.rates.pixInApp}</strong>
               </span>
             </div>
 
@@ -353,7 +353,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveSubTab('planos_upgrade')}
-                className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold rounded-2xl text-xs uppercase tracking-wider transition-all cursor-pointer shadow-lg shadow-emerald-950/40 flex items-center justify-center gap-2"
+                className="w-full py-3 koma-btn-success rounded-2xl text-xs uppercase tracking-wider transition-all cursor-pointer shadow-sm flex items-center justify-center gap-2"
               >
                 <span>Comparar planos</span>
                 <ArrowUpRight size={16} />
@@ -531,12 +531,12 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
 
                       <div className="mt-4 pt-4 border-t border-koma-border min-w-0">
                         <div className="flex items-end gap-1 whitespace-nowrap">
-                          <span className="text-3xl font-bold font-mono text-emerald-400 tracking-tight">
+                          <span className="text-3xl font-extrabold font-mono text-emerald-700 dark:text-emerald-400 tracking-tight">
                             {formatCurrency(displayPrice)}
                           </span>
-                          <span className="text-koma-subtle text-xs font-mono pb-1">/mês</span>
+                          <span className="text-koma-muted text-xs font-mono pb-1">/mês</span>
                         </div>
-                        <p className="mt-1 min-h-4 text-[10px] leading-4 text-koma-muted">
+                        <p className="mt-1 min-h-4 text-[10px] leading-4 text-koma-muted font-medium">
                           {isYearly
                             ? `${formatCurrency(pricing.annualTotal)} cobrados anualmente`
                             : 'Cobrança mensal'}
@@ -548,7 +548,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                       {/* Botão de Ação do Card */}
                       <div className="pt-1">
                         {isCurrent ? (
-                          <div className="w-full py-2.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold rounded-xl text-[10px] uppercase tracking-wider text-center flex items-center justify-center gap-1.5 shadow">
+                          <div className="w-full py-2.5 koma-badge-success font-bold rounded-xl text-[10px] uppercase tracking-wider text-center flex items-center justify-center gap-1.5 shadow-xs">
                             <ShieldCheck size={14} />
                             <span>Plano Atual</span>
                           </div>
@@ -559,10 +559,10 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                             rel="noopener noreferrer"
                             aria-label={`Falar sobre o ${plan.name} no WhatsApp`}
                             className={clsx(
-                              'w-full py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors',
+                              'w-full py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors shadow-xs',
                               isPopular
-                                ? 'bg-emerald-500 text-zinc-950 hover:bg-emerald-400'
-                                : 'bg-koma-raised text-koma-secondary border border-[#343438] hover:border-emerald-500/50 hover:text-koma-foreground'
+                                ? 'koma-btn-success'
+                                : 'bg-koma-raised text-koma-foreground border border-koma-border hover:border-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-400'
                             )}
                           >
                             <MessageSquare size={13} />
@@ -573,16 +573,16 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
 
                       {/* Lista de Recursos com Ícone CheckCheck */}
                       <div className="space-y-3 pt-2">
-                        <span className="text-[9px] font-bold text-koma-subtle uppercase tracking-wider block">
+                        <span className="text-[9px] font-bold text-koma-muted uppercase tracking-wider block">
                           Recursos Inclusos:
                         </span>
                         <ul className="space-y-2 font-medium text-xs">
                           {plan.features.map((feature, featureIndex) => (
                             <li key={featureIndex} className="flex items-start">
-                              <span className="h-5 w-5 bg-emerald-500/10 border border-emerald-500/30 rounded-full grid place-content-center mt-0.5 mr-2.5 shrink-0">
-                                <CheckCheck className="h-3 w-3 text-emerald-400" />
+                              <span className="h-5 w-5 bg-emerald-500/15 border border-emerald-500/30 rounded-full grid place-content-center mt-0.5 mr-2.5 shrink-0">
+                                <CheckCheck className="h-3 w-3 text-emerald-700 dark:text-emerald-400" />
                               </span>
-                              <span className="text-xs text-koma-secondary leading-snug">{feature}</span>
+                              <span className="text-xs text-koma-foreground leading-snug">{feature}</span>
                             </li>
                           ))}
                         </ul>
@@ -595,20 +595,20 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
           </div>
 
           {/* CARD DO ADDON "CARDÁPIO ONLINE KÔMA" */}
-          <div className="p-5 bg-koma-panel/80 border border-[#303034] rounded-3xl text-left space-y-3">
+          <div className="p-5 bg-koma-panel border border-koma-border rounded-3xl text-left space-y-3 shadow-sm">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-koma-border pb-3">
               <div>
                 <div className="flex items-center gap-2">
                   <strong className="text-koma-foreground font-serif text-sm block">{ONLINE_MENU_ADDON.name}</strong>
                 </div>
-                <p className="text-xs text-koma-subtle mt-1">{ONLINE_MENU_ADDON.description}</p>
+                <p className="text-xs text-koma-muted mt-1">{ONLINE_MENU_ADDON.description}</p>
               </div>
 
               <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 shrink-0">
-                <span className="px-2.5 py-1 bg-koma-raised text-koma-secondary border border-koma-border text-[9px] font-bold rounded-full whitespace-nowrap">
+                <span className="px-2.5 py-1 bg-koma-raised text-koma-foreground border border-koma-border text-[9px] font-bold rounded-full whitespace-nowrap">
                   R$ {ONLINE_MENU_ADDON.price}/mês no Pocket e Pro
                 </span>
-                <span className="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px] font-bold uppercase rounded-full whitespace-nowrap">
+                <span className="px-2.5 py-1 koma-badge-success text-[9px] font-bold uppercase rounded-full whitespace-nowrap">
                   Incluso no Premium
                 </span>
               </div>
@@ -620,22 +620,22 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
           </div>
 
           {/* ACCORDION PARA TABELA COMPARATIVA DETALHADA */}
-          <div className="bg-koma-panel/60 border border-koma-border rounded-3xl overflow-hidden transition-all">
+          <div className="bg-koma-panel border border-koma-border rounded-3xl overflow-hidden transition-all shadow-sm">
             <button
               type="button"
               onClick={() => setIsAccordionOpen(!isAccordionOpen)}
-              className="w-full p-5 border border-transparent hover:bg-koma-raised/40 flex items-center justify-between transition-colors cursor-pointer text-left"
+              className="w-full p-5 border border-transparent hover:bg-koma-raised flex items-center justify-between transition-colors cursor-pointer text-left"
             >
               <div className="flex items-center gap-2.5">
-                <Layers size={18} className="text-emerald-400" />
+                <Layers size={18} className="text-emerald-700 dark:text-emerald-400" />
                 <div>
                   <h4 className="font-serif font-bold text-sm text-koma-foreground">Ver Comparativo Completo de Recursos (Tabela Detalhada)</h4>
-                  <span className="text-[10px] text-koma-subtle block mt-0.5">
+                  <span className="text-[10px] text-koma-muted block mt-0.5">
                     {isAccordionOpen ? 'Clique para recolher o detalhamento linha a linha' : 'Clique para expandir a comparação completa de funcionalidades'}
                   </span>
                 </div>
               </div>
-              <div className="p-2 bg-koma-raised border border-koma-border rounded-xl text-koma-secondary">
+              <div className="p-2 bg-koma-raised border border-koma-border rounded-xl text-koma-foreground">
                 {isAccordionOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
               </div>
             </button>
@@ -645,14 +645,14 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                 <div className="overflow-x-auto min-w-full border border-koma-border rounded-2xl">
                   <table className="w-full text-left text-xs font-mono">
                     <thead>
-                      <tr className="bg-koma-raised border-b border-koma-border text-koma-subtle uppercase text-[9px] tracking-wider">
+                      <tr className="bg-koma-raised border-b border-koma-border text-koma-foreground uppercase text-[9px] font-extrabold tracking-wider">
                         <th className="p-3.5 font-sans">Funcionalidade</th>
                         {SUBSCRIPTION_PLANS.map((plan) => (
                           <th
                             key={plan.id}
                             className={clsx(
                               'p-3.5 text-center font-mono whitespace-nowrap',
-                              plan.recommended && 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
+                              plan.recommended ? 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 font-extrabold' : 'text-koma-foreground'
                             )}
                           >
                             {plan.name} ({formatCurrency(plan.price)})
@@ -660,54 +660,54 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                         ))}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-koma-border text-koma-secondary">
+                    <tbody className="divide-y divide-koma-border text-koma-foreground">
                       {Object.entries(groupedMatrix).map(([category, rows]) => (
                         <React.Fragment key={category}>
-                          <tr className="bg-koma-raised/90 text-emerald-400 font-bold text-[9px] uppercase tracking-wider border-y border-koma-border">
+                          <tr className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-300 font-extrabold text-[10px] uppercase tracking-wider border-y border-koma-border">
                             <td colSpan={4} className="p-2.5 pl-3.5 font-sans">
                               {category}
                             </td>
                           </tr>
 
                           {rows.map((row, idx) => (
-                            <tr key={idx} className="hover:bg-koma-raised/40 transition-colors text-[10px]">
-                              <td className="p-3.5 font-sans font-medium text-koma-foreground pl-6">
+                            <tr key={idx} className="hover:bg-koma-raised/60 transition-colors text-[10px]">
+                              <td className="p-3.5 font-sans font-semibold text-koma-foreground pl-6">
                                 {row.feature}
                               </td>
 
                               <td className="p-3.5 text-center">
                                 {typeof row.pocket === 'boolean' ? (
                                   row.pocket ? (
-                                    <Check size={16} className="text-emerald-400 mx-auto" />
+                                    <Check size={16} className="text-emerald-700 dark:text-emerald-400 mx-auto stroke-[2.5]" />
                                   ) : (
-                                    <X size={16} className="text-koma-muted mx-auto" />
+                                    <X size={15} className="text-koma-muted mx-auto opacity-40" />
                                   )
                                 ) : (
-                                  <span className="text-koma-secondary">{row.pocket}</span>
+                                  <span className="text-koma-foreground font-medium">{row.pocket}</span>
                                 )}
                               </td>
 
                               <td className="p-3.5 text-center bg-emerald-500/5">
                                 {typeof row.pro === 'boolean' ? (
                                   row.pro ? (
-                                    <Check size={16} className="text-emerald-400 mx-auto" />
+                                    <Check size={16} className="text-emerald-700 dark:text-emerald-400 mx-auto stroke-[2.5]" />
                                   ) : (
-                                    <X size={16} className="text-koma-muted mx-auto" />
+                                    <X size={15} className="text-koma-muted mx-auto opacity-40" />
                                   )
                                 ) : (
-                                  <span className="font-bold text-emerald-600 dark:text-emerald-300">{row.pro}</span>
+                                  <span className="font-bold text-emerald-800 dark:text-emerald-300">{row.pro}</span>
                                 )}
                               </td>
 
                               <td className="p-3.5 text-center">
                                 {typeof row.premium === 'boolean' ? (
                                   row.premium ? (
-                                    <Check size={16} className="text-emerald-400 mx-auto" />
+                                    <Check size={16} className="text-emerald-700 dark:text-emerald-400 mx-auto stroke-[2.5]" />
                                   ) : (
-                                    <X size={16} className="text-koma-muted mx-auto" />
+                                    <X size={15} className="text-koma-muted mx-auto opacity-40" />
                                   )
                                 ) : (
-                                  <span className="font-bold text-emerald-400">{row.premium}</span>
+                                  <span className="font-bold text-emerald-800 dark:text-emerald-300">{row.premium}</span>
                                 )}
                               </td>
                             </tr>

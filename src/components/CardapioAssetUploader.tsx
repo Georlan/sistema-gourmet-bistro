@@ -300,24 +300,24 @@ export const CardapioAssetUploader: React.FC<CardapioAssetUploaderProps> = ({
           onDrop={handleDrop}
           onClick={() => !isBusy && fileInputRef.current?.click()}
           className={clsx(
-            'border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-1.5 group',
+            'border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2 group',
             isDragging
-              ? 'border-[#10b981] bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 scale-[1.01]'
-              : 'border-koma-border hover:border-[#10b981]/50 bg-koma-page hover:bg-koma-card text-koma-subtle hover:text-koma-secondary',
+              ? 'border-emerald-500 bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 scale-[1.01]'
+              : 'border-koma-border hover:border-emerald-500/50 bg-koma-raised hover:bg-koma-card text-koma-muted hover:text-koma-foreground',
             isBusy && 'opacity-60 cursor-not-allowed pointer-events-none'
           )}
         >
           {isBusy ? (
-            <Loader2 size={20} className="animate-spin text-emerald-700 dark:text-emerald-400" />
+            <Loader2 size={24} className="animate-spin text-emerald-700 dark:text-emerald-400" />
           ) : (
-            <ImageIcon size={20} className={isDragging ? 'text-emerald-700 dark:text-emerald-400' : 'text-koma-subtle group-hover:text-emerald-700 dark:text-emerald-400'} />
+            <ImageIcon size={24} className={isDragging ? 'text-emerald-700 dark:text-emerald-400' : 'text-koma-muted group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors'} />
           )}
 
-          <div className="space-y-0.5">
-            <span className="text-xs font-semibold block text-koma-secondary">
+          <div className="space-y-1">
+            <span className="text-xs font-bold block text-koma-foreground">
               {isBusy ? 'Fazendo upload...' : isDragging ? 'Solte a imagem aqui para enviar' : `Clique para escolher ou arraste o ${label} aqui`}
             </span>
-            <span className="text-[9px] text-koma-muted block">
+            <span className="text-[10px] text-koma-muted block">
               Formatos aceitos: PNG, JPG, JPEG ou WEBP (máx. 5 MB)
             </span>
           </div>
