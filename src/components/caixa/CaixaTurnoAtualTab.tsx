@@ -217,13 +217,13 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
         </div>
       </section>
 
-      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
         {metrics.map(metric => (
-          <article key={metric.label} className="rounded-[18px] border border-[#252b28] bg-[#111412] p-4">
+          <article key={metric.label} className="min-w-0 rounded-[16px] border border-[#252b28] bg-[#111412] p-3 sm:rounded-[18px] sm:p-4">
             <span className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.14em] text-zinc-500">
               <metric.icon size={13} className="text-[#54d9b3]" /> {metric.label}
             </span>
-            <strong className="mt-2 block text-xl font-bold tabular-nums text-[#f5f4ef]">{formatCurrency(metric.value)}</strong>
+            <strong className="mt-2 block text-base font-bold tabular-nums text-[#f5f4ef] sm:text-xl">{formatCurrency(metric.value)}</strong>
             <span className="mt-1 block truncate text-[10px] text-zinc-500" title={metric.help}>{metric.help}</span>
           </article>
         ))}

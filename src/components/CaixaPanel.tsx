@@ -430,6 +430,7 @@ export function CaixaPanel({
   });
 
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [mobileOrdersStage, setMobileOrdersStage] = useState<'salon' | 'digital' | 'closing'>('salon');
   const [balcaoMobileView, setBalcaoMobileView] = useState<'produtos' | 'carrinho'>('produtos');
 
   useEffect(() => {
@@ -4526,6 +4527,26 @@ export function CaixaPanel({
                 </div>
               )}
 
+              <div className="orders-mobile-stages" role="tablist" aria-label="Etapa dos pedidos">
+                {[
+                  { id: 'salon' as const, label: 'Salão', count: filteredCol1.length },
+                  { id: 'digital' as const, label: 'Digital', count: filteredDigitalProduction.length },
+                  { id: 'closing' as const, label: 'Concluir', count: filteredCol2Table.length + filteredDeliveryFinalization.length },
+                ].map(stage => (
+                  <button
+                    key={stage.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={mobileOrdersStage === stage.id}
+                    onClick={() => setMobileOrdersStage(stage.id)}
+                    className={clsx('orders-mobile-stages__button', mobileOrdersStage === stage.id && 'is-active')}
+                  >
+                    <span>{stage.label}</span>
+                    <strong>{stage.count}</strong>
+                  </button>
+                ))}
+              </div>
+
               {/* Kanban operacional universal: mesas, pedidos online e finalização. */}
               <div
                 className={clsx('orders-board', 'flex-1', 'gap-3', 'overflow-x-auto', 'snap-x', 'snap-mandatory', 'pb-3', 'scrollbar-thin', 'scrollbar-thumb-zinc-800')}
@@ -4534,7 +4555,7 @@ export function CaixaPanel({
 
 
                 {/* COLUMN 1: Em produção */}
-                <div className={clsx('orders-column orders-column--salon flex flex-col overflow-hidden snap-center', filteredCol1.length === 0 && 'is-empty')}>
+                <div className={clsx('orders-column orders-column--salon flex flex-col overflow-hidden snap-center', mobileOrdersStage === 'salon' && 'is-mobile-active', filteredCol1.length === 0 && 'is-empty')}>
                   <div className={clsx('orders-column__header', 'px-4', 'py-2.5', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
                     <div>
                       <span className="orders-column__number">01 / SALÃO</span>
@@ -4665,7 +4686,7 @@ export function CaixaPanel({
                 </div>
 
                 {/* COLUMN 2: pedidos online aceitos, delivery ou retirada. */}
-                <div className={clsx('orders-column orders-column--digital flex flex-col overflow-hidden snap-center', filteredDigitalProduction.length === 0 && 'is-empty')}>
+                <div className={clsx('orders-column orders-column--digital flex flex-col overflow-hidden snap-center', mobileOrdersStage === 'digital' && 'is-mobile-active', filteredDigitalProduction.length === 0 && 'is-empty')}>
                   <div className={clsx('orders-column__header', 'px-4', 'py-2.5', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
                     <div>
                       <span className="orders-column__number">02 / DIGITAL</span>
@@ -4775,7 +4796,7 @@ export function CaixaPanel({
                 </div>
 
                 {/* COLUMN 3: pagamento e finalização de todas as modalidades. */}
-                <div className={clsx('orders-column orders-column--closing flex flex-col overflow-hidden snap-center', filteredCol2Table.length === 0 && filteredDeliveryFinalization.length === 0 && 'is-empty')}>
+                <div className={clsx('orders-column orders-column--closing flex flex-col overflow-hidden snap-center', mobileOrdersStage === 'closing' && 'is-mobile-active', filteredCol2Table.length === 0 && filteredDeliveryFinalization.length === 0 && 'is-empty')}>
                   <div className={clsx('orders-column__header', 'px-4', 'py-2.5', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
                     <div>
                       <span className="orders-column__number">03 / FECHAMENTO</span>
@@ -5623,7 +5644,7 @@ export function CaixaPanel({
                       Nenhuma mesa neste filtro.
                     </div>
                   ) : (
-                    <div className={clsx('grid', 'grid-cols-1', 'gap-2.5', 'min-[420px]:grid-cols-2', 'sm:grid-cols-3', 'xl:grid-cols-4', '2xl:grid-cols-6')}>
+                    <div className={clsx('grid', 'grid-cols-2', 'gap-2', 'sm:grid-cols-3', 'sm:gap-2.5', 'xl:grid-cols-4', '2xl:grid-cols-6')}>
                       {visibleSalonTableCards.map((card) => {
                         const { table, displayMesaId, tableOrders, isMerged, isOccupied, hasPendingPayment, total } = card;
                         const originId = tableOrders.find(order => order.mesaOrigemId && Number(order.mesaOrigemId) !== Number(displayMesaId))?.mesaOrigemId;
@@ -5641,7 +5662,7 @@ export function CaixaPanel({
                             key={table.id}
                             data-table-status={isMerged ? 'merged' : hasPendingPayment ? 'payment' : isOccupied ? 'occupied' : 'free'}
                             className={clsx(
-                              'group flex min-h-[148px] flex-col justify-between gap-3 rounded-2xl border p-3.5 transition-colors',
+                              'group flex min-h-[132px] flex-col justify-between gap-2.5 rounded-2xl border p-3 transition-colors sm:min-h-[148px] sm:gap-3 sm:p-3.5',
                               isMerged && 'border-dashed border-zinc-800 bg-black/20 opacity-65',
                               hasPendingPayment && 'border-[#74404b] bg-[#241419] hover:border-[#92515e]',
                               isOccupied && !hasPendingPayment && 'border-[#5f2831] bg-[#1b1013] hover:border-[#7d3540]',
@@ -7627,9 +7648,9 @@ export function CaixaPanel({
           {/* LIVE VIEW: ESTOQUE DE INSUMOS */}
           {activeTab === 'estoque' && activeSubTab === 'insumos' && (
             <div className={clsx('animate-fade-in', 'space-y-4', 'text-left')}>
-              <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-3')}>
-                <div className={clsx('flex', 'justify-between', 'items-center', 'border-b', 'border-[#27272A]', 'pb-2')}>
-                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300')}>Ingredientes</span>
+              <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-3', 'sm:p-5', 'space-y-3')}>
+                <div className={clsx('grid', 'grid-cols-2', 'gap-2', 'border-b', 'border-[#27272A]', 'pb-3', 'sm:flex', 'sm:items-center', 'sm:justify-between')}>
+                  <span className={clsx('col-span-2', 'font-serif', 'font-bold', 'text-gray-300', 'sm:col-span-1', 'sm:mr-auto')}>Ingredientes</span>
                   <button
                     type="button"
                     onClick={() => {
@@ -7641,22 +7662,22 @@ export function CaixaPanel({
                       setInsumoFormCusto(0);
                       setShowNewInsumoModal(true);
                     }}
-                    className={clsx('px-3', 'py-1', 'bg-emerald-600', 'hover:bg-emerald-500', 'text-white', 'rounded-lg', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-sm')}
+                    className={clsx('min-h-10', 'px-3', 'py-1', 'bg-emerald-600', 'hover:bg-emerald-500', 'text-white', 'rounded-lg', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-sm')}
                   >
                     + Novo Ingrediente
                   </button>
                   <button
                     type="button"
                     onClick={() => setActiveSubTab('entradas')}
-                    className={clsx('px-3', 'py-1', 'bg-zinc-800', 'hover:bg-zinc-700', 'text-emerald-400', 'border', 'border-emerald-500/30', 'rounded-lg', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-sm', 'flex', 'items-center', 'gap-1')}
+                    className={clsx('min-h-10', 'px-3', 'py-1', 'bg-zinc-800', 'hover:bg-zinc-700', 'text-emerald-400', 'border', 'border-emerald-500/30', 'rounded-lg', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-sm', 'flex', 'items-center', 'justify-center', 'gap-1')}
                     title="Importar Nota Fiscal Eletrônica XML"
                   >
                     <Upload size={11} />
                     <span>Importar NF-e (XML)</span>
                   </button>
                 </div>
-                <div className={clsx('overflow-hidden', 'border', 'border-[#27272A]/40', 'rounded-2xl')}>
-                  <table className={clsx('w-full', 'text-left', 'text-[10px]')}>
+                <div className={clsx('overflow-x-auto', 'overscroll-x-contain', 'border', 'border-[#27272A]/40', 'rounded-2xl')}>
+                  <table className={clsx('w-full', 'min-w-[680px]', 'text-left', 'text-[10px]')}>
                     <thead>
                       <tr className={clsx('bg-[#1C1C1F]', 'border-b', 'border-[#27272A]', 'text-gray-400', 'uppercase', 'tracking-wider', 'font-bold')}>
                         <th className="p-3">Ingrediente</th>
