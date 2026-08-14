@@ -111,7 +111,7 @@ export const SuprimentoModal: React.FC<SuprimentoModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2 border border-koma-border hover:border-zinc-700 bg-koma-raised text-koma-subtle hover:text-koma-foreground rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+              className="flex-1 py-2 border border-koma-border hover:border-koma-border bg-koma-raised text-koma-subtle hover:text-koma-foreground rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
             >
               Cancelar
             </button>

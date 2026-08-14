@@ -642,7 +642,7 @@ export default function SuperAdminTenantControl({
                     setShowFlushConfirmModal(false);
                     setPendingFlushTenant(null);
                   }}
-                  className="bg-koma-card hover:bg-zinc-800 border border-zinc-700/50 px-3 py-2 rounded text-koma-subtle hover:text-koma-foreground cursor-pointer transition-colors"
+                  className="bg-koma-card hover:bg-koma-raised border border-koma-border/50 px-3 py-2 rounded text-koma-subtle hover:text-koma-foreground cursor-pointer transition-colors"
                 >
                   Cancelar
                 </button>

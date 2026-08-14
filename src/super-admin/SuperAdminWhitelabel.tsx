@@ -660,7 +660,7 @@ export default function SuperAdminWhitelabel({
                         <div className="flex items-start gap-1.5 text-[9px] text-koma-secondary">
                           <MapPin className="w-3 h-3 text-[#00b894] shrink-0 mt-0.5" />
                           <div className="flex-1 min-w-0">
-                            <p className="font-bold text-slate-200">Localização Sincronizada</p>
+                            <p className="font-bold text-koma-secondary">Localização Sincronizada</p>
                             <p className="text-[8px] text-koma-muted font-mono truncate">
                               Lat: {latitude || "0"} / Lon: {longitude || "0"}
                             </p>
@@ -683,7 +683,7 @@ export default function SuperAdminWhitelabel({
                         <div className="flex items-start gap-1.5 text-[9px] text-koma-secondary pt-2 border-t border-zinc-800/60">
                           <Share2 className="w-3 h-3 text-[#00b894] shrink-0 mt-0.5" />
                           <div className="flex-1">
-                            <p className="font-bold text-slate-200">Redes Sociais & Contato</p>
+                            <p className="font-bold text-koma-secondary">Redes Sociais & Contato</p>
                             <div className="flex flex-wrap gap-1 mt-1">
                               {instagram ? (
                                 <span className="flex items-center gap-0.5 text-[7px] bg-pink-950/20 text-pink-400 border border-pink-900/30 px-1 rounded font-mono">
@@ -711,7 +711,7 @@ export default function SuperAdminWhitelabel({
                         
                         <div className="bg-zinc-900/40 border border-zinc-900 rounded-lg p-2 flex items-center justify-between">
                           <div className="min-w-0 flex-1 pr-1">
-                            <p className="text-[9px] font-bold text-slate-200 truncate">Calabresa Premium</p>
+                            <p className="text-[9px] font-bold text-koma-secondary truncate">Calabresa Premium</p>
                             <p className="text-[7px] text-koma-muted truncate">Queijo derretido, calabresa fina</p>
                           </div>
                           <span className="text-[9px] font-mono text-emerald-400 font-bold shrink-0">R$ 49,00</span>
@@ -719,7 +719,7 @@ export default function SuperAdminWhitelabel({
 
                         <div className="bg-zinc-900/40 border border-zinc-900 rounded-lg p-2 flex items-center justify-between">
                           <div className="min-w-0 flex-1 pr-1">
-                            <p className="text-[9px] font-bold text-slate-200 truncate">Artisanal Smash Burger</p>
+                            <p className="text-[9px] font-bold text-koma-secondary truncate">Artisanal Smash Burger</p>
                             <p className="text-[7px] text-koma-muted truncate">Molho especial, pão brioche</p>
                           </div>
                           <span className="text-[9px] font-mono text-emerald-400 font-bold shrink-0">R$ 35,00</span>

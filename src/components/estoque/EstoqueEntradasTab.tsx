@@ -39,7 +39,7 @@ export const EstoqueEntradasTab: React.FC<EstoqueEntradasTabProps> = ({
           <button
             type="button"
             onClick={() => xmlFileInputRef.current?.click()}
-            className="px-3.5 py-2 bg-sky-600/20 hover:bg-sky-600/30 border border-sky-500/30 text-sky-300 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
+            className="px-3.5 py-2 bg-sky-600/20 hover:bg-sky-600/30 border border-sky-500/30 text-sky-600 dark:text-sky-300 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
           >
             <FileText size={14} />
             <span>Importar XML</span>

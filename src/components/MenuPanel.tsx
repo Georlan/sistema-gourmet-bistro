@@ -821,7 +821,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                           }}
                           className={`px-2.5 py-1 text-[9px] rounded-lg border transition-colors font-medium cursor-pointer ${
                             isActive
-                              ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
+                              ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-600 dark:text-emerald-300'
                               : 'bg-koma-raised hover:bg-emerald-500/25 text-koma-secondary hover:text-koma-foreground border-koma-border'
                           }`}
                         >

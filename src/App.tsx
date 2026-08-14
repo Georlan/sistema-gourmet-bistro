@@ -2180,7 +2180,7 @@ export default function App() {
                             <CheckCircle2 size={14} className={pratosProntosCount > 0 ? "text-amber-400 animate-bounce" : "text-koma-muted"} />
                             <span className="text-koma-secondary font-medium">Pratos Prontos</span>
                           </div>
-                          <span className={clsx('font-mono font-bold px-2 py-0.5 rounded-md text-[10px]', pratosProntosCount > 0 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-koma-subtle bg-koma-raised')}>
+                          <span className={clsx('font-mono font-bold px-2 py-0.5 rounded-md text-[10px]', pratosProntosCount > 0 ? 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/30' : 'text-koma-subtle bg-koma-raised')}>
                             {pratosProntosCount} p/ servir
                           </span>
                         </div>
@@ -2293,9 +2293,9 @@ export default function App() {
                           <div className="flex items-center justify-between p-2 bg-amber-950/20 border border-amber-800/30 rounded-xl text-xs">
                             <div className="flex items-center gap-2">
                               <ShoppingBag size={13} className="text-amber-400 animate-pulse" />
-                              <span className="text-amber-300 font-medium text-[11px]">Delivery Pendente</span>
+                              <span className="text-amber-600 dark:text-amber-300 font-medium text-[11px]">Delivery Pendente</span>
                             </div>
-                            <span className="font-mono font-bold text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded text-[10px]">
+                            <span className="font-mono font-bold text-amber-600 dark:text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded text-[10px]">
                               {deliveryPendentesCount} p/ aceitar
                             </span>
                           </div>

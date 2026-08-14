@@ -157,14 +157,14 @@ export function CardapioProdutosTab({
 
           <div className="min-w-0 flex-1 pt-0.5">
             <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-              <h3 className={clsx('truncate text-[13px] font-bold text-zinc-100', !isPublished && 'text-koma-muted')}>
+              <h3 className={clsx('truncate text-[13px] font-bold text-koma-foreground', !isPublished && 'text-koma-muted')}>
                 {product.nome}
               </h3>
               <span className={clsx(
                 'rounded-full border px-2 py-0.5 text-[8px] font-bold uppercase tracking-[0.1em]',
                 isPublished
-                  ? 'border-emerald-400/15 bg-emerald-400/[0.07] text-emerald-300'
-                  : 'border-amber-400/15 bg-amber-400/[0.07] text-amber-300',
+                  ? 'border-emerald-400/15 bg-emerald-400/[0.07] text-emerald-600 dark:text-emerald-300'
+                  : 'border-amber-400/15 bg-amber-400/[0.07] text-amber-600 dark:text-amber-300',
               )}>
                 {isPublished ? 'Publicado' : 'Pausado'}
               </span>
@@ -172,7 +172,7 @@ export function CardapioProdutosTab({
             <p className="mt-1 line-clamp-2 max-w-3xl text-[10px] leading-relaxed text-koma-subtle">
               {product.descricao || 'Sem descrição. Adicione detalhes para facilitar a escolha do cliente.'}
             </p>
-            <strong className="mt-1.5 block font-mono text-xs text-emerald-300">
+            <strong className="mt-1.5 block font-mono text-xs text-emerald-600 dark:text-emerald-300">
               {currency.format(Number(product.preco) || 0)}
             </strong>
           </div>
@@ -188,8 +188,8 @@ export function CardapioProdutosTab({
             className={clsx(
               'inline-flex min-w-[112px] items-center justify-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-bold transition-all disabled:cursor-wait disabled:opacity-50 cursor-pointer',
               isPublished
-                ? 'border-emerald-400/20 bg-emerald-400/[0.08] text-emerald-300 hover:bg-emerald-400/[0.14]'
-                : 'border-koma-border bg-koma-card text-koma-secondary hover:border-emerald-400/25 hover:text-emerald-300',
+                ? 'border-emerald-400/20 bg-emerald-400/[0.08] text-emerald-600 dark:text-emerald-300 hover:bg-emerald-400/[0.14]'
+                : 'border-koma-border bg-koma-card text-koma-secondary hover:border-emerald-400/25 hover:text-emerald-600 dark:text-emerald-300',
             )}
           >
             <span className={clsx('h-2 w-2 rounded-full', isPublished ? 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,.65)]' : 'bg-zinc-600')} />
@@ -197,13 +197,13 @@ export function CardapioProdutosTab({
           </button>
 
           <div className="flex items-center rounded-xl border border-koma-border bg-koma-input p-1">
-            <button type="button" onClick={() => onDuplicateProduct(product)} className="rounded-lg p-2 text-koma-subtle transition-colors hover:bg-white/[0.05] hover:text-emerald-300 cursor-pointer" title="Duplicar produto" aria-label={`Duplicar ${product.nome}`}>
+            <button type="button" onClick={() => onDuplicateProduct(product)} className="rounded-lg p-2 text-koma-subtle transition-colors hover:bg-white/[0.05] hover:text-emerald-600 dark:text-emerald-300 cursor-pointer" title="Duplicar produto" aria-label={`Duplicar ${product.nome}`}>
               <Copy size={14} />
             </button>
             <button type="button" onClick={() => onEditProduct(product)} className="rounded-lg p-2 text-koma-subtle transition-colors hover:bg-white/[0.05] hover:text-koma-foreground cursor-pointer" title="Editar produto" aria-label={`Editar ${product.nome}`}>
               <Edit3 size={14} />
             </button>
-            <button type="button" onClick={() => void onRemoveProduct(product)} className="rounded-lg p-2 text-koma-subtle transition-colors hover:bg-rose-500/10 hover:text-rose-300 cursor-pointer" title="Remover do cardápio" aria-label={`Remover ${product.nome} do cardápio`}>
+            <button type="button" onClick={() => void onRemoveProduct(product)} className="rounded-lg p-2 text-koma-subtle transition-colors hover:bg-rose-500/10 hover:text-rose-600 dark:text-rose-300 cursor-pointer" title="Remover do cardápio" aria-label={`Remover ${product.nome} do cardápio`}>
               <Trash2 size={14} />
             </button>
           </div>
@@ -219,11 +219,11 @@ export function CardapioProdutosTab({
       <section key={category.id} className="overflow-hidden rounded-[22px] border border-koma-border bg-koma-panel/60 shadow-[0_18px_50px_rgba(0,0,0,.18)]">
         <header className="flex flex-col gap-3 border-b border-koma-border bg-white/[0.018] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-emerald-400/15 bg-emerald-400/[0.07] text-emerald-300">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-emerald-400/15 bg-emerald-400/[0.07] text-emerald-600 dark:text-emerald-300">
               <Utensils size={15} />
             </span>
             <div className="min-w-0">
-              <h2 className="truncate text-xs font-bold text-zinc-100">{category.nome}</h2>
+              <h2 className="truncate text-xs font-bold text-koma-foreground">{category.nome}</h2>
               <p className="mt-0.5 text-[9px] text-koma-subtle">
                 {products.length} {products.length === 1 ? 'produto' : 'produtos'} · {publishedCount} disponíveis
               </p>
@@ -236,8 +236,8 @@ export function CardapioProdutosTab({
             className={clsx(
               'inline-flex items-center justify-center gap-1.5 self-start rounded-xl border px-3 py-2 text-[9px] font-bold transition-colors disabled:cursor-wait disabled:opacity-50 sm:self-auto cursor-pointer',
               allPublished
-                ? 'border-amber-400/15 bg-amber-400/[0.06] text-amber-300 hover:bg-amber-400/[0.11]'
-                : 'border-emerald-400/15 bg-emerald-400/[0.07] text-emerald-300 hover:bg-emerald-400/[0.12]',
+                ? 'border-amber-400/15 bg-amber-400/[0.06] text-amber-600 dark:text-amber-300 hover:bg-amber-400/[0.11]'
+                : 'border-emerald-400/15 bg-emerald-400/[0.07] text-emerald-600 dark:text-emerald-300 hover:bg-emerald-400/[0.12]',
             )}
           >
             {allPublished ? <EyeOff size={13} /> : <Eye size={13} />}
@@ -258,10 +258,10 @@ export function CardapioProdutosTab({
         accent="organizado para vender"
         description="Produtos, preços e disponibilidade sincronizados entre caixa, atendimento e cardápio digital."
         metrics={[
-          { label: 'publicação', value: `${summary.publicationRate}%`, valueClassName: 'text-emerald-300' },
-          { label: 'itens pausados', value: summary.paused, valueClassName: summary.paused > 0 ? 'text-amber-300' : 'text-emerald-300' },
-          { label: 'sem imagem', value: summary.withoutImage, valueClassName: summary.withoutImage > 0 ? 'text-amber-300' : 'text-emerald-300' },
-          { label: 'categorias vazias', value: summary.emptyCategories, valueClassName: summary.emptyCategories > 0 ? 'text-amber-300' : 'text-emerald-300' },
+          { label: 'publicação', value: `${summary.publicationRate}%`, valueClassName: 'text-emerald-600 dark:text-emerald-300' },
+          { label: 'itens pausados', value: summary.paused, valueClassName: summary.paused > 0 ? 'text-amber-600 dark:text-amber-300' : 'text-emerald-600 dark:text-emerald-300' },
+          { label: 'sem imagem', value: summary.withoutImage, valueClassName: summary.withoutImage > 0 ? 'text-amber-600 dark:text-amber-300' : 'text-emerald-600 dark:text-emerald-300' },
+          { label: 'categorias vazias', value: summary.emptyCategories, valueClassName: summary.emptyCategories > 0 ? 'text-amber-600 dark:text-amber-300' : 'text-emerald-600 dark:text-emerald-300' },
         ]}
       />
 
@@ -278,18 +278,18 @@ export function CardapioProdutosTab({
               ['publicados', 'Disponíveis'],
               ['pausados', 'Pausados'],
             ] as Array<[AvailabilityFilter, string]>).map(([value, label]) => (
-              <button key={value} type="button" onClick={() => setAvailabilityFilter(value)} className={clsx('rounded-lg px-3 py-2 text-[9px] font-bold transition-colors cursor-pointer', availabilityFilter === value ? 'bg-koma-card text-koma-foreground' : 'text-koma-subtle hover:text-zinc-200')}>
+              <button key={value} type="button" onClick={() => setAvailabilityFilter(value)} className={clsx('rounded-lg px-3 py-2 text-[9px] font-bold transition-colors cursor-pointer', availabilityFilter === value ? 'bg-koma-card text-koma-foreground' : 'text-koma-subtle hover:text-koma-secondary')}>
                 {label}
               </button>
             ))}
           </div>
           <div className="flex flex-wrap gap-2">
             {previewUrl && (
-              <a href={previewUrl} target="_blank" rel="noreferrer" className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card px-3 py-2.5 text-[9px] font-bold text-zinc-200 transition-colors hover:bg-zinc-700 sm:flex-none">
+              <a href={previewUrl} target="_blank" rel="noreferrer" className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card px-3 py-2.5 text-[9px] font-bold text-koma-secondary transition-colors hover:bg-koma-raised sm:flex-none">
                 <Eye size={13} /> Ver cardápio
               </a>
             )}
-            <button type="button" onClick={onCreateCategory} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-emerald-300/15 bg-emerald-300/[0.06] px-3 py-2.5 text-[9px] font-bold text-emerald-200 transition-colors hover:bg-emerald-300/[0.11] sm:flex-none cursor-pointer">
+            <button type="button" onClick={onCreateCategory} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-emerald-300/15 bg-emerald-300/[0.06] px-3 py-2.5 text-[9px] font-bold text-emerald-600 dark:text-emerald-300 transition-colors hover:bg-emerald-300/[0.11] sm:flex-none cursor-pointer">
               <Layers3 size={13} /> Nova categoria
             </button>
             <button type="button" onClick={onCreateProduct} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-3 py-2.5 text-[9px] font-black text-zinc-950 transition-colors hover:bg-emerald-400 sm:flex-none cursor-pointer shadow-sm">
@@ -298,9 +298,9 @@ export function CardapioProdutosTab({
           </div>
         </div>
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-          <button type="button" onClick={() => setCategoryFilter('todos')} className={clsx('shrink-0 rounded-full border px-3 py-1.5 text-[9px] font-bold transition-colors cursor-pointer', categoryFilter === 'todos' ? 'border-emerald-300/25 bg-emerald-300/[0.09] text-emerald-200' : 'border-koma-border text-koma-subtle hover:text-zinc-200')}>Todas as categorias</button>
+          <button type="button" onClick={() => setCategoryFilter('todos')} className={clsx('shrink-0 rounded-full border px-3 py-1.5 text-[9px] font-bold transition-colors cursor-pointer', categoryFilter === 'todos' ? 'border-emerald-300/25 bg-emerald-300/[0.09] text-emerald-600 dark:text-emerald-300' : 'border-koma-border text-koma-subtle hover:text-koma-secondary')}>Todas as categorias</button>
           {categorias.map((category) => (
-            <button key={category.id} type="button" onClick={() => setCategoryFilter(category.id)} className={clsx('shrink-0 rounded-full border px-3 py-1.5 text-[9px] font-bold transition-colors cursor-pointer', categoryFilter === category.id ? 'border-emerald-300/25 bg-emerald-300/[0.09] text-emerald-200' : 'border-koma-border text-koma-subtle hover:text-zinc-200')}>
+            <button key={category.id} type="button" onClick={() => setCategoryFilter(category.id)} className={clsx('shrink-0 rounded-full border px-3 py-1.5 text-[9px] font-bold transition-colors cursor-pointer', categoryFilter === category.id ? 'border-emerald-300/25 bg-emerald-300/[0.09] text-emerald-600 dark:text-emerald-300' : 'border-koma-border text-koma-subtle hover:text-koma-secondary')}>
               {category.nome}
             </button>
           ))}

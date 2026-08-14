@@ -265,7 +265,7 @@ export const CardapioAssetUploader: React.FC<CardapioAssetUploaderProps> = ({
                   type="button"
                   disabled={isBusy}
                   onClick={() => fileInputRef.current?.click()}
-                  className="px-3 py-1.5 bg-koma-card hover:bg-koma-raised border border-koma-border text-gray-200 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                  className="px-3 py-1.5 bg-koma-card hover:bg-koma-raised border border-koma-border text-koma-secondary rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
                 >
                   {status === 'uploading' ? (
                     <Loader2 size={12} className="animate-spin text-[#10b981]" />
@@ -303,7 +303,7 @@ export const CardapioAssetUploader: React.FC<CardapioAssetUploaderProps> = ({
             'border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-1.5 group',
             isDragging
               ? 'border-[#10b981] bg-[#10b981]/15 text-[#10b981] scale-[1.01]'
-              : 'border-koma-border hover:border-[#10b981]/50 bg-koma-page hover:bg-koma-card text-koma-subtle hover:text-gray-200',
+              : 'border-koma-border hover:border-[#10b981]/50 bg-koma-page hover:bg-koma-card text-koma-subtle hover:text-koma-secondary',
             isBusy && 'opacity-60 cursor-not-allowed pointer-events-none'
           )}
         >
@@ -314,7 +314,7 @@ export const CardapioAssetUploader: React.FC<CardapioAssetUploaderProps> = ({
           )}
 
           <div className="space-y-0.5">
-            <span className="text-xs font-semibold block text-gray-200">
+            <span className="text-xs font-semibold block text-koma-secondary">
               {isBusy ? 'Fazendo upload...' : isDragging ? 'Solte a imagem aqui para enviar' : `Clique para escolher ou arraste o ${label} aqui`}
             </span>
             <span className="text-[9px] text-koma-muted block">

@@ -246,7 +246,7 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
                 <th className="p-3 text-right font-mono">% do Faturamento</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-koma-border text-gray-200">
+            <tbody className="divide-y divide-koma-border text-koma-secondary">
               <tr className="bg-koma-raised/60 font-bold">
                 <td className="p-3 font-sans text-emerald-400">1. FATURAMENTO TOTAL BRUTO</td>
                 <td className="p-3 text-right text-emerald-400 font-bold">

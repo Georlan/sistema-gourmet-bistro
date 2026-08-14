@@ -203,7 +203,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
         <div className="space-y-1">
           <h3 className="font-serif font-bold text-base text-koma-foreground">Relatórios — Visão Geral Operacional</h3>
           <p className="text-[10px] text-koma-subtle">
-            Período selecionado: <strong className="text-gray-200">{dataInicio}</strong> até <strong className="text-gray-200">{dataFim}</strong>
+            Período selecionado: <strong className="text-koma-secondary">{dataInicio}</strong> até <strong className="text-koma-secondary">{dataFim}</strong>
           </p>
         </div>
 

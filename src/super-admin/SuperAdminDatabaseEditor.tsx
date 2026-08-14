@@ -821,7 +821,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
                             </button>
                             <button
                               onClick={() => setDeletingRowId(null)}
-                              className="bg-koma-raised text-koma-subtle hover:bg-zinc-700 px-1 py-0.5 rounded text-[9px] font-bold cursor-pointer transition-colors"
+                              className="bg-koma-raised text-koma-subtle hover:bg-koma-raised px-1 py-0.5 rounded text-[9px] font-bold cursor-pointer transition-colors"
                             >
                               Não
                             </button>
@@ -1064,7 +1064,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
                     <tr key={log.id} className="hover:bg-black/30 transition-colors">
                       <td className="py-2.5 px-3 text-koma-subtle font-bold whitespace-nowrap">{log.timestamp}</td>
                       <td className="py-2.5 px-3 text-koma-foreground">
-                        <span className="px-1.5 py-0.5 rounded bg-koma-card border border-zinc-700/50 text-[10px] text-koma-secondary">
+                        <span className="px-1.5 py-0.5 rounded bg-koma-card border border-koma-border/50 text-[10px] text-koma-secondary">
                           {log.who}
                         </span>
                       </td>
@@ -1131,7 +1131,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
                 <button
                   type="button"
                   onClick={() => setPendingCellEdit(null)}
-                  className="bg-koma-card hover:bg-zinc-800 border border-zinc-700/50 px-3 py-2 rounded text-koma-subtle hover:text-koma-foreground cursor-pointer transition-colors"
+                  className="bg-koma-card hover:bg-koma-raised border border-koma-border/50 px-3 py-2 rounded text-koma-subtle hover:text-koma-foreground cursor-pointer transition-colors"
                 >
                   Cancelar
                 </button>
@@ -1179,7 +1179,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
                 <button
                   type="button"
                   onClick={() => setShowColumnConfirm(false)}
-                  className="bg-koma-card hover:bg-zinc-800 border border-zinc-700/50 px-3 py-2 rounded text-koma-subtle hover:text-koma-foreground cursor-pointer transition-colors"
+                  className="bg-koma-card hover:bg-koma-raised border border-koma-border/50 px-3 py-2 rounded text-koma-subtle hover:text-koma-foreground cursor-pointer transition-colors"
                 >
                   Cancelar
                 </button>

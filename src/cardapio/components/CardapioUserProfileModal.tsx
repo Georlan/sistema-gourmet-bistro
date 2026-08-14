@@ -128,7 +128,7 @@ export default function CardapioUserProfileModal({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 animate-fade-in cursor-pointer"
       id="user-profile-overlay"
     >
-      <div className="relative w-full max-w-md rounded-3xl bg-koma-card border border-slate-800 p-6 shadow-2xl flex flex-col max-h-[90vh] text-slate-100 animate-scale-up">
+      <div className="relative w-full max-w-md rounded-3xl bg-koma-card border border-slate-800 p-6 shadow-2xl flex flex-col max-h-[90vh] text-koma-foreground animate-scale-up">
         <div className="flex items-center justify-between border-b border-slate-800/60 pb-4 shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center border border-primary/20">
@@ -151,7 +151,7 @@ export default function CardapioUserProfileModal({
 
         <div className="flex-1 overflow-y-auto mt-4 space-y-5 pr-1 no-scrollbar text-xs">
           {!user ? (
-            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-center text-amber-300">
+            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-center text-amber-600 dark:text-amber-300">
               Confirme seu celular para acessar o perfil.
             </div>
           ) : isEditing ? (

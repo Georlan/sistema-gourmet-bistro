@@ -895,7 +895,7 @@ export default function CardapioPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-koma-page text-slate-100 flex flex-col items-center justify-center p-6 font-sans">
+      <div className="min-h-screen bg-koma-page text-koma-foreground flex flex-col items-center justify-center p-6 font-sans">
         <div className="flex flex-col items-center space-y-4 max-w-sm text-center animate-pulse">
           <div className="w-12 h-12 rounded-full border-4 border-emerald-500/20 border-t-emerald-500 animate-spin" />
           <h2 className="font-display font-extrabold text-sm uppercase tracking-wider text-koma-secondary">
@@ -911,7 +911,7 @@ export default function CardapioPage() {
 
   if (errorMsg || !activeBrand) {
     return (
-      <div className="min-h-screen bg-koma-page text-slate-100 flex flex-col items-center justify-center p-6 font-sans">
+      <div className="min-h-screen bg-koma-page text-koma-foreground flex flex-col items-center justify-center p-6 font-sans">
         <div className="flex flex-col items-center space-y-6 max-w-md text-center p-8 rounded-3xl border border-red-500/10 bg-red-500/[0.02]">
           <div className="w-14 h-14 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center border border-red-500/20">
             <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -996,7 +996,7 @@ export default function CardapioPage() {
                         <span className="text-xs font-extrabold uppercase tracking-wider text-emerald-400">
                           Pedido em Andamento (#{activeOrder.numero_pedido})
                         </span>
-                        <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase rounded-md bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30">
                           {activeOrder.status}
                         </span>
                       </div>
@@ -1010,7 +1010,7 @@ export default function CardapioPage() {
                     <button
                       type="button"
                       onClick={() => checkActiveOrder(Number(activeBrand.id))}
-                      className="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs font-bold rounded-xl transition border border-emerald-500/30 flex items-center gap-1.5 cursor-pointer"
+                      className="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-600 dark:text-emerald-300 text-xs font-bold rounded-xl transition border border-emerald-500/30 flex items-center gap-1.5 cursor-pointer"
                       id="btn-refresh-active-order"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
@@ -1082,7 +1082,7 @@ export default function CardapioPage() {
                 />
                 <div>
                   <h1 className="font-display font-black text-xl sm:text-2xl tracking-tight leading-tight">{activeBrand.name}</h1>
-                  <p className="text-xs text-slate-200/90 font-medium leading-normal mt-0.5">{activeBrand.slogan}</p>
+                  <p className="text-xs text-koma-secondary/90 font-medium leading-normal mt-0.5">{activeBrand.slogan}</p>
                 </div>
               </div>
               <div className="text-[11px] font-semibold bg-white/10 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/15 self-start sm:self-auto flex items-center gap-1.5">

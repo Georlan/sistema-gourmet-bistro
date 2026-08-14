@@ -44,19 +44,19 @@
   --color-brand-accent: #00b894;
 
   /* Theme contract — Dark mode palette (high-contrast, anti-fatigue) */
-  --koma-surface-page: #0b0e0c;
-  --koma-surface-canvas: #070a08;
-  --koma-surface-shell: #0a0d0b;
-  --koma-surface-panel: #121714;
-  --koma-surface-card: #181f1b;
-  --koma-surface-raised: #222b26;
-  --koma-surface-input: #0e1310;
-  --koma-surface-dialog: #161c18;
+  --koma-surface-page: #0a0d0c;
+  --koma-surface-canvas: #060807;
+  --koma-surface-shell: #090c0a;
+  --koma-surface-panel: #121614;
+  --koma-surface-card: #171d1a;
+  --koma-surface-raised: #202824;
+  --koma-surface-input: #0d1210;
+  --koma-surface-dialog: #151b18;
   --koma-surface-overlay: rgba(0, 0, 0, 0.85);
-  --koma-text-primary: #f5f8f6;
-  --koma-text-secondary: #cbd7d1;
-  --koma-text-muted: #95a79f;
-  --koma-text-subtle: #798c84;
+  --koma-text-primary: #ffffff;
+  --koma-text-secondary: #d6e2dc;
+  --koma-text-muted: #a7b8b0;
+  --koma-text-subtle: #889c93;
   --koma-border-subtle: rgba(255, 255, 255, 0.08);
   --koma-border-default: rgba(220, 240, 230, 0.16);
   --koma-border-strong: rgba(220, 240, 230, 0.28);
@@ -65,7 +65,7 @@
 
   --koma-waiter-bg: radial-gradient(circle at 88% 6%, rgba(0, 184, 148, 0.06), transparent 25rem), linear-gradient(180deg, var(--koma-surface-shell) 0%, #0c0e0d 58%, var(--koma-surface-shell) 100%);
   --koma-sidebar-bg: radial-gradient(circle at 12% 0%, rgba(0, 201, 150, 0.05), transparent 15rem), linear-gradient(180deg, #101412 0%, #0c0f0d 100%);
-  --koma-main-bg: radial-gradient(circle at 89% 4%, rgba(0, 201, 150, 0.06), transparent 28rem), linear-gradient(180deg, #0b0e0c 0%, #0e1210 100%);
+  --koma-main-bg: radial-gradient(circle at 89% 4%, rgba(0, 201, 150, 0.06), transparent 28rem), linear-gradient(180deg, #0a0d0c 0%, #0e1210 100%);
   --koma-topbar-bg: rgba(14, 18, 16, 0.92);
   --koma-hero-bg: linear-gradient(112deg, rgba(16, 22, 19, 0.98) 0 62%, rgba(3, 43, 33, 0.78) 62.1% 100%);
   --koma-hero-accent: linear-gradient(122deg, transparent 38%, rgba(67, 241, 189, 0.28) 38.2%, transparent 38.7%), radial-gradient(circle at 72% 0, rgba(0, 217, 166, 0.11), transparent 56%);
@@ -75,35 +75,35 @@
 
 [data-koma-theme="light"] {
   --color-brand-primary: #00966d;
-  --color-brand-bg: #f1f5f9;
-  --color-brand-text: #0f172a;
-  --color-brand-secondary: #e2e8f0;
+  --color-brand-bg: #eaeff2;
+  --color-brand-text: #090d16;
+  --color-brand-secondary: #dce3e8;
   --color-brand-card: #ffffff;
   --color-brand-accent: #00966d;
 
-  /* Theme contract — Light mode palette (comfort, crisp readability, zero glare) */
-  --koma-surface-page: #f1f5f9;
-  --koma-surface-canvas: #e2e8f0;
-  --koma-surface-shell: #ffffff;
+  /* Theme contract — Light mode palette (anti-glare, eye comfort, deep ink contrast) */
+  --koma-surface-page: #eaeff2;
+  --koma-surface-canvas: #dce3e8;
+  --koma-surface-shell: #f3f6f8;
   --koma-surface-panel: #ffffff;
   --koma-surface-card: #ffffff;
-  --koma-surface-raised: #f8fafc;
-  --koma-surface-input: #f8fafc;
+  --koma-surface-raised: #f3f6f8;
+  --koma-surface-input: #ffffff;
   --koma-surface-dialog: #ffffff;
-  --koma-surface-overlay: rgba(15, 23, 42, 0.55);
-  --koma-text-primary: #0f172a;
+  --koma-surface-overlay: rgba(15, 23, 42, 0.6);
+  --koma-text-primary: #090d16;
   --koma-text-secondary: #1e293b;
-  --koma-text-muted: #475569;
-  --koma-text-subtle: #64748b;
-  --koma-border-subtle: rgba(15, 23, 42, 0.07);
-  --koma-border-default: rgba(15, 23, 42, 0.13);
-  --koma-border-strong: rgba(15, 23, 42, 0.24);
+  --koma-text-muted: #334155;
+  --koma-text-subtle: #475569;
+  --koma-border-subtle: rgba(15, 23, 42, 0.08);
+  --koma-border-default: rgba(15, 23, 42, 0.16);
+  --koma-border-strong: rgba(15, 23, 42, 0.28);
   --koma-accent: #00875f;
   --koma-focus-ring: rgba(0, 135, 95, 0.30);
 
-  --koma-waiter-bg: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 58%, #f8fafc 100%);
+  --koma-waiter-bg: linear-gradient(180deg, #f3f6f8 0%, #eaeff2 58%, #f3f6f8 100%);
   --koma-sidebar-bg: #ffffff;
-  --koma-main-bg: #f1f5f9;
+  --koma-main-bg: #eaeff2;
   --koma-topbar-bg: rgba(255, 255, 255, 0.95);
   --koma-hero-bg: linear-gradient(112deg, #ffffff 0 62%, rgba(0, 135, 95, 0.08) 62.1% 100%);
   --koma-hero-accent: linear-gradient(122deg, transparent 38%, rgba(0, 135, 95, 0.08) 38.2%, transparent 38.7%), radial-gradient(circle at 72% 0, rgba(0, 135, 95, 0.06), transparent 56%);

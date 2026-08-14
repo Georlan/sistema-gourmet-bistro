@@ -361,7 +361,7 @@ export default function SuperAdminTerminal({
                               {issue.level}
                             </span>
                             <span className="text-[9px] text-koma-muted font-mono">#{issue.id}</span>
-                            <h4 className="font-bold text-slate-200 mt-1 font-sans text-xs leading-normal">
+                            <h4 className="font-bold text-koma-secondary mt-1 font-sans text-xs leading-normal">
                               {issue.title}
                             </h4>
                           </div>

@@ -42,7 +42,7 @@ export const EstoqueMovimentacoesTab: React.FC<EstoqueMovimentacoesTabProps> = (
       case 'perda':
         return <span className="px-2 py-0.5 rounded-full text-[8px] font-bold uppercase bg-red-500/10 text-red-400 flex items-center gap-1 w-fit"><AlertTriangle size={10} /> Perda</span>;
       case 'ajuste_positivo':
-        return <span className="px-2 py-0.5 rounded-full text-[8px] font-bold uppercase bg-emerald-500/10 text-emerald-300 flex items-center gap-1 w-fit"><Plus size={10} /> Ajuste (+)</span>;
+        return <span className="px-2 py-0.5 rounded-full text-[8px] font-bold uppercase bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 flex items-center gap-1 w-fit"><Plus size={10} /> Ajuste (+)</span>;
       case 'ajuste_negativo':
         return <span className="px-2 py-0.5 rounded-full text-[8px] font-bold uppercase bg-amber-500/10 text-amber-400 flex items-center gap-1 w-fit"><AlertTriangle size={10} /> Ajuste (-)</span>;
       case 'contagem':

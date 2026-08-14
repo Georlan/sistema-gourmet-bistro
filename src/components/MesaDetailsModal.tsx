@@ -418,7 +418,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                           </div>
 
                           {/* Order Items */}
-                          <div className="p-4 divide-y divide-[#27272A]">
+                          <div className="p-4 divide-y divide-koma-border">
                             {unpaidItems.map((item) => (
                               <div
                                 key={item.id}
@@ -666,8 +666,8 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                             }}
                             className={`w-full py-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider font-sans transition-all border ${
                               confirmClear
-                                ? 'bg-rose-800/40 border-rose-700/50 text-rose-300 animate-pulse'
-                                : 'bg-koma-panel hover:bg-rose-950/30 border-koma-border hover:border-rose-800/40 text-koma-muted hover:text-rose-300'
+                                ? 'bg-rose-800/40 border-rose-700/50 text-rose-600 dark:text-rose-300 animate-pulse'
+                                : 'bg-koma-panel hover:bg-rose-950/30 border-koma-border hover:border-rose-800/40 text-koma-muted hover:text-rose-600 dark:text-rose-300'
                             }`}
                           >
                             <X size={13} />
@@ -859,7 +859,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
 
               {/* Info banner ou bloqueio por limite de mesclagem */}
               {originIds.length > 0 ? (
-                <div className="bg-rose-500/10 border border-rose-500/20 rounded-2xl p-4 text-xs text-rose-300 font-sans flex items-start gap-2 max-w-md mx-auto">
+                <div className="bg-rose-500/10 border border-rose-500/20 rounded-2xl p-4 text-xs text-rose-600 dark:text-rose-300 font-sans flex items-start gap-2 max-w-md mx-auto">
                   <span className="text-sm shrink-0">🚫</span>
                   <div>
                     <strong className="block text-rose-400 font-bold mb-0.5">Limite de Mesclagem Excedido</strong>
@@ -867,7 +867,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                   </div>
                 </div>
               ) : (
-                <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-3.5 text-xs text-amber-300 font-sans flex items-start gap-2">
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-3.5 text-xs text-amber-600 dark:text-amber-300 font-sans flex items-start gap-2">
                   <span className="text-sm shrink-0">⚠️</span>
                   <span>A mesclagem une as comandas. Use a aba <strong>Transferência → Selecionar Itens</strong> se quiser mover itens específicos sem mesclar a conta.</span>
                 </div>
@@ -1299,7 +1299,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                           <p className="text-[9px] text-[#10b981] uppercase font-bold">Para: {item.clienteNome}</p>
                         )}
                         {item.observacao && (
-                          <p className="text-[10px] text-rose-300 italic pl-2 border-l border-dashed border-rose-900/50/50">
+                          <p className="text-[10px] text-rose-600 dark:text-rose-300 italic pl-2 border-l border-dashed border-rose-900/50/50">
                             Obs: "{item.observacao}"
                           </p>
                         )}

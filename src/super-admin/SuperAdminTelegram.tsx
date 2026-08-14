@@ -214,7 +214,7 @@ export default function SuperAdminTelegram({
                         {isWebhook && <AlertTriangle className="w-4 h-4 text-amber-500" />}
                         {isPrinter && <Smartphone className="w-4 h-4 text-[#00b894]" />}
                         {isSentry && <ShieldAlert className="w-4 h-4 text-red-500" />}
-                        <span className="text-xs font-mono font-bold text-slate-200">{rule.name}</span>
+                        <span className="text-xs font-mono font-bold text-koma-secondary">{rule.name}</span>
                       </div>
 
                       <button
@@ -222,7 +222,7 @@ export default function SuperAdminTelegram({
                         className={`px-2 py-1 rounded text-[10px] font-mono font-bold flex items-center gap-1 cursor-pointer transition-colors ${
                           rule.enabled 
                             ? "bg-[#00b894]/10 text-[#00b894] hover:bg-[#00b894]/20" 
-                            : "bg-koma-raised text-koma-muted hover:bg-zinc-700"
+                            : "bg-koma-raised text-koma-muted hover:bg-koma-raised"
                         }`}
                       >
                         {rule.enabled ? (

@@ -79,13 +79,13 @@ export function FechamentoCegoModal({
             <EyeOff size={20} />
           </div>
           <div>
-            <h3 className="text-base font-bold text-zinc-100">Fechamento de Caixa Cego</h3>
+            <h3 className="text-base font-bold text-koma-foreground">Fechamento de Caixa Cego</h3>
             <p className="text-xs text-koma-subtle">Declare os valores físicos contados na gaveta</p>
           </div>
         </div>
 
         {/* Aviso de Regra Cega */}
-        <div className="mb-5 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-300/90 text-xs flex items-start gap-2.5">
+        <div className="mb-5 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-600 dark:text-amber-300/90 text-xs flex items-start gap-2.5">
           <ShieldAlert size={16} className="mt-0.5 shrink-0 text-amber-400" />
           <span>
             <b>Regra Cega Ativa:</b> Os saldos esperados pelo sistema estão ocultos para evitar contagens induzidas. O relatório de quebra (Sobra/Falta) será gerado para a gerência.
@@ -183,7 +183,7 @@ export function FechamentoCegoModal({
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="flex-1 py-3 rounded-xl bg-koma-card hover:bg-zinc-800 border border-koma-border text-koma-secondary text-xs font-semibold transition-colors"
+              className="flex-1 py-3 rounded-xl bg-koma-card hover:bg-koma-raised border border-koma-border text-koma-secondary text-xs font-semibold transition-colors"
             >
               Cancelar
             </button>

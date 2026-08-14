@@ -74,7 +74,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
       accent: hasPendingPayment ? 'bg-amber-400' : 'bg-rose-500',
       dot: hasPendingPayment ? 'bg-amber-400' : 'bg-rose-400',
       label: hasPendingPayment ? 'Aprovar dinheiro' : 'Em atendimento',
-      labelColor: hasPendingPayment ? 'text-amber-300' : 'text-rose-300',
+      labelColor: hasPendingPayment ? 'text-amber-600 dark:text-amber-300' : 'text-rose-600 dark:text-rose-300',
     },
     pronto: {
       surface: 'bg-[#211707] hover:bg-[#2b1e08]',
@@ -82,7 +82,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
       accent: 'bg-amber-400',
       dot: 'bg-amber-400 animate-pulse',
       label: 'Pronto para servir',
-      labelColor: 'text-amber-300',
+      labelColor: 'text-amber-600 dark:text-amber-300',
     },
     entregue: {
       surface: 'bg-[#0b1621] hover:bg-[#0d1d2c]',
@@ -90,7 +90,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
       accent: 'bg-sky-400',
       dot: 'bg-sky-400',
       label: 'Aguardando conta',
-      labelColor: 'text-sky-300',
+      labelColor: 'text-sky-600 dark:text-sky-300',
     },
     mesclada: {
       surface: 'bg-koma-panel hover:bg-koma-card',
@@ -153,7 +153,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
               {statusConfig.label}
             </span>
             {draftCount > 0 && (
-              <span className="flex shrink-0 items-center gap-1 rounded-md border border-emerald-500/25 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-bold text-emerald-300">
+              <span className="flex shrink-0 items-center gap-1 rounded-md border border-emerald-500/25 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-bold text-emerald-600 dark:text-emerald-300">
                 <FileText size={9} /> {draftCount}
               </span>
             )}

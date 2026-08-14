@@ -156,14 +156,14 @@ export const ContagemEstoqueModal: React.FC<ContagemEstoqueModalProps> = ({
               <button
                 type="button"
                 onClick={() => handleToggleSelectAll(true)}
-                className="px-2.5 py-1 bg-koma-raised hover:bg-zinc-700 text-koma-secondary rounded-lg text-[9px] font-bold uppercase transition-all cursor-pointer flex items-center gap-1 border border-koma-border"
+                className="px-2.5 py-1 bg-koma-raised hover:bg-koma-raised text-koma-secondary rounded-lg text-[9px] font-bold uppercase transition-all cursor-pointer flex items-center gap-1 border border-koma-border"
               >
                 <CheckSquare size={12} /> Selecionar Todos
               </button>
               <button
                 type="button"
                 onClick={() => handleToggleSelectAll(false)}
-                className="px-2.5 py-1 bg-koma-raised hover:bg-zinc-700 text-koma-secondary rounded-lg text-[9px] font-bold uppercase transition-all cursor-pointer flex items-center gap-1 border border-koma-border"
+                className="px-2.5 py-1 bg-koma-raised hover:bg-koma-raised text-koma-secondary rounded-lg text-[9px] font-bold uppercase transition-all cursor-pointer flex items-center gap-1 border border-koma-border"
               >
                 <Square size={12} /> Desmarcar Todos
               </button>
@@ -268,7 +268,7 @@ export const ContagemEstoqueModal: React.FC<ContagemEstoqueModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 py-2.5 border border-koma-border hover:border-zinc-700 bg-koma-raised text-koma-subtle hover:text-koma-foreground rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+            className="flex-1 py-2.5 border border-koma-border hover:border-koma-border bg-koma-raised text-koma-subtle hover:text-koma-foreground rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
           >
             {isAlreadyConfirmed ? 'Fechar' : 'Cancelar'}
           </button>
@@ -279,7 +279,7 @@ export const ContagemEstoqueModal: React.FC<ContagemEstoqueModalProps> = ({
                 type="button"
                 disabled={isSubmitting}
                 onClick={() => handleSave('rascunho')}
-                className="flex-1 py-2.5 bg-koma-raised hover:bg-zinc-700 text-amber-300 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer flex items-center justify-center gap-1.5 border border-koma-border"
+                className="flex-1 py-2.5 bg-koma-raised hover:bg-koma-raised text-amber-600 dark:text-amber-300 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer flex items-center justify-center gap-1.5 border border-koma-border"
               >
                 <Save size={14} />
                 <span>{isSubmitting ? 'Salvando...' : 'Salvar Rascunho'}</span>

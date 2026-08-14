@@ -447,7 +447,7 @@ export default function SuperAdminPanel() {
               </span>
               <div>
                 <span className="font-bold text-red-400">[{flashAlert.title}]</span>
-                <p className="text-slate-200 mt-0.5 font-sans">{flashAlert.message}</p>
+                <p className="text-koma-secondary mt-0.5 font-sans">{flashAlert.message}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">

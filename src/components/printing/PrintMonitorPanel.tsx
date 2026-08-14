@@ -152,13 +152,13 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_STYLES: Record<string, string> = {
-  pending: 'border-sky-500/30 bg-sky-500/10 text-sky-300',
-  claimed: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
-  printing: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
-  spooler_accepted: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
+  pending: 'border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-300',
+  claimed: 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-300',
+  printing: 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-300',
+  spooler_accepted: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300',
   failed: 'border-red-500/30 bg-red-500/10 text-red-300',
   cancelled: 'border-zinc-500/30 bg-zinc-500/10 text-koma-subtle',
-  expired: 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+  expired: 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-300'
 };
 
 const dateTimeFormatter = new Intl.DateTimeFormat('pt-BR', {
@@ -655,10 +655,10 @@ export function PrintMonitorPanel({
     neutral: 'border-sky-500/30 bg-sky-500/10'
   };
   const diagnosticIconStyle: Record<DiagnosticTone, string> = {
-    success: 'bg-emerald-400/15 text-emerald-300',
-    warning: 'bg-amber-400/15 text-amber-300',
+    success: 'bg-emerald-400/15 text-emerald-600 dark:text-emerald-300',
+    warning: 'bg-amber-400/15 text-amber-600 dark:text-amber-300',
     danger: 'bg-red-400/15 text-red-300',
-    neutral: 'bg-sky-400/15 text-sky-300'
+    neutral: 'bg-sky-400/15 text-sky-600 dark:text-sky-300'
   };
 
   const equipmentState = hasReadyPrinter
@@ -685,7 +685,7 @@ export function PrintMonitorPanel({
           {
             label: 'equipamento USB',
             value: equipmentState,
-            valueClassName: hasReadyPrinter ? 'text-emerald-300' : 'text-amber-200'
+            valueClassName: hasReadyPrinter ? 'text-emerald-600 dark:text-emerald-300' : 'text-amber-200'
           },
           {
             label: queueTotal > 0 ? 'espera mais antiga' : 'fila de impressão',
@@ -716,7 +716,7 @@ export function PrintMonitorPanel({
           type="button"
           onClick={() => void loadMonitor(true)}
           disabled={loading}
-          className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#333338] bg-koma-card px-4 py-2 text-[10px] font-bold text-gray-200 transition hover:border-gray-500 hover:bg-koma-raised disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+          className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#333338] bg-koma-card px-4 py-2 text-[10px] font-bold text-koma-secondary transition hover:border-gray-500 hover:bg-koma-raised disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
         >
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           Atualizar status
@@ -751,7 +751,7 @@ export function PrintMonitorPanel({
                   actionSuccessful === false
                     ? 'text-red-200'
                     : actionSuccessful === true
-                      ? 'text-emerald-200'
+                      ? 'text-emerald-600 dark:text-emerald-300'
                       : 'text-sky-200'
                 }`}>
                   {actionMessage}
@@ -829,7 +829,7 @@ export function PrintMonitorPanel({
 
       {monitorData && monitorData.summary.delayed > 0 && (
         <div className="flex items-start gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-300" />
+          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-300" />
           <div>
             <strong className="block text-[11px] text-amber-100">
               Há impressão aguardando há mais de 2 minutos
@@ -851,8 +851,8 @@ export function PrintMonitorPanel({
           <span className="flex min-w-0 items-center gap-3">
             <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
               queueTotal || failedJobs.length
-                ? 'bg-amber-400/10 text-amber-300'
-                : 'bg-emerald-400/10 text-emerald-300'
+                ? 'bg-amber-400/10 text-amber-600 dark:text-amber-300'
+                : 'bg-emerald-400/10 text-emerald-600 dark:text-emerald-300'
             }`}>
               <Clock3 size={15} />
             </span>
@@ -875,7 +875,7 @@ export function PrintMonitorPanel({
                   return (
                     <div key={job.id} className="grid grid-cols-[1fr_auto] items-center gap-3 px-4 py-3 sm:grid-cols-[1fr_auto_auto]">
                       <div className="min-w-0">
-                        <strong className="block truncate text-[10px] text-gray-200">
+                        <strong className="block truncate text-[10px] text-koma-secondary">
                           {job.reference || friendlyDocumentType(job.document_type)}
                         </strong>
                         <span className="text-[8px] text-koma-muted">
@@ -949,8 +949,8 @@ export function PrintMonitorPanel({
                   <div className="flex min-w-0 items-start gap-3">
                     <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
                       ready
-                        ? 'bg-emerald-400/15 text-emerald-300'
-                        : 'bg-amber-400/15 text-amber-300'
+                        ? 'bg-emerald-400/15 text-emerald-600 dark:text-emerald-300'
+                        : 'bg-amber-400/15 text-amber-600 dark:text-amber-300'
                     }`}>
                       <Printer size={17} />
                     </div>
@@ -960,8 +960,8 @@ export function PrintMonitorPanel({
                       </strong>
                       <span className={`mt-1 block text-[9px] ${
                         ready
-                          ? 'text-emerald-300'
-                          : 'text-amber-300'
+                          ? 'text-emerald-600 dark:text-emerald-300'
+                          : 'text-amber-600 dark:text-amber-300'
                       }`}>
                         {ready
                           ? 'Conectada e pronta'
@@ -970,7 +970,7 @@ export function PrintMonitorPanel({
                     </div>
                   </div>
                   {printer.is_default && (
-                    <span className="shrink-0 rounded-full bg-emerald-400/10 px-2 py-1 text-[8px] font-bold text-emerald-300">
+                    <span className="shrink-0 rounded-full bg-emerald-400/10 px-2 py-1 text-[8px] font-bold text-emerald-600 dark:text-emerald-300">
                       PRINCIPAL
                     </span>
                   )}
@@ -1019,7 +1019,7 @@ export function PrintMonitorPanel({
         <button
           type="button"
           onClick={() => setShowHistory(current => !current)}
-          className="flex min-h-11 w-full items-center justify-between gap-2 bg-koma-card px-4 py-2.5 text-[10px] font-bold text-gray-200 transition hover:bg-koma-raised cursor-pointer"
+          className="flex min-h-11 w-full items-center justify-between gap-2 bg-koma-card px-4 py-2.5 text-[10px] font-bold text-koma-secondary transition hover:bg-koma-raised cursor-pointer"
           aria-expanded={showHistory}
         >
           <span className="flex items-center gap-2">
@@ -1045,13 +1045,13 @@ export function PrintMonitorPanel({
                     <th className="px-3 py-2 text-right">Ação</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#27272A]">
+                <tbody className="divide-y divide-koma-border">
                   {monitorData.history_jobs.map(job => {
                     const displayStatus = job.display_status || job.status;
                     return (
                       <tr key={job.id} className={job.delayed ? 'bg-amber-500/5' : ''}>
                         <td className="px-3 py-2">
-                          <strong className="block text-[9px] text-gray-200">
+                          <strong className="block text-[9px] text-koma-secondary">
                             {job.reference || friendlyDocumentType(job.document_type)}
                             {job.is_reprint ? ' · Reimpressão' : ''}
                           </strong>
@@ -1075,7 +1075,7 @@ export function PrintMonitorPanel({
                         <td className="whitespace-nowrap px-3 py-2 text-[8px] text-koma-subtle">
                           {formatDate(job.printed_at || job.created_at)}
                           {job.delayed && (
-                            <span className="block text-amber-300">
+                            <span className="block text-amber-600 dark:text-amber-300">
                               esperando {formatAge(job.age_seconds)}
                             </span>
                           )}
@@ -1086,7 +1086,7 @@ export function PrintMonitorPanel({
                               type="button"
                               onClick={() => void requestReprint(job)}
                               disabled={reprintingId === job.id}
-                              className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-[#35353a] px-2.5 py-1 text-[8px] font-bold text-gray-200 transition hover:border-gray-500 disabled:opacity-50 cursor-pointer"
+                              className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-[#35353a] px-2.5 py-1 text-[8px] font-bold text-koma-secondary transition hover:border-gray-500 disabled:opacity-50 cursor-pointer"
                             >
                               {reprintingId === job.id
                                 ? <RefreshCw size={10} className="animate-spin" />

@@ -237,7 +237,7 @@ export default function CardapioAuthModal({
                 type="button"
                 disabled={isResending}
                 onClick={() => void requestCode(true)}
-                className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 hover:text-emerald-300 disabled:opacity-50 transition cursor-pointer"
+                className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 hover:text-emerald-600 dark:text-emerald-300 disabled:opacity-50 transition cursor-pointer"
               >
                 <RefreshCw className={`h-3.5 w-3.5 ${isResending ? "animate-spin" : ""}`} />
                 Reenviar código

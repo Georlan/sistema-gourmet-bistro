@@ -165,7 +165,7 @@ export function CategoriaModal({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 text-koma-subtle hover:text-koma-foreground rounded-xl bg-koma-card hover:bg-zinc-700 transition-colors cursor-pointer"
+            className="p-1.5 text-koma-subtle hover:text-koma-foreground rounded-xl bg-koma-card hover:bg-koma-raised transition-colors cursor-pointer"
           >
             <X size={16} />
           </button>

@@ -144,7 +144,7 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
             <h3 className="font-serif font-bold text-base text-koma-foreground">Relatório de Desempenho de Produtos</h3>
           </div>
           <p className="text-[10px] text-koma-subtle">
-            Período: <strong className="text-gray-200">{dataInicio}</strong> até <strong className="text-gray-200">{dataFim}</strong>
+            Período: <strong className="text-koma-secondary">{dataInicio}</strong> até <strong className="text-koma-secondary">{dataFim}</strong>
           </p>
         </div>
 

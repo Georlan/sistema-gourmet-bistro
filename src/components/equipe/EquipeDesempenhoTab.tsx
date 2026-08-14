@@ -157,7 +157,7 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
             <h3 className="font-serif font-bold text-base text-koma-foreground">Desempenho Comercial da Equipe</h3>
           </div>
           <p className="text-[10px] text-koma-subtle">
-            Período: <strong className="text-gray-200">{dataInicio}</strong> até <strong className="text-gray-200">{dataFim}</strong>
+            Período: <strong className="text-koma-secondary">{dataInicio}</strong> até <strong className="text-koma-secondary">{dataFim}</strong>
             {' | '}Taxa de Serviço: <strong className="text-emerald-400">{taxaAtiva ? `${taxaPadrao}%` : 'Desativada'}</strong>
             {' | '}Filtro: <strong className="text-sky-400">{cargoLabel}</strong>
           </p>

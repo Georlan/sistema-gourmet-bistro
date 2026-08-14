@@ -30,13 +30,13 @@ const destinationMeta = {
     label: 'Cozinha',
     description: 'Os pedidos desta categoria saem na produção.',
     icon: ChefHat,
-    className: 'border-orange-400/15 bg-orange-400/[0.06] text-orange-300',
+    className: 'border-orange-400/15 bg-orange-400/[0.06] text-orange-600 dark:text-orange-300',
   },
   BAR: {
     label: 'Bar',
     description: 'Os pedidos desta categoria saem no bar.',
     icon: GlassWater,
-    className: 'border-sky-400/15 bg-sky-400/[0.06] text-sky-300',
+    className: 'border-sky-400/15 bg-sky-400/[0.06] text-sky-600 dark:text-sky-300',
   },
   NENHUM: {
     label: 'Sem impressão',
@@ -139,18 +139,23 @@ export function CardapioCategoriasTab({
         accent="prontas para produzir"
         description="Organize os produtos e defina para onde cada pedido será enviado na operação."
         metrics={[
-          { label: 'com rota de impressão', value: `${catalogInsights.routeCoverage}%`, valueClassName: catalogInsights.routeCoverage === 100 ? 'text-emerald-300' : 'text-amber-300' },
-          { label: 'categorias vazias', value: catalogInsights.emptyCategories, valueClassName: catalogInsights.emptyCategories > 0 ? 'text-amber-300' : 'text-emerald-300' },
-          { label: 'produtos sem categoria', value: catalogInsights.orphanProducts, valueClassName: catalogInsights.orphanProducts > 0 ? 'text-amber-300' : 'text-emerald-300' },
-          { label: 'destinos ativos', value: catalogInsights.activeDestinations, valueClassName: 'text-sky-300' },
+          { label: 'Com rota de impressão', value: `${Math.round((apiCategorias.filter((c) => c.destino_impressao !== 'NENHUM').length / (apiCategorias.length || 1)) * 100)}%` },
+          { label: 'Categorias vazias', value: apiCategorias.filter((c) => !apiProdutos.some((p) => String(p.categoria_id) === String(c.id))).length },
+          { label: 'Produtos sem categoria', value: apiProdutos.filter((p) => !p.categoria_id).length },
+          { label: 'Destinos ativos', value: new Set(apiCategorias.map((c) => c.destino_impressao)).size },
         ]}
       />
 
-      <section className="flex flex-col gap-3 rounded-[22px] border border-koma-border bg-koma-panel/60 p-3.5 sm:flex-row sm:items-center sm:p-4">
-        <div className="relative w-full flex-1">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-koma-muted" size={15} />
-          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar categoria…" className="h-11 w-full rounded-xl border border-koma-border bg-koma-input pl-10 pr-10 text-[11px] text-koma-foreground outline-none placeholder:text-zinc-500 focus:border-emerald-400/30" />
-          {search && <button type="button" onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1 text-koma-muted hover:text-koma-foreground cursor-pointer" aria-label="Limpar busca"><X size={13} /></button>}
+      <section className="flex flex-col gap-3 rounded-[22px] border border-koma-border bg-koma-panel p-3.5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative flex-1">
+          <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-koma-muted" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar categoria..."
+            className="w-full rounded-xl border border-koma-border bg-koma-input py-2 pl-9 pr-3 text-xs text-koma-foreground placeholder:text-koma-muted focus:border-emerald-500 focus:outline-none"
+          />
         </div>
         <button type="button" onClick={handleOpenCreate} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-3 text-[10px] font-black text-zinc-950 transition-colors hover:bg-emerald-400 cursor-pointer shadow-sm">
           <Plus size={14} /> Nova categoria
@@ -158,7 +163,7 @@ export function CardapioCategoriasTab({
       </section>
 
       {filteredCategories.length === 0 ? (
-        <div className="flex min-h-64 flex-col items-center justify-center rounded-[22px] border border-dashed border-koma-border bg-koma-panel/60 px-6 text-center">
+        <div className="flex min-h-64 flex-col items-center justify-center rounded-[22px] border border-dashed border-koma-border bg-koma-panel px-6 text-center">
           <Layers3 size={28} className="text-koma-muted" />
           <strong className="mt-4 text-sm text-koma-secondary">Nenhuma categoria encontrada</strong>
           <p className="mt-1 text-[10px] text-koma-muted">Ajuste a busca ou crie uma nova categoria.</p>
@@ -169,20 +174,20 @@ export function CardapioCategoriasTab({
             const meta = destinationMeta[category.destino_impressao as keyof typeof destinationMeta] || destinationMeta.NENHUM;
             const Icon = meta.icon;
             return (
-              <article key={category.id} className="group flex min-h-[160px] flex-col justify-between rounded-[22px] border border-koma-border bg-koma-panel/60 p-4 shadow-[0_18px_50px_rgba(0,0,0,.16)] transition-colors hover:border-zinc-700">
+              <article key={category.id} className="group flex min-h-[160px] flex-col justify-between rounded-[22px] border border-koma-border bg-koma-card p-4 shadow-sm transition-colors hover:border-koma-border-strong">
                 <div>
                   <div className="flex items-start justify-between gap-3">
                     <span className={clsx('flex h-10 w-10 items-center justify-center rounded-xl border', meta.className)}><Icon size={16} /></span>
-                    <span className="max-w-[60%] truncate rounded-full border border-koma-border bg-koma-input px-2 py-1 font-mono text-[8px] text-koma-subtle">{category.id}</span>
+                    <span className="max-w-[60%] truncate rounded-full border border-koma-border bg-koma-input px-2 py-1 font-mono text-[8px] text-koma-muted">{category.id}</span>
                   </div>
-                  <h2 className="mt-4 text-sm font-bold text-zinc-100">{category.nome}</h2>
-                  <p className="mt-1 text-[10px] leading-relaxed text-koma-subtle">{meta.description}</p>
+                  <h2 className="mt-4 text-sm font-bold text-koma-foreground">{category.nome}</h2>
+                  <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">{meta.description}</p>
                 </div>
                 <div className="mt-4 flex items-center justify-between border-t border-koma-border pt-3">
                   <span className={clsx('text-[9px] font-bold', meta.className.split(' ').at(-1))}>{meta.label}</span>
                   <div className="flex items-center gap-1">
                     <button type="button" onClick={() => { setEditingCategory(category); setModalOpen(true); }} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[9px] font-bold text-koma-subtle transition-colors hover:bg-white/[0.05] hover:text-koma-foreground cursor-pointer"><Edit3 size={12} /> Editar</button>
-                    <button type="button" onClick={() => { setDeletingCategory(category); setDeleteModalOpen(true); }} className="rounded-lg p-2 text-koma-muted transition-colors hover:bg-rose-500/10 hover:text-rose-300 cursor-pointer" title="Excluir categoria" aria-label={`Excluir ${category.nome}`}><Trash2 size={13} /></button>
+                    <button type="button" onClick={() => { setDeletingCategory(category); setDeleteModalOpen(true); }} className="rounded-lg p-2 text-koma-muted transition-colors hover:bg-rose-500/10 hover:text-rose-600 dark:text-rose-300 cursor-pointer" title="Excluir categoria" aria-label={`Excluir ${category.nome}`}><Trash2 size={13} /></button>
                   </div>
                 </div>
               </article>

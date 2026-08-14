@@ -75,7 +75,7 @@ export function ManagerPinModal({
           <div className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-3">
             <Lock size={24} />
           </div>
-          <h3 className="text-lg font-bold text-zinc-100">{actionTitle}</h3>
+          <h3 className="text-lg font-bold text-koma-foreground">{actionTitle}</h3>
           <p className="text-xs text-koma-subtle mt-1">Digite o PIN do Gerente (4 dígitos)</p>
         </div>
 
@@ -88,7 +88,7 @@ export function ManagerPinModal({
                 'w-12 h-14 rounded-xl border flex items-center justify-center text-2xl font-mono transition-all',
                 pin.length > index
                   ? 'border-amber-500 bg-amber-500/10 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.2)]'
-                  : 'border-koma-border bg-zinc-900/50 text-koma-muted'
+                  : 'border-koma-border bg-koma-input text-koma-muted'
               )}
             >
               {pin.length > index ? '•' : ''}
@@ -111,7 +111,7 @@ export function ManagerPinModal({
               key={num}
               type="button"
               onClick={() => handleKeyPress(num)}
-              className="h-12 rounded-xl bg-koma-card hover:bg-zinc-800 border border-koma-border text-lg font-semibold text-zinc-100 flex items-center justify-center active:scale-95 transition-all"
+              className="h-12 rounded-xl bg-koma-card hover:bg-koma-raised border border-koma-border text-lg font-semibold text-koma-foreground flex items-center justify-center active:scale-95 transition-all"
             >
               {num}
             </button>
@@ -119,21 +119,21 @@ export function ManagerPinModal({
           <button
             type="button"
             onClick={handleClear}
-            className="h-12 rounded-xl bg-zinc-900/50 hover:bg-zinc-800 border border-zinc-800/80 text-xs font-semibold text-koma-subtle flex items-center justify-center active:scale-95 transition-all"
+            className="h-12 rounded-xl bg-koma-input hover:bg-koma-raised border border-koma-border text-xs font-semibold text-koma-subtle flex items-center justify-center active:scale-95 transition-all"
           >
             Limpar
           </button>
           <button
             type="button"
             onClick={() => handleKeyPress('0')}
-            className="h-12 rounded-xl bg-koma-card hover:bg-zinc-800 border border-koma-border text-lg font-semibold text-zinc-100 flex items-center justify-center active:scale-95 transition-all"
+            className="h-12 rounded-xl bg-koma-card hover:bg-koma-raised border border-koma-border text-lg font-semibold text-koma-foreground flex items-center justify-center active:scale-95 transition-all"
           >
             0
           </button>
           <button
             type="button"
             onClick={handleDelete}
-            className="h-12 rounded-xl bg-zinc-900/50 hover:bg-zinc-800 border border-zinc-800/80 text-koma-subtle flex items-center justify-center active:scale-95 transition-all"
+            className="h-12 rounded-xl bg-koma-input hover:bg-koma-raised border border-koma-border text-koma-subtle flex items-center justify-center active:scale-95 transition-all"
           >
             <Delete size={18} />
           </button>
@@ -148,7 +148,7 @@ export function ManagerPinModal({
             'w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-lg',
             pin.length === 4
               ? 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black shadow-amber-500/20'
-              : 'bg-koma-raised text-koma-muted cursor-not-allowed border border-zinc-700/50'
+              : 'bg-koma-raised text-koma-muted cursor-not-allowed border border-koma-border/50'
           )}
         >
           <Check size={18} />

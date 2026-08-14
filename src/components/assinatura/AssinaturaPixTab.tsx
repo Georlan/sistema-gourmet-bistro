@@ -88,7 +88,7 @@ const PricingSwitch = ({ isYearly, onSwitch }: { isYearly: boolean; onSwitch: (y
           <span className="relative flex items-center gap-1.5">
             Anual
             <span className={`rounded-full px-2 py-0.5 text-[9px] font-extrabold transition-colors ${
-              isYearly ? "bg-zinc-950/30 text-zinc-950" : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+              isYearly ? "bg-zinc-950/30 text-zinc-950" : "bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30"
             }`}>
               Economize {ANNUAL_DISCOUNT_RATE * 100}%
             </span>
@@ -246,7 +246,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
             </div>
 
             {isHighUsage && (
-              <div className="p-3.5 bg-amber-500/10 border border-amber-500/25 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-300 text-xs">
+              <div className="p-3.5 bg-amber-500/10 border border-amber-500/25 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-600 dark:text-amber-300 text-xs">
                 <div className="flex items-center gap-2.5">
                   <AlertTriangle size={18} className="shrink-0 text-amber-400 animate-pulse" />
                   <span>Você atingiu mais de 80% das cotas do seu plano neste mês.</span>
@@ -324,14 +324,14 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
 
             <div className="flex flex-wrap gap-2 text-[10px] font-mono">
               {isTestPlan && (
-                <span className="px-3 py-1 rounded-xl border border-sky-500/30 bg-sky-500/10 text-sky-300 font-bold">
+                <span className="px-3 py-1 rounded-xl border border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-300 font-bold">
                   Modo de teste Premium — assinatura não alterada
                 </span>
               )}
               <span className={clsx(
                 'px-3 py-1 rounded-xl border font-bold',
                 hasPrinting
-                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-300'
                   : 'bg-koma-raised border-koma-border text-koma-subtle'
               )}>
                 {hasPrinting ? '✓ Impressão Automática Incluída' : '✕ Sem Impressão Automática'}
@@ -339,8 +339,8 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
               <span className={clsx(
                 'px-3 py-1 rounded-xl border font-bold',
                 hasOnlineMenu
-                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
-                  : 'bg-amber-500/10 border-amber-500/20 text-amber-300'
+                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-300'
+                  : 'bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-300'
               )}>
                 {hasOnlineMenu ? '✓ Cardápio Digital Ativo' : '⚡ Cardápio Digital Opcional (+R$ 49/mês)'}
               </span>
@@ -388,7 +388,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                   Gera um QR Code Pix dinâmico na mesa. Libera a comanda e o caixa de forma autônoma.
                 </p>
                 <span className="text-[9px] text-koma-muted block font-mono">
-                  💡 No Kôma Pro a taxa reduz para <strong className="text-emerald-300">0,79%</strong> e no Premium para <strong className="text-emerald-300">0,49%</strong>.
+                  💡 No Kôma Pro a taxa reduz para <strong className="text-emerald-600 dark:text-emerald-300">0,79%</strong> e no Premium para <strong className="text-emerald-600 dark:text-emerald-300">0,49%</strong>.
                 </span>
               </div>
 
@@ -417,7 +417,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                   Permite pagamento com cartão direto no celular do cliente pela comanda digital.
                 </p>
                 <span className="text-[9px] text-koma-muted block font-mono">
-                  💡 No Kôma Pro a taxa reduz para <strong className="text-sky-300">1,99% + R$0,29</strong> e no Premium para <strong className="text-sky-300">1,49% + R$0,19</strong>.
+                  💡 No Kôma Pro a taxa reduz para <strong className="text-sky-600 dark:text-sky-300">1,99% + R$0,29</strong> e no Premium para <strong className="text-sky-600 dark:text-sky-300">1,49% + R$0,19</strong>.
                 </span>
               </div>
 
@@ -562,7 +562,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                               'w-full py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors',
                               isPopular
                                 ? 'bg-emerald-500 text-zinc-950 hover:bg-emerald-400'
-                                : 'bg-koma-raised text-gray-200 border border-[#343438] hover:border-emerald-500/50 hover:text-koma-foreground'
+                                : 'bg-koma-raised text-koma-secondary border border-[#343438] hover:border-emerald-500/50 hover:text-koma-foreground'
                             )}
                           >
                             <MessageSquare size={13} />
@@ -605,7 +605,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
               </div>
 
               <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 shrink-0">
-                <span className="px-2.5 py-1 bg-koma-raised text-gray-200 border border-koma-border text-[9px] font-bold rounded-full whitespace-nowrap">
+                <span className="px-2.5 py-1 bg-koma-raised text-koma-secondary border border-koma-border text-[9px] font-bold rounded-full whitespace-nowrap">
                   R$ {ONLINE_MENU_ADDON.price}/mês no Pocket e Pro
                 </span>
                 <span className="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px] font-bold uppercase rounded-full whitespace-nowrap">
@@ -652,7 +652,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                             key={plan.id}
                             className={clsx(
                               'p-3.5 text-center font-mono whitespace-nowrap',
-                              plan.recommended && 'bg-emerald-500/10 text-emerald-300'
+                              plan.recommended && 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
                             )}
                           >
                             {plan.name} ({formatCurrency(plan.price)})
@@ -660,7 +660,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                         ))}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-koma-border text-gray-200">
+                    <tbody className="divide-y divide-koma-border text-koma-secondary">
                       {Object.entries(groupedMatrix).map(([category, rows]) => (
                         <React.Fragment key={category}>
                           <tr className="bg-koma-raised/90 text-emerald-400 font-bold text-[9px] uppercase tracking-wider border-y border-koma-border">
@@ -695,7 +695,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                                     <X size={16} className="text-koma-muted mx-auto" />
                                   )
                                 ) : (
-                                  <span className="font-bold text-emerald-300">{row.pro}</span>
+                                  <span className="font-bold text-emerald-600 dark:text-emerald-300">{row.pro}</span>
                                 )}
                               </td>
 
