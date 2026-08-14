@@ -163,8 +163,8 @@ export function CardapioProdutosTab({
               <span className={clsx(
                 'rounded-full border px-2 py-0.5 text-[8px] font-bold uppercase tracking-[0.1em]',
                 isPublished
-                  ? 'border-emerald-400/15 bg-emerald-400/[0.07] text-emerald-600 dark:text-emerald-300'
-                  : 'border-amber-400/15 bg-amber-400/[0.07] text-amber-600 dark:text-amber-300',
+                  ? 'koma-badge-success'
+                  : 'koma-badge-warning',
               )}>
                 {isPublished ? 'Publicado' : 'Pausado'}
               </span>
@@ -172,7 +172,7 @@ export function CardapioProdutosTab({
             <p className="mt-1 line-clamp-2 max-w-3xl text-[10px] leading-relaxed text-koma-subtle">
               {product.descricao || 'Sem descrição. Adicione detalhes para facilitar a escolha do cliente.'}
             </p>
-            <strong className="mt-1.5 block font-mono text-xs text-emerald-600 dark:text-emerald-300">
+            <strong className="mt-1.5 block font-mono text-xs font-extrabold text-emerald-700 dark:text-emerald-400">
               {currency.format(Number(product.preco) || 0)}
             </strong>
           </div>
@@ -186,13 +186,13 @@ export function CardapioProdutosTab({
             aria-pressed={isPublished}
             aria-label={`${isPublished ? 'Pausar' : 'Publicar'} ${product.nome}`}
             className={clsx(
-              'inline-flex min-w-[112px] items-center justify-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-bold transition-all disabled:cursor-wait disabled:opacity-50 cursor-pointer',
+              'inline-flex min-w-[112px] items-center justify-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-bold transition-all disabled:cursor-wait disabled:opacity-50 cursor-pointer shadow-sm',
               isPublished
-                ? 'border-emerald-400/20 bg-emerald-400/[0.08] text-emerald-600 dark:text-emerald-300 hover:bg-emerald-400/[0.14]'
-                : 'border-koma-border bg-koma-card text-koma-secondary hover:border-emerald-400/25 hover:text-emerald-600 dark:text-emerald-300',
+                ? 'koma-btn-success'
+                : 'border-koma-border bg-koma-card text-koma-muted hover:border-koma-border-strong hover:text-koma-foreground',
             )}
           >
-            <span className={clsx('h-2 w-2 rounded-full', isPublished ? 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,.65)]' : 'bg-zinc-600')} />
+            <span className={clsx('h-2 w-2 rounded-full', isPublished ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,.7)]' : 'bg-zinc-500')} />
             {isPending ? 'Salvando…' : isPublished ? 'Disponível' : 'Publicar'}
           </button>
 

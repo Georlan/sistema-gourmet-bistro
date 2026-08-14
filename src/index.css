@@ -14,7 +14,7 @@
   --color-card-app: var(--color-brand-card, #121420);
   --color-accent-app: var(--color-brand-accent, #00b894);
 
-  /* Kôma semantic theme colors. Components should prefer these roles over raw hex values. */
+  /* Kôma semantic theme surfaces & text */
   --color-koma-page: var(--koma-surface-page);
   --color-koma-canvas: var(--koma-surface-canvas);
   --color-koma-shell: var(--koma-surface-shell);
@@ -32,6 +32,23 @@
   --color-koma-border: var(--koma-border-default);
   --color-koma-border-strong: var(--koma-border-strong);
   --color-koma-accent: var(--koma-accent);
+
+  /* Standardized semantic status tokens */
+  --color-koma-success-bg: var(--koma-success-bg);
+  --color-koma-success-border: var(--koma-success-border);
+  --color-koma-success-text: var(--koma-success-text);
+
+  --color-koma-danger-bg: var(--koma-danger-bg);
+  --color-koma-danger-border: var(--koma-danger-border);
+  --color-koma-danger-text: var(--koma-danger-text);
+
+  --color-koma-warning-bg: var(--koma-warning-bg);
+  --color-koma-warning-border: var(--koma-warning-border);
+  --color-koma-warning-text: var(--koma-warning-text);
+
+  --color-koma-info-bg: var(--koma-info-bg);
+  --color-koma-info-border: var(--koma-info-border);
+  --color-koma-info-text: var(--koma-info-text);
 }
 
 :root,
@@ -62,6 +79,27 @@
   --koma-border-strong: rgba(220, 240, 230, 0.28);
   --koma-accent: #00c996;
   --koma-focus-ring: rgba(0, 201, 150, 0.34);
+
+  /* Status Tokens (Dark) */
+  --koma-success-bg: rgba(0, 201, 150, 0.12);
+  --koma-success-border: rgba(0, 201, 150, 0.30);
+  --koma-success-text: #6ee7b7;
+  --koma-success-hover: rgba(0, 201, 150, 0.22);
+
+  --koma-danger-bg: rgba(239, 68, 68, 0.12);
+  --koma-danger-border: rgba(239, 68, 68, 0.30);
+  --koma-danger-text: #fca5a5;
+  --koma-danger-hover: rgba(239, 68, 68, 0.22);
+
+  --koma-warning-bg: rgba(245, 158, 11, 0.12);
+  --koma-warning-border: rgba(245, 158, 11, 0.30);
+  --koma-warning-text: #fde68a;
+  --koma-warning-hover: rgba(245, 158, 11, 0.22);
+
+  --koma-info-bg: rgba(56, 189, 248, 0.12);
+  --koma-info-border: rgba(56, 189, 248, 0.30);
+  --koma-info-text: #7dd3fc;
+  --koma-info-hover: rgba(56, 189, 248, 0.22);
 
   --koma-waiter-bg: radial-gradient(circle at 88% 6%, rgba(0, 184, 148, 0.06), transparent 25rem), linear-gradient(180deg, var(--koma-surface-shell) 0%, #0c0e0d 58%, var(--koma-surface-shell) 100%);
   --koma-sidebar-bg: radial-gradient(circle at 12% 0%, rgba(0, 201, 150, 0.05), transparent 15rem), linear-gradient(180deg, #101412 0%, #0c0f0d 100%);
@@ -100,6 +138,27 @@
   --koma-border-strong: rgba(15, 23, 42, 0.28);
   --koma-accent: #00875f;
   --koma-focus-ring: rgba(0, 135, 95, 0.30);
+
+  /* Status Tokens (Light) */
+  --koma-success-bg: #d1fae5;
+  --koma-success-border: #a7f3d0;
+  --koma-success-text: #065f46;
+  --koma-success-hover: #059669;
+
+  --koma-danger-bg: #fee2e2;
+  --koma-danger-border: #fecaca;
+  --koma-danger-text: #991b1b;
+  --koma-danger-hover: #dc2626;
+
+  --koma-warning-bg: #fef3c7;
+  --koma-warning-border: #fde68a;
+  --koma-warning-text: #92400e;
+  --koma-warning-hover: #d97706;
+
+  --koma-info-bg: #e0f2fe;
+  --koma-info-border: #bae6fd;
+  --koma-info-text: #075985;
+  --koma-info-hover: #0284c7;
 
   --koma-waiter-bg: linear-gradient(180deg, #f3f6f8 0%, #eaeff2 58%, #f3f6f8 100%);
   --koma-sidebar-bg: #ffffff;
@@ -1722,3 +1781,64 @@ body {
   transform: translateY(0);
   transition: transform 300s cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+/* ==========================================================================
+   KÔMA STANDARDIZED SEMANTIC UI CLASSES
+   Use these classes across the entire system so that colors and states
+   (success, danger, warning, info) remain unified and 100% theme-reactive.
+   ========================================================================== */
+
+.koma-badge-success {
+  background-color: var(--koma-success-bg);
+  border: 1px solid var(--koma-success-border);
+  color: var(--koma-success-text);
+  font-weight: 750;
+}
+
+.koma-badge-danger {
+  background-color: var(--koma-danger-bg);
+  border: 1px solid var(--koma-danger-border);
+  color: var(--koma-danger-text);
+  font-weight: 750;
+}
+
+.koma-badge-warning {
+  background-color: var(--koma-warning-bg);
+  border: 1px solid var(--koma-warning-border);
+  color: var(--koma-warning-text);
+  font-weight: 750;
+}
+
+.koma-badge-info {
+  background-color: var(--koma-info-bg);
+  border: 1px solid var(--koma-info-border);
+  color: var(--koma-info-text);
+  font-weight: 750;
+}
+
+.koma-btn-success {
+  background-color: var(--koma-success-bg);
+  border: 1px solid var(--koma-success-border);
+  color: var(--koma-success-text);
+  font-weight: 800;
+  transition: all 140ms ease;
+}
+.koma-btn-success:hover {
+  background-color: var(--koma-success-hover);
+  color: #ffffff;
+  border-color: var(--koma-success-hover);
+}
+
+.koma-btn-danger {
+  background-color: var(--koma-danger-bg);
+  border: 1px solid var(--koma-danger-border);
+  color: var(--koma-danger-text);
+  font-weight: 800;
+  transition: all 140ms ease;
+}
+.koma-btn-danger:hover {
+  background-color: var(--koma-danger-hover);
+  color: #ffffff;
+  border-color: var(--koma-danger-hover);
+}
+
