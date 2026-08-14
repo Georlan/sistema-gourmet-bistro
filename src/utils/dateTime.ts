@@ -19,20 +19,23 @@ export function parseBackendTimestamp(
 ): Date | null {
   if (raw === null || raw === undefined || raw === '') return null;
 
+  const MIN_VALID_EPOCH = 1577836800000; // 2020-01-01T00:00:00Z
+
   if (raw instanceof Date) {
     const copy = new Date(raw.getTime());
-    return Number.isNaN(copy.getTime()) ? null : copy;
+    return Number.isNaN(copy.getTime()) || copy.getTime() < MIN_VALID_EPOCH ? null : copy;
   }
 
   if (typeof raw === 'number') {
     if (!Number.isFinite(raw) || raw <= 0) return null;
     const milliseconds = raw < 1_000_000_000_000 ? raw * 1000 : raw;
+    if (milliseconds < MIN_VALID_EPOCH) return null;
     const date = new Date(milliseconds);
     return Number.isNaN(date.getTime()) ? null : date;
   }
 
   const value = raw.trim();
-  if (!value) return null;
+  if (!value || value === '0') return null;
 
   const clock = value.match(CLOCK_ONLY);
   if (clock) {
@@ -46,13 +49,13 @@ export function parseBackendTimestamp(
 
   if (DATE_ONLY.test(value)) {
     const localDate = new Date(`${value}T00:00:00`);
-    return Number.isNaN(localDate.getTime()) ? null : localDate;
+    return Number.isNaN(localDate.getTime()) || localDate.getTime() < MIN_VALID_EPOCH ? null : localDate;
   }
 
   const iso = value.replace(' ', 'T');
   const normalized = HAS_EXPLICIT_TIMEZONE.test(iso) ? iso : `${iso}Z`;
   const date = new Date(normalized);
-  return Number.isNaN(date.getTime()) ? null : date;
+  return Number.isNaN(date.getTime()) || date.getTime() < MIN_VALID_EPOCH ? null : date;
 }
 
 export function formatBackendDateTime(

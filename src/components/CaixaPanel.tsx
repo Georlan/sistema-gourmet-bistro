@@ -239,11 +239,13 @@ const formatCompactCurrency = (value: number) => new Intl.NumberFormat('pt-BR', 
 }).format(Number(value) || 0);
 
 const formatOldestAge = (values: unknown[]) => {
+  const MIN_VALID_EPOCH = 1577836800000; // 2020-01-01T00:00:00Z
+  const now = Date.now();
   const timestamps = values
-    .map(normalizeOperationalTimestamp)
-    .filter((value): value is number => value !== null && value <= Date.now());
+    .map(v => normalizeOperationalTimestamp(v, now))
+    .filter((value): value is number => value !== null && value >= MIN_VALID_EPOCH && value <= now + 60_000);
   if (timestamps.length === 0) return '—';
-  const elapsedMinutes = Math.max(0, Math.floor((Date.now() - Math.min(...timestamps)) / 60_000));
+  const elapsedMinutes = Math.max(0, Math.floor((now - Math.min(...timestamps)) / 60_000));
   if (elapsedMinutes < 1) return 'Agora';
   if (elapsedMinutes < 60) return `${elapsedMinutes} min`;
   const hours = Math.floor(elapsedMinutes / 60);
@@ -3654,30 +3656,36 @@ export function CaixaPanel({
   );
   const sidebarOrderCount = tableOrdersInProduction.length + activeDeliveryOrdersCount + tableOrdersReady.length;
   const operationalOrderInsights = useMemo(() => {
-    const closedStatuses = new Set(['fechada', 'fechado', 'cancelada', 'cancelado', 'finalizada', 'finalizado']);
-    const activeTableOrders = orders.filter(order => !closedStatuses.has(String(order.status || '').toLowerCase()));
     const activeDigitalOrders = deliveryOrders.filter(order => (
       ['pendente', 'analise', 'producao', 'pronto', 'transito'].includes(order.status)
     ));
-    const tableValue = activeTableOrders.reduce((total, order) => total + (order.itens || []).reduce(
-      (itemTotal, item) => itemTotal + (!item.pago && String(item.status) !== 'cancelado' ? Number(item.preco) || 0 : 0),
-      0,
-    ), 0);
+
+    const activeTableList = [...tableOrdersInProduction, ...tableOrdersReady];
+
+    const tableValue = activeTableList.reduce((total, order) => {
+      const itens = Array.isArray(order.itens) ? order.itens : [];
+      return total + itens.reduce((itemTotal: number, item: any) => {
+        return itemTotal + (!item.pago && String(item.status) !== 'cancelado' ? Number(item.preco) || 0 : 0);
+      }, 0);
+    }, 0);
+
     const digitalValue = activeDigitalOrders.reduce(
       (total, order) => total + (!order.pago ? Number(order.total) || 0 : 0),
       0,
     );
+
     const timestamps = [
-      ...activeTableOrders.map(order => order.created_at || order.timestamp),
+      ...activeTableList.map(order => order.aberta_em || order.data_abertura || order.aberto_em || order.timestamp || order.created_at || order.criadoEm),
       ...activeDigitalOrders.map(order => order.criadoEm),
     ];
+
     return {
       oldestOrder: formatOldestAge(timestamps),
       openValue: tableValue + digitalValue,
       attentionCount: activeDigitalOrders.filter(order => order.status === 'pendente').length
         + pagamentosPendentes.length,
     };
-  }, [deliveryOrders, orders, pagamentosPendentes.length]);
+  }, [deliveryOrders, pagamentosPendentes.length, tableOrdersInProduction, tableOrdersReady]);
 
   const isSidebarTabActive = (tabId: string) => (
     tabId === 'cardapio_digital' ? (activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital')
