@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import logoImg from './assets/logo.png';
+import { KomaLogo } from './components/KomaLogo';
 import { LoginButton } from '../components/shadcnblocks/login-button';
 import { Menu, X, User, Wifi, WifiOff, SlidersHorizontal, ArrowDownRight, ArrowUpRight, RefreshCw, Bell, Printer, TrendingUp, Utensils, CheckCircle2, UserCheck, UserX, ShoppingBag } from 'lucide-react';
 import { Table, Order, DraftItem, AppSettings, AppRole, Product, CaixaTurnoResumo } from './types';
@@ -1920,11 +1921,19 @@ export default function App() {
           {/* Logo / Header */}
           <div className="text-center space-y-3 mb-7">
             <div className="flex justify-center">
-              <div className="h-20 w-20 bg-koma-card border border-koma-border rounded-2xl flex items-center justify-center shadow-lg shrink-0 overflow-hidden">
-                <img src={logoImg} alt="Kôma Logo" className="h-16 w-16 object-contain" />
+              <div className="h-20 w-20 bg-koma-card border border-koma-border rounded-2xl flex items-center justify-center shadow-lg shrink-0 overflow-hidden p-2">
+                <KomaLogo size="xl" />
               </div>
             </div>
-            <p className="text-[10px] text-emerald-400 uppercase tracking-widest font-sans font-bold bg-emerald-500/10 px-3 py-1 rounded-full w-fit mx-auto border border-emerald-500/15">
+            <div className="space-y-1">
+              <span className="font-serif font-black tracking-[-0.03em] text-koma-foreground text-xl block">
+                KÔMA
+              </span>
+              <span className="text-[10px] font-sans font-semibold tracking-wide text-emerald-700 dark:text-emerald-400 block">
+                Se está com fome, Kôma
+              </span>
+            </div>
+            <p className="text-[10px] text-emerald-700 dark:text-emerald-400 uppercase tracking-widest font-sans font-bold bg-emerald-500/10 px-3 py-1 rounded-full w-fit mx-auto border border-emerald-500/15">
               {portal === 'caixa' ? "Painel de Gerenciamento & Caixa" : "Portal do Garçom"}
             </p>
           </div>
@@ -2035,12 +2044,12 @@ export default function App() {
               </button>
 
               <div className="flex items-center gap-2.5">
-                <img src={logoImg} alt="Kôma Logo" className="h-8 w-8 object-contain shrink-0" />
+                <KomaLogo size="lg" />
                 <div>
                   <h1 className="font-serif text-base sm:text-lg font-black tracking-[-0.03em] text-koma-foreground leading-tight">
                     {restaurantName}
                   </h1>
-                  <p className="text-[9px] text-koma-subtle font-sans leading-none mt-0.5">
+                  <p className="text-[9px] text-koma-muted font-sans leading-none mt-0.5 font-medium">
                     {activeWaiter.nome}
                   </p>
                 </div>
@@ -2078,19 +2087,22 @@ export default function App() {
           />
 
           {/* Drawer content */}
-          <div className="relative w-72 sm:w-80 max-w-sm bg-koma-panel border-r border-emerald-500/10 h-full flex flex-col justify-between shadow-2xl z-10 p-4 sm:p-6 text-koma-foreground overflow-y-auto animate-slide-in-left">
+          <div className="relative w-72 sm:w-80 max-w-sm bg-koma-panel border-r border-koma-border h-full flex flex-col justify-between shadow-2xl z-10 p-4 sm:p-6 text-koma-foreground overflow-y-auto animate-slide-in-left">
             <div className="space-y-6">
 
               {/* Header inside drawer */}
               <div className={clsx('flex', 'items-center', 'justify-between', 'pb-4', 'border-b', 'border-koma-border')}>
                 <div className={clsx('flex', 'items-center', 'gap-2.5')}>
-                  <img src={logoImg} alt="Kôma Logo" className={clsx('h-7', 'w-7', 'object-contain', 'shrink-0')} />
-                  <span className={clsx('font-serif', 'font-bold', 'text-base', 'text-koma-foreground', 'leading-none')}>{restaurantName}</span>
+                  <KomaLogo size="md" />
+                  <div>
+                    <span className={clsx('font-serif', 'font-bold', 'text-base', 'text-koma-foreground', 'leading-none', 'block')}>{restaurantName}</span>
+                    <span className="text-[9px] text-emerald-700 dark:text-emerald-400 font-sans font-medium block mt-0.5">Se está com fome, Kôma</span>
+                  </div>
                 </div>
                 <button
                   id="close-sidebar-btn"
                   onClick={() => setIsSidebarOpen(false)}
-                  className={clsx('p-1.5', 'rounded-lg', 'hover:bg-koma-card', 'text-koma-subtle', 'hover:text-koma-foreground', 'transition-colors', 'cursor-pointer')}
+                  className={clsx('p-1.5', 'rounded-lg', 'hover:bg-koma-card', 'text-koma-muted', 'hover:text-koma-foreground', 'transition-colors', 'cursor-pointer')}
                 >
                   <X size={18} />
                 </button>

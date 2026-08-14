@@ -1,6 +1,7 @@
 import { CardapioAssetUploader } from './CardapioAssetUploader';
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import logoImg from '../assets/logo.png';
+import { KomaLogo } from './KomaLogo';
 import { LoginButton } from '../../components/shadcnblocks/login-button';
 import {
   DollarSign, ArrowUpRight, Lock, Users,
@@ -3770,11 +3771,11 @@ export function CaixaPanel({
                 <div className="cashier-sidebar__brand-row">
                   <div className="cashier-sidebar__brand">
                     <span className="cashier-sidebar__logo-wrap">
-                      <img src={logoImg} alt="Kôma" className={clsx('w-7', 'h-7', 'object-contain')} />
+                      <KomaLogo size="md" />
                     </span>
                     <span className="cashier-sidebar__brand-copy">
                       <strong>Kôma</strong>
-                      <small>Gestão do restaurante</small>
+                      <small>Se está com fome, Kôma</small>
                     </span>
                   </div>
                   <div className={clsx('flex', 'items-center', 'gap-1.5')}>
@@ -3926,11 +3927,11 @@ export function CaixaPanel({
             <div className="cashier-sidebar__brand-row">
               <div className="cashier-sidebar__brand">
                 <span className="cashier-sidebar__logo-wrap">
-                  <img src={logoImg} alt="Kôma" className={clsx('w-7', 'h-7', 'object-contain')} />
+                  <KomaLogo size="md" />
                 </span>
                 <span className="cashier-sidebar__brand-copy">
                   <strong>Kôma</strong>
-                  <small>Gestão do restaurante</small>
+                  <small>Se está com fome, Kôma</small>
                 </span>
               </div>
                 <button
