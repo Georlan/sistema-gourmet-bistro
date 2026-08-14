@@ -6041,13 +6041,13 @@ export function CaixaPanel({
             <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5')}>
 
               {/* CRUD table list */}
-              <div className={clsx('lg:col-span-2', 'bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4')}>
-                <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]')}>Cadastro de Funcionários (Equipe)</span>
+              <div className={clsx('lg:col-span-2', 'bg-koma-panel/60', 'border', 'border-koma-border', 'rounded-3xl', 'p-5', 'space-y-4')}>
+                <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-koma-border')}>Cadastro de Funcionários (Equipe)</span>
 
                 <div className="overflow-x-auto">
                   <table className={clsx('w-full', 'text-left', 'font-sans', 'text-xs', 'border-collapse')}>
                     <thead>
-                      <tr className={clsx('border-b', 'border-[#27272A]', 'text-gray-400', 'font-bold')}>
+                      <tr className={clsx('border-b', 'border-koma-border', 'text-gray-400', 'font-bold')}>
                         <th className="py-2">Nome</th>
                         <th className="py-2">Telefone</th>
                         <th className="py-2">Cargo</th>
@@ -6063,11 +6063,11 @@ export function CaixaPanel({
                         const isPendente = statusVal === 'pendente_ativacao';
 
                         return (
-                          <tr key={user.id} className={clsx('border-b', 'border-[#27272A]/40', 'hover:bg-[#1C1C1F]/20', 'transition-colors')}>
+                          <tr key={user.id} className={clsx('border-b', 'border-koma-border/40', 'hover:bg-koma-raised/30', 'transition-colors')}>
                             <td className={clsx('py-2.5', 'text-white', 'font-bold')}>{user.nome}</td>
                             <td className={clsx('py-2.5', 'font-mono', 'text-gray-400')}>{formatarTelefoneTabela(user.telefone || user.usuario || '')}</td>
                             <td className="py-2.5">
-                              <span className={`px-2 py-0.5 text-[8px] font-bold rounded uppercase tracking-wider ${cargoRaw === 'admin' ? 'bg-emerald-600/20 text-[#C46A74]' : cargoRaw === 'caixa' ? 'bg-[#10b981]/10 text-[#10b981]' : 'bg-emerald-500/10 text-emerald-400'}`}>
+                              <span className={`px-2 py-0.5 text-[8px] font-bold rounded uppercase tracking-wider ${cargoRaw === 'admin' ? 'bg-emerald-600/20 text-[#C46A74]' : cargoRaw === 'caixa' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-500/10 text-emerald-400'}`}>
                                 {cargoLabel}
                               </span>
                             </td>
@@ -6086,7 +6086,7 @@ export function CaixaPanel({
                               {isPendente && (
                                 <button
                                   onClick={() => handleResendInvite(user)}
-                                  className={clsx('px-2', 'py-1', 'text-[8px]', 'font-bold', 'bg-[#1C1C1F]', 'hover:bg-[#27272A]', 'text-gray-300', 'hover:text-white', 'rounded-lg', 'border', 'border-[#27272A]', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'gap-1')}
+                                  className={clsx('px-2', 'py-1', 'text-[8px]', 'font-bold', 'bg-koma-raised', 'hover:bg-koma-card', 'text-gray-300', 'hover:text-white', 'rounded-lg', 'border', 'border-koma-border', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'gap-1')}
                                   title="Reenviar link de ativação via WhatsApp"
                                 >
                                   <Send size={10} />
@@ -6115,8 +6115,8 @@ export function CaixaPanel({
               <div className="space-y-4">
 
                 {/* Add Waiter form */}
-                <div className={clsx('bg-[#121214]/60', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5')}>
-                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-[#27272A]', 'mb-3')}>Registrar Funcionário</span>
+                <div className={clsx('bg-koma-panel/60', 'border', 'border-koma-border', 'rounded-3xl', 'p-5')}>
+                  <span className={clsx('font-serif', 'font-bold', 'text-gray-300', 'block', 'pb-1', 'border-b', 'border-koma-border', 'mb-3')}>Registrar Funcionário</span>
 
                   <form onSubmit={handleAddUserSubmit} className={clsx('space-y-3', 'text-left')}>
                     <div className="space-y-1">
@@ -6127,7 +6127,7 @@ export function CaixaPanel({
                         placeholder="Ex: Pedro Henrique"
                         value={newUserNome}
                         onChange={(e) => setNewUserNome(e.target.value)}
-                        className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-[10px]')}
+                        className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-white', 'text-[10px]')}
                       />
                     </div>
                     <div className="space-y-1">
@@ -6138,7 +6138,7 @@ export function CaixaPanel({
                         placeholder="(81) 99999-9999"
                         value={newUserTelefone}
                         onChange={(e) => setNewUserTelefone(aplicarMascaraTelefoneInput(e.target.value))}
-                        className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'font-mono', 'text-[10px]')}
+                        className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-white', 'font-mono', 'text-[10px]')}
                       />
                     </div>
                     <div className="space-y-1">
@@ -6146,7 +6146,7 @@ export function CaixaPanel({
                       <select
                         value={newUserRole}
                         onChange={(e) => setNewUserRole(e.target.value)}
-                        className={clsx('w-full', 'px-3', 'py-2', 'bg-[#09090B]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'text-[10px]')}
+                        className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-white', 'text-[10px]')}
                       >
                         <option value="garcom">Garçom</option>
                         <option value="caixa">Operador Caixa</option>
@@ -6154,7 +6154,7 @@ export function CaixaPanel({
                         <option value="motoboy">Motoboy</option>
                       </select>
                     </div>
-                    <button type="submit" className={clsx('w-full', 'py-2', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'font-bold', 'text-[9px]', 'uppercase', 'tracking-wider', 'rounded-lg', 'transition-all', 'cursor-pointer')}>Cadastrar e Enviar Convite</button>
+                    <button type="submit" className={clsx('w-full', 'py-2', 'bg-emerald-500', 'hover:bg-emerald-400', 'text-zinc-950', 'font-bold', 'text-[9px]', 'uppercase', 'tracking-wider', 'rounded-lg', 'transition-all', 'cursor-pointer', 'shadow-sm')}>Cadastrar e Enviar Convite</button>
                   </form>
                 </div>
 

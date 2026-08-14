@@ -227,7 +227,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
         <div
           role="tablist"
           aria-label="Ações da mesa"
-          className="bg-[#121214] border-b border-[#27272A] px-3 sm:px-6 py-2 grid grid-cols-2 gap-1.5 sm:flex sm:items-center sm:gap-2 shrink-0"
+          className="bg-koma-panel border-b border-koma-border px-3 sm:px-6 py-2 grid grid-cols-2 gap-1.5 sm:flex sm:items-center sm:gap-2 shrink-0"
         >
           <button
             id="tab-consumo-btn"
@@ -237,11 +237,11 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
             onClick={() => setActiveTab('consumo')}
             className={`w-full sm:w-auto min-h-11 sm:min-h-0 px-2 sm:px-4.5 py-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider font-sans whitespace-nowrap border ${
               activeTab === 'consumo' 
-                ? 'bg-[#1C1C1F] text-[#10b981] shadow-sm border-[#27272A]' 
+                ? 'bg-koma-raised text-emerald-400 shadow-sm border-koma-border' 
                 : 'text-gray-400 hover:text-white border-transparent'
             }`}
           >
-            <Receipt size={14} className="text-[#10b981]" />
+            <Receipt size={14} className="text-emerald-400" />
             <span className="sm:hidden">Consumo</span>
             <span className="hidden sm:inline">Consumo Ativo</span>
           </button>
@@ -255,84 +255,85 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
             onClick={() => setActiveTab('lancamento')}
             className={`w-full sm:w-auto min-h-11 sm:min-h-0 px-2 sm:px-4.5 py-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider font-sans whitespace-nowrap border ${
               activeTab === 'lancamento' 
-                ? 'bg-[#1C1C1F] text-[#10b981] shadow-sm border-[#27272A]' 
+                ? 'bg-koma-raised text-emerald-400 shadow-sm border-koma-border' 
                 : 'text-gray-400 hover:text-white border-transparent'
             }`}
           >
-            <PlusCircle size={14} className="text-[#10b981]" />
-            <span className="sm:hidden">Novo pedido</span>
-            <span className="hidden sm:inline">Lançar Pedido</span>
-            {draftItems.length > 0 && (
-              <span className="min-w-5 h-5 px-1 rounded-full bg-[#10b981]/15 border border-[#10b981]/30 text-[#10b981] text-[9px] font-mono flex items-center justify-center">
-                {draftItems.reduce((total, item) => total + (item.quantidade || 1), 0)}
+            <Utensils size={14} className="text-emerald-400" />
+            <span className="sm:hidden">Lançar</span>
+            <span className="hidden sm:inline">La Carte (Lançar)</span>
+            {draftCount > 0 && (
+              <span className="bg-emerald-500 text-zinc-950 text-[10px] w-4.5 h-4.5 rounded-full flex items-center justify-center font-mono font-black ml-0.5">
+                {draftCount}
               </span>
             )}
           </button>
           )}
 
-          {orders.length > 0 && (canTransferTables || canTransferItems) && (
-            <button
-              id="tab-transferir-btn"
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'transferir'}
-              onClick={() => {
-                setActiveTab('transferir');
-                setTransferType(canTransferTables ? 'total' : 'parcial');
-              }}
-              className={`w-full sm:w-auto min-h-11 sm:min-h-0 px-2 sm:px-4.5 py-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider font-sans whitespace-nowrap border ${
-                activeTab === 'transferir' 
-                  ? 'bg-[#1C1C1F] text-[#10b981] shadow-sm border-[#27272A]' 
-                  : 'text-gray-400 hover:text-white border-transparent'
-              }`}
-            >
-              <Move size={14} className="text-[#10b981]" />
-              <span>Transferência</span>
-            </button>
+          {canCloseAccount && (
+          <button
+            id="tab-fechamento-btn"
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'fechamento'}
+            onClick={() => setActiveTab('fechamento')}
+            className={`w-full sm:w-auto min-h-11 sm:min-h-0 px-2 sm:px-4.5 py-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider font-sans whitespace-nowrap border ${
+              activeTab === 'fechamento' 
+                ? 'bg-koma-raised text-emerald-400 shadow-sm border-koma-border' 
+                : 'text-gray-400 hover:text-white border-transparent'
+            }`}
+          >
+            <CheckCircle size={14} className="text-emerald-400" />
+            <span>Fechamento</span>
+          </button>
           )}
 
-          {orders.length > 0 && onMergeTables && canTransferTables && (
-            <button
-              id="tab-mesclar-btn"
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'mesclar'}
-              onClick={() => {
-                setActiveTab('mesclar');
-                setTransferType('mesclar');
-              }}
-              className={`w-full sm:w-auto min-h-11 sm:min-h-0 px-2 sm:px-4.5 py-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider font-sans whitespace-nowrap border ${
-                activeTab === 'mesclar' 
-                  ? 'bg-[#1C1C1F] text-[#10b981] shadow-sm border-[#27272A]' 
-                  : 'text-gray-400 hover:text-white border-transparent'
-              }`}
-            >
-              <GitMerge size={14} className="text-[#10b981]" />
-              <span>Mesclar</span>
-            </button>
+          {canTransferGeneral && (
+          <button
+            id="tab-transferencia-btn"
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'transferencia'}
+            onClick={() => setActiveTab('transferencia')}
+            className={`w-full sm:w-auto min-h-11 sm:min-h-0 px-2 sm:px-4.5 py-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider font-sans whitespace-nowrap border ${
+              activeTab === 'transferencia' 
+                ? 'bg-koma-raised text-rose-400 shadow-sm border-koma-border' 
+                : 'text-gray-400 hover:text-white border-transparent'
+            }`}
+          >
+            <ArrowRightLeft size={14} className="text-rose-400" />
+            <span>Transferência</span>
+          </button>
+          )}
+
+          {canTransferTables && (
+          <button
+            id="tab-mesclar-btn"
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'mesclar'}
+            onClick={() => setActiveTab('mesclar')}
+            className={`w-full sm:w-auto min-h-11 sm:min-h-0 px-2 sm:px-4.5 py-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider font-sans whitespace-nowrap border ${
+              activeTab === 'mesclar' 
+                ? 'bg-koma-raised text-rose-400 shadow-sm border-koma-border' 
+                : 'text-gray-400 hover:text-white border-transparent'
+            }`}
+          >
+            <Merge size={14} className="text-rose-400" />
+            <span>Mesclar Mesas</span>
+          </button>
           )}
         </div>
 
-        {/* MODAL BODY */}
-        <div id="mesa-details-scroll-body" className={`overflow-y-auto flex-1 bg-[#18181B] space-y-4 ${activeTab === 'lancamento' ? 'p-0 sm:p-6' : 'p-3 sm:p-6'}`}>
-          
-          {/* Concurrency Alert Banner */}
-          {otherWaitersServing.length > 0 && (
-            <div className="bg-amber-500/10 border border-amber-500/35 text-amber-400 p-3.5 rounded-2xl flex items-start gap-2 text-xs font-sans shadow-sm leading-relaxed">
-              <span className="text-sm shrink-0">⚠️</span>
-              <div>
-                <strong className="text-white block font-semibold mb-0.5">Aviso de Concorrência</strong>
-                O(s) garçom(garçons) <strong className="text-white">{otherWaitersServing.join(', ')}</strong> também está(ão) editando um rascunho ativo para esta mesa no momento. Cuidado para não duplicar pratos!
-              </div>
-            </div>
-          )}
+        {/* MODAL BODY WITH SCROLL */}
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1 text-left">
           
           {/* TAB 1: CONSUMO ATIVO */}
           {activeTab === 'consumo' && (
             <div className="space-y-6">
               {orders.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
-                  <div className="p-4 bg-[#121214] text-[#10b981] rounded-full border border-[#27272A]">
+                  <div className="p-4 bg-koma-panel text-emerald-400 rounded-full border border-koma-border">
                     <ShoppingBag size={32} />
                   </div>
                   <h3 className="font-serif text-xl font-bold text-white">Mesa sem consumo ativo</h3>
@@ -352,7 +353,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                   
                   {/* Itemized Order History (Col-7) */}
                   <div className="lg:col-span-7 space-y-4">
-                    <div className="flex items-center justify-between border-b border-[#27272A] pb-3">
+                    <div className="flex items-center justify-between border-b border-koma-border pb-3">
                       <h3 className="font-serif font-bold text-white text-base">Comanda de Pedidos</h3>
                       <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider font-sans">Lotes Consolidados: {orders.length}</span>
                     </div>
@@ -366,13 +367,13 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                         <div
                           key={order.id}
                           id={`placed-order-${order.id}`}
-                          className="border border-[#27272A] rounded-2xl overflow-hidden bg-[#121214]/40"
+                          className="border border-koma-border rounded-2xl overflow-hidden bg-koma-panel/40"
                         >
                           {/* Order Header */}
-                          <div className="bg-[#1C1C1F] px-4 py-2.5 flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-[#27272A] gap-2 w-full">
+                          <div className="bg-koma-raised px-4 py-2.5 flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-koma-border gap-2 w-full">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-xs font-bold text-white font-sans">Lote #{order.id.slice(-4)}</span>
-                              <span className="text-[10px] bg-[#121214] text-gray-300 px-2 py-0.5 rounded font-bold font-sans">
+                              <span className="text-[10px] bg-koma-panel text-gray-300 px-2 py-0.5 rounded font-bold font-sans">
                                 Garçom: {order.garcomNome}
                               </span>
                               {order.tipo && (
@@ -556,15 +557,15 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                   </div>
 
                   {/* DIVISÃO DE CONTA / EXTRATO DE CONSUMO POR CLIENTE (Col-5) */}
-                  <div className="lg:col-span-5 bg-[#121214] border border-[#27272A] rounded-3xl p-5 flex flex-col justify-between h-full min-h-[400px]">
+                  <div className="lg:col-span-5 bg-koma-panel border border-koma-border rounded-3xl p-5 flex flex-col justify-between h-full min-h-[400px]">
                     <div className="space-y-4">
                       
-                      <div className="flex items-center justify-between pb-3.5 border-b border-[#27272A]">
+                      <div className="flex items-center justify-between pb-3.5 border-b border-koma-border">
                         <div className="flex items-center gap-1.5 text-white">
-                          <Receipt size={16} className="text-[#10b981]" />
+                          <Receipt size={16} className="text-emerald-400" />
                           <h3 className="font-serif font-bold text-sm uppercase tracking-wide">Extrato por Cliente</h3>
                         </div>
-                        <span className="text-[10px] font-sans font-bold text-[#A1A1AA] uppercase tracking-wider">Divisão Ativa</span>
+                        <span className="text-[10px] font-sans font-bold text-zinc-400 uppercase tracking-wider">Divisão Ativa</span>
                       </div>
 
                       {/* Customer list with subtotal calculations */}
@@ -573,7 +574,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                           <div
                             key={cust.name}
                             id={`customer-total-${cust.name.toLowerCase().replace(/\s+/g, '-')}`}
-                            className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-4 flex items-center justify-between shadow-sm"
+                            className="bg-koma-raised border border-koma-border rounded-2xl p-4 flex items-center justify-between shadow-sm"
                           >
                             <div className="space-y-1 font-sans">
                               <span className="text-xs font-bold text-white truncate block max-w-[150px]">
@@ -730,7 +731,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
               </div>
 
               {/* Selector for transfer type */}
-              <div className="flex bg-[#121214] p-1 border border-[#27272A] rounded-xl font-sans text-xs">
+              <div className="flex bg-koma-panel p-1 border border-koma-border rounded-xl font-sans text-xs">
                 {canTransferTables && (
                 <button
                   type="button"
@@ -760,7 +761,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
 
               {/* If partial, show items checklist */}
               {transferType === 'parcial' && (
-                <div className="space-y-2 bg-[#121214]/50 border border-[#27272A] rounded-2xl p-4 max-h-48 overflow-y-auto">
+                <div className="space-y-2 bg-koma-panel/50 border border-koma-border rounded-2xl p-4 max-h-48 overflow-y-auto">
                   <span className="text-[10px] text-gray-400 block font-bold uppercase tracking-wider mb-2">Selecione os itens para transferir:</span>
                   {orders.flatMap(o => o.itens).length === 0 ? (
                     <span className="text-xs text-gray-500 italic">Não há itens lançados para transferir.</span>
@@ -770,7 +771,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                       return (
                         <label
                           key={item.id}
-                          className="flex items-center justify-between p-2 rounded-lg border border-[#27272A] hover:bg-[#27272A]/50 transition-all cursor-pointer text-xs"
+                          className="flex items-center justify-between p-2 rounded-lg border border-koma-border hover:bg-koma-raised/50 transition-all cursor-pointer text-xs"
                         >
                           <div className="flex items-center gap-2.5 text-white">
                             <input
@@ -783,10 +784,10 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                                   setSelectedItemsForTransfer(prev => [...prev, item.id]);
                                 }
                               }}
-                              className="rounded border-[#27272A] text-rose-400 focus:ring-[#f43f5e] h-3.5 w-3.5 bg-[#121214]"
+                              className="rounded border-koma-border text-rose-400 focus:ring-rose-500 h-3.5 w-3.5 bg-koma-input"
                             />
                             <span>{item.nome}</span>
-                            {item.clienteNome && <span className="text-[9px] text-[#10b981] bg-[#10b981]/10 border border-[#10b981]/20 px-1 rounded">Para: {item.clienteNome}</span>}
+                            {item.clienteNome && <span className="text-[9px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1 rounded">Para: {item.clienteNome}</span>}
                           </div>
                           <span className="font-mono text-gray-400">R$ {(item.preco ?? 0).toFixed(2)}</span>
                         </label>
@@ -890,7 +891,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                   <div className="space-y-2">
                     <span className="text-[10px] text-gray-400 block font-bold uppercase tracking-wider text-center">Mesa Destino — Mesas Ocupadas:</span>
                     {tablesWithOrders.length === 0 ? (
-                      <div className="py-6 text-center text-gray-500 text-sm italic font-sans bg-[#121214]/40 rounded-2xl border border-[#27272A]/40">
+                      <div className="py-6 text-center text-gray-500 text-sm italic font-sans bg-koma-panel/40 rounded-2xl border border-koma-border/40">
                         Nenhuma outra mesa está ocupada no momento.
                       </div>
                     ) : (
@@ -916,13 +917,13 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                               onMouseLeave={() => { if (isConfirming) setConfirmTransferTo(null); }}
                               className={`p-4 border rounded-2xl text-center transition-all flex flex-col items-center justify-center gap-1 group ${
                                 isTargetAlreadyMerged
-                                  ? 'bg-[#121214] border-zinc-800 text-zinc-600 cursor-not-allowed opacity-40'
+                                  ? 'bg-koma-panel border-zinc-800 text-zinc-600 cursor-not-allowed opacity-40'
                                   : isConfirming
                                     ? 'bg-rose-900/40 border border-rose-800/50 animate-pulse text-white cursor-pointer'
-                                    : 'bg-[#1C1C1F] hover:bg-[#10b981]/10 border border-rose-500/30 hover:border-[#10b981] text-white cursor-pointer hover:scale-102'
+                                    : 'bg-koma-raised hover:bg-emerald-500/10 border border-rose-500/30 hover:border-emerald-500 text-white cursor-pointer hover:scale-102'
                               }`}
                             >
-                              <span className={`text-base font-bold text-white ${!isTargetAlreadyMerged && 'group-hover:text-[#10b981]'}`}>
+                              <span className={`text-base font-bold text-white ${!isTargetAlreadyMerged && 'group-hover:text-emerald-400'}`}>
                                 {isConfirming ? 'Confirmar?' : `Mesa ${t.id}`}
                               </span>
                               {isTargetAlreadyMerged ? (
@@ -965,13 +966,13 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                               onMouseLeave={() => { if (isConfirming) setConfirmTransferTo(null); }}
                               className={`p-4 border rounded-2xl text-center transition-all flex flex-col items-center justify-center gap-1 group opacity-60 ${
                                 isTargetAlreadyMerged
-                                  ? 'bg-[#121214] border-zinc-800 text-zinc-600 cursor-not-allowed opacity-40'
+                                  ? 'bg-koma-panel border-zinc-800 text-zinc-600 cursor-not-allowed opacity-40'
                                   : isConfirming
                                     ? 'bg-rose-900/40 border border-rose-800/50 animate-pulse text-white opacity-100 cursor-pointer'
-                                    : 'bg-[#1C1C1F] hover:bg-[#10b981]/10 border border-[#27272A] hover:border-[#10b981] text-white hover:opacity-100 cursor-pointer'
+                                    : 'bg-koma-raised hover:bg-emerald-500/10 border border-koma-border hover:border-emerald-500 text-white hover:opacity-100 cursor-pointer'
                               }`}
                             >
-                              <span className="text-base font-bold text-white group-hover:text-[#10b981]">
+                              <span className="text-base font-bold text-white group-hover:text-emerald-400">
                                 {isConfirming ? 'Confirmar?' : `Mesa ${t.id}`}
                               </span>
                               {isTargetAlreadyMerged ? (
@@ -1374,8 +1375,8 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
           }}
           className="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4 cursor-pointer"
         >
-          <div className="w-full max-w-sm bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in">
-            <div className="flex justify-between items-center pb-2 border-b border-[#27272A]">
+          <div className="w-full max-w-sm bg-koma-dialog border border-koma-border rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in">
+            <div className="flex justify-between items-center pb-2 border-b border-koma-border">
               <h3 className="font-serif text-sm font-bold text-white">Editar Item: {editingItem.nome}</h3>
               <button 
                 type="button"
@@ -1394,7 +1395,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setEditingItem({ ...editingItem, quantidade: Math.max(1, editingItem.quantidade - 1) })}
-                    className="w-8 h-8 rounded-xl bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] flex items-center justify-center text-white font-bold cursor-pointer transition-colors"
+                    className="w-8 h-8 rounded-xl bg-koma-raised hover:bg-koma-card border border-koma-border flex items-center justify-center text-white font-bold cursor-pointer transition-colors"
                   >
                     -
                   </button>
@@ -1402,7 +1403,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setEditingItem({ ...editingItem, quantidade: editingItem.quantidade + 1 })}
-                    className="w-8 h-8 rounded-xl bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] flex items-center justify-center text-white font-bold cursor-pointer transition-colors"
+                    className="w-8 h-8 rounded-xl bg-koma-raised hover:bg-koma-card border border-koma-border flex items-center justify-center text-white font-bold cursor-pointer transition-colors"
                   >
                     +
                   </button>
@@ -1416,7 +1417,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                   type="text"
                   value={editingItem.observacao}
                   onChange={(e) => setEditingItem({ ...editingItem, observacao: e.target.value })}
-                  className="w-full px-3.5 py-2 text-xs bg-[#1C1C1F] border border-[#27272A] rounded-xl focus:outline-none focus:border-[#10b981]/30 text-white"
+                  className="w-full px-3.5 py-2 text-xs bg-koma-input border border-koma-border rounded-xl focus:outline-none focus:border-emerald-400/30 text-white"
                   placeholder="Ex: Sem cebola, Bem frito, etc."
                 />
               </div>
@@ -1428,7 +1429,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                   type="text"
                   value={editingItem.clienteNome === 'Consumo Geral' ? '' : editingItem.clienteNome}
                   onChange={(e) => setEditingItem({ ...editingItem, clienteNome: e.target.value })}
-                  className="w-full px-3.5 py-2 text-xs bg-[#1C1C1F] border border-[#27272A] rounded-xl focus:outline-none focus:border-[#10b981]/30 text-white"
+                  className="w-full px-3.5 py-2 text-xs bg-koma-input border border-koma-border rounded-xl focus:outline-none focus:border-emerald-400/30 text-white"
                   placeholder="Ex: Maria (Opcional)"
                 />
               </div>
@@ -1447,7 +1448,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                   }
                   setEditingItem(null);
                 }}
-                className="w-full py-2.5 bg-[#10b981] hover:bg-[#059669] text-[#121214] font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center"
+                className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center shadow-sm"
               >
                 Confirmar Alterações
               </button>
