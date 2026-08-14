@@ -137,59 +137,59 @@ export default function SuperAdminTelegram({
         <div className="space-y-6">
           
           {/* BOT Configuration */}
-          <div className="bg-[#121420] border border-[#1e293b]/40 p-5 rounded" id="telegram-config-panel">
+          <div className="bg-koma-card border border-[#1e293b]/40 p-5 rounded" id="telegram-config-panel">
             <div className="border-b border-[#1e293b]/40 pb-3 flex items-center justify-between mb-4">
               <div>
-                <h3 className="text-sm font-mono text-white font-bold flex items-center gap-2">
+                <h3 className="text-sm font-mono text-koma-foreground font-bold flex items-center gap-2">
                   <Bot className="w-4 h-4 text-[#00b894]" />
                   [01] CREDENCIAIS DO BOT DO TELEGRAM
                 </h3>
-                <p className="text-[10px] text-slate-500 font-mono mt-0.5">NOTIFICAÇÕES REAL-TIME NO CELULAR DO DEVELOPER</p>
+                <p className="text-[10px] text-koma-muted font-mono mt-0.5">NOTIFICAÇÕES REAL-TIME NO CELULAR DO DEVELOPER</p>
               </div>
-              <span className="text-[9px] text-[#00b894] bg-[#121420] border border-[#00b894]/20 px-2 py-0.5 rounded font-mono font-bold">
+              <span className="text-[9px] text-[#00b894] bg-koma-card border border-[#00b894]/20 px-2 py-0.5 rounded font-mono font-bold">
                 TELEGRAM_BOT_API
               </span>
             </div>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-mono text-slate-400 mb-1">TELEGRAM_BOT_TOKEN</label>
+                <label className="block text-xs font-mono text-koma-subtle mb-1">TELEGRAM_BOT_TOKEN</label>
                 <div className="relative">
                   <input
                     type="password"
-                    className="w-full bg-black border border-[#1e293b]/40 rounded px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-[#00b894]"
+                    className="w-full bg-koma-page border border-[#1e293b]/40 rounded px-3 py-2 text-xs font-mono text-koma-foreground focus:outline-none focus:border-[#00b894]"
                     value={botToken}
                     onChange={e => setBotToken(e.target.value)}
                   />
                   <span className="absolute right-3 top-2 text-[10px] font-mono text-slate-600">SECURE</span>
                 </div>
-                <p className="text-[9px] text-slate-500 font-mono mt-1">Token secreto gerado através do @BotFather</p>
+                <p className="text-[9px] text-koma-muted font-mono mt-1">Token secreto gerado através do @BotFather</p>
               </div>
 
               <div>
-                <label className="block text-xs font-mono text-slate-400 mb-1">TELEGRAM_CHAT_ID</label>
+                <label className="block text-xs font-mono text-koma-subtle mb-1">TELEGRAM_CHAT_ID</label>
                 <input
                   type="text"
-                  className="w-full bg-black border border-[#1e293b]/40 rounded px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-[#00b894]"
+                  className="w-full bg-koma-page border border-[#1e293b]/40 rounded px-3 py-2 text-xs font-mono text-koma-foreground focus:outline-none focus:border-[#00b894]"
                   value={chatId}
                   onChange={e => setChatId(e.target.value)}
                 />
-                <p className="text-[9px] text-slate-500 font-mono mt-1">ID numérico do chat privado ou grupo para entrega push</p>
+                <p className="text-[9px] text-koma-muted font-mono mt-1">ID numérico do chat privado ou grupo para entrega push</p>
               </div>
             </div>
           </div>
 
           {/* Active Rules Setup */}
-          <div className="bg-[#121420] border border-[#1e293b]/40 p-5 rounded" id="telegram-rules-panel">
+          <div className="bg-koma-card border border-[#1e293b]/40 p-5 rounded" id="telegram-rules-panel">
             <div className="border-b border-[#1e293b]/40 pb-3 flex items-center justify-between mb-4">
               <div>
-                <h3 className="text-sm font-mono text-white font-bold flex items-center gap-2">
+                <h3 className="text-sm font-mono text-koma-foreground font-bold flex items-center gap-2">
                   <Settings className="w-4 h-4 text-[#00b894]" />
                   [02] REGRAS DE ALERTA AUTOMÁTICO
                 </h3>
-                <p className="text-[10px] text-slate-500 font-mono mt-0.5">THRESHOLDS DE DISPARO PROATIVO DO SERVIDOR (BACKGROUND)</p>
+                <p className="text-[10px] text-koma-muted font-mono mt-0.5">THRESHOLDS DE DISPARO PROATIVO DO SERVIDOR (BACKGROUND)</p>
               </div>
-              <span className="text-[9px] text-slate-400 bg-black/50 border border-[#1e293b]/40 px-2 py-0.5 rounded font-mono">
+              <span className="text-[9px] text-koma-subtle bg-black/50 border border-[#1e293b]/40 px-2 py-0.5 rounded font-mono">
                 MONITOR_DAEMON
               </span>
             </div>
@@ -222,7 +222,7 @@ export default function SuperAdminTelegram({
                         className={`px-2 py-1 rounded text-[10px] font-mono font-bold flex items-center gap-1 cursor-pointer transition-colors ${
                           rule.enabled 
                             ? "bg-[#00b894]/10 text-[#00b894] hover:bg-[#00b894]/20" 
-                            : "bg-zinc-800 text-slate-500 hover:bg-zinc-700"
+                            : "bg-koma-raised text-koma-muted hover:bg-zinc-700"
                         }`}
                       >
                         {rule.enabled ? (
@@ -243,38 +243,38 @@ export default function SuperAdminTelegram({
                         {isWebhook && (
                           <>
                             <div className="flex items-center gap-1.5">
-                              <span className="text-slate-500">Se</span>
+                              <span className="text-koma-muted">Se</span>
                               <input
                                 type="number"
-                                className="w-12 bg-black border border-[#1e293b]/40 rounded text-center py-0.5 text-white focus:outline-none focus:border-[#00b894]"
+                                className="w-12 bg-koma-page border border-[#1e293b]/40 rounded text-center py-0.5 text-koma-foreground focus:outline-none focus:border-[#00b894]"
                                 value={rule.thresholdCount}
                                 onChange={e => handleRuleNumberChange(rule.id, "thresholdCount", parseInt(e.target.value) || 1)}
                               />
-                              <span className="text-slate-400">ou mais falharem</span>
+                              <span className="text-koma-subtle">ou mais falharem</span>
                             </div>
                             <div className="flex items-center gap-1.5">
-                              <span className="text-slate-500">em</span>
+                              <span className="text-koma-muted">em</span>
                               <input
                                 type="number"
-                                className="w-14 bg-black border border-[#1e293b]/40 rounded text-center py-0.5 text-white focus:outline-none focus:border-[#00b894]"
+                                className="w-14 bg-koma-page border border-[#1e293b]/40 rounded text-center py-0.5 text-koma-foreground focus:outline-none focus:border-[#00b894]"
                                 value={rule.thresholdMinutes}
                                 onChange={e => handleRuleNumberChange(rule.id, "thresholdMinutes", parseInt(e.target.value) || 1)}
                               />
-                              <span className="text-slate-400">minutos</span>
+                              <span className="text-koma-subtle">minutos</span>
                             </div>
                           </>
                         )}
 
                         {isPrinter && (
                           <div className="flex items-center gap-1.5">
-                            <span className="text-slate-500">Se desconectada por mais de</span>
+                            <span className="text-koma-muted">Se desconectada por mais de</span>
                             <input
                               type="number"
-                              className="w-14 bg-black border border-[#1e293b]/40 rounded text-center py-0.5 text-white focus:outline-none focus:border-[#00b894]"
+                              className="w-14 bg-koma-page border border-[#1e293b]/40 rounded text-center py-0.5 text-koma-foreground focus:outline-none focus:border-[#00b894]"
                               value={rule.thresholdMinutes}
                               onChange={e => handleRuleNumberChange(rule.id, "thresholdMinutes", parseInt(e.target.value) || 1)}
                             />
-                            <span className="text-slate-400">minutos</span>
+                            <span className="text-koma-subtle">minutos</span>
                           </div>
                         )}
 
@@ -320,15 +320,15 @@ export default function SuperAdminTelegram({
         <div className="space-y-6">
           
           {/* Fired Alerts History Log */}
-          <div className="bg-[#121420] border border-[#1e293b]/40 p-5 rounded flex flex-col h-[325px] justify-between" id="telegram-history-panel">
+          <div className="bg-koma-card border border-[#1e293b]/40 p-5 rounded flex flex-col h-[325px] justify-between" id="telegram-history-panel">
             <div className="space-y-4 overflow-hidden flex flex-col flex-1">
               <div className="border-b border-[#1e293b]/40 pb-3 flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-mono text-white font-bold flex items-center gap-2">
+                  <h3 className="text-sm font-mono text-koma-foreground font-bold flex items-center gap-2">
                     <History className="w-4 h-4 text-[#00b894]" />
                     [03] HISTÓRICO DE DISPAROS REALIZADOS
                   </h3>
-                  <p className="text-[10px] text-slate-500 font-mono mt-0.5 font-bold">ALERTA AUTOMÁTICO DO MONITOR DE INFRAESTRUTURA</p>
+                  <p className="text-[10px] text-koma-muted font-mono mt-0.5 font-bold">ALERTA AUTOMÁTICO DO MONITOR DE INFRAESTRUTURA</p>
                 </div>
                 
                 {firedAlertsHistory.length > 0 && (
@@ -364,9 +364,9 @@ export default function SuperAdminTelegram({
                         }`}>
                           {alert.type.replace("_", " ")}
                         </span>
-                        <span className="text-slate-500">{alert.timestamp}</span>
+                        <span className="text-koma-muted">{alert.timestamp}</span>
                       </div>
-                      <p className="text-[11px] text-slate-300 leading-relaxed font-mono whitespace-pre-wrap">{alert.message}</p>
+                      <p className="text-[11px] text-koma-secondary leading-relaxed font-mono whitespace-pre-wrap">{alert.message}</p>
                     </div>
                   ))
                 )}
@@ -375,14 +375,14 @@ export default function SuperAdminTelegram({
           </div>
 
           {/* Test Manual triggers */}
-          <div className="bg-[#121420] border border-[#1e293b]/40 p-5 rounded" id="telegram-test-triggers">
+          <div className="bg-koma-card border border-[#1e293b]/40 p-5 rounded" id="telegram-test-triggers">
             <div className="border-b border-[#1e293b]/40 pb-3 flex items-center justify-between mb-4">
               <div>
-                <h3 className="text-sm font-mono text-white font-bold flex items-center gap-2">
+                <h3 className="text-sm font-mono text-koma-foreground font-bold flex items-center gap-2">
                   <BellRing className="w-4 h-4 text-[#00b894]" />
                   [04] DISPARO MANUAL & TESTES RÁPIDOS
                 </h3>
-                <p className="text-[10px] text-slate-500 font-mono mt-0.5 font-bold">DISPARAR EVENTOS E TESTAR COMUNICADORES</p>
+                <p className="text-[10px] text-koma-muted font-mono mt-0.5 font-bold">DISPARAR EVENTOS E TESTAR COMUNICADORES</p>
               </div>
             </div>
 
@@ -394,10 +394,10 @@ export default function SuperAdminTelegram({
                   onClick={() => {
                     onTriggerTelegramAlert(demo.text);
                   }}
-                  className="bg-black hover:bg-zinc-900/80 border border-[#1e293b]/40 hover:border-slate-700 text-left p-2.5 rounded text-[11px] font-mono text-slate-300 hover:text-white transition-all cursor-pointer flex flex-col justify-between"
+                  className="bg-koma-page hover:bg-zinc-900/80 border border-[#1e293b]/40 hover:border-slate-700 text-left p-2.5 rounded text-[11px] font-mono text-koma-secondary hover:text-white transition-all cursor-pointer flex flex-col justify-between"
                 >
                   <span className="text-[#00b894] font-bold mb-1">{demo.label}</span>
-                  <span className="text-[9px] text-slate-500 line-clamp-1">{demo.text}</span>
+                  <span className="text-[9px] text-koma-muted line-clamp-1">{demo.text}</span>
                 </button>
               ))}
             </div>
@@ -409,7 +409,7 @@ export default function SuperAdminTelegram({
                 <input
                   type="text"
                   placeholder="Ex: Alerta de tráfego de API elevado..."
-                  className="flex-1 bg-black border border-[#1e293b]/40 rounded px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-[#00b894]"
+                  className="flex-1 bg-koma-page border border-[#1e293b]/40 rounded px-3 py-2 text-xs font-mono text-koma-foreground focus:outline-none focus:border-[#00b894]"
                   value={customText}
                   onChange={e => setCustomText(e.target.value)}
                   disabled={isSending}

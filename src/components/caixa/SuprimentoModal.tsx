@@ -49,10 +49,10 @@ export const SuprimentoModal: React.FC<SuprimentoModalProps> = ({
         {/* Header */}
         <div className="flex justify-between items-center pb-2 border-b border-koma-border">
           <div>
-            <h3 className="font-serif text-sm font-bold text-white">Novo Suprimento de Caixa</h3>
-            <p className="text-[9px] text-gray-400">Aporte de fundo de troco extra no caixa aberto.</p>
+            <h3 className="font-serif text-sm font-bold text-koma-foreground">Novo Suprimento de Caixa</h3>
+            <p className="text-[9px] text-koma-subtle">Aporte de fundo de troco extra no caixa aberto.</p>
           </div>
-          <button type="button" onClick={onClose} className="p-1 text-gray-400 hover:text-white transition-colors cursor-pointer">
+          <button type="button" onClick={onClose} className="p-1 text-koma-subtle hover:text-white transition-colors cursor-pointer">
             <X size={16} />
           </button>
         </div>
@@ -67,7 +67,7 @@ export const SuprimentoModal: React.FC<SuprimentoModalProps> = ({
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Valor */}
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+            <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">
               Valor do Suprimento (R$) <span className="text-red-400">*</span>:
             </label>
             <input
@@ -78,31 +78,31 @@ export const SuprimentoModal: React.FC<SuprimentoModalProps> = ({
               placeholder="0,00"
               value={valor || ''}
               onChange={(e) => setValor(parseFloat(e.target.value) || 0)}
-              className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-white text-sm font-mono focus:outline-none focus:border-emerald-500"
+              className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-sm font-mono focus:outline-none focus:border-emerald-500"
             />
           </div>
 
           {/* Motivo Opcional */}
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Motivo (Opcional):</label>
+            <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">Motivo (Opcional):</label>
             <input
               type="text"
               placeholder="ex: Troco inicial extra para início de pico..."
               value={motivo}
               onChange={(e) => setMotivo(e.target.value)}
-              className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
+              className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs focus:outline-none focus:border-emerald-500"
             />
           </div>
 
           {/* Observação Opcional */}
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Observação (Opcional):</label>
+            <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">Observação (Opcional):</label>
             <textarea
               rows={2}
               placeholder="Detalhes adicionais..."
               value={observacao}
               onChange={(e) => setObservacao(e.target.value)}
-              className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500 resize-none"
+              className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs focus:outline-none focus:border-emerald-500 resize-none"
             />
           </div>
 
@@ -111,7 +111,7 @@ export const SuprimentoModal: React.FC<SuprimentoModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2 border border-koma-border hover:border-zinc-700 bg-koma-raised text-gray-400 hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+              className="flex-1 py-2 border border-koma-border hover:border-zinc-700 bg-koma-raised text-koma-subtle hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
             >
               Cancelar
             </button>

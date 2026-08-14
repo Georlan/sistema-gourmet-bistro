@@ -126,14 +126,14 @@ export default function CardapioAuthModal({
       id="auth-modal-overlay"
     >
       <div
-        className="relative w-full max-w-sm rounded-3xl bg-[#0e1017] border border-gray-800/80 p-6 shadow-2xl animate-scale-up"
+        className="relative w-full max-w-sm rounded-3xl bg-koma-panel border border-gray-800/80 p-6 shadow-2xl animate-scale-up"
         id="auth-modal-card"
         onClick={(event) => event.stopPropagation()}
       >
         <button
           type="button"
           onClick={onClose}
-          className="absolute top-3 right-3 flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full hover:bg-gray-800 text-gray-400 transition cursor-pointer"
+          className="absolute top-3 right-3 flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full hover:bg-gray-800 text-koma-subtle transition cursor-pointer"
           aria-label="Fechar identificação"
         >
           <X className="h-5 w-5" />
@@ -143,10 +143,10 @@ export default function CardapioAuthModal({
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400 mb-3">
             {step === "identify" ? <Phone className="h-6 w-6" /> : <KeyRound className="h-6 w-6" />}
           </div>
-          <h2 className="font-display text-xl font-bold text-white">
+          <h2 className="font-display text-xl font-bold text-koma-foreground">
             {step === "identify" ? "Identifique-se pelo celular" : "Confirme seu WhatsApp"}
           </h2>
-          <p className="mt-1.5 text-xs text-gray-400 max-w-xs mx-auto leading-relaxed">
+          <p className="mt-1.5 text-xs text-koma-subtle max-w-xs mx-auto leading-relaxed">
             {step === "identify"
               ? "Seu número conecta seus pedidos e perfil somente neste restaurante."
               : `Enviamos um código de 6 números para ${formatBrazilianPhone(normalizedPhone)}.`}
@@ -163,9 +163,9 @@ export default function CardapioAuthModal({
           {step === "identify" ? (
             <>
               <label className="block">
-                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Celular com DDD</span>
+                <span className="text-[10px] font-bold text-koma-muted uppercase tracking-wider block mb-1">Celular com DDD</span>
                 <span className="relative block">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-gray-500 pointer-events-none" />
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-koma-muted pointer-events-none" />
                   <input
                     type="tel"
                     required
@@ -175,15 +175,15 @@ export default function CardapioAuthModal({
                     placeholder="(00) 00000-0000"
                     value={phone}
                     onChange={(event) => setPhone(formatBrazilianPhone(event.target.value))}
-                    className="w-full rounded-xl border border-gray-800 bg-[#161824] py-3 pl-10 pr-4 text-xs text-white placeholder-gray-600 focus:border-emerald-500 outline-hidden transition"
+                    className="w-full rounded-xl border border-koma-border bg-koma-card py-3 pl-10 pr-4 text-xs text-koma-foreground placeholder-gray-600 focus:border-emerald-500 outline-hidden transition"
                   />
                 </span>
               </label>
 
               <label className="block">
-                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Como devemos chamar você?</span>
+                <span className="text-[10px] font-bold text-koma-muted uppercase tracking-wider block mb-1">Como devemos chamar você?</span>
                 <span className="relative block">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-gray-500 pointer-events-none" />
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-koma-muted pointer-events-none" />
                   <input
                     type="text"
                     required
@@ -192,14 +192,14 @@ export default function CardapioAuthModal({
                     placeholder="Nome completo"
                     value={name}
                     onChange={(event) => setName(event.target.value)}
-                    className="w-full rounded-xl border border-gray-800 bg-[#161824] py-3 pl-10 pr-4 text-xs text-white placeholder-gray-600 focus:border-emerald-500 outline-hidden transition"
+                    className="w-full rounded-xl border border-koma-border bg-koma-card py-3 pl-10 pr-4 text-xs text-koma-foreground placeholder-gray-600 focus:border-emerald-500 outline-hidden transition"
                   />
                 </span>
               </label>
             </>
           ) : (
             <label className="block">
-              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Código de confirmação</span>
+              <span className="text-[10px] font-bold text-koma-muted uppercase tracking-wider block mb-1">Código de confirmação</span>
               <input
                 type="text"
                 required
@@ -210,7 +210,7 @@ export default function CardapioAuthModal({
                 placeholder="000000"
                 value={code}
                 onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
-                className="w-full rounded-xl border border-gray-800 bg-[#161824] px-4 py-3 text-center font-mono text-xl tracking-[0.45em] text-white placeholder-gray-700 focus:border-emerald-500 outline-hidden transition"
+                className="w-full rounded-xl border border-koma-border bg-koma-card px-4 py-3 text-center font-mono text-xl tracking-[0.45em] text-koma-foreground placeholder-gray-700 focus:border-emerald-500 outline-hidden transition"
               />
             </label>
           )}
@@ -229,7 +229,7 @@ export default function CardapioAuthModal({
               <button
                 type="button"
                 onClick={() => { setStep("identify"); setErrorMessage(""); }}
-                className="inline-flex items-center gap-1 text-[10px] font-bold text-gray-400 hover:text-white transition cursor-pointer"
+                className="inline-flex items-center gap-1 text-[10px] font-bold text-koma-subtle hover:text-white transition cursor-pointer"
               >
                 <ArrowLeft className="h-3.5 w-3.5" /> Alterar número
               </button>
@@ -246,7 +246,7 @@ export default function CardapioAuthModal({
           )}
         </form>
 
-        <p className="mt-4 text-[10px] text-gray-500 text-center leading-relaxed">
+        <p className="mt-4 text-[10px] text-koma-muted text-center leading-relaxed">
           O código confirma que o número pertence a você e protege seu histórico e seus pontos.
         </p>
       </div>

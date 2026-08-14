@@ -279,20 +279,20 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
     <div className="space-y-6" id="superadmin-credentials-manager">
       
       {/* Intro Header Card */}
-      <div className={clsx('bg-[#121420]', 'border', 'border-[#1e293b]/40', 'p-5', 'rounded', 'flex', 'flex-col', 'md:flex-row', 'md:items-center', 'justify-between', 'gap-4')}>
+      <div className={clsx('bg-koma-card', 'border', 'border-[#1e293b]/40', 'p-5', 'rounded', 'flex', 'flex-col', 'md:flex-row', 'md:items-center', 'justify-between', 'gap-4')}>
         <div>
-          <h2 className={clsx('text-base', 'font-bold', 'text-white', 'flex', 'items-center', 'gap-2')}>
+          <h2 className={clsx('text-base', 'font-bold', 'text-koma-foreground', 'flex', 'items-center', 'gap-2')}>
             <Key className={clsx('w-5', 'h-5', 'text-[#00b894]')} />
             GERENCIADOR DE CHAVES & CREDENCIAIS DO SISTEMA
           </h2>
-          <p className={clsx('text-xs', 'text-slate-400', 'mt-1', 'max-w-2xl', 'font-sans', 'leading-relaxed')}>
+          <p className={clsx('text-xs', 'text-koma-subtle', 'mt-1', 'max-w-2xl', 'font-sans', 'leading-relaxed')}>
             Configure e edite as chaves de API reais do seu sistema diretamente por aqui. As atualizações modificam o arquivo <code className={clsx('text-amber-400', 'font-mono')}>.env</code> de forma persistente e recarregam as configurações em memória em tempo de execução, sem necessidade de reinicializar o container do servidor de forma forçada.
           </p>
         </div>
         <button
           onClick={fetchCredentials}
           disabled={isLoading || isSaving}
-          className={clsx('text-xs', 'bg-black/40', 'hover:bg-black', 'border', 'border-[#1e293b]/40', 'text-slate-300', 'font-mono', 'py-1.5', 'px-3', 'rounded', 'flex', 'items-center', 'gap-2', 'transition-all', 'cursor-pointer', 'disabled:opacity-50')}
+          className={clsx('text-xs', 'bg-black/40', 'hover:bg-black', 'border', 'border-[#1e293b]/40', 'text-koma-secondary', 'font-mono', 'py-1.5', 'px-3', 'rounded', 'flex', 'items-center', 'gap-2', 'transition-all', 'cursor-pointer', 'disabled:opacity-50')}
         >
           <RefreshCw className={`w-3.5 h-3.5 text-[#00b894] ${isLoading ? "animate-spin" : ""}`} />
           {isLoading ? "CARREGANDO..." : "RECARREGAR DO DISCO"}
@@ -323,12 +323,12 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
         <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-2', 'gap-6')}>
 
           {/* Module 1: Cloudflare */}
-          <div className={clsx('bg-[#121420]', 'border', 'border-[#1e293b]/40', 'p-5', 'rounded', 'flex', 'flex-col', 'justify-between')} id="cred-module-cloudflare">
+          <div className={clsx('bg-koma-card', 'border', 'border-[#1e293b]/40', 'p-5', 'rounded', 'flex', 'flex-col', 'justify-between')} id="cred-module-cloudflare">
             <div>
               <div className={clsx('flex', 'items-center', 'justify-between', 'border-b', 'border-[#1e293b]/40', 'pb-3', 'mb-4')}>
                 <div className={clsx('flex', 'items-center', 'gap-2')}>
                   <Globe className={clsx('w-4', 'h-4', 'text-orange-500')} />
-                  <h3 className={clsx('text-sm', 'font-bold', 'text-white', 'font-mono', 'uppercase', 'tracking-wide')}>
+                  <h3 className={clsx('text-sm', 'font-bold', 'text-koma-foreground', 'font-mono', 'uppercase', 'tracking-wide')}>
                     [01] Cloudflare DNS API
                   </h3>
                 </div>
@@ -336,7 +336,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                   type="button"
                   onClick={() => testConnection("cloudflare")}
                   disabled={testStatus.cloudflare?.status === "loading" || !keys.CLOUDFLARE_TOKEN || !keys.CLOUDFLARE_ZONE_ID}
-                  className={clsx('text-[10px]', 'font-mono', 'bg-black/40', 'hover:bg-[#00b894]/20', 'border', 'border-[#1e293b]/60', 'hover:border-[#00b894]/50', 'disabled:border-zinc-850', 'disabled:opacity-40', 'disabled:hover:bg-transparent', 'text-slate-300', 'hover:text-[#00b894]', 'py-1', 'px-2.5', 'rounded', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'gap-1.5')}
+                  className={clsx('text-[10px]', 'font-mono', 'bg-black/40', 'hover:bg-[#00b894]/20', 'border', 'border-[#1e293b]/60', 'hover:border-[#00b894]/50', 'disabled:border-zinc-850', 'disabled:opacity-40', 'disabled:hover:bg-transparent', 'text-koma-secondary', 'hover:text-[#00b894]', 'py-1', 'px-2.5', 'rounded', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'gap-1.5')}
                 >
                   {testStatus.cloudflare?.status === "loading" ? (
                     <>
@@ -351,7 +351,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                   )}
                 </button>
               </div>
-              <p className={clsx('text-[11px]', 'text-slate-400', 'mb-4', 'font-sans', 'leading-relaxed')}>
+              <p className={clsx('text-[11px]', 'text-koma-subtle', 'mb-4', 'font-sans', 'leading-relaxed')}>
                 Usado para gerenciar, criar e auditar registros CNAME de subdomínios para novos estabelecimentos (tenants).
               </p>
 
@@ -371,7 +371,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
               <div className={clsx('space-y-4', 'font-mono', 'text-xs')}>
                 {/* CLOUDFLARE_ZONE_ID */}
                 <div className="space-y-1.5">
-                  <label className={clsx('text-slate-400', 'flex', 'items-center', 'justify-between')}>
+                  <label className={clsx('text-koma-subtle', 'flex', 'items-center', 'justify-between')}>
                     <span>CLOUDFLARE_ZONE_ID</span>
                     {keys.CLOUDFLARE_ZONE_ID ? (
                       <span className={clsx('text-[9px]', 'text-[#00b894]', 'bg-[#00b894]/10', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-[#00b894]/20')}>DEFINIDO</span>
@@ -400,7 +400,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
 
                 {/* CLOUDFLARE_TOKEN */}
                 <div className="space-y-1.5">
-                  <label className={clsx('text-slate-400', 'flex', 'items-center', 'justify-between')}>
+                  <label className={clsx('text-koma-subtle', 'flex', 'items-center', 'justify-between')}>
                     <span>CLOUDFLARE_TOKEN</span>
                     {keys.CLOUDFLARE_TOKEN ? (
                       <span className={clsx('text-[9px]', 'text-[#00b894]', 'bg-[#00b894]/10', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-[#00b894]/20')}>DEFINIDO</span>
@@ -423,7 +423,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                     <button
                       type="button"
                       onClick={() => handleToggleVisibility("CLOUDFLARE_TOKEN")}
-                      className={clsx('absolute', 'right-3', 'top-1/2', '-translate-y-1/2', 'text-slate-500', 'hover:text-slate-300', 'cursor-pointer')}
+                      className={clsx('absolute', 'right-3', 'top-1/2', '-translate-y-1/2', 'text-koma-muted', 'hover:text-slate-300', 'cursor-pointer')}
                     >
                       {visibleKeys.CLOUDFLARE_TOKEN ? <EyeOff className={clsx('w-4', 'h-4')} /> : <Eye className={clsx('w-4', 'h-4')} />}
                     </button>
@@ -438,19 +438,19 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
               </div>
             </div>
             
-            <div className={clsx('mt-4', 'pt-3', 'border-t', 'border-zinc-900', 'flex', 'items-center', 'gap-2', 'text-[10px]', 'text-slate-500', 'font-sans')}>
+            <div className={clsx('mt-4', 'pt-3', 'border-t', 'border-zinc-900', 'flex', 'items-center', 'gap-2', 'text-[10px]', 'text-koma-muted', 'font-sans')}>
               <HelpCircle className={clsx('w-3.5', 'h-3.5', 'text-amber-500')} />
               <span>O Zone ID pode ser encontrado no menu lateral direito da sua Dashboard Cloudflare.</span>
             </div>
           </div>
 
           {/* Module 2: GitHub Actions */}
-          <div className={clsx('bg-[#121420]', 'border', 'border-[#1e293b]/40', 'p-5', 'rounded', 'flex', 'flex-col', 'justify-between')} id="cred-module-github">
+          <div className={clsx('bg-koma-card', 'border', 'border-[#1e293b]/40', 'p-5', 'rounded', 'flex', 'flex-col', 'justify-between')} id="cred-module-github">
             <div>
               <div className={clsx('flex', 'items-center', 'justify-between', 'border-b', 'border-[#1e293b]/40', 'pb-3', 'mb-4')}>
                 <div className={clsx('flex', 'items-center', 'gap-2')}>
                   <GitBranch className={clsx('w-4', 'h-4', 'text-purple-400')} />
-                  <h3 className={clsx('text-sm', 'font-bold', 'text-white', 'font-mono', 'uppercase', 'tracking-wide')}>
+                  <h3 className={clsx('text-sm', 'font-bold', 'text-koma-foreground', 'font-mono', 'uppercase', 'tracking-wide')}>
                     [02] GitHub Actions CI/CD
                   </h3>
                 </div>
@@ -458,7 +458,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                   type="button"
                   onClick={() => testConnection("github")}
                   disabled={testStatus.github?.status === "loading" || !keys.GITHUB_TOKEN}
-                  className={clsx('text-[10px]', 'font-mono', 'bg-black/40', 'hover:bg-[#00b894]/20', 'border', 'border-[#1e293b]/60', 'hover:border-[#00b894]/50', 'disabled:border-zinc-850', 'disabled:opacity-40', 'disabled:hover:bg-transparent', 'text-slate-300', 'hover:text-[#00b894]', 'py-1', 'px-2.5', 'rounded', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'gap-1.5')}
+                  className={clsx('text-[10px]', 'font-mono', 'bg-black/40', 'hover:bg-[#00b894]/20', 'border', 'border-[#1e293b]/60', 'hover:border-[#00b894]/50', 'disabled:border-zinc-850', 'disabled:opacity-40', 'disabled:hover:bg-transparent', 'text-koma-secondary', 'hover:text-[#00b894]', 'py-1', 'px-2.5', 'rounded', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'gap-1.5')}
                 >
                   {testStatus.github?.status === "loading" ? (
                     <>
@@ -473,7 +473,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                   )}
                 </button>
               </div>
-              <p className={clsx('text-[11px]', 'text-slate-400', 'mb-4', 'font-sans', 'leading-relaxed')}>
+              <p className={clsx('text-[11px]', 'text-koma-subtle', 'mb-4', 'font-sans', 'leading-relaxed')}>
                 Usado para consultar status de builds anteriores e disparar workflows automáticos de testes ou deployments.
               </p>
 
@@ -493,7 +493,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
               <div className={clsx('space-y-3', 'font-mono', 'text-xs')}>
                 {/* GITHUB_OWNER */}
                 <div className="space-y-1.5">
-                  <label className={clsx('text-slate-400', 'flex', 'items-center', 'justify-between')}>
+                  <label className={clsx('text-koma-subtle', 'flex', 'items-center', 'justify-between')}>
                     <span>GITHUB_OWNER (Nome do Usuário/Organização)</span>
                     {keys.GITHUB_OWNER ? (
                       <span className={clsx('text-[9px]', 'text-[#00b894]', 'bg-[#00b894]/10', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-[#00b894]/20')}>DEFINIDO</span>
@@ -512,7 +512,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
 
                 {/* GITHUB_REPO */}
                 <div className="space-y-1.5">
-                  <label className={clsx('text-slate-400', 'flex', 'items-center', 'justify-between')}>
+                  <label className={clsx('text-koma-subtle', 'flex', 'items-center', 'justify-between')}>
                     <span>GITHUB_REPO (Nome do Repositório)</span>
                     {keys.GITHUB_REPO ? (
                       <span className={clsx('text-[9px]', 'text-[#00b894]', 'bg-[#00b894]/10', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-[#00b894]/20')}>DEFINIDO</span>
@@ -531,7 +531,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
 
                 {/* GITHUB_TOKEN */}
                 <div className="space-y-1.5">
-                  <label className={clsx('text-slate-400', 'flex', 'items-center', 'justify-between')}>
+                  <label className={clsx('text-koma-subtle', 'flex', 'items-center', 'justify-between')}>
                     <span>GITHUB_TOKEN (Personal Access Token)</span>
                     {keys.GITHUB_TOKEN ? (
                       <span className={clsx('text-[9px]', 'text-[#00b894]', 'bg-[#00b894]/10', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-[#00b894]/20')}>DEFINIDO</span>
@@ -554,7 +554,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                     <button
                       type="button"
                       onClick={() => handleToggleVisibility("GITHUB_TOKEN")}
-                      className={clsx('absolute', 'right-3', 'top-1/2', '-translate-y-1/2', 'text-slate-500', 'hover:text-slate-300', 'cursor-pointer')}
+                      className={clsx('absolute', 'right-3', 'top-1/2', '-translate-y-1/2', 'text-koma-muted', 'hover:text-slate-300', 'cursor-pointer')}
                     >
                       {visibleKeys.GITHUB_TOKEN ? <EyeOff className={clsx('w-4', 'h-4')} /> : <Eye className={clsx('w-4', 'h-4')} />}
                     </button>
@@ -569,19 +569,19 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
               </div>
             </div>
             
-            <div className={clsx('mt-4', 'pt-3', 'border-t', 'border-zinc-900', 'flex', 'items-center', 'gap-2', 'text-[10px]', 'text-slate-500', 'font-sans')}>
+            <div className={clsx('mt-4', 'pt-3', 'border-t', 'border-zinc-900', 'flex', 'items-center', 'gap-2', 'text-[10px]', 'text-koma-muted', 'font-sans')}>
               <HelpCircle className={clsx('w-3.5', 'h-3.5', 'text-amber-500')} />
               <span>O token deve possuir permissões ativas para ler e disparar 'workflows' e 'actions'.</span>
             </div>
           </div>
 
           {/* Module 3: Railway */}
-          <div className={clsx('bg-[#121420]', 'border', 'border-[#1e293b]/40', 'p-5', 'rounded', 'flex', 'flex-col', 'justify-between')} id="cred-module-railway">
+          <div className={clsx('bg-koma-card', 'border', 'border-[#1e293b]/40', 'p-5', 'rounded', 'flex', 'flex-col', 'justify-between')} id="cred-module-railway">
             <div>
               <div className={clsx('flex', 'items-center', 'justify-between', 'border-b', 'border-[#1e293b]/40', 'pb-3', 'mb-4')}>
                 <div className={clsx('flex', 'items-center', 'gap-2')}>
                   <Server className={clsx('w-4', 'h-4', 'text-rose-400')} />
-                  <h3 className={clsx('text-sm', 'font-bold', 'text-white', 'font-mono', 'uppercase', 'tracking-wide')}>
+                  <h3 className={clsx('text-sm', 'font-bold', 'text-koma-foreground', 'font-mono', 'uppercase', 'tracking-wide')}>
                     [03] Railway Cloud Engine
                   </h3>
                 </div>
@@ -589,7 +589,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                   type="button"
                   onClick={() => testConnection("railway")}
                   disabled={testStatus.railway?.status === "loading" || !keys.RAILWAY_TOKEN || !keys.RAILWAY_PROJECT_ID || !keys.RAILWAY_SERVICE_ID}
-                  className={clsx('text-[10px]', 'font-mono', 'bg-black/40', 'hover:bg-[#00b894]/20', 'border', 'border-[#1e293b]/60', 'hover:border-[#00b894]/50', 'disabled:border-zinc-850', 'disabled:opacity-40', 'disabled:hover:bg-transparent', 'text-slate-300', 'hover:text-[#00b894]', 'py-1', 'px-2.5', 'rounded', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'gap-1.5')}
+                  className={clsx('text-[10px]', 'font-mono', 'bg-black/40', 'hover:bg-[#00b894]/20', 'border', 'border-[#1e293b]/60', 'hover:border-[#00b894]/50', 'disabled:border-zinc-850', 'disabled:opacity-40', 'disabled:hover:bg-transparent', 'text-koma-secondary', 'hover:text-[#00b894]', 'py-1', 'px-2.5', 'rounded', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'gap-1.5')}
                 >
                   {testStatus.railway?.status === "loading" ? (
                     <>
@@ -604,7 +604,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                   )}
                 </button>
               </div>
-              <p className={clsx('text-[11px]', 'text-slate-400', 'mb-4', 'font-sans', 'leading-relaxed')}>
+              <p className={clsx('text-[11px]', 'text-koma-subtle', 'mb-4', 'font-sans', 'leading-relaxed')}>
                 Usado para carregar estatísticas reais de uso de recursos (CPU, RAM, conexões de banco) e registros operacionais de deploy.
               </p>
 
@@ -624,7 +624,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
               <div className={clsx('space-y-3', 'font-mono', 'text-xs')}>
                 {/* RAILWAY_PROJECT_ID */}
                 <div className="space-y-1.5">
-                  <label className={clsx('text-slate-400', 'flex', 'items-center', 'justify-between')}>
+                  <label className={clsx('text-koma-subtle', 'flex', 'items-center', 'justify-between')}>
                     <span>RAILWAY_PROJECT_ID</span>
                     {keys.RAILWAY_PROJECT_ID ? (
                       <span className={clsx('text-[9px]', 'text-[#00b894]', 'bg-[#00b894]/10', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-[#00b894]/20')}>DEFINIDO</span>
@@ -653,7 +653,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
 
                 {/* RAILWAY_SERVICE_ID */}
                 <div className="space-y-1.5">
-                  <label className={clsx('text-slate-400', 'flex', 'items-center', 'justify-between')}>
+                  <label className={clsx('text-koma-subtle', 'flex', 'items-center', 'justify-between')}>
                     <span>RAILWAY_SERVICE_ID (ID do Serviço de Container)</span>
                     {keys.RAILWAY_SERVICE_ID ? (
                       <span className={clsx('text-[9px]', 'text-[#00b894]', 'bg-[#00b894]/10', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-[#00b894]/20')}>DEFINIDO</span>
@@ -682,7 +682,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
 
                 {/* RAILWAY_TOKEN */}
                 <div className="space-y-1.5">
-                  <label className={clsx('text-slate-400', 'flex', 'items-center', 'justify-between')}>
+                  <label className={clsx('text-koma-subtle', 'flex', 'items-center', 'justify-between')}>
                     <span>RAILWAY_TOKEN (Developer API Token)</span>
                     {keys.RAILWAY_TOKEN ? (
                       <span className={clsx('text-[9px]', 'text-[#00b894]', 'bg-[#00b894]/10', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-[#00b894]/20')}>DEFINIDO</span>
@@ -705,7 +705,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                     <button
                       type="button"
                       onClick={() => handleToggleVisibility("RAILWAY_TOKEN")}
-                      className={clsx('absolute', 'right-3', 'top-1/2', '-translate-y-1/2', 'text-slate-500', 'hover:text-slate-300', 'cursor-pointer')}
+                      className={clsx('absolute', 'right-3', 'top-1/2', '-translate-y-1/2', 'text-koma-muted', 'hover:text-slate-300', 'cursor-pointer')}
                     >
                       {visibleKeys.RAILWAY_TOKEN ? <EyeOff className={clsx('w-4', 'h-4')} /> : <Eye className={clsx('w-4', 'h-4')} />}
                     </button>
@@ -720,19 +720,19 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
               </div>
             </div>
             
-            <div className={clsx('mt-4', 'pt-3', 'border-t', 'border-zinc-900', 'flex', 'items-center', 'gap-2', 'text-[10px]', 'text-slate-500', 'font-sans')}>
+            <div className={clsx('mt-4', 'pt-3', 'border-t', 'border-zinc-900', 'flex', 'items-center', 'gap-2', 'text-[10px]', 'text-koma-muted', 'font-sans')}>
               <HelpCircle className={clsx('w-3.5', 'h-3.5', 'text-amber-500')} />
               <span>O token deve ser gerado no painel de configurações de conta na Railway Cloud.</span>
             </div>
           </div>
 
           {/* Module 4: Sentry */}
-          <div className={clsx('bg-[#121420]', 'border', 'border-[#1e293b]/40', 'p-5', 'rounded', 'flex', 'flex-col', 'justify-between')} id="cred-module-sentry">
+          <div className={clsx('bg-koma-card', 'border', 'border-[#1e293b]/40', 'p-5', 'rounded', 'flex', 'flex-col', 'justify-between')} id="cred-module-sentry">
             <div>
               <div className={clsx('flex', 'items-center', 'justify-between', 'border-b', 'border-[#1e293b]/40', 'pb-3', 'mb-4')}>
                 <div className={clsx('flex', 'items-center', 'gap-2')}>
                   <CloudLightning className={clsx('w-4', 'h-4', 'text-cyan-400')} />
-                  <h3 className={clsx('text-sm', 'font-bold', 'text-white', 'font-mono', 'uppercase', 'tracking-wide')}>
+                  <h3 className={clsx('text-sm', 'font-bold', 'text-koma-foreground', 'font-mono', 'uppercase', 'tracking-wide')}>
                     [04] Sentry Telemetry System
                   </h3>
                 </div>
@@ -740,7 +740,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                   type="button"
                   onClick={() => testConnection("sentry")}
                   disabled={testStatus.sentry?.status === "loading" || !keys.SENTRY_AUTH_TOKEN || !keys.SENTRY_ORG || !keys.SENTRY_PROJECT}
-                  className={clsx('text-[10px]', 'font-mono', 'bg-black/40', 'hover:bg-[#00b894]/20', 'border', 'border-[#1e293b]/60', 'hover:border-[#00b894]/50', 'disabled:border-zinc-850', 'disabled:opacity-40', 'disabled:hover:bg-transparent', 'text-slate-300', 'hover:text-[#00b894]', 'py-1', 'px-2.5', 'rounded', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'gap-1.5')}
+                  className={clsx('text-[10px]', 'font-mono', 'bg-black/40', 'hover:bg-[#00b894]/20', 'border', 'border-[#1e293b]/60', 'hover:border-[#00b894]/50', 'disabled:border-zinc-850', 'disabled:opacity-40', 'disabled:hover:bg-transparent', 'text-koma-secondary', 'hover:text-[#00b894]', 'py-1', 'px-2.5', 'rounded', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'gap-1.5')}
                 >
                   {testStatus.sentry?.status === "loading" ? (
                     <>
@@ -755,7 +755,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                   )}
                 </button>
               </div>
-              <p className={clsx('text-[11px]', 'text-slate-400', 'mb-4', 'font-sans', 'leading-relaxed')}>
+              <p className={clsx('text-[11px]', 'text-koma-subtle', 'mb-4', 'font-sans', 'leading-relaxed')}>
                 Usado para carregar issues reais, erros ativos de produção, frequências de exceção e telemetria de logs.
               </p>
 
@@ -775,7 +775,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
               <div className={clsx('space-y-3', 'font-mono', 'text-xs')}>
                 {/* SENTRY_ORG */}
                 <div className="space-y-1.5">
-                  <label className={clsx('text-slate-400', 'flex', 'items-center', 'justify-between')}>
+                  <label className={clsx('text-koma-subtle', 'flex', 'items-center', 'justify-between')}>
                     <span>SENTRY_ORG (Apelido/Slug da Organização)</span>
                     {keys.SENTRY_ORG ? (
                       <span className={clsx('text-[9px]', 'text-[#00b894]', 'bg-[#00b894]/10', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-[#00b894]/20')}>DEFINIDO</span>
@@ -794,7 +794,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
 
                 {/* SENTRY_PROJECT */}
                 <div className="space-y-1.5">
-                  <label className={clsx('text-slate-400', 'flex', 'items-center', 'justify-between')}>
+                  <label className={clsx('text-koma-subtle', 'flex', 'items-center', 'justify-between')}>
                     <span>SENTRY_PROJECT (Slug do Projeto)</span>
                     {keys.SENTRY_PROJECT ? (
                       <span className={clsx('text-[9px]', 'text-[#00b894]', 'bg-[#00b894]/10', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-[#00b894]/20')}>DEFINIDO</span>
@@ -813,7 +813,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
 
                 {/* SENTRY_AUTH_TOKEN */}
                 <div className="space-y-1.5">
-                  <label className={clsx('text-slate-400', 'flex', 'items-center', 'justify-between')}>
+                  <label className={clsx('text-koma-subtle', 'flex', 'items-center', 'justify-between')}>
                     <span>SENTRY_AUTH_TOKEN</span>
                     {keys.SENTRY_AUTH_TOKEN ? (
                       <span className={clsx('text-[9px]', 'text-[#00b894]', 'bg-[#00b894]/10', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-[#00b894]/20')}>DEFINIDO</span>
@@ -836,7 +836,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                     <button
                       type="button"
                       onClick={() => handleToggleVisibility("SENTRY_AUTH_TOKEN")}
-                      className={clsx('absolute', 'right-3', 'top-1/2', '-translate-y-1/2', 'text-slate-500', 'hover:text-slate-300', 'cursor-pointer')}
+                      className={clsx('absolute', 'right-3', 'top-1/2', '-translate-y-1/2', 'text-koma-muted', 'hover:text-slate-300', 'cursor-pointer')}
                     >
                       {visibleKeys.SENTRY_AUTH_TOKEN ? <EyeOff className={clsx('w-4', 'h-4')} /> : <Eye className={clsx('w-4', 'h-4')} />}
                     </button>
@@ -851,29 +851,29 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
               </div>
             </div>
             
-            <div className={clsx('mt-4', 'pt-3', 'border-t', 'border-zinc-900', 'flex', 'items-center', 'gap-2', 'text-[10px]', 'text-slate-500', 'font-sans')}>
+            <div className={clsx('mt-4', 'pt-3', 'border-t', 'border-zinc-900', 'flex', 'items-center', 'gap-2', 'text-[10px]', 'text-koma-muted', 'font-sans')}>
               <HelpCircle className={clsx('w-3.5', 'h-3.5', 'text-amber-500')} />
               <span>O token Sentry deve ser do tipo "Internal Integration" ou "User Auth Token".</span>
             </div>
           </div>
 
           {/* Module 5: Supabase */}
-          <div className={clsx('bg-[#121420]', 'border', 'border-[#1e293b]/40', 'p-5', 'rounded', 'lg:col-span-2', 'flex', 'flex-col', 'justify-between')} id="cred-module-supabase">
+          <div className={clsx('bg-koma-card', 'border', 'border-[#1e293b]/40', 'p-5', 'rounded', 'lg:col-span-2', 'flex', 'flex-col', 'justify-between')} id="cred-module-supabase">
             <div>
               <div className={clsx('flex', 'items-center', 'gap-2', 'border-b', 'border-[#1e293b]/40', 'pb-3', 'mb-4')}>
                 <Database className={clsx('w-4', 'h-4', 'text-emerald-400')} />
-                <h3 className={clsx('text-sm', 'font-bold', 'text-white', 'font-mono', 'uppercase', 'tracking-wide')}>
+                <h3 className={clsx('text-sm', 'font-bold', 'text-koma-foreground', 'font-mono', 'uppercase', 'tracking-wide')}>
                   [05] Supabase / PostgreSQL Client API
                 </h3>
               </div>
-              <p className={clsx('text-[11px]', 'text-slate-400', 'mb-4', 'font-sans', 'leading-relaxed')}>
+              <p className={clsx('text-[11px]', 'text-koma-subtle', 'mb-4', 'font-sans', 'leading-relaxed')}>
                 Configure a URL e a chave de API (anon/service) do Supabase para conectar à base PostgreSQL real. Caso as credenciais não estejam corretas, o gateway de dados reverte automaticamente para o modo resiliente de alta-fidelidade local, impedindo falhas em tela.
               </p>
 
               <div className={clsx('grid', 'grid-cols-1', 'md:grid-cols-2', 'gap-4', 'font-mono', 'text-xs')}>
                 {/* SUPABASE_URL */}
                 <div className="space-y-1.5">
-                  <label className={clsx('text-slate-400', 'flex', 'items-center', 'justify-between')}>
+                  <label className={clsx('text-koma-subtle', 'flex', 'items-center', 'justify-between')}>
                     <span>SUPABASE_URL</span>
                     {keys.SUPABASE_URL ? (
                       <span className={clsx('text-[9px]', 'text-[#00b894]', 'bg-[#00b894]/10', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-[#00b894]/20')}>DEFINIDO</span>
@@ -902,7 +902,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
 
                 {/* SUPABASE_KEY */}
                 <div className="space-y-1.5">
-                  <label className={clsx('text-slate-400', 'flex', 'items-center', 'justify-between')}>
+                  <label className={clsx('text-koma-subtle', 'flex', 'items-center', 'justify-between')}>
                     <span>SUPABASE_KEY (anon key ou service_role key)</span>
                     {keys.SUPABASE_KEY ? (
                       <span className={clsx('text-[9px]', 'text-[#00b894]', 'bg-[#00b894]/10', 'px-1.5', 'py-0.2', 'rounded', 'border', 'border-[#00b894]/20')}>DEFINIDO</span>
@@ -921,7 +921,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                     <button
                       type="button"
                       onClick={() => handleToggleVisibility("SUPABASE_KEY")}
-                      className={clsx('absolute', 'right-3', 'top-1/2', '-translate-y-1/2', 'text-slate-500', 'hover:text-slate-300', 'cursor-pointer')}
+                      className={clsx('absolute', 'right-3', 'top-1/2', '-translate-y-1/2', 'text-koma-muted', 'hover:text-slate-300', 'cursor-pointer')}
                     >
                       {visibleKeys.SUPABASE_KEY ? <EyeOff className={clsx('w-4', 'h-4')} /> : <Eye className={clsx('w-4', 'h-4')} />}
                     </button>
@@ -934,8 +934,8 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
         </div>
 
         {/* Save Controls Panel */}
-        <div className={clsx('bg-[#121420]', 'border', 'border-[#1e293b]/40', 'p-4', 'rounded', 'flex', 'items-center', 'justify-between', 'gap-4', 'flex-wrap')} id="credentials-actions-panel">
-          <div className={clsx('text-[10px]', 'font-mono', 'text-slate-500', 'flex', 'items-center', 'gap-1.5', 'bg-black/30', 'py-2', 'px-3', 'rounded', 'border', 'border-zinc-900/55', 'max-w-lg')}>
+        <div className={clsx('bg-koma-card', 'border', 'border-[#1e293b]/40', 'p-4', 'rounded', 'flex', 'items-center', 'justify-between', 'gap-4', 'flex-wrap')} id="credentials-actions-panel">
+          <div className={clsx('text-[10px]', 'font-mono', 'text-koma-muted', 'flex', 'items-center', 'gap-1.5', 'bg-black/30', 'py-2', 'px-3', 'rounded', 'border', 'border-zinc-900/55', 'max-w-lg')}>
             <Sparkles className={clsx('w-3.5', 'h-3.5', 'text-[#00b894]', 'animate-pulse')} />
             <span>As credenciais salvas entram em operação imediatamente após a confirmação do processo de persistência do servidor.</span>
           </div>
@@ -955,42 +955,42 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
       {/* Safety Confirmation / Warning Overlay modal */}
       {showWarningModal && (
         <div className={clsx('fixed', 'inset-0', 'z-50', 'flex', 'items-center', 'justify-center', 'bg-black/80', 'backdrop-blur-sm', 'p-4', 'animate-fadeIn')}>
-          <div className={clsx('bg-[#0b0c13]', 'border-2', 'border-red-500/60', 'w-full', 'max-w-xl', 'p-6', 'rounded-lg', 'shadow-[0_0_50px_rgba(239,68,68,0.25)]', 'flex', 'flex-col', 'gap-4')}>
+          <div className={clsx('bg-koma-page', 'border-2', 'border-red-500/60', 'w-full', 'max-w-xl', 'p-6', 'rounded-lg', 'shadow-[0_0_50px_rgba(239,68,68,0.25)]', 'flex', 'flex-col', 'gap-4')}>
             
             <div className={clsx('flex', 'items-start', 'gap-3.5', 'border-b', 'border-[#1e293b]/40', 'pb-4')}>
               <div className={clsx('p-2.5', 'bg-red-950/40', 'rounded', 'border', 'border-red-500/30')}>
                 <AlertTriangle className={clsx('w-6', 'h-6', 'text-red-500', 'animate-pulse')} />
               </div>
               <div>
-                <h3 className={clsx('text-sm', 'font-bold', 'text-white', 'font-mono', 'uppercase', 'tracking-wide')}>
+                <h3 className={clsx('text-sm', 'font-bold', 'text-koma-foreground', 'font-mono', 'uppercase', 'tracking-wide')}>
                   ⚠️ CONFIRMAÇÃO DE GRAVAÇÃO COM INCONSISTÊNCIAS
                 </h3>
-                <p className={clsx('text-[11px]', 'text-slate-400', 'font-sans', 'mt-1')}>
+                <p className={clsx('text-[11px]', 'text-koma-subtle', 'font-sans', 'mt-1')}>
                   O sistema identificou um ou mais campos com formatação suspeita que sabidamente impedirão a conexão real com as APIs externas.
                 </p>
               </div>
             </div>
 
-            <div className={clsx('bg-[#121420]', 'border', 'border-[#1e293b]/40', 'p-3.5', 'rounded', 'text-xs', 'font-mono', 'max-h-52', 'overflow-y-auto', 'space-y-2.5')}>
+            <div className={clsx('bg-koma-card', 'border', 'border-[#1e293b]/40', 'p-3.5', 'rounded', 'text-xs', 'font-mono', 'max-h-52', 'overflow-y-auto', 'space-y-2.5')}>
               {pendingWarnings.map((warning, idx) => (
                 <div key={idx} className={clsx('flex', 'gap-2', 'text-amber-400', 'bg-amber-950/20', 'p-2', 'rounded', 'border', 'border-amber-500/20')}>
                   <AlertCircle className={clsx('w-4', 'h-4', 'shrink-0', 'text-amber-500')} />
                   <div>
-                    <span className={clsx('font-bold', 'text-[10px]', 'uppercase', 'block', 'text-slate-400')}>{warning.key}</span>
+                    <span className={clsx('font-bold', 'text-[10px]', 'uppercase', 'block', 'text-koma-subtle')}>{warning.key}</span>
                     <span className={clsx('text-[11px]', 'leading-relaxed', 'block', 'mt-0.5')}>{warning.message}</span>
                   </div>
                 </div>
               ))}
             </div>
 
-            <div className={clsx('p-3', 'bg-black/40', 'border', 'border-zinc-900', 'rounded', 'text-[10px]', 'text-slate-400', 'leading-relaxed', 'font-sans')}>
+            <div className={clsx('p-3', 'bg-black/40', 'border', 'border-zinc-900', 'rounded', 'text-[10px]', 'text-koma-subtle', 'leading-relaxed', 'font-sans')}>
               <strong>Impacto do Salvamento:</strong> Ao persistir valores inválidos, placeholders como "test", ou hashes truncados, o Painel do Orquestrador de Infra [04] entrará em modo de ERRO EXPLÍCITO DE CONEXÃO e desativará os gráficos e fluxos em tempo real.
             </div>
 
             <div className={clsx('flex', 'items-center', 'justify-end', 'gap-3', 'font-mono', 'text-xs', 'mt-2')}>
               <button
                 onClick={() => setShowWarningModal(false)}
-                className={clsx('bg-black', 'hover:bg-zinc-900', 'text-slate-300', 'hover:text-white', 'border', 'border-[#1e293b]', 'py-2', 'px-4', 'rounded', 'cursor-pointer', 'transition-all')}
+                className={clsx('bg-koma-page', 'hover:bg-zinc-900', 'text-koma-secondary', 'hover:text-white', 'border', 'border-[#1e293b]', 'py-2', 'px-4', 'rounded', 'cursor-pointer', 'transition-all')}
               >
                 CANCELAR E CORRIGIR
               </button>

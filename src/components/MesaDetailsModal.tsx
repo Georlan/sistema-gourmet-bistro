@@ -196,7 +196,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
           </div>
 
           {/* Bottom Line: Permanence & Waiter Name */}
-          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#A1A1AA] font-sans">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-koma-subtle font-sans">
             <div className="flex flex-wrap gap-x-3 gap-y-1 items-center">
               {orders.length > 0 && (
                 <span className="flex items-center gap-1">
@@ -553,7 +553,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                           <Receipt size={16} className="text-emerald-400" />
                           <h3 className="font-serif font-bold text-sm uppercase tracking-wide">Extrato por Cliente</h3>
                         </div>
-                        <span className="text-[10px] font-sans font-bold text-zinc-400 uppercase tracking-wider">Divisão Ativa</span>
+                        <span className="text-[10px] font-sans font-bold text-koma-subtle uppercase tracking-wider">Divisão Ativa</span>
                       </div>
 
                       {/* Customer list with subtotal calculations */}
@@ -905,7 +905,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                               onMouseLeave={() => { if (isConfirming) setConfirmTransferTo(null); }}
                               className={`p-4 border rounded-2xl text-center transition-all flex flex-col items-center justify-center gap-1 group ${
                                 isTargetAlreadyMerged
-                                  ? 'bg-koma-panel border-zinc-800 text-zinc-600 cursor-not-allowed opacity-40'
+                                  ? 'bg-koma-panel border-koma-border text-zinc-600 cursor-not-allowed opacity-40'
                                   : isConfirming
                                     ? 'bg-rose-900/40 border border-rose-800/50 animate-pulse text-koma-foreground cursor-pointer'
                                     : 'bg-koma-raised hover:bg-emerald-500/10 border border-rose-500/30 hover:border-emerald-500 text-koma-foreground cursor-pointer hover:scale-102'
@@ -915,7 +915,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                                 {isConfirming ? 'Confirmar?' : `Mesa ${t.id}`}
                               </span>
                               {isTargetAlreadyMerged ? (
-                                <span className="text-[8px] text-zinc-500 font-bold uppercase tracking-wider">Limite Atingido</span>
+                                <span className="text-[8px] text-koma-muted font-bold uppercase tracking-wider">Limite Atingido</span>
                               ) : !isConfirming ? (
                                 <span className="text-[8px] text-rose-400 font-bold uppercase tracking-wider">Ocupada</span>
                               ) : (
@@ -954,7 +954,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                               onMouseLeave={() => { if (isConfirming) setConfirmTransferTo(null); }}
                               className={`p-4 border rounded-2xl text-center transition-all flex flex-col items-center justify-center gap-1 group opacity-60 ${
                                 isTargetAlreadyMerged
-                                  ? 'bg-koma-panel border-zinc-800 text-zinc-600 cursor-not-allowed opacity-40'
+                                  ? 'bg-koma-panel border-koma-border text-zinc-600 cursor-not-allowed opacity-40'
                                   : isConfirming
                                     ? 'bg-rose-900/40 border border-rose-800/50 animate-pulse text-koma-foreground opacity-100 cursor-pointer'
                                     : 'bg-koma-raised hover:bg-emerald-500/10 border border-koma-border hover:border-emerald-500 text-koma-foreground hover:opacity-100 cursor-pointer'
@@ -964,7 +964,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                                 {isConfirming ? 'Confirmar?' : `Mesa ${t.id}`}
                               </span>
                               {isTargetAlreadyMerged ? (
-                                <span className="text-[8px] text-zinc-500 font-bold uppercase tracking-wider">Limite Atingido</span>
+                                <span className="text-[8px] text-koma-muted font-bold uppercase tracking-wider">Limite Atingido</span>
                               ) : !isConfirming ? (
                                 <span className="text-[8px] text-emerald-400 font-bold uppercase tracking-wider">Livre</span>
                               ) : (
@@ -1012,7 +1012,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
             </div>
 
             {/* RECEIPT GRAPHICS */}
-            <div className="flex-1 overflow-y-auto bg-black border border-koma-border rounded-2xl p-5 font-mono text-[11px] text-koma-muted space-y-4 shadow-inner max-h-[50vh] scrollbar-thin">
+            <div className="flex-1 overflow-y-auto bg-koma-page border border-koma-border rounded-2xl p-5 font-mono text-[11px] text-koma-muted space-y-4 shadow-inner max-h-[50vh] scrollbar-thin">
               <div className="text-center space-y-1 border-b border-dashed border-koma-border pb-3">
                 <p className="font-serif font-bold text-base text-koma-foreground tracking-tight">{restaurantName.toUpperCase()}</p>
                 <p className="text-[9px] text-[#10b981] leading-normal font-sans">Mesa de Atendimento de Excelência</p>
@@ -1240,7 +1240,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
             </div>
 
             {/* RECEIPT GRAPHICS */}
-            <div className="flex-1 overflow-y-auto bg-black border border-koma-border rounded-2xl p-5 font-mono text-[11px] text-koma-muted space-y-4 shadow-inner max-h-[50vh] scrollbar-thin">
+            <div className="flex-1 overflow-y-auto bg-koma-page border border-koma-border rounded-2xl p-5 font-mono text-[11px] text-koma-muted space-y-4 shadow-inner max-h-[50vh] scrollbar-thin">
               <div className="text-center space-y-1 border-b border-dashed border-koma-border pb-3">
                 <p className="font-serif font-bold text-base text-koma-foreground tracking-tight">{restaurantName.toUpperCase()}</p>
                 <p className="text-[9px] text-rose-400 leading-normal font-sans font-bold">REIMPRESSÃO • VIA COZINHA</p>

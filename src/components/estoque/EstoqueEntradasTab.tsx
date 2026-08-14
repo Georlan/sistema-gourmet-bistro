@@ -32,8 +32,8 @@ export const EstoqueEntradasTab: React.FC<EstoqueEntradasTabProps> = ({
       {/* Action Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-koma-panel/60 border border-koma-border p-4 rounded-3xl">
         <div>
-          <h3 className="font-serif text-sm font-bold text-white">Histórico de Entradas de Estoque</h3>
-          <p className="text-[10px] text-gray-400">Registre entradas manuais com nota/documento ou importe arquivos XML de NF-e.</p>
+          <h3 className="font-serif text-sm font-bold text-koma-foreground">Histórico de Entradas de Estoque</h3>
+          <p className="text-[10px] text-koma-subtle">Registre entradas manuais com nota/documento ou importe arquivos XML de NF-e.</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -79,13 +79,13 @@ export const EstoqueEntradasTab: React.FC<EstoqueEntradasTabProps> = ({
         <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 space-y-2 text-left">
           <div className="flex justify-between items-center">
             <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">✓ NF-e Importada com Sucesso</span>
-            <button onClick={onResetXmlState} className="text-[10px] text-gray-400 hover:text-white cursor-pointer">Fechar</button>
+            <button onClick={onResetXmlState} className="text-[10px] text-koma-subtle hover:text-white cursor-pointer">Fechar</button>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-[10px] text-gray-300 pt-1 font-mono">
-            <div>Fornecedor: <strong className="text-white">{xmlUploadState.result.fornecedor}</strong></div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-[10px] text-koma-secondary pt-1 font-mono">
+            <div>Fornecedor: <strong className="text-koma-foreground">{xmlUploadState.result.fornecedor}</strong></div>
             <div>Criados: <strong className="text-emerald-400">{xmlUploadState.result.insumos_criados}</strong></div>
             <div>Atualizados: <strong className="text-sky-400">{xmlUploadState.result.insumos_atualizados}</strong></div>
-            <div>Total: <strong className="text-white">R$ {Number(xmlUploadState.result.valor_total || 0).toFixed(2)}</strong></div>
+            <div>Total: <strong className="text-koma-foreground">R$ {Number(xmlUploadState.result.valor_total || 0).toFixed(2)}</strong></div>
           </div>
         </div>
       )}
@@ -93,7 +93,7 @@ export const EstoqueEntradasTab: React.FC<EstoqueEntradasTabProps> = ({
       {xmlUploadState.error && (
         <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 flex justify-between items-center text-red-400 text-xs">
           <span>✗ Erro na importação: {xmlUploadState.error}</span>
-          <button onClick={onResetXmlState} className="text-[10px] text-gray-400 hover:text-white cursor-pointer">Fechar</button>
+          <button onClick={onResetXmlState} className="text-[10px] text-koma-subtle hover:text-white cursor-pointer">Fechar</button>
         </div>
       )}
 
@@ -102,7 +102,7 @@ export const EstoqueEntradasTab: React.FC<EstoqueEntradasTabProps> = ({
         <div className="overflow-x-auto border border-koma-border rounded-2xl">
           <table className="w-full text-left text-[10px]">
             <thead>
-              <tr className="bg-koma-raised border-b border-koma-border text-gray-400 uppercase tracking-wider font-bold">
+              <tr className="bg-koma-raised border-b border-koma-border text-koma-subtle uppercase tracking-wider font-bold">
                 <th className="p-3">Data</th>
                 <th className="p-3">Doc / Nota</th>
                 <th className="p-3">Fornecedor</th>
@@ -114,7 +114,7 @@ export const EstoqueEntradasTab: React.FC<EstoqueEntradasTabProps> = ({
             <tbody className="divide-y divide-koma-border">
               {entradas.length === 0 && notasEntradaXml.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="p-8 text-center text-gray-500 italic">
+                  <td colSpan={6} className="p-8 text-center text-koma-muted italic">
                     Nenhuma entrada registrada ainda. Clique em Nova Entrada Manual ou Importar XML.
                   </td>
                 </tr>
@@ -122,11 +122,11 @@ export const EstoqueEntradasTab: React.FC<EstoqueEntradasTabProps> = ({
                 <>
                   {entradas.map((ent) => (
                     <tr key={ent.id} className="hover:bg-koma-raised/50 transition-colors">
-                      <td className="p-3 text-gray-400 whitespace-nowrap font-mono">
+                      <td className="p-3 text-koma-subtle whitespace-nowrap font-mono">
                         {formatBackendDateTime(ent.created_at)}
                       </td>
-                      <td className="p-3 font-bold text-white font-mono">{ent.numero_documento || 'S/N'}</td>
-                      <td className="p-3 text-gray-300 font-medium">{ent.distribuidor?.nome_fantasia || '—'}</td>
+                      <td className="p-3 font-bold text-koma-foreground font-mono">{ent.numero_documento || 'S/N'}</td>
+                      <td className="p-3 text-koma-secondary font-medium">{ent.distribuidor?.nome_fantasia || '—'}</td>
                       <td className="p-3">
                         <span className={clsx(
                           'px-2 py-0.5 rounded-full text-[8px] font-bold uppercase',
@@ -136,7 +136,7 @@ export const EstoqueEntradasTab: React.FC<EstoqueEntradasTabProps> = ({
                         </span>
                       </td>
                       <td className="p-3 font-mono font-bold text-emerald-400">R$ {Number(ent.valor_total).toFixed(2)}</td>
-                      <td className="p-3 text-gray-400 text-[9px]">
+                      <td className="p-3 text-koma-subtle text-[9px]">
                         {ent.itens?.map(i => `${i.quantidade}x ${i.insumo?.nome || i.insumo_id}`).join(', ') || 'Sem detalhes'}
                       </td>
                     </tr>
@@ -145,18 +145,18 @@ export const EstoqueEntradasTab: React.FC<EstoqueEntradasTabProps> = ({
                   {/* Existing XML entries fallback list if not in entradas */}
                   {notasEntradaXml.filter(n => !entradas.some(e => e.numero_documento === n.numero_nota)).map((nota) => (
                     <tr key={nota.id} className="hover:bg-koma-raised/50 transition-colors opacity-90">
-                      <td className="p-3 text-gray-400 whitespace-nowrap font-mono">
+                      <td className="p-3 text-koma-subtle whitespace-nowrap font-mono">
                         {nota.data_emissao ? formatBackendDateTime(nota.data_emissao, { dateStyle: 'short' }) : '—'}
                       </td>
-                      <td className="p-3 font-bold text-white font-mono">NF-{nota.numero_nota}</td>
-                      <td className="p-3 text-gray-300 font-medium">{nota.distribuidor?.nome_fantasia || '—'}</td>
+                      <td className="p-3 font-bold text-koma-foreground font-mono">NF-{nota.numero_nota}</td>
+                      <td className="p-3 text-koma-secondary font-medium">{nota.distribuidor?.nome_fantasia || '—'}</td>
                       <td className="p-3">
                         <span className="px-2 py-0.5 rounded-full text-[8px] font-bold uppercase bg-sky-500/10 text-sky-400">
                           XML
                         </span>
                       </td>
                       <td className="p-3 font-mono font-bold text-emerald-400">R$ {Number(nota.valor_total).toFixed(2)}</td>
-                      <td className="p-3 text-gray-400 text-[9px]">
+                      <td className="p-3 text-koma-subtle text-[9px]">
                         {nota.itens?.map((i: any) => `${i.quantidade}x ${i.insumo?.nome || i.insumo_id}`).join(', ') || 'Importação XML'}
                       </td>
                     </tr>

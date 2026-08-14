@@ -128,9 +128,9 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
   if (isLoading && movimentacoes.length === 0) {
     return (
       <div className="space-y-4" aria-busy="true" aria-label="Carregando movimentações do caixa">
-        <div className="h-24 animate-pulse rounded-2xl border border-[#252b28] bg-[#0d100f]" />
-        <div className="h-24 animate-pulse rounded-[20px] border border-[#252b28] bg-[#111412]" />
-        <div className="h-80 animate-pulse rounded-[22px] border border-[#252b28] bg-[#0d100f]" />
+        <div className="h-24 animate-pulse rounded-2xl border border-koma-border bg-koma-panel" />
+        <div className="h-24 animate-pulse rounded-[20px] border border-koma-border bg-koma-panel" />
+        <div className="h-80 animate-pulse rounded-[22px] border border-koma-border bg-koma-panel" />
       </div>
     );
   }
@@ -151,12 +151,12 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
         ]}
       />
 
-      <section className="rounded-[20px] border border-[#252b28] bg-[#0d100f] p-4">
+      <section className="rounded-[20px] border border-koma-border bg-koma-panel p-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <span className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.14em] text-zinc-500"><Filter size={13} className="text-[#54d9b3]" /> Filtros</span>
+          <span className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.14em] text-koma-muted"><Filter size={13} className="text-[#54d9b3]" /> Filtros</span>
           <div className="flex items-center gap-2">
             {hasFilters && <button type="button" onClick={clearFilters} className="px-2 text-[10px] font-bold text-[#54d9b3] hover:text-[#7becce]">Limpar filtros</button>}
-            <button type="button" onClick={exportCsv} disabled={filteredMovs.length === 0} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#303532] bg-[#151816] px-3 py-2 text-[10px] font-bold text-zinc-300 transition-colors hover:border-[#196b55] hover:text-[#54d9b3] disabled:opacity-40">
+            <button type="button" onClick={exportCsv} disabled={filteredMovs.length === 0} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#303532] bg-koma-card px-3 py-2 text-[10px] font-bold text-koma-secondary transition-colors hover:border-[#196b55] hover:text-[#54d9b3] disabled:opacity-40">
               <Download size={13} /> Exportar CSV
             </button>
           </div>
@@ -165,26 +165,26 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
           <label className="relative">
             <span className="sr-only">Buscar movimentação</span>
             <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600" />
-            <input value={searchTerm} onChange={event => setSearchTerm(event.target.value)} placeholder="Buscar motivo, observação ou operador" className="h-10 w-full rounded-xl border border-[#2a302d] bg-[#151816] pl-9 pr-3 text-xs text-white outline-none transition-colors placeholder:text-zinc-600 focus:border-[#196b55]" />
+            <input value={searchTerm} onChange={event => setSearchTerm(event.target.value)} placeholder="Buscar motivo, observação ou operador" className="h-10 w-full rounded-xl border border-[#2a302d] bg-koma-card pl-9 pr-3 text-xs text-koma-foreground outline-none transition-colors placeholder:text-zinc-600 focus:border-[#196b55]" />
           </label>
-          <select value={filterTipo} onChange={event => setFilterTipo(event.target.value)} className="h-10 w-full rounded-xl border border-[#2a302d] bg-[#151816] px-3 text-xs text-white outline-none focus:border-[#196b55]">
+          <select value={filterTipo} onChange={event => setFilterTipo(event.target.value)} className="h-10 w-full rounded-xl border border-[#2a302d] bg-koma-card px-3 text-xs text-koma-foreground outline-none focus:border-[#196b55]">
             <option value="todos">Todas as operações</option>
             <option value="suprimento">Suprimentos</option>
             <option value="sangria">Sangrias</option>
           </select>
-          <label className="relative"><span className="sr-only">Data inicial</span><CalendarDays size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600" /><input type="date" value={filterDataInicio} onChange={event => setFilterDataInicio(event.target.value)} className="h-10 w-full rounded-xl border border-[#2a302d] bg-[#151816] pl-9 pr-2 text-xs text-white outline-none focus:border-[#196b55]" /></label>
-          <label className="relative"><span className="sr-only">Data final</span><CalendarDays size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600" /><input type="date" value={filterDataFim} onChange={event => setFilterDataFim(event.target.value)} className="h-10 w-full rounded-xl border border-[#2a302d] bg-[#151816] pl-9 pr-2 text-xs text-white outline-none focus:border-[#196b55]" /></label>
+          <label className="relative"><span className="sr-only">Data inicial</span><CalendarDays size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600" /><input type="date" value={filterDataInicio} onChange={event => setFilterDataInicio(event.target.value)} className="h-10 w-full rounded-xl border border-[#2a302d] bg-koma-card pl-9 pr-2 text-xs text-koma-foreground outline-none focus:border-[#196b55]" /></label>
+          <label className="relative"><span className="sr-only">Data final</span><CalendarDays size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600" /><input type="date" value={filterDataFim} onChange={event => setFilterDataFim(event.target.value)} className="h-10 w-full rounded-xl border border-[#2a302d] bg-koma-card pl-9 pr-2 text-xs text-koma-foreground outline-none focus:border-[#196b55]" /></label>
         </div>
       </section>
 
       <section>
-        <article className="overflow-hidden rounded-[20px] border border-[#252b28] bg-[#0d100f]">
-          <header className="flex items-center justify-between gap-3 border-b border-[#252b28] px-4 py-3 sm:px-5">
-            <div><h3 className="text-xs font-bold text-[#f5f4ef]">Histórico de ajustes</h3><p className="mt-0.5 text-[10px] text-zinc-500">Ordem cronológica, do registro mais recente ao mais antigo</p></div>
-            <span className="rounded-full border border-[#2a302d] bg-[#151816] px-2.5 py-1 text-[9px] font-bold text-zinc-500">{filteredMovs.length} registro(s)</span>
+        <article className="overflow-hidden rounded-[20px] border border-koma-border bg-koma-panel">
+          <header className="flex items-center justify-between gap-3 border-b border-koma-border px-4 py-3 sm:px-5">
+            <div><h3 className="text-xs font-bold text-koma-foreground">Histórico de ajustes</h3><p className="mt-0.5 text-[10px] text-koma-muted">Ordem cronológica, do registro mais recente ao mais antigo</p></div>
+            <span className="rounded-full border border-[#2a302d] bg-koma-card px-2.5 py-1 text-[9px] font-bold text-koma-muted">{filteredMovs.length} registro(s)</span>
           </header>
           {filteredMovs.length === 0 ? (
-            <div className="flex min-h-64 flex-col items-center justify-center px-5 text-center"><History size={24} className="text-zinc-700" /><strong className="mt-3 text-xs text-zinc-400">Nenhuma movimentação encontrada</strong><span className="mt-1 max-w-sm text-[10px] leading-relaxed text-zinc-600">Revise os filtros ou use o Turno atual para registrar sangria ou suprimento.</span></div>
+            <div className="flex min-h-64 flex-col items-center justify-center px-5 text-center"><History size={24} className="text-zinc-700" /><strong className="mt-3 text-xs text-koma-subtle">Nenhuma movimentação encontrada</strong><span className="mt-1 max-w-sm text-[10px] leading-relaxed text-zinc-600">Revise os filtros ou use o Turno atual para registrar sangria ou suprimento.</span></div>
           ) : (
             <ul className="divide-y divide-[#202522]">
               {filteredMovs.map(movimentacao => {
@@ -199,7 +199,7 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
                 return (
                   <li key={movimentacao.id} className="grid gap-3 px-4 py-3.5 transition-colors hover:bg-white/[0.015] sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center sm:px-5">
                     <span className={clsx('flex h-9 w-9 items-center justify-center rounded-xl border', isSupply ? 'border-[#145c49] bg-[#0b2d25] text-[#54d9b3]' : 'border-[#543535] bg-[#211414] text-[#dfabab]')}>{isSupply ? <ArrowDownRight size={15} /> : <ArrowUpRight size={15} />}</span>
-                    <span className="min-w-0"><span className="flex flex-wrap items-center gap-x-2 gap-y-0.5"><strong className="truncate text-xs text-[#f5f4ef]">{movimentacao.descricao || (isSupply ? 'Suprimento' : 'Sangria')}</strong><span className="text-[9px] text-zinc-600">{dateLabel}</span></span><span className="mt-0.5 block truncate text-[10px] text-zinc-500">{movimentacao.usuario_nome || 'Operador'}{movimentacao.observacao ? ` · ${movimentacao.observacao}` : ''}</span><span className="mt-1 block text-[9px] tabular-nums text-zinc-600">Saldo: {formatCurrency(Number(movimentacao.saldo_anterior || 0))} → {formatCurrency(Number(movimentacao.saldo_posterior || 0))}</span></span>
+                    <span className="min-w-0"><span className="flex flex-wrap items-center gap-x-2 gap-y-0.5"><strong className="truncate text-xs text-koma-foreground">{movimentacao.descricao || (isSupply ? 'Suprimento' : 'Sangria')}</strong><span className="text-[9px] text-zinc-600">{dateLabel}</span></span><span className="mt-0.5 block truncate text-[10px] text-koma-muted">{movimentacao.usuario_nome || 'Operador'}{movimentacao.observacao ? ` · ${movimentacao.observacao}` : ''}</span><span className="mt-1 block text-[9px] tabular-nums text-zinc-600">Saldo: {formatCurrency(Number(movimentacao.saldo_anterior || 0))} → {formatCurrency(Number(movimentacao.saldo_posterior || 0))}</span></span>
                     <strong className={clsx('whitespace-nowrap text-sm font-bold tabular-nums sm:text-right', isSupply ? 'text-[#54d9b3]' : 'text-[#dfabab]')}>{isSupply ? '+' : '−'} {formatCurrency(Number(movimentacao.valor))}</strong>
                   </li>
                 );

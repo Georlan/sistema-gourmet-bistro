@@ -895,13 +895,13 @@ export default function CardapioPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#090a0f] text-slate-100 flex flex-col items-center justify-center p-6 font-sans">
+      <div className="min-h-screen bg-koma-page text-slate-100 flex flex-col items-center justify-center p-6 font-sans">
         <div className="flex flex-col items-center space-y-4 max-w-sm text-center animate-pulse">
           <div className="w-12 h-12 rounded-full border-4 border-emerald-500/20 border-t-emerald-500 animate-spin" />
-          <h2 className="font-display font-extrabold text-sm uppercase tracking-wider text-slate-300">
+          <h2 className="font-display font-extrabold text-sm uppercase tracking-wider text-koma-secondary">
             Carregando Cardápio Digital
           </h2>
-          <p className="text-xs text-slate-500 leading-relaxed">
+          <p className="text-xs text-koma-muted leading-relaxed">
             Carregando os produtos e a identidade do restaurante...
           </p>
         </div>
@@ -911,7 +911,7 @@ export default function CardapioPage() {
 
   if (errorMsg || !activeBrand) {
     return (
-      <div className="min-h-screen bg-[#090a0f] text-slate-100 flex flex-col items-center justify-center p-6 font-sans">
+      <div className="min-h-screen bg-koma-page text-slate-100 flex flex-col items-center justify-center p-6 font-sans">
         <div className="flex flex-col items-center space-y-6 max-w-md text-center p-8 rounded-3xl border border-red-500/10 bg-red-500/[0.02]">
           <div className="w-14 h-14 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center border border-red-500/20">
             <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -922,7 +922,7 @@ export default function CardapioPage() {
             <h2 className="font-display font-black text-lg text-red-500 uppercase tracking-wide">
               Estabelecimento Não Encontrado
             </h2>
-            <p className="text-xs text-slate-400 leading-relaxed">
+            <p className="text-xs text-koma-subtle leading-relaxed">
               {errorMsg || "Não foi possível carregar os dados deste estabelecimento no momento."}
             </p>
           </div>
@@ -985,7 +985,7 @@ export default function CardapioPage() {
             ];
 
             return (
-              <div className="w-full bg-[#121214] border border-emerald-500/30 rounded-2xl p-4 shadow-xl flex flex-col gap-3 animate-fade-in" id="active-order-banner">
+              <div className="w-full bg-koma-card border border-emerald-500/30 rounded-2xl p-4 shadow-xl flex flex-col gap-3 animate-fade-in" id="active-order-banner">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <div className="p-2.5 bg-emerald-500/20 text-emerald-400 rounded-xl shrink-0">
@@ -1000,7 +1000,7 @@ export default function CardapioPage() {
                           {activeOrder.status}
                         </span>
                       </div>
-                      <p className="text-xs text-gray-300 mt-0.5 font-medium">
+                      <p className="text-xs text-koma-secondary mt-0.5 font-medium">
                         Modalidade: {activeOrder.tipo === "delivery" || activeOrder.tipo === "Delivery" ? "Delivery" : "Retirada/Balcão"} • Total: {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(activeOrder.total)}
                       </p>
                     </div>
@@ -1022,7 +1022,7 @@ export default function CardapioPage() {
                         localStorage.removeItem("koma_active_order");
                         setActiveOrder(null);
                       }}
-                      className="px-3 py-1.5 bg-slate-500/10 hover:bg-slate-500/20 text-gray-400 hover:text-white text-xs font-bold rounded-xl transition cursor-pointer"
+                      className="px-3 py-1.5 bg-slate-500/10 hover:bg-slate-500/20 text-koma-subtle hover:text-white text-xs font-bold rounded-xl transition cursor-pointer"
                       id="btn-new-order-clear"
                     >
                       Fazer Novo Pedido
@@ -1031,7 +1031,7 @@ export default function CardapioPage() {
                 </div>
 
                 {/* 4-Step Progress Bar Timeline */}
-                <div className="pt-2 border-t border-[#27272A] grid grid-cols-4 gap-1.5 text-center">
+                <div className="pt-2 border-t border-koma-border grid grid-cols-4 gap-1.5 text-center">
                   {steps.map((st) => {
                     const isPassed = currentStep >= st.step;
                     const isCurrent = currentStep === st.step;
@@ -1040,7 +1040,7 @@ export default function CardapioPage() {
                         <div
                           className={clsx(
                             "w-full h-1.5 rounded-full transition-all duration-500",
-                            isPassed ? "bg-emerald-500 shadow-xs shadow-emerald-500/50" : "bg-[#27272A]"
+                            isPassed ? "bg-emerald-500 shadow-xs shadow-emerald-500/50" : "bg-koma-raised"
                           )}
                         />
                         <span
@@ -1049,7 +1049,7 @@ export default function CardapioPage() {
                             isCurrent
                               ? "text-emerald-400 animate-pulse"
                               : isPassed
-                              ? "text-gray-300"
+                              ? "text-koma-secondary"
                               : "text-gray-600"
                           )}
                         >
@@ -1073,7 +1073,7 @@ export default function CardapioPage() {
             <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent flex items-end p-6" />
             
             {/* Overlay Info on Banner */}
-            <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6 text-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 z-10">
+            <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6 text-koma-foreground flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 z-10">
               <div className="flex items-center gap-4">
                 <img 
                   src={activeBrand.logo} 
@@ -1237,7 +1237,7 @@ export default function CardapioPage() {
                   <ShoppingBag className="w-4.5 h-4.5 text-primary" />
                   Sua Sacola
                   {cartCount > 0 && (
-                    <span className="ml-1 inline-flex items-center justify-center h-5 w-5 rounded-full bg-primary text-[9px] font-black text-white">
+                    <span className="ml-1 inline-flex items-center justify-center h-5 w-5 rounded-full bg-primary text-[9px] font-black text-koma-foreground">
                       {cartCount}
                     </span>
                   )}
@@ -1317,7 +1317,7 @@ export default function CardapioPage() {
                       <button
                         onClick={() => setDeliveryMethod("delivery")}
                         className={`py-1.5 text-[10px] font-bold rounded-lg transition cursor-pointer ${
-                          deliveryMethod === "delivery" ? "bg-primary text-white shadow-xs" : "text-text-app/50"
+                          deliveryMethod === "delivery" ? "bg-primary text-koma-foreground shadow-xs" : "text-text-app/50"
                         }`}
                       >
                         Delivery (Entrega)
@@ -1325,7 +1325,7 @@ export default function CardapioPage() {
                       <button
                         onClick={() => setDeliveryMethod("pickup")}
                         className={`py-1.5 text-[10px] font-bold rounded-lg transition cursor-pointer ${
-                          deliveryMethod === "pickup" ? "bg-primary text-white shadow-xs" : "text-text-app/50"
+                          deliveryMethod === "pickup" ? "bg-primary text-koma-foreground shadow-xs" : "text-text-app/50"
                         }`}
                       >
                         Retirada Balcão
@@ -1463,7 +1463,7 @@ export default function CardapioPage() {
                     {/* Checkout button */}
                     <button
                       onClick={handleQuickSidebarCheckout}
-                      className="w-full py-2.5 bg-primary text-white text-xs font-black rounded-xl shadow-xs hover:opacity-95 transition uppercase tracking-wider cursor-pointer"
+                      className="w-full py-2.5 bg-primary text-koma-foreground text-xs font-black rounded-xl shadow-xs hover:opacity-95 transition uppercase tracking-wider cursor-pointer"
                     >
                       Confirmar e Enviar Pedido
                     </button>
@@ -1480,7 +1480,7 @@ export default function CardapioPage() {
         <div className="lg:hidden fixed bottom-0 left-0 w-full z-30 px-4 pb-5 pt-2">
           <button
             onClick={() => setIsCartOpen(true)}
-            className="w-full flex items-center justify-between gap-3 rounded-2xl bg-primary text-white px-5 h-14 shadow-xl hover:opacity-95 active:scale-[0.99] transition cursor-pointer"
+            className="w-full flex items-center justify-between gap-3 rounded-2xl bg-primary text-koma-foreground px-5 h-14 shadow-xl hover:opacity-95 active:scale-[0.99] transition cursor-pointer"
             id="floating-cart-trigger"
           >
             {/* Left: item count badge + label */}

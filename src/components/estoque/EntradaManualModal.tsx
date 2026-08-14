@@ -135,10 +135,10 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
         {/* Header */}
         <div className="flex justify-between items-center pb-2 border-b border-koma-border shrink-0">
           <div>
-            <h3 className="font-serif text-sm font-bold text-white">Nova Entrada Manual de Estoque</h3>
-            <p className="text-[9px] text-gray-400">Registre recebimento de ingredientes com recálculo de custo médio ponderado.</p>
+            <h3 className="font-serif text-sm font-bold text-koma-foreground">Nova Entrada Manual de Estoque</h3>
+            <p className="text-[9px] text-koma-subtle">Registre recebimento de ingredientes com recálculo de custo médio ponderado.</p>
           </div>
-          <button type="button" onClick={onClose} className="p-1 text-gray-400 hover:text-white transition-colors cursor-pointer">
+          <button type="button" onClick={onClose} className="p-1 text-koma-subtle hover:text-white transition-colors cursor-pointer">
             <X size={16} />
           </button>
         </div>
@@ -154,7 +154,7 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-koma-raised p-4 rounded-2xl border border-koma-border">
             <div className="space-y-1 md:col-span-1">
               <div className="flex justify-between items-center">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Fornecedor:</label>
+                <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider">Fornecedor:</label>
                 <button
                   type="button"
                   onClick={() => { setIsNovoDistribuidor(!isNovoDistribuidor); setDistribuidorId(''); }}
@@ -168,7 +168,7 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
                 <select
                   value={distribuidorId}
                   onChange={(e) => setDistribuidorId(e.target.value)}
-                  className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
+                  className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs focus:outline-none focus:border-emerald-500"
                 >
                   <option value="">-- Selecione (Opcional) --</option>
                   {distribuidores.map(d => (
@@ -183,37 +183,37 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
                     placeholder="Nome Fantasia do Fornecedor"
                     value={distribuidorNome}
                     onChange={(e) => setDistribuidorNome(e.target.value)}
-                    className="w-full px-3 py-1.5 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
+                    className="w-full px-3 py-1.5 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs focus:outline-none focus:border-emerald-500"
                   />
                   <input
                     type="text"
                     placeholder="CNPJ (opcional)"
                     value={distribuidorCnpj}
                     onChange={(e) => setDistribuidorCnpj(e.target.value)}
-                    className="w-full px-3 py-1.5 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500 font-mono"
+                    className="w-full px-3 py-1.5 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs focus:outline-none focus:border-emerald-500 font-mono"
                   />
                 </div>
               )}
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Nº Documento / Nota:</label>
+              <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">Nº Documento / Nota:</label>
               <input
                 type="text"
                 placeholder="ex: NF-12345"
                 value={numeroDocumento}
                 onChange={(e) => setNumeroDocumento(e.target.value)}
-                className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500 font-mono"
+                className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs focus:outline-none focus:border-emerald-500 font-mono"
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Data de Emissão:</label>
+              <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">Data de Emissão:</label>
               <input
                 type="date"
                 value={dataEmissao}
                 onChange={(e) => setDataEmissao(e.target.value)}
-                className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500 font-mono"
+                className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs focus:outline-none focus:border-emerald-500 font-mono"
               />
             </div>
           </div>
@@ -221,7 +221,7 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
           {/* Dynamic Items Table */}
           <div className="space-y-2">
             <div className="flex justify-between items-center">
-              <span className="text-[10px] font-bold text-gray-300 uppercase tracking-wider">Itens da Entrada</span>
+              <span className="text-[10px] font-bold text-koma-secondary uppercase tracking-wider">Itens da Entrada</span>
               <button
                 type="button"
                 onClick={handleAddItem}
@@ -241,7 +241,7 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
                       <select
                         value={item.insumo_id}
                         onChange={(e) => handleItemChange(idx, 'insumo_id', e.target.value)}
-                        className="w-full px-2.5 py-1.5 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
+                        className="w-full px-2.5 py-1.5 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs focus:outline-none focus:border-emerald-500"
                       >
                         <option value="">-- Selecione o Ingrediente --</option>
                         {insumos.map(ins => (
@@ -257,12 +257,12 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
                           placeholder="Nome do Novo Ingrediente"
                           value={item.insumo_nome}
                           onChange={(e) => handleItemChange(idx, 'insumo_nome', e.target.value)}
-                          className="w-full px-2.5 py-1.5 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
+                          className="w-full px-2.5 py-1.5 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs focus:outline-none focus:border-emerald-500"
                         />
                         <button
                           type="button"
                           onClick={() => handleItemChange(idx, 'insumo_id', '')}
-                          className="text-[8px] text-gray-400 hover:text-white whitespace-nowrap cursor-pointer"
+                          className="text-[8px] text-koma-subtle hover:text-white whitespace-nowrap cursor-pointer"
                         >
                           Voltar
                         </button>
@@ -280,7 +280,7 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
                       placeholder="Qtd"
                       value={item.quantidade}
                       onChange={(e) => handleItemChange(idx, 'quantidade', parseFloat(e.target.value) || 0)}
-                      className="w-full px-2.5 py-1.5 bg-koma-input border border-koma-border rounded-xl text-white text-xs text-center focus:outline-none focus:border-emerald-500 font-mono"
+                      className="w-full px-2.5 py-1.5 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs text-center focus:outline-none focus:border-emerald-500 font-mono"
                     />
                   </div>
 
@@ -289,7 +289,7 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
                     <select
                       value={item.unidade_medida}
                       onChange={(e) => handleItemChange(idx, 'unidade_medida', e.target.value)}
-                      className="w-full px-2 py-1.5 bg-koma-input border border-koma-border rounded-xl text-white text-xs text-center focus:outline-none focus:border-emerald-500"
+                      className="w-full px-2 py-1.5 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs text-center focus:outline-none focus:border-emerald-500"
                     >
                       <option value="un">un</option>
                       <option value="kg">kg</option>
@@ -309,7 +309,7 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
                       placeholder="R$ Unit"
                       value={item.custo_unitario}
                       onChange={(e) => handleItemChange(idx, 'custo_unitario', parseFloat(e.target.value) || 0)}
-                      className="w-full px-2.5 py-1.5 bg-koma-input border border-koma-border rounded-xl text-white text-xs text-right focus:outline-none focus:border-emerald-500 font-mono"
+                      className="w-full px-2.5 py-1.5 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs text-right focus:outline-none focus:border-emerald-500 font-mono"
                     />
                   </div>
 
@@ -319,7 +319,7 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
                       type="button"
                       disabled={itens.length === 1}
                       onClick={() => handleRemoveItem(idx)}
-                      className="p-1 text-gray-500 hover:text-red-400 disabled:opacity-30 transition-colors cursor-pointer"
+                      className="p-1 text-koma-muted hover:text-red-400 disabled:opacity-30 transition-colors cursor-pointer"
                     >
                       <Trash2 size={14} />
                     </button>
@@ -332,18 +332,18 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
           {/* Note & Grand Total Footer */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end pt-2 border-t border-koma-border">
             <div className="md:col-span-2 space-y-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Observação:</label>
+              <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">Observação:</label>
               <input
                 type="text"
                 placeholder="ex: Entrega recebida sem avarias pelo estoquista João"
                 value={observacao}
                 onChange={(e) => setObservacao(e.target.value)}
-                className="w-full px-3 py-1.5 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
+                className="w-full px-3 py-1.5 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs focus:outline-none focus:border-emerald-500"
               />
             </div>
 
             <div className="text-right bg-koma-raised p-3 rounded-2xl border border-koma-border">
-              <span className="text-[9px] uppercase tracking-wider text-gray-400 font-bold block">Valor Total Automático</span>
+              <span className="text-[9px] uppercase tracking-wider text-koma-subtle font-bold block">Valor Total Automático</span>
               <strong className="text-sm font-mono text-emerald-400">R$ {valorTotal.toFixed(2)}</strong>
             </div>
           </div>
@@ -353,7 +353,7 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2.5 border border-koma-border hover:border-zinc-700 bg-koma-raised text-gray-400 hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+              className="flex-1 py-2.5 border border-koma-border hover:border-zinc-700 bg-koma-raised text-koma-subtle hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
             >
               Cancelar
             </button>

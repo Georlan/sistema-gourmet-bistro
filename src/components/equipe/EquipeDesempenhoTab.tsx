@@ -154,9 +154,9 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <Award size={18} className="text-[#10b981]" />
-            <h3 className="font-serif font-bold text-base text-white">Desempenho Comercial da Equipe</h3>
+            <h3 className="font-serif font-bold text-base text-koma-foreground">Desempenho Comercial da Equipe</h3>
           </div>
-          <p className="text-[10px] text-gray-400">
+          <p className="text-[10px] text-koma-subtle">
             Período: <strong className="text-gray-200">{dataInicio}</strong> até <strong className="text-gray-200">{dataFim}</strong>
             {' | '}Taxa de Serviço: <strong className="text-emerald-400">{taxaAtiva ? `${taxaPadrao}%` : 'Desativada'}</strong>
             {' | '}Filtro: <strong className="text-sky-400">{cargoLabel}</strong>
@@ -171,10 +171,10 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
               id="cargo-filter-select"
               value={cargo}
               onChange={e => setCargo(e.target.value)}
-              className="bg-transparent text-white text-[10px] font-bold cursor-pointer outline-none pr-1"
+              className="bg-transparent text-koma-foreground text-[10px] font-bold cursor-pointer outline-none pr-1"
             >
               {CARGO_OPTIONS.map(o => (
-                <option key={o.value} value={o.value} className="bg-zinc-900 text-white">
+                <option key={o.value} value={o.value} className="bg-koma-card text-koma-foreground">
                   {o.label}
                 </option>
               ))}
@@ -184,7 +184,7 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
           <button
             type="button"
             onClick={() => setShowCalendarModal(true)}
-            className="px-3.5 py-2 bg-koma-raised hover:bg-koma-card border border-koma-border text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
+            className="px-3.5 py-2 bg-koma-raised hover:bg-koma-card border border-koma-border text-koma-foreground rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
           >
             <CalendarIcon size={14} className="text-[#10b981]" />
             Alterar Período
@@ -194,7 +194,7 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
             type="button"
             onClick={handleExportCsv}
             disabled={!membros.length}
-            className="px-3.5 py-2 bg-koma-raised hover:bg-koma-card border border-koma-border text-gray-300 hover:text-white rounded-xl text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+            className="px-3.5 py-2 bg-koma-raised hover:bg-koma-card border border-koma-border text-koma-secondary hover:text-white rounded-xl text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
           >
             <Download size={14} />
             Exportar CSV
@@ -205,32 +205,32 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-2">
-          <div className="flex justify-between items-center text-gray-400">
+          <div className="flex justify-between items-center text-koma-subtle">
             <span className="text-[9px] font-bold uppercase tracking-wider">Total Atendimentos</span>
             <div className="p-1.5 bg-sky-500/15 text-sky-400 rounded-xl">
               <ShoppingBag size={16} />
             </div>
           </div>
-          <strong className="text-2xl text-white font-mono block">{totalAtendimentos}</strong>
-          <span className="text-[9px] text-gray-500 block">Comandas atendidas pela equipe</span>
+          <strong className="text-2xl text-koma-foreground font-mono block">{totalAtendimentos}</strong>
+          <span className="text-[9px] text-koma-muted block">Comandas atendidas pela equipe</span>
         </div>
 
         <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-2">
-          <div className="flex justify-between items-center text-gray-400">
+          <div className="flex justify-between items-center text-koma-subtle">
             <span className="text-[9px] font-bold uppercase tracking-wider">Faturamento Gerado</span>
             <div className="p-1.5 bg-[#10b981]/15 text-[#10b981] rounded-xl">
               <DollarSign size={16} />
             </div>
           </div>
-          <strong className="text-2xl text-white font-mono block">
+          <strong className="text-2xl text-koma-foreground font-mono block">
             R$ {totalFaturamento.toFixed(2)}
           </strong>
-          <span className="text-[9px] text-gray-500 block">Vendas diretas da equipe</span>
+          <span className="text-[9px] text-koma-muted block">Vendas diretas da equipe</span>
         </div>
 
         {taxaAtiva && (
           <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-2">
-            <div className="flex justify-between items-center text-gray-400">
+            <div className="flex justify-between items-center text-koma-subtle">
               <span className="text-[9px] font-bold uppercase tracking-wider">Comissão Total Proporcional</span>
               <div className="p-1.5 bg-purple-500/15 text-purple-400 rounded-xl">
                 <Percent size={16} />
@@ -239,7 +239,7 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
             <strong className="text-2xl text-purple-400 font-mono block">
               R$ {totalComissao.toFixed(2)}
             </strong>
-            <span className="text-[9px] text-gray-500 block">Calculada individualmente conforme vendas</span>
+            <span className="text-[9px] text-koma-muted block">Calculada individualmente conforme vendas</span>
           </div>
         )}
       </div>
@@ -250,7 +250,7 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
           <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4">
             <div className="flex items-center gap-2 border-b border-koma-border pb-3">
               <BarChart2 size={16} className="text-[#10b981]" />
-              <span className="font-serif font-bold text-sm text-white">Faturamento Gerado por Atendente</span>
+              <span className="font-serif font-bold text-sm text-koma-foreground">Faturamento Gerado por Atendente</span>
             </div>
 
             <div className="h-60 w-full pt-1">
@@ -269,7 +269,7 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
           <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4">
             <div className="flex items-center gap-2 border-b border-koma-border pb-3">
               <BarChart2 size={16} className="text-sky-400" />
-              <span className="font-serif font-bold text-sm text-white">Volume de Atendimentos por Garçom</span>
+              <span className="font-serif font-bold text-sm text-koma-foreground">Volume de Atendimentos por Garçom</span>
             </div>
 
             <div className="h-60 w-full pt-1">
@@ -290,22 +290,22 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
       {/* Team Performance Table */}
       <div className="bg-koma-panel border border-koma-border rounded-3xl overflow-hidden p-5 space-y-4">
         <div className="border-b border-koma-border pb-2 flex items-center justify-between">
-          <span className="font-serif font-bold text-sm text-white">Desempenho por Funcionário</span>
-          <span className="text-[9px] text-gray-500 font-mono">{membros.length} funcionário{membros.length !== 1 ? 's' : ''}</span>
+          <span className="font-serif font-bold text-sm text-koma-foreground">Desempenho por Funcionário</span>
+          <span className="text-[9px] text-koma-muted font-mono">{membros.length} funcionário{membros.length !== 1 ? 's' : ''}</span>
         </div>
 
         {isLoading ? (
-          <div className="p-12 text-center text-gray-400 text-xs animate-pulse">
+          <div className="p-12 text-center text-koma-subtle text-xs animate-pulse">
             Carregando desempenho da equipe...
           </div>
         ) : membros.length === 0 ? (
-          <div className="p-12 text-center text-gray-500 text-xs">
+          <div className="p-12 text-center text-koma-muted text-xs">
             Nenhum funcionário encontrado no período para o filtro selecionado.
           </div>
         ) : (
           <div className="overflow-x-auto border border-koma-border rounded-2xl">
             <table className="w-full text-left text-[10px]">
-              <thead className="bg-koma-raised border-b border-koma-border text-gray-400 uppercase tracking-wider font-bold">
+              <thead className="bg-koma-raised border-b border-koma-border text-koma-subtle uppercase tracking-wider font-bold">
                 <tr>
                   <th className="p-3.5">#</th>
                   <th className="p-3.5">Funcionário</th>
@@ -319,23 +319,23 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
               <tbody className="divide-y divide-koma-border">
                 {membros.map((m, idx) => (
                   <tr key={m.id} className="hover:bg-koma-raised/50 transition-colors">
-                    <td className="p-3.5 font-mono text-gray-500 text-center">{idx + 1}</td>
-                    <td className="p-3.5 font-bold text-white">
+                    <td className="p-3.5 font-mono text-koma-muted text-center">{idx + 1}</td>
+                    <td className="p-3.5 font-bold text-koma-foreground">
                       <div>
                         <span>{m.nome}</span>
-                        {m.email && <span className="text-[8px] text-gray-500 block">{m.email}</span>}
+                        {m.email && <span className="text-[8px] text-koma-muted block">{m.email}</span>}
                       </div>
                     </td>
-                    <td className="p-3.5 text-gray-300 capitalize">
+                    <td className="p-3.5 text-koma-secondary capitalize">
                       {ROLE_LABEL[m.role] || m.role}
                     </td>
                     <td className="p-3.5 text-center font-mono font-bold text-sky-400">
                       {m.pedidos_atendidos}
                     </td>
-                    <td className="p-3.5 text-right font-mono font-bold text-white">
+                    <td className="p-3.5 text-right font-mono font-bold text-koma-foreground">
                       R$ {m.faturamento.toFixed(2)}
                     </td>
-                    <td className="p-3.5 text-right font-mono text-gray-300">
+                    <td className="p-3.5 text-right font-mono text-koma-secondary">
                       R$ {m.ticket_medio.toFixed(2)}
                     </td>
                     {taxaAtiva && (

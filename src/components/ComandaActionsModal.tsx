@@ -80,14 +80,14 @@ export const ComandaActionsModal: React.FC<ComandaActionsModalProps> = ({
       }}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-xs p-4 animate-fade-in cursor-pointer"
     >
-      <div className="w-full max-w-lg bg-[#121214] border border-[#27272A] rounded-3xl p-6 space-y-5 text-left shadow-2xl relative animate-scale-in cursor-default my-auto max-h-[92vh] overflow-y-auto">
+      <div className="w-full max-w-lg bg-koma-card border border-koma-border rounded-3xl p-6 space-y-5 text-left shadow-2xl relative animate-scale-in cursor-default my-auto max-h-[92vh] overflow-y-auto">
         {/* Header */}
-        <div className="flex justify-between items-center pb-3 border-b border-[#27272A]">
+        <div className="flex justify-between items-center pb-3 border-b border-koma-border">
           <div>
-            <h3 className="font-serif text-lg font-bold text-white tracking-tight">
+            <h3 className="font-serif text-lg font-bold text-koma-foreground tracking-tight">
               Ações Rápidas — Comanda {comanda.mesaId ? `Mesa ${comanda.mesaId}` : `#${comanda.id.slice(-4)}`}
             </h3>
-            <span className="text-[10px] text-gray-400 font-mono block mt-0.5">
+            <span className="text-[10px] text-koma-subtle font-mono block mt-0.5">
               Cliente: {comanda.identificador || 'Consumo Geral'} • {comanda.itens?.length || 0} item(ns)
             </span>
           </div>
@@ -95,7 +95,7 @@ export const ComandaActionsModal: React.FC<ComandaActionsModalProps> = ({
             type="button"
             onClick={onClose}
             disabled={isAnyLoading}
-            className="p-1.5 rounded-full text-gray-400 hover:text-white hover:bg-[#27272A] transition-colors cursor-pointer disabled:opacity-50"
+            className="p-1.5 rounded-full text-koma-subtle hover:text-white hover:bg-[#27272A] transition-colors cursor-pointer disabled:opacity-50"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -106,7 +106,7 @@ export const ComandaActionsModal: React.FC<ComandaActionsModalProps> = ({
         {/* Simulador de Desconto e Calculadora de Rateio */}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-gray-300 uppercase tracking-wider block">
+            <label className="text-[10px] font-bold text-koma-secondary uppercase tracking-wider block">
               Desconto R$:
             </label>
             <input
@@ -116,12 +116,12 @@ export const ComandaActionsModal: React.FC<ComandaActionsModalProps> = ({
               value={descontoStr}
               onChange={(e) => setDescontoStr(e.target.value)}
               placeholder="0.00"
-              className="w-full px-3 py-2.5 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white font-mono text-sm focus:outline-none focus:border-emerald-500"
+              className="w-full px-3 py-2.5 bg-koma-card border border-koma-border rounded-xl text-koma-foreground font-mono text-sm focus:outline-none focus:border-emerald-500"
             />
           </div>
 
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-gray-300 uppercase tracking-wider block">
+            <label className="text-[10px] font-bold text-koma-secondary uppercase tracking-wider block">
               Dividir Conta (Pessoas):
             </label>
             <input
@@ -131,16 +131,16 @@ export const ComandaActionsModal: React.FC<ComandaActionsModalProps> = ({
               value={pessoasStr}
               onChange={(e) => setPessoasStr(e.target.value)}
               placeholder="1"
-              className="w-full px-3 py-2.5 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-white font-mono text-sm focus:outline-none focus:border-emerald-500"
+              className="w-full px-3 py-2.5 bg-koma-card border border-koma-border rounded-xl text-koma-foreground font-mono text-sm focus:outline-none focus:border-emerald-500"
             />
           </div>
         </div>
 
         {/* Resumo de Calculo em Tempo Real */}
-        <div className="bg-[#1C1C1F] p-4 rounded-2xl border border-[#27272A] space-y-2">
-          <div className="flex justify-between text-xs text-gray-400">
+        <div className="bg-koma-card p-4 rounded-2xl border border-koma-border space-y-2">
+          <div className="flex justify-between text-xs text-koma-subtle">
             <span>Subtotal Consumido:</span>
-            <span className="font-mono text-gray-300">R$ {totalBase.toFixed(2)}</span>
+            <span className="font-mono text-koma-secondary">R$ {totalBase.toFixed(2)}</span>
           </div>
 
           {desconto > 0 && (
@@ -150,7 +150,7 @@ export const ComandaActionsModal: React.FC<ComandaActionsModalProps> = ({
             </div>
           )}
 
-          <div className="flex justify-between text-sm font-bold text-white border-t border-[#27272A] pt-2">
+          <div className="flex justify-between text-sm font-bold text-koma-foreground border-t border-koma-border pt-2">
             <span>Total Final:</span>
             <span className="font-mono text-emerald-400 text-base">R$ {totalFinal.toFixed(2)}</span>
           </div>
@@ -165,7 +165,7 @@ export const ComandaActionsModal: React.FC<ComandaActionsModalProps> = ({
 
         {/* Métodos de Recebimento */}
         <div className="space-y-1.5">
-          <label className="text-[10px] font-bold text-gray-300 uppercase tracking-wider block">
+          <label className="text-[10px] font-bold text-koma-secondary uppercase tracking-wider block">
             Método de Pagamento:
           </label>
           <div className="grid grid-cols-3 gap-2">
@@ -180,7 +180,7 @@ export const ComandaActionsModal: React.FC<ComandaActionsModalProps> = ({
                   className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
                     selected
                       ? 'bg-emerald-500/15 border-emerald-500 text-emerald-400'
-                      : 'bg-[#1C1C1F] border-[#27272A] text-gray-400 hover:text-white hover:border-gray-600'
+                      : 'bg-koma-card border-koma-border text-koma-subtle hover:text-white hover:border-gray-600'
                   }`}
                 >
                   {label}
@@ -191,13 +191,13 @@ export const ComandaActionsModal: React.FC<ComandaActionsModalProps> = ({
         </div>
 
         {/* Ações de Impressão e Finalização */}
-        <div className="space-y-2 pt-2 border-t border-[#27272A]">
+        <div className="space-y-2 pt-2 border-t border-koma-border">
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
               disabled={isAnyLoading}
               onClick={handlePrintKitchen}
-              className="py-3 px-3 bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] text-gray-200 hover:text-white rounded-xl text-xs font-bold cursor-pointer transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              className="py-3 px-3 bg-koma-card hover:bg-[#27272A] border border-koma-border text-gray-200 hover:text-white rounded-xl text-xs font-bold cursor-pointer transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {loadingKitchen ? (
                 <svg className="animate-spin h-4 w-4 text-emerald-400" fill="none" viewBox="0 0 24 24">
@@ -216,7 +216,7 @@ export const ComandaActionsModal: React.FC<ComandaActionsModalProps> = ({
               type="button"
               disabled={isAnyLoading}
               onClick={handlePrintBill}
-              className="py-3 px-3 bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] text-gray-200 hover:text-white rounded-xl text-xs font-bold cursor-pointer transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              className="py-3 px-3 bg-koma-card hover:bg-[#27272A] border border-koma-border text-gray-200 hover:text-white rounded-xl text-xs font-bold cursor-pointer transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {loadingBill ? (
                 <svg className="animate-spin h-4 w-4 text-emerald-400" fill="none" viewBox="0 0 24 24">

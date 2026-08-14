@@ -54,7 +54,7 @@ export default function CardapioProductCard({
               e.stopPropagation();
               onFastAdd(product);
             }}
-            className="absolute -bottom-1.5 -right-1.5 flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-white shadow-md hover:scale-105 active:scale-95 transition duration-150 cursor-pointer"
+            className="absolute -bottom-1.5 -right-1.5 flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-koma-foreground shadow-md hover:scale-105 active:scale-95 transition duration-150 cursor-pointer"
             id={`btn-fast-add-${product.id}`}
             title="Adicionar rápido"
           >

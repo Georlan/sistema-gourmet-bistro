@@ -317,14 +317,14 @@ export default function SuperAdminDevOps({
     <div className="space-y-6" id="superadmin-devops-control">
 
       {/* Real-time API Connection Diagnostics Panel */}
-      <div className="bg-[#121420] border border-[#1e293b]/40 p-5 rounded" id="api-diagnostics-panel">
+      <div className="bg-koma-card border border-[#1e293b]/40 p-5 rounded" id="api-diagnostics-panel">
         <div className="border-b border-[#1e293b]/40 pb-3 mb-4 flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <div className="relative">
               <span className="absolute inline-flex h-2.5 w-2.5 rounded-full bg-[#00b894] opacity-75 animate-ping"></span>
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#00b894]"></span>
             </div>
-            <h3 className="text-sm font-mono text-white font-bold flex items-center gap-2">
+            <h3 className="text-sm font-mono text-koma-foreground font-bold flex items-center gap-2">
               <ShieldAlert className="w-4 h-4 text-[#00b894]" />
               DIAGNÓSTICO E SAÚDE DAS INTEGRAÇÕES (API GATEWAY)
             </h3>
@@ -332,7 +332,7 @@ export default function SuperAdminDevOps({
           <button
             onClick={fetchApiHealth}
             disabled={isRefreshingHealth}
-            className="text-xs bg-[#111827] hover:bg-black border border-[#1e293b]/40 text-slate-300 font-mono py-1 px-3 rounded flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+            className="text-xs bg-koma-card hover:bg-black border border-[#1e293b]/40 text-koma-secondary font-mono py-1 px-3 rounded flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
           >
             <RefreshCw className={`w-3 h-3 text-[#00b894] ${isRefreshingHealth ? "animate-spin" : ""}`} />
             {isRefreshingHealth ? "REFRESCANDO..." : "REFRESCAR CONEXÕES"}
@@ -343,9 +343,9 @@ export default function SuperAdminDevOps({
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             {[1, 2, 3, 4, 5].map((i) => (
               <div key={i} className="bg-black/40 border border-zinc-900 p-3.5 rounded animate-pulse space-y-2">
-                <div className="h-4 bg-zinc-800 rounded w-1/2"></div>
-                <div className="h-3 bg-zinc-800 rounded w-3/4"></div>
-                <div className="h-2 bg-zinc-800 rounded w-1/3"></div>
+                <div className="h-4 bg-koma-raised rounded w-1/2"></div>
+                <div className="h-3 bg-koma-raised rounded w-3/4"></div>
+                <div className="h-2 bg-koma-raised rounded w-1/3"></div>
               </div>
             ))}
           </div>
@@ -354,12 +354,12 @@ export default function SuperAdminDevOps({
             {/* Cloudflare */}
             <div className={`p-3.5 rounded border transition-all ${
               apiHealth.cloudflare?.status === "CONNECTED"
-                ? "bg-emerald-950/20/10 border-emerald-950 text-slate-300"
-                : "bg-amber-950/10 border-amber-900/40 text-slate-300"
+                ? "bg-emerald-950/20/10 border-emerald-950 text-koma-secondary"
+                : "bg-amber-950/10 border-amber-900/40 text-koma-secondary"
             }`}>
               <div className="flex items-center justify-between mb-1.5">
-                <span className="font-bold font-mono text-white flex items-center gap-1.5">
-                  <Globe className="w-3.5 h-3.5 text-slate-400" />
+                <span className="font-bold font-mono text-koma-foreground flex items-center gap-1.5">
+                  <Globe className="w-3.5 h-3.5 text-koma-subtle" />
                   Cloudflare DNS
                 </span>
                 <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
@@ -370,7 +370,7 @@ export default function SuperAdminDevOps({
                   {apiHealth.cloudflare?.status === "CONNECTED" ? "CONECTADO" : "AJUSTE REQ."}
                 </span>
               </div>
-              <p className="text-[11px] font-mono text-slate-400">{apiHealth.cloudflare?.message}</p>
+              <p className="text-[11px] font-mono text-koma-subtle">{apiHealth.cloudflare?.message}</p>
               {apiHealth.cloudflare?.status !== "CONNECTED" && (
                 <p className="text-[10px] text-amber-500/90 mt-1.5 italic">
                   * Dica: Verifique se o CLOUDFLARE_ZONE_ID no painel de configurações é o ID real, não "test".
@@ -381,12 +381,12 @@ export default function SuperAdminDevOps({
             {/* GitHub */}
             <div className={`p-3.5 rounded border transition-all ${
               apiHealth.github?.status === "CONNECTED"
-                ? "bg-emerald-950/20/10 border-emerald-950 text-slate-300"
-                : "bg-amber-950/10 border-amber-900/40 text-slate-300"
+                ? "bg-emerald-950/20/10 border-emerald-950 text-koma-secondary"
+                : "bg-amber-950/10 border-amber-900/40 text-koma-secondary"
             }`}>
               <div className="flex items-center justify-between mb-1.5">
-                <span className="font-bold font-mono text-white flex items-center gap-1.5">
-                  <GitBranch className="w-3.5 h-3.5 text-slate-400" />
+                <span className="font-bold font-mono text-koma-foreground flex items-center gap-1.5">
+                  <GitBranch className="w-3.5 h-3.5 text-koma-subtle" />
                   GitHub CI/CD
                 </span>
                 <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
@@ -397,7 +397,7 @@ export default function SuperAdminDevOps({
                   {apiHealth.github?.status === "CONNECTED" ? "CONECTADO" : "FALHA CONEXÃO"}
                 </span>
               </div>
-              <p className="text-[11px] font-mono text-slate-400">{apiHealth.github?.message}</p>
+              <p className="text-[11px] font-mono text-koma-subtle">{apiHealth.github?.message}</p>
               {apiHealth.github?.status !== "CONNECTED" && (
                 <p className="text-[10px] text-amber-500/90 mt-1.5 italic">
                   * Dica: Garanta que o GITHUB_TOKEN possui permissões de "workflow" e "repo" ativas.
@@ -408,12 +408,12 @@ export default function SuperAdminDevOps({
             {/* Railway */}
             <div className={`p-3.5 rounded border transition-all ${
               apiHealth.railway?.status === "CONNECTED"
-                ? "bg-emerald-950/20/10 border-emerald-950 text-slate-300"
-                : "bg-amber-950/10 border-amber-900/40 text-slate-300"
+                ? "bg-emerald-950/20/10 border-emerald-950 text-koma-secondary"
+                : "bg-amber-950/10 border-amber-900/40 text-koma-secondary"
             }`}>
               <div className="flex items-center justify-between mb-1.5">
-                <span className="font-bold font-mono text-white flex items-center gap-1.5">
-                  <Server className="w-3.5 h-3.5 text-slate-400" />
+                <span className="font-bold font-mono text-koma-foreground flex items-center gap-1.5">
+                  <Server className="w-3.5 h-3.5 text-koma-subtle" />
                   Railway Core
                 </span>
                 <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
@@ -424,7 +424,7 @@ export default function SuperAdminDevOps({
                   {apiHealth.railway?.status === "CONNECTED" ? "CONECTADO" : "NÃO AUTORIZADO"}
                 </span>
               </div>
-              <p className="text-[11px] font-mono text-slate-400">{apiHealth.railway?.message}</p>
+              <p className="text-[11px] font-mono text-koma-subtle">{apiHealth.railway?.message}</p>
               {apiHealth.railway?.status !== "CONNECTED" && (
                 <p className="text-[10px] text-amber-500/90 mt-1.5 italic">
                   * Dica: Verifique se o RAILWAY_TOKEN é um token de desenvolvedor válido para o projeto.
@@ -435,12 +435,12 @@ export default function SuperAdminDevOps({
             {/* Sentry */}
             <div className={`p-3.5 rounded border transition-all ${
               apiHealth.sentry?.status === "CONNECTED"
-                ? "bg-emerald-950/20/10 border-emerald-950 text-slate-300"
-                : "bg-amber-950/10 border-amber-900/40 text-slate-300"
+                ? "bg-emerald-950/20/10 border-emerald-950 text-koma-secondary"
+                : "bg-amber-950/10 border-amber-900/40 text-koma-secondary"
             }`}>
               <div className="flex items-center justify-between mb-1.5">
-                <span className="font-bold font-mono text-white flex items-center gap-1.5">
-                  <CloudLightning className="w-3.5 h-3.5 text-slate-400" />
+                <span className="font-bold font-mono text-koma-foreground flex items-center gap-1.5">
+                  <CloudLightning className="w-3.5 h-3.5 text-koma-subtle" />
                   Sentry Telemetria
                 </span>
                 <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
@@ -451,7 +451,7 @@ export default function SuperAdminDevOps({
                   {apiHealth.sentry?.status === "CONNECTED" ? "CONECTADO" : "ACESSO NEGADO"}
                 </span>
               </div>
-              <p className="text-[11px] font-mono text-slate-400">{apiHealth.sentry?.message}</p>
+              <p className="text-[11px] font-mono text-koma-subtle">{apiHealth.sentry?.message}</p>
               {apiHealth.sentry?.status !== "CONNECTED" && (
                 <p className="text-[10px] text-amber-500/90 mt-1.5 italic">
                   * Dica: O token de autenticação do Sentry requer o escopo "project:read" habilitado.
@@ -462,14 +462,14 @@ export default function SuperAdminDevOps({
             {/* Evolution API */}
             <div className={`p-3.5 rounded border transition-all ${
               apiHealth.evolution?.status === "green"
-                ? "bg-emerald-950/20/10 border-emerald-950 text-slate-300"
+                ? "bg-emerald-950/20/10 border-emerald-950 text-koma-secondary"
                 : apiHealth.evolution?.status === "yellow"
-                  ? "bg-amber-950/10 border-amber-900/40 text-slate-300"
-                  : "bg-red-950/10 border-red-900/40 text-slate-300"
+                  ? "bg-amber-950/10 border-amber-900/40 text-koma-secondary"
+                  : "bg-red-950/10 border-red-900/40 text-koma-secondary"
             }`}>
               <div className="flex items-center justify-between mb-1.5">
-                <span className="font-bold font-mono text-white flex items-center gap-1.5">
-                  <Zap className="w-3.5 h-3.5 text-slate-400" />
+                <span className="font-bold font-mono text-koma-foreground flex items-center gap-1.5">
+                  <Zap className="w-3.5 h-3.5 text-koma-subtle" />
                   WhatsApp OTP
                 </span>
                 <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
@@ -486,7 +486,7 @@ export default function SuperAdminDevOps({
                       : "NÃO CONFIGURADO"}
                 </span>
               </div>
-              <p className="text-[11px] font-mono text-slate-400">
+              <p className="text-[11px] font-mono text-koma-subtle">
                 {apiHealth.evolution?.details || "Diagnóstico indisponível"}
               </p>
             </div>
@@ -494,7 +494,7 @@ export default function SuperAdminDevOps({
         )}
 
         {/* Informative fallback toggle indicator */}
-        <div className="mt-3 text-[10px] font-mono text-slate-500 flex items-center gap-1.5 bg-black/20 p-2 rounded border border-zinc-900">
+        <div className="mt-3 text-[10px] font-mono text-koma-muted flex items-center gap-1.5 bg-black/20 p-2 rounded border border-zinc-900">
           <span className="inline-block w-2 h-2 rounded-full bg-[#00b894]"></span>
           <span>
             <strong>Transparência de Conexão:</strong> Este painel opera estritamente com dados de telemetria e fluxos obtidos via conexões de API reais. Se uma credencial for inválida, um aviso de erro persistente será exibido no lugar de dados simulados.
@@ -505,9 +505,9 @@ export default function SuperAdminDevOps({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Railway Server Health Stats */}
-        <div className="bg-[#121420] border border-[#1e293b]/40 p-5 rounded flex flex-col" id="railway-panel">
+        <div className="bg-koma-card border border-[#1e293b]/40 p-5 rounded flex flex-col" id="railway-panel">
           <div className="border-b border-[#1e293b]/40 pb-3 mb-4 flex items-center justify-between">
-            <h3 className="text-sm font-mono text-white font-bold flex items-center gap-2">
+            <h3 className="text-sm font-mono text-koma-foreground font-bold flex items-center gap-2">
               <Server className="w-4 h-4 text-[#00b894]" />
               [01] RAILWAY CONTAINER SAÚDE (CORE API)
             </h3>
@@ -523,7 +523,7 @@ export default function SuperAdminDevOps({
               <p className="text-xs text-red-300/85 max-w-[280px]">
                 {railwayError}
               </p>
-              <p className="text-[10px] text-slate-500 font-sans italic mt-2">
+              <p className="text-[10px] text-koma-muted font-sans italic mt-2">
                 Verifique se o token, o project ID e o service ID foram fornecidos corretamente.
               </p>
             </div>
@@ -532,15 +532,15 @@ export default function SuperAdminDevOps({
               {/* CPU Bar */}
               <div>
                 <div className="flex items-center justify-between text-xs font-mono mb-1.5">
-                  <span className="text-slate-400 flex items-center gap-1">
-                    <Cpu className="w-3.5 h-3.5 text-slate-500" />
+                  <span className="text-koma-subtle flex items-center gap-1">
+                    <Cpu className="w-3.5 h-3.5 text-koma-muted" />
                     CPU_USAGE
                   </span>
-                  <span className="font-bold text-white">
+                  <span className="font-bold text-koma-foreground">
                     {railwayCpu !== null ? `${railwayCpu.toFixed(1)}%` : "Carregando..."}
                   </span>
                 </div>
-                <div className="w-full bg-black rounded-full h-2 border border-[#1e293b]/40 overflow-hidden">
+                <div className="w-full bg-koma-page rounded-full h-2 border border-[#1e293b]/40 overflow-hidden">
                   {railwayCpu !== null ? (
                     <div 
                       className={`h-full rounded-full transition-all duration-500 ${
@@ -557,15 +557,15 @@ export default function SuperAdminDevOps({
               {/* RAM Bar */}
               <div>
                 <div className="flex items-center justify-between text-xs font-mono mb-1.5">
-                  <span className="text-slate-400 flex items-center gap-1">
-                    <Cpu className="w-3.5 h-3.5 text-slate-500" />
+                  <span className="text-koma-subtle flex items-center gap-1">
+                    <Cpu className="w-3.5 h-3.5 text-koma-muted" />
                     RAM_ALLOCATED (512MB LIMIT)
                   </span>
-                  <span className="font-bold text-white">
+                  <span className="font-bold text-koma-foreground">
                     {railwayRam !== null ? `${railwayRam}MB / 512MB` : "Carregando..."}
                   </span>
                 </div>
-                <div className="w-full bg-black rounded-full h-2 border border-[#1e293b]/40 overflow-hidden">
+                <div className="w-full bg-koma-page rounded-full h-2 border border-[#1e293b]/40 overflow-hidden">
                   {railwayRam !== null ? (
                     <div 
                       className="h-full bg-[#00b894] rounded-full transition-all duration-500"
@@ -578,12 +578,12 @@ export default function SuperAdminDevOps({
               </div>
 
               {/* Supabase connections stat */}
-              <div className="bg-black border border-[#1e293b]/40 p-3.5 rounded flex items-center justify-between">
+              <div className="bg-koma-page border border-[#1e293b]/40 p-3.5 rounded flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Database className="w-4 h-4 text-[#00b894]" />
                   <div className="text-xs font-mono">
-                    <p className="text-white font-bold">SUPABASE_POOL_CONN</p>
-                    <p className="text-[10px] text-slate-500">PostgreSQL isolated multi-tenant</p>
+                    <p className="text-koma-foreground font-bold">SUPABASE_POOL_CONN</p>
+                    <p className="text-[10px] text-koma-muted">PostgreSQL isolated multi-tenant</p>
                   </div>
                 </div>
                 <span className="text-sm font-mono font-bold text-[#00b894]">
@@ -592,11 +592,11 @@ export default function SuperAdminDevOps({
               </div>
 
               {/* Railway Terminal Outputs */}
-              <div className="bg-black/80 border border-[#1e293b]/40 p-3 rounded font-mono text-[10px] space-y-1 text-slate-400 h-[140px] overflow-y-auto">
-                <span className="text-slate-500 block border-b border-zinc-950 pb-1 mb-1">LIVE_RAILWAY_STDERR_STREAM</span>
+              <div className="bg-black/80 border border-[#1e293b]/40 p-3 rounded font-mono text-[10px] space-y-1 text-koma-subtle h-[140px] overflow-y-auto">
+                <span className="text-koma-muted block border-b border-zinc-950 pb-1 mb-1">LIVE_RAILWAY_STDERR_STREAM</span>
                 {deployLogs.length > 0 ? (
                   deployLogs.map((log, idx) => (
-                    <div key={idx} className="whitespace-nowrap overflow-hidden text-ellipsis text-slate-400">
+                    <div key={idx} className="whitespace-nowrap overflow-hidden text-ellipsis text-koma-subtle">
                       {log}
                     </div>
                   ))
@@ -619,9 +619,9 @@ export default function SuperAdminDevOps({
         </div>
 
         {/* Cloudflare DNS Domains Automation Panel */}
-        <div className="bg-[#121420] border border-[#1e293b]/40 p-5 rounded" id="cloudflare-panel">
+        <div className="bg-koma-card border border-[#1e293b]/40 p-5 rounded" id="cloudflare-panel">
           <div className="border-b border-[#1e293b]/40 pb-3 mb-4 flex items-center justify-between">
-            <h3 className="text-sm font-mono text-white font-bold flex items-center gap-2">
+            <h3 className="text-sm font-mono text-koma-foreground font-bold flex items-center gap-2">
               <Globe className="w-4 h-4 text-[#00b894]" />
               [02] CLOUDFLARE DOMÍNIOS AUTOMÁTICOS
             </h3>
@@ -637,28 +637,28 @@ export default function SuperAdminDevOps({
               <p className="text-xs text-red-300/85 max-w-[280px]">
                 {cloudflareError}
               </p>
-              <p className="text-[10px] text-slate-500 font-sans italic mt-2">
+              <p className="text-[10px] text-koma-muted font-sans italic mt-2">
                 Verifique se o token e o Zone ID foram fornecidos e estão válidos.
               </p>
             </div>
           ) : (
             <div className="space-y-4 flex-1">
               {/* Create subdomain form */}
-              <form onSubmit={handleAddDns} className="bg-black border border-[#1e293b]/40 p-3 rounded space-y-3">
+              <form onSubmit={handleAddDns} className="bg-koma-page border border-[#1e293b]/40 p-3 rounded space-y-3">
                 <p className="text-[10px] text-[#00b894] font-mono uppercase font-bold">Novo Mapeamento CNAME Dinâmico</p>
                 
                 <div className="flex items-center gap-2">
                   <div className="flex-1 relative">
                     <input
                       type="text"
-                      className="w-full bg-black border border-[#1e293b]/40 rounded px-2.5 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-[#00b894]"
+                      className="w-full bg-koma-page border border-[#1e293b]/40 rounded px-2.5 py-1.5 text-xs font-mono text-koma-foreground focus:outline-none focus:border-[#00b894]"
                       placeholder="Ex: pizzaria-sol"
                       value={newSubdomain}
                       onChange={e => setNewSubdomain(e.target.value)}
                       disabled={isAddingDns}
                       required
                     />
-                    <span className="absolute right-2 top-2 text-[10px] font-mono text-slate-500">.koma.com</span>
+                    <span className="absolute right-2 top-2 text-[10px] font-mono text-koma-muted">.koma.com</span>
                   </div>
                   <button
                     type="submit"
@@ -674,21 +674,21 @@ export default function SuperAdminDevOps({
               {/* Subdomain List */}
               <div className="space-y-2 overflow-y-auto max-h-[280px] scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent pr-1">
                 {dnsList.length === 0 ? (
-                  <div className="text-center py-8 text-xs font-mono text-slate-500 border border-dashed border-zinc-800 rounded bg-black/30 px-4">
+                  <div className="text-center py-8 text-xs font-mono text-koma-muted border border-dashed border-koma-border rounded bg-black/30 px-4">
                     Nenhum subdomínio ativo no momento. Digite um slug no campo acima para criar.
                   </div>
                 ) : (
                   dnsList.map((dns, idx) => (
-                    <div key={idx} className="bg-black border border-[#1e293b]/40 p-3 rounded flex items-center justify-between text-xs font-mono">
+                    <div key={idx} className="bg-koma-page border border-[#1e293b]/40 p-3 rounded flex items-center justify-between text-xs font-mono">
                       <div>
-                        <p className="text-white font-bold">{dns.subdomain}</p>
+                        <p className="text-koma-foreground font-bold">{dns.subdomain}</p>
                         <p className="text-[9px] text-[#00b894] mt-0.5">CNAME &rarr; {dns.target}</p>
                       </div>
                       <div className="flex flex-col items-end gap-1">
                         <span className="text-[9px] text-[#00b894] bg-emerald-950/20/40 border border-emerald-950 px-1.5 rounded font-bold">
                           🟢 PROXIED
                         </span>
-                        <span className="text-[9px] text-slate-400 bg-zinc-950 px-1.5 rounded">
+                        <span className="text-[9px] text-koma-subtle bg-zinc-950 px-1.5 rounded">
                           SSL: {dns.ssl}
                         </span>
                       </div>
@@ -701,9 +701,9 @@ export default function SuperAdminDevOps({
         </div>
 
         {/* GitHub Actions CI/CD Branch Panel */}
-        <div className="bg-[#121420] border border-[#1e293b]/40 p-5 rounded" id="github-panel">
+        <div className="bg-koma-card border border-[#1e293b]/40 p-5 rounded" id="github-panel">
           <div className="border-b border-[#1e293b]/40 pb-3 mb-4 flex items-center justify-between">
-            <h3 className="text-sm font-mono text-white font-bold flex items-center gap-2">
+            <h3 className="text-sm font-mono text-koma-foreground font-bold flex items-center gap-2">
               <GitBranch className="w-4 h-4 text-[#00b894]" />
               [03] GITHUB CI/CD WORKFLOW RUNS
             </h3>
@@ -719,7 +719,7 @@ export default function SuperAdminDevOps({
               <p className="text-xs text-red-300/85 max-w-[280px]">
                 {githubError}
               </p>
-              <p className="text-[10px] text-slate-500 font-sans italic mt-2">
+              <p className="text-[10px] text-koma-muted font-sans italic mt-2">
                 Verifique se o token de autenticação e o repositório foram preenchidos corretamente.
               </p>
             </div>
@@ -727,14 +727,14 @@ export default function SuperAdminDevOps({
             <div className="space-y-4 flex-1">
               <div className="space-y-3 overflow-y-auto max-h-[300px] scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
                 {githubCommits.length === 0 ? (
-                  <div className="text-center py-8 text-xs font-mono text-slate-500 border border-dashed border-zinc-800 rounded bg-black/30 px-4">
+                  <div className="text-center py-8 text-xs font-mono text-koma-muted border border-dashed border-koma-border rounded bg-black/30 px-4">
                     Sem dados de deploy ativos. Verifique as credenciais GITHUB_TOKEN.
                   </div>
                 ) : (
                   githubCommits.map((commit, idx) => (
-                    <div key={idx} className="bg-black border border-[#1e293b]/40 p-3 rounded flex flex-col space-y-2 text-xs font-mono">
+                    <div key={idx} className="bg-koma-page border border-[#1e293b]/40 p-3 rounded flex flex-col space-y-2 text-xs font-mono">
                       <div className="flex items-center justify-between">
-                        <span className="text-white font-bold flex items-center gap-1 bg-[#090c15] border border-[#1e293b]/40 px-1.5 py-0.5 rounded text-[10px]">
+                        <span className="text-koma-foreground font-bold flex items-center gap-1 bg-[#090c15] border border-[#1e293b]/40 px-1.5 py-0.5 rounded text-[10px]">
                           <GitBranch className="w-3.5 h-3.5 text-[#00b894]" />
                           {commit.branch}
                         </span>
@@ -753,9 +753,9 @@ export default function SuperAdminDevOps({
                         )}
                       </div>
                       
-                      <p className="text-slate-300 font-sans text-xs">{commit.text}</p>
+                      <p className="text-koma-secondary font-sans text-xs">{commit.text}</p>
 
-                      <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1.5 border-t border-zinc-900/60">
+                      <div className="flex items-center justify-between text-[10px] text-koma-muted pt-1.5 border-t border-zinc-900/60">
                         <span>COMMIT: {commit.id} by {commit.author}</span>
                         <span>{commit.time}</span>
                       </div>
@@ -776,14 +776,14 @@ export default function SuperAdminDevOps({
               {/* Deploy Global Section */}
               <div className="mt-6 pt-6 border-t border-[#1e293b]/40 space-y-4">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-mono text-white font-bold flex items-center gap-1.5 uppercase">
+                  <h4 className="text-xs font-mono text-koma-foreground font-bold flex items-center gap-1.5 uppercase">
                     🚀 DISPARAR DEPLOY GLOBAL
                   </h4>
-                  <span className="text-[8px] text-slate-500 font-mono">AUTOMATION_V3.5</span>
+                  <span className="text-[8px] text-koma-muted font-mono">AUTOMATION_V3.5</span>
                 </div>
 
                 <div className="space-y-3">
-                  <label className="block text-[10px] font-mono text-slate-400 uppercase">
+                  <label className="block text-[10px] font-mono text-koma-subtle uppercase">
                     Mensagem de Commit (Obrigatório)
                   </label>
                   <div className="flex flex-col md:flex-row gap-3">
@@ -792,7 +792,7 @@ export default function SuperAdminDevOps({
                       value={commitMessage}
                       onChange={(e) => setCommitMessage(e.target.value)}
                       placeholder="Ex: refactor: optimization of memory caching"
-                      className="flex-1 bg-black border border-[#1e293b]/40 rounded px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-[#00b894]"
+                      className="flex-1 bg-koma-page border border-[#1e293b]/40 rounded px-3 py-2 text-xs font-mono text-koma-foreground focus:outline-none focus:border-[#00b894]"
                       disabled={isDeploying}
                     />
                     <button
@@ -800,7 +800,7 @@ export default function SuperAdminDevOps({
                       disabled={isDeploying || !commitMessage.trim()}
                       className={`px-5 py-2 rounded font-mono text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
                         isDeploying || !commitMessage.trim()
-                          ? "bg-zinc-800 text-zinc-500 border-transparent cursor-not-allowed"
+                          ? "bg-koma-raised text-koma-muted border-transparent cursor-not-allowed"
                           : "bg-emerald-500 hover:bg-emerald-600 text-black font-extrabold"
                       }`}
                     >
@@ -818,8 +818,8 @@ export default function SuperAdminDevOps({
                   </div>
 
                   {/* Provisioning Terminal for Git Output */}
-                  <div className="bg-black/90 border border-zinc-900 rounded p-3 font-mono text-[10px] text-slate-300 h-[180px] overflow-y-auto flex flex-col space-y-1">
-                    <div className="text-slate-500 border-b border-zinc-950 pb-1 mb-2 flex items-center justify-between">
+                  <div className="bg-black/90 border border-zinc-900 rounded p-3 font-mono text-[10px] text-koma-secondary h-[180px] overflow-y-auto flex flex-col space-y-1">
+                    <div className="text-koma-muted border-b border-zinc-950 pb-1 mb-2 flex items-center justify-between">
                       <span>PROVISIONING_TERMINAL</span>
                       <span className={`w-2 h-2 rounded-full ${isDeploying ? "bg-[#00b894] animate-pulse" : "bg-zinc-600"}`}></span>
                     </div>
@@ -835,7 +835,7 @@ export default function SuperAdminDevOps({
                               ? "text-red-400 font-bold" 
                               : line.startsWith("$") 
                               ? "text-sky-400 font-bold" 
-                              : "text-slate-400"
+                              : "text-koma-subtle"
                           }>
                             {line}
                           </div>
@@ -852,12 +852,12 @@ export default function SuperAdminDevOps({
       </div>
 
       {/* DevOps Architecture Details */}
-      <div className="bg-[#121420] border border-[#1e293b]/40 p-4 rounded flex flex-col space-y-2 animate-fade-in">
-        <h4 className="text-xs font-mono text-slate-400 font-bold flex items-center gap-1.5">
+      <div className="bg-koma-card border border-[#1e293b]/40 p-4 rounded flex flex-col space-y-2 animate-fade-in">
+        <h4 className="text-xs font-mono text-koma-subtle font-bold flex items-center gap-1.5">
           <CloudLightning className="w-3.5 h-3.5 text-[#00b894]" />
           [SISTEMA_DOCKER] ARQUITETURA DO ORQUESTRADOR DE INFRAESTRUTURA
         </h4>
-        <p className="text-[10px] text-slate-500 font-mono leading-relaxed">
+        <p className="text-[10px] text-koma-muted font-mono leading-relaxed">
           The SuperAdmin console communicates directly with our Python FastAPI backend. The FastAPI application makes use of decoupled services using standard Dependency Injection design patterns to talk directly to Cloudflare, Sentry, and Railway. All credentials, API keys, and auth scopes are safely hidden on our servers, ensuring your restaurant's digital gateways are completely secure.
         </p>
       </div>
@@ -865,19 +865,19 @@ export default function SuperAdminDevOps({
       {/* Modal: Confirm Restart Server */}
       <AnimatePresence>
         {showRestartModal && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 font-mono text-xs text-slate-300">
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 font-mono text-xs text-koma-secondary">
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-[#050814] border border-red-900/40 rounded-lg max-w-md w-full p-5 space-y-4 shadow-[0_0_35px_rgba(239,68,68,0.25)]"
+              className="bg-koma-page border border-red-900/40 rounded-lg max-w-md w-full p-5 space-y-4 shadow-[0_0_35px_rgba(239,68,68,0.25)]"
             >
               <div className="flex items-center gap-2 text-red-500 font-bold border-b border-[#1e293b]/40 pb-3 uppercase text-sm">
                 <ShieldAlert className="w-5 h-5 text-red-500 shrink-0" />
                 <span>Confirmar Reinicialização de Emergência</span>
               </div>
               <p className="leading-relaxed">
-                Você tem certeza que deseja realizar a <strong className="text-white">REINICIALIZAÇÃO DE EMERGÊNCIA</strong> do servidor central no Railway em produção?
+                Você tem certeza que deseja realizar a <strong className="text-koma-foreground">REINICIALIZAÇÃO DE EMERGÊNCIA</strong> do servidor central no Railway em produção?
               </p>
               <div className="bg-red-950/20 border border-red-900/30 p-3 rounded text-red-400 text-[11px] leading-relaxed">
                 <strong>🚨 PERIGO: Ações Irreversíveis</strong>
@@ -889,7 +889,7 @@ export default function SuperAdminDevOps({
                 <button
                   type="button"
                   onClick={() => setShowRestartModal(false)}
-                  className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-700/50 px-3 py-2 rounded text-slate-400 hover:text-white cursor-pointer transition-colors"
+                  className="bg-koma-card hover:bg-zinc-800 border border-zinc-700/50 px-3 py-2 rounded text-koma-subtle hover:text-white cursor-pointer transition-colors"
                 >
                   Cancelar
                 </button>

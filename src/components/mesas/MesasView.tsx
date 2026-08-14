@@ -75,8 +75,8 @@ export function MesasView({
   ];
 
   return (
-    <div className="w-full text-white font-sans select-none space-y-4 sm:space-y-5">
-      <section className="waiter-salon-stage relative overflow-hidden rounded-[24px] sm:rounded-[30px] border border-white/[0.08] bg-[#0d100e] px-4 py-5 sm:px-7 sm:py-6 lg:px-9 lg:py-7">
+    <div className="w-full text-koma-foreground font-sans select-none space-y-4 sm:space-y-5">
+      <section className="waiter-salon-stage relative overflow-hidden rounded-[24px] sm:rounded-[30px] border border-white/[0.08] bg-koma-panel px-4 py-5 sm:px-7 sm:py-6 lg:px-9 lg:py-7">
         <div className="waiter-salon-stage__plane" aria-hidden="true" />
         <span className="waiter-salon-stage__word" aria-hidden="true">SALÃO</span>
 
@@ -87,44 +87,44 @@ export function MesasView({
               Operação ao vivo
             </div>
             <div className="mt-2 flex items-end gap-3 sm:gap-4">
-              <h2 className="font-serif text-[2rem] sm:text-4xl lg:text-5xl font-black tracking-[-0.055em] leading-none text-white">
+              <h2 className="font-serif text-[2rem] sm:text-4xl lg:text-5xl font-black tracking-[-0.055em] leading-none text-koma-foreground">
                 Mapa de mesas
               </h2>
               <span className="hidden sm:inline-block mb-1.5 h-1 w-14 bg-[#00b894] -rotate-2" aria-hidden="true" />
             </div>
-            <p className="mt-2.5 max-w-xl text-xs sm:text-sm text-zinc-400 leading-relaxed">
+            <p className="mt-2.5 max-w-xl text-xs sm:text-sm text-koma-subtle leading-relaxed">
               Veja o salão inteiro, identifique prioridades e abra uma mesa com um toque.
             </p>
           </div>
 
           <div className="grid grid-cols-3 gap-px overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.08] w-full xl:w-auto xl:min-w-[470px]">
-            <div className="bg-[#111411] px-3 py-3 sm:px-4 sm:py-3.5">
-              <div className="flex items-center gap-1.5 text-zinc-500">
+            <div className="bg-koma-panel px-3 py-3 sm:px-4 sm:py-3.5">
+              <div className="flex items-center gap-1.5 text-koma-muted">
                 <Grid2X2 size={12} />
                 <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-wider">Salão</span>
               </div>
-              <p className="mt-1 font-mono text-lg sm:text-xl font-bold text-white">{counts.todos}</p>
+              <p className="mt-1 font-mono text-lg sm:text-xl font-bold text-koma-foreground">{counts.todos}</p>
             </div>
-            <div className="bg-[#111411] px-3 py-3 sm:px-4 sm:py-3.5">
+            <div className="bg-koma-panel px-3 py-3 sm:px-4 sm:py-3.5">
               <div className="flex items-center gap-1.5 text-rose-400">
                 <Utensils size={12} />
                 <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-wider">Ocupadas</span>
               </div>
-              <p className="mt-1 font-mono text-lg sm:text-xl font-bold text-white">{counts.ocupadas}</p>
+              <p className="mt-1 font-mono text-lg sm:text-xl font-bold text-koma-foreground">{counts.ocupadas}</p>
             </div>
-            <div className="bg-[#111411] px-3 py-3 sm:px-4 sm:py-3.5">
+            <div className="bg-koma-panel px-3 py-3 sm:px-4 sm:py-3.5">
               <div className="flex items-center gap-1.5 text-amber-400">
                 <CheckCircle2 size={12} />
                 <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-wider">Prontas</span>
               </div>
-              <p className="mt-1 font-mono text-lg sm:text-xl font-bold text-white">{counts.prontas}</p>
+              <p className="mt-1 font-mono text-lg sm:text-xl font-bold text-koma-foreground">{counts.prontas}</p>
             </div>
           </div>
         </div>
       </section>
 
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 border-b border-white/[0.07] pb-4">
-        <div className="flex items-center gap-2 text-zinc-400">
+        <div className="flex items-center gap-2 text-koma-subtle">
           <Activity size={14} className="text-[#00b894]" />
           <span className="text-[10px] font-bold uppercase tracking-[0.14em]">Estrutura física do salão</span>
         </div>
@@ -143,7 +143,7 @@ export function MesasView({
                 } ${
                   isActive
                     ? 'bg-[#00b894] text-[#04100c] border-[#00b894] shadow-[0_8px_24px_rgba(0,184,148,0.16)]'
-                    : 'bg-white/[0.035] text-zinc-400 hover:text-white hover:bg-white/[0.07] border-white/[0.08]'
+                    : 'bg-white/[0.035] text-koma-subtle hover:text-white hover:bg-white/[0.07] border-white/[0.08]'
                 }`}
               >
                 {filter.label} <span className={`font-mono text-[9px] ${isActive ? 'text-[#063f32]' : 'text-zinc-600'}`}>{filter.count}</span>
@@ -155,7 +155,7 @@ export function MesasView({
 
       <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-3.5 w-full">
         {filteredRows.length === 0 ? (
-          <div className="col-span-full py-16 rounded-2xl border border-dashed border-white/[0.09] text-center text-zinc-500 text-sm">
+          <div className="col-span-full py-16 rounded-2xl border border-dashed border-white/[0.09] text-center text-koma-muted text-sm">
             Nenhuma mesa encontrada neste status.
           </div>
         ) : filteredRows.map(({ table, tableOrders }) => {

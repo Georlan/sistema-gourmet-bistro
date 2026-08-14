@@ -87,23 +87,23 @@ export function CaixaAtivarPage({ token }: CaixaAtivarPageProps) {
   };
 
   return (
-    <div className={clsx('min-h-screen', 'bg-[#09090B]', 'text-white', 'flex', 'items-center', 'justify-center', 'p-4', 'font-sans')}>
-      <div className={clsx('w-full', 'max-w-md', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-8', 'shadow-2xl', 'space-y-6')}>
+    <div className={clsx('min-h-screen', 'bg-koma-page', 'text-koma-foreground', 'flex', 'items-center', 'justify-center', 'p-4', 'font-sans')}>
+      <div className={clsx('w-full', 'max-w-md', 'bg-koma-card', 'border', 'border-koma-border', 'rounded-3xl', 'p-8', 'shadow-2xl', 'space-y-6')}>
         
         {/* Brand Header */}
         <div className="text-center space-y-2">
           <div className="inline-flex items-center justify-center p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl mb-1 text-emerald-400">
             <ShieldCheck size={32} />
           </div>
-          <h1 className="text-2xl font-serif font-bold text-white tracking-tight">Ative sua Conta</h1>
-          <p className="text-xs text-gray-400 font-medium">Cadastre sua nova senha de acesso ao Kôma Bistrô</p>
+          <h1 className="text-2xl font-serif font-bold text-koma-foreground tracking-tight">Ative sua Conta</h1>
+          <p className="text-xs text-koma-subtle font-medium">Cadastre sua nova senha de acesso ao Kôma Bistrô</p>
         </div>
 
         {sucesso ? (
           <div className="p-6 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl text-center space-y-3 animate-scale-in">
             <CheckCircle size={40} className="mx-auto text-emerald-400" />
             <h3 className="text-sm font-bold text-emerald-400 uppercase tracking-wider">Conta Ativada com Sucesso!</h3>
-            <p className="text-xs text-gray-300">Você será redirecionado automaticamente para o seu painel de trabalho...</p>
+            <p className="text-xs text-koma-secondary">Você será redirecionado automaticamente para o seu painel de trabalho...</p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -116,7 +116,7 @@ export function CaixaAtivarPage({ token }: CaixaAtivarPageProps) {
             )}
 
             <div className="space-y-1 text-left">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">E-mail de Login</label>
+              <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">E-mail de Login</label>
               <div className="relative">
                 <input
                   type="email"
@@ -127,14 +127,14 @@ export function CaixaAtivarPage({ token }: CaixaAtivarPageProps) {
                   placeholder="seu@email.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2.5 bg-[#09090B] border border-[#27272A] rounded-xl text-white text-xs focus:border-emerald-500 focus:outline-none transition-all"
+                  className="w-full pl-9 pr-4 py-2.5 bg-koma-page border border-koma-border rounded-xl text-koma-foreground text-xs focus:border-emerald-500 focus:outline-none transition-all"
                 />
-                <Mail size={14} className="absolute left-3 top-3 text-gray-500" />
+                <Mail size={14} className="absolute left-3 top-3 text-koma-muted" />
               </div>
             </div>
 
             <div className="space-y-1 text-left">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Nova Senha</label>
+              <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">Nova Senha</label>
               <div className="relative">
                 <input
                   type="password"
@@ -146,14 +146,14 @@ export function CaixaAtivarPage({ token }: CaixaAtivarPageProps) {
                   placeholder="Digite sua senha..."
                   value={senha}
                   onChange={(e) => setSenha(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2.5 bg-[#09090B] border border-[#27272A] rounded-xl text-white text-xs focus:border-emerald-500 focus:outline-none transition-all"
+                  className="w-full pl-9 pr-4 py-2.5 bg-koma-page border border-koma-border rounded-xl text-koma-foreground text-xs focus:border-emerald-500 focus:outline-none transition-all"
                 />
-                <Lock size={14} className="absolute left-3 top-3 text-gray-500" />
+                <Lock size={14} className="absolute left-3 top-3 text-koma-muted" />
               </div>
             </div>
 
             <div className="space-y-1 text-left">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Confirme a Senha</label>
+              <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">Confirme a Senha</label>
               <div className="relative">
                 <input
                   type="password"
@@ -165,9 +165,9 @@ export function CaixaAtivarPage({ token }: CaixaAtivarPageProps) {
                   placeholder="Repita sua nova senha..."
                   value={confirmaSenha}
                   onChange={(e) => setConfirmaSenha(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2.5 bg-[#09090B] border border-[#27272A] rounded-xl text-white text-xs focus:border-emerald-500 focus:outline-none transition-all"
+                  className="w-full pl-9 pr-4 py-2.5 bg-koma-page border border-koma-border rounded-xl text-koma-foreground text-xs focus:border-emerald-500 focus:outline-none transition-all"
                 />
-                <Lock size={14} className="absolute left-3 top-3 text-gray-500" />
+                <Lock size={14} className="absolute left-3 top-3 text-koma-muted" />
               </div>
             </div>
 

@@ -430,7 +430,7 @@ export default function SuperAdminPanel() {
   };
 
   return (
-    <div className="min-h-screen bg-[#090a0f] text-[#9ca3af] flex flex-col font-mono select-none border-4 border-[#121420] antialiased" id="superadmin-root">
+    <div className="min-h-screen bg-koma-page text-[#9ca3af] flex flex-col font-mono select-none border-4 border-[#121420] antialiased" id="superadmin-root">
       
       {/* Real-time Flashing Red Alerter */}
       <AnimatePresence>
@@ -464,7 +464,7 @@ export default function SuperAdminPanel() {
               )}
               <button
                 onClick={() => setFlashAlert(null)}
-                className="text-slate-400 hover:text-white font-bold underline text-[10px] px-2 py-1 cursor-pointer"
+                className="text-koma-subtle hover:text-white font-bold underline text-[10px] px-2 py-1 cursor-pointer"
               >
                 DESCARTAR
               </button>
@@ -474,7 +474,7 @@ export default function SuperAdminPanel() {
       </AnimatePresence>
 
       {/* Immersive UI Header */}
-      <header className="flex flex-col md:flex-row md:items-center justify-between px-6 py-4 bg-[#121420] border-b border-[#1e293b]/40 shadow-lg shrink-0 gap-4" id="superadmin-header">
+      <header className="flex flex-col md:flex-row md:items-center justify-between px-6 py-4 bg-koma-card border-b border-[#1e293b]/40 shadow-lg shrink-0 gap-4" id="superadmin-header">
         <div className="flex items-center space-x-4">
           {/* Glowing Green Nominal State Indicator */}
           <div className="h-3 w-3 rounded-full bg-[#00b894] shadow-[0_0_8px_#00b894]"></div>
@@ -485,8 +485,8 @@ export default function SuperAdminPanel() {
               KÔMA
             </div>
             <div>
-              <h1 className="text-xl font-black tracking-tighter text-white flex items-center gap-1.5">
-                KÔMA <span className="text-[#00b894]">DATA</span> <span className="text-[10px] text-slate-500 font-normal tracking-normal uppercase">v2.4.0</span>
+              <h1 className="text-xl font-black tracking-tighter text-koma-foreground flex items-center gap-1.5">
+                KÔMA <span className="text-[#00b894]">DATA</span> <span className="text-[10px] text-koma-muted font-normal tracking-normal uppercase">v2.4.0</span>
               </h1>
               <div className="flex items-center gap-2 mt-0.5">
                 <div className="px-2 py-0.5 border border-[#00b894] text-[#00b894] text-[9px] rounded animate-pulse font-bold tracking-widest">
@@ -501,16 +501,16 @@ export default function SuperAdminPanel() {
         {/* Dynamic Telemetry Stats */}
         <div className="flex space-x-6 md:space-x-8 text-[11px] font-mono text-[#9ca3af]">
           <div className="flex flex-col items-start md:items-end">
-            <span className="text-slate-500 uppercase text-[9px] tracking-wider">Railway Node</span>
-            <span className="text-white font-bold">US-EAST-1 (PROD)</span>
+            <span className="text-koma-muted uppercase text-[9px] tracking-wider">Railway Node</span>
+            <span className="text-koma-foreground font-bold">US-EAST-1 (PROD)</span>
           </div>
           <div className="flex flex-col items-start md:items-end">
-            <span className="text-slate-500 uppercase text-[9px] tracking-wider">Memory</span>
+            <span className="text-koma-muted uppercase text-[9px] tracking-wider">Memory</span>
             <span className="text-[#00b894] font-bold">512MB / 2048MB</span>
           </div>
           <div className="flex flex-col items-start md:items-end">
-            <span className="text-slate-500 uppercase text-[9px] tracking-wider">Server Time</span>
-            <span className="text-white font-mono font-bold tracking-tight">{currentTime || "2026-07-14 18:41:49"}</span>
+            <span className="text-koma-muted uppercase text-[9px] tracking-wider">Server Time</span>
+            <span className="text-koma-foreground font-mono font-bold tracking-tight">{currentTime || "2026-07-14 18:41:49"}</span>
           </div>
         </div>
       </header>
@@ -519,10 +519,10 @@ export default function SuperAdminPanel() {
       <div className="flex-1 flex flex-col md:flex-row min-h-0" id="superadmin-body-container">
         
         {/* Left Sidebar Navigation */}
-        <aside className="w-full md:w-64 bg-[#121420] border-r border-[#1e293b]/40 flex flex-col justify-between shrink-0" id="superadmin-sidebar">
+        <aside className="w-full md:w-64 bg-koma-card border-r border-[#1e293b]/40 flex flex-col justify-between shrink-0" id="superadmin-sidebar">
           {/* Top Nav List */}
           <div className="p-4 space-y-4">
-            <div className="text-[10px] font-mono text-slate-500 uppercase tracking-widest px-2 font-bold">
+            <div className="text-[10px] font-mono text-koma-muted uppercase tracking-widest px-2 font-bold">
               [SYSTEM_NAVIGATION]
             </div>
             
@@ -531,12 +531,12 @@ export default function SuperAdminPanel() {
                 onClick={() => setActiveTab("metrics")}
                 className={`w-full text-left font-mono text-xs px-3 py-2.5 rounded transition-all flex items-center justify-between cursor-pointer border ${
                   activeTab === "metrics" 
-                    ? "bg-[#090a0f] border-[#00b894] text-white font-bold shadow-[0_0_8px_rgba(0,184,148,0.15)]" 
-                    : "border-transparent text-slate-400 hover:bg-[#090a0f]/60 hover:text-white"
+                    ? "bg-koma-page border-[#00b894] text-koma-foreground font-bold shadow-[0_0_8px_rgba(0,184,148,0.15)]" 
+                    : "border-transparent text-koma-subtle hover:bg-[#090a0f]/60 hover:text-white"
                 }`}
               >
                 <div className="flex items-center gap-2.5">
-                  <Building2 className={`w-4 h-4 ${activeTab === "metrics" ? "text-[#00b894]" : "text-slate-500"}`} />
+                  <Building2 className={`w-4 h-4 ${activeTab === "metrics" ? "text-[#00b894]" : "text-koma-muted"}`} />
                   [01] METRICS & CONTROLE
                 </div>
               </button>
@@ -545,12 +545,12 @@ export default function SuperAdminPanel() {
                 onClick={() => setActiveTab("webhooks")}
                 className={`w-full text-left font-mono text-xs px-3 py-2.5 rounded transition-all flex items-center justify-between cursor-pointer border ${
                   activeTab === "webhooks" 
-                    ? "bg-[#090a0f] border-[#00b894] text-white font-bold shadow-[0_0_8px_rgba(0,184,148,0.15)]" 
-                    : "border-transparent text-slate-400 hover:bg-[#090a0f]/60 hover:text-white"
+                    ? "bg-koma-page border-[#00b894] text-koma-foreground font-bold shadow-[0_0_8px_rgba(0,184,148,0.15)]" 
+                    : "border-transparent text-koma-subtle hover:bg-[#090a0f]/60 hover:text-white"
                 }`}
               >
                 <div className="flex items-center gap-2.5">
-                  <Terminal className={`w-4 h-4 ${activeTab === "webhooks" ? "text-[#00b894]" : "text-slate-500"}`} />
+                  <Terminal className={`w-4 h-4 ${activeTab === "webhooks" ? "text-[#00b894]" : "text-koma-muted"}`} />
                   [02] WEBHOOK TERMINAL
                 </div>
               </button>
@@ -559,12 +559,12 @@ export default function SuperAdminPanel() {
                 onClick={() => setActiveTab("database")}
                 className={`w-full text-left font-mono text-xs px-3 py-2.5 rounded transition-all flex items-center justify-between cursor-pointer border ${
                   activeTab === "database" 
-                    ? "bg-[#090a0f] border-[#00b894] text-white font-bold shadow-[0_0_8px_rgba(0,184,148,0.15)]" 
-                    : "border-transparent text-slate-400 hover:bg-[#090a0f]/60 hover:text-white"
+                    ? "bg-koma-page border-[#00b894] text-koma-foreground font-bold shadow-[0_0_8px_rgba(0,184,148,0.15)]" 
+                    : "border-transparent text-koma-subtle hover:bg-[#090a0f]/60 hover:text-white"
                 }`}
               >
                 <div className="flex items-center gap-2.5">
-                  <Database className={`w-4 h-4 ${activeTab === "database" ? "text-[#00b894]" : "text-slate-500"}`} />
+                  <Database className={`w-4 h-4 ${activeTab === "database" ? "text-[#00b894]" : "text-koma-muted"}`} />
                   [03] DATABASE GRID EDITOR
                 </div>
               </button>
@@ -573,12 +573,12 @@ export default function SuperAdminPanel() {
                 onClick={() => setActiveTab("devops")}
                 className={`w-full text-left font-mono text-xs px-3 py-2.5 rounded transition-all flex items-center justify-between cursor-pointer border ${
                   activeTab === "devops" 
-                    ? "bg-[#090a0f] border-[#00b894] text-white font-bold shadow-[0_0_8px_rgba(0,184,148,0.15)]" 
-                    : "border-transparent text-slate-400 hover:bg-[#090a0f]/60 hover:text-white"
+                    ? "bg-koma-page border-[#00b894] text-koma-foreground font-bold shadow-[0_0_8px_rgba(0,184,148,0.15)]" 
+                    : "border-transparent text-koma-subtle hover:bg-[#090a0f]/60 hover:text-white"
                 }`}
               >
                 <div className="flex items-center gap-2.5">
-                  <Cpu className={`w-4 h-4 ${activeTab === "devops" ? "text-[#00b894]" : "text-slate-500"}`} />
+                  <Cpu className={`w-4 h-4 ${activeTab === "devops" ? "text-[#00b894]" : "text-koma-muted"}`} />
                   [04] ORQUESTRADOR INFRA
                 </div>
               </button>
@@ -587,12 +587,12 @@ export default function SuperAdminPanel() {
                 onClick={() => setActiveTab("telegram")}
                 className={`w-full text-left font-mono text-xs px-3 py-2.5 rounded transition-all flex items-center justify-between cursor-pointer border ${
                   activeTab === "telegram" 
-                    ? "bg-[#090a0f] border-[#00b894] text-white font-bold shadow-[0_0_8px_rgba(0,184,148,0.15)]" 
-                    : "border-transparent text-slate-400 hover:bg-[#090a0f]/60 hover:text-white"
+                    ? "bg-koma-page border-[#00b894] text-koma-foreground font-bold shadow-[0_0_8px_rgba(0,184,148,0.15)]" 
+                    : "border-transparent text-koma-subtle hover:bg-[#090a0f]/60 hover:text-white"
                 }`}
               >
                 <div className="flex items-center gap-2.5">
-                  <Bell className={`w-4 h-4 ${activeTab === "telegram" ? "text-[#00b894]" : "text-slate-500"}`} />
+                  <Bell className={`w-4 h-4 ${activeTab === "telegram" ? "text-[#00b894]" : "text-koma-muted"}`} />
                   [05] TELEGRAM ALERTS
                 </div>
               </button>
@@ -601,12 +601,12 @@ export default function SuperAdminPanel() {
                 onClick={() => setActiveTab("credentials")}
                 className={`w-full text-left font-mono text-xs px-3 py-2.5 rounded transition-all flex items-center justify-between cursor-pointer border ${
                   activeTab === "credentials" 
-                    ? "bg-[#090a0f] border-[#00b894] text-white font-bold shadow-[0_0_8px_rgba(0,184,148,0.15)]" 
-                    : "border-transparent text-slate-400 hover:bg-[#090a0f]/60 hover:text-white"
+                    ? "bg-koma-page border-[#00b894] text-koma-foreground font-bold shadow-[0_0_8px_rgba(0,184,148,0.15)]" 
+                    : "border-transparent text-koma-subtle hover:bg-[#090a0f]/60 hover:text-white"
                 }`}
               >
                 <div className="flex items-center gap-2.5">
-                  <Key className={`w-4 h-4 ${activeTab === "credentials" ? "text-[#00b894]" : "text-slate-500"}`} />
+                  <Key className={`w-4 h-4 ${activeTab === "credentials" ? "text-[#00b894]" : "text-koma-muted"}`} />
                   [06] GERENCIAR CHAVES
                 </div>
               </button>
@@ -615,12 +615,12 @@ export default function SuperAdminPanel() {
                 onClick={() => setActiveTab("whitelabel")}
                 className={`w-full text-left font-mono text-xs px-3 py-2.5 rounded transition-all flex items-center justify-between cursor-pointer border ${
                   activeTab === "whitelabel" 
-                    ? "bg-[#090a0f] border-[#00b894] text-white font-bold shadow-[0_0_8px_rgba(0,184,148,0.15)]" 
-                    : "border-transparent text-slate-400 hover:bg-[#090a0f]/60 hover:text-white"
+                    ? "bg-koma-page border-[#00b894] text-koma-foreground font-bold shadow-[0_0_8px_rgba(0,184,148,0.15)]" 
+                    : "border-transparent text-koma-subtle hover:bg-[#090a0f]/60 hover:text-white"
                 }`}
               >
                 <div className="flex items-center gap-2.5">
-                  <Sliders className={`w-4 h-4 ${activeTab === "whitelabel" ? "text-[#00b894]" : "text-slate-500"}`} />
+                  <Sliders className={`w-4 h-4 ${activeTab === "whitelabel" ? "text-[#00b894]" : "text-koma-muted"}`} />
                   [07] CONFIGURADOR WHITELABEL
                 </div>
               </button>
@@ -640,8 +640,8 @@ export default function SuperAdminPanel() {
                   return (
                     <div key={`${d.restaurantId}_${d.device}`} className="flex items-center justify-between border-b border-zinc-900/40 pb-1.5 last:border-0 last:pb-0">
                       <div>
-                        <div className="font-bold text-white text-[9px] truncate max-w-[100px]">{d.restaurantName}</div>
-                        <div className="text-[8px] text-slate-500">{d.device}</div>
+                        <div className="font-bold text-koma-foreground text-[9px] truncate max-w-[100px]">{d.restaurantName}</div>
+                        <div className="text-[8px] text-koma-muted">{d.device}</div>
                       </div>
                       <button
                         onClick={async () => {
@@ -672,7 +672,7 @@ export default function SuperAdminPanel() {
 
             {/* Local Node Telemetry Box from the Cockpit Theme */}
             <div className="bg-[#090a0f]/60 border border-[#1e293b]/30 p-3 rounded font-mono text-[10px] space-y-2">
-              <span className="text-slate-500 block uppercase font-bold border-b border-[#1e293b]/30 pb-1.5 tracking-wider">[LOCAL_TELEMETRY]</span>
+              <span className="text-koma-muted block uppercase font-bold border-b border-[#1e293b]/30 pb-1.5 tracking-wider">[LOCAL_TELEMETRY]</span>
               <div className="flex justify-between">
                 <span>FASTAPI PORT</span>
                 <span className="text-[#00b894] font-bold">:3000</span>
@@ -693,15 +693,15 @@ export default function SuperAdminPanel() {
           </div>
 
           {/* Bottom metadata */}
-          <div className="p-4 border-t border-[#1e293b]/40 bg-black/20 font-mono text-[10px] text-slate-500 space-y-1">
-            <p className="text-white opacity-40 font-bold">KOMA DATA SERVICE</p>
+          <div className="p-4 border-t border-[#1e293b]/40 bg-black/20 font-mono text-[10px] text-koma-muted space-y-1">
+            <p className="text-koma-foreground opacity-40 font-bold">KOMA DATA SERVICE</p>
             <p>BUILD: FINAL-RELEASE</p>
             <p className="text-[9px] text-slate-600">DevOps Workspace v2.4</p>
           </div>
         </aside>
 
         {/* Content Area with background container styling */}
-        <main className="flex-1 bg-[#090a0f] p-6 overflow-y-auto scrollbar-thin scrollbar-thumb-[#121420] scrollbar-track-transparent" id="superadmin-content">
+        <main className="flex-1 bg-koma-page p-6 overflow-y-auto scrollbar-thin scrollbar-thumb-[#121420] scrollbar-track-transparent" id="superadmin-content">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
@@ -786,13 +786,13 @@ export default function SuperAdminPanel() {
       </div>
 
       {/* Immersive UI Bottom Status Footer */}
-      <footer className="h-8 bg-[#121420] border-t border-[#1e293b]/40 px-4 flex items-center justify-between text-[10px] text-slate-500 shrink-0 select-none font-mono" id="superadmin-footer">
+      <footer className="h-8 bg-koma-card border-t border-[#1e293b]/40 px-4 flex items-center justify-between text-[10px] text-koma-muted shrink-0 select-none font-mono" id="superadmin-footer">
         <div>
           DOCKER-COMPOSE: <span className="text-[#00b894] font-bold">UP</span> | ELK STACK: <span className="text-[#00b894] font-bold">SYNCED</span> | SWAGGER: <span className="text-[#00b894]">/api/docs</span>
         </div>
         <div className="flex items-center space-x-4">
           <span>TESTS: <span className="text-[#00b894] font-bold">PASSED (442)</span></span>
-          <span className="text-white opacity-40">KÔMA DATA CONSOLE v2.4</span>
+          <span className="text-koma-foreground opacity-40">KÔMA DATA CONSOLE v2.4</span>
         </div>
       </footer>
     </div>

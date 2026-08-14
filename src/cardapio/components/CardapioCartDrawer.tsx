@@ -129,7 +129,7 @@ export default function CardapioCartDrawer({
             </p>
             <button
               onClick={onClose}
-              className="mt-6 rounded-full bg-primary px-6 py-2.5 text-xs font-bold text-white transition hover:scale-105"
+              className="mt-6 rounded-full bg-primary px-6 py-2.5 text-xs font-bold text-koma-foreground transition hover:scale-105"
             >
               Voltar ao Cardápio
             </button>
@@ -306,7 +306,7 @@ export default function CardapioCartDrawer({
             <div className="flex flex-col gap-2">
               <button
                 onClick={handleCheckout}
-                className="w-full flex items-center justify-center gap-2 rounded-xl bg-primary py-3.5 text-sm font-bold text-white shadow-lg shadow-primary/20 hover:scale-[1.01] active:scale-[0.99] transition duration-150"
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-primary py-3.5 text-sm font-bold text-koma-foreground shadow-lg shadow-primary/20 hover:scale-[1.01] active:scale-[0.99] transition duration-150"
                 id="btn-confirm-order"
               >
                 <ShoppingBag className="h-4.5 w-4.5" />

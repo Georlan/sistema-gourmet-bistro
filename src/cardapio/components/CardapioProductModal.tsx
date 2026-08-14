@@ -176,7 +176,7 @@ export default function CardapioProductModal({
                   e.stopPropagation();
                   setCurrentImgIndex((prev) => (prev > 0 ? prev - 1 : galleryImages.length - 1));
                 }}
-                className="absolute left-3 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 transition cursor-pointer"
+                className="absolute left-3 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-koma-foreground hover:bg-black/80 transition cursor-pointer"
                 title="Foto anterior"
               >
                 <ChevronLeft className="h-5 w-5" />
@@ -187,7 +187,7 @@ export default function CardapioProductModal({
                   e.stopPropagation();
                   setCurrentImgIndex((prev) => (prev < galleryImages.length - 1 ? prev + 1 : 0));
                 }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 transition cursor-pointer"
+                className="absolute right-3 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-koma-foreground hover:bg-black/80 transition cursor-pointer"
                 title="Próxima foto"
               >
                 <ChevronRight className="h-5 w-5" />
@@ -215,7 +215,7 @@ export default function CardapioProductModal({
           <button
             type="button"
             onClick={handleShare}
-            className="absolute top-3 right-16 flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 transition cursor-pointer"
+            className="absolute top-3 right-16 flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-koma-foreground hover:bg-black/80 transition cursor-pointer"
             title="Compartilhar Produto"
             aria-label="Compartilhar Produto"
             id="btn-share-product"
@@ -226,7 +226,7 @@ export default function CardapioProductModal({
           <button
             type="button"
             onClick={onClose}
-            className="absolute top-3 right-3 flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 transition cursor-pointer"
+            className="absolute top-3 right-3 flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-koma-foreground hover:bg-black/80 transition cursor-pointer"
             aria-label="Fechar modal de produto"
             id="btn-close-modal"
           >
@@ -300,7 +300,7 @@ export default function CardapioProductModal({
                               <div
                                 className={`flex h-5 w-5 items-center justify-center rounded-full border transition ${
                                   isSelected
-                                    ? "bg-primary border-primary text-white"
+                                    ? "bg-primary border-primary text-koma-foreground"
                                     : "border-slate-500/15"
                                   }`}
                               >
@@ -355,7 +355,7 @@ export default function CardapioProductModal({
           {/* Add to Cart button */}
           <button
             onClick={handleAdd}
-            className="flex-1 rounded-xl bg-primary py-3 text-center text-sm font-bold text-white shadow-lg shadow-primary/20 hover:scale-[1.01] active:scale-[0.99] transition duration-150"
+            className="flex-1 rounded-xl bg-primary py-3 text-center text-sm font-bold text-koma-foreground shadow-lg shadow-primary/20 hover:scale-[1.01] active:scale-[0.99] transition duration-150"
             id="btn-add-to-cart-action"
           >
             Adicionar • {formattedTotalPrice}

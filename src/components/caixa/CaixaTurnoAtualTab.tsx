@@ -61,15 +61,15 @@ const paymentMethodLabel: Record<string, string> = {
 
 const CaixaSummarySkeleton = () => (
   <div className="space-y-4" aria-busy="true" aria-label="Sincronizando resumo do caixa">
-    <div className="h-14 animate-pulse rounded-[18px] border border-[#252b28] bg-[#0d100f]" />
+    <div className="h-14 animate-pulse rounded-[18px] border border-koma-border bg-koma-panel" />
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {[0, 1, 2, 3].map(item => (
-        <div key={item} className="h-24 animate-pulse rounded-[18px] border border-[#252b28] bg-[#0d100f]" />
+        <div key={item} className="h-24 animate-pulse rounded-[18px] border border-koma-border bg-koma-panel" />
       ))}
     </div>
     <div className="grid gap-3 xl:grid-cols-[minmax(0,1.65fr)_minmax(280px,0.75fr)]">
-      <div className="h-72 animate-pulse rounded-[18px] border border-[#252b28] bg-[#0d100f]" />
-      <div className="h-72 animate-pulse rounded-[18px] border border-[#252b28] bg-[#0d100f]" />
+      <div className="h-72 animate-pulse rounded-[18px] border border-koma-border bg-koma-panel" />
+      <div className="h-72 animate-pulse rounded-[18px] border border-koma-border bg-koma-panel" />
     </div>
   </div>
 );
@@ -98,12 +98,12 @@ const ActivityRow = ({ activity }: { activity: CaixaAtividadeRecente }) => {
       </span>
       <span className="min-w-0">
         <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
-          <strong className="truncate text-xs text-[#f5f4ef]">
+          <strong className="truncate text-xs text-koma-foreground">
             {activityLabel[activity.tipo] || activity.descricao}
           </strong>
           <span className="text-[10px] text-zinc-600">{validDate ? timeFormatter.format(date!) : '—'}</span>
         </span>
-        <span className="mt-0.5 block truncate text-[11px] text-zinc-500">
+        <span className="mt-0.5 block truncate text-[11px] text-koma-muted">
           {activity.origem}{method ? ` · ${method}` : ''}{activity.operador_nome ? ` · ${activity.operador_nome}` : ''}
         </span>
       </span>
@@ -139,10 +139,10 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
 
   if (!isTurnoAberto) {
     return (
-      <section className="rounded-[18px] border border-[#252b28] bg-[#0d100f] px-5 py-10 text-center animate-fade-in">
+      <section className="rounded-[18px] border border-koma-border bg-koma-panel px-5 py-10 text-center animate-fade-in">
         <Lock size={22} className="mx-auto text-zinc-600" />
-        <h2 className="mt-3 text-sm font-bold text-[#f5f4ef]">Caixa fechado</h2>
-        <p className="mx-auto mt-1 max-w-md text-xs leading-relaxed text-zinc-500">
+        <h2 className="mt-3 text-sm font-bold text-koma-foreground">Caixa fechado</h2>
+        <p className="mx-auto mt-1 max-w-md text-xs leading-relaxed text-koma-muted">
           Abra um turno e informe o fundo de troco para começar a conciliação.
         </p>
         {onOpenNovoTurnoModal && (
@@ -189,26 +189,26 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
 
   return (
     <div className="space-y-4 text-left animate-fade-in" aria-live="polite" aria-busy={isLoading}>
-      <section className="flex flex-col gap-3 rounded-[18px] border border-[#252b28] bg-[#0d100f] p-3 sm:flex-row sm:items-center sm:justify-between">
+      <section className="flex flex-col gap-3 rounded-[18px] border border-koma-border bg-koma-panel p-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-3 px-1">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#145c49] bg-[#0b2d25] text-[#54d9b3]">
             <DollarSign size={17} />
           </span>
           <div className="min-w-0">
-            <h2 className="text-xs font-bold text-[#f5f4ef]">Ações do turno</h2>
-            <p className="mt-0.5 truncate text-[10px] text-zinc-500">Registre entradas e saídas antes de fechar o caixa.</p>
+            <h2 className="text-xs font-bold text-koma-foreground">Ações do turno</h2>
+            <p className="mt-0.5 truncate text-[10px] text-koma-muted">Registre entradas e saídas antes de fechar o caixa.</p>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
           {!isConnected && (
-            <button type="button" onClick={onRefresh} disabled={isLoading} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#303532] bg-[#151816] px-3 py-2 text-[10px] font-bold text-zinc-300 transition-colors hover:border-[#196b55] hover:text-[#54d9b3] disabled:cursor-wait disabled:opacity-60">
+            <button type="button" onClick={onRefresh} disabled={isLoading} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#303532] bg-koma-card px-3 py-2 text-[10px] font-bold text-koma-secondary transition-colors hover:border-[#196b55] hover:text-[#54d9b3] disabled:cursor-wait disabled:opacity-60">
               <RefreshCw size={13} className={isLoading ? 'animate-spin' : ''} /> Tentar sincronizar
             </button>
           )}
-          <button type="button" onClick={onOpenSuprimentoModal} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#303532] bg-[#151816] px-3 py-2 text-[10px] font-bold text-zinc-300 transition-colors hover:border-[#196b55] hover:text-[#54d9b3]">
+          <button type="button" onClick={onOpenSuprimentoModal} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#303532] bg-koma-card px-3 py-2 text-[10px] font-bold text-koma-secondary transition-colors hover:border-[#196b55] hover:text-[#54d9b3]">
             <ArrowDownRight size={13} /> Suprimento
           </button>
-          <button type="button" onClick={onOpenSangriaModal} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#303532] bg-[#151816] px-3 py-2 text-[10px] font-bold text-zinc-300 transition-colors hover:border-[#5a3434] hover:text-[#dca8a8]">
+          <button type="button" onClick={onOpenSangriaModal} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#303532] bg-koma-card px-3 py-2 text-[10px] font-bold text-koma-secondary transition-colors hover:border-[#5a3434] hover:text-[#dca8a8]">
             <ArrowUpRight size={13} /> Sangria
           </button>
           <button type="button" onClick={onNavigateToFechamento} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#196b55] bg-[#0b2d25] px-3 py-2 text-[10px] font-bold uppercase tracking-[0.08em] text-[#60e4be] transition-colors hover:bg-[#103b30]">
@@ -219,24 +219,24 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
 
       <section className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
         {metrics.map(metric => (
-          <article key={metric.label} className="min-w-0 rounded-[16px] border border-[#252b28] bg-[#111412] p-3 sm:rounded-[18px] sm:p-4">
-            <span className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.14em] text-zinc-500">
+          <article key={metric.label} className="min-w-0 rounded-[16px] border border-koma-border bg-koma-panel p-3 sm:rounded-[18px] sm:p-4">
+            <span className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.14em] text-koma-muted">
               <metric.icon size={13} className="text-[#54d9b3]" /> {metric.label}
             </span>
-            <strong className="mt-2 block text-base font-bold tabular-nums text-[#f5f4ef] sm:text-xl">{formatCurrency(metric.value)}</strong>
-            <span className="mt-1 block truncate text-[10px] text-zinc-500" title={metric.help}>{metric.help}</span>
+            <strong className="mt-2 block text-base font-bold tabular-nums text-koma-foreground sm:text-xl">{formatCurrency(metric.value)}</strong>
+            <span className="mt-1 block truncate text-[10px] text-koma-muted" title={metric.help}>{metric.help}</span>
           </article>
         ))}
       </section>
 
       <section className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1.65fr)_minmax(280px,0.75fr)]">
-        <article className="overflow-hidden rounded-[18px] border border-[#252b28] bg-[#0d100f]">
-          <header className="flex items-center justify-between gap-3 border-b border-[#252b28] px-4 py-3 sm:px-5">
+        <article className="overflow-hidden rounded-[18px] border border-koma-border bg-koma-panel">
+          <header className="flex items-center justify-between gap-3 border-b border-koma-border px-4 py-3 sm:px-5">
             <div className="flex items-center gap-2">
               <History size={15} className="text-[#54d9b3]" />
               <div>
-                <h3 className="text-xs font-bold text-[#f5f4ef]">Atividade recente</h3>
-                <p className="mt-0.5 text-[10px] text-zinc-500">Últimos recebimentos e ajustes deste turno</p>
+                <h3 className="text-xs font-bold text-koma-foreground">Atividade recente</h3>
+                <p className="mt-0.5 text-[10px] text-koma-muted">Últimos recebimentos e ajustes deste turno</p>
               </div>
             </div>
             <button type="button" onClick={onNavigateToMovimentacoes} className="shrink-0 text-[10px] font-bold text-[#54d9b3] transition-colors hover:text-[#7becce]">Ver ajustes</button>
@@ -246,24 +246,24 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
           ) : (
             <div className="flex min-h-48 flex-col items-center justify-center px-5 text-center">
               <History size={22} className="text-zinc-700" />
-              <strong className="mt-3 text-xs text-zinc-400">O turno ainda não teve movimentações</strong>
+              <strong className="mt-3 text-xs text-koma-subtle">O turno ainda não teve movimentações</strong>
               <span className="mt-1 text-[10px] text-zinc-600">Vendas recebidas, sangrias e suprimentos aparecerão aqui.</span>
             </div>
           )}
         </article>
 
         <div className="space-y-3">
-          <article className="rounded-[18px] border border-[#252b28] bg-[#111412] p-4">
-            <div className="flex items-center gap-2 border-b border-[#252b28] pb-3">
+          <article className="rounded-[18px] border border-koma-border bg-koma-panel p-4">
+            <div className="flex items-center gap-2 border-b border-koma-border pb-3">
               <Banknote size={15} className="text-[#54d9b3]" />
-              <h3 className="text-[10px] font-bold uppercase tracking-[0.13em] text-zinc-300">Conferência do dinheiro</h3>
+              <h3 className="text-[10px] font-bold uppercase tracking-[0.13em] text-koma-secondary">Conferência do dinheiro</h3>
             </div>
             <dl className="mt-3 space-y-2.5 text-xs">
-              <div className="flex justify-between gap-3 text-zinc-400"><dt>Saldo inicial</dt><dd className="tabular-nums text-[#f5f4ef]">{formatCurrency(turnoResumo.saldo_inicial)}</dd></div>
-              <div className="flex justify-between gap-3 text-zinc-400"><dt>Recebido em dinheiro</dt><dd className="tabular-nums text-[#f5f4ef]">+ {formatCurrency(turnoResumo.total_dinheiro)}</dd></div>
-              <div className="flex justify-between gap-3 text-zinc-400"><dt>Suprimentos</dt><dd className="tabular-nums text-[#f5f4ef]">+ {formatCurrency(turnoResumo.total_suprimentos)}</dd></div>
-              <div className="flex justify-between gap-3 text-zinc-400"><dt>Sangrias</dt><dd className="tabular-nums text-[#dca8a8]">− {formatCurrency(turnoResumo.total_sangrias)}</dd></div>
-              <div className="flex items-end justify-between gap-3 border-t border-[#252b28] pt-3"><dt className="font-bold text-zinc-300">Esperado no caixa</dt><dd className="text-base font-bold tabular-nums text-[#54d9b3]">{formatCurrency(turnoResumo.saldo_esperado_dinheiro)}</dd></div>
+              <div className="flex justify-between gap-3 text-koma-subtle"><dt>Saldo inicial</dt><dd className="tabular-nums text-koma-foreground">{formatCurrency(turnoResumo.saldo_inicial)}</dd></div>
+              <div className="flex justify-between gap-3 text-koma-subtle"><dt>Recebido em dinheiro</dt><dd className="tabular-nums text-koma-foreground">+ {formatCurrency(turnoResumo.total_dinheiro)}</dd></div>
+              <div className="flex justify-between gap-3 text-koma-subtle"><dt>Suprimentos</dt><dd className="tabular-nums text-koma-foreground">+ {formatCurrency(turnoResumo.total_suprimentos)}</dd></div>
+              <div className="flex justify-between gap-3 text-koma-subtle"><dt>Sangrias</dt><dd className="tabular-nums text-[#dca8a8]">− {formatCurrency(turnoResumo.total_sangrias)}</dd></div>
+              <div className="flex items-end justify-between gap-3 border-t border-koma-border pt-3"><dt className="font-bold text-koma-secondary">Esperado no caixa</dt><dd className="text-base font-bold tabular-nums text-[#54d9b3]">{formatCurrency(turnoResumo.saldo_esperado_dinheiro)}</dd></div>
             </dl>
           </article>
 
@@ -273,12 +273,12 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
               : 'border-[#145c49] bg-[#0b211b]'
           }`}>
             <div className="flex items-start gap-3">
-              {!isConnected ? <WifiOff size={17} className="mt-0.5 shrink-0 text-zinc-400" /> : isTurnoEsquecido || pendingPaymentsCount > 0 ? <AlertCircle size={17} className="mt-0.5 shrink-0 text-zinc-400" /> : <CheckCircle2 size={17} className="mt-0.5 shrink-0 text-[#54d9b3]" />}
+              {!isConnected ? <WifiOff size={17} className="mt-0.5 shrink-0 text-koma-subtle" /> : isTurnoEsquecido || pendingPaymentsCount > 0 ? <AlertCircle size={17} className="mt-0.5 shrink-0 text-koma-subtle" /> : <CheckCircle2 size={17} className="mt-0.5 shrink-0 text-[#54d9b3]" />}
               <div className="min-w-0">
-                <h3 className="text-xs font-bold text-[#f5f4ef]">
+                <h3 className="text-xs font-bold text-koma-foreground">
                   {!isConnected ? 'Sincronização reconectando' : isTurnoEsquecido ? 'Turno aberto há mais de 24 horas' : pendingPaymentsCount > 0 ? 'Há contas aguardando confirmação' : 'Operação em dia'}
                 </h3>
-                <p className="mt-0.5 text-[10px] leading-relaxed text-zinc-500">
+                <p className="mt-0.5 text-[10px] leading-relaxed text-koma-muted">
                   {!isConnected ? 'As informações salvas continuam disponíveis e serão atualizadas ao reconectar.' : isTurnoEsquecido ? 'Confira os valores e encerre o turno anterior antes de continuar.' : pendingPaymentsCount > 0 ? `${pendingPaymentsCount} pagamento(s) precisam de conferência.` : 'Resumo conciliado e atualização em tempo real ativa.'}
                 </p>
                 {(isTurnoEsquecido || pendingPaymentsCount > 0) && (

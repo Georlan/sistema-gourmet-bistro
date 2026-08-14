@@ -93,12 +93,12 @@ export const MesaCard = React.memo<MesaCardProps>(({
       labelColor: 'text-sky-300',
     },
     mesclada: {
-      surface: 'bg-[#101112] hover:bg-[#141517]',
-      border: 'border-dashed border-zinc-800 hover:border-zinc-600 focus-visible:ring-zinc-400',
+      surface: 'bg-koma-panel hover:bg-[#141517]',
+      border: 'border-dashed border-koma-border hover:border-zinc-600 focus-visible:ring-zinc-400',
       accent: 'bg-zinc-600',
       dot: 'bg-zinc-600',
       label: `Unida à mesa ${mergedIntoMesaId}`,
-      labelColor: 'text-zinc-400',
+      labelColor: 'text-koma-subtle',
     },
   }[status];
 
@@ -125,24 +125,24 @@ export const MesaCard = React.memo<MesaCardProps>(({
       <div className="relative flex h-full flex-col justify-between gap-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <span className="block text-[8px] sm:text-[9px] font-mono font-bold uppercase tracking-[0.16em] text-zinc-500">
+            <span className="block text-[8px] sm:text-[9px] font-mono font-bold uppercase tracking-[0.16em] text-koma-muted">
               {hasCustomName ? `Mesa ${table.id}` : 'Mesa'}
             </span>
-            <strong className={`${hasCustomName ? 'text-xs sm:text-sm font-bold tracking-tight leading-tight line-clamp-2 break-words' : 'text-2xl sm:text-3xl font-serif font-black tracking-[-0.05em] leading-none'} mt-0.5 block text-white`}>
+            <strong className={`${hasCustomName ? 'text-xs sm:text-sm font-bold tracking-tight leading-tight line-clamp-2 break-words' : 'text-2xl sm:text-3xl font-serif font-black tracking-[-0.05em] leading-none'} mt-0.5 block text-koma-foreground`}>
               {hasCustomName ? table.nome : table.id}
             </strong>
             {mergedSources.length > 0 && (
-              <span className="mt-1 block text-[9px] font-mono text-zinc-400">+ mesas {mergedSources.join(', ')}</span>
+              <span className="mt-1 block text-[9px] font-mono text-koma-subtle">+ mesas {mergedSources.join(', ')}</span>
             )}
           </div>
           {status === 'livre' ? (
             <CirclePlus size={18} className="shrink-0 text-emerald-500 transition-transform group-hover:rotate-90" />
           ) : status === 'mesclada' ? (
-            <GitMerge size={17} className="shrink-0 text-zinc-500" />
+            <GitMerge size={17} className="shrink-0 text-koma-muted" />
           ) : (
             <div className="flex items-center gap-1.5 rounded-full border border-white/[0.07] bg-black/20 px-2 py-1">
               <span className={`h-1.5 w-1.5 rounded-full ${statusConfig.dot}`} />
-              <span className="hidden 2xl:inline text-[8px] font-bold uppercase tracking-wider text-zinc-400">Ativa</span>
+              <span className="hidden 2xl:inline text-[8px] font-bold uppercase tracking-wider text-koma-subtle">Ativa</span>
             </div>
           )}
         </div>
@@ -162,10 +162,10 @@ export const MesaCard = React.memo<MesaCardProps>(({
           {status !== 'livre' && status !== 'mesclada' && (
             <div className="mt-2 flex items-end justify-between gap-2 border-t border-white/[0.07] pt-2">
               <div className="min-w-0 space-y-1">
-                <span className="flex items-center gap-1 text-[9px] sm:text-[10px] font-mono font-bold text-zinc-300">
-                  <Clock3 size={10} className="shrink-0 text-zinc-500" /> {elapsed}
+                <span className="flex items-center gap-1 text-[9px] sm:text-[10px] font-mono font-bold text-koma-secondary">
+                  <Clock3 size={10} className="shrink-0 text-koma-muted" /> {elapsed}
                 </span>
-                <span className="flex items-center gap-1 text-[8px] sm:text-[9px] text-zinc-500">
+                <span className="flex items-center gap-1 text-[8px] sm:text-[9px] text-koma-muted">
                   <UsersRound size={9} /> {activeItemCount} {activeItemCount === 1 ? 'item' : 'itens'}
                 </span>
               </div>
@@ -176,7 +176,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
           )}
 
           {status === 'mesclada' && (
-            <div className="mt-2 flex items-center justify-between border-t border-white/[0.06] pt-2 text-[9px] text-zinc-500">
+            <div className="mt-2 flex items-center justify-between border-t border-white/[0.06] pt-2 text-[9px] text-koma-muted">
               <span>Atendimento unificado</span>
               <span className="font-mono">M{mergedIntoMesaId}</span>
             </div>

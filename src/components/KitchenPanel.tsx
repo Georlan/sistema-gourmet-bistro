@@ -69,7 +69,7 @@ export const KitchenPanel: React.FC<KitchenPanelProps> = ({
   }, [orders]);
 
   return (
-    <div className="bg-[#1C1917] text-[#FAF7F2] rounded-3xl border border-[#2E2A25] p-6 shadow-2xl space-y-6">
+    <div className="bg-[#1C1917] text-koma-foreground rounded-3xl border border-[#2E2A25] p-6 shadow-2xl space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 pb-5 border-b border-[#2E2A25]">
         <div className="flex items-center gap-3">
@@ -77,7 +77,7 @@ export const KitchenPanel: React.FC<KitchenPanelProps> = ({
             <ChefHat size={22} />
           </div>
           <div>
-            <h3 className="font-serif text-lg font-bold text-white tracking-wide">Monitor de Alta Gastronomia</h3>
+            <h3 className="font-serif text-lg font-bold text-koma-foreground tracking-wide">Monitor de Alta Gastronomia</h3>
             <p className="text-xs text-[#8F8578]">Fila prioritária de preparos de pratos e observações da cozinha do Kôma</p>
           </div>
         </div>
@@ -87,7 +87,7 @@ export const KitchenPanel: React.FC<KitchenPanelProps> = ({
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#4E6E58] opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-[#4E6E58]"></span>
           </span>
-          <span className="text-[10px] uppercase font-bold text-[#FAF7F2] font-sans tracking-wider">Conectado ao Salão</span>
+          <span className="text-[10px] uppercase font-bold text-koma-foreground font-sans tracking-wider">Conectado ao Salão</span>
         </div>
       </div>
 
@@ -98,7 +98,7 @@ export const KitchenPanel: React.FC<KitchenPanelProps> = ({
             <Utensils size={32} />
           </div>
           <div className="space-y-1">
-            <p className="font-serif text-lg text-white">Cozinha em perfeita harmonia</p>
+            <p className="font-serif text-lg text-koma-foreground">Cozinha em perfeita harmonia</p>
             <p className="text-xs text-[#8F8578] leading-relaxed">
               Todos os pratos e vinhos do Kôma foram encaminhados e estão em perfeita sintonia com as mesas.
             </p>
@@ -125,7 +125,7 @@ export const KitchenPanel: React.FC<KitchenPanelProps> = ({
                 <div className="space-y-4">
                   {/* Card Header: Table, Timer, and delay badge */}
                   <div className="flex justify-between items-center pb-3 border-b border-[#2E2A25]/80">
-                    <span className="font-serif font-bold text-lg text-white">
+                    <span className="font-serif font-bold text-lg text-koma-foreground">
                       {mesaId && mesaId > 0 ? `Mesa ${mesaId}` : 'Balcão / Viagem'}
                     </span>
                     
@@ -140,7 +140,7 @@ export const KitchenPanel: React.FC<KitchenPanelProps> = ({
                   {/* Product detail */}
                   <div className="space-y-3">
                     <div className="flex justify-between items-start gap-2">
-                      <h4 className="font-sans font-bold text-sm text-[#FAF7F2]">{item.nome}</h4>
+                      <h4 className="font-sans font-bold text-sm text-koma-foreground">{item.nome}</h4>
                       {item.clienteNome && (
                         <span className="px-2 py-0.5 bg-[#10b981]/15 border border-[#10b981]/20 text-[#10b981] rounded text-[9px] font-bold uppercase tracking-wider">
                           {item.clienteNome}
@@ -165,7 +165,7 @@ export const KitchenPanel: React.FC<KitchenPanelProps> = ({
                   id={`kitchen-finish-btn-${item.id}`}
                   onClick={() => handleFinish(orderId, item.id)}
                   disabled={inflightIds.has(item.id)}
-                  className="mt-5 w-full py-2.5 bg-[#4E6E58] hover:bg-[#5E836A] active:bg-[#3D5745] text-white font-semibold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors tracking-wider uppercase font-sans border border-[#5E836A]/20 disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="mt-5 w-full py-2.5 bg-[#4E6E58] hover:bg-[#5E836A] active:bg-[#3D5745] text-koma-foreground font-semibold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors tracking-wider uppercase font-sans border border-[#5E836A]/20 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {inflightIds.has(item.id) ? (
                     <><Loader size={14} className="animate-spin" /><span>Enviando...</span></>

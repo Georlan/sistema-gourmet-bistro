@@ -147,14 +147,14 @@ export default function SuperAdminTerminal({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
         {/* Failed Webhooks Resolving Card */}
-        <div className="bg-[#121420] border border-[#1e293b]/40 p-5 rounded flex flex-col h-full animate-fade-in" id="failed-webhooks-panel">
+        <div className="bg-koma-card border border-[#1e293b]/40 p-5 rounded flex flex-col h-full animate-fade-in" id="failed-webhooks-panel">
           <div className="border-b border-[#1e293b]/40 pb-3 mb-4 flex items-center justify-between">
             <div>
-              <h3 className="text-sm font-mono text-white font-bold flex items-center gap-2">
+              <h3 className="text-sm font-mono text-koma-foreground font-bold flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-red-500 animate-pulse" />
                 [01] ASAAS WEBHOOK RESOLVER (FALHAS)
               </h3>
-              <p className="text-[10px] text-slate-500 font-mono mt-0.5">FORÇAR ASSINATURA MANUAL DE PAGAMENTOS</p>
+              <p className="text-[10px] text-koma-muted font-mono mt-0.5">FORÇAR ASSINATURA MANUAL DE PAGAMENTOS</p>
             </div>
             <span className="text-[9px] text-red-400 bg-red-950/40 border border-red-900/60 px-2 py-0.5 rounded font-mono font-bold">
               {webhooks.filter(w => !w.resolved).length} ERROS ATIVOS
@@ -183,28 +183,28 @@ export default function SuperAdminTerminal({
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, scale: 0.95 }}
-                      className="bg-black border border-[#1e293b]/40 rounded p-4 flex flex-col space-y-3 hover:border-slate-700 transition-colors"
+                      className="bg-koma-page border border-[#1e293b]/40 rounded p-4 flex flex-col space-y-3 hover:border-slate-700 transition-colors"
                     >
                       <div className="flex items-center justify-between">
                         <div>
                           <span className="text-[10px] bg-red-950 text-red-400 border border-red-900 px-1.5 py-0.5 rounded font-bold font-mono">
                             {wh.event}
                           </span>
-                          <span className="text-[10px] text-slate-500 font-mono ml-2">ID: {wh.id}</span>
+                          <span className="text-[10px] text-koma-muted font-mono ml-2">ID: {wh.id}</span>
                         </div>
-                        <span className="font-bold text-white font-mono text-xs">
+                        <span className="font-bold text-koma-foreground font-mono text-xs">
                           R$ {wh.amount.toFixed(2)}
                         </span>
                       </div>
 
-                      <div className="text-xs font-sans text-slate-300">
+                      <div className="text-xs font-sans text-koma-secondary">
                         <div className="flex items-center gap-1.5">
-                          <span className="text-slate-500 font-mono text-[10px]">INQUILINO:</span>
-                          <span className="font-semibold text-white font-mono">{wh.tenantName}</span>
+                          <span className="text-koma-muted font-mono text-[10px]">INQUILINO:</span>
+                          <span className="font-semibold text-koma-foreground font-mono">{wh.tenantName}</span>
                         </div>
                         <div className="flex items-center gap-1.5 mt-1">
-                          <span className="text-slate-500 font-mono text-[10px]">PEDIDO ID:</span>
-                          <span className="font-mono bg-[#090c15] px-1.5 py-0.5 text-slate-300 rounded border border-[#1e293b]/40 text-[10px]">
+                          <span className="text-koma-muted font-mono text-[10px]">PEDIDO ID:</span>
+                          <span className="font-mono bg-[#090c15] px-1.5 py-0.5 text-koma-secondary rounded border border-[#1e293b]/40 text-[10px]">
                             {wh.orderId}
                           </span>
                         </div>
@@ -218,7 +218,7 @@ export default function SuperAdminTerminal({
                       </div>
 
                       <div className="flex items-center justify-between pt-1 border-t border-[#1e293b]/40">
-                        <span className="text-[9px] text-slate-500 font-mono">OCORRIDO EM: {wh.createdAt}</span>
+                        <span className="text-[9px] text-koma-muted font-mono">OCORRIDO EM: {wh.createdAt}</span>
                         <button
                           onClick={() => handleForceConfirm(wh)}
                           className="bg-red-500 hover:bg-red-600 text-black font-mono font-bold text-[10px] px-3 py-1.5 rounded transition-all flex items-center gap-1.5 cursor-pointer shadow-[0_0_8px_rgba(239,68,68,0.2)]"
@@ -236,24 +236,24 @@ export default function SuperAdminTerminal({
         </div>
 
         {/* Real-time Sentry Log Stream */}
-        <div className="bg-[#121420] border border-[#1e293b]/40 p-5 rounded flex flex-col h-full" id="sentry-stream-panel">
+        <div className="bg-koma-card border border-[#1e293b]/40 p-5 rounded flex flex-col h-full" id="sentry-stream-panel">
           <div className="border-b border-[#1e293b]/40 pb-3 mb-4 flex flex-col xl:flex-row xl:items-center justify-between gap-3">
             <div>
-              <h3 className="text-sm font-mono text-white font-bold flex items-center gap-2">
+              <h3 className="text-sm font-mono text-koma-foreground font-bold flex items-center gap-2">
                 <TerminalIcon className="w-4 h-4 text-[#00b894]" />
                 [02] SENTRY REAL ISSUES & CENTRAL LOGS
               </h3>
-              <p className="text-[10px] text-slate-500 font-mono mt-0.5">EXCEÇÕES PRODUÇÃO E EVENTOS OPERACIONAIS</p>
+              <p className="text-[10px] text-koma-muted font-mono mt-0.5">EXCEÇÕES PRODUÇÃO E EVENTOS OPERACIONAIS</p>
             </div>
 
             {/* Elegant Tab Switcher */}
-            <div className="flex bg-black border border-[#1e293b]/40 rounded p-0.5 self-start">
+            <div className="flex bg-koma-page border border-[#1e293b]/40 rounded p-0.5 self-start">
               <button
                 onClick={() => setActiveSentryTab("issues")}
                 className={`px-3 py-1.5 text-[9px] font-mono rounded cursor-pointer transition-all ${
                   activeSentryTab === "issues" 
                     ? "bg-[#00b894] text-black font-bold" 
-                    : "text-slate-400 hover:text-white"
+                    : "text-koma-subtle hover:text-white"
                 }`}
               >
                 SENTRY REAL ISSUES
@@ -263,7 +263,7 @@ export default function SuperAdminTerminal({
                 className={`px-3 py-1.5 text-[9px] font-mono rounded cursor-pointer transition-all ${
                   activeSentryTab === "stream" 
                     ? "bg-[#00b894] text-black font-bold" 
-                    : "text-slate-400 hover:text-white"
+                    : "text-koma-subtle hover:text-white"
                 }`}
               >
                 LOCAL LOG STREAM
@@ -273,10 +273,10 @@ export default function SuperAdminTerminal({
             {activeSentryTab === "stream" && (
               <div className="flex items-center gap-2">
                 {/* Level Filter */}
-                <div className="flex items-center gap-1 bg-black border border-[#1e293b]/40 rounded px-1.5 py-1">
-                  <Filter className="w-3 h-3 text-slate-500" />
+                <div className="flex items-center gap-1 bg-koma-page border border-[#1e293b]/40 rounded px-1.5 py-1">
+                  <Filter className="w-3 h-3 text-koma-muted" />
                   <select
-                    className="bg-transparent border-none text-[10px] font-mono text-white focus:outline-none cursor-pointer"
+                    className="bg-transparent border-none text-[10px] font-mono text-koma-foreground focus:outline-none cursor-pointer"
                     value={logFilter}
                     onChange={e => setLogFilter(e.target.value)}
                   >
@@ -294,7 +294,7 @@ export default function SuperAdminTerminal({
                   className={`p-1.5 rounded border text-[10px] font-mono flex items-center gap-1 cursor-pointer transition-colors ${
                     isStreamingLogs 
                       ? "bg-emerald-950/20 border-[#00b894]/20/60 text-[#00b894]" 
-                      : "bg-zinc-900 border-[#1e293b]/40 text-slate-400"
+                      : "bg-koma-card border-[#1e293b]/40 text-koma-subtle"
                   }`}
                   title={isStreamingLogs ? "Pause automatic scrolling" : "Enable automatic scrolling"}
                 >
@@ -314,7 +314,7 @@ export default function SuperAdminTerminal({
                 {/* Clear logs */}
                 <button
                   onClick={onClearLogs}
-                  className="bg-zinc-900 border border-[#1e293b]/40 hover:border-[#334155] p-1.5 rounded text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  className="bg-koma-card border border-[#1e293b]/40 hover:border-[#334155] p-1.5 rounded text-koma-subtle hover:text-white transition-colors cursor-pointer"
                   title="Limpar logs"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -325,8 +325,8 @@ export default function SuperAdminTerminal({
 
           {activeSentryTab === "issues" ? (
             /* Real Sentry Issues Panel List */
-            <div className="bg-black border border-[#1e293b]/40 rounded p-4 flex-1 flex flex-col font-mono text-xs overflow-hidden h-[360px]">
-              <div className="flex items-center justify-between text-[10px] text-slate-500 border-b border-[#1e293b]/40 pb-2 mb-2 shrink-0">
+            <div className="bg-koma-page border border-[#1e293b]/40 rounded p-4 flex-1 flex flex-col font-mono text-xs overflow-hidden h-[360px]">
+              <div className="flex items-center justify-between text-[10px] text-koma-muted border-b border-[#1e293b]/40 pb-2 mb-2 shrink-0">
                 <span>API SENTRY CONECTADA & EXCEÇÕES</span>
                 <button 
                   onClick={fetchIssues} 
@@ -339,7 +339,7 @@ export default function SuperAdminTerminal({
 
               <div className="flex-1 overflow-y-auto space-y-3.5 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent pr-1">
                 {isLoadingIssues ? (
-                  <div className="text-zinc-500 text-center py-16 animate-pulse">
+                  <div className="text-koma-muted text-center py-16 animate-pulse">
                     Conectando à API oficial do Sentry e extraindo exceções de produção...
                   </div>
                 ) : sentryIssues.length === 0 ? (
@@ -360,17 +360,17 @@ export default function SuperAdminTerminal({
                             }`}>
                               {issue.level}
                             </span>
-                            <span className="text-[9px] text-slate-500 font-mono">#{issue.id}</span>
+                            <span className="text-[9px] text-koma-muted font-mono">#{issue.id}</span>
                             <h4 className="font-bold text-slate-200 mt-1 font-sans text-xs leading-normal">
                               {issue.title}
                             </h4>
                           </div>
-                          <span className="text-white bg-slate-900 px-1.5 py-0.5 rounded text-[10px] border border-slate-800 font-bold shrink-0">
+                          <span className="text-koma-foreground bg-slate-900 px-1.5 py-0.5 rounded text-[10px] border border-slate-800 font-bold shrink-0">
                             {issue.count}x
                           </span>
                         </div>
 
-                        <div className="text-[10px] text-slate-400 bg-[#090a0f]/60 p-2 rounded font-mono truncate border border-zinc-900/60">
+                        <div className="text-[10px] text-koma-subtle bg-[#090a0f]/60 p-2 rounded font-mono truncate border border-zinc-900/60">
                           <span className="text-slate-600">ARQUIVO: </span>
                           {issue.culprit}
                         </div>
@@ -380,7 +380,7 @@ export default function SuperAdminTerminal({
                             href={issue.permalink}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-slate-400 hover:text-[#00b894] transition-colors text-[9px] underline flex items-center gap-1"
+                            className="text-koma-subtle hover:text-[#00b894] transition-colors text-[9px] underline flex items-center gap-1"
                           >
                             VER DETALHES NO SENTRY &rarr;
                           </a>
@@ -400,8 +400,8 @@ export default function SuperAdminTerminal({
             </div>
           ) : (
             /* Sentry Logs Console Terminal Window (Log Stream) */
-            <div className="bg-black border border-[#1e293b]/40 rounded p-4 flex-1 flex flex-col font-mono text-xs overflow-hidden h-[360px]">
-              <div className="flex items-center justify-between text-[10px] text-slate-500 border-b border-[#1e293b]/40 pb-2 mb-2">
+            <div className="bg-koma-page border border-[#1e293b]/40 rounded p-4 flex-1 flex flex-col font-mono text-xs overflow-hidden h-[360px]">
+              <div className="flex items-center justify-between text-[10px] text-koma-muted border-b border-[#1e293b]/40 pb-2 mb-2">
                 <span>SENTRY_ENGINE_v2.4_STREAMING</span>
                 <span className="flex items-center gap-1 font-bold">
                   <span className={`w-1.5 h-1.5 rounded-full bg-red-500 ${isStreamingLogs ? "animate-ping" : ""}`}></span>
@@ -416,7 +416,7 @@ export default function SuperAdminTerminal({
                   </div>
                 ) : (
                   filteredLogs.map(log => {
-                    let levelColor = "text-zinc-400";
+                    let levelColor = "text-koma-subtle";
                     if (log.level === "WARNING") levelColor = "text-amber-400 font-semibold";
                     if (log.level === "ERROR") levelColor = "text-red-400 font-bold";
                     if (log.level === "CRITICAL") levelColor = "text-purple-400 bg-purple-950/20 px-1 rounded border border-purple-950 font-black animate-pulse";
@@ -425,8 +425,8 @@ export default function SuperAdminTerminal({
                       <div key={log.id} className="hover:bg-zinc-950 p-1 rounded transition-colors text-[11px] leading-relaxed">
                         <span className="text-zinc-600">[{log.timestamp}]</span>{" "}
                         <span className={`${levelColor} font-mono`}>{log.level}</span>{" "}
-                        <span className="text-zinc-500 font-semibold">&lt;{log.service}&gt;</span>{" "}
-                        <span className="text-zinc-300 font-sans">{log.message}</span>
+                        <span className="text-koma-muted font-semibold">&lt;{log.service}&gt;</span>{" "}
+                        <span className="text-koma-secondary font-sans">{log.message}</span>
                       </div>
                     );
                   })
@@ -440,12 +440,12 @@ export default function SuperAdminTerminal({
       </div>
 
       {/* Real Sentry Integration Explanation */}
-      <div className="bg-[#121420] border border-[#1e293b]/40 p-4 rounded flex flex-col space-y-2 animate-fade-in">
-        <h4 className="text-xs font-mono text-slate-400 font-bold flex items-center gap-1.5">
+      <div className="bg-koma-card border border-[#1e293b]/40 p-4 rounded flex flex-col space-y-2 animate-fade-in">
+        <h4 className="text-xs font-mono text-koma-subtle font-bold flex items-center gap-1.5">
           <Sparkles className="w-3.5 h-3.5 text-[#00b894]" />
           [SISTEMA_DOCKER] INTEGRAÇÃO CENTRAL SENTRY & FASTAPI
         </h4>
-        <p className="text-[10px] text-slate-500 font-mono leading-relaxed">
+        <p className="text-[10px] text-koma-muted font-mono leading-relaxed">
           The FastAPI backend imports the Sentry SDK. For any unhandled exception across your tenant schemas (e.g., PostgreSQL connection pools breaking, missing column references, printer gateway offline), Sentry catches the event, logs the stack trace, and instantly broadcasts the payload through our centralized logging service and pushes an alert directly to your Telegram Bot.
         </p>
       </div>

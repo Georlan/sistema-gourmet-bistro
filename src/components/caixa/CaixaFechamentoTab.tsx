@@ -79,9 +79,9 @@ const CountField: React.FC<CountFieldProps> = ({
   const isExact = difference !== null && Math.abs(difference) < 0.01;
 
   return (
-    <div className="rounded-2xl border border-[#252b28] bg-[#111512] p-4 transition-colors focus-within:border-[#1f8f70]">
+    <div className="rounded-2xl border border-koma-border bg-koma-panel p-4 transition-colors focus-within:border-[#1f8f70]">
       <div className="flex items-start justify-between gap-3">
-        <label htmlFor={id} className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-300">
+        <label htmlFor={id} className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.12em] text-koma-secondary">
           <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#1f5948] bg-[#0c2a22] text-[#54d9b3]">
             <Icon size={15} />
           </span>
@@ -91,8 +91,8 @@ const CountField: React.FC<CountFieldProps> = ({
           Usar {formatMoney(expected)}
         </button>
       </div>
-      <label htmlFor={id} className="mt-3 flex items-center rounded-xl border border-[#242925] bg-[#090c0a] px-3 focus-within:border-[#2a9f7d]">
-        <span className="text-sm font-semibold text-zinc-500">R$</span>
+      <label htmlFor={id} className="mt-3 flex items-center rounded-xl border border-koma-border bg-[#090c0a] px-3 focus-within:border-[#2a9f7d]">
+        <span className="text-sm font-semibold text-koma-muted">R$</span>
         <input
           id={id}
           type="number"
@@ -104,14 +104,14 @@ const CountField: React.FC<CountFieldProps> = ({
           value={value}
           onChange={(event) => onChange(valueFromInput(event.target.value))}
           onFocus={(event) => event.currentTarget.select()}
-          className="min-w-0 flex-1 appearance-none bg-transparent px-2 py-3 text-lg font-semibold tabular-nums text-white outline-none placeholder:text-zinc-700 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          className="min-w-0 flex-1 appearance-none bg-transparent px-2 py-3 text-lg font-semibold tabular-nums text-koma-foreground outline-none placeholder:text-zinc-700 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
         />
       </label>
       <div className="mt-2 flex items-center justify-between gap-3 text-[10px]">
-        <span className="leading-relaxed text-zinc-500">{help}</span>
+        <span className="leading-relaxed text-koma-muted">{help}</span>
         <span className={clsx(
           'shrink-0 font-semibold tabular-nums',
-          difference === null ? 'text-zinc-500' : isExact ? 'text-[#54d9b3]' : 'text-[#f0b3aa]',
+          difference === null ? 'text-koma-muted' : isExact ? 'text-[#54d9b3]' : 'text-[#f0b3aa]',
         )}>
           {difference === null ? `Esperado ${formatMoney(expected)}` : isExact ? 'Confere' : `${difference > 0 ? '+' : ''}${formatMoney(difference)}`}
         </span>
@@ -280,20 +280,20 @@ ________________________________
 
     return (
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(280px,.5fr)]">
-        <section className="overflow-hidden rounded-3xl border border-[#252b28] bg-[#0d100f]">
-          <header className="flex flex-col gap-4 border-b border-[#252b28] p-5 sm:flex-row sm:items-center sm:justify-between">
+        <section className="overflow-hidden rounded-3xl border border-koma-border bg-koma-panel">
+          <header className="flex flex-col gap-4 border-b border-koma-border p-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
               <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[#1f7058] bg-[#0d3026] text-[#54d9b3]">
                 <CheckCircle2 size={22} />
               </span>
               <div>
-                <h2 className="text-base font-bold text-white">Turno encerrado com segurança</h2>
-                <p className="mt-0.5 text-[11px] text-zinc-500">
+                <h2 className="text-base font-bold text-koma-foreground">Turno encerrado com segurança</h2>
+                <p className="mt-0.5 text-[11px] text-koma-muted">
                   Caixa #{fechamentoResult.turno_id} · {fechamentoResult.fechado_por_nome} · {formatBackendDateTime(fechamentoResult.fechado_em)}
                 </p>
               </div>
             </div>
-            <span className="w-fit rounded-full border border-[#2d3531] bg-[#151a17] px-3 py-1 text-[9px] font-bold uppercase tracking-wider text-zinc-300">
+            <span className="w-fit rounded-full border border-koma-border-subtle bg-koma-panel px-3 py-1 text-[9px] font-bold uppercase tracking-wider text-koma-secondary">
               Conferência concluída
             </span>
           </header>
@@ -307,7 +307,7 @@ ________________________________
                 <strong className={clsx('block text-sm', isExact ? 'text-[#54d9b3]' : 'text-[#f0b3aa]')}>
                   {isExact ? 'Caixa conferido sem divergência' : isSurplus ? 'Sobra identificada na conferência' : 'Falta identificada na conferência'}
                 </strong>
-                <span className="mt-1 block text-[10px] text-zinc-400">
+                <span className="mt-1 block text-[10px] text-koma-subtle">
                   {isExact ? 'Os valores contados conferem com os registros do sistema.' : 'A diferença ficou registrada no fechamento para auditoria.'}
                 </span>
               </div>
@@ -316,9 +316,9 @@ ________________________________
               </strong>
             </div>
 
-            <div className="overflow-x-auto rounded-2xl border border-[#252b28]">
+            <div className="overflow-x-auto rounded-2xl border border-koma-border">
               <table className="w-full min-w-[620px] text-left text-xs">
-                <thead className="bg-[#141815] text-[9px] uppercase tracking-wider text-zinc-500">
+                <thead className="bg-koma-panel text-[9px] uppercase tracking-wider text-koma-muted">
                   <tr>
                     <th className="p-3">Meio</th>
                     <th className="p-3">Sistema</th>
@@ -326,10 +326,10 @@ ________________________________
                     <th className="p-3 text-right">Diferença</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#252b28] text-zinc-300">
+                <tbody className="divide-y divide-[#252b28] text-koma-secondary">
                   {rows.map(([label, expected, declared, rowDifference]) => (
                     <tr key={label}>
-                      <td className="p-3 font-semibold text-white">{label}</td>
+                      <td className="p-3 font-semibold text-koma-foreground">{label}</td>
                       <td className="p-3 tabular-nums">{formatMoney(expected)}</td>
                       <td className="p-3 tabular-nums">{formatMoney(declared)}</td>
                       <td className={clsx('p-3 text-right font-semibold tabular-nums', Math.abs(rowDifference) < 0.01 ? 'text-[#54d9b3]' : 'text-[#f0b3aa]')}>
@@ -338,7 +338,7 @@ ________________________________
                     </tr>
                   ))}
                 </tbody>
-                <tfoot className="border-t border-[#303832] bg-[#141815] text-sm font-bold text-white">
+                <tfoot className="border-t border-koma-border bg-koma-panel text-sm font-bold text-koma-foreground">
                   <tr>
                     <td className="p-3">Total</td>
                     <td className="p-3 tabular-nums">{formatMoney(fechamentoResult.total_esperado)}</td>
@@ -351,11 +351,11 @@ ________________________________
           </div>
         </section>
 
-        <aside className="flex flex-col justify-between rounded-3xl border border-[#252b28] bg-[#0d100f] p-5">
+        <aside className="flex flex-col justify-between rounded-3xl border border-koma-border bg-koma-panel p-5">
           <div>
             <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[#54d9b3]">Próximo turno</p>
-            <h3 className="mt-2 text-lg font-bold text-white">Caixa pronto para recomeçar</h3>
-            <p className="mt-2 text-xs leading-relaxed text-zinc-500">O fechamento foi gravado e os valores permanecerão disponíveis no histórico do caixa.</p>
+            <h3 className="mt-2 text-lg font-bold text-koma-foreground">Caixa pronto para recomeçar</h3>
+            <p className="mt-2 text-xs leading-relaxed text-koma-muted">O fechamento foi gravado e os valores permanecerão disponíveis no histórico do caixa.</p>
           </div>
           {onOpenNovoTurnoModal && (
             <button type="button" onClick={onOpenNovoTurnoModal} className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#1f8f70] bg-[#0f6f55] px-4 py-3 text-xs font-bold text-white transition-colors hover:bg-[#128364]">
@@ -363,7 +363,7 @@ ________________________________
             </button>
           )}
           
-          <button type="button" onClick={handlePrintComprovante} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#2d3531] bg-[#151a17] px-4 py-3 text-xs font-bold text-zinc-300 transition-colors hover:bg-[#1a201c] hover:text-white">
+          <button type="button" onClick={handlePrintComprovante} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-koma-border-subtle bg-koma-panel px-4 py-3 text-xs font-bold text-koma-secondary transition-colors hover:bg-[#1a201c] hover:text-white">
             <Printer size={16} /> Imprimir comprovante
           </button>
         </aside>
@@ -373,10 +373,10 @@ ________________________________
 
   if (!isTurnoAberto) {
     return (
-      <section className="rounded-3xl border border-[#252b28] bg-[#0d100f] p-8 text-center">
-        <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-[#2d3531] bg-[#151a17] text-zinc-400"><Lock size={22} /></span>
-        <h2 className="mt-4 text-base font-bold text-white">Nenhum turno aberto</h2>
-        <p className="mx-auto mt-2 max-w-lg text-xs leading-relaxed text-zinc-500">Abra o caixa para registrar vendas, movimentações e realizar a conferência ao final do expediente.</p>
+      <section className="rounded-3xl border border-koma-border bg-koma-panel p-8 text-center">
+        <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-koma-border-subtle bg-koma-panel text-koma-subtle"><Lock size={22} /></span>
+        <h2 className="mt-4 text-base font-bold text-koma-foreground">Nenhum turno aberto</h2>
+        <p className="mx-auto mt-2 max-w-lg text-xs leading-relaxed text-koma-muted">Abra o caixa para registrar vendas, movimentações e realizar a conferência ao final do expediente.</p>
         {onOpenNovoTurnoModal && (
           <button type="button" onClick={onOpenNovoTurnoModal} className="mt-5 inline-flex items-center gap-2 rounded-xl border border-[#1f8f70] bg-[#0f6f55] px-5 py-2.5 text-xs font-bold text-white hover:bg-[#128364]">
             <DollarSign size={15} /> Abrir caixa
@@ -388,15 +388,15 @@ ________________________________
 
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,.55fr)]">
-      <section className="rounded-3xl border border-[#252b28] bg-[#0d100f] p-5 sm:p-6">
-        <div className="flex flex-col gap-3 border-b border-[#252b28] pb-4 sm:flex-row sm:items-start sm:justify-between">
+      <section className="rounded-3xl border border-koma-border bg-koma-panel p-5 sm:p-6">
+        <div className="flex flex-col gap-3 border-b border-koma-border pb-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[#54d9b3]">Conferência assistida</p>
-            <h2 className="mt-1 text-lg font-bold text-white">Confira e feche mais rápido</h2>
-            <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-zinc-500">Compare cada meio com o sistema. Use os valores esperados e altere apenas quando houver divergência.</p>
+            <h2 className="mt-1 text-lg font-bold text-koma-foreground">Confira e feche mais rápido</h2>
+            <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-koma-muted">Compare cada meio com o sistema. Use os valores esperados e altere apenas quando houver divergência.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={handleRefresh} disabled={!onRefresh || isRefreshing} className="inline-flex w-fit items-center gap-2 rounded-xl border border-[#2d3531] bg-[#151a17] px-3 py-2 text-[10px] font-semibold text-zinc-300 hover:border-[#3a4540] hover:text-white disabled:opacity-50">
+            <button type="button" onClick={handleRefresh} disabled={!onRefresh || isRefreshing} className="inline-flex w-fit items-center gap-2 rounded-xl border border-koma-border-subtle bg-koma-panel px-3 py-2 text-[10px] font-semibold text-koma-secondary hover:border-[#3a4540] hover:text-white disabled:opacity-50">
               <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} /> Atualizar
             </button>
             <button type="button" onClick={useExpectedValues} className="inline-flex w-fit items-center gap-2 rounded-xl border border-[#1f8f70] bg-[#0f6f55] px-3 py-2 text-[10px] font-bold text-white transition-colors hover:bg-[#128364]">
@@ -420,19 +420,19 @@ ________________________________
           </div>
 
           <label htmlFor="closing-note" className="mt-4 block">
-            <span className={clsx("text-[9px] font-bold uppercase tracking-[0.12em]", isDivergent ? "text-[#f0b3aa]" : "text-zinc-500")}>
+            <span className={clsx("text-[9px] font-bold uppercase tracking-[0.12em]", isDivergent ? "text-[#f0b3aa]" : "text-koma-muted")}>
               Observação do fechamento {isDivergent ? <span className="normal-case tracking-normal ml-1 text-[#f0b3aa]">* Obrigatório para justificar divergência</span> : <span className="normal-case tracking-normal">(opcional)</span>}
             </span>
-            <textarea id="closing-note" rows={2} maxLength={500} placeholder={isDivergent ? "Justifique a diferença de caixa..." : "Ex.: comprovante ausente, valor deixado para troco..."} value={observacao} onChange={(event) => setObservacao(event.target.value)} required={isDivergent} className={clsx("mt-2 w-full resize-none rounded-xl border bg-[#111512] px-3 py-3 text-xs text-white outline-none placeholder:text-zinc-700 focus:border-[#2a9f7d]", isDivergent && !observacao.trim() ? "border-[#5d2b31] focus:border-[#f0b3aa]" : "border-[#252b28]")} />
+            <textarea id="closing-note" rows={2} maxLength={500} placeholder={isDivergent ? "Justifique a diferença de caixa..." : "Ex.: comprovante ausente, valor deixado para troco..."} value={observacao} onChange={(event) => setObservacao(event.target.value)} required={isDivergent} className={clsx("mt-2 w-full resize-none rounded-xl border bg-koma-panel px-3 py-3 text-xs text-koma-foreground outline-none placeholder:text-zinc-700 focus:border-[#2a9f7d]", isDivergent && !observacao.trim() ? "border-[#5d2b31] focus:border-[#f0b3aa]" : "border-koma-border")} />
           </label>
 
-          <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-[#252b28] bg-[#111512] p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-koma-border bg-koma-panel p-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="grid grid-cols-3 gap-x-2 gap-y-1 sm:gap-x-5">
-              <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-zinc-500">Esperado</span>
-              <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-zinc-500">Declarado</span>
-              <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-zinc-500">Diferença</span>
-              <strong className="text-sm tabular-nums text-zinc-300 sm:text-base">{formatMoney(expectedTotal)}</strong>
-              <strong className="text-sm tabular-nums text-white sm:text-base">{hasMissingDeclarations ? '—' : formatMoney(declaredTotal)}</strong>
+              <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-koma-muted">Esperado</span>
+              <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-koma-muted">Declarado</span>
+              <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-koma-muted">Diferença</span>
+              <strong className="text-sm tabular-nums text-koma-secondary sm:text-base">{formatMoney(expectedTotal)}</strong>
+              <strong className="text-sm tabular-nums text-koma-foreground sm:text-base">{hasMissingDeclarations ? '—' : formatMoney(declaredTotal)}</strong>
               <strong className={clsx('text-sm tabular-nums sm:text-base', hasMissingDeclarations ? 'text-zinc-600' : Math.abs(liveDifference) < 0.01 ? 'text-[#54d9b3]' : 'text-[#f0b3aa]')}>
                 {hasMissingDeclarations ? '—' : `${liveDifference > 0 ? '+' : ''}${formatMoney(liveDifference)}`}
               </strong>
@@ -444,23 +444,23 @@ ________________________________
         </form>
       </section>
 
-      <aside className="rounded-3xl border border-[#252b28] bg-[#0d100f] p-5">
-        <div className="flex items-center justify-between border-b border-[#252b28] pb-4">
+      <aside className="rounded-3xl border border-koma-border bg-koma-panel p-5">
+        <div className="flex items-center justify-between border-b border-koma-border pb-4">
           <div>
             <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[#54d9b3]">Validação do turno</p>
-            <h2 className="mt-1 text-base font-bold text-white">Antes de fechar</h2>
+            <h2 className="mt-1 text-base font-bold text-koma-foreground">Antes de fechar</h2>
           </div>
-          {isConnected ? <Wifi size={17} className="text-[#54d9b3]" /> : <WifiOff size={17} className="text-zinc-500" />}
+          {isConnected ? <Wifi size={17} className="text-[#54d9b3]" /> : <WifiOff size={17} className="text-koma-muted" />}
         </div>
 
         <div className="mt-4 space-y-3">
           <div className={clsx('rounded-2xl border p-4', pendingPaymentsCount > 0 ? 'border-[#4b3430] bg-[#211816]' : 'border-[#254c40] bg-[#101d18]')}>
             <div className="flex items-start justify-between gap-3">
               <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-current/20 text-[#54d9b3]"><ReceiptText size={17} /></span>
-              <strong className="text-xl tabular-nums text-white">{pendingPaymentsCount}</strong>
+              <strong className="text-xl tabular-nums text-koma-foreground">{pendingPaymentsCount}</strong>
             </div>
-            <h3 className="mt-3 text-xs font-bold text-white">Pagamentos aguardando confirmação</h3>
-            <p className="mt-1 text-[10px] text-zinc-500">{pendingPaymentsCount > 0 ? `${formatMoney(pendingPaymentsTotal)} ainda precisa ser conferido.` : 'Nenhum recebimento pendente neste momento.'}</p>
+            <h3 className="mt-3 text-xs font-bold text-koma-foreground">Pagamentos aguardando confirmação</h3>
+            <p className="mt-1 text-[10px] text-koma-muted">{pendingPaymentsCount > 0 ? `${formatMoney(pendingPaymentsTotal)} ainda precisa ser conferido.` : 'Nenhum recebimento pendente neste momento.'}</p>
             {pendingPaymentsCount > 0 && onNavigateToPendingPayments && (
               <button type="button" onClick={onNavigateToPendingPayments} className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-bold text-[#54d9b3] hover:text-white">Resolver pagamentos <ArrowRight size={13} /></button>
             )}
@@ -469,10 +469,10 @@ ________________________________
           <div className={clsx('rounded-2xl border p-4', openAccountsCount > 0 ? 'border-[#4b3430] bg-[#211816]' : 'border-[#254c40] bg-[#101d18]')}>
             <div className="flex items-start justify-between gap-3">
               <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-current/20 text-[#54d9b3]"><ClipboardCheck size={17} /></span>
-              <strong className="text-xl tabular-nums text-white">{openAccountsCount}</strong>
+              <strong className="text-xl tabular-nums text-koma-foreground">{openAccountsCount}</strong>
             </div>
-            <h3 className="mt-3 text-xs font-bold text-white">Comandas ainda abertas</h3>
-            <p className="mt-1 text-[10px] text-zinc-500">{openAccountsCount > 0 ? 'Finalize as contas para não levar valores ao próximo turno.' : 'Todas as comandas estão finalizadas.'}</p>
+            <h3 className="mt-3 text-xs font-bold text-koma-foreground">Comandas ainda abertas</h3>
+            <p className="mt-1 text-[10px] text-koma-muted">{openAccountsCount > 0 ? 'Finalize as contas para não levar valores ao próximo turno.' : 'Todas as comandas estão finalizadas.'}</p>
             {openAccountsCount > 0 && onNavigateToOpenComandas && (
               <button type="button" onClick={onNavigateToOpenComandas} className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-bold text-[#54d9b3] hover:text-white">Revisar comandas <ArrowRight size={13} /></button>
             )}
@@ -483,24 +483,24 @@ ________________________________
           {hasBlockingPending ? <AlertCircle size={18} className="mt-0.5 shrink-0 text-[#f0b3aa]" /> : <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-[#54d9b3]" />}
           <div>
             <strong className={clsx('block text-xs', hasBlockingPending ? 'text-[#f0b3aa]' : 'text-[#54d9b3]')}>{hasBlockingPending ? 'Fechamento bloqueado com segurança' : 'Turno pronto para conferência'}</strong>
-            <p className="mt-1 text-[10px] leading-relaxed text-zinc-400">{hasBlockingPending ? 'Resolva as pendências acima. O sistema também valida tudo novamente no servidor.' : 'A confirmação fará uma última validação no servidor antes de encerrar.'}</p>
+            <p className="mt-1 text-[10px] leading-relaxed text-koma-subtle">{hasBlockingPending ? 'Resolva as pendências acima. O sistema também valida tudo novamente no servidor.' : 'A confirmação fará uma última validação no servidor antes de encerrar.'}</p>
           </div>
         </div>
       </aside>
 
       {showConfirmModal && (
         <div onClick={(event) => { if (event.target === event.currentTarget && !isSubmitting) setShowConfirmModal(false); }} className="fixed inset-0 z-50 flex cursor-pointer items-center justify-center overflow-y-auto bg-black/80 p-4 backdrop-blur-sm">
-          <div role="dialog" aria-modal="true" aria-labelledby="confirm-closing-title" className="my-8 w-full max-w-md cursor-default rounded-3xl border border-[#2d3531] bg-[#0d100f] p-5 shadow-2xl">
-            <div className="flex items-start gap-3 border-b border-[#252b28] pb-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="confirm-closing-title" className="my-8 w-full max-w-md cursor-default rounded-3xl border border-koma-border-subtle bg-koma-panel p-5 shadow-2xl">
+            <div className="flex items-start gap-3 border-b border-koma-border pb-4">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[#1f7058] bg-[#0d3026] text-[#54d9b3]"><Lock size={18} /></span>
               <div>
-                <h2 id="confirm-closing-title" className="text-base font-bold text-white">Confirmar encerramento do turno?</h2>
-                <p className="mt-1 text-[10px] leading-relaxed text-zinc-500">Depois de confirmar, os lançamentos deste turno ficam encerrados e a conferência será exibida.</p>
+                <h2 id="confirm-closing-title" className="text-base font-bold text-koma-foreground">Confirmar encerramento do turno?</h2>
+                <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">Depois de confirmar, os lançamentos deste turno ficam encerrados e a conferência será exibida.</p>
               </div>
             </div>
 
-            <div className="mt-4 overflow-hidden rounded-2xl border border-[#252b28] bg-[#111512] text-[10px]">
-              <div className="grid grid-cols-[1fr_repeat(3,auto)] gap-x-3 border-b border-[#252b28] px-4 py-2 font-bold uppercase tracking-wider text-zinc-600">
+            <div className="mt-4 overflow-hidden rounded-2xl border border-koma-border bg-koma-panel text-[10px]">
+              <div className="grid grid-cols-[1fr_repeat(3,auto)] gap-x-3 border-b border-koma-border px-4 py-2 font-bold uppercase tracking-wider text-zinc-600">
                 <span>Meio</span><span>Esperado</span><span>Informado</span><span>Dif.</span>
               </div>
               {[
@@ -510,22 +510,22 @@ ________________________________
               ].map(([label, expected, declared]) => {
                 const rowDifference = Number(declared) - Number(expected);
                 return (
-                  <div key={String(label)} className="grid grid-cols-[1fr_repeat(3,auto)] gap-x-3 border-b border-[#252b28] px-4 py-2.5 tabular-nums last:border-0">
-                    <strong className="text-zinc-300">{label}</strong>
-                    <span className="text-zinc-500">{formatMoney(Number(expected))}</span>
-                    <span className="text-white">{formatMoney(Number(declared))}</span>
+                  <div key={String(label)} className="grid grid-cols-[1fr_repeat(3,auto)] gap-x-3 border-b border-koma-border px-4 py-2.5 tabular-nums last:border-0">
+                    <strong className="text-koma-secondary">{label}</strong>
+                    <span className="text-koma-muted">{formatMoney(Number(expected))}</span>
+                    <span className="text-koma-foreground">{formatMoney(Number(declared))}</span>
                     <span className={Math.abs(rowDifference) < 0.01 ? 'text-[#54d9b3]' : 'text-[#f0b3aa]'}>{rowDifference > 0 ? '+' : ''}{formatMoney(rowDifference)}</span>
                   </div>
                 );
               })}
-              <div className="flex items-center justify-between bg-[#141815] px-4 py-3 text-xs font-bold text-white">
+              <div className="flex items-center justify-between bg-koma-panel px-4 py-3 text-xs font-bold text-koma-foreground">
                 <span>Diferença total</span>
                 <span className={Math.abs(liveDifference) < 0.01 ? 'text-[#54d9b3]' : 'text-[#f0b3aa]'}>{liveDifference > 0 ? '+' : ''}{formatMoney(liveDifference)}</span>
               </div>
             </div>
 
             <div className="mt-4 flex gap-2">
-              <button type="button" onClick={() => setShowConfirmModal(false)} disabled={isSubmitting} className="flex-1 rounded-xl border border-[#2d3531] bg-[#151a17] px-3 py-3 text-xs font-bold text-zinc-300 hover:text-white disabled:opacity-50">Voltar e conferir</button>
+              <button type="button" onClick={() => setShowConfirmModal(false)} disabled={isSubmitting} className="flex-1 rounded-xl border border-koma-border-subtle bg-koma-panel px-3 py-3 text-xs font-bold text-koma-secondary hover:text-white disabled:opacity-50">Voltar e conferir</button>
               <button type="button" onClick={handleExecuteFechamento} disabled={isSubmitting} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-[#1f8f70] bg-[#0f6f55] px-3 py-3 text-xs font-bold text-white hover:bg-[#128364] disabled:opacity-50">
                 <Check size={15} /> {isSubmitting ? 'Encerrando...' : 'Confirmar fechamento'}
               </button>

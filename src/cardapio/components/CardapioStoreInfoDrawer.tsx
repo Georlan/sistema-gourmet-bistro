@@ -41,7 +41,7 @@ export default function CardapioStoreInfoDrawer({ brand, isOpen, onClose }: Card
           <button
             type="button"
             onClick={onClose}
-            className="absolute top-3 right-3 flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 hover:scale-105 transition shadow-md cursor-pointer"
+            className="absolute top-3 right-3 flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full bg-black/60 text-koma-foreground hover:bg-black/80 hover:scale-105 transition shadow-md cursor-pointer"
             id="btn-close-store-info"
             aria-label="Fechar informações"
             title="Fechar informações"
@@ -159,7 +159,7 @@ export default function CardapioStoreInfoDrawer({ brand, isOpen, onClose }: Card
                   href={brand.googleMapsUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-primary hover:opacity-90 text-white font-bold text-[10px] transition uppercase tracking-wider text-center"
+                  className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-primary hover:opacity-90 text-koma-foreground font-bold text-[10px] transition uppercase tracking-wider text-center"
                   id="btn-google-maps-link"
                 >
                   <ExternalLink className="h-3 w-3" />

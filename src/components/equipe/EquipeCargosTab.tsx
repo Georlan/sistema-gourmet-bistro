@@ -62,10 +62,10 @@ export const EquipeCargosTab: React.FC<EquipeCargosTabProps> = ({ apiBaseUrl, au
         <div className={clsx('border-b', 'border-koma-border', 'pb-3', 'flex', 'items-center', 'justify-between')}>
           <div className="flex items-center gap-2">
             <ShieldCheck size={18} className="text-[#10b981]" />
-            <span className={clsx('font-serif', 'font-bold', 'text-sm', 'text-white')}>Cargos e Permissões</span>
+            <span className={clsx('font-serif', 'font-bold', 'text-sm', 'text-koma-foreground')}>Cargos e Permissões</span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-[9px] text-gray-500">Controle de acesso por função</span>
+            <span className="text-[9px] text-koma-muted">Controle de acesso por função</span>
           </div>
         </div>
 
@@ -79,7 +79,7 @@ export const EquipeCargosTab: React.FC<EquipeCargosTabProps> = ({ apiBaseUrl, au
 
         {/* Loading State */}
         {isLoading && (
-          <div className="p-12 text-center text-gray-400 text-xs animate-pulse">
+          <div className="p-12 text-center text-koma-subtle text-xs animate-pulse">
             Carregando cargos e permissões...
           </div>
         )}
@@ -88,7 +88,7 @@ export const EquipeCargosTab: React.FC<EquipeCargosTabProps> = ({ apiBaseUrl, au
         {!isLoading && !hasError && cargos.length > 0 && (
           <div className="overflow-x-auto border border-koma-border rounded-2xl">
             <table className="w-full text-left text-[10px]">
-              <thead className="bg-koma-raised border-b border-koma-border text-gray-400 uppercase tracking-wider font-bold">
+              <thead className="bg-koma-raised border-b border-koma-border text-koma-subtle uppercase tracking-wider font-bold">
                 <tr>
                   <th className="p-3.5">Cargo</th>
                   <th className="p-3.5 text-center font-mono">Funcionários</th>
@@ -100,7 +100,7 @@ export const EquipeCargosTab: React.FC<EquipeCargosTabProps> = ({ apiBaseUrl, au
               <tbody className="divide-y divide-koma-border">
                 {cargos.map(cargo => (
                   <tr key={cargo.slug} className="hover:bg-koma-raised/50 transition-colors">
-                    <td className="p-3.5 font-bold text-white">{cargo.label}</td>
+                    <td className="p-3.5 font-bold text-koma-foreground">{cargo.label}</td>
                     <td className="p-3.5 text-center font-mono text-sky-400 font-bold">
                       {cargo.total_funcionarios}
                     </td>
@@ -109,7 +109,7 @@ export const EquipeCargosTab: React.FC<EquipeCargosTabProps> = ({ apiBaseUrl, au
                         <span className={`px-2 py-0.5 text-[8px] font-bold rounded uppercase tracking-wider ${
                           cargo.permissoes[col.key]
                             ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                            : 'bg-koma-raised text-gray-500'
+                            : 'bg-koma-raised text-koma-muted'
                         }`}>
                           {cargo.permissoes[col.key] ? 'Sim' : 'Não'}
                         </span>
@@ -123,12 +123,12 @@ export const EquipeCargosTab: React.FC<EquipeCargosTabProps> = ({ apiBaseUrl, au
         )}
 
         {!isLoading && !hasError && cargos.length === 0 && (
-          <div className="p-12 text-center text-gray-500 text-xs">
+          <div className="p-12 text-center text-koma-muted text-xs">
             Nenhum cargo encontrado para este restaurante.
           </div>
         )}
 
-        <p className="text-[9px] text-gray-500 pt-1">
+        <p className="text-[9px] text-koma-muted pt-1">
           * Contagem de funcionários reflete os dados cadastrados no sistema. Permissões são gerenciadas
           automaticamente pelo sistema conforme o cargo atribuído.
         </p>

@@ -48,7 +48,7 @@ export const EstoqueMovimentacoesTab: React.FC<EstoqueMovimentacoesTabProps> = (
       case 'contagem':
         return <span className="px-2 py-0.5 rounded-full text-[8px] font-bold uppercase bg-purple-500/10 text-purple-400 flex items-center gap-1 w-fit"><CheckCircle2 size={10} /> Contagem</span>;
       default:
-        return <span className="px-2 py-0.5 rounded-full text-[8px] font-bold uppercase bg-zinc-800 text-gray-400">{tipo}</span>;
+        return <span className="px-2 py-0.5 rounded-full text-[8px] font-bold uppercase bg-koma-raised text-koma-subtle">{tipo}</span>;
     }
   };
 
@@ -57,14 +57,14 @@ export const EstoqueMovimentacoesTab: React.FC<EstoqueMovimentacoesTabProps> = (
       {/* Header Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-koma-panel/60 border border-koma-border p-4 rounded-3xl">
         <div>
-          <h3 className="font-serif text-sm font-bold text-white">Histórico Auditável de Movimentações</h3>
-          <p className="text-[10px] text-gray-400">Rastreabilidade completa de entradas, perdas, contagens e ajustes de saldo.</p>
+          <h3 className="font-serif text-sm font-bold text-koma-foreground">Histórico Auditável de Movimentações</h3>
+          <p className="text-[10px] text-koma-subtle">Rastreabilidade completa de entradas, perdas, contagens e ajustes de saldo.</p>
         </div>
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={onRefreshMovimentacoes}
-            className="p-2 border border-koma-border hover:bg-koma-raised text-gray-400 hover:text-white rounded-xl transition-all cursor-pointer"
+            className="p-2 border border-koma-border hover:bg-koma-raised text-koma-subtle hover:text-white rounded-xl transition-all cursor-pointer"
             title="Atualizar Movimentações"
           >
             <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
@@ -83,14 +83,14 @@ export const EstoqueMovimentacoesTab: React.FC<EstoqueMovimentacoesTabProps> = (
       {/* Filter Bar */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 bg-koma-raised/60 border border-koma-border p-3 rounded-2xl">
         <div className="space-y-1">
-          <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
+          <label className="text-[9px] font-bold text-koma-subtle uppercase tracking-wider flex items-center gap-1">
             <Filter size={10} />
             <span>Ingrediente</span>
           </label>
           <select
             value={filterInsumoId}
             onChange={(e) => setFilterInsumoId(e.target.value)}
-            className="w-full px-2.5 py-1.5 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
+            className="w-full px-2.5 py-1.5 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs focus:outline-none focus:border-emerald-500"
           >
             <option value="">Todos os ingredientes</option>
             {insumos.map(i => (
@@ -100,11 +100,11 @@ export const EstoqueMovimentacoesTab: React.FC<EstoqueMovimentacoesTabProps> = (
         </div>
 
         <div className="space-y-1">
-          <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Tipo</label>
+          <label className="text-[9px] font-bold text-koma-subtle uppercase tracking-wider">Tipo</label>
           <select
             value={filterTipo}
             onChange={(e) => setFilterTipo(e.target.value)}
-            className="w-full px-2.5 py-1.5 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
+            className="w-full px-2.5 py-1.5 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs focus:outline-none focus:border-emerald-500"
           >
             <option value="todos">Todos os Tipos</option>
             <option value="entrada">Entradas</option>
@@ -116,22 +116,22 @@ export const EstoqueMovimentacoesTab: React.FC<EstoqueMovimentacoesTabProps> = (
         </div>
 
         <div className="space-y-1">
-          <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Data Início</label>
+          <label className="text-[9px] font-bold text-koma-subtle uppercase tracking-wider">Data Início</label>
           <input
             type="date"
             value={filterDataInicio}
             onChange={(e) => setFilterDataInicio(e.target.value)}
-            className="w-full px-2.5 py-1.5 bg-koma-input border border-koma-border rounded-xl text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
+            className="w-full px-2.5 py-1.5 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs font-mono focus:outline-none focus:border-emerald-500"
           />
         </div>
 
         <div className="space-y-1">
-          <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Data Fim</label>
+          <label className="text-[9px] font-bold text-koma-subtle uppercase tracking-wider">Data Fim</label>
           <input
             type="date"
             value={filterDataFim}
             onChange={(e) => setFilterDataFim(e.target.value)}
-            className="w-full px-2.5 py-1.5 bg-koma-input border border-koma-border rounded-xl text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
+            className="w-full px-2.5 py-1.5 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs font-mono focus:outline-none focus:border-emerald-500"
           />
         </div>
       </div>
@@ -141,7 +141,7 @@ export const EstoqueMovimentacoesTab: React.FC<EstoqueMovimentacoesTabProps> = (
         <div className="overflow-x-auto border border-koma-border rounded-2xl">
           <table className="w-full text-left text-[10px]">
             <thead>
-              <tr className="bg-koma-raised border-b border-koma-border text-gray-400 uppercase tracking-wider font-bold">
+              <tr className="bg-koma-raised border-b border-koma-border text-koma-subtle uppercase tracking-wider font-bold">
                 <th className="p-3">Data / Hora</th>
                 <th className="p-3">Ingrediente</th>
                 <th className="p-3">Tipo</th>
@@ -155,33 +155,33 @@ export const EstoqueMovimentacoesTab: React.FC<EstoqueMovimentacoesTabProps> = (
             <tbody className="divide-y divide-koma-border">
               {filteredMovs.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-gray-500 italic">
+                  <td colSpan={8} className="p-8 text-center text-koma-muted italic">
                     Nenhuma movimentação encontrada para os filtros selecionados.
                   </td>
                 </tr>
               ) : (
                 filteredMovs.map((mov) => (
                   <tr key={mov.id} className="hover:bg-koma-raised/50 transition-colors">
-                    <td className="p-3 text-gray-400 whitespace-nowrap font-mono">
+                    <td className="p-3 text-koma-subtle whitespace-nowrap font-mono">
                       {formatBackendDateTime(mov.created_at)}
                     </td>
-                    <td className="p-3 font-bold text-white">
+                    <td className="p-3 font-bold text-koma-foreground">
                       {mov.insumo?.nome || mov.insumo_id}
-                      <span className="text-[8px] text-gray-500 block font-mono">ID: {mov.insumo_id}</span>
+                      <span className="text-[8px] text-koma-muted block font-mono">ID: {mov.insumo_id}</span>
                     </td>
                     <td className="p-3">{getTipoBadge(mov.tipo)}</td>
-                    <td className="p-3 font-mono font-bold text-white">{mov.quantidade} {mov.insumo?.unidade_medida || ''}</td>
-                    <td className="p-3 font-mono text-gray-300 whitespace-nowrap">
+                    <td className="p-3 font-mono font-bold text-koma-foreground">{mov.quantidade} {mov.insumo?.unidade_medida || ''}</td>
+                    <td className="p-3 font-mono text-koma-secondary whitespace-nowrap">
                       {mov.saldo_anterior.toFixed(2)} ➔ <strong className={clsx(
-                        mov.saldo_posterior > mov.saldo_anterior ? 'text-emerald-400' : mov.saldo_posterior < mov.saldo_anterior ? 'text-amber-400' : 'text-white'
+                        mov.saldo_posterior > mov.saldo_anterior ? 'text-emerald-400' : mov.saldo_posterior < mov.saldo_anterior ? 'text-amber-400' : 'text-koma-foreground'
                       )}>{mov.saldo_posterior.toFixed(2)}</strong>
                     </td>
-                    <td className="p-3 font-mono text-gray-400">R$ {Number(mov.custo_unitario || 0).toFixed(2)}</td>
-                    <td className="p-3 text-gray-300 max-w-xs truncate" title={mov.motivo}>
+                    <td className="p-3 font-mono text-koma-subtle">R$ {Number(mov.custo_unitario || 0).toFixed(2)}</td>
+                    <td className="p-3 text-koma-secondary max-w-xs truncate" title={mov.motivo}>
                       {mov.motivo}
-                      {mov.observacao && <span className="text-[8px] text-gray-500 block">{mov.observacao}</span>}
+                      {mov.observacao && <span className="text-[8px] text-koma-muted block">{mov.observacao}</span>}
                     </td>
-                    <td className="p-3 text-gray-400 text-[9px] font-mono uppercase">{mov.origem || 'manual'}</td>
+                    <td className="p-3 text-koma-subtle text-[9px] font-mono uppercase">{mov.origem || 'manual'}</td>
                   </tr>
                 ))
               )}

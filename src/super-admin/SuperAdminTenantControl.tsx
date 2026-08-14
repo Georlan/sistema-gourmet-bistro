@@ -191,15 +191,15 @@ export default function SuperAdminTenantControl({
     <div className="space-y-6" id="superadmin-tenant-control">
       {/* Header Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-[#121420] border border-[#1e293b]/40 p-4 rounded relative overflow-hidden" id="stat-total-restaurants">
+        <div className="bg-koma-card border border-[#1e293b]/40 p-4 rounded relative overflow-hidden" id="stat-total-restaurants">
           <div className="absolute top-0 right-0 p-3 opacity-10">
-            <Building2 className="w-12 h-12 text-white" />
+            <Building2 className="w-12 h-12 text-koma-foreground" />
           </div>
           <p className="text-xs text-[#9ca3af] font-mono">[TOTAL_TENANTS]</p>
           {isLoading ? (
             <div className="w-20 h-7 bg-slate-800/60 rounded animate-pulse mt-1"></div>
           ) : (
-            <p className="text-2xl font-mono font-bold text-white mt-1">{tenants.length}</p>
+            <p className="text-2xl font-mono font-bold text-koma-foreground mt-1">{tenants.length}</p>
           )}
           <div className="text-[10px] text-[#00b894] font-mono mt-2 flex items-center gap-1 font-bold">
             <span className="w-1.5 h-1.5 bg-[#00b894] rounded-full animate-pulse shadow-[0_0_6px_#00b894]"></span>
@@ -207,9 +207,9 @@ export default function SuperAdminTenantControl({
           </div>
         </div>
 
-        <div className="bg-[#121420] border border-[#1e293b]/40 p-4 rounded relative overflow-hidden" id="stat-mrr">
+        <div className="bg-koma-card border border-[#1e293b]/40 p-4 rounded relative overflow-hidden" id="stat-mrr">
           <div className="absolute top-0 right-0 p-3 opacity-10">
-            <DollarSign className="w-12 h-12 text-white" />
+            <DollarSign className="w-12 h-12 text-koma-foreground" />
           </div>
           <p className="text-xs text-[#9ca3af] font-mono">[MRR_REAL]</p>
           {isLoading ? (
@@ -224,15 +224,15 @@ export default function SuperAdminTenantControl({
           </div>
         </div>
 
-        <div className="bg-[#121420] border border-[#1e293b]/40 p-4 rounded relative overflow-hidden" id="stat-monthly-orders">
+        <div className="bg-koma-card border border-[#1e293b]/40 p-4 rounded relative overflow-hidden" id="stat-monthly-orders">
           <div className="absolute top-0 right-0 p-3 opacity-10">
-            <Terminal className="w-12 h-12 text-white" />
+            <Terminal className="w-12 h-12 text-koma-foreground" />
           </div>
           <p className="text-xs text-[#9ca3af] font-mono">[PEDIDOS_MES_CORRENTE]</p>
           {isLoading ? (
             <div className="w-24 h-7 bg-slate-800/60 rounded animate-pulse mt-1"></div>
           ) : (
-            <p className="text-2xl font-mono font-bold text-white mt-1">
+            <p className="text-2xl font-mono font-bold text-koma-foreground mt-1">
               {tenants.reduce((acc, curr) => acc + curr.monthlyOrders, 0).toLocaleString()}
             </p>
           )}
@@ -241,9 +241,9 @@ export default function SuperAdminTenantControl({
           </div>
         </div>
 
-        <div className="bg-[#121420] border border-[#1e293b]/40 p-4 rounded relative overflow-hidden" id="stat-active-percentage">
+        <div className="bg-koma-card border border-[#1e293b]/40 p-4 rounded relative overflow-hidden" id="stat-active-percentage">
           <div className="absolute top-0 right-0 p-3 opacity-10">
-            <ShieldAlert className="w-12 h-12 text-white" />
+            <ShieldAlert className="w-12 h-12 text-koma-foreground" />
           </div>
           <p className="text-xs text-[#9ca3af] font-mono">[INADIMPLENTES_BLOQUEADOS]</p>
           {isLoading ? (
@@ -262,9 +262,9 @@ export default function SuperAdminTenantControl({
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Onboarding Control Card */}
-        <div className="lg:col-span-1 bg-[#121420] border border-[#1e293b]/40 p-5 rounded flex flex-col space-y-4" id="onboarding-panel">
+        <div className="lg:col-span-1 bg-koma-card border border-[#1e293b]/40 p-5 rounded flex flex-col space-y-4" id="onboarding-panel">
           <div className="border-b border-[#1e293b]/40 pb-3 flex items-center justify-between">
-            <h3 className="text-sm font-mono text-white font-bold flex items-center gap-2">
+            <h3 className="text-sm font-mono text-koma-foreground font-bold flex items-center gap-2">
               <Plus className="w-4 h-4 text-[#00b894]" />
               [01] ONBOARDING 1-CLIQUE
             </h3>
@@ -278,7 +278,7 @@ export default function SuperAdminTenantControl({
               <label className="block text-xs font-mono text-[#9ca3af] mb-1">NOME_DO_RESTAURANTE</label>
               <input
                 type="text"
-                className="w-full bg-black/60 border border-[#1e293b]/40 rounded px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-[#00b894] transition-colors"
+                className="w-full bg-black/60 border border-[#1e293b]/40 rounded px-3 py-2 text-sm font-mono text-koma-foreground focus:outline-none focus:border-[#00b894] transition-colors"
                 placeholder="Ex: Pizzaria Sol"
                 value={onboardName}
                 onChange={e => setOnboardName(e.target.value)}
@@ -290,7 +290,7 @@ export default function SuperAdminTenantControl({
             <div>
               <label className="block text-xs font-mono text-[#9ca3af] mb-1">PLANO_SAAS</label>
               <select
-                className="w-full bg-black/60 border border-[#1e293b]/40 rounded px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-[#00b894]"
+                className="w-full bg-black/60 border border-[#1e293b]/40 rounded px-3 py-2 text-sm font-mono text-koma-foreground focus:outline-none focus:border-[#00b894]"
                 value={onboardPlan}
                 onChange={e => setOnboardPlan(e.target.value as any)}
                 disabled={isOnboarding}
@@ -307,7 +307,7 @@ export default function SuperAdminTenantControl({
               disabled={isOnboarding || !onboardName.trim()}
               className={`w-full py-2.5 rounded font-mono text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
                 isOnboarding
-                  ? "bg-zinc-800 text-zinc-500 cursor-not-allowed border-transparent"
+                  ? "bg-koma-raised text-koma-muted cursor-not-allowed border-transparent"
                   : "bg-[#00b894] hover:bg-[#059669] text-black shadow-[0_0_8px_rgba(0,184,148,0.2)] border-transparent"
               }`}
             >
@@ -325,7 +325,7 @@ export default function SuperAdminTenantControl({
             </button>
             {isOnboarding && (
               <div className="space-y-1.5 animate-fade-in mt-2" id="onboarding-progress-bar">
-                <div className="flex items-center justify-between font-mono text-[9px] text-slate-400">
+                <div className="flex items-center justify-between font-mono text-[9px] text-koma-subtle">
                   <span className="truncate">{onboardStatusText}</span>
                   <span className="font-bold text-[#00b894]">{onboardProgress}%</span>
                 </div>
@@ -341,7 +341,7 @@ export default function SuperAdminTenantControl({
 
           {/* Onboarding Logs Terminal inside card */}
           <div className="flex-1 min-h-[160px] max-h-[220px] bg-black/60 border border-[#1e293b]/40 rounded p-3 overflow-y-auto font-mono text-[10px] space-y-1 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
-            <div className="text-slate-500 border-b border-zinc-950 pb-1 mb-2 flex items-center justify-between">
+            <div className="text-koma-muted border-b border-zinc-950 pb-1 mb-2 flex items-center justify-between">
               <span>PROVISIONING_TERMINAL</span>
               <span className="w-2 h-2 rounded-full bg-[#00b894] animate-pulse shadow-[0_0_4px_#00b894]"></span>
             </div>
@@ -349,7 +349,7 @@ export default function SuperAdminTenantControl({
               <span className="text-slate-600 italic">Waiting for command...</span>
             ) : (
               onboardConsole.map((line, idx) => (
-                <div key={idx} className={line.includes("[SUCCESS]") ? "text-[#00b894] font-bold" : line.includes("[ERROR]") ? "text-red-500 font-bold" : "text-slate-400"}>
+                <div key={idx} className={line.includes("[SUCCESS]") ? "text-[#00b894] font-bold" : line.includes("[ERROR]") ? "text-red-500 font-bold" : "text-koma-subtle"}>
                   {line}
                 </div>
               ))
@@ -358,30 +358,30 @@ export default function SuperAdminTenantControl({
         </div>
 
         {/* Tenants Table Grid */}
-        <div className="lg:col-span-2 bg-[#121420] border border-[#1e293b]/40 p-5 rounded flex flex-col" id="tenants-list-panel">
+        <div className="lg:col-span-2 bg-koma-card border border-[#1e293b]/40 p-5 rounded flex flex-col" id="tenants-list-panel">
           <div className="border-b border-[#1e293b]/40 pb-3 flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
             <div>
-              <h3 className="text-sm font-mono text-white font-bold flex items-center gap-2">
+              <h3 className="text-sm font-mono text-koma-foreground font-bold flex items-center gap-2">
                 <Building2 className="w-4 h-4 text-[#00b894]" />
                 [02] CONTROLE DE INQUILINOS (TENANTS)
               </h3>
-              <p className="text-[10px] text-slate-500 font-mono mt-0.5">ESTADO GERAL E BLOQUEIO DE INADIMPLÊNCIA</p>
+              <p className="text-[10px] text-koma-muted font-mono mt-0.5">ESTADO GERAL E BLOQUEIO DE INADIMPLÊNCIA</p>
             </div>
 
             <div className="flex items-center gap-2">
               <div className="relative">
-                <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2" />
+                <Search className="w-3.5 h-3.5 text-koma-muted absolute left-2.5 top-2" />
                 <input
                   type="text"
                   placeholder="Pesquisar..."
-                  className="bg-black/60 border border-[#1e293b]/40 rounded pl-8 pr-3 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-[#00b894] w-36 md:w-48"
+                  className="bg-black/60 border border-[#1e293b]/40 rounded pl-8 pr-3 py-1.5 text-xs font-mono text-koma-foreground focus:outline-none focus:border-[#00b894] w-36 md:w-48"
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
                 />
               </div>
 
               <select
-                className="bg-black/60 border border-[#1e293b]/40 rounded px-2 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-[#00b894]"
+                className="bg-black/60 border border-[#1e293b]/40 rounded px-2 py-1.5 text-xs font-mono text-koma-foreground focus:outline-none focus:border-[#00b894]"
                 value={selectedPlan}
                 onChange={e => setSelectedPlan(e.target.value)}
               >
@@ -395,7 +395,7 @@ export default function SuperAdminTenantControl({
               <button
                 onClick={refreshTenants}
                 disabled={isLoading}
-                className="bg-black/60 border border-[#1e293b]/40 hover:border-[#00b894] p-1.5 rounded text-slate-400 hover:text-white transition-colors cursor-pointer"
+                className="bg-black/60 border border-[#1e293b]/40 hover:border-[#00b894] p-1.5 rounded text-koma-subtle hover:text-white transition-colors cursor-pointer"
                 title="Sincronizar Supabase"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin text-[#00b894]" : ""}`} />
@@ -407,7 +407,7 @@ export default function SuperAdminTenantControl({
           <div className="overflow-x-auto flex-1">
             <table className="w-full text-left font-mono text-xs">
               <thead>
-                <tr className="border-b border-[#1e293b]/40 text-slate-400 pb-2">
+                <tr className="border-b border-[#1e293b]/40 text-koma-subtle pb-2">
                   <th className="py-2.5 font-semibold">RESTAURANTE / ID</th>
                   <th className="py-2.5 font-semibold">PLANO</th>
                   <th className="py-2.5 font-semibold text-right">FATURADO (MÊS)</th>
@@ -417,17 +417,17 @@ export default function SuperAdminTenantControl({
                   <th className="py-2.5 font-semibold text-center">AÇÕES E CONTROLE</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#1e293b]/30 text-slate-300">
+              <tbody className="divide-y divide-[#1e293b]/30 text-koma-secondary">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={7} className="text-center py-8 text-slate-500">
+                    <td colSpan={7} className="text-center py-8 text-koma-muted">
                       <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-[#00b894]" />
                       Consultando registros no PostgreSQL (Supabase)...
                     </td>
                   </tr>
                 ) : filteredTenants.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-center py-8 text-zinc-500 italic">
+                    <td colSpan={7} className="text-center py-8 text-koma-muted italic">
                       Nenhum restaurante encontrado.
                     </td>
                   </tr>
@@ -487,10 +487,10 @@ export default function SuperAdminTenantControl({
                         className={`hover:bg-[#121420]/60 transition-colors ${isSuspended ? "bg-red-950/5 border-l-2 border-l-red-500" : ""}`}
                       >
                         <td className="py-3">
-                          <div className="font-bold text-white flex items-center gap-1.5">
+                          <div className="font-bold text-koma-foreground flex items-center gap-1.5">
                             {t.name}
                           </div>
-                          <div className="text-[10px] text-slate-500 flex items-center gap-2 mt-0.5">
+                          <div className="text-[10px] text-koma-muted flex items-center gap-2 mt-0.5">
                             <span>ID: {t.id}</span>
                             <span>•</span>
                             <span className="text-[#00b894] hover:underline cursor-pointer">
@@ -503,16 +503,16 @@ export default function SuperAdminTenantControl({
                             t.plan === "Premium" ? "bg-purple-950/80 text-purple-400 border border-purple-800" :
                             t.plan === "Delivery" ? "bg-sky-950/80 text-sky-400 border border-sky-800" :
                             t.plan === "Bistro" ? "bg-amber-950/80 text-amber-400 border border-amber-800" :
-                            "bg-zinc-800 text-zinc-300"
+                            "bg-koma-raised text-koma-secondary"
                           }`}>
                             {t.plan}
                           </span>
                         </td>
                         <td className="py-3 text-right">
-                          <div className="font-bold text-white">
+                          <div className="font-bold text-koma-foreground">
                             R$ {(t.monthlyBilling).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                           </div>
-                          <div className="text-[10px] text-slate-500">{t.monthlyOrders} ped.</div>
+                          <div className="text-[10px] text-koma-muted">{t.monthlyOrders} ped.</div>
                         </td>
                         <td className="py-3 text-center">
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold font-mono ${
@@ -551,13 +551,13 @@ export default function SuperAdminTenantControl({
                               <span className={printerStatus === "online" ? "text-emerald-400" : "text-red-400 animate-pulse font-bold"}>
                                 🖨️ {printerStatus === "online" ? "Online" : "Offline"}
                               </span>
-                              <span className={failedWebhooksCount24h > 0 ? "text-amber-400 font-bold" : "text-slate-500"}>
+                              <span className={failedWebhooksCount24h > 0 ? "text-amber-400 font-bold" : "text-koma-muted"}>
                                 ⚠️ {failedWebhooksCount24h} {failedWebhooksCount24h === 1 ? "erro" : "erros"} (24h)
                               </span>
                             </div>
                           </div>
                         </td>
-                        <td className="py-3 text-center text-slate-400 text-[10px] font-mono whitespace-nowrap">
+                        <td className="py-3 text-center text-koma-subtle text-[10px] font-mono whitespace-nowrap">
                           {lastActivity}
                         </td>
                         <td className="py-3">
@@ -615,19 +615,19 @@ export default function SuperAdminTenantControl({
       {/* Modal: Confirm Flush Redis */}
       <AnimatePresence>
         {showFlushConfirmModal && pendingFlushTenant && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 font-mono text-xs text-slate-300">
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 font-mono text-xs text-koma-secondary">
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-[#050814] border border-amber-900/40 rounded-lg max-w-md w-full p-5 space-y-4 shadow-[0_0_35px_rgba(245,158,11,0.15)]"
+              className="bg-koma-page border border-amber-900/40 rounded-lg max-w-md w-full p-5 space-y-4 shadow-[0_0_35px_rgba(245,158,11,0.15)]"
             >
               <div className="flex items-center gap-2 text-amber-500 font-bold border-b border-[#1e293b]/40 pb-3 uppercase text-sm">
                 <ShieldAlert className="w-5 h-5 text-amber-500 shrink-0" />
                 <span>Confirmar Limpeza de Cache (FLUSH)</span>
               </div>
               <p className="leading-relaxed">
-                Você tem certeza que deseja realizar a limpeza completa do cache Redis para o inquilino <strong className="text-white">"{pendingFlushTenant.name}"</strong>?
+                Você tem certeza que deseja realizar a limpeza completa do cache Redis para o inquilino <strong className="text-koma-foreground">"{pendingFlushTenant.name}"</strong>?
               </p>
               <div className="bg-amber-950/20 border border-amber-900/30 p-3 rounded text-amber-400 text-[11px] leading-relaxed">
                 <strong>O que vai acontecer:</strong>
@@ -642,7 +642,7 @@ export default function SuperAdminTenantControl({
                     setShowFlushConfirmModal(false);
                     setPendingFlushTenant(null);
                   }}
-                  className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-700/50 px-3 py-2 rounded text-slate-400 hover:text-white cursor-pointer transition-colors"
+                  className="bg-koma-card hover:bg-zinc-800 border border-zinc-700/50 px-3 py-2 rounded text-koma-subtle hover:text-white cursor-pointer transition-colors"
                 >
                   Cancelar
                 </button>

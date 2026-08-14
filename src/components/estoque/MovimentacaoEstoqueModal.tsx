@@ -72,10 +72,10 @@ export const MovimentacaoEstoqueModal: React.FC<MovimentacaoEstoqueModalProps> =
         {/* Header */}
         <div className="flex justify-between items-center pb-2 border-b border-koma-border">
           <div>
-            <h3 className="font-serif text-sm font-bold text-white">Nova Movimentação de Estoque</h3>
-            <p className="text-[9px] text-gray-400">Registre perdas ou ajustes com motivo auditável.</p>
+            <h3 className="font-serif text-sm font-bold text-koma-foreground">Nova Movimentação de Estoque</h3>
+            <p className="text-[9px] text-koma-subtle">Registre perdas ou ajustes com motivo auditável.</p>
           </div>
-          <button type="button" onClick={onClose} className="p-1 text-gray-400 hover:text-white transition-colors cursor-pointer">
+          <button type="button" onClick={onClose} className="p-1 text-koma-subtle hover:text-white transition-colors cursor-pointer">
             <X size={16} />
           </button>
         </div>
@@ -90,12 +90,12 @@ export const MovimentacaoEstoqueModal: React.FC<MovimentacaoEstoqueModalProps> =
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Insumo Select */}
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Ingrediente:</label>
+            <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">Ingrediente:</label>
             <select
               value={insumoId}
               onChange={(e) => setInsumoId(e.target.value)}
               required
-              className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
+              className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs focus:outline-none focus:border-emerald-500"
             >
               <option value="">-- Selecione o Ingrediente --</option>
               {insumos.map(i => (
@@ -109,11 +109,11 @@ export const MovimentacaoEstoqueModal: React.FC<MovimentacaoEstoqueModalProps> =
           {/* Tipo & Quantidade */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Tipo:</label>
+              <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">Tipo:</label>
               <select
                 value={tipo}
                 onChange={(e) => setTipo(e.target.value)}
-                className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
+                className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs focus:outline-none focus:border-emerald-500"
               >
                 <option value="perda">Perda / Descarte</option>
                 <option value="ajuste_positivo">Ajuste Positivo (+)</option>
@@ -122,7 +122,7 @@ export const MovimentacaoEstoqueModal: React.FC<MovimentacaoEstoqueModalProps> =
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+              <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">
                 Quantidade ({selectedInsumo?.unidade_medida || 'un'}):
               </label>
               <input
@@ -132,14 +132,14 @@ export const MovimentacaoEstoqueModal: React.FC<MovimentacaoEstoqueModalProps> =
                 required
                 value={quantidade}
                 onChange={(e) => setQuantidade(parseFloat(e.target.value) || 0)}
-                className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
+                className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs font-mono focus:outline-none focus:border-emerald-500"
               />
             </div>
           </div>
 
           {/* Motivo Obrigatório */}
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+            <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">
               Motivo <span className="text-red-400">*</span>:
             </label>
             <input
@@ -148,19 +148,19 @@ export const MovimentacaoEstoqueModal: React.FC<MovimentacaoEstoqueModalProps> =
               placeholder="ex: Validade vencida, produto danificado no manuseio..."
               value={motivo}
               onChange={(e) => setMotivo(e.target.value)}
-              className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
+              className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs focus:outline-none focus:border-emerald-500"
             />
           </div>
 
           {/* Observação Opcional */}
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Observação (Opcional):</label>
+            <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">Observação (Opcional):</label>
             <textarea
               rows={2}
               placeholder="Detalhes adicionais..."
               value={observacao}
               onChange={(e) => setObservacao(e.target.value)}
-              className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500 resize-none"
+              className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs focus:outline-none focus:border-emerald-500 resize-none"
             />
           </div>
 
@@ -169,7 +169,7 @@ export const MovimentacaoEstoqueModal: React.FC<MovimentacaoEstoqueModalProps> =
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2 border border-koma-border hover:border-zinc-700 bg-koma-raised text-gray-400 hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+              className="flex-1 py-2 border border-koma-border hover:border-zinc-700 bg-koma-raised text-koma-subtle hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
             >
               Cancelar
             </button>

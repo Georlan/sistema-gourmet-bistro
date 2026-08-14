@@ -410,16 +410,16 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
     <div className="space-y-6" id="superadmin-db-editor">
       
       {/* Header and Controls */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#121420] border border-[#1e293b]/40 p-4 rounded">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-koma-card border border-[#1e293b]/40 p-4 rounded">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-emerald-950/20/40 border border-[#00b894]/20 rounded">
             <Database className="w-5 h-5 text-[#00b894]" />
           </div>
           <div>
-            <h3 className="text-sm font-mono text-white font-bold flex items-center gap-2">
+            <h3 className="text-sm font-mono text-koma-foreground font-bold flex items-center gap-2">
               EDITOR VISUAL DO BANCO DE DADOS (SUPABASE REAL)
             </h3>
-            <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+            <p className="text-[10px] text-koma-muted font-mono mt-0.5">
               PLANILHA OPERACIONAL COM PERSISTÊNCIA DIRETA E VALIDAÇÃO ESTRITA DE ENUM/TIPOS
             </p>
           </div>
@@ -450,7 +450,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
               setNewColumnData({ name: "", type: "text" });
               setIsAddColumnOpen(true);
             }}
-            className="bg-black border border-[#1e293b]/40 hover:border-slate-600 p-2 rounded text-slate-300 hover:text-white cursor-pointer text-xs font-mono font-bold flex items-center gap-1.5 transition-colors"
+            className="bg-koma-page border border-[#1e293b]/40 hover:border-slate-600 p-2 rounded text-koma-secondary hover:text-white cursor-pointer text-xs font-mono font-bold flex items-center gap-1.5 transition-colors"
             title="Adicionar uma nova coluna de dados na tabela"
           >
             <Plus className="w-3.5 h-3.5 text-[#00b894]" />
@@ -460,7 +460,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
           <button
             onClick={handleBackup}
             disabled={isBackingUp}
-            className="bg-black border border-[#1e293b]/40 hover:border-slate-700 hover:bg-[#121420]/40 p-2 rounded text-slate-400 hover:text-white transition-all cursor-pointer text-xs font-mono font-bold flex items-center gap-1.5 shadow-[0_0_8px_rgba(0,0,0,0.5)]"
+            className="bg-koma-page border border-[#1e293b]/40 hover:border-slate-700 hover:bg-[#121420]/40 p-2 rounded text-koma-subtle hover:text-white transition-all cursor-pointer text-xs font-mono font-bold flex items-center gap-1.5 shadow-[0_0_8px_rgba(0,0,0,0.5)]"
             title="Executar backup instantâneo de segurança"
           >
             {isBackingUp ? (
@@ -474,7 +474,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
           <button
             onClick={() => fetchTableData(selectedTable)}
             disabled={isLoading}
-            className="bg-black border border-[#1e293b]/40 hover:border-[#334155] p-2 rounded text-slate-400 hover:text-white transition-colors cursor-pointer"
+            className="bg-koma-page border border-[#1e293b]/40 hover:border-[#334155] p-2 rounded text-koma-subtle hover:text-white transition-colors cursor-pointer"
             title="Recarregar dados"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin text-[#00b894]" : ""}`} />
@@ -495,14 +495,14 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
               <CheckCircle className="w-4 h-4 text-[#00b894]" />
               <div>
                 <span className="text-[#00b894] font-bold">SEGURANÇA_DUMP:</span> SQL dump gerado com sucesso para proteção de escrita.
-                <div className="text-[10px] text-slate-400 mt-0.5">
-                  Arquivo: <span className="text-white font-bold">{backupResult.filename}</span> • Tamanho: <span className="text-amber-400 font-bold">{backupResult.size}</span>
+                <div className="text-[10px] text-koma-subtle mt-0.5">
+                  Arquivo: <span className="text-koma-foreground font-bold">{backupResult.filename}</span> • Tamanho: <span className="text-amber-400 font-bold">{backupResult.size}</span>
                 </div>
               </div>
             </div>
             <button 
               onClick={() => setBackupResult(null)}
-              className="text-slate-500 hover:text-white text-[10px] font-bold underline cursor-pointer"
+              className="text-koma-muted hover:text-white text-[10px] font-bold underline cursor-pointer"
             >
               FECHAR
             </button>
@@ -556,10 +556,10 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
                 OCULTAR
               </button>
             </div>
-            <p className="text-[11px] leading-relaxed text-slate-300">
+            <p className="text-[11px] leading-relaxed text-koma-secondary">
               {sqlSuggestion.message}
             </p>
-            <div className="bg-black/80 border border-[#1e293b]/40 p-3 rounded text-white relative font-mono text-[11px] overflow-x-auto">
+            <div className="bg-black/80 border border-[#1e293b]/40 p-3 rounded text-koma-foreground relative font-mono text-[11px] overflow-x-auto">
               <code>{sqlSuggestion.query}</code>
               <button
                 onClick={() => {
@@ -582,7 +582,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
           className={`pb-2 px-1 cursor-pointer border-b-2 transition-all ${
             activeTab === "spreadsheet" 
               ? "text-[#00b894] border-[#00b894]" 
-              : "text-slate-400 border-transparent hover:text-white"
+              : "text-koma-subtle border-transparent hover:text-white"
           }`}
         >
           [ PLANILHA DE DADOS ]
@@ -595,7 +595,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
           className={`pb-2 px-1 cursor-pointer border-b-2 transition-all flex items-center gap-1.5 ${
             activeTab === "audit" 
               ? "text-amber-500 border-amber-500" 
-              : "text-slate-400 border-transparent hover:text-white"
+              : "text-koma-subtle border-transparent hover:text-white"
           }`}
         >
           <History className="w-3.5 h-3.5 shrink-0" />
@@ -608,8 +608,8 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         
         {/* Table selector panel */}
-        <div className="md:col-span-1 bg-[#121420] border border-[#1e293b]/40 p-4 rounded flex flex-col space-y-3">
-          <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest border-b border-[#1e293b]/40 pb-1.5 font-bold flex items-center gap-1.5">
+        <div className="md:col-span-1 bg-koma-card border border-[#1e293b]/40 p-4 rounded flex flex-col space-y-3">
+          <span className="text-[10px] font-mono text-koma-muted uppercase tracking-widest border-b border-[#1e293b]/40 pb-1.5 font-bold flex items-center gap-1.5">
             <Table2 className="w-3.5 h-3.5 text-[#00b894]" />
             TABELAS_POSTGRES
           </span>
@@ -621,11 +621,11 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
                 className={`w-full text-left font-mono text-xs px-3 py-2 rounded transition-all cursor-pointer flex flex-col justify-center space-y-0.5 ${
                   selectedTable === tbl 
                     ? "bg-[#1a1f2e] text-[#00b894] border-l-2 border-[#00b894] font-bold" 
-                    : "text-slate-400 hover:bg-black/40 hover:text-white"
+                    : "text-koma-subtle hover:bg-black/40 hover:text-white"
                 }`}
               >
                 <span className="truncate">{tbl.toUpperCase()}</span>
-                <span className="text-[9px] text-slate-500 font-sans block truncate">
+                <span className="text-[9px] text-koma-muted font-sans block truncate">
                   {tbl === "restaurantes" ? "Planos, status e whitelabel" 
                    : tbl === "configuracoes_restaurante" ? "Ajustes de permissões e regras"
                    : tbl === "configuracoes_ia" ? "Parâmetros do assistente virtual"
@@ -637,38 +637,38 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
               </button>
             ))}
           </div>
-          <div className="bg-black/40 border border-[#1e293b]/40 p-2.5 rounded text-[9px] text-slate-500 space-y-1">
-            <span className="text-white opacity-40 font-bold block uppercase">Como editar:</span>
+          <div className="bg-black/40 border border-[#1e293b]/40 p-2.5 rounded text-[9px] text-koma-muted space-y-1">
+            <span className="text-koma-foreground opacity-40 font-bold block uppercase">Como editar:</span>
             <p>1. Clique duas vezes em qualquer célula de dados.</p>
             <p>2. Digite o novo valor desejado.</p>
-            <p>3. Pressione <span className="text-white font-bold">ENTER</span> para salvar ou clique fora para cancelar.</p>
+            <p>3. Pressione <span className="text-koma-foreground font-bold">ENTER</span> para salvar ou clique fora para cancelar.</p>
           </div>
         </div>
 
         {/* Main Grid spreadsheet table panel */}
-        <div className="md:col-span-3 bg-[#121420] border border-[#1e293b]/40 p-4 rounded flex flex-col min-h-[380px]" id="db-grid-container">
+        <div className="md:col-span-3 bg-koma-card border border-[#1e293b]/40 p-4 rounded flex flex-col min-h-[380px]" id="db-grid-container">
           
           {/* Grid filter bar */}
           <div className="flex items-center justify-between gap-3 mb-4">
             <div className="relative flex-1 max-w-sm">
-              <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5" />
+              <Search className="w-3.5 h-3.5 text-koma-muted absolute left-2.5 top-2.5" />
               <input
                 type="text"
                 placeholder={`Pesquisar na tabela ${selectedTable}...`}
-                className="w-full bg-black border border-[#1e293b]/40 rounded pl-8 pr-3 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-[#00b894]"
+                className="w-full bg-koma-page border border-[#1e293b]/40 rounded pl-8 pr-3 py-1.5 text-xs font-mono text-koma-foreground focus:outline-none focus:border-[#00b894]"
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
               />
             </div>
-            <div className="text-[10px] text-slate-500 font-mono">
+            <div className="text-[10px] text-koma-muted font-mono">
               MOSTRANDO: <span className="text-[#00b894] font-bold">{filteredRows.length}</span> / {rows.length} REGISTROS
             </div>
           </div>
 
           {/* Grid spreadsheet viewport */}
-          <div className="overflow-x-auto flex-1 border border-zinc-950 rounded bg-black">
+          <div className="overflow-x-auto flex-1 border border-zinc-950 rounded bg-koma-page">
             {isLoading ? (
-              <div className="flex flex-col items-center justify-center py-20 text-slate-500">
+              <div className="flex flex-col items-center justify-center py-20 text-koma-muted">
                 <RefreshCw className="w-8 h-8 animate-spin text-[#00b894] mb-2" />
                 <span className="font-mono text-xs">Consultando banco de dados...</span>
               </div>
@@ -683,17 +683,17 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
                     {headers.map(header => (
                       <th 
                         key={header} 
-                        className="p-2.5 font-bold text-slate-400 text-[10px] uppercase border-r border-[#1e293b]/40 bg-[#121420] shrink-0"
+                        className="p-2.5 font-bold text-koma-subtle text-[10px] uppercase border-r border-[#1e293b]/40 bg-koma-card shrink-0"
                       >
                         {header}
                       </th>
                     ))}
-                    <th className="p-2.5 font-bold text-[#00b894] text-[10px] uppercase bg-[#121420] text-center w-[110px] shrink-0">
+                    <th className="p-2.5 font-bold text-[#00b894] text-[10px] uppercase bg-koma-card text-center w-[110px] shrink-0">
                       Ações
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-900 text-slate-300">
+                <tbody className="divide-y divide-zinc-900 text-koma-secondary">
                   {filteredRows.map((row) => (
                     <tr key={row.id} className="hover:bg-[#1a1f2e]/20 transition-colors">
                       {headers.map((header) => {
@@ -726,7 +726,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
                           <td 
                             key={header} 
                             className={`p-2 border-r border-zinc-950 relative min-w-[120px] max-w-[240px] truncate ${
-                              hasIdHeader ? "bg-[#121420]/50 font-bold text-slate-500 text-[10px] select-all cursor-copy" : "cursor-pointer"
+                              hasIdHeader ? "bg-[#121420]/50 font-bold text-koma-muted text-[10px] select-all cursor-copy" : "cursor-pointer"
                             }`}
                             onDoubleClick={() => {
                               if (!hasIdHeader) {
@@ -742,10 +742,10 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
                             title={hasIdHeader ? "ID não editável" : "Clique duas vezes para editar"}
                           >
                             {isEditing ? (
-                              <div className="absolute inset-0 z-10 p-1 bg-black">
+                              <div className="absolute inset-0 z-10 p-1 bg-koma-page">
                                 <input
                                   type="text"
-                                  className="w-full h-full bg-zinc-900 border border-[#00b894] px-1.5 text-xs text-white font-mono rounded focus:outline-none focus:ring-1 focus:ring-[#00b894]"
+                                  className="w-full h-full bg-koma-card border border-[#00b894] px-1.5 text-xs text-koma-foreground font-mono rounded focus:outline-none focus:ring-1 focus:ring-[#00b894]"
                                   value={editValue}
                                   onChange={e => setEditValue(e.target.value)}
                                   onKeyDown={(e) => {
@@ -782,7 +782,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
                                     ? row[header] ? "text-[#00b894] font-bold" : "text-red-500 font-bold"
                                     : typeof row[header] === "number" && header === "price"
                                     ? "text-[#00b894] font-bold"
-                                    : "text-slate-300"
+                                    : "text-koma-secondary"
                                 }`}>
                                   {header === "price" || header === "monthlyBilling"
                                     ? `R$ ${Number(row[header]).toFixed(2)}`
@@ -790,7 +790,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
                                 </span>
 
                                 {!hasIdHeader && (
-                                  <span className="opacity-0 group-hover:opacity-40 text-[9px] text-slate-500 select-none">
+                                  <span className="opacity-0 group-hover:opacity-40 text-[9px] text-koma-muted select-none">
                                     [edit]
                                   </span>
                                 )}
@@ -821,7 +821,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
                             </button>
                             <button
                               onClick={() => setDeletingRowId(null)}
-                              className="bg-zinc-800 text-slate-400 hover:bg-zinc-700 px-1 py-0.5 rounded text-[9px] font-bold cursor-pointer transition-colors"
+                              className="bg-koma-raised text-koma-subtle hover:bg-zinc-700 px-1 py-0.5 rounded text-[9px] font-bold cursor-pointer transition-colors"
                             >
                               Não
                             </button>
@@ -853,7 +853,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-[#050814] border border-[#1e293b]/40 rounded-lg max-w-lg w-full p-5 font-mono text-xs text-slate-300 space-y-4 shadow-[0_0_30px_rgba(0,0,0,0.8)]"
+              className="bg-koma-page border border-[#1e293b]/40 rounded-lg max-w-lg w-full p-5 font-mono text-xs text-koma-secondary space-y-4 shadow-[0_0_30px_rgba(0,0,0,0.8)]"
             >
               <div className="flex items-center justify-between border-b border-[#1e293b]/40 pb-3">
                 <span className="text-[#00b894] font-bold uppercase tracking-wider flex items-center gap-1.5">
@@ -862,7 +862,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
                 <button 
                   type="button"
                   onClick={() => setIsAddRowOpen(false)}
-                  className="text-slate-500 hover:text-white cursor-pointer"
+                  className="text-koma-muted hover:text-white cursor-pointer"
                 >
                   [FECHAR]
                 </button>
@@ -881,12 +881,12 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
 
                       return (
                         <div key={col.name} className="space-y-1">
-                          <label className="text-slate-400 font-bold uppercase tracking-wide text-[10px] block">
+                          <label className="text-koma-subtle font-bold uppercase tracking-wide text-[10px] block">
                             {col.name} {isNum ? "(NÚMERO)" : isBool ? "(BOLEANO)" : "(TEXTO)"}
                           </label>
                           {isBool ? (
                             <select
-                              className="w-full bg-black border border-[#1e293b]/40 rounded p-2 text-xs font-mono text-white focus:outline-none focus:border-[#00b894]"
+                              className="w-full bg-koma-page border border-[#1e293b]/40 rounded p-2 text-xs font-mono text-koma-foreground focus:outline-none focus:border-[#00b894]"
                               value={String(newRowPayload[col.name] ?? false)}
                               onChange={(e) => setNewRowPayload({ ...newRowPayload, [col.name]: e.target.value === "true" })}
                             >
@@ -897,7 +897,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
                             <input
                               type={isNum ? "number" : "text"}
                               step={isNum ? "any" : undefined}
-                              className="w-full bg-black border border-[#1e293b]/40 rounded p-2 text-xs font-mono text-white focus:outline-none focus:border-[#00b894]"
+                              className="w-full bg-koma-page border border-[#1e293b]/40 rounded p-2 text-xs font-mono text-koma-foreground focus:outline-none focus:border-[#00b894]"
                               placeholder={`Inserir valor para ${col.name}...`}
                               value={newRowPayload[col.name] ?? ""}
                               onChange={(e) => {
@@ -917,7 +917,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
                   <button
                     type="button"
                     onClick={() => setIsAddRowOpen(false)}
-                    className="px-3.5 py-2 rounded bg-black border border-[#1e293b]/40 hover:border-slate-600 text-slate-400 hover:text-white cursor-pointer"
+                    className="px-3.5 py-2 rounded bg-koma-page border border-[#1e293b]/40 hover:border-slate-600 text-koma-subtle hover:text-white cursor-pointer"
                   >
                     CANCELAR
                   </button>
@@ -942,7 +942,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-[#050814] border border-[#1e293b]/40 rounded-lg max-w-sm w-full p-5 font-mono text-xs text-slate-300 space-y-4 shadow-[0_0_30px_rgba(0,0,0,0.8)]"
+              className="bg-koma-page border border-[#1e293b]/40 rounded-lg max-w-sm w-full p-5 font-mono text-xs text-koma-secondary space-y-4 shadow-[0_0_30px_rgba(0,0,0,0.8)]"
             >
               <div className="flex items-center justify-between border-b border-[#1e293b]/40 pb-3">
                 <span className="text-amber-500 font-bold uppercase tracking-wider flex items-center gap-1.5">
@@ -951,7 +951,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
                 <button 
                   type="button"
                   onClick={() => setIsAddColumnOpen(false)}
-                  className="text-slate-500 hover:text-white cursor-pointer"
+                  className="text-koma-muted hover:text-white cursor-pointer"
                 >
                   [FECHAR]
                 </button>
@@ -960,29 +960,29 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
               <form onSubmit={handleCreateColumn} className="space-y-4">
                 <div className="space-y-3">
                   <div className="space-y-1">
-                    <label className="text-slate-400 font-bold uppercase tracking-wide text-[10px] block">
+                    <label className="text-koma-subtle font-bold uppercase tracking-wide text-[10px] block">
                       Nome da Coluna
                     </label>
                     <input
                       type="text"
-                      className="w-full bg-black border border-[#1e293b]/40 rounded p-2 text-xs font-mono text-white focus:outline-none focus:border-[#00b894]"
+                      className="w-full bg-koma-page border border-[#1e293b]/40 rounded p-2 text-xs font-mono text-koma-foreground focus:outline-none focus:border-[#00b894]"
                       placeholder="Ex: address, rating, thumbnail..."
                       value={newColumnData.name}
                       onChange={(e) => setNewColumnData({ ...newColumnData, name: e.target.value })}
                       required
                       autoFocus
                     />
-                    <span className="text-[9px] text-slate-500 block">
+                    <span className="text-[9px] text-koma-muted block">
                       Apenas letras minúsculas, números e underline (_).
                     </span>
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-slate-400 font-bold uppercase tracking-wide text-[10px] block">
+                    <label className="text-koma-subtle font-bold uppercase tracking-wide text-[10px] block">
                       Tipo de Dado (PostgreSQL)
                     </label>
                     <select
-                      className="w-full bg-black border border-[#1e293b]/40 rounded p-2 text-xs font-mono text-white focus:outline-none focus:border-[#00b894]"
+                      className="w-full bg-koma-page border border-[#1e293b]/40 rounded p-2 text-xs font-mono text-koma-foreground focus:outline-none focus:border-[#00b894]"
                       value={newColumnData.type}
                       onChange={(e) => setNewColumnData({ ...newColumnData, type: e.target.value })}
                     >
@@ -998,7 +998,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
                   <button
                     type="button"
                     onClick={() => setIsAddColumnOpen(false)}
-                    className="px-3.5 py-2 rounded bg-black border border-[#1e293b]/40 hover:border-slate-600 text-slate-400 hover:text-white cursor-pointer"
+                    className="px-3.5 py-2 rounded bg-koma-page border border-[#1e293b]/40 hover:border-slate-600 text-koma-subtle hover:text-white cursor-pointer"
                   >
                     CANCELAR
                   </button>
@@ -1017,19 +1017,19 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
 
         </>
       ) : (
-        <div className="bg-[#121420] border border-[#1e293b]/40 p-5 rounded space-y-4 font-mono text-xs text-slate-300">
+        <div className="bg-koma-card border border-[#1e293b]/40 p-5 rounded space-y-4 font-mono text-xs text-koma-secondary">
           <div className="flex items-center justify-between border-b border-[#1e293b]/40 pb-3">
             <div className="flex items-center gap-2">
               <History className="w-5 h-5 text-amber-500" />
               <div>
-                <h4 className="text-sm font-bold text-white uppercase">[AUDIT_LOG_STREAM] REGISTRO CENTRAL DE AUDITORIA</h4>
-                <p className="text-[10px] text-slate-500 mt-0.5">ÚLTIMAS 50 AÇÕES DE ESCRITA, ALTERAÇÃO E DDL EXECUTADAS NO SISTEMA</p>
+                <h4 className="text-sm font-bold text-koma-foreground uppercase">[AUDIT_LOG_STREAM] REGISTRO CENTRAL DE AUDITORIA</h4>
+                <p className="text-[10px] text-koma-muted mt-0.5">ÚLTIMAS 50 AÇÕES DE ESCRITA, ALTERAÇÃO E DDL EXECUTADAS NO SISTEMA</p>
               </div>
             </div>
             <button
               onClick={fetchAuditLog}
               disabled={isFetchingAudit}
-              className="bg-black hover:bg-zinc-950 border border-slate-800 text-slate-300 hover:text-white px-3 py-1.5 rounded cursor-pointer transition-all flex items-center gap-1.5"
+              className="bg-koma-page hover:bg-zinc-950 border border-slate-800 text-koma-secondary hover:text-white px-3 py-1.5 rounded cursor-pointer transition-all flex items-center gap-1.5"
             >
               <RefreshCw className={`w-3.5 h-3.5 text-amber-500 ${isFetchingAudit ? "animate-spin" : ""}`} />
               RECARREGAR AUDITORIA
@@ -1037,19 +1037,19 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
           </div>
 
           {isFetchingAudit ? (
-            <div className="py-12 flex flex-col items-center justify-center gap-2 text-slate-500">
+            <div className="py-12 flex flex-col items-center justify-center gap-2 text-koma-muted">
               <RefreshCw className="w-6 h-6 animate-spin text-amber-500" />
               <span>Carregando dados da auditoria central...</span>
             </div>
           ) : auditLogs.length === 0 ? (
-            <div className="py-12 text-center text-slate-500 bg-black/20 rounded border border-dashed border-[#1e293b]/40">
+            <div className="py-12 text-center text-koma-muted bg-black/20 rounded border border-dashed border-[#1e293b]/40">
               Nenhum registro de auditoria encontrado na base de dados central.
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-[11px] border-collapse">
                 <thead>
-                  <tr className="border-b border-[#1e293b] text-slate-400 font-bold bg-black/40">
+                  <tr className="border-b border-[#1e293b] text-koma-subtle font-bold bg-black/40">
                     <th className="py-2.5 px-3">DATA/HORA</th>
                     <th className="py-2.5 px-3">OPERADOR</th>
                     <th className="py-2.5 px-3">AÇÃO</th>
@@ -1062,9 +1062,9 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
                 <tbody className="divide-y divide-[#1e293b]/40">
                   {auditLogs.slice(0, 50).map((log) => (
                     <tr key={log.id} className="hover:bg-black/30 transition-colors">
-                      <td className="py-2.5 px-3 text-slate-400 font-bold whitespace-nowrap">{log.timestamp}</td>
-                      <td className="py-2.5 px-3 text-white">
-                        <span className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-700/50 text-[10px] text-zinc-300">
+                      <td className="py-2.5 px-3 text-koma-subtle font-bold whitespace-nowrap">{log.timestamp}</td>
+                      <td className="py-2.5 px-3 text-koma-foreground">
+                        <span className="px-1.5 py-0.5 rounded bg-koma-card border border-zinc-700/50 text-[10px] text-koma-secondary">
                           {log.who}
                         </span>
                       </td>
@@ -1079,8 +1079,8 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
                           {log.action}
                         </span>
                       </td>
-                      <td className="py-2.5 px-3 text-slate-400">{log.affected_table}</td>
-                      <td className="py-2.5 px-3 font-bold text-slate-300">{log.affected_field}</td>
+                      <td className="py-2.5 px-3 text-koma-subtle">{log.affected_table}</td>
+                      <td className="py-2.5 px-3 font-bold text-koma-secondary">{log.affected_field}</td>
                       <td className="py-2.5 px-3 text-red-400 max-w-xs truncate" title={String(log.old_value)}>
                         {log.old_value !== null && log.old_value !== undefined ? String(log.old_value) : "-"}
                       </td>
@@ -1099,29 +1099,29 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
       {/* Modal: Confirm Cell Edit */}
       <AnimatePresence>
         {pendingCellEdit && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 font-mono text-xs text-slate-300">
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 font-mono text-xs text-koma-secondary">
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-[#050814] border border-[#1e293b]/40 rounded-lg max-w-md w-full p-5 space-y-4 shadow-[0_0_35px_rgba(0,184,148,0.15)]"
+              className="bg-koma-page border border-[#1e293b]/40 rounded-lg max-w-md w-full p-5 space-y-4 shadow-[0_0_35px_rgba(0,184,148,0.15)]"
             >
               <div className="flex items-center gap-2 text-[#00b894] font-bold border-b border-[#1e293b]/40 pb-3 uppercase text-sm">
                 <ShieldAlert className="w-5 h-5 text-[#00b894] shrink-0" />
                 <span>Confirmar Edição de Célula</span>
               </div>
               <p className="leading-relaxed">
-                Deseja realmente alterar o campo <strong className="text-white">"{pendingCellEdit.colKey}"</strong> do registro <strong className="text-white">"{pendingCellEdit.rowId}"</strong> na tabela <strong className="text-[#00b894]">"{selectedTable}"</strong>?
+                Deseja realmente alterar o campo <strong className="text-koma-foreground">"{pendingCellEdit.colKey}"</strong> do registro <strong className="text-koma-foreground">"{pendingCellEdit.rowId}"</strong> na tabela <strong className="text-[#00b894]">"{selectedTable}"</strong>?
               </p>
               <div className="bg-black/60 border border-[#1e293b]/40 p-3 rounded space-y-2 text-[11px]">
                 <div>
-                  <span className="text-slate-500 block text-[10px] uppercase font-bold">VALOR ANTIGO:</span>
+                  <span className="text-koma-muted block text-[10px] uppercase font-bold">VALOR ANTIGO:</span>
                   <span className="text-red-400 font-bold line-through block truncate">
                     {pendingCellEdit.oldValue !== undefined && pendingCellEdit.oldValue !== null ? String(pendingCellEdit.oldValue) : "(vazio)"}
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-500 block text-[10px] uppercase font-bold">VALOR NOVO:</span>
+                  <span className="text-koma-muted block text-[10px] uppercase font-bold">VALOR NOVO:</span>
                   <span className="text-[#00b894] font-bold block truncate">
                     {pendingCellEdit.newValue !== undefined && pendingCellEdit.newValue !== null ? String(pendingCellEdit.newValue) : "(vazio)"}
                   </span>
@@ -1131,7 +1131,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
                 <button
                   type="button"
                   onClick={() => setPendingCellEdit(null)}
-                  className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-700/50 px-3 py-2 rounded text-slate-400 hover:text-white cursor-pointer transition-colors"
+                  className="bg-koma-card hover:bg-zinc-800 border border-zinc-700/50 px-3 py-2 rounded text-koma-subtle hover:text-white cursor-pointer transition-colors"
                 >
                   Cancelar
                 </button>
@@ -1155,19 +1155,19 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
       {/* Modal: Confirm Column Creation */}
       <AnimatePresence>
         {showColumnConfirm && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4 font-mono text-xs text-slate-300">
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4 font-mono text-xs text-koma-secondary">
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-[#050814] border border-amber-900/40 rounded-lg max-w-md w-full p-5 space-y-4 shadow-[0_0_35px_rgba(245,158,11,0.15)]"
+              className="bg-koma-page border border-amber-900/40 rounded-lg max-w-md w-full p-5 space-y-4 shadow-[0_0_35px_rgba(245,158,11,0.15)]"
             >
               <div className="flex items-center gap-2 text-amber-500 font-bold border-b border-[#1e293b]/40 pb-3 uppercase text-sm">
                 <ShieldAlert className="w-5 h-5 text-amber-500 shrink-0" />
                 <span>Confirmar Criação de Coluna</span>
               </div>
               <p className="leading-relaxed">
-                Você tem certeza que deseja criar uma nova coluna física chamada <strong className="text-white">"{newColumnData.name.toLowerCase().replace(/[^a-z0-9_]/g, "")}"</strong> do tipo <strong className="text-white">"{newColumnData.type.toUpperCase()}"</strong> na tabela <strong className="text-[#00b894]">"{selectedTable}"</strong>?
+                Você tem certeza que deseja criar uma nova coluna física chamada <strong className="text-koma-foreground">"{newColumnData.name.toLowerCase().replace(/[^a-z0-9_]/g, "")}"</strong> do tipo <strong className="text-koma-foreground">"{newColumnData.type.toUpperCase()}"</strong> na tabela <strong className="text-[#00b894]">"{selectedTable}"</strong>?
               </p>
               <div className="bg-amber-950/20 border border-amber-900/30 p-3 rounded text-amber-400 text-[11px] leading-relaxed">
                 <strong>🚨 Alerta de Alteração de Schema (DDL)</strong>
@@ -1179,7 +1179,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
                 <button
                   type="button"
                   onClick={() => setShowColumnConfirm(false)}
-                  className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-700/50 px-3 py-2 rounded text-slate-400 hover:text-white cursor-pointer transition-colors"
+                  className="bg-koma-card hover:bg-zinc-800 border border-zinc-700/50 px-3 py-2 rounded text-koma-subtle hover:text-white cursor-pointer transition-colors"
                 >
                   Cancelar
                 </button>

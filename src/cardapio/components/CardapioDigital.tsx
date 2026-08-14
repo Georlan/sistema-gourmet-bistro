@@ -268,7 +268,7 @@ export default function CardapioDigital({
                       const msg = buildPedidoConfirmadoMsg(customerName, itensStr, estimatedTotal);
                       openWhatsAppMessage(String(activeBrand.phone), msg);
                     }}
-                    className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 border border-slate-700"
+                    className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-koma-secondary text-[10px] font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 border border-slate-700"
                   >
                     <span>💬 Falar com o Restaurante no WhatsApp (Opcional)</span>
                   </button>
@@ -370,7 +370,7 @@ export default function CardapioDigital({
               type="button"
               onClick={handlePlaceOrder}
               disabled={isSubmitting || cart.length === 0}
-              className="w-full flex items-center justify-center gap-2 rounded-xl bg-primary py-3.5 text-xs font-black text-white uppercase tracking-wider transition shadow-lg hover:opacity-95 disabled:opacity-50 cursor-pointer"
+              className="w-full flex items-center justify-center gap-2 rounded-xl bg-primary py-3.5 text-xs font-black text-koma-foreground uppercase tracking-wider transition shadow-lg hover:opacity-95 disabled:opacity-50 cursor-pointer"
             >
               <Send className="h-4 w-4" />
               <span>{isSubmitting ? "Enviando..." : "Enviar Pedido"}</span>

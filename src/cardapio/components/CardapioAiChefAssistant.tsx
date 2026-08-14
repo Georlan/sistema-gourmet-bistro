@@ -104,7 +104,7 @@ export default function CardapioAiChefAssistant({ activeBrand, hasCart = false }
       {/* Floating Sparkles Trigger Button */}
       <button
         onClick={() => setIsOpen(true)}
-        className={`fixed ${hasCart ? "bottom-24" : "bottom-6"} right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-white shadow-xl hover:scale-105 active:scale-95 transition-all duration-300`}
+        className={`fixed ${hasCart ? "bottom-24" : "bottom-6"} right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-koma-foreground shadow-xl hover:scale-105 active:scale-95 transition-all duration-300`}
         id="ai-chef-assistant-trigger"
         title="Falar com o Chef Virtual"
         aria-label="Falar com o Chef Virtual"
@@ -165,7 +165,7 @@ export default function CardapioAiChefAssistant({ activeBrand, hasCart = false }
                       className={`rounded-2xl p-3.5 text-xs leading-relaxed border ${
                         isModel
                           ? "bg-slate-500/5 border-slate-500/10 text-text-app/90"
-                          : "bg-primary border-primary text-white"
+                          : "bg-primary border-primary text-koma-foreground"
                       }`}
                     >
                       {/* Very simple markdown format parser for bold (**text**) and linebreaks */}
@@ -237,7 +237,7 @@ export default function CardapioAiChefAssistant({ activeBrand, hasCart = false }
                 <button
                   type="submit"
                   disabled={isLoading || !inputMessage.trim()}
-                  className="rounded-xl bg-primary px-4 text-white hover:opacity-90 active:scale-95 transition disabled:opacity-50 flex items-center justify-center cursor-pointer"
+                  className="rounded-xl bg-primary px-4 text-koma-foreground hover:opacity-90 active:scale-95 transition disabled:opacity-50 flex items-center justify-center cursor-pointer"
                   id="btn-send-ai-message"
                 >
                   <Send className="h-4 w-4" />

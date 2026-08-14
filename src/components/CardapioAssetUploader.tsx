@@ -164,7 +164,7 @@ export const CardapioAssetUploader: React.FC<CardapioAssetUploaderProps> = ({
   return (
     <div className="space-y-1.5 text-left">
       <div className="flex items-center justify-between">
-        <label className="text-[10px] font-bold text-gray-300 uppercase tracking-wider block">
+        <label className="text-[10px] font-bold text-koma-secondary uppercase tracking-wider block">
           {label}:
         </label>
 
@@ -205,17 +205,17 @@ export const CardapioAssetUploader: React.FC<CardapioAssetUploaderProps> = ({
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           className={clsx(
-            'bg-[#09090B] border rounded-xl p-3 flex flex-col gap-2 transition-all relative',
-            isDragging ? 'border-[#10b981] bg-[#10b981]/10 scale-[1.01]' : 'border-[#27272A]',
+            'bg-koma-page border rounded-xl p-3 flex flex-col gap-2 transition-all relative',
+            isDragging ? 'border-[#10b981] bg-[#10b981]/10 scale-[1.01]' : 'border-koma-border',
             isBusy && 'opacity-70 pointer-events-none'
           )}
         >
           {/* Image Preview Window */}
-          <div className="flex items-center justify-center bg-[#121214] border border-[#27272A]/50 rounded-lg p-2 overflow-hidden min-h-[80px]">
+          <div className="flex items-center justify-center bg-koma-card border border-[#27272A]/50 rounded-lg p-2 overflow-hidden min-h-[80px]">
             {hasImageError ? (
-              <div className="flex flex-col items-center justify-center p-3 text-center text-gray-500 gap-1">
+              <div className="flex flex-col items-center justify-center p-3 text-center text-koma-muted gap-1">
                 <AlertCircle size={20} className="text-amber-500/80" />
-                <span className="text-[10px] font-medium text-gray-400">Imagem indisponível ou em carregamento</span>
+                <span className="text-[10px] font-medium text-koma-subtle">Imagem indisponível ou em carregamento</span>
               </div>
             ) : (
               <img
@@ -234,8 +234,8 @@ export const CardapioAssetUploader: React.FC<CardapioAssetUploaderProps> = ({
 
           {/* Action Bar */}
           <div className="flex items-center justify-between pt-1">
-            <span className="text-[9px] text-gray-500 flex items-center gap-1">
-              <Upload size={10} className="text-gray-400" />
+            <span className="text-[9px] text-koma-muted flex items-center gap-1">
+              <Upload size={10} className="text-koma-subtle" />
               Arraste para substituir
             </span>
 
@@ -246,7 +246,7 @@ export const CardapioAssetUploader: React.FC<CardapioAssetUploaderProps> = ({
                   type="button"
                   disabled={isBusy}
                   onClick={handleRemoveAsset}
-                  className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-md text-[9px] font-bold uppercase transition-all cursor-pointer"
+                  className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-koma-foreground rounded-md text-[9px] font-bold uppercase transition-all cursor-pointer"
                 >
                   Sim
                 </button>
@@ -254,7 +254,7 @@ export const CardapioAssetUploader: React.FC<CardapioAssetUploaderProps> = ({
                   type="button"
                   disabled={isBusy}
                   onClick={() => setIsConfirmingDelete(false)}
-                  className="px-2.5 py-1 bg-[#27272A] hover:bg-[#3F3F46] text-gray-300 rounded-md text-[9px] font-bold uppercase transition-all cursor-pointer"
+                  className="px-2.5 py-1 bg-koma-raised hover:bg-[#3F3F46] text-koma-secondary rounded-md text-[9px] font-bold uppercase transition-all cursor-pointer"
                 >
                   Não
                 </button>
@@ -265,7 +265,7 @@ export const CardapioAssetUploader: React.FC<CardapioAssetUploaderProps> = ({
                   type="button"
                   disabled={isBusy}
                   onClick={() => fileInputRef.current?.click()}
-                  className="px-3 py-1.5 bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] text-gray-200 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                  className="px-3 py-1.5 bg-koma-card hover:bg-[#27272A] border border-koma-border text-gray-200 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
                 >
                   {status === 'uploading' ? (
                     <Loader2 size={12} className="animate-spin text-[#10b981]" />
@@ -303,21 +303,21 @@ export const CardapioAssetUploader: React.FC<CardapioAssetUploaderProps> = ({
             'border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-1.5 group',
             isDragging
               ? 'border-[#10b981] bg-[#10b981]/15 text-[#10b981] scale-[1.01]'
-              : 'border-[#27272A] hover:border-[#10b981]/50 bg-[#09090B] hover:bg-[#121214] text-gray-400 hover:text-gray-200',
+              : 'border-koma-border hover:border-[#10b981]/50 bg-koma-page hover:bg-[#121214] text-koma-subtle hover:text-gray-200',
             isBusy && 'opacity-60 cursor-not-allowed pointer-events-none'
           )}
         >
           {isBusy ? (
             <Loader2 size={20} className="animate-spin text-[#10b981]" />
           ) : (
-            <ImageIcon size={20} className={isDragging ? 'text-[#10b981]' : 'text-gray-400 group-hover:text-[#10b981]'} />
+            <ImageIcon size={20} className={isDragging ? 'text-[#10b981]' : 'text-koma-subtle group-hover:text-[#10b981]'} />
           )}
 
           <div className="space-y-0.5">
             <span className="text-xs font-semibold block text-gray-200">
               {isBusy ? 'Fazendo upload...' : isDragging ? 'Solte a imagem aqui para enviar' : `Clique para escolher ou arraste o ${label} aqui`}
             </span>
-            <span className="text-[9px] text-gray-500 block">
+            <span className="text-[9px] text-koma-muted block">
               Formatos aceitos: PNG, JPG, JPEG ou WEBP (máx. 5 MB)
             </span>
           </div>

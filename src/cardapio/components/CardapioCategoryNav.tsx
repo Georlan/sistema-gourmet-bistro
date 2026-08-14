@@ -62,7 +62,7 @@ export default function CardapioCategoryNav({
               id={`cat-btn-${sanitizedId}`}
               className={`whitespace-nowrap rounded-full px-4 py-2 text-xs font-bold tracking-wide transition-all duration-200 cursor-pointer ${
                 isActive
-                  ? "bg-primary text-white shadow-md shadow-primary/20 scale-[1.02]"
+                  ? "bg-primary text-koma-foreground shadow-md shadow-primary/20 scale-[1.02]"
                   : "bg-slate-500/10 text-text-app/80 hover:bg-slate-500/20"
               }`}
             >

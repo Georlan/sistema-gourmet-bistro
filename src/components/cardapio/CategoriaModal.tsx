@@ -154,10 +154,10 @@ export function CategoriaModal({
               <Printer size={18} />
             </div>
             <div>
-              <h3 className="font-serif text-base font-bold text-white leading-tight">
+              <h3 className="font-serif text-base font-bold text-koma-foreground leading-tight">
                 {isEditing ? 'Editar Categoria' : 'Nova Categoria'}
               </h3>
-              <p className="text-[10px] text-gray-400">
+              <p className="text-[10px] text-koma-subtle">
                 {isEditing ? 'Atualize as configurações de impressão e exibição' : 'Cadastre uma nova categoria para o cardápio'}
               </p>
             </div>
@@ -165,7 +165,7 @@ export function CategoriaModal({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 text-gray-400 hover:text-white rounded-xl bg-koma-card hover:bg-zinc-700 transition-colors cursor-pointer"
+            className="p-1.5 text-koma-subtle hover:text-white rounded-xl bg-koma-card hover:bg-zinc-700 transition-colors cursor-pointer"
           >
             <X size={16} />
           </button>
@@ -181,7 +181,7 @@ export function CategoriaModal({
 
           {/* Nome Input */}
           <div className="space-y-1.5">
-            <label className="text-[11px] font-bold text-gray-300 uppercase tracking-wider block">
+            <label className="text-[11px] font-bold text-koma-secondary uppercase tracking-wider block">
               Nome da Categoria
             </label>
             <input
@@ -189,7 +189,7 @@ export function CategoriaModal({
               value={nome}
               onChange={(e) => handleNomeChange(e.target.value)}
               placeholder="Ex: Hambúrgueres Bovinos, Bebidas, Sobremesas..."
-              className="w-full bg-koma-input border border-koma-border rounded-xl px-3.5 py-2.5 text-xs text-white placeholder:text-gray-500 focus:outline-none focus:border-[#10b981] transition-colors font-medium"
+              className="w-full bg-koma-input border border-koma-border rounded-xl px-3.5 py-2.5 text-xs text-koma-foreground placeholder:text-gray-500 focus:outline-none focus:border-[#10b981] transition-colors font-medium"
               autoFocus
               required
             />
@@ -199,10 +199,10 @@ export function CategoriaModal({
 
           {/* Destino de Impressão Cards */}
           <div className="space-y-2 pt-1">
-            <label className="text-[11px] font-bold text-gray-300 uppercase tracking-wider block">
+            <label className="text-[11px] font-bold text-koma-secondary uppercase tracking-wider block">
               Destino de Impressão de Pedidos
             </label>
-            <p className="text-[10px] text-gray-400 leading-normal">
+            <p className="text-[10px] text-koma-subtle leading-normal">
               Escolha para onde os itens desta categoria serão enviados ao imprimir a via de preparação:
             </p>
 
@@ -219,7 +219,7 @@ export function CategoriaModal({
                 )}
               >
                 <div className="flex justify-between items-center">
-                  <div className={clsx('p-1.5 rounded-lg', destino === 'COZINHA' ? 'bg-orange-500/20 text-orange-400' : 'bg-zinc-800 text-gray-400')}>
+                  <div className={clsx('p-1.5 rounded-lg', destino === 'COZINHA' ? 'bg-orange-500/20 text-orange-400' : 'bg-koma-raised text-koma-subtle')}>
                     <Utensils size={15} />
                   </div>
                   {destino === 'COZINHA' && (
@@ -229,10 +229,10 @@ export function CategoriaModal({
                   )}
                 </div>
                 <div>
-                  <span className={clsx('font-bold text-xs block', destino === 'COZINHA' ? 'text-orange-400' : 'text-white')}>
+                  <span className={clsx('font-bold text-xs block', destino === 'COZINHA' ? 'text-orange-400' : 'text-koma-foreground')}>
                     Cozinha
                   </span>
-                  <span className="text-[9px] text-gray-400 block leading-tight mt-0.5">
+                  <span className="text-[9px] text-koma-subtle block leading-tight mt-0.5">
                     Imprime na via da Cozinha
                   </span>
                 </div>
@@ -250,7 +250,7 @@ export function CategoriaModal({
                 )}
               >
                 <div className="flex justify-between items-center">
-                  <div className={clsx('p-1.5 rounded-lg', destino === 'BAR' ? 'bg-blue-500/20 text-blue-400' : 'bg-zinc-800 text-gray-400')}>
+                  <div className={clsx('p-1.5 rounded-lg', destino === 'BAR' ? 'bg-blue-500/20 text-blue-400' : 'bg-koma-raised text-koma-subtle')}>
                     <Wine size={15} />
                   </div>
                   {destino === 'BAR' && (
@@ -260,10 +260,10 @@ export function CategoriaModal({
                   )}
                 </div>
                 <div>
-                  <span className={clsx('font-bold text-xs block', destino === 'BAR' ? 'text-blue-400' : 'text-white')}>
+                  <span className={clsx('font-bold text-xs block', destino === 'BAR' ? 'text-blue-400' : 'text-koma-foreground')}>
                     Bar
                   </span>
-                  <span className="text-[9px] text-gray-400 block leading-tight mt-0.5">
+                  <span className="text-[9px] text-koma-subtle block leading-tight mt-0.5">
                     Imprime na via do Bar
                   </span>
                 </div>
@@ -281,7 +281,7 @@ export function CategoriaModal({
                 )}
               >
                 <div className="flex justify-between items-center">
-                  <div className={clsx('p-1.5 rounded-lg', destino === 'NENHUM' ? 'bg-zinc-700 text-zinc-300' : 'bg-zinc-800 text-gray-400')}>
+                  <div className={clsx('p-1.5 rounded-lg', destino === 'NENHUM' ? 'bg-zinc-700 text-koma-secondary' : 'bg-koma-raised text-koma-subtle')}>
                     <Ban size={15} />
                   </div>
                   {destino === 'NENHUM' && (
@@ -291,10 +291,10 @@ export function CategoriaModal({
                   )}
                 </div>
                 <div>
-                  <span className={clsx('font-bold text-xs block', destino === 'NENHUM' ? 'text-zinc-300' : 'text-white')}>
+                  <span className={clsx('font-bold text-xs block', destino === 'NENHUM' ? 'text-koma-secondary' : 'text-koma-foreground')}>
                     Não Imprime
                   </span>
-                  <span className="text-[9px] text-gray-400 block leading-tight mt-0.5">
+                  <span className="text-[9px] text-koma-subtle block leading-tight mt-0.5">
                     Sem via física de preparo
                   </span>
                 </div>
@@ -308,7 +308,7 @@ export function CategoriaModal({
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="px-4 py-2 bg-koma-raised hover:bg-koma-card text-gray-300 rounded-xl text-xs font-bold transition-all cursor-pointer border border-koma-border"
+              className="px-4 py-2 bg-koma-raised hover:bg-koma-card text-koma-secondary rounded-xl text-xs font-bold transition-all cursor-pointer border border-koma-border"
             >
               Cancelar
             </button>
@@ -368,13 +368,13 @@ export function DeleteCategoryModal({
             <Ban size={22} />
           </div>
           <div>
-            <h3 className="font-serif text-base font-bold text-white">Excluir Categoria</h3>
-            <p className="text-[10px] text-gray-400">Confirmação de exclusão permanente</p>
+            <h3 className="font-serif text-base font-bold text-koma-foreground">Excluir Categoria</h3>
+            <p className="text-[10px] text-koma-subtle">Confirmação de exclusão permanente</p>
           </div>
         </div>
 
-        <p className="text-xs text-gray-300 leading-relaxed">
-          Tem certeza que deseja excluir a categoria <strong className="text-white font-bold">"{categoryName}"</strong>?
+        <p className="text-xs text-koma-secondary leading-relaxed">
+          Tem certeza que deseja excluir a categoria <strong className="text-koma-foreground font-bold">"{categoryName}"</strong>?
         </p>
 
         <div className="flex items-center justify-end gap-2.5 pt-2">
@@ -382,7 +382,7 @@ export function DeleteCategoryModal({
             type="button"
             onClick={onClose}
             disabled={isDeleting}
-            className="px-4 py-2 bg-koma-raised hover:bg-koma-card text-gray-300 rounded-xl text-xs font-bold transition-all cursor-pointer border border-koma-border"
+            className="px-4 py-2 bg-koma-raised hover:bg-koma-card text-koma-secondary rounded-xl text-xs font-bold transition-all cursor-pointer border border-koma-border"
           >
             Cancelar
           </button>

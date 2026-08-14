@@ -113,7 +113,7 @@ export default function CardapioHeader({
             title="Clique para ver informações completas sobre nós"
             id="header-brand-info-trigger"
           >
-            <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center text-white font-bold text-2xl shadow-xs overflow-hidden shrink-0 border border-slate-500/10 group-hover:scale-105 group-hover:border-primary transition duration-300">
+            <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center text-koma-foreground font-bold text-2xl shadow-xs overflow-hidden shrink-0 border border-slate-500/10 group-hover:scale-105 group-hover:border-primary transition duration-300">
               <img
                 src={activeBrand.logo}
                 alt={activeBrand.name}
@@ -207,7 +207,7 @@ export default function CardapioHeader({
             >
               <ShoppingBag className="h-4.5 w-4.5" />
               {cartCount > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[8px] font-bold text-white shadow-xs">
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[8px] font-bold text-koma-foreground shadow-xs">
                   {cartCount}
                 </span>
               )}
@@ -227,7 +227,7 @@ export default function CardapioHeader({
             ) : (
               <button
                 onClick={onAuthClick}
-                className="flex items-center gap-1.5 h-9 px-4 rounded-xl bg-primary text-white hover:opacity-90 text-xs font-black transition shadow-xs cursor-pointer"
+                className="flex items-center gap-1.5 h-9 px-4 rounded-xl bg-primary text-koma-foreground hover:opacity-90 text-xs font-black transition shadow-xs cursor-pointer"
                 id="btn-login-trigger"
               >
                 <User className="h-4 w-4" />

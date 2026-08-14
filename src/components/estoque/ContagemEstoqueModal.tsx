@@ -120,12 +120,12 @@ export const ContagemEstoqueModal: React.FC<ContagemEstoqueModalProps> = ({
         {/* Modal Header */}
         <div className="flex justify-between items-center pb-2 border-b border-koma-border shrink-0">
           <div>
-            <h3 className="font-serif text-sm font-bold text-white">
+            <h3 className="font-serif text-sm font-bold text-koma-foreground">
               {isAlreadyConfirmed ? 'Visualizar Contagem Confirmada' : existingSessao ? 'Editar Rascunho de Contagem' : 'Nova Contagem Física de Inventário'}
             </h3>
-            <p className="text-[9px] text-gray-400">Informe os valores contados fisicamente. Ao confirmar, divergências gerarão ajustes automáticos.</p>
+            <p className="text-[9px] text-koma-subtle">Informe os valores contados fisicamente. Ao confirmar, divergências gerarão ajustes automáticos.</p>
           </div>
-          <button type="button" onClick={onClose} className="p-1 text-gray-400 hover:text-white transition-colors cursor-pointer">
+          <button type="button" onClick={onClose} className="p-1 text-koma-subtle hover:text-white transition-colors cursor-pointer">
             <X size={16} />
           </button>
         </div>
@@ -141,13 +141,13 @@ export const ContagemEstoqueModal: React.FC<ContagemEstoqueModalProps> = ({
           <div className="flex flex-wrap items-center justify-between gap-3 bg-koma-raised p-3 rounded-2xl border border-koma-border shrink-0">
             <div className="flex items-center gap-2 flex-1 max-w-xs">
               <div className="relative w-full">
-                <Search size={14} className="absolute left-3 top-2.5 text-gray-400" />
+                <Search size={14} className="absolute left-3 top-2.5 text-koma-subtle" />
                 <input
                   type="text"
                   placeholder="Buscar ingrediente..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-3 py-1.5 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
+                  className="w-full pl-9 pr-3 py-1.5 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs focus:outline-none focus:border-emerald-500"
                 />
               </div>
             </div>
@@ -156,14 +156,14 @@ export const ContagemEstoqueModal: React.FC<ContagemEstoqueModalProps> = ({
               <button
                 type="button"
                 onClick={() => handleToggleSelectAll(true)}
-                className="px-2.5 py-1 bg-koma-raised hover:bg-zinc-700 text-gray-300 rounded-lg text-[9px] font-bold uppercase transition-all cursor-pointer flex items-center gap-1 border border-koma-border"
+                className="px-2.5 py-1 bg-koma-raised hover:bg-zinc-700 text-koma-secondary rounded-lg text-[9px] font-bold uppercase transition-all cursor-pointer flex items-center gap-1 border border-koma-border"
               >
                 <CheckSquare size={12} /> Selecionar Todos
               </button>
               <button
                 type="button"
                 onClick={() => handleToggleSelectAll(false)}
-                className="px-2.5 py-1 bg-koma-raised hover:bg-zinc-700 text-gray-300 rounded-lg text-[9px] font-bold uppercase transition-all cursor-pointer flex items-center gap-1 border border-koma-border"
+                className="px-2.5 py-1 bg-koma-raised hover:bg-zinc-700 text-koma-secondary rounded-lg text-[9px] font-bold uppercase transition-all cursor-pointer flex items-center gap-1 border border-koma-border"
               >
                 <Square size={12} /> Desmarcar Todos
               </button>
@@ -174,7 +174,7 @@ export const ContagemEstoqueModal: React.FC<ContagemEstoqueModalProps> = ({
         {/* Inventory Items Table */}
         <div className="flex-1 overflow-y-auto border border-koma-border rounded-2xl">
           <table className="w-full text-left text-[10px]">
-            <thead className="sticky top-0 bg-koma-raised border-b border-koma-border text-gray-400 uppercase tracking-wider font-bold z-10">
+            <thead className="sticky top-0 bg-koma-raised border-b border-koma-border text-koma-subtle uppercase tracking-wider font-bold z-10">
               <tr>
                 {!isAlreadyConfirmed && <th className="p-3 w-10 text-center">Incluir</th>}
                 <th className="p-3">Ingrediente</th>
@@ -204,12 +204,12 @@ export const ContagemEstoqueModal: React.FC<ContagemEstoqueModalProps> = ({
                         />
                       </td>
                     )}
-                    <td className="p-3 font-semibold text-white">
+                    <td className="p-3 font-semibold text-koma-foreground">
                       {item.insumo_nome}
-                      <span className="text-[8px] text-gray-500 block font-mono">ID: {item.insumo_id}</span>
+                      <span className="text-[8px] text-koma-muted block font-mono">ID: {item.insumo_id}</span>
                     </td>
-                    <td className="p-3 font-mono text-gray-300">
-                      {item.quantidade_sistema.toFixed(2)} <span className="text-gray-500">{item.unidade_medida}</span>
+                    <td className="p-3 font-mono text-koma-secondary">
+                      {item.quantidade_sistema.toFixed(2)} <span className="text-koma-muted">{item.unidade_medida}</span>
                     </td>
                     <td className="p-3 font-mono">
                       {!isAlreadyConfirmed && item.selected ? (
@@ -219,15 +219,15 @@ export const ContagemEstoqueModal: React.FC<ContagemEstoqueModalProps> = ({
                           min="0"
                           value={item.quantidade_contada}
                           onChange={(e) => handleQtyChange(item.insumo_id, parseFloat(e.target.value) || 0)}
-                          className="w-24 px-2 py-1 bg-koma-input border border-koma-border rounded-lg text-white font-mono text-xs text-center focus:outline-none focus:border-emerald-500"
+                          className="w-24 px-2 py-1 bg-koma-input border border-koma-border rounded-lg text-koma-foreground font-mono text-xs text-center focus:outline-none focus:border-emerald-500"
                         />
                       ) : (
-                        <span className="font-bold text-white">{item.quantidade_contada.toFixed(2)} {item.unidade_medida}</span>
+                        <span className="font-bold text-koma-foreground">{item.quantidade_contada.toFixed(2)} {item.unidade_medida}</span>
                       )}
                     </td>
                     <td className="p-3 font-mono font-bold">
                       {diff === 0 ? (
-                        <span className="text-gray-500">0.00 (Sem diferença)</span>
+                        <span className="text-koma-muted">0.00 (Sem diferença)</span>
                       ) : diff > 0 ? (
                         <span className="text-emerald-400">+{diff.toFixed(2)} {item.unidade_medida}</span>
                       ) : (
@@ -244,21 +244,21 @@ export const ContagemEstoqueModal: React.FC<ContagemEstoqueModalProps> = ({
         {/* Footer Summary & Note */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end pt-2 border-t border-koma-border shrink-0">
           <div className="md:col-span-2 space-y-1">
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Observação / Justificativa do Inventário:</label>
+            <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">Observação / Justificativa do Inventário:</label>
             <input
               type="text"
               disabled={isAlreadyConfirmed}
               placeholder="ex: Contagem física mensal realizada pelo gerente de turno"
               value={observacao}
               onChange={(e) => setObservacao(e.target.value)}
-              className="w-full px-3 py-1.5 bg-koma-input border border-koma-border rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500"
+              className="w-full px-3 py-1.5 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs focus:outline-none focus:border-emerald-500"
             />
           </div>
 
           <div className="text-right bg-koma-raised p-3 rounded-2xl border border-koma-border">
-            <span className="text-[9px] uppercase tracking-wider text-gray-400 font-bold block">Resumo do Inventário</span>
-            <div className="text-[10px] text-gray-300 font-mono">
-              Itens selecionados: <strong className="text-white">{selectedItems.length}</strong> | Divergências: <strong className="text-amber-400">{totalDivergencias}</strong>
+            <span className="text-[9px] uppercase tracking-wider text-koma-subtle font-bold block">Resumo do Inventário</span>
+            <div className="text-[10px] text-koma-secondary font-mono">
+              Itens selecionados: <strong className="text-koma-foreground">{selectedItems.length}</strong> | Divergências: <strong className="text-amber-400">{totalDivergencias}</strong>
             </div>
           </div>
         </div>
@@ -268,7 +268,7 @@ export const ContagemEstoqueModal: React.FC<ContagemEstoqueModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 py-2.5 border border-koma-border hover:border-zinc-700 bg-koma-raised text-gray-400 hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+            className="flex-1 py-2.5 border border-koma-border hover:border-zinc-700 bg-koma-raised text-koma-subtle hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
           >
             {isAlreadyConfirmed ? 'Fechar' : 'Cancelar'}
           </button>

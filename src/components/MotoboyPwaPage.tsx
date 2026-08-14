@@ -93,21 +93,21 @@ export function MotoboyPwaPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#09090B] text-white flex flex-col items-center justify-center p-6 text-center">
+      <div className="min-h-screen bg-koma-page text-koma-foreground flex flex-col items-center justify-center p-6 text-center">
         <div className="w-12 h-12 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin mb-4" />
-        <p className="text-gray-400 text-sm font-medium">Carregando painel do entregador...</p>
+        <p className="text-koma-subtle text-sm font-medium">Carregando painel do entregador...</p>
       </div>
     );
   }
 
   if (errorMsg) {
     return (
-      <div className="min-h-screen bg-[#09090B] text-white flex flex-col items-center justify-center p-6 text-center">
+      <div className="min-h-screen bg-koma-page text-koma-foreground flex flex-col items-center justify-center p-6 text-center">
         <div className="w-16 h-16 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center justify-center mb-4 text-red-400">
           <AlertCircle className="w-8 h-8" />
         </div>
         <h2 className="text-lg font-bold mb-2">Link Invalido ou Expirado</h2>
-        <p className="text-gray-400 text-xs max-w-sm mb-6 leading-relaxed">{errorMsg}</p>
+        <p className="text-koma-subtle text-xs max-w-sm mb-6 leading-relaxed">{errorMsg}</p>
         {token && (
           <button
             onClick={() => carregarDadosPainel(token)}
@@ -121,7 +121,7 @@ export function MotoboyPwaPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#09090B] text-white font-sans pb-12 select-none">
+    <div className="min-h-screen bg-koma-page text-koma-foreground font-sans pb-12 select-none">
       {/* Toast Notification */}
       {toast && (
         <div className={clsx(
@@ -134,23 +134,23 @@ export function MotoboyPwaPage() {
       )}
 
       {/* Header Sticky */}
-      <header className="sticky top-0 z-40 bg-[#121214]/90 backdrop-blur-md border-b border-[#27272A] px-4 py-3 flex items-center justify-between">
+      <header className="sticky top-0 z-40 bg-[#121214]/90 backdrop-blur-md border-b border-koma-border px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-emerald-500/15 border border-emerald-500/30 rounded-xl flex items-center justify-center text-emerald-400 font-bold">
             <Truck className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-sm font-bold text-white flex items-center gap-1.5">
+            <h1 className="text-sm font-bold text-koma-foreground flex items-center gap-1.5">
               KÔMA Entregas
               <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded font-mono font-normal">PWA</span>
             </h1>
-            <p className="text-[11px] text-gray-400">Olá, <span className="text-white font-semibold">{motoboy?.nome || 'Entregador'}</span></p>
+            <p className="text-[11px] text-koma-subtle">Olá, <span className="text-koma-foreground font-semibold">{motoboy?.nome || 'Entregador'}</span></p>
           </div>
         </div>
 
         <button
           onClick={() => token && carregarDadosPainel(token)}
-          className="p-2.5 bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] rounded-xl text-gray-300 transition-colors active:scale-95"
+          className="p-2.5 bg-koma-card hover:bg-[#27272A] border border-koma-border rounded-xl text-koma-secondary transition-colors active:scale-95"
           title="Atualizar Pedidos"
         >
           <RefreshCw className="w-4 h-4" />
@@ -160,20 +160,20 @@ export function MotoboyPwaPage() {
       {/* Main Container */}
       <main className="max-w-md mx-auto p-4 space-y-4">
         {/* Status Bar */}
-        <div className="flex items-center justify-between bg-[#18181B] border border-[#27272A] rounded-2xl p-3 text-xs">
-          <span className="text-gray-400">Entregas Pendentes:</span>
+        <div className="flex items-center justify-between bg-koma-card border border-koma-border rounded-2xl p-3 text-xs">
+          <span className="text-koma-subtle">Entregas Pendentes:</span>
           <span className="font-mono font-bold bg-emerald-500/20 text-emerald-400 px-2.5 py-1 rounded-full text-xs border border-emerald-500/30">
             {entregas.length} {entregas.length === 1 ? 'pedido' : 'pedidos'}
           </span>
         </div>
 
         {entregas.length === 0 ? (
-          <div className="bg-[#121214] border border-[#27272A] rounded-2xl p-8 text-center space-y-3 mt-6">
+          <div className="bg-koma-card border border-koma-border rounded-2xl p-8 text-center space-y-3 mt-6">
             <div className="w-14 h-14 bg-emerald-500/10 border border-emerald-500/20 rounded-full flex items-center justify-center text-emerald-400 mx-auto">
               <CheckCircle2 className="w-7 h-7" />
             </div>
-            <h3 className="text-sm font-bold text-white">Tudo Entregue!</h3>
-            <p className="text-gray-400 text-xs leading-relaxed">Você não tem entregas pendentes no momento. Clique no botão de atualizar acima para checar novos pedidos.</p>
+            <h3 className="text-sm font-bold text-koma-foreground">Tudo Entregue!</h3>
+            <p className="text-koma-subtle text-xs leading-relaxed">Você não tem entregas pendentes no momento. Clique no botão de atualizar acima para checar novos pedidos.</p>
           </div>
         ) : (
           entregas.map((entrega) => {
@@ -183,17 +183,17 @@ export function MotoboyPwaPage() {
             const telUrl = cleanTel ? `tel:${cleanTel}` : null;
 
             return (
-              <div key={entrega.id} className="bg-[#121214] border border-[#27272A] rounded-2xl p-4 space-y-3.5 shadow-lg relative overflow-hidden">
+              <div key={entrega.id} className="bg-koma-card border border-koma-border rounded-2xl p-4 space-y-3.5 shadow-lg relative overflow-hidden">
                 {/* Visual Accent bar */}
                 <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 via-emerald-400 to-teal-500" />
 
                 {/* Card Header */}
-                <div className="flex items-start justify-between border-b border-[#27272A] pb-3">
+                <div className="flex items-start justify-between border-b border-koma-border pb-3">
                   <div>
                     <span className="text-[10px] uppercase tracking-wider font-semibold text-emerald-400 block mb-0.5">
                       Pedido #{entrega.numero_pedido || entrega.id.slice(-6)}
                     </span>
-                    <h2 className="text-sm font-bold text-white">{entrega.cliente_nome}</h2>
+                    <h2 className="text-sm font-bold text-koma-foreground">{entrega.cliente_nome}</h2>
                   </div>
                   <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
                     {entrega.delivery_status === 'transito' ? 'Em Trânsito' : 'Pronto'}
@@ -201,8 +201,8 @@ export function MotoboyPwaPage() {
                 </div>
 
                 {/* Address Section */}
-                <div className="bg-[#18181B] border border-[#27272A] rounded-xl p-3 space-y-2 text-xs">
-                  <div className="flex items-start gap-2 text-gray-300">
+                <div className="bg-koma-card border border-koma-border rounded-xl p-3 space-y-2 text-xs">
+                  <div className="flex items-start gap-2 text-koma-secondary">
                     <MapPin className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                     <span className="leading-relaxed font-medium">{entrega.delivery_endereco || 'Endereço não especificado'}</span>
                   </div>
@@ -220,17 +220,17 @@ export function MotoboyPwaPage() {
                 </div>
 
                 {/* Items Summary */}
-                <div className="bg-[#18181B]/60 rounded-xl p-2.5 text-xs text-gray-400 border border-[#27272A]/50">
-                  <div className="flex items-center gap-1.5 font-semibold text-gray-300 mb-1 text-[11px]">
+                <div className="bg-[#18181B]/60 rounded-xl p-2.5 text-xs text-koma-subtle border border-[#27272A]/50">
+                  <div className="flex items-center gap-1.5 font-semibold text-koma-secondary mb-1 text-[11px]">
                     <ShoppingBag className="w-3.5 h-3.5 text-amber-400" /> Itens do Pedido:
                   </div>
-                  <p className="text-[11px] font-mono leading-relaxed text-gray-300">{entrega.itens_resumo || 'Nenhum item discriminado'}</p>
+                  <p className="text-[11px] font-mono leading-relaxed text-koma-secondary">{entrega.itens_resumo || 'Nenhum item discriminado'}</p>
                 </div>
 
                 {/* Financial Summary */}
-                <div className="bg-[#1C1C20] border border-[#27272A] rounded-xl p-3 flex items-center justify-between text-xs">
+                <div className="bg-koma-card border border-koma-border rounded-xl p-3 flex items-center justify-between text-xs">
                   <div>
-                    <span className="text-[10px] text-gray-400 block uppercase font-medium">Valor a Cobrar</span>
+                    <span className="text-[10px] text-koma-subtle block uppercase font-medium">Valor a Cobrar</span>
                     {entrega.valor_a_cobrar > 0 ? (
                       <span className="text-base font-extrabold text-emerald-400 font-mono">
                         R$ {entrega.valor_a_cobrar.toFixed(2)}
@@ -241,7 +241,7 @@ export function MotoboyPwaPage() {
                       </span>
                     )}
                   </div>
-                  <div className="text-right text-[11px] text-gray-400">
+                  <div className="text-right text-[11px] text-koma-subtle">
                     <div>Total: R$ {entrega.total.toFixed(2)}</div>
                     <div>Taxa: R$ {entrega.delivery_taxa.toFixed(2)}</div>
                   </div>
@@ -252,12 +252,12 @@ export function MotoboyPwaPage() {
                   {telUrl ? (
                     <a
                       href={telUrl}
-                      className="py-2 px-3 bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] text-gray-200 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors"
+                      className="py-2 px-3 bg-koma-card hover:bg-[#27272A] border border-koma-border text-gray-200 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors"
                     >
                       <Phone className="w-3.5 h-3.5 text-emerald-400" /> Ligar para Cliente
                     </a>
                   ) : (
-                    <button disabled className="py-2 px-3 bg-[#1C1C1F] text-gray-600 text-xs font-bold rounded-xl cursor-not-allowed">
+                    <button disabled className="py-2 px-3 bg-koma-card text-gray-600 text-xs font-bold rounded-xl cursor-not-allowed">
                       Sem Telefone
                     </button>
                   )}
@@ -272,7 +272,7 @@ export function MotoboyPwaPage() {
                       WhatsApp
                     </a>
                   ) : (
-                    <button disabled className="py-2 px-3 bg-[#1C1C1F] text-gray-600 text-xs font-bold rounded-xl cursor-not-allowed">
+                    <button disabled className="py-2 px-3 bg-koma-card text-gray-600 text-xs font-bold rounded-xl cursor-not-allowed">
                       Sem WhatsApp
                     </button>
                   )}
