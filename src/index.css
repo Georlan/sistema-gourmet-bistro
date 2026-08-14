@@ -19,8 +19,11 @@
   --color-koma-canvas: var(--koma-surface-canvas);
   --color-koma-shell: var(--koma-surface-shell);
   --color-koma-panel: var(--koma-surface-panel);
+  --color-koma-card: var(--koma-surface-card);
   --color-koma-raised: var(--koma-surface-raised);
   --color-koma-input: var(--koma-surface-input);
+  --color-koma-dialog: var(--koma-surface-dialog);
+  --color-koma-overlay: var(--koma-surface-overlay);
   --color-koma-foreground: var(--koma-text-primary);
   --color-koma-secondary: var(--koma-text-secondary);
   --color-koma-muted: var(--koma-text-muted);
@@ -40,13 +43,16 @@
   --color-brand-card: #121420;
   --color-brand-accent: #00b894;
 
-  /* Theme contract — keep feature components independent from a specific palette. */
-  --koma-surface-page: #121417;
+  /* Theme contract — Dark mode palette */
+  --koma-surface-page: #0c0e0d;
   --koma-surface-canvas: #080a09;
-  --koma-surface-shell: #090a09;
-  --koma-surface-panel: #101311;
-  --koma-surface-raised: #151916;
+  --koma-surface-shell: #0a0d0b;
+  --koma-surface-panel: #111412;
+  --koma-surface-card: #151917;
+  --koma-surface-raised: #1a201c;
   --koma-surface-input: #090c0a;
+  --koma-surface-dialog: #121513;
+  --koma-surface-overlay: rgba(0, 0, 0, 0.85);
   --koma-text-primary: #f3f6f4;
   --koma-text-secondary: #c2cbc6;
   --koma-text-muted: #8e9993;
@@ -57,6 +63,36 @@
   --koma-accent: #00c996;
   --koma-focus-ring: rgba(0, 201, 150, 0.34);
   color-scheme: dark;
+}
+
+[data-koma-theme="light"] {
+  --color-brand-primary: #00966d;
+  --color-brand-bg: #f8faf9;
+  --color-brand-text: #0f172a;
+  --color-brand-secondary: #eef2f0;
+  --color-brand-card: #ffffff;
+  --color-brand-accent: #00966d;
+
+  /* Theme contract — Light mode palette */
+  --koma-surface-page: #f4f7f5;
+  --koma-surface-canvas: #e9eeeb;
+  --koma-surface-shell: #ffffff;
+  --koma-surface-panel: #ffffff;
+  --koma-surface-card: #ffffff;
+  --koma-surface-raised: #f8faf9;
+  --koma-surface-input: #ffffff;
+  --koma-surface-dialog: #ffffff;
+  --koma-surface-overlay: rgba(15, 23, 42, 0.65);
+  --koma-text-primary: #0f172a;
+  --koma-text-secondary: #334155;
+  --koma-text-muted: #64748b;
+  --koma-text-subtle: #94a3b8;
+  --koma-border-subtle: rgba(15, 23, 42, 0.08);
+  --koma-border-default: rgba(15, 23, 42, 0.14);
+  --koma-border-strong: rgba(15, 23, 42, 0.24);
+  --koma-accent: #00966d;
+  --koma-focus-ring: rgba(0, 150, 109, 0.34);
+  color-scheme: light;
 }
 
 /* Luxury Fine Dining Color Palettes - Setup as Rich Dark theme */
