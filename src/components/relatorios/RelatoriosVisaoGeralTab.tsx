@@ -214,7 +214,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
               setShowVendasDrawer(true);
               fetchVendasDetalhes(dataInicio, dataFim);
             }}
-            className="px-3.5 py-2 bg-[#10b981]/10 hover:bg-[#10b981]/20 border border-[#10b981]/30 text-[#10b981] rounded-xl text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+            className="px-3.5 py-2 bg-emerald-500/15 hover:bg-[#10b981]/20 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 rounded-xl text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
           >
             <Eye size={14} />
             Ver Vendas
@@ -225,7 +225,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
             onClick={() => setShowCalendarModal(true)}
             className="px-3.5 py-2 bg-koma-raised hover:bg-koma-card border border-koma-border text-koma-foreground rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
           >
-            <CalendarIcon size={14} className="text-[#10b981]" />
+            <CalendarIcon size={14} className="text-emerald-700 dark:text-emerald-400" />
             Alterar Período
           </button>
 
@@ -265,7 +265,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
         <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-2">
           <div className="flex justify-between items-center text-koma-subtle">
             <span className="text-[9px] font-bold uppercase tracking-wider">Faturamento Total</span>
-            <div className="p-1.5 bg-[#10b981]/15 text-[#10b981] rounded-xl">
+            <div className="p-1.5 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 rounded-xl">
               <TrendingUp size={16} />
             </div>
           </div>
@@ -347,7 +347,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
       <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4">
         <div className="flex justify-between items-center border-b border-koma-border pb-3">
           <div className="flex items-center gap-2">
-            <Target size={18} className="text-[#10b981]" />
+            <Target size={18} className="text-emerald-700 dark:text-emerald-400" />
             <span className="font-serif font-bold text-sm text-koma-foreground">Acompanhamento da Meta Mensal</span>
           </div>
           {editingMeta ? (
@@ -412,7 +412,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
                 <span className="text-koma-subtle">
                   Realizado: <strong className="text-koma-foreground">R$ {data?.meta_realizada?.toFixed(2) ?? '0.00'}</strong>
                 </span>
-                <span className="text-[#10b981] font-bold">
+                <span className="text-emerald-700 dark:text-emerald-400 font-bold">
                   {data?.meta_percentual ?? 0}% Alcançado
                 </span>
                 <span className="text-koma-subtle">
@@ -457,7 +457,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
         <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4">
           <div className="flex justify-between items-center border-b border-koma-border pb-3">
             <div className="flex items-center gap-2">
-              <TrendingUp size={16} className="text-[#10b981]" />
+              <TrendingUp size={16} className="text-emerald-700 dark:text-emerald-400" />
               <span className="font-serif font-bold text-sm text-koma-foreground">Evolução Diária do Faturamento</span>
             </div>
             <span className="text-[10px] text-koma-subtle font-mono">Tendência do Período</span>
@@ -531,7 +531,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
                   <tr key={v.data} className="hover:bg-koma-raised/50 transition-colors">
                     <td className="p-3 font-mono text-koma-muted">{v.data}</td>
                     <td className="p-3 font-mono text-center font-bold text-koma-foreground">{v.quantidade_pedidos}</td>
-                    <td className="p-3 font-mono text-right font-extrabold text-[#10b981]">
+                    <td className="p-3 font-mono text-right font-extrabold text-emerald-700 dark:text-emerald-400">
                       R$ {v.total.toFixed(2)}
                     </td>
                   </tr>
@@ -543,7 +543,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
 
         <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4">
           <div className="flex items-center gap-2 border-b border-koma-border pb-2">
-            <Clock size={16} className="text-[#10b981]" />
+            <Clock size={16} className="text-emerald-700 dark:text-emerald-400" />
             <span className="font-serif font-bold text-sm text-koma-foreground">Detalhamento por Faixa Horária</span>
           </div>
 

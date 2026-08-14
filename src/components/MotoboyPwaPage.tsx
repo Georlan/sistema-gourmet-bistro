@@ -267,7 +267,7 @@ export function MotoboyPwaPage() {
                       href={waUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="py-2 px-3 bg-[#10b981]/15 hover:bg-[#10b981]/25 border border-[#10b981]/30 text-emerald-600 dark:text-emerald-300 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors"
+                      className="py-2 px-3 bg-emerald-500/15 hover:bg-[#10b981]/25 border border-emerald-500/30 text-emerald-600 dark:text-emerald-300 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors"
                     >
                       WhatsApp
                     </a>

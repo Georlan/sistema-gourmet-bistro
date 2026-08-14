@@ -46,7 +46,7 @@ export const PeriodoCalendarioModal: React.FC<PeriodoCalendarioModalProps> = ({
       <div className={clsx('bg-koma-dialog', 'border', 'border-koma-border', 'rounded-3xl', 'max-w-md', 'w-full', 'p-6', 'space-y-5', 'text-left')}>
         <div className="flex justify-between items-center border-b border-koma-border pb-3">
           <div className="flex items-center gap-2">
-            <CalendarIcon size={18} className="text-[#10b981]" />
+            <CalendarIcon size={18} className="text-emerald-700 dark:text-emerald-400" />
             <h3 className="font-serif font-bold text-base text-koma-foreground">Selecionar Período</h3>
           </div>
           <button

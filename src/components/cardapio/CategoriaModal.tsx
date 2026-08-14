@@ -150,7 +150,7 @@ export function CategoriaModal({
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-koma-border bg-koma-raised">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-[#10b981]/10 text-[#10b981] border border-[#10b981]/20">
+            <div className="p-2 rounded-xl bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
               <Printer size={18} />
             </div>
             <div>

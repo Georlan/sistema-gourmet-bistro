@@ -2463,7 +2463,7 @@ export default function App() {
       {/* FOOTER */}
       <footer className={clsx('bg-koma-page', 'text-koma-muted', 'border-t', 'border-white/[0.06]', 'py-4', 'text-center', 'text-xs', 'shrink-0', 'font-sans')}>
         <div className={clsx('max-w-[1680px]', 'mx-auto', 'px-4', 'flex', 'items-center', 'justify-center', 'gap-2')}>
-          <p className={clsx('font-serif', 'text-sm', 'text-[#10b981]', 'font-medium')}>{restaurantName}</p>
+          <p className={clsx('font-serif', 'text-sm', 'text-emerald-700 dark:text-emerald-400', 'font-medium')}>{restaurantName}</p>
           <span className="h-1 w-1 rounded-full bg-zinc-700" />
           <p className="text-[10px]">Operação do salão</p>
         </div>

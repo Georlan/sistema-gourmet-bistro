@@ -206,7 +206,7 @@ export const CardapioAssetUploader: React.FC<CardapioAssetUploaderProps> = ({
           onDrop={handleDrop}
           className={clsx(
             'bg-koma-page border rounded-xl p-3 flex flex-col gap-2 transition-all relative',
-            isDragging ? 'border-[#10b981] bg-[#10b981]/10 scale-[1.01]' : 'border-koma-border',
+            isDragging ? 'border-[#10b981] bg-emerald-500/15 scale-[1.01]' : 'border-koma-border',
             isBusy && 'opacity-70 pointer-events-none'
           )}
         >
@@ -268,7 +268,7 @@ export const CardapioAssetUploader: React.FC<CardapioAssetUploaderProps> = ({
                   className="px-3 py-1.5 bg-koma-card hover:bg-koma-raised border border-koma-border text-koma-secondary rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
                 >
                   {status === 'uploading' ? (
-                    <Loader2 size={12} className="animate-spin text-[#10b981]" />
+                    <Loader2 size={12} className="animate-spin text-emerald-700 dark:text-emerald-400" />
                   ) : (
                     <RefreshCw size={12} />
                   )}
@@ -302,15 +302,15 @@ export const CardapioAssetUploader: React.FC<CardapioAssetUploaderProps> = ({
           className={clsx(
             'border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-1.5 group',
             isDragging
-              ? 'border-[#10b981] bg-[#10b981]/15 text-[#10b981] scale-[1.01]'
+              ? 'border-[#10b981] bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 scale-[1.01]'
               : 'border-koma-border hover:border-[#10b981]/50 bg-koma-page hover:bg-koma-card text-koma-subtle hover:text-koma-secondary',
             isBusy && 'opacity-60 cursor-not-allowed pointer-events-none'
           )}
         >
           {isBusy ? (
-            <Loader2 size={20} className="animate-spin text-[#10b981]" />
+            <Loader2 size={20} className="animate-spin text-emerald-700 dark:text-emerald-400" />
           ) : (
-            <ImageIcon size={20} className={isDragging ? 'text-[#10b981]' : 'text-koma-subtle group-hover:text-[#10b981]'} />
+            <ImageIcon size={20} className={isDragging ? 'text-emerald-700 dark:text-emerald-400' : 'text-koma-subtle group-hover:text-emerald-700 dark:text-emerald-400'} />
           )}
 
           <div className="space-y-0.5">

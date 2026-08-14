@@ -144,19 +144,19 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
         accent="do caixa"
         description={`Sangrias e suprimentos do período${turnoResumo?.operador_nome ? ` · ${turnoResumo.operador_nome}` : ''}.`}
         metrics={[
-          { label: 'suprimentos', value: formatCurrency(totals.suprimentos), valueClassName: 'text-[#54d9b3]' },
-          { label: 'sangrias', value: formatCurrency(totals.sangrias), valueClassName: 'text-[#dfabab]' },
-          { label: 'saldo dos ajustes', value: formatCurrency(totals.suprimentos - totals.sangrias), valueClassName: totals.suprimentos >= totals.sangrias ? 'text-[#54d9b3]' : 'text-[#dfabab]' },
+          { label: 'suprimentos', value: formatCurrency(totals.suprimentos), valueClassName: 'text-emerald-800 dark:text-emerald-300' },
+          { label: 'sangrias', value: formatCurrency(totals.sangrias), valueClassName: 'text-rose-800 dark:text-rose-300' },
+          { label: 'saldo dos ajustes', value: formatCurrency(totals.suprimentos - totals.sangrias), valueClassName: totals.suprimentos >= totals.sangrias ? 'text-emerald-800 dark:text-emerald-300' : 'text-rose-800 dark:text-rose-300' },
           { label: 'último no recorte', value: latestMovementTime },
         ]}
       />
 
       <section className="rounded-[20px] border border-koma-border bg-koma-panel p-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <span className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.14em] text-koma-muted"><Filter size={13} className="text-[#54d9b3]" /> Filtros</span>
+          <span className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.14em] text-koma-muted"><Filter size={13} className="text-emerald-800 dark:text-emerald-300" /> Filtros</span>
           <div className="flex items-center gap-2">
-            {hasFilters && <button type="button" onClick={clearFilters} className="px-2 text-[10px] font-bold text-[#54d9b3] hover:text-[#7becce]">Limpar filtros</button>}
-            <button type="button" onClick={exportCsv} disabled={filteredMovs.length === 0} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#303532] bg-koma-card px-3 py-2 text-[10px] font-bold text-koma-secondary transition-colors hover:border-[#196b55] hover:text-[#54d9b3] disabled:opacity-40">
+            {hasFilters && <button type="button" onClick={clearFilters} className="px-2 text-[10px] font-bold text-emerald-800 dark:text-emerald-300 hover:text-[#7becce]">Limpar filtros</button>}
+            <button type="button" onClick={exportCsv} disabled={filteredMovs.length === 0} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#303532] bg-koma-card px-3 py-2 text-[10px] font-bold text-koma-secondary transition-colors hover:border-emerald-300 dark:border-emerald-900/50 hover:text-emerald-800 dark:text-emerald-300 disabled:opacity-40">
               <Download size={13} /> Exportar CSV
             </button>
           </div>
@@ -165,15 +165,15 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
           <label className="relative">
             <span className="sr-only">Buscar movimentação</span>
             <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" />
-            <input value={searchTerm} onChange={event => setSearchTerm(event.target.value)} placeholder="Buscar motivo, observação ou operador" className="h-10 w-full rounded-xl border border-[#2a302d] bg-koma-card pl-9 pr-3 text-xs text-koma-foreground outline-none transition-colors placeholder:text-zinc-600 focus:border-[#196b55]" />
+            <input value={searchTerm} onChange={event => setSearchTerm(event.target.value)} placeholder="Buscar motivo, observação ou operador" className="h-10 w-full rounded-xl border border-[#2a302d] bg-koma-card pl-9 pr-3 text-xs text-koma-foreground outline-none transition-colors placeholder:text-zinc-600 focus:border-emerald-300 dark:border-emerald-900/50" />
           </label>
-          <select value={filterTipo} onChange={event => setFilterTipo(event.target.value)} className="h-10 w-full rounded-xl border border-[#2a302d] bg-koma-card px-3 text-xs text-koma-foreground outline-none focus:border-[#196b55]">
+          <select value={filterTipo} onChange={event => setFilterTipo(event.target.value)} className="h-10 w-full rounded-xl border border-[#2a302d] bg-koma-card px-3 text-xs text-koma-foreground outline-none focus:border-emerald-300 dark:border-emerald-900/50">
             <option value="todos">Todas as operações</option>
             <option value="suprimento">Suprimentos</option>
             <option value="sangria">Sangrias</option>
           </select>
-          <label className="relative"><span className="sr-only">Data inicial</span><CalendarDays size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" /><input type="date" value={filterDataInicio} onChange={event => setFilterDataInicio(event.target.value)} className="h-10 w-full rounded-xl border border-[#2a302d] bg-koma-card pl-9 pr-2 text-xs text-koma-foreground outline-none focus:border-[#196b55]" /></label>
-          <label className="relative"><span className="sr-only">Data final</span><CalendarDays size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" /><input type="date" value={filterDataFim} onChange={event => setFilterDataFim(event.target.value)} className="h-10 w-full rounded-xl border border-[#2a302d] bg-koma-card pl-9 pr-2 text-xs text-koma-foreground outline-none focus:border-[#196b55]" /></label>
+          <label className="relative"><span className="sr-only">Data inicial</span><CalendarDays size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" /><input type="date" value={filterDataInicio} onChange={event => setFilterDataInicio(event.target.value)} className="h-10 w-full rounded-xl border border-[#2a302d] bg-koma-card pl-9 pr-2 text-xs text-koma-foreground outline-none focus:border-emerald-300 dark:border-emerald-900/50" /></label>
+          <label className="relative"><span className="sr-only">Data final</span><CalendarDays size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" /><input type="date" value={filterDataFim} onChange={event => setFilterDataFim(event.target.value)} className="h-10 w-full rounded-xl border border-[#2a302d] bg-koma-card pl-9 pr-2 text-xs text-koma-foreground outline-none focus:border-emerald-300 dark:border-emerald-900/50" /></label>
         </div>
       </section>
 
@@ -198,9 +198,9 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
                 });
                 return (
                   <li key={movimentacao.id} className="grid gap-3 px-4 py-3.5 transition-colors hover:bg-white/[0.015] sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center sm:px-5">
-                    <span className={clsx('flex h-9 w-9 items-center justify-center rounded-xl border', isSupply ? 'border-[#145c49] bg-[#0b2d25] text-[#54d9b3]' : 'border-[#543535] bg-[#211414] text-[#dfabab]')}>{isSupply ? <ArrowDownRight size={15} /> : <ArrowUpRight size={15} />}</span>
+                    <span className={clsx('flex h-9 w-9 items-center justify-center rounded-xl border', isSupply ? 'border-emerald-300 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300' : 'border-rose-300 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30 text-rose-800 dark:text-rose-300')}>{isSupply ? <ArrowDownRight size={15} /> : <ArrowUpRight size={15} />}</span>
                     <span className="min-w-0"><span className="flex flex-wrap items-center gap-x-2 gap-y-0.5"><strong className="truncate text-xs text-koma-foreground">{movimentacao.descricao || (isSupply ? 'Suprimento' : 'Sangria')}</strong><span className="text-[9px] text-koma-muted">{dateLabel}</span></span><span className="mt-0.5 block truncate text-[10px] text-koma-muted">{movimentacao.usuario_nome || 'Operador'}{movimentacao.observacao ? ` · ${movimentacao.observacao}` : ''}</span><span className="mt-1 block text-[9px] tabular-nums text-koma-muted">Saldo: {formatCurrency(Number(movimentacao.saldo_anterior || 0))} → {formatCurrency(Number(movimentacao.saldo_posterior || 0))}</span></span>
-                    <strong className={clsx('whitespace-nowrap text-sm font-bold tabular-nums sm:text-right', isSupply ? 'text-[#54d9b3]' : 'text-[#dfabab]')}>{isSupply ? '+' : '−'} {formatCurrency(Number(movimentacao.valor))}</strong>
+                    <strong className={clsx('whitespace-nowrap text-sm font-bold tabular-nums sm:text-right', isSupply ? 'text-emerald-800 dark:text-emerald-300' : 'text-rose-800 dark:text-rose-300')}>{isSupply ? '+' : '−'} {formatCurrency(Number(movimentacao.valor))}</strong>
                   </li>
                 );
               })}

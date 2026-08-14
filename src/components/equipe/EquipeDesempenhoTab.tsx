@@ -153,7 +153,7 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
       <div className={clsx('bg-koma-panel', 'border', 'border-koma-border', 'p-4.5', 'rounded-3xl', 'flex', 'flex-col', 'sm:flex-row', 'sm:items-center', 'justify-between', 'gap-4')}>
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <Award size={18} className="text-[#10b981]" />
+            <Award size={18} className="text-emerald-700 dark:text-emerald-400" />
             <h3 className="font-serif font-bold text-base text-koma-foreground">Desempenho Comercial da Equipe</h3>
           </div>
           <p className="text-[10px] text-koma-subtle">
@@ -166,7 +166,7 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
         <div className="flex items-center gap-2.5 flex-wrap">
           {/* Cargo Filter */}
           <div className="relative flex items-center gap-1.5 bg-koma-input border border-koma-border rounded-xl px-3 py-2">
-            <Filter size={12} className="text-[#10b981] shrink-0" />
+            <Filter size={12} className="text-emerald-700 dark:text-emerald-400 shrink-0" />
             <select
               id="cargo-filter-select"
               value={cargo}
@@ -186,7 +186,7 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
             onClick={() => setShowCalendarModal(true)}
             className="px-3.5 py-2 bg-koma-raised hover:bg-koma-card border border-koma-border text-koma-foreground rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
           >
-            <CalendarIcon size={14} className="text-[#10b981]" />
+            <CalendarIcon size={14} className="text-emerald-700 dark:text-emerald-400" />
             Alterar Período
           </button>
 
@@ -218,7 +218,7 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
         <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-2">
           <div className="flex justify-between items-center text-koma-subtle">
             <span className="text-[9px] font-bold uppercase tracking-wider">Faturamento Gerado</span>
-            <div className="p-1.5 bg-[#10b981]/15 text-[#10b981] rounded-xl">
+            <div className="p-1.5 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 rounded-xl">
               <DollarSign size={16} />
             </div>
           </div>
@@ -249,7 +249,7 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4">
             <div className="flex items-center gap-2 border-b border-koma-border pb-3">
-              <BarChart2 size={16} className="text-[#10b981]" />
+              <BarChart2 size={16} className="text-emerald-700 dark:text-emerald-400" />
               <span className="font-serif font-bold text-sm text-koma-foreground">Faturamento Gerado por Atendente</span>
             </div>
 

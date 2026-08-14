@@ -140,7 +140,7 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
       <div className={clsx('bg-koma-panel', 'border', 'border-koma-border', 'p-4.5', 'rounded-3xl', 'flex', 'flex-col', 'sm:flex-row', 'sm:items-center', 'justify-between', 'gap-4')}>
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <Package size={18} className="text-[#10b981]" />
+            <Package size={18} className="text-emerald-700 dark:text-emerald-400" />
             <h3 className="font-serif font-bold text-base text-koma-foreground">Relatório de Desempenho de Produtos</h3>
           </div>
           <p className="text-[10px] text-koma-subtle">
@@ -154,7 +154,7 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
             onClick={() => setShowCalendarModal(true)}
             className="px-3.5 py-2 bg-koma-raised hover:bg-koma-card border border-koma-border text-koma-foreground rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
           >
-            <CalendarIcon size={14} className="text-[#10b981]" />
+            <CalendarIcon size={14} className="text-emerald-700 dark:text-emerald-400" />
             Alterar Período
           </button>
 
@@ -193,7 +193,7 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4">
             <div className="flex items-center gap-2 border-b border-koma-border pb-3">
-              <BarChart2 size={16} className="text-[#10b981]" />
+              <BarChart2 size={16} className="text-emerald-700 dark:text-emerald-400" />
               <span className="font-serif font-bold text-sm text-koma-foreground">Top Produtos por Unidades Vendidas</span>
             </div>
 
@@ -335,7 +335,7 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
                     <td className="p-3.5 text-center font-mono font-bold text-sky-400">
                       {p.quantidade_vendida}
                     </td>
-                    <td className="p-3.5 text-right font-mono font-extrabold text-[#10b981]">
+                    <td className="p-3.5 text-right font-mono font-extrabold text-emerald-700 dark:text-emerald-400">
                       R$ {p.faturamento_total.toFixed(2)}
                     </td>
                     <td className="p-3.5 text-right font-mono text-koma-muted">

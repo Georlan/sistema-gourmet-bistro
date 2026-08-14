@@ -142,11 +142,11 @@ export function MesasView({
                   readOnly ? 'cursor-default' : 'cursor-pointer'
                 } ${
                   isActive
-                    ? 'bg-[#00b894] text-[#04100c] border-[#00b894] shadow-[0_8px_24px_rgba(0,184,148,0.16)]'
-                    : 'bg-white/[0.035] text-koma-subtle hover:text-koma-foreground hover:bg-white/[0.07] border-koma-border'
+                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                    : 'bg-koma-card text-koma-muted hover:text-koma-foreground hover:bg-koma-raised border-koma-border'
                 }`}
               >
-                {filter.label} <span className={`font-mono text-[9px] ${isActive ? 'text-[#063f32]' : 'text-koma-muted'}`}>{filter.count}</span>
+                {filter.label} <span className={`font-mono text-[9px] ${isActive ? 'text-emerald-100' : 'text-koma-muted'}`}>{filter.count}</span>
               </button>
             );
           })}

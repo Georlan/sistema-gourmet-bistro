@@ -61,7 +61,7 @@ export const EquipeCargosTab: React.FC<EquipeCargosTabProps> = ({ apiBaseUrl, au
         {/* Header */}
         <div className={clsx('border-b', 'border-koma-border', 'pb-3', 'flex', 'items-center', 'justify-between')}>
           <div className="flex items-center gap-2">
-            <ShieldCheck size={18} className="text-[#10b981]" />
+            <ShieldCheck size={18} className="text-emerald-700 dark:text-emerald-400" />
             <span className={clsx('font-serif', 'font-bold', 'text-sm', 'text-koma-foreground')}>Cargos e Permissões</span>
           </div>
           <div className="flex items-center gap-3">

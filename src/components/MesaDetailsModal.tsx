@@ -179,7 +179,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                 orders.length === 0 
                   ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
                   : orders.some(o => o.itens.some(i => i.status === 'pronto'))
-                    ? 'bg-[#10b981]/15 text-[#10b981] border-[#10b981]/30'
+                    ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30'
                     : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
               }`}>
                 {orders.length === 0 ? 'Livre' : orders.some(o => o.itens.some(i => i.status === 'pronto')) ? 'Pronto p/ Servir' : 'Ocupada'}
@@ -200,7 +200,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
             <div className="flex flex-wrap gap-x-3 gap-y-1 items-center">
               {orders.length > 0 && (
                 <span className="flex items-center gap-1">
-                  <Clock size={12} className="text-[#10b981]" />
+                  <Clock size={12} className="text-emerald-700 dark:text-emerald-400" />
                   Permanência: <strong className="text-koma-foreground font-medium font-mono">{permanenceTime}</strong>
                 </span>
               )}
@@ -217,7 +217,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
               })()}
             </div>
             
-            <span className="text-[9px] sm:text-[10px] uppercase tracking-wider bg-koma-raised px-2.5 py-1 rounded-lg border border-[#10b981]/10 font-sans text-[#10b981] font-bold">
+            <span className="text-[9px] sm:text-[10px] uppercase tracking-wider bg-koma-raised px-2.5 py-1 rounded-lg border border-emerald-500/30 font-sans text-emerald-700 dark:text-emerald-400 font-bold">
               Garçom: <strong className="text-koma-foreground">{activeWaiterNome}</strong>
             </span>
           </div>
@@ -408,10 +408,10 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                               <button
                                 type="button"
                                 onClick={() => setSelectedOrderToPrint(order)}
-                                className="px-2.5 py-1 bg-koma-raised hover:bg-[#10b981]/20 text-koma-muted hover:text-koma-foreground border border-koma-border hover:border-[#10b981]/30 rounded-lg text-[10px] font-sans font-semibold transition-all cursor-pointer flex items-center gap-1 shadow-sm"
+                                className="px-2.5 py-1 bg-koma-raised hover:bg-[#10b981]/20 text-koma-muted hover:text-koma-foreground border border-koma-border hover:border-emerald-500/30 rounded-lg text-[10px] font-sans font-semibold transition-all cursor-pointer flex items-center gap-1 shadow-sm"
                                 title="Reimprimir este lote de pedidos"
                               >
-                                <Printer size={11} className="text-[#10b981]" />
+                                <Printer size={11} className="text-emerald-700 dark:text-emerald-400" />
                                 <span>Reimprimir</span>
                               </button>
                             </div>
@@ -429,7 +429,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                                   <div className="flex flex-wrap items-baseline gap-2">
                                     <span className="font-bold text-koma-foreground">{item.nome}</span>
                                     {item.clienteNome && (
-                                      <span className="text-[9px] font-bold text-[#10b981] bg-[#10b981]/10 px-2 py-0.5 rounded border border-[#10b981]/20 uppercase tracking-wider">
+                                      <span className="text-[9px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/15 px-2 py-0.5 rounded border border-emerald-500/30 uppercase tracking-wider">
                                         Para: {item.clienteNome}
                                       </span>
                                     )}
@@ -455,13 +455,13 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
 
                                   {item.status === 'pronto' && (
                                     <div className="flex items-center gap-1.5">
-                                      <span className="px-2.5 py-1 text-[10px] font-bold bg-[#10b981]/15 text-[#10b981] rounded-md border border-[#10b981]/30 animate-pulse uppercase tracking-wider">
+                                      <span className="px-2.5 py-1 text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 rounded-md border border-emerald-500/30 animate-pulse uppercase tracking-wider">
                                         Pronto!
                                       </span>
                                       <button
                                         id={`deliver-item-btn-${item.id}`}
                                         onClick={() => onDeliverItem(order.id, item.id)}
-                                        className="px-2.5 py-1 bg-[#4E6E58] hover:bg-[#5E836A] text-koma-foreground rounded-md text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer border border-[#4E6E58]/10"
+                                        className="px-2.5 py-1 bg-emerald-600/15 dark:bg-emerald-950/30 hover:bg-emerald-600 text-koma-foreground rounded-md text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer border border-emerald-300 dark:border-emerald-900/40"
                                         title="Marcar como entregue à mesa"
                                       >
                                         Servir
@@ -470,8 +470,8 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                                   )}
 
                                   {item.status === 'entregue' && (
-                                    <span className="px-2.5 py-1 text-[10px] font-bold bg-[#4E6E58]/10 text-[#4E6E58] rounded-md border border-[#4E6E58]/20 flex items-center gap-1 uppercase tracking-wider">
-                                      <span className="h-1.5 w-1.5 rounded-full bg-[#4E6E58]"></span>
+                                    <span className="px-2.5 py-1 text-[10px] font-bold bg-emerald-600/15 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 rounded-md border border-emerald-300 dark:border-emerald-900/40 flex items-center gap-1 uppercase tracking-wider">
+                                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-600/15 dark:bg-emerald-950/30"></span>
                                       Servido
                                     </span>
                                   )}
@@ -513,7 +513,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                                           }
                                         }
                                       }}
-                                      className="p-1 text-koma-subtle hover:text-[#10b981] transition-colors cursor-pointer"
+                                      className="p-1 text-koma-subtle hover:text-emerald-700 dark:text-emerald-400 transition-colors cursor-pointer"
                                       title="Transferir este item para outra mesa"
                                     >
                                       <Move size={12} />
@@ -574,7 +574,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                             </div>
 
                             <div className="flex items-center gap-3">
-                              <span className="font-mono text-xs sm:text-sm font-bold text-[#10b981]">
+                              <span className="font-mono text-xs sm:text-sm font-bold text-emerald-700 dark:text-emerald-400">
                                 R$ {cust.total.toFixed(2)}
                               </span>
                             </div>
@@ -605,7 +605,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                             )}
                             <div className="flex justify-between items-baseline font-sans border-t border-koma-border pt-2">
                               <span className="text-xs text-koma-subtle font-bold uppercase tracking-wider">Total Geral:</span>
-                              <span className="text-2xl font-bold font-mono text-[#10b981]">
+                              <span className="text-2xl font-bold font-mono text-emerald-700 dark:text-emerald-400">
                                 R$ {grandTotal.toFixed(2)}
                               </span>
                             </div>
@@ -618,9 +618,9 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                         <button
                           id="print-invoice-preview-btn"
                           onClick={handlePrintPreview}
-                          className="w-full py-3 bg-koma-panel hover:bg-koma-raised border border-koma-border hover:border-[#10b981]/30 text-koma-foreground rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer uppercase tracking-wider font-sans"
+                          className="w-full py-3 bg-koma-panel hover:bg-koma-raised border border-koma-border hover:border-emerald-500/30 text-koma-foreground rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer uppercase tracking-wider font-sans"
                         >
-                          <Printer size={13} className="text-[#10b981]" />
+                          <Printer size={13} className="text-emerald-700 dark:text-emerald-400" />
                           <span>Prévia e Extrato</span>
                         </button>
 
@@ -632,9 +632,9 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                               setActiveTab('transferir');
                               setTransferType(canTransferTables ? 'total' : 'parcial');
                             }}
-                            className="py-2.5 bg-koma-panel hover:bg-koma-raised border border-koma-border hover:border-[#10b981]/30 text-koma-foreground rounded-xl font-bold text-[10px] flex items-center justify-center gap-1.5 transition-colors cursor-pointer uppercase tracking-wider font-sans"
+                            className="py-2.5 bg-koma-panel hover:bg-koma-raised border border-koma-border hover:border-emerald-500/30 text-koma-foreground rounded-xl font-bold text-[10px] flex items-center justify-center gap-1.5 transition-colors cursor-pointer uppercase tracking-wider font-sans"
                           >
-                            <Move size={11} className="text-[#10b981]" />
+                            <Move size={11} className="text-emerald-700 dark:text-emerald-400" />
                             <span>Transferir</span>
                           </button>
                           {onMergeTables && canTransferTables && (
@@ -644,9 +644,9 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                                 setActiveTab('mesclar');
                                 setTransferType('mesclar');
                               }}
-                              className="py-2.5 bg-koma-panel hover:bg-koma-raised border border-koma-border hover:border-[#10b981]/30 text-koma-foreground rounded-xl font-bold text-[10px] flex items-center justify-center gap-1.5 transition-colors cursor-pointer uppercase tracking-wider font-sans"
+                              className="py-2.5 bg-koma-panel hover:bg-koma-raised border border-koma-border hover:border-emerald-500/30 text-koma-foreground rounded-xl font-bold text-[10px] flex items-center justify-center gap-1.5 transition-colors cursor-pointer uppercase tracking-wider font-sans"
                             >
-                              <GitMerge size={11} className="text-[#10b981]" />
+                              <GitMerge size={11} className="text-emerald-700 dark:text-emerald-400" />
                               <span>Mesclar</span>
                             </button>
                           )}
@@ -709,7 +709,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
           {activeTab === 'transferir' && (
             <div className="space-y-6 max-w-2xl mx-auto py-4">
               <div className="text-center space-y-2">
-                <div className="p-3 bg-[#10b981]/10 text-[#10b981] rounded-full inline-block border border-[#10b981]/20">
+                <div className="p-3 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 rounded-full inline-block border border-emerald-500/30">
                   <Move size={24} />
                 </div>
                 <h3 className="font-serif text-xl font-bold text-koma-foreground">Transferência de Mesa</h3>
@@ -826,10 +826,10 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                               ? 'bg-koma-panel/40 border-koma-border/40 text-gray-600 cursor-not-allowed'
                               : isConfirming
                                 ? 'bg-rose-900/40 border border-rose-800/50 border-rose-900/50 animate-pulse text-koma-foreground cursor-pointer hover:scale-102'
-                                : 'bg-koma-panel hover:bg-[#10b981]/10 border border-koma-border hover:border-[#10b981] text-koma-foreground cursor-pointer hover:scale-102'
+                                : 'bg-koma-panel hover:bg-emerald-500/15 border border-koma-border hover:border-[#10b981] text-koma-foreground cursor-pointer hover:scale-102'
                           }`}
                         >
-                          <span className={`text-base font-bold ${hasSelected ? 'text-koma-foreground group-hover:text-[#10b981]' : 'text-gray-600'}`}>
+                          <span className={`text-base font-bold ${hasSelected ? 'text-koma-foreground group-hover:text-emerald-700 dark:text-emerald-400' : 'text-gray-600'}`}>
                             {isConfirming ? 'Confirmar?' : `Mesa ${t.id}`}
                           </span>
                           {isConfirming && (
@@ -848,7 +848,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
           {activeTab === 'mesclar' && (
             <div className="space-y-6 max-w-2xl mx-auto py-4">
               <div className="text-center space-y-2">
-                <div className="p-3 bg-[#10b981]/10 text-[#10b981] rounded-full inline-block border border-[#10b981]/20">
+                <div className="p-3 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 rounded-full inline-block border border-emerald-500/30">
                   <GitMerge size={24} />
                 </div>
                 <h3 className="font-serif text-xl font-bold text-koma-foreground">Mesclar Mesa {table.id} com outra</h3>
@@ -1015,7 +1015,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
             <div className="flex-1 overflow-y-auto bg-koma-page border border-koma-border rounded-2xl p-5 font-mono text-[11px] text-koma-muted space-y-4 shadow-inner max-h-[50vh] scrollbar-thin">
               <div className="text-center space-y-1 border-b border-dashed border-koma-border pb-3">
                 <p className="font-serif font-bold text-base text-koma-foreground tracking-tight">{restaurantName.toUpperCase()}</p>
-                <p className="text-[9px] text-[#10b981] leading-normal font-sans">Mesa de Atendimento de Excelência</p>
+                <p className="text-[9px] text-emerald-700 dark:text-emerald-400 leading-normal font-sans">Mesa de Atendimento de Excelência</p>
               </div>
 
               <div className="space-y-1 border-b border-dashed border-koma-border pb-3">
@@ -1086,7 +1086,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
 
                           return (
                             <div key={client} className="space-y-1 border-t border-dashed border-koma-border pt-2 first:border-0 first:pt-0">
-                              <span className="font-bold text-[10px] text-[#10b981] uppercase font-sans tracking-wider block">
+                              <span className="font-bold text-[10px] text-emerald-700 dark:text-emerald-400 uppercase font-sans tracking-wider block">
                                 Cliente: {client}
                               </span>
                               {Object.values(clientGrouped).map((item, idx) => (
@@ -1129,7 +1129,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                           <span className="font-mono">R$ {taxVal.toFixed(2)}</span>
                         </div>
                       )}
-                      <div className="flex justify-between text-xs font-bold text-[#10b981] border-t border-dotted border-koma-border pt-2.5 mt-2.5">
+                      <div className="flex justify-between text-xs font-bold text-emerald-700 dark:text-emerald-400 border-t border-dotted border-koma-border pt-2.5 mt-2.5">
                         <span>TOTAL GERAL:</span>
                         <span className="font-mono">R$ {grandTotal.toFixed(2)}</span>
                       </div>
@@ -1146,7 +1146,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
 
             {/* Print Status Feedback */}
             {printSuccess && (
-              <div className="bg-[#4E6E58]/25 border border-[#4E6E58]/40 text-[#6E9E7C] p-2.5 rounded-xl text-center text-[10px] font-bold font-sans uppercase tracking-wider">
+              <div className="bg-emerald-600/15 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-900/40 text-emerald-800 dark:text-emerald-300 p-2.5 rounded-xl text-center text-[10px] font-bold font-sans uppercase tracking-wider">
                 Impressão enviada com sucesso!
               </div>
             )}
@@ -1296,7 +1296,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                           <span className="text-koma-subtle">R$ {((item.preco ?? 0) * qty).toFixed(2)}</span>
                         </div>
                         {item.clienteNome && item.clienteNome !== 'Consumo Geral' && (
-                          <p className="text-[9px] text-[#10b981] uppercase font-bold">Para: {item.clienteNome}</p>
+                          <p className="text-[9px] text-emerald-700 dark:text-emerald-400 uppercase font-bold">Para: {item.clienteNome}</p>
                         )}
                         {item.observacao && (
                           <p className="text-[10px] text-rose-600 dark:text-rose-300 italic pl-2 border-l border-dashed border-rose-900/50/50">
@@ -1317,7 +1317,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
 
             {/* Print Status Feedback */}
             {printSuccess && (
-              <div className="bg-[#4E6E58]/25 border border-[#4E6E58]/40 text-[#6E9E7C] p-2.5 rounded-xl text-center text-[10px] font-bold font-sans uppercase tracking-wider">
+              <div className="bg-emerald-600/15 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-900/40 text-emerald-800 dark:text-emerald-300 p-2.5 rounded-xl text-center text-[10px] font-bold font-sans uppercase tracking-wider">
                 Reimpressão enviada com sucesso!
               </div>
             )}

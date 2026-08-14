@@ -64,7 +64,7 @@ export const VendasDetalhesDrawer: React.FC<VendasDetalhesDrawerProps> = ({
         {/* Header */}
         <div className="flex justify-between items-center border-b border-koma-border pb-4">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-[#10b981]/15 border border-[#10b981]/30 flex items-center justify-center text-[#10b981]">
+            <div className="w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-700 dark:text-emerald-400">
               <ShoppingBag size={18} />
             </div>
             <div>
@@ -102,7 +102,7 @@ export const VendasDetalhesDrawer: React.FC<VendasDetalhesDrawerProps> = ({
             disabled={!filteredVendas.length}
             className="px-3 py-1.5 bg-koma-raised hover:bg-koma-card border border-koma-border text-koma-foreground rounded-xl text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
           >
-            <Download size={12} className="text-[#10b981]" />
+            <Download size={12} className="text-emerald-700 dark:text-emerald-400" />
             Exportar CSV
           </button>
         </div>
@@ -136,7 +136,7 @@ export const VendasDetalhesDrawer: React.FC<VendasDetalhesDrawerProps> = ({
                       {formatBackendDateTime(v.data_hora)}
                     </td>
                     <td className="p-3 font-mono font-bold text-koma-foreground">#{v.numero_pedido}</td>
-                    <td className="p-3 font-mono font-extrabold text-[#10b981]">
+                    <td className="p-3 font-mono font-extrabold text-emerald-700 dark:text-emerald-400">
                       R$ {v.valor_total.toFixed(2)}
                     </td>
                     <td className="p-3 text-koma-muted">{v.forma_pagamento}</td>

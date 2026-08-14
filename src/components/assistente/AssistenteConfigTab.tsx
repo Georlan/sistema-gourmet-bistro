@@ -122,7 +122,7 @@ export function AssistenteConfigTab({
               <button
                 onClick={() => setIaVoiceTone('direto')}
                 className={`py-1.5 rounded-xl border text-[9px] font-bold transition-all cursor-pointer ${iaVoiceTone === 'direto'
-                  ? 'bg-[#10b981]/15 border-[#10b981] text-[#10b981]'
+                  ? 'bg-emerald-500/15 border-[#10b981] text-emerald-700 dark:text-emerald-400'
                   : 'bg-koma-card/40 border-koma-border text-koma-muted'
                   }`}
               >
@@ -131,7 +131,7 @@ export function AssistenteConfigTab({
               <button
                 onClick={() => setIaVoiceTone('conversador')}
                 className={`py-1.5 rounded-xl border text-[9px] font-bold transition-all cursor-pointer ${iaVoiceTone === 'conversador'
-                  ? 'bg-[#10b981]/15 border-[#10b981] text-[#10b981]'
+                  ? 'bg-emerald-500/15 border-[#10b981] text-emerald-700 dark:text-emerald-400'
                   : 'bg-koma-card/40 border-koma-border text-koma-muted'
                   }`}
               >
