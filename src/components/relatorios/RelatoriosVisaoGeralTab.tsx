@@ -488,7 +488,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
 
         <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4 shadow-xs">
           <div className="flex items-center gap-2 border-b border-koma-border pb-3">
-            <Clock size={16} className="text-sky-600 dark:text-sky-400" />
+            <Clock size={16} className="text-koma-accent" />
             <span className="font-serif font-bold text-sm text-koma-foreground">Horários de Pico do Salão</span>
           </div>
 
@@ -500,7 +500,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
                   <XAxis dataKey="hora" stroke="var(--koma-text-muted)" fontSize={11} tickLine={false} axisLine={false} />
                   <YAxis stroke="var(--koma-text-muted)" fontSize={11} tickLine={false} axisLine={false} />
                   <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'var(--koma-border-default)' }} />
-                  <Bar dataKey="pedidos" name="Pedidos Atendidos" fill="#0284c7" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="pedidos" name="Pedidos Atendidos" fill="#475569" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (

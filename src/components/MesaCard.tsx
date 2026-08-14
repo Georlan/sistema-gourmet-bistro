@@ -60,39 +60,39 @@ export const MesaCard = React.memo<MesaCardProps>(({
   const statusConfig = {
     livre: {
       surface: 'bg-white dark:bg-[#0b1713] hover:bg-emerald-50/70 dark:hover:bg-[#0e211a]',
-      border: 'border-emerald-300 dark:border-emerald-900/50 hover:border-emerald-500 focus-visible:ring-emerald-400',
+      border: 'border-emerald-400/60 dark:border-emerald-900/50 hover:border-emerald-500 focus-visible:ring-emerald-400',
       accent: 'bg-emerald-600 dark:bg-[#00b894]',
       dot: 'bg-emerald-600 dark:bg-[#00d9a6]',
       label: 'Livre',
-      labelColor: 'text-emerald-700 dark:text-[#00d9a6]',
+      labelColor: 'text-emerald-800 dark:text-[#00d9a6]',
     },
     ocupada: {
       surface: hasPendingPayment
-        ? 'bg-amber-50/90 dark:bg-[#20180b] hover:bg-amber-100/90 dark:hover:bg-[#2a1f0c]'
-        : 'bg-rose-50/90 dark:bg-[#1b0d10] hover:bg-rose-100/90 dark:hover:bg-[#251014]',
+        ? 'bg-amber-50 dark:bg-[#20180b] hover:bg-amber-100/80 dark:hover:bg-[#2a1f0c]'
+        : 'bg-rose-50 dark:bg-[#1b0d10] hover:bg-rose-100/80 dark:hover:bg-[#251014]',
       border: hasPendingPayment
-        ? 'border-amber-300 dark:border-amber-800/60 hover:border-amber-500 focus-visible:ring-amber-400'
-        : 'border-rose-300 dark:border-rose-950 hover:border-rose-500 focus-visible:ring-rose-400',
+        ? 'border-amber-400/80 dark:border-amber-800/60 hover:border-amber-500 focus-visible:ring-amber-400'
+        : 'border-rose-400/80 dark:border-rose-900 hover:border-rose-600 focus-visible:ring-rose-400',
       accent: hasPendingPayment ? 'bg-amber-500 dark:bg-amber-400' : 'bg-rose-600 dark:bg-rose-500',
       dot: hasPendingPayment ? 'bg-amber-500 dark:bg-amber-400' : 'bg-rose-600 dark:bg-rose-400',
       label: hasPendingPayment ? 'Aprovar dinheiro' : 'Em atendimento',
-      labelColor: hasPendingPayment ? 'text-amber-800 dark:text-amber-300' : 'text-rose-800 dark:text-rose-300',
+      labelColor: hasPendingPayment ? 'text-amber-900 dark:text-amber-300' : 'text-rose-900 dark:text-rose-300',
     },
     pronto: {
-      surface: 'bg-amber-50/90 dark:bg-[#211707] hover:bg-amber-100/90 dark:hover:bg-[#2b1e08]',
-      border: 'border-amber-300 dark:border-amber-800/60 hover:border-amber-500 focus-visible:ring-amber-400',
+      surface: 'bg-amber-50 dark:bg-[#211707] hover:bg-amber-100/80 dark:hover:bg-[#2b1e08]',
+      border: 'border-amber-400/80 dark:border-amber-800/60 hover:border-amber-500 focus-visible:ring-amber-400',
       accent: 'bg-amber-500 dark:bg-amber-400',
       dot: 'bg-amber-500 dark:bg-amber-400 animate-pulse',
       label: 'Pronto para servir',
-      labelColor: 'text-amber-800 dark:text-amber-300',
+      labelColor: 'text-amber-900 dark:text-amber-300',
     },
     entregue: {
-      surface: 'bg-sky-50/90 dark:bg-[#0b1621] hover:bg-sky-100/90 dark:hover:bg-[#0d1d2c]',
-      border: 'border-sky-300 dark:border-sky-900/60 hover:border-sky-500 focus-visible:ring-sky-400',
-      accent: 'bg-sky-500 dark:bg-sky-400',
-      dot: 'bg-sky-500 dark:bg-sky-400',
+      surface: 'bg-slate-50 dark:bg-[#0b1621] hover:bg-slate-100/80 dark:hover:bg-[#0d1d2c]',
+      border: 'border-slate-300 dark:border-slate-800 hover:border-slate-400 focus-visible:ring-slate-400',
+      accent: 'bg-slate-600 dark:bg-slate-400',
+      dot: 'bg-slate-600 dark:bg-slate-400',
       label: 'Aguardando conta',
-      labelColor: 'text-sky-800 dark:text-sky-300',
+      labelColor: 'text-slate-800 dark:text-slate-300',
     },
     mesclada: {
       surface: 'bg-koma-panel hover:bg-koma-card',

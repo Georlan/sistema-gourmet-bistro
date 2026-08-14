@@ -72,15 +72,15 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
   const car = Number(bk.cartao || 0);
 
   const paymentChartData = [
-    { name: 'Pix', value: pix, color: '#10b981' },
-    { name: 'Cartão', value: car, color: '#0ea5e9' },
-    { name: 'Dinheiro', value: din, color: '#f59e0b' }
+    { name: 'Pix', value: pix, color: '#059669' },
+    { name: 'Cartão', value: car, color: '#475569' },
+    { name: 'Dinheiro', value: din, color: '#d97706' }
   ].filter(item => item.value > 0);
 
   const paymentBarData = [
-    { name: 'Pix', valor: pix, fill: '#10b981' },
-    { name: 'Cartão', valor: car, fill: '#0ea5e9' },
-    { name: 'Dinheiro', valor: din, fill: '#f59e0b' }
+    { name: 'Pix', valor: pix, fill: '#059669' },
+    { name: 'Cartão', valor: car, fill: '#475569' },
+    { name: 'Dinheiro', valor: din, fill: '#d97706' }
   ];
 
   return (
@@ -194,16 +194,16 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
           </div>
 
           <div className="flex justify-center items-center gap-4 text-xs font-bold">
-            <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-600 inline-block" /><span>Pix</span></div>
-            <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-sky-600 inline-block" /><span>Cartão</span></div>
-            <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-600 inline-block" /><span>Dinheiro</span></div>
+            <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#059669] inline-block" /><span>Pix</span></div>
+            <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#475569] inline-block" /><span>Cartão</span></div>
+            <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#d97706] inline-block" /><span>Dinheiro</span></div>
           </div>
         </div>
 
         <div className="bg-koma-panel border border-koma-border rounded-3xl p-5 space-y-4 shadow-xs">
           <div className="border-b border-koma-border pb-2 flex items-center justify-between">
             <h4 className="font-serif text-sm font-bold text-koma-foreground flex items-center gap-2">
-              <BarChart3 size={16} className="text-sky-600 dark:text-sky-400" />
+              <BarChart3 size={16} className="text-koma-accent" />
               <span>Comparativo dos Meios de Recebimento</span>
             </h4>
             <span className="text-[9px] text-koma-muted font-mono font-medium">Em R$</span>
@@ -218,7 +218,7 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
                 <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'var(--koma-border-default)' }} />
                 <Bar dataKey="valor" radius={[6, 6, 0, 0]}>
                   {paymentBarData.map((entry, index) => (
-                    <Cell key={`bar-${index}`} fill={entry.fill === '#10b981' ? '#059669' : entry.fill === '#0ea5e9' ? '#0284c7' : '#d97706'} />
+                    <Cell key={`bar-${index}`} fill={entry.fill} />
                   ))}
                 </Bar>
               </BarChart>

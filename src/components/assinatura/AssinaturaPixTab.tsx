@@ -507,15 +507,15 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                     className={clsx(
                       'relative h-full flex flex-col justify-between transition-all duration-200 cursor-pointer rounded-3xl border text-left overflow-visible',
                       isPopular
-                        ? 'bg-koma-card border-emerald-500/70 shadow-lg shadow-black/30 ring-1 ring-emerald-500/20 md:-translate-y-1 z-10'
+                        ? 'bg-koma-card border-emerald-500 shadow-lg ring-2 ring-emerald-500/20 md:-translate-y-1 z-10'
                         : isSelected
-                        ? 'bg-koma-raised border-emerald-500/40 shadow-md'
-                        : 'bg-koma-panel/90 border-koma-border hover:border-gray-600'
+                        ? 'bg-koma-raised border-emerald-500/60 shadow-md'
+                        : 'bg-koma-panel border-koma-border hover:border-koma-border-strong'
                     )}
                   >
                     {/* Badge Mais Popular */}
                     {isPopular && (
-                      <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-emerald-500 text-zinc-950 text-[9px] font-extrabold uppercase tracking-widest shadow-md flex items-center gap-1">
+                      <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3.5 py-1 rounded-full bg-emerald-600 text-white text-[9px] font-extrabold uppercase tracking-widest shadow-md flex items-center gap-1">
                         <Sparkles size={11} />
                         <span>Mais Popular</span>
                       </div>

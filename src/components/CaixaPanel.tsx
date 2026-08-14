@@ -2,6 +2,7 @@ import { CardapioAssetUploader } from './CardapioAssetUploader';
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import logoImg from '../assets/logo.png';
 import { KomaLogo } from './KomaLogo';
+import { KomaEmptyState } from './shared/KomaEmptyState';
 import { LoginButton } from '../../components/shadcnblocks/login-button';
 import {
   DollarSign, ArrowUpRight, Lock, Users,
@@ -6100,87 +6101,106 @@ export function CaixaPanel({
 
           {/* VIEW: EQUIPE — PESSOAS */}
           {activeTab === 'permissoes_cargos' && ['pessoas', 'equipe', 'convites'].includes(activeSubTab) && (
-            <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5')}>
+            <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-6', 'max-w-6xl', 'text-left', 'animate-fade-in')}>
 
               {/* CRUD table list */}
               <div className={clsx('lg:col-span-2', 'bg-koma-panel', 'border', 'border-koma-border', 'rounded-3xl', 'p-5', 'space-y-4', 'shadow-xs')}>
-                <span className={clsx('font-serif', 'font-bold', 'text-koma-foreground', 'block', 'pb-1', 'border-b', 'border-koma-border')}>Cadastro de Funcionários (Equipe)</span>
-
-                <div className="overflow-x-auto">
-                  <table className={clsx('w-full', 'text-left', 'font-sans', 'text-xs', 'border-collapse')}>
-                    <thead>
-                      <tr className={clsx('border-b', 'border-koma-border', 'text-koma-muted', 'font-extrabold', 'uppercase', 'text-[9px]', 'tracking-wider')}>
-                        <th className="py-2.5">Nome</th>
-                        <th className="py-2.5">Telefone</th>
-                        <th className="py-2.5">Cargo</th>
-                        <th className="py-2.5">Status</th>
-                        <th className={clsx('py-2.5', 'text-right')}>Ação</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {systemUsers.map(user => {
-                        const cargoRaw = user.cargo || user.role || 'garcom';
-                        const cargoLabel = cargoRaw === 'garcom' ? 'Garçom' : cargoRaw === 'caixa' ? 'Caixa' : cargoRaw === 'operador_caixa' ? 'Op. Caixa' : cargoRaw === 'gerente' ? 'Gerente' : cargoRaw === 'atendente' ? 'Atendente' : cargoRaw === 'cozinha' ? 'Cozinha' : cargoRaw === 'admin' ? 'Administrador' : cargoRaw;
-                        const statusVal = user.status || 'ativo';
-                        const isPendente = statusVal === 'pendente_ativacao';
-
-                        return (
-                          <tr key={user.id} className={clsx('border-b', 'border-koma-border/60', 'hover:bg-koma-raised/50', 'transition-colors')}>
-                            <td className={clsx('py-3', 'text-koma-foreground', 'font-bold')}>{user.nome}</td>
-                            <td className={clsx('py-3', 'font-mono', 'text-koma-muted', 'text-[11px]')}>{formatarTelefoneTabela(user.telefone || user.usuario || '')}</td>
-                            <td className="py-3">
-                              <span className={clsx('px-2.5', 'py-0.5', 'text-[8px]', 'font-extrabold', 'rounded-md', 'uppercase', 'tracking-wider', cargoRaw === 'admin' ? 'koma-badge-danger' : 'koma-badge-info')}>
-                                {cargoLabel}
-                              </span>
-                            </td>
-                            <td className="py-3">
-                              {statusVal === 'ativo' ? (
-                                <span className="koma-badge-success px-2.5 py-0.5 text-[8px] font-extrabold rounded-md uppercase tracking-wider">
-                                  Ativo
-                                </span>
-                              ) : (
-                                <span className="koma-badge-warning px-2.5 py-0.5 text-[8px] font-extrabold rounded-md uppercase tracking-wider">
-                                  Pendente de Ativação
-                                </span>
-                              )}
-                            </td>
-                            <td className={clsx('py-3', 'text-right', 'flex', 'items-center', 'justify-end', 'gap-2')}>
-                              {isPendente && (
-                                <button
-                                  onClick={() => handleResendInvite(user)}
-                                  className={clsx('px-2.5', 'py-1', 'text-[8px]', 'font-bold', 'bg-koma-raised', 'hover:bg-koma-card', 'text-koma-foreground', 'rounded-lg', 'border', 'border-koma-border', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'gap-1')}
-                                  title="Reenviar link de ativação via WhatsApp"
-                                >
-                                  <Send size={10} />
-                                  Reenviar Convite
-                                </button>
-                              )}
-                              {cargoRaw !== 'admin' && (
-                                <button
-                                  onClick={() => handleDeleteUser(user.id)}
-                                  className={clsx('p-1.5', 'text-rose-600 dark:text-rose-400', 'hover:text-rose-700 dark:hover:text-rose-300', 'cursor-pointer', 'transition-colors')}
-                                  title="Excluir funcionário"
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                <div className={clsx('flex', 'justify-between', 'items-center', 'border-b', 'border-koma-border', 'pb-3')}>
+                  <div>
+                    <span className={clsx('font-serif', 'font-bold', 'text-koma-foreground', 'text-base', 'block')}>Equipe & Funcionários</span>
+                    <span className="text-[10px] text-koma-muted font-medium block mt-0.5">
+                      {systemUsers.length} {systemUsers.length === 1 ? 'membro cadastrado' : 'membros cadastrados'}
+                    </span>
+                  </div>
                 </div>
+
+                {systemUsers.length > 0 ? (
+                  <div className="overflow-x-auto border border-koma-border rounded-2xl">
+                    <table className={clsx('w-full', 'text-left', 'font-sans', 'text-xs')}>
+                      <thead>
+                        <tr className={clsx('bg-koma-raised', 'border-b', 'border-koma-border', 'text-koma-muted', 'font-extrabold', 'uppercase', 'text-[9px]', 'tracking-wider')}>
+                          <th className="p-3.5">Nome</th>
+                          <th className="p-3.5">WhatsApp</th>
+                          <th className="p-3.5">Função</th>
+                          <th className="p-3.5">Status</th>
+                          <th className={clsx('p-3.5', 'text-right')}>Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-koma-border">
+                        {systemUsers.map(user => {
+                          const cargoRaw = user.cargo || user.role || 'garcom';
+                          const cargoLabel = cargoRaw === 'garcom' ? 'Garçom' : cargoRaw === 'caixa' ? 'Caixa' : cargoRaw === 'operador_caixa' ? 'Op. Caixa' : cargoRaw === 'gerente' ? 'Gerente' : cargoRaw === 'atendente' ? 'Atendente' : cargoRaw === 'cozinha' ? 'Cozinha' : cargoRaw === 'admin' ? 'Administrador' : cargoRaw;
+                          const statusVal = user.status || 'ativo';
+                          const isPendente = statusVal === 'pendente_ativacao';
+
+                          return (
+                            <tr key={user.id} className={clsx('hover:bg-koma-raised/50', 'transition-colors')}>
+                              <td className={clsx('p-3.5', 'text-koma-foreground', 'font-bold')}>{user.nome}</td>
+                              <td className={clsx('p-3.5', 'font-mono', 'text-koma-muted', 'text-xs')}>{formatarTelefoneTabela(user.telefone || user.usuario || '')}</td>
+                              <td className="p-3.5">
+                                <span className={clsx('px-2.5', 'py-0.5', 'text-[8px]', 'font-extrabold', 'rounded-md', 'uppercase', 'tracking-wider', cargoRaw === 'admin' ? 'koma-badge-danger' : 'koma-badge-info')}>
+                                  {cargoLabel}
+                                </span>
+                              </td>
+                              <td className="p-3.5">
+                                {statusVal === 'ativo' ? (
+                                  <span className="koma-badge-success px-2.5 py-0.5 text-[8px] font-extrabold rounded-md uppercase tracking-wider">
+                                    Ativo
+                                  </span>
+                                ) : (
+                                  <span className="koma-badge-warning px-2.5 py-0.5 text-[8px] font-extrabold rounded-md uppercase tracking-wider">
+                                    Pendente
+                                  </span>
+                                )}
+                              </td>
+                              <td className={clsx('p-3.5', 'text-right')}>
+                                <div className="flex items-center justify-end gap-2">
+                                  {isPendente && (
+                                    <button
+                                      onClick={() => handleResendInvite(user)}
+                                      className={clsx('px-2.5', 'py-1', 'text-[9px]', 'font-bold', 'koma-btn-secondary', 'rounded-lg', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'gap-1')}
+                                      title="Reenviar link de ativação via WhatsApp"
+                                    >
+                                      <Send size={11} />
+                                      Reenviar
+                                    </button>
+                                  )}
+                                  {cargoRaw !== 'admin' && (
+                                    <button
+                                      onClick={() => handleDeleteUser(user.id)}
+                                      className={clsx('p-1.5', 'text-rose-600 dark:text-rose-400', 'hover:text-rose-700 dark:hover:text-rose-300', 'cursor-pointer', 'transition-colors', 'rounded-lg', 'hover:bg-rose-500/10')}
+                                      title="Excluir funcionário"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <KomaEmptyState
+                    icon={<Users size={24} className="text-koma-muted" />}
+                    title="Nenhum funcionário cadastrado"
+                    description="Cadastre garçons, operadores de caixa ou gerentes no formulário ao lado para liberar acessos e monitorar atendimentos."
+                    variant="panel"
+                  />
+                )}
               </div>
 
               {/* Add form & Service fee settings */}
               <div className="space-y-4">
-
-                {/* Add Waiter form */}
                 <div className={clsx('bg-koma-panel', 'border', 'border-koma-border', 'rounded-3xl', 'p-5', 'shadow-xs')}>
-                  <span className={clsx('font-serif', 'font-bold', 'text-koma-foreground', 'block', 'pb-1', 'border-b', 'border-koma-border', 'mb-3')}>Registrar Funcionário</span>
+                  <div className={clsx('border-b', 'border-koma-border', 'pb-3', 'mb-4')}>
+                    <span className={clsx('font-serif', 'font-bold', 'text-koma-foreground', 'text-base', 'block')}>Cadastrar Membro</span>
+                    <span className="text-[10px] text-koma-muted font-medium block mt-0.5">Envio automático do convite de acesso</span>
+                  </div>
 
-                  <form onSubmit={handleAddUserSubmit} className={clsx('space-y-3', 'text-left')}>
+                  <form onSubmit={handleAddUserSubmit} className={clsx('space-y-3.5', 'text-left')}>
                     <div className="space-y-1">
                       <label className={clsx('text-[9px]', 'text-koma-muted', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Nome Completo:</label>
                       <input
@@ -6189,7 +6209,7 @@ export function CaixaPanel({
                         placeholder="Ex: Pedro Henrique"
                         value={newUserNome}
                         onChange={(e) => setNewUserNome(e.target.value)}
-                        className={clsx('w-full', 'px-3.5', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'focus:outline-none', 'focus:border-emerald-500/60')}
+                        className={clsx('w-full', 'px-3.5', 'py-2.5', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'focus:outline-none', 'focus:border-emerald-500/60')}
                       />
                     </div>
                     <div className="space-y-1">
@@ -6200,7 +6220,7 @@ export function CaixaPanel({
                         placeholder="(81) 99999-9999"
                         value={newUserTelefone}
                         onChange={(e) => setNewUserTelefone(aplicarMascaraTelefoneInput(e.target.value))}
-                        className={clsx('w-full', 'px-3.5', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'font-mono', 'text-xs', 'focus:outline-none', 'focus:border-emerald-500/60')}
+                        className={clsx('w-full', 'px-3.5', 'py-2.5', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'font-mono', 'text-xs', 'focus:outline-none', 'focus:border-emerald-500/60')}
                       />
                     </div>
                     <div className="space-y-1">
@@ -6208,7 +6228,7 @@ export function CaixaPanel({
                       <select
                         value={newUserRole}
                         onChange={(e) => setNewUserRole(e.target.value)}
-                        className={clsx('w-full', 'px-3.5', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'font-medium', 'focus:outline-none', 'focus:border-emerald-500/60')}
+                        className={clsx('w-full', 'px-3.5', 'py-2.5', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'font-medium', 'focus:outline-none', 'focus:border-emerald-500/60')}
                       >
                         <option value="garcom">Garçom</option>
                         <option value="caixa">Operador Caixa</option>
@@ -6216,12 +6236,13 @@ export function CaixaPanel({
                         <option value="motoboy">Motoboy</option>
                       </select>
                     </div>
-                    <button type="submit" className={clsx('w-full', 'py-2.5', 'koma-btn-success', 'font-bold', 'text-[10px]', 'uppercase', 'tracking-wider', 'rounded-xl', 'transition-all', 'cursor-pointer', 'shadow-xs')}>Cadastrar e Enviar Convite</button>
+                    <button type="submit" className={clsx('w-full', 'py-3', 'koma-btn-success', 'font-bold', 'text-xs', 'uppercase', 'tracking-wider', 'rounded-xl', 'transition-all', 'cursor-pointer', 'shadow-xs', 'mt-2')}>
+                      Cadastrar e Enviar Convite
+                    </button>
                   </form>
                 </div>
-
-                </div>
               </div>
+            </div>
           )}
 
           {/* VIEW: EQUIPE — CARGOS E PERMISSÕES (dados reais da API) */}
@@ -8082,65 +8103,84 @@ export function CaixaPanel({
 
           {/* CRM CLIENTES — REAL DATA */}
           {activeTab === 'clientes' && ['clientes', 'crm', 'banco_clientes', 'fidelidade', 'programa_fidelidade'].includes(activeSubTab) && (
-            <div className={clsx('bg-koma-panel', 'border', 'border-koma-border', 'rounded-3xl', 'p-5', 'space-y-4', 'text-left', 'animate-fade-in', 'max-w-3xl', 'shadow-xs')}>
-              <div className={clsx('flex', 'justify-between', 'items-center', 'border-b', 'border-koma-border', 'pb-2')}>
-                <span className={clsx('font-serif', 'font-bold', 'text-koma-foreground', 'text-sm')}>CRM — Cadastro de Clientes</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNewCrmNome('');
-                    setNewCrmTelefone('');
-                    setNewCrmSaldo('0');
-                    setShowNewCrmModal(true);
-                  }}
-                  className={clsx('px-3.5', 'py-1.5', 'koma-btn-success', 'rounded-xl', 'text-xs', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-xs')}
-                >
-                  + Novo Cliente
-                </button>
-              </div>
-              <div className={clsx('overflow-hidden', 'border', 'border-koma-border', 'rounded-2xl')}>
-                <table className={clsx('w-full', 'text-left', 'text-[10px]')}>
-                  <thead>
-                    <tr className={clsx('bg-koma-raised', 'border-b', 'border-koma-border', 'text-koma-muted', 'uppercase', 'tracking-wider', 'font-extrabold', 'text-[9px]')}>
-                      <th className="p-3.5">WhatsApp</th>
-                      <th className="p-3.5">Nome</th>
-                      <th className={clsx('p-3.5', 'font-mono')}>Saldo</th>
-                      <th className={clsx('p-3.5', 'text-right')}>Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody className={clsx('divide-y', 'divide-koma-border')}>
-                    {loyaltyUsers.map((user) => (
-                      <tr key={user.id} className={clsx('hover:bg-koma-raised/50', 'transition-colors')}>
-                        <td className={clsx('p-3.5', 'font-mono', 'text-koma-muted', 'text-[11px]')}>{formatarTelefoneTabela(user.telefone)}</td>
-                        <td className={clsx('p-3.5', 'font-bold', 'text-koma-foreground')}>{user.cliente}</td>
-                        <td className={clsx('p-3.5', 'font-mono', 'text-emerald-700 dark:text-emerald-400', 'font-extrabold')}>
-                          {fidelidadeConfig.tipo_recompensa === 'PONTOS' ? `${user.pontos} pts` : `R$ ${user.saldoCashback.toFixed(2)}`}
-                        </td>
-                        <td className={clsx('p-3.5', 'text-right')}>
-                          <button
-                            onClick={() => {
-                              setEditingCrmUser(user);
-                              setCrmFormNome(user.cliente);
-                              setCrmFormTelefone(aplicarMascaraTelefoneInput(user.telefone));
-                              setCrmFormPontos(user.pontos || 0);
-                              setCrmFormCashback(user.saldoCashback || 0);
-                            }}
-                            className={clsx('px-3', 'py-1', 'border', 'border-koma-border', 'bg-koma-raised', 'hover:bg-koma-card', 'text-koma-foreground', 'rounded-lg', 'transition-all', 'cursor-pointer', 'font-bold')}
-                          >
-                            Editar
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                    {loyaltyUsers.length === 0 && (
-                      <tr>
-                        <td colSpan={4} className={clsx('p-8', 'text-center', 'text-koma-muted', 'text-xs', 'font-medium')}>
-                          Nenhum cliente cadastrado. O primeiro cadastro feito aqui, no balcão ou no cardápio aparecerá automaticamente.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+            <div className={clsx('space-y-5', 'text-left', 'animate-fade-in', 'max-w-4xl')}>
+              <div className={clsx('bg-koma-panel', 'border', 'border-koma-border', 'rounded-3xl', 'p-5', 'space-y-4', 'shadow-xs')}>
+                <div className={clsx('flex', 'flex-col', 'sm:flex-row', 'sm:items-center', 'justify-between', 'gap-3', 'border-b', 'border-koma-border', 'pb-3')}>
+                  <div>
+                    <span className={clsx('font-serif', 'font-bold', 'text-koma-foreground', 'text-base', 'block')}>CRM & Fidelidade</span>
+                    <span className="text-[10px] text-koma-muted font-medium block mt-0.5">
+                      {loyaltyUsers.length} {loyaltyUsers.length === 1 ? 'cliente cadastrado' : 'clientes cadastrados'} no restaurante
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewCrmNome('');
+                      setNewCrmTelefone('');
+                      setNewCrmSaldo('0');
+                      setShowNewCrmModal(true);
+                    }}
+                    className={clsx('px-4', 'py-2', 'koma-btn-success', 'rounded-xl', 'text-xs', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-xs', 'self-start', 'sm:self-auto')}
+                  >
+                    + Novo Cliente
+                  </button>
+                </div>
+
+                {loyaltyUsers.length > 0 ? (
+                  <div className={clsx('overflow-x-auto', 'border', 'border-koma-border', 'rounded-2xl')}>
+                    <table className={clsx('w-full', 'text-left', 'text-xs')}>
+                      <thead>
+                        <tr className={clsx('bg-koma-raised', 'border-b', 'border-koma-border', 'text-koma-muted', 'uppercase', 'tracking-wider', 'font-extrabold', 'text-[9px]')}>
+                          <th className="p-3.5">WhatsApp</th>
+                          <th className="p-3.5">Nome do Cliente</th>
+                          <th className={clsx('p-3.5', 'font-mono')}>Saldo de Fidelidade</th>
+                          <th className={clsx('p-3.5', 'text-right')}>Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody className={clsx('divide-y', 'divide-koma-border')}>
+                        {loyaltyUsers.map((user) => (
+                          <tr key={user.id} className={clsx('hover:bg-koma-raised/50', 'transition-colors')}>
+                            <td className={clsx('p-3.5', 'font-mono', 'text-koma-muted', 'text-xs')}>{formatarTelefoneTabela(user.telefone)}</td>
+                            <td className={clsx('p-3.5', 'font-bold', 'text-koma-foreground')}>{user.cliente}</td>
+                            <td className={clsx('p-3.5', 'font-mono', 'text-emerald-700 dark:text-emerald-400', 'font-extrabold', 'text-xs')}>
+                              {fidelidadeConfig.tipo_recompensa === 'PONTOS' ? `${user.pontos} pts` : `R$ ${user.saldoCashback.toFixed(2)}`}
+                            </td>
+                            <td className={clsx('p-3.5', 'text-right')}>
+                              <button
+                                onClick={() => {
+                                  setEditingCrmUser(user);
+                                  setCrmFormNome(user.cliente);
+                                  setCrmFormTelefone(aplicarMascaraTelefoneInput(user.telefone));
+                                  setCrmFormPontos(user.pontos || 0);
+                                  setCrmFormCashback(user.saldoCashback || 0);
+                                }}
+                                className={clsx('px-3.5', 'py-1.5', 'koma-btn-secondary', 'rounded-xl', 'transition-all', 'cursor-pointer', 'font-bold', 'text-xs')}
+                              >
+                                Editar
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <KomaEmptyState
+                    icon={<Users size={24} className="text-koma-muted" />}
+                    title="Nenhum cliente cadastrado ainda"
+                    description="Cadastre clientes para acumular cashback e pontos de fidelidade, ou aguarde os primeiros pedidos identificados no cardápio e balcão."
+                    action={{
+                      label: '+ Cadastrar Primeiro Cliente',
+                      onClick: () => {
+                        setNewCrmNome('');
+                        setNewCrmTelefone('');
+                        setNewCrmSaldo('0');
+                        setShowNewCrmModal(true);
+                      },
+                    }}
+                    variant="panel"
+                  />
+                )}
               </div>
             </div>
           )}
@@ -8176,8 +8216,8 @@ export function CaixaPanel({
                       key={contact.id}
                       onClick={() => setActiveChatContactId(contact.id)}
                       className={`w-full p-3 rounded-2xl border text-left transition-all flex flex-col gap-1.5 cursor-pointer relative ${activeChatContactId === contact.id
-                        ? 'bg-emerald-500/10 border-emerald-500/30 text-koma-foreground shadow-xs'
-                        : 'bg-koma-panel/40 border-transparent hover:bg-koma-panel/80 text-koma-muted'
+                        ? 'bg-emerald-50 dark:bg-emerald-950/25 border-emerald-400/80 dark:border-emerald-800 text-koma-foreground shadow-xs'
+                        : 'bg-koma-raised/60 border-transparent hover:bg-koma-raised text-koma-muted'
                         }`}
                     >
                       <div className={clsx('flex', 'justify-between', 'items-center')}>
@@ -8188,7 +8228,7 @@ export function CaixaPanel({
                       <div className={clsx('flex', 'justify-between', 'items-center', 'pt-1')}>
                         <span className={`text-[8px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider ${contact.iaStatus === 'Aguardando Co-Piloto' ? 'koma-badge-warning' :
                           contact.iaStatus === 'Piloto Automático' ? 'koma-badge-success' :
-                            'bg-koma-raised text-koma-muted border border-koma-border'
+                            'koma-badge-neutral'
                           }`}>
                           {contact.iaStatus}
                         </span>
@@ -8208,15 +8248,23 @@ export function CaixaPanel({
                   const contact = copilotContacts.find(c => c.id === activeChatContactId);
                   if (!contact) return null;
                   return (
-                    <div className={clsx('p-4', 'border-b', 'border-koma-border', 'bg-koma-panel', 'flex', 'justify-between', 'items-center')}>
-                      <div>
-                        <span className={clsx('text-xs', 'font-bold', 'text-koma-foreground', 'block')}>{contact.name}</span>
-                        <span className={clsx('text-[9px]', 'text-koma-muted', 'block')}>{contact.phone} • WhatsApp</span>
+                    <div className={clsx('p-4', 'border-b', 'border-koma-border', 'bg-koma-raised', 'flex', 'justify-between', 'items-center')}>
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 font-bold flex items-center justify-center text-xs border border-emerald-300 dark:border-emerald-800">
+                          {contact.name.substring(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <strong className={clsx('text-xs', 'text-koma-foreground', 'block', 'font-bold')}>{contact.name}</strong>
+                          <span className={clsx('text-[10px]', 'text-koma-muted', 'font-mono')}>{contact.phone}</span>
+                        </div>
                       </div>
-                      <div className={clsx('flex', 'items-center', 'gap-2')}>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[8px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider ${contact.iaStatus === 'Aguardando Co-Piloto' ? 'koma-badge-warning' : 'koma-badge-success'}`}>
+                          {contact.iaStatus}
+                        </span>
                         <button
                           onClick={() => {
-                            setCopilotContacts(prev => prev.map(c => c.id === activeChatContactId ? { ...c, iaStatus: "Atendimento Humano", pendingAction: false } : c));
+                            setCopilotContacts(prev => prev.map(c => c.id === contact.id ? { ...c, iaStatus: 'Intervenção Humana' } : c));
                             alert('A IA foi pausada. Modo de intervenção manual ativo.');
                           }}
                           className={clsx('px-3', 'py-1.5', 'koma-badge-warning', 'hover:bg-amber-200 dark:hover:bg-amber-900/40', 'rounded-xl', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}
@@ -8229,15 +8277,15 @@ export function CaixaPanel({
                 })()}
 
                 {/* Conversation area */}
-                <div className={clsx('flex-1', 'overflow-y-auto', 'p-4', 'space-y-4')}>
+                <div className={clsx('flex-1', 'overflow-y-auto', 'p-4', 'space-y-4', 'bg-koma-page/40')}>
                   {copilotMessages.filter(m => m.contactId === activeChatContactId).map((msg, index) => (
                     <div key={index} className={`flex ${msg.sender === 'cliente' ? 'justify-start' : 'justify-end'}`}>
-                      <div className={`max-w-[70%] rounded-2xl p-3 text-[11px] space-y-1.5 ${msg.sender === 'cliente'
+                      <div className={`max-w-[75%] rounded-2xl p-3.5 text-xs space-y-1.5 shadow-2xs ${msg.sender === 'cliente'
                         ? 'bg-koma-panel text-koma-foreground border border-koma-border'
-                        : 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30'
+                        : 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-950 dark:text-emerald-100 border border-emerald-300/80 dark:border-emerald-800/80'
                         }`}>
                         <div className={clsx('flex', 'justify-between', 'gap-4', 'text-koma-muted', 'text-[9px]', 'font-semibold')}>
-                          <span className={clsx('font-bold', 'uppercase')}>{msg.sender === 'cliente' ? 'Cliente' : msg.sender === 'ia' ? 'IA Co-Piloto' : 'Atendente'}</span>
+                          <span className={clsx('font-bold', 'uppercase', msg.sender !== 'cliente' ? 'text-emerald-800 dark:text-emerald-300' : '')}>{msg.sender === 'cliente' ? 'Cliente' : msg.sender === 'ia' ? 'IA Co-Piloto' : 'Atendente'}</span>
                           <span>{msg.time}</span>
                         </div>
                         {msg.isAudio ? (
@@ -8246,13 +8294,13 @@ export function CaixaPanel({
                               <button className={clsx('h-6', 'w-6', 'koma-btn-success', 'rounded-full', 'flex', 'items-center', 'justify-center', 'cursor-pointer', 'text-[9px]')}>▶</button>
                               <div className={clsx('flex', 'gap-0.5', 'items-center', 'flex-1', 'h-3')}>
                                 {[3, 6, 4, 8, 12, 6, 4, 9, 14, 10, 7, 5, 8, 3, 2, 6, 9, 11, 8, 4].map((h, i) => (
-                                  <div key={i} className={clsx('bg-sky-500', 'flex-1', 'rounded-sm')} style={{ height: `${h * 7}%` }} />
+                                  <div key={i} className={clsx('bg-emerald-600', 'flex-1', 'rounded-sm')} style={{ height: `${h * 7}%` }} />
                                 ))}
                               </div>
                             </div>
-                            <div className={clsx('bg-sky-50 dark:bg-sky-950/40', 'border', 'border-sky-300 dark:border-sky-800', 'p-2.5', 'rounded-xl', 'space-y-1.5')}>
-                              <span className={clsx('bg-sky-600', 'text-white', 'text-[8px]', 'font-extrabold', 'px-2', 'py-0.5', 'rounded-full', 'uppercase', 'tracking-wider', 'inline-block')}>IA Transcrição</span>
-                              <p className={clsx('text-sky-950 dark:text-sky-100', 'leading-relaxed', 'font-medium', 'text-[11px]')}>"{msg.audioText}"</p>
+                            <div className={clsx('bg-emerald-50/60 dark:bg-emerald-950/40', 'border', 'border-emerald-300 dark:border-emerald-800', 'p-2.5', 'rounded-xl', 'space-y-1.5')}>
+                              <span className={clsx('bg-emerald-700', 'text-white', 'text-[8px]', 'font-extrabold', 'px-2', 'py-0.5', 'rounded-full', 'uppercase', 'tracking-wider', 'inline-block')}>IA Transcrição</span>
+                              <p className={clsx('text-emerald-950 dark:text-emerald-100', 'leading-relaxed', 'font-medium', 'text-xs')}>"{msg.audioText}"</p>
                             </div>
                           </div>
                         ) : (
@@ -8591,122 +8639,241 @@ export function CaixaPanel({
           )}
 
           {(activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital') && hasOnlineMenu && (
-            <div className={clsx('bg-koma-panel', 'border', 'border-koma-border', 'rounded-3xl', 'p-6', 'text-left', 'max-w-2xl', 'mx-auto', 'space-y-6', 'animate-fade-in', 'shadow-sm')}>
-              <div className={clsx('border-b', 'border-koma-border', 'pb-3')}>
-                <span className={clsx('font-serif', 'font-bold', 'text-base', 'text-koma-foreground', 'block')}>Configurações do Cardápio Digital</span>
-                <span className={clsx('text-[11px]', 'text-koma-muted', 'block', 'mt-1')}>Personalize a identidade visual e comportamento do cardápio digital do cliente (Whitelabel).</span>
-              </div>
-
-              <div className="space-y-4">
-                {/* Status Override */}
-                <div className="space-y-1.5">
-                  <label className={clsx('text-[10px]', 'font-bold', 'text-koma-muted', 'uppercase', 'tracking-wider', 'block')}>Status de Funcionamento:</label>
-                  <select
-                    value={cardapioStatusOverride}
-                    onChange={(e) => setCardapioStatusOverride(e.target.value)}
-                    className={clsx('w-full', 'px-3.5', 'py-2.5', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'font-medium', 'focus:outline-none', 'focus:border-emerald-500/60')}
-                  >
-                    <option value="Automático">Automático (Segue horários de funcionamento)</option>
-                    <option value="Forçado Aberto">Forçado Aberto (Sempre aberto para pedidos)</option>
-                    <option value="Forçado Fechado">Forçado Fechado (Sempre fechado/indisponível)</option>
-                  </select>
+            <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-12', 'gap-6', 'max-w-6xl', 'mx-auto', 'text-left', 'animate-fade-in')}>
+              {/* Coluna 1: Formulário de Configuração (7 cols) */}
+              <div className={clsx('lg:col-span-7', 'bg-koma-panel', 'border', 'border-koma-border', 'rounded-3xl', 'p-6', 'space-y-6', 'shadow-xs')}>
+                <div className={clsx('border-b', 'border-koma-border', 'pb-3')}>
+                  <span className={clsx('font-serif', 'font-bold', 'text-base', 'text-koma-foreground', 'block')}>Configurações do Cardápio Digital</span>
+                  <span className={clsx('text-[11px]', 'text-koma-muted', 'block', 'mt-1')}>Personalize a identidade visual, cores e conteúdo do cardápio digital (Whitelabel).</span>
                 </div>
 
-                {/* Cores */}
-                <div className={clsx('grid', 'grid-cols-1', 'sm:grid-cols-2', 'gap-4')}>
-                  <div className="space-y-1.5">
-                    <label className={clsx('text-[10px]', 'font-bold', 'text-koma-muted', 'uppercase', 'tracking-wider', 'block')}>Cor Primária (Tema):</label>
-                    <div className={clsx('flex', 'gap-2')}>
-                      <input
-                        type="color"
-                        value={cardapioCorPrimaria}
-                        onChange={(e) => setCardapioCorPrimaria(e.target.value)}
-                        className={clsx('w-10', 'h-10', 'p-0', 'border', 'border-koma-border', 'rounded-xl', 'bg-transparent', 'cursor-pointer')}
-                      />
-                      <input
-                        type="text"
-                        value={cardapioCorPrimaria}
-                        onChange={(e) => setCardapioCorPrimaria(e.target.value)}
-                        className={clsx('flex-1', 'px-3.5', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'font-mono', 'focus:outline-none', 'focus:border-emerald-500/60')}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className={clsx('text-[10px]', 'font-bold', 'text-koma-muted', 'uppercase', 'tracking-wider', 'block')}>Cor de Fundo:</label>
-                    <div className={clsx('flex', 'gap-2')}>
-                      <input
-                        type="color"
-                        value={cardapioCorFundo}
-                        onChange={(e) => setCardapioCorFundo(e.target.value)}
-                        className={clsx('w-10', 'h-10', 'p-0', 'border', 'border-koma-border', 'rounded-xl', 'bg-transparent', 'cursor-pointer')}
-                      />
-                      <input
-                        type="text"
-                        value={cardapioCorFundo}
-                        onChange={(e) => setCardapioCorFundo(e.target.value)}
-                        className={clsx('flex-1', 'px-3.5', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'font-mono', 'focus:outline-none', 'focus:border-emerald-500/60')}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Upload de Logo e Banner para Supabase Storage via Endpoints Backend */}
                 <div className="space-y-4">
-                  <CardapioAssetUploader
-                    label="Logotipo do Restaurante"
-                    type="logo"
-                    currentUrl={cardapioLogoUrl}
-                    apiBaseUrl={apiBaseUrl}
-                    authHeaders={authHeaders}
-                    onSuccess={(newUrl) => setCardapioLogoUrl(newUrl || '')}
-                  />
+                  {/* Status Override */}
+                  <div className="space-y-1.5">
+                    <label className={clsx('text-[10px]', 'font-bold', 'text-koma-muted', 'uppercase', 'tracking-wider', 'block')}>Status de Funcionamento:</label>
+                    <select
+                      value={cardapioStatusOverride}
+                      onChange={(e) => setCardapioStatusOverride(e.target.value)}
+                      className={clsx('w-full', 'px-3.5', 'py-2.5', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'font-medium', 'focus:outline-none', 'focus:border-emerald-500/60')}
+                    >
+                      <option value="Automático">Automático (Segue horários de funcionamento)</option>
+                      <option value="Forçado Aberto">Forçado Aberto (Sempre aberto para pedidos)</option>
+                      <option value="Forçado Fechado">Forçado Fechado (Sempre fechado/indisponível)</option>
+                    </select>
+                  </div>
 
-                  <CardapioAssetUploader
-                    label="Banner Promocional / Capa"
-                    type="banner"
-                    currentUrl={cardapioBannerUrl}
-                    apiBaseUrl={apiBaseUrl}
-                    authHeaders={authHeaders}
-                    onSuccess={(newUrl) => setCardapioBannerUrl(newUrl || '')}
-                  />
+                  {/* Cores */}
+                  <div className={clsx('grid', 'grid-cols-1', 'sm:grid-cols-2', 'gap-4')}>
+                    <div className="space-y-1.5">
+                      <label className={clsx('text-[10px]', 'font-bold', 'text-koma-muted', 'uppercase', 'tracking-wider', 'block')}>Cor Primária (Destaques):</label>
+                      <div className={clsx('flex', 'gap-2')}>
+                        <input
+                          type="color"
+                          value={cardapioCorPrimaria}
+                          onChange={(e) => setCardapioCorPrimaria(e.target.value)}
+                          className={clsx('w-10', 'h-10', 'p-0', 'border', 'border-koma-border', 'rounded-xl', 'bg-transparent', 'cursor-pointer')}
+                        />
+                        <input
+                          type="text"
+                          value={cardapioCorPrimaria}
+                          onChange={(e) => setCardapioCorPrimaria(e.target.value)}
+                          className={clsx('flex-1', 'px-3.5', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'font-mono', 'focus:outline-none', 'focus:border-emerald-500/60')}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className={clsx('text-[10px]', 'font-bold', 'text-koma-muted', 'uppercase', 'tracking-wider', 'block')}>Cor de Fundo:</label>
+                      <div className={clsx('flex', 'gap-2')}>
+                        <input
+                          type="color"
+                          value={cardapioCorFundo}
+                          onChange={(e) => setCardapioCorFundo(e.target.value)}
+                          className={clsx('w-10', 'h-10', 'p-0', 'border', 'border-koma-border', 'rounded-xl', 'bg-transparent', 'cursor-pointer')}
+                        />
+                        <input
+                          type="text"
+                          value={cardapioCorFundo}
+                          onChange={(e) => setCardapioCorFundo(e.target.value)}
+                          className={clsx('flex-1', 'px-3.5', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'font-mono', 'focus:outline-none', 'focus:border-emerald-500/60')}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Upload de Logo e Banner para Supabase Storage via Endpoints Backend */}
+                  <div className="space-y-4">
+                    <CardapioAssetUploader
+                      label="Logotipo do Restaurante"
+                      type="logo"
+                      currentUrl={cardapioLogoUrl}
+                      apiBaseUrl={apiBaseUrl}
+                      authHeaders={authHeaders}
+                      onSuccess={(newUrl) => setCardapioLogoUrl(newUrl || '')}
+                    />
+
+                    <CardapioAssetUploader
+                      label="Banner Promocional / Capa"
+                      type="banner"
+                      currentUrl={cardapioBannerUrl}
+                      apiBaseUrl={apiBaseUrl}
+                      authHeaders={authHeaders}
+                      onSuccess={(newUrl) => setCardapioBannerUrl(newUrl || '')}
+                    />
+                  </div>
+
+                  {/* Sobre Nós */}
+                  <div className="space-y-1.5">
+                    <label className={clsx('text-[10px]', 'font-bold', 'text-koma-muted', 'uppercase', 'tracking-wider', 'block')}>Sobre Nós:</label>
+                    <textarea
+                      value={cardapioSobreNos}
+                      onChange={(e) => setCardapioSobreNos(e.target.value)}
+                      rows={3}
+                      placeholder="Breve história ou descrição do restaurante..."
+                      className={clsx('w-full', 'px-3.5', 'py-2.5', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'focus:outline-none', 'focus:border-emerald-500/60')}
+                    />
+                  </div>
+
+                  {/* Endereço */}
+                  <div className="space-y-1.5">
+                    <label className={clsx('text-[10px]', 'font-bold', 'text-koma-muted', 'uppercase', 'tracking-wider', 'block')}>Endereço Físico:</label>
+                    <input
+                      type="text"
+                      value={cardapioEndereco}
+                      onChange={(e) => setCardapioEndereco(e.target.value)}
+                      placeholder="Rua Exemplo, 123 - Centro"
+                      className={clsx('w-full', 'px-3.5', 'py-2.5', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'focus:outline-none', 'focus:border-emerald-500/60')}
+                    />
+                  </div>
                 </div>
 
-                {/* Sobre Nós */}
-                <div className="space-y-1.5">
-                  <label className={clsx('text-[10px]', 'font-bold', 'text-koma-muted', 'uppercase', 'tracking-wider', 'block')}>Sobre Nós:</label>
-                  <textarea
-                    value={cardapioSobreNos}
-                    onChange={(e) => setCardapioSobreNos(e.target.value)}
-                    rows={3}
-                    placeholder="Breve história ou descrição do restaurante..."
-                    className={clsx('w-full', 'px-3.5', 'py-2.5', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'focus:outline-none', 'focus:border-emerald-500/60')}
-                  />
-                </div>
-
-                {/* Endereço */}
-                <div className="space-y-1.5">
-                  <label className={clsx('text-[10px]', 'font-bold', 'text-koma-muted', 'uppercase', 'tracking-wider', 'block')}>Endereço Físico:</label>
-                  <input
-                    type="text"
-                    value={cardapioEndereco}
-                    onChange={(e) => setCardapioEndereco(e.target.value)}
-                    placeholder="Rua Exemplo, 123 - Centro"
-                    className={clsx('w-full', 'px-3.5', 'py-2.5', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'focus:outline-none', 'focus:border-emerald-500/60')}
-                  />
+                {/* Botão de salvar */}
+                <div className={clsx('pt-4', 'border-t', 'border-koma-border', 'flex', 'justify-end')}>
+                  <button
+                    type="button"
+                    disabled={isSavingCardapioConfig}
+                    onClick={saveCardapioConfig}
+                    className={clsx('px-6', 'py-2.5', 'koma-btn-success', 'rounded-xl', 'text-xs', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-sm', 'disabled:opacity-50')}
+                  >
+                    {isSavingCardapioConfig ? 'Salvando...' : 'Salvar Configurações Whitelabel'}
+                  </button>
                 </div>
               </div>
 
-              {/* Botão de salvar */}
-              <div className={clsx('pt-4', 'border-t', 'border-koma-border', 'flex', 'justify-end')}>
-                <button
-                  type="button"
-                  disabled={isSavingCardapioConfig}
-                  onClick={saveCardapioConfig}
-                  className={clsx('px-6', 'py-2.5', 'koma-btn-success', 'rounded-xl', 'text-xs', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-sm', 'disabled:opacity-50')}
-                >
-                  {isSavingCardapioConfig ? 'Salvando...' : 'Salvar Configurações Whitelabel'}
-                </button>
+              {/* Coluna 2: Live Mobile Mockup Preview (5 cols) */}
+              <div className="lg:col-span-5 flex flex-col items-center">
+                <div className="sticky top-6 w-full max-w-[320px] bg-koma-panel border border-koma-border rounded-[2.5rem] p-3 shadow-md space-y-3">
+                  {/* Top Phone speaker */}
+                  <div className="flex justify-center items-center gap-2 pt-1 pb-2">
+                    <div className="w-12 h-1 bg-koma-border rounded-full" />
+                    <div className="w-2.5 h-2.5 rounded-full bg-koma-border" />
+                  </div>
+
+                  {/* Phone Screen Canvas */}
+                  <div
+                    className="rounded-[1.75rem] overflow-hidden border border-koma-border/80 text-left transition-colors duration-300 min-h-[460px] flex flex-col"
+                    style={{ backgroundColor: cardapioCorFundo || '#ffffff' }}
+                  >
+                    {/* Header Banner */}
+                    <div
+                      className="h-28 w-full bg-cover bg-center relative flex items-end p-3"
+                      style={{
+                        backgroundColor: cardapioCorPrimaria || '#00875f',
+                        backgroundImage: cardapioBannerUrl ? `url(${cardapioBannerUrl})` : undefined,
+                      }}
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                      <div className="relative z-10 flex items-center gap-2.5">
+                        {cardapioLogoUrl ? (
+                          <img src={cardapioLogoUrl} alt="Logo" className="w-10 h-10 rounded-xl object-contain bg-white p-0.5 border border-white/20 shadow-xs" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-xl bg-white text-zinc-900 font-bold flex items-center justify-center text-xs shadow-xs">
+                            Kôma
+                          </div>
+                        )}
+                        <div className="text-white">
+                          <h5 className="font-bold text-xs leading-tight drop-shadow-xs">Restaurante Gourmet</h5>
+                          <span
+                            className="inline-block text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md mt-0.5"
+                            style={{ backgroundColor: cardapioCorPrimaria || '#00875f', color: '#ffffff' }}
+                          >
+                            {cardapioStatusOverride === 'Forçado Fechado' ? 'Fechado' : 'Aberto'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Content Preview */}
+                    <div className="p-3 space-y-3 flex-1 flex flex-col justify-between">
+                      <div className="space-y-2">
+                        {/* Sobre nós snippet */}
+                        {cardapioSobreNos && (
+                          <p className="text-[10px] text-zinc-600 dark:text-zinc-300 line-clamp-2 leading-relaxed italic">
+                            "{cardapioSobreNos}"
+                          </p>
+                        )}
+
+                        {/* Dummy Menu Categories */}
+                        <div className="flex gap-1.5 overflow-x-hidden pt-1">
+                          <span
+                            className="text-[9px] font-bold px-2.5 py-1 rounded-full text-white shadow-2xs"
+                            style={{ backgroundColor: cardapioCorPrimaria || '#00875f' }}
+                          >
+                            Destaques
+                          </span>
+                          <span className="text-[9px] font-bold px-2.5 py-1 rounded-full bg-zinc-200/80 text-zinc-700">
+                            Pratos
+                          </span>
+                          <span className="text-[9px] font-bold px-2.5 py-1 rounded-full bg-zinc-200/80 text-zinc-700">
+                            Bebidas
+                          </span>
+                        </div>
+
+                        {/* Dummy Menu Cards */}
+                        <div className="space-y-1.5 pt-1">
+                          <div className="p-2 rounded-xl bg-white/90 border border-zinc-200 shadow-2xs flex justify-between items-center text-zinc-900">
+                            <div>
+                              <strong className="block text-[10px] font-bold">Filé Mignon ao Molho Madeira</strong>
+                              <span className="text-[8px] text-zinc-500">Acompanha arroz e batatas rústicas</span>
+                              <span className="block text-[10px] font-bold font-mono mt-0.5" style={{ color: cardapioCorPrimaria || '#00875f' }}>
+                                R$ 68,90
+                              </span>
+                            </div>
+                            <div className="w-10 h-10 rounded-lg bg-zinc-100 border border-zinc-200 flex items-center justify-center text-[8px] text-zinc-400">
+                              Foto
+                            </div>
+                          </div>
+
+                          <div className="p-2 rounded-xl bg-white/90 border border-zinc-200 shadow-2xs flex justify-between items-center text-zinc-900">
+                            <div>
+                              <strong className="block text-[10px] font-bold">Salmão Grelhado com Legumes</strong>
+                              <span className="text-[8px] text-zinc-500">Salmão fresco com azeite de ervas</span>
+                              <span className="block text-[10px] font-bold font-mono mt-0.5" style={{ color: cardapioCorPrimaria || '#00875f' }}>
+                                R$ 74,50
+                              </span>
+                            </div>
+                            <div className="w-10 h-10 rounded-lg bg-zinc-100 border border-zinc-200 flex items-center justify-center text-[8px] text-zinc-400">
+                              Foto
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Bottom Order Bar */}
+                      <div
+                        className="w-full py-2 px-3 rounded-xl text-white font-bold text-[10px] flex justify-between items-center shadow-xs"
+                        style={{ backgroundColor: cardapioCorPrimaria || '#00875f' }}
+                      >
+                        <span>Ver Sacola (2 itens)</span>
+                        <span className="font-mono">R$ 143,40</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <span className="text-[9px] text-koma-subtle block text-center font-medium">
+                    Preview em tempo real do Cardápio Whitelabel
+                  </span>
+                </div>
               </div>
             </div>
           )}

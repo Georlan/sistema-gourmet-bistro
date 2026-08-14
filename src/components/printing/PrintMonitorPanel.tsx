@@ -649,16 +649,16 @@ export function PrintMonitorPanel({
   ]);
 
   const diagnosticStyle: Record<DiagnosticTone, string> = {
-    success: 'border-emerald-500/30 bg-emerald-500/10',
-    warning: 'border-amber-500/30 bg-amber-500/10',
-    danger: 'border-red-500/30 bg-red-500/10',
-    neutral: 'border-sky-500/30 bg-sky-500/10'
+    success: 'border-emerald-400/80 bg-emerald-50/90 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-300',
+    warning: 'border-amber-400/90 bg-amber-50 dark:bg-amber-950/25 text-amber-950 dark:text-amber-200',
+    danger: 'border-rose-400/90 bg-rose-50 dark:bg-rose-950/25 text-rose-950 dark:text-rose-200',
+    neutral: 'border-slate-300 bg-slate-50 dark:bg-slate-900/40 text-slate-900 dark:text-slate-200'
   };
   const diagnosticIconStyle: Record<DiagnosticTone, string> = {
-    success: 'bg-emerald-400/15 text-emerald-600 dark:text-emerald-300',
-    warning: 'bg-amber-400/15 text-amber-600 dark:text-amber-300',
-    danger: 'bg-red-400/15 text-red-300',
-    neutral: 'bg-sky-400/15 text-sky-600 dark:text-sky-300'
+    success: 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30',
+    warning: 'bg-amber-500/20 text-amber-900 dark:text-amber-300 border border-amber-500/40',
+    danger: 'bg-rose-500/20 text-rose-900 dark:text-rose-300 border border-rose-500/40',
+    neutral: 'bg-slate-500/20 text-slate-800 dark:text-slate-300 border border-slate-500/30'
   };
 
   const equipmentState = hasReadyPrinter

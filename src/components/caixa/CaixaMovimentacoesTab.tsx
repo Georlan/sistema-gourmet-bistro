@@ -165,15 +165,15 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
           <label className="relative">
             <span className="sr-only">Buscar movimentação</span>
             <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" />
-            <input value={searchTerm} onChange={event => setSearchTerm(event.target.value)} placeholder="Buscar motivo, observação ou operador" className="h-10 w-full rounded-xl border border-[#2a302d] bg-koma-card pl-9 pr-3 text-xs text-koma-foreground outline-none transition-colors placeholder:text-zinc-600 focus:border-emerald-300 dark:border-emerald-900/50" />
+            <input value={searchTerm} onChange={event => setSearchTerm(event.target.value)} placeholder="Buscar motivo, observação ou operador" className="h-10 w-full rounded-xl border border-koma-border bg-koma-card pl-9 pr-3 text-xs text-koma-foreground outline-none transition-colors placeholder:text-koma-muted focus:border-emerald-500" />
           </label>
-          <select value={filterTipo} onChange={event => setFilterTipo(event.target.value)} className="h-10 w-full rounded-xl border border-[#2a302d] bg-koma-card px-3 text-xs text-koma-foreground outline-none focus:border-emerald-300 dark:border-emerald-900/50">
+          <select value={filterTipo} onChange={event => setFilterTipo(event.target.value)} className="h-10 w-full rounded-xl border border-koma-border bg-koma-card px-3 text-xs text-koma-foreground outline-none focus:border-emerald-500">
             <option value="todos">Todas as operações</option>
             <option value="suprimento">Suprimentos</option>
             <option value="sangria">Sangrias</option>
           </select>
-          <label className="relative"><span className="sr-only">Data inicial</span><CalendarDays size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" /><input type="date" value={filterDataInicio} onChange={event => setFilterDataInicio(event.target.value)} className="h-10 w-full rounded-xl border border-[#2a302d] bg-koma-card pl-9 pr-2 text-xs text-koma-foreground outline-none focus:border-emerald-300 dark:border-emerald-900/50" /></label>
-          <label className="relative"><span className="sr-only">Data final</span><CalendarDays size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" /><input type="date" value={filterDataFim} onChange={event => setFilterDataFim(event.target.value)} className="h-10 w-full rounded-xl border border-[#2a302d] bg-koma-card pl-9 pr-2 text-xs text-koma-foreground outline-none focus:border-emerald-300 dark:border-emerald-900/50" /></label>
+          <label className="relative"><span className="sr-only">Data inicial</span><CalendarDays size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" /><input type="date" value={filterDataInicio} onChange={event => setFilterDataInicio(event.target.value)} className="h-10 w-full rounded-xl border border-koma-border bg-koma-card pl-9 pr-2 text-xs text-koma-foreground outline-none focus:border-emerald-500" /></label>
+          <label className="relative"><span className="sr-only">Data final</span><CalendarDays size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" /><input type="date" value={filterDataFim} onChange={event => setFilterDataFim(event.target.value)} className="h-10 w-full rounded-xl border border-koma-border bg-koma-card pl-9 pr-2 text-xs text-koma-foreground outline-none focus:border-emerald-500" /></label>
         </div>
       </section>
 
@@ -181,12 +181,12 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
         <article className="overflow-hidden rounded-[20px] border border-koma-border bg-koma-panel">
           <header className="flex items-center justify-between gap-3 border-b border-koma-border px-4 py-3 sm:px-5">
             <div><h3 className="text-xs font-bold text-koma-foreground">Histórico de ajustes</h3><p className="mt-0.5 text-[10px] text-koma-muted">Ordem cronológica, do registro mais recente ao mais antigo</p></div>
-            <span className="rounded-full border border-[#2a302d] bg-koma-card px-2.5 py-1 text-[9px] font-bold text-koma-muted">{filteredMovs.length} registro(s)</span>
+            <span className="rounded-full border border-koma-border bg-koma-card px-2.5 py-1 text-[9px] font-bold text-koma-muted">{filteredMovs.length} registro(s)</span>
           </header>
           {filteredMovs.length === 0 ? (
             <div className="flex min-h-64 flex-col items-center justify-center px-5 text-center"><History size={24} className="text-koma-muted" /><strong className="mt-3 text-xs text-koma-subtle">Nenhuma movimentação encontrada</strong><span className="mt-1 max-w-sm text-[10px] leading-relaxed text-koma-muted">Revise os filtros ou use o Turno atual para registrar sangria ou suprimento.</span></div>
           ) : (
-            <ul className="divide-y divide-[#202522]">
+            <ul className="divide-y divide-koma-border">
               {filteredMovs.map(movimentacao => {
                 const isSupply = movimentacao.tipo === 'suprimento';
                 const dateLabel = formatBackendDateTime(movimentacao.criado_em, {

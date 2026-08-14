@@ -223,7 +223,7 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
                   <XAxis dataKey="name" stroke="var(--koma-text-muted)" fontSize={10} interval={0} angle={-25} textAnchor="end" />
                   <YAxis stroke="var(--koma-text-muted)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${v}`} />
                   <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'var(--koma-border-default)' }} />
-                  <Bar dataKey="faturamento" name="Faturamento (R$)" fill="#0284c7" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="faturamento" name="Faturamento (R$)" fill="#475569" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

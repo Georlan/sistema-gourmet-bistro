@@ -87,7 +87,7 @@ export const EquipeCargosTab: React.FC<EquipeCargosTabProps> = ({ apiBaseUrl, au
         {/* Table */}
         {!isLoading && !hasError && cargos.length > 0 && (
           <div className="overflow-x-auto border border-koma-border rounded-2xl">
-            <table className="w-full text-left text-[10px]">
+            <table className="w-full text-left text-xs">
               <thead className="bg-koma-raised border-b border-koma-border text-koma-muted uppercase tracking-wider font-extrabold text-[9px]">
                 <tr>
                   <th className="p-3.5">Cargo</th>
@@ -109,7 +109,7 @@ export const EquipeCargosTab: React.FC<EquipeCargosTabProps> = ({ apiBaseUrl, au
                         <span className={`px-2.5 py-0.5 text-[8px] font-extrabold rounded-md uppercase tracking-wider ${
                           cargo.permissoes[col.key]
                             ? 'koma-badge-success'
-                            : 'bg-koma-raised border border-koma-border text-koma-muted'
+                            : 'koma-badge-neutral'
                         }`}>
                           {cargo.permissoes[col.key] ? 'Sim' : 'Não'}
                         </span>

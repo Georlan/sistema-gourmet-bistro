@@ -149,7 +149,7 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
           <button
             type="button"
             onClick={onOpenNovoTurnoModal}
-            className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#00b894] px-5 py-2.5 text-[10px] font-bold uppercase tracking-[0.1em] text-[#06110e] transition-colors hover:bg-[#12c9a3]"
+            className="mt-5 inline-flex items-center gap-2 rounded-xl koma-btn-success px-5 py-2.5 text-xs font-bold uppercase tracking-wider shadow-xs cursor-pointer"
           >
             <DollarSign size={14} /> Abrir caixa
           </button>
