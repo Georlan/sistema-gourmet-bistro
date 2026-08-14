@@ -57,9 +57,9 @@ export const EquipeCargosTab: React.FC<EquipeCargosTabProps> = ({ apiBaseUrl, au
 
   return (
     <div className={clsx('space-y-6', 'animate-fade-in', 'text-left')}>
-      <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-5', 'space-y-4')}>
+      <div className={clsx('bg-koma-panel/60', 'border', 'border-koma-border', 'rounded-3xl', 'p-5', 'space-y-4')}>
         {/* Header */}
-        <div className={clsx('border-b', 'border-[#27272A]', 'pb-3', 'flex', 'items-center', 'justify-between')}>
+        <div className={clsx('border-b', 'border-koma-border', 'pb-3', 'flex', 'items-center', 'justify-between')}>
           <div className="flex items-center gap-2">
             <ShieldCheck size={18} className="text-[#10b981]" />
             <span className={clsx('font-serif', 'font-bold', 'text-sm', 'text-white')}>Cargos e Permissões</span>
@@ -86,9 +86,9 @@ export const EquipeCargosTab: React.FC<EquipeCargosTabProps> = ({ apiBaseUrl, au
 
         {/* Table */}
         {!isLoading && !hasError && cargos.length > 0 && (
-          <div className="overflow-x-auto border border-[#27272A]/40 rounded-2xl">
+          <div className="overflow-x-auto border border-koma-border rounded-2xl">
             <table className="w-full text-left text-[10px]">
-              <thead className="bg-[#1C1C1F] border-b border-[#27272A] text-gray-400 uppercase tracking-wider font-bold">
+              <thead className="bg-koma-raised border-b border-koma-border text-gray-400 uppercase tracking-wider font-bold">
                 <tr>
                   <th className="p-3.5">Cargo</th>
                   <th className="p-3.5 text-center font-mono">Funcionários</th>
@@ -97,9 +97,9 @@ export const EquipeCargosTab: React.FC<EquipeCargosTabProps> = ({ apiBaseUrl, au
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#27272A]/40">
+              <tbody className="divide-y divide-koma-border">
                 {cargos.map(cargo => (
-                  <tr key={cargo.slug} className="hover:bg-[#1C1C1F]/40 transition-colors">
+                  <tr key={cargo.slug} className="hover:bg-koma-raised/50 transition-colors">
                     <td className="p-3.5 font-bold text-white">{cargo.label}</td>
                     <td className="p-3.5 text-center font-mono text-sky-400 font-bold">
                       {cargo.total_funcionarios}
@@ -109,7 +109,7 @@ export const EquipeCargosTab: React.FC<EquipeCargosTabProps> = ({ apiBaseUrl, au
                         <span className={`px-2 py-0.5 text-[8px] font-bold rounded uppercase tracking-wider ${
                           cargo.permissoes[col.key]
                             ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                            : 'bg-[#1C1C1F] text-gray-600'
+                            : 'bg-koma-raised text-gray-500'
                         }`}>
                           {cargo.permissoes[col.key] ? 'Sim' : 'Não'}
                         </span>

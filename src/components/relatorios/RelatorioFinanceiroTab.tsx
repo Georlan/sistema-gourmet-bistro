@@ -86,13 +86,13 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
   return (
     <div className="space-y-5 text-left animate-fade-in">
       {/* Header Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-[#121214]/60 border border-[#27272A] p-4 rounded-3xl">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-koma-panel/60 border border-koma-border p-4 rounded-3xl">
         <div>
           <h3 className="font-serif text-sm font-bold text-white">Resumo Financeiro & Recebimentos</h3>
           <p className="text-[10px] text-gray-400">Análise do faturamento total e distribuição por meio de pagamento do seu restaurante.</p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 bg-[#1C1C1F] border border-[#27272A] px-2.5 py-1 rounded-xl">
+          <div className="flex items-center gap-1.5 bg-koma-raised border border-koma-border px-2.5 py-1 rounded-xl">
             <Filter size={12} className="text-gray-400" />
             <select
               value={periodoDias}
@@ -107,7 +107,7 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
           <button
             type="button"
             onClick={fetchFinanceiroData}
-            className="p-2 border border-[#27272A] hover:bg-[#1C1C1F] text-gray-400 hover:text-white rounded-xl transition-all cursor-pointer"
+            className="p-2 border border-koma-border hover:bg-koma-raised text-gray-400 hover:text-white rounded-xl transition-all cursor-pointer"
             title="Atualizar Financeiro"
           >
             <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
@@ -124,7 +124,7 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-[#121214]/80 border border-[#27272A] p-4 rounded-2xl space-y-1">
+        <div className="bg-koma-panel/80 border border-koma-border p-4 rounded-2xl space-y-1">
           <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400 block">Faturamento Total</span>
           <strong className="text-base font-mono font-bold text-emerald-400 block">
             {faturamentoBruto !== null ? `R$ ${Number(faturamentoBruto).toFixed(2)}` : 'Dados indisponíveis'}
@@ -132,7 +132,7 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
           <span className="text-[8px] text-gray-500 block">Período de {periodoDias} dias</span>
         </div>
 
-        <div className="bg-[#121214]/80 border border-[#27272A] p-4 rounded-2xl space-y-1">
+        <div className="bg-koma-panel/80 border border-koma-border p-4 rounded-2xl space-y-1">
           <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400 block">Vendas de Hoje</span>
           <strong className="text-base font-mono font-bold text-white block">
             {faturamentoHoje !== null ? `R$ ${Number(faturamentoHoje).toFixed(2)}` : 'Dados indisponíveis'}
@@ -140,7 +140,7 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
           <span className="text-[8px] text-emerald-500/80 block">Data atual</span>
         </div>
 
-        <div className="bg-[#121214]/80 border border-[#27272A] p-4 rounded-2xl space-y-1">
+        <div className="bg-koma-panel/80 border border-koma-border p-4 rounded-2xl space-y-1">
           <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400 block">Pedidos Finalizados</span>
           <strong className="text-base font-mono font-bold text-sky-400 block">
             {totalPedidos !== null ? `${totalPedidos} comandas` : 'Dados indisponíveis'}
@@ -148,7 +148,7 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
           <span className="text-[8px] text-gray-500 block">Volume do período</span>
         </div>
 
-        <div className="bg-[#121214]/80 border border-[#27272A] p-4 rounded-2xl space-y-1">
+        <div className="bg-koma-panel/80 border border-koma-border p-4 rounded-2xl space-y-1">
           <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400 block">Ticket Médio por Pedido</span>
           <strong className="text-base font-mono font-bold text-purple-400 block">
             {ticketMedio !== null ? `R$ ${Number(ticketMedio).toFixed(2)}` : 'Dados indisponíveis'}
@@ -159,8 +159,8 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
 
       {/* Gráfico de Meios de Pagamento */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <div className="bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 space-y-4">
-          <div className="border-b border-[#27272A] pb-2 flex items-center justify-between">
+        <div className="bg-koma-panel/60 border border-koma-border rounded-3xl p-5 space-y-4">
+          <div className="border-b border-koma-border pb-2 flex items-center justify-between">
             <h4 className="font-serif text-sm font-bold text-white flex items-center gap-2">
               <PieIcon size={16} className="text-emerald-400" />
               <span>Vendas por Meio de Pagamento</span>
@@ -182,7 +182,7 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
                     dataKey="value"
                   >
                     {paymentChartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} stroke="#121214" strokeWidth={2} />
+                      <Cell key={`cell-${index}`} fill={entry.color} stroke="var(--color-koma-panel)" strokeWidth={2} />
                     ))}
                   </Pie>
                   <Tooltip content={<CustomChartTooltip />} />
@@ -200,8 +200,8 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
           </div>
         </div>
 
-        <div className="bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 space-y-4">
-          <div className="border-b border-[#27272A] pb-2 flex items-center justify-between">
+        <div className="bg-koma-panel/60 border border-koma-border rounded-3xl p-5 space-y-4">
+          <div className="border-b border-koma-border pb-2 flex items-center justify-between">
             <h4 className="font-serif text-sm font-bold text-white flex items-center gap-2">
               <BarChart3 size={16} className="text-sky-400" />
               <span>Comparativo dos Meios de Recebimento</span>
@@ -228,8 +228,8 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
       </div>
 
       {/* Real Sales & Payment Breakdown Table */}
-      <div className="bg-[#121214]/60 border border-[#27272A] rounded-3xl p-5 space-y-4 text-left">
-        <div className="border-b border-[#27272A] pb-2 flex items-center justify-between">
+      <div className="bg-koma-panel/60 border border-koma-border rounded-3xl p-5 space-y-4 text-left">
+        <div className="border-b border-koma-border pb-2 flex items-center justify-between">
           <h4 className="font-serif text-sm font-bold text-white flex items-center gap-2">
             <BarChart3 size={16} className="text-emerald-400" />
             <span>Detalhamento Financeiro de Vendas</span>
@@ -237,17 +237,17 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
           <span className="text-[9px] text-gray-400 font-mono">Últimos {periodoDias} dias</span>
         </div>
 
-        <div className="overflow-x-auto border border-[#27272A]/40 rounded-2xl">
+        <div className="overflow-x-auto border border-koma-border rounded-2xl">
           <table className="w-full text-left text-xs font-mono">
             <thead>
-              <tr className="bg-[#1C1C1F] border-b border-[#27272A] text-gray-400 uppercase text-[9px] tracking-wider">
+              <tr className="bg-koma-raised border-b border-koma-border text-gray-400 uppercase text-[9px] tracking-wider">
                 <th className="p-3">Forma de Recebimento</th>
                 <th className="p-3 text-right font-mono">Valor Total</th>
                 <th className="p-3 text-right font-mono">% do Faturamento</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#27272A]/40 text-gray-200">
-              <tr className="bg-[#1C1C1F]/60 font-bold">
+            <tbody className="divide-y divide-koma-border text-gray-200">
+              <tr className="bg-koma-raised/60 font-bold">
                 <td className="p-3 font-sans text-emerald-400">1. FATURAMENTO TOTAL BRUTO</td>
                 <td className="p-3 text-right text-emerald-400 font-bold">
                   {faturamentoBruto !== null ? `R$ ${Number(faturamentoBruto).toFixed(2)}` : 'R$ 0.00'}

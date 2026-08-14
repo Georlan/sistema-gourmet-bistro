@@ -137,7 +137,7 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
   return (
     <div className={clsx('space-y-5', 'text-left', 'animate-fade-in')}>
       {/* Top Bar */}
-      <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-4.5', 'rounded-3xl', 'flex', 'flex-col', 'sm:flex-row', 'sm:items-center', 'justify-between', 'gap-4')}>
+      <div className={clsx('bg-koma-panel', 'border', 'border-koma-border', 'p-4.5', 'rounded-3xl', 'flex', 'flex-col', 'sm:flex-row', 'sm:items-center', 'justify-between', 'gap-4')}>
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <Package size={18} className="text-[#10b981]" />
@@ -152,7 +152,7 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
           <button
             type="button"
             onClick={() => setShowCalendarModal(true)}
-            className="px-3.5 py-2 bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
+            className="px-3.5 py-2 bg-koma-raised hover:bg-koma-card border border-koma-border text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
           >
             <CalendarIcon size={14} className="text-[#10b981]" />
             Alterar Período
@@ -162,7 +162,7 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
             type="button"
             onClick={handleExportCsv}
             disabled={!produtos.length}
-            className="px-3.5 py-2 bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] text-gray-300 hover:text-white rounded-xl text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+            className="px-3.5 py-2 bg-koma-raised hover:bg-koma-card border border-koma-border text-gray-300 hover:text-white rounded-xl text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
           >
             <Download size={14} />
             Exportar CSV
@@ -171,7 +171,7 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
       </div>
 
       {hasError && !isLoading && (
-        <div className="bg-[#121214] border border-rose-900/50 rounded-3xl p-8 text-center space-y-4 max-w-md mx-auto my-6 animate-fade-in">
+        <div className="bg-koma-panel border border-rose-900/50 rounded-3xl p-8 text-center space-y-4 max-w-md mx-auto my-6 animate-fade-in">
           <div className="w-12 h-12 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center mx-auto">
             <span className="font-bold text-lg">!</span>
           </div>
@@ -191,8 +191,8 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
       {/* Gráficos Visuais dos Mais Vendidos */}
       {topProdutosChartData.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <div className="bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-4">
-            <div className="flex items-center gap-2 border-b border-[#27272A] pb-3">
+          <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4">
+            <div className="flex items-center gap-2 border-b border-koma-border pb-3">
               <BarChart2 size={16} className="text-[#10b981]" />
               <span className="font-serif font-bold text-sm text-white">Top Produtos por Unidades Vendidas</span>
             </div>
@@ -210,8 +210,8 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
             </div>
           </div>
 
-          <div className="bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-4">
-            <div className="flex items-center gap-2 border-b border-[#27272A] pb-3">
+          <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4">
+            <div className="flex items-center gap-2 border-b border-koma-border pb-3">
               <BarChart2 size={16} className="text-sky-400" />
               <span className="font-serif font-bold text-sm text-white">Top Produtos por Faturamento (R$)</span>
             </div>
@@ -232,17 +232,17 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
       )}
 
       {/* Filters Toolbar */}
-      <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-4', 'rounded-2xl', 'flex', 'flex-col', 'md:flex-row', 'items-center', 'justify-between', 'gap-3')}>
+      <div className={clsx('bg-koma-panel', 'border', 'border-koma-border', 'p-4', 'rounded-2xl', 'flex', 'flex-col', 'md:flex-row', 'items-center', 'justify-between', 'gap-3')}>
         {/* Ordenação */}
         <div className="flex items-center gap-1.5 w-full md:w-auto">
           <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Filtro:</span>
-          <div className="flex bg-[#09090B] p-1 border border-[#27272A] rounded-xl gap-1">
+          <div className="flex bg-koma-input p-1 border border-koma-border rounded-xl gap-1">
             <button
               type="button"
               onClick={() => setOrdenacao('mais_vendidos')}
               className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase transition-all cursor-pointer ${
                 ordenacao === 'mais_vendidos'
-                  ? 'bg-[#10b981] text-[#121214]'
+                  ? 'bg-[#10b981] text-zinc-950 font-bold'
                   : 'text-gray-400 hover:text-white'
               }`}
             >
@@ -253,7 +253,7 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
               onClick={() => setOrdenacao('menos_vendidos')}
               className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase transition-all cursor-pointer ${
                 ordenacao === 'menos_vendidos'
-                  ? 'bg-[#10b981] text-[#121214]'
+                  ? 'bg-[#10b981] text-zinc-950 font-bold'
                   : 'text-gray-400 hover:text-white'
               }`}
             >
@@ -264,7 +264,7 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
               onClick={() => setOrdenacao('todos')}
               className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase transition-all cursor-pointer ${
                 ordenacao === 'todos'
-                  ? 'bg-[#10b981] text-[#121214]'
+                  ? 'bg-[#10b981] text-zinc-950 font-bold'
                   : 'text-gray-400 hover:text-white'
               }`}
             >
@@ -282,14 +282,14 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
               placeholder="Buscar por nome do produto..."
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 bg-[#09090B] border border-[#27272A] rounded-xl text-white text-[10px]"
+              className="w-full pl-9 pr-3 py-1.5 bg-koma-input border border-koma-border rounded-xl text-white text-[10px]"
             />
           </form>
 
           <select
             value={categoriaId}
             onChange={(e) => setCategoriaId(e.target.value)}
-            className="px-3 py-1.5 bg-[#09090B] border border-[#27272A] rounded-xl text-white text-[10px] cursor-pointer"
+            className="px-3 py-1.5 bg-koma-input border border-koma-border rounded-xl text-white text-[10px] cursor-pointer"
           >
             <option value="">Todas as Categorias</option>
             {categorias.map((c) => (
@@ -302,7 +302,7 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
       </div>
 
       {/* Products Table */}
-      <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-3xl', 'overflow-hidden')}>
+      <div className={clsx('bg-koma-panel', 'border', 'border-koma-border', 'rounded-3xl', 'overflow-hidden')}>
         {isLoading ? (
           <div className="p-12 text-center text-gray-400 text-xs animate-pulse">
             Carregando desempenho de produtos...
@@ -314,7 +314,7 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-[10px]">
-              <thead className="bg-[#1C1C1F] border-b border-[#27272A] text-gray-400 uppercase tracking-wider font-bold">
+              <thead className="bg-koma-raised border-b border-koma-border text-gray-400 uppercase tracking-wider font-bold">
                 <tr>
                   <th className="p-3.5 text-center font-mono w-16">Posição</th>
                   <th className="p-3.5">Produto</th>
@@ -324,9 +324,9 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
                   <th className="p-3.5 text-right font-mono">Ticket Médio do Item</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#27272A]/40">
+              <tbody className="divide-y divide-koma-border">
                 {produtos.map((p) => (
-                  <tr key={p.produto_id} className="hover:bg-[#1C1C1F]/40 transition-colors">
+                  <tr key={p.produto_id} className="hover:bg-koma-raised/50 transition-colors">
                     <td className="p-3.5 text-center font-mono font-extrabold text-gray-400">
                       #{p.ranking}
                     </td>

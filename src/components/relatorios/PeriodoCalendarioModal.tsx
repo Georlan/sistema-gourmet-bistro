@@ -43,8 +43,8 @@ export const PeriodoCalendarioModal: React.FC<PeriodoCalendarioModalProps> = ({
       className={clsx('fixed', 'inset-0', 'z-50', 'bg-black/80', 'backdrop-blur-sm', 'flex', 'items-center', 'justify-center', 'p-4', 'animate-fade-in')}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-3xl', 'max-w-md', 'w-full', 'p-6', 'space-y-5', 'text-left')}>
-        <div className="flex justify-between items-center border-b border-[#27272A] pb-3">
+      <div className={clsx('bg-koma-dialog', 'border', 'border-koma-border', 'rounded-3xl', 'max-w-md', 'w-full', 'p-6', 'space-y-5', 'text-left')}>
+        <div className="flex justify-between items-center border-b border-koma-border pb-3">
           <div className="flex items-center gap-2">
             <CalendarIcon size={18} className="text-[#10b981]" />
             <h3 className="font-serif font-bold text-base text-white">Selecionar Período</h3>
@@ -52,7 +52,7 @@ export const PeriodoCalendarioModal: React.FC<PeriodoCalendarioModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="p-1 hover:bg-[#27272A] rounded-full text-gray-400 hover:text-white transition-colors cursor-pointer"
+            className="p-1 hover:bg-koma-raised rounded-full text-gray-400 hover:text-white transition-colors cursor-pointer"
           >
             <X size={16} />
           </button>
@@ -65,21 +65,21 @@ export const PeriodoCalendarioModal: React.FC<PeriodoCalendarioModalProps> = ({
             <button
               type="button"
               onClick={() => applyShortcut(7)}
-              className="py-2 px-3 bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] text-white rounded-xl text-[10px] font-bold transition-all cursor-pointer"
+              className="py-2 px-3 bg-koma-raised hover:bg-koma-card border border-koma-border text-white rounded-xl text-[10px] font-bold transition-all cursor-pointer"
             >
               Últimos 7 dias
             </button>
             <button
               type="button"
               onClick={() => applyShortcut(15)}
-              className="py-2 px-3 bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] text-white rounded-xl text-[10px] font-bold transition-all cursor-pointer"
+              className="py-2 px-3 bg-koma-raised hover:bg-koma-card border border-koma-border text-white rounded-xl text-[10px] font-bold transition-all cursor-pointer"
             >
               Últimos 15 dias
             </button>
             <button
               type="button"
               onClick={() => applyShortcut(30)}
-              className="py-2 px-3 bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] text-white rounded-xl text-[10px] font-bold transition-all cursor-pointer"
+              className="py-2 px-3 bg-koma-raised hover:bg-koma-card border border-koma-border text-white rounded-xl text-[10px] font-bold transition-all cursor-pointer"
             >
               Últimos 30 dias
             </button>
@@ -87,7 +87,7 @@ export const PeriodoCalendarioModal: React.FC<PeriodoCalendarioModalProps> = ({
         </div>
 
         {/* Intervalo Personalizado */}
-        <form onSubmit={handleCustomSubmit} className="space-y-4 pt-2 border-t border-[#27272A]">
+        <form onSubmit={handleCustomSubmit} className="space-y-4 pt-2 border-t border-koma-border">
           <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Intervalo Personalizado:</span>
           
           <div className="grid grid-cols-2 gap-3">
@@ -97,7 +97,7 @@ export const PeriodoCalendarioModal: React.FC<PeriodoCalendarioModalProps> = ({
                 type="date"
                 value={tempInicio}
                 onChange={(e) => setTempInicio(e.target.value)}
-                className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-white font-mono text-[10px]"
+                className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-white font-mono text-[10px]"
                 required
               />
             </div>
@@ -107,7 +107,7 @@ export const PeriodoCalendarioModal: React.FC<PeriodoCalendarioModalProps> = ({
                 type="date"
                 value={tempFim}
                 onChange={(e) => setTempFim(e.target.value)}
-                className="w-full px-3 py-2 bg-[#09090B] border border-[#27272A] rounded-xl text-white font-mono text-[10px]"
+                className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-white font-mono text-[10px]"
                 required
               />
             </div>
@@ -117,13 +117,13 @@ export const PeriodoCalendarioModal: React.FC<PeriodoCalendarioModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2.5 bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] text-gray-300 rounded-xl text-[10px] font-bold transition-all cursor-pointer"
+              className="flex-1 py-2.5 bg-koma-raised hover:bg-koma-card border border-koma-border text-gray-300 rounded-xl text-[10px] font-bold transition-all cursor-pointer"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="flex-1 py-2.5 bg-[#10b981] hover:bg-[#059669] text-[#121214] rounded-xl text-[10px] font-extrabold transition-all cursor-pointer shadow-sm uppercase tracking-wider"
+              className="flex-1 py-2.5 bg-[#10b981] hover:bg-[#059669] text-zinc-950 font-extrabold rounded-xl text-[10px] transition-all cursor-pointer shadow-sm uppercase tracking-wider"
             >
               Aplicar Período
             </button>

@@ -135,20 +135,20 @@ export function CardapioProdutosTab({
       <article
         key={product.id}
         className={clsx(
-          'group grid gap-3 border-b border-white/[0.055] px-3 py-3.5 transition-colors last:border-b-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-4',
+          'group grid gap-3 border-b border-koma-border px-3 py-3.5 transition-colors last:border-b-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-4',
           'hover:bg-white/[0.025]',
           !isPublished && 'bg-black/10',
         )}
       >
         <div className="flex min-w-0 items-start gap-3">
           <div className={clsx(
-            'relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/[0.07] bg-[#171b19]',
+            'relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-koma-border bg-koma-card',
             !isPublished && 'opacity-60 grayscale',
           )}>
             {product.imagem ? (
               <img src={product.imagem} alt="" className="h-full w-full object-cover" loading="lazy" />
             ) : (
-              <ImageIcon size={18} className="text-zinc-600" aria-hidden="true" />
+              <ImageIcon size={18} className="text-zinc-500" aria-hidden="true" />
             )}
             <span className="absolute bottom-1 left-1 rounded-md bg-black/70 px-1.5 py-0.5 font-mono text-[8px] font-bold text-zinc-300 backdrop-blur-sm">
               #{product.id}
@@ -169,7 +169,7 @@ export function CardapioProdutosTab({
                 {isPublished ? 'Publicado' : 'Pausado'}
               </span>
             </div>
-            <p className="mt-1 line-clamp-2 max-w-3xl text-[10px] leading-relaxed text-zinc-500">
+            <p className="mt-1 line-clamp-2 max-w-3xl text-[10px] leading-relaxed text-zinc-400">
               {product.descricao || 'Sem descrição. Adicione detalhes para facilitar a escolha do cliente.'}
             </p>
             <strong className="mt-1.5 block font-mono text-xs text-emerald-300">
@@ -186,7 +186,7 @@ export function CardapioProdutosTab({
             aria-pressed={isPublished}
             aria-label={`${isPublished ? 'Pausar' : 'Publicar'} ${product.nome}`}
             className={clsx(
-              'inline-flex min-w-[112px] items-center justify-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-bold transition-all disabled:cursor-wait disabled:opacity-50',
+              'inline-flex min-w-[112px] items-center justify-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-bold transition-all disabled:cursor-wait disabled:opacity-50 cursor-pointer',
               isPublished
                 ? 'border-emerald-400/20 bg-emerald-400/[0.08] text-emerald-300 hover:bg-emerald-400/[0.14]'
                 : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-emerald-400/25 hover:text-emerald-300',
@@ -196,14 +196,14 @@ export function CardapioProdutosTab({
             {isPending ? 'Salvando…' : isPublished ? 'Disponível' : 'Publicar'}
           </button>
 
-          <div className="flex items-center rounded-xl border border-white/[0.07] bg-black/20 p-1">
-            <button type="button" onClick={() => onDuplicateProduct(product)} className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-white/[0.05] hover:text-emerald-300" title="Duplicar produto" aria-label={`Duplicar ${product.nome}`}>
+          <div className="flex items-center rounded-xl border border-koma-border bg-koma-input p-1">
+            <button type="button" onClick={() => onDuplicateProduct(product)} className="rounded-lg p-2 text-zinc-400 transition-colors hover:bg-white/[0.05] hover:text-emerald-300 cursor-pointer" title="Duplicar produto" aria-label={`Duplicar ${product.nome}`}>
               <Copy size={14} />
             </button>
-            <button type="button" onClick={() => onEditProduct(product)} className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-white/[0.05] hover:text-white" title="Editar produto" aria-label={`Editar ${product.nome}`}>
+            <button type="button" onClick={() => onEditProduct(product)} className="rounded-lg p-2 text-zinc-400 transition-colors hover:bg-white/[0.05] hover:text-white cursor-pointer" title="Editar produto" aria-label={`Editar ${product.nome}`}>
               <Edit3 size={14} />
             </button>
-            <button type="button" onClick={() => void onRemoveProduct(product)} className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-rose-500/10 hover:text-rose-300" title="Remover do cardápio" aria-label={`Remover ${product.nome} do cardápio`}>
+            <button type="button" onClick={() => void onRemoveProduct(product)} className="rounded-lg p-2 text-zinc-400 transition-colors hover:bg-rose-500/10 hover:text-rose-300 cursor-pointer" title="Remover do cardápio" aria-label={`Remover ${product.nome} do cardápio`}>
               <Trash2 size={14} />
             </button>
           </div>
@@ -216,15 +216,15 @@ export function CardapioProdutosTab({
     const publishedCount = products.filter((product) => product.ativo !== false).length;
     const allPublished = publishedCount === products.length;
     return (
-      <section key={category.id} className="overflow-hidden rounded-[22px] border border-white/[0.07] bg-[#101311] shadow-[0_18px_50px_rgba(0,0,0,.18)]">
-        <header className="flex flex-col gap-3 border-b border-white/[0.06] bg-white/[0.018] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <section key={category.id} className="overflow-hidden rounded-[22px] border border-koma-border bg-koma-panel/60 shadow-[0_18px_50px_rgba(0,0,0,.18)]">
+        <header className="flex flex-col gap-3 border-b border-koma-border bg-white/[0.018] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-3">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-emerald-400/15 bg-emerald-400/[0.07] text-emerald-300">
               <Utensils size={15} />
             </span>
             <div className="min-w-0">
               <h2 className="truncate text-xs font-bold text-zinc-100">{category.nome}</h2>
-              <p className="mt-0.5 text-[9px] text-zinc-500">
+              <p className="mt-0.5 text-[9px] text-zinc-400">
                 {products.length} {products.length === 1 ? 'produto' : 'produtos'} · {publishedCount} disponíveis
               </p>
             </div>
@@ -234,7 +234,7 @@ export function CardapioProdutosTab({
             onClick={() => void handleCategoryAvailability(category.id, products.map((product) => product.id), !allPublished)}
             disabled={Boolean(pendingCategoryId)}
             className={clsx(
-              'inline-flex items-center justify-center gap-1.5 self-start rounded-xl border px-3 py-2 text-[9px] font-bold transition-colors disabled:cursor-wait disabled:opacity-50 sm:self-auto',
+              'inline-flex items-center justify-center gap-1.5 self-start rounded-xl border px-3 py-2 text-[9px] font-bold transition-colors disabled:cursor-wait disabled:opacity-50 sm:self-auto cursor-pointer',
               allPublished
                 ? 'border-amber-400/15 bg-amber-400/[0.06] text-amber-300 hover:bg-amber-400/[0.11]'
                 : 'border-emerald-400/15 bg-emerald-400/[0.07] text-emerald-300 hover:bg-emerald-400/[0.12]',
@@ -265,42 +265,42 @@ export function CardapioProdutosTab({
         ]}
       />
 
-      <section className="space-y-3 rounded-[22px] border border-white/[0.065] bg-[#101311] p-3.5 sm:p-4">
+      <section className="space-y-3 rounded-[22px] border border-koma-border bg-koma-panel/60 p-3.5 sm:p-4">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
           <div className="relative flex-1">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-600" size={15} />
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por nome, descrição ou código…" className="h-11 w-full rounded-xl border border-white/[0.07] bg-black/20 pl-10 pr-10 text-[11px] text-white outline-none transition-colors placeholder:text-zinc-600 focus:border-emerald-400/30" />
-            {search && <button type="button" onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1 text-zinc-600 hover:text-white" aria-label="Limpar busca"><X size={13} /></button>}
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" size={15} />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por nome, descrição ou código…" className="h-11 w-full rounded-xl border border-koma-border bg-koma-input pl-10 pr-10 text-[11px] text-white outline-none transition-colors placeholder:text-zinc-500 focus:border-emerald-400/30" />
+            {search && <button type="button" onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1 text-zinc-500 hover:text-white cursor-pointer" aria-label="Limpar busca"><X size={13} /></button>}
           </div>
-          <div className="grid grid-cols-3 rounded-xl border border-white/[0.07] bg-black/20 p-1 lg:w-auto">
+          <div className="grid grid-cols-3 rounded-xl border border-koma-border bg-koma-input p-1 lg:w-auto">
             {([
               ['todos', 'Todos'],
               ['publicados', 'Disponíveis'],
               ['pausados', 'Pausados'],
             ] as Array<[AvailabilityFilter, string]>).map(([value, label]) => (
-              <button key={value} type="button" onClick={() => setAvailabilityFilter(value)} className={clsx('rounded-lg px-3 py-2 text-[9px] font-bold transition-colors', availabilityFilter === value ? 'bg-white/[0.075] text-white' : 'text-zinc-500 hover:text-zinc-300')}>
+              <button key={value} type="button" onClick={() => setAvailabilityFilter(value)} className={clsx('rounded-lg px-3 py-2 text-[9px] font-bold transition-colors cursor-pointer', availabilityFilter === value ? 'bg-koma-card text-white' : 'text-zinc-400 hover:text-zinc-200')}>
                 {label}
               </button>
             ))}
           </div>
           <div className="flex flex-wrap gap-2">
             {previewUrl && (
-              <a href={previewUrl} target="_blank" rel="noreferrer" className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.035] px-3 py-2.5 text-[9px] font-bold text-zinc-200 transition-colors hover:bg-white/[0.07] sm:flex-none">
+              <a href={previewUrl} target="_blank" rel="noreferrer" className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card px-3 py-2.5 text-[9px] font-bold text-zinc-200 transition-colors hover:bg-zinc-700 sm:flex-none">
                 <Eye size={13} /> Ver cardápio
               </a>
             )}
-            <button type="button" onClick={onCreateCategory} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-emerald-300/15 bg-emerald-300/[0.06] px-3 py-2.5 text-[9px] font-bold text-emerald-200 transition-colors hover:bg-emerald-300/[0.11] sm:flex-none">
+            <button type="button" onClick={onCreateCategory} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-emerald-300/15 bg-emerald-300/[0.06] px-3 py-2.5 text-[9px] font-bold text-emerald-200 transition-colors hover:bg-emerald-300/[0.11] sm:flex-none cursor-pointer">
               <Layers3 size={13} /> Nova categoria
             </button>
-            <button type="button" onClick={onCreateProduct} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-400 px-3 py-2.5 text-[9px] font-black text-[#07110d] transition-colors hover:bg-emerald-300 sm:flex-none">
+            <button type="button" onClick={onCreateProduct} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-3 py-2.5 text-[9px] font-black text-zinc-950 transition-colors hover:bg-emerald-400 sm:flex-none cursor-pointer shadow-sm">
               <Plus size={13} /> Novo produto
             </button>
           </div>
         </div>
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-          <button type="button" onClick={() => setCategoryFilter('todos')} className={clsx('shrink-0 rounded-full border px-3 py-1.5 text-[9px] font-bold transition-colors', categoryFilter === 'todos' ? 'border-emerald-300/25 bg-emerald-300/[0.09] text-emerald-200' : 'border-white/[0.07] text-zinc-500 hover:text-zinc-300')}>Todas as categorias</button>
+          <button type="button" onClick={() => setCategoryFilter('todos')} className={clsx('shrink-0 rounded-full border px-3 py-1.5 text-[9px] font-bold transition-colors cursor-pointer', categoryFilter === 'todos' ? 'border-emerald-300/25 bg-emerald-300/[0.09] text-emerald-200' : 'border-koma-border text-zinc-400 hover:text-zinc-200')}>Todas as categorias</button>
           {categorias.map((category) => (
-            <button key={category.id} type="button" onClick={() => setCategoryFilter(category.id)} className={clsx('shrink-0 rounded-full border px-3 py-1.5 text-[9px] font-bold transition-colors', categoryFilter === category.id ? 'border-emerald-300/25 bg-emerald-300/[0.09] text-emerald-200' : 'border-white/[0.07] text-zinc-500 hover:text-zinc-300')}>
+            <button key={category.id} type="button" onClick={() => setCategoryFilter(category.id)} className={clsx('shrink-0 rounded-full border px-3 py-1.5 text-[9px] font-bold transition-colors cursor-pointer', categoryFilter === category.id ? 'border-emerald-300/25 bg-emerald-300/[0.09] text-emerald-200' : 'border-koma-border text-zinc-400 hover:text-zinc-200')}>
               {category.nome}
             </button>
           ))}
@@ -308,12 +308,12 @@ export function CardapioProdutosTab({
       </section>
 
       {!catalogReady && produtos.length === 0 ? (
-        <div className="flex min-h-64 items-center justify-center rounded-[22px] border border-white/[0.06] bg-[#101311] text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-600">Carregando catálogo…</div>
+        <div className="flex min-h-64 items-center justify-center rounded-[22px] border border-koma-border bg-koma-panel/60 text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-500">Carregando catálogo…</div>
       ) : filteredProducts.length === 0 ? (
-        <div className="flex min-h-64 flex-col items-center justify-center rounded-[22px] border border-dashed border-white/10 bg-[#101311] px-6 text-center">
-          <PackageOpen size={28} className="text-zinc-700" />
+        <div className="flex min-h-64 flex-col items-center justify-center rounded-[22px] border border-dashed border-koma-border bg-koma-panel/60 px-6 text-center">
+          <PackageOpen size={28} className="text-zinc-600" />
           <strong className="mt-4 text-sm text-zinc-300">Nenhum produto encontrado</strong>
-          <p className="mt-1 max-w-sm text-[10px] leading-relaxed text-zinc-600">Ajuste os filtros ou cadastre o primeiro produto desta categoria.</p>
+          <p className="mt-1 max-w-sm text-[10px] leading-relaxed text-zinc-500">Ajuste os filtros ou cadastre o primeiro produto desta categoria.</p>
         </div>
       ) : (
         <div className="space-y-3.5">

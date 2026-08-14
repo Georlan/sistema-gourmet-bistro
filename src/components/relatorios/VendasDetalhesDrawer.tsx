@@ -60,9 +60,9 @@ export const VendasDetalhesDrawer: React.FC<VendasDetalhesDrawerProps> = ({
       className={clsx('fixed', 'inset-0', 'z-50', 'bg-black/80', 'backdrop-blur-sm', 'flex', 'justify-end', 'animate-fade-in')}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className={clsx('bg-[#121214]', 'border-l', 'border-[#27272A]', 'w-full', 'max-w-2xl', 'h-full', 'flex', 'flex-col', 'p-6', 'space-y-4', 'text-left')}>
+      <div className={clsx('bg-koma-panel', 'border-l', 'border-koma-border', 'w-full', 'max-w-2xl', 'h-full', 'flex', 'flex-col', 'p-6', 'space-y-4', 'text-left')}>
         {/* Header */}
-        <div className="flex justify-between items-center border-b border-[#27272A] pb-4">
+        <div className="flex justify-between items-center border-b border-koma-border pb-4">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-[#10b981]/15 border border-[#10b981]/30 flex items-center justify-center text-[#10b981]">
               <ShoppingBag size={18} />
@@ -77,7 +77,7 @@ export const VendasDetalhesDrawer: React.FC<VendasDetalhesDrawerProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 hover:bg-[#27272A] rounded-full text-gray-400 hover:text-white transition-colors cursor-pointer"
+            className="p-1.5 hover:bg-koma-raised rounded-full text-gray-400 hover:text-white transition-colors cursor-pointer"
           >
             <X size={18} />
           </button>
@@ -92,7 +92,7 @@ export const VendasDetalhesDrawer: React.FC<VendasDetalhesDrawerProps> = ({
               placeholder="Buscar por n° pedido, operador ou pagamento..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 bg-[#09090B] border border-[#27272A] rounded-xl text-white text-[10px]"
+              className="w-full pl-9 pr-3 py-1.5 bg-koma-input border border-koma-border rounded-xl text-white text-[10px]"
             />
           </div>
 
@@ -100,7 +100,7 @@ export const VendasDetalhesDrawer: React.FC<VendasDetalhesDrawerProps> = ({
             type="button"
             onClick={handleExportCsv}
             disabled={!filteredVendas.length}
-            className="px-3 py-1.5 bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] text-white rounded-xl text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+            className="px-3 py-1.5 bg-koma-raised hover:bg-koma-card border border-koma-border text-white rounded-xl text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
           >
             <Download size={12} className="text-[#10b981]" />
             Exportar CSV
@@ -108,7 +108,7 @@ export const VendasDetalhesDrawer: React.FC<VendasDetalhesDrawerProps> = ({
         </div>
 
         {/* Table */}
-        <div className="flex-1 overflow-y-auto border border-[#27272A]/60 rounded-2xl">
+        <div className="flex-1 overflow-y-auto border border-koma-border rounded-2xl">
           {isLoading ? (
             <div className="p-8 text-center text-gray-400 text-xs animate-pulse">
               Carregando detalhamento de vendas...
@@ -119,7 +119,7 @@ export const VendasDetalhesDrawer: React.FC<VendasDetalhesDrawerProps> = ({
             </div>
           ) : (
             <table className="w-full text-left text-[10px]">
-              <thead className="bg-[#1C1C1F] border-b border-[#27272A] text-gray-400 uppercase tracking-wider font-bold sticky top-0">
+              <thead className="bg-koma-raised border-b border-koma-border text-gray-400 uppercase tracking-wider font-bold sticky top-0">
                 <tr>
                   <th className="p-3">Data / Hora</th>
                   <th className="p-3 font-mono">Pedido</th>
@@ -129,9 +129,9 @@ export const VendasDetalhesDrawer: React.FC<VendasDetalhesDrawerProps> = ({
                   <th className="p-3 text-right">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#27272A]/40">
+              <tbody className="divide-y divide-koma-border">
                 {filteredVendas.map((v) => (
-                  <tr key={v.id} className="hover:bg-[#1C1C1F]/40 transition-colors">
+                  <tr key={v.id} className="hover:bg-koma-raised/50 transition-colors">
                     <td className="p-3 font-mono text-gray-300">
                       {formatBackendDateTime(v.data_hora)}
                     </td>

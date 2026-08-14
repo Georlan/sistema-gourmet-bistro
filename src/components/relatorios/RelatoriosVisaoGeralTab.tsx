@@ -199,7 +199,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
   return (
     <div className={clsx('space-y-6', 'text-left', 'animate-fade-in')}>
       {/* Top Header Bar */}
-      <div className={clsx('bg-[#121214]', 'border', 'border-[#27272A]', 'p-4.5', 'rounded-3xl', 'flex', 'flex-col', 'sm:flex-row', 'sm:items-center', 'justify-between', 'gap-4')}>
+      <div className={clsx('bg-koma-panel', 'border', 'border-koma-border', 'p-4.5', 'rounded-3xl', 'flex', 'flex-col', 'sm:flex-row', 'sm:items-center', 'justify-between', 'gap-4')}>
         <div className="space-y-1">
           <h3 className="font-serif font-bold text-base text-white">Relatórios — Visão Geral Operacional</h3>
           <p className="text-[10px] text-gray-400">
@@ -223,7 +223,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
           <button
             type="button"
             onClick={() => setShowCalendarModal(true)}
-            className="px-3.5 py-2 bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
+            className="px-3.5 py-2 bg-koma-raised hover:bg-koma-card border border-koma-border text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
           >
             <CalendarIcon size={14} className="text-[#10b981]" />
             Alterar Período
@@ -233,7 +233,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
             type="button"
             onClick={handleExportCsv}
             disabled={!data}
-            className="px-3 py-2 bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] text-gray-300 hover:text-white rounded-xl text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+            className="px-3 py-2 bg-koma-raised hover:bg-koma-card border border-koma-border text-gray-300 hover:text-white rounded-xl text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
             title="Exportar CSV"
           >
             <Download size={14} />
@@ -243,7 +243,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
       </div>
 
       {hasError && !isLoading && (
-        <div className="bg-[#121214] border border-rose-900/50 rounded-3xl p-8 text-center space-y-4 max-w-md mx-auto my-6 animate-fade-in">
+        <div className="bg-koma-panel border border-rose-900/50 rounded-3xl p-8 text-center space-y-4 max-w-md mx-auto my-6 animate-fade-in">
           <div className="w-12 h-12 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center mx-auto">
             <span className="font-bold text-lg">!</span>
           </div>
@@ -262,7 +262,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
 
       {/* Main Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-2">
+        <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-2">
           <div className="flex justify-between items-center text-gray-400">
             <span className="text-[9px] font-bold uppercase tracking-wider">Faturamento Total</span>
             <div className="p-1.5 bg-[#10b981]/15 text-[#10b981] rounded-xl">
@@ -288,7 +288,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
           )}
         </div>
 
-        <div className="bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-2">
+        <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-2">
           <div className="flex justify-between items-center text-gray-400">
             <span className="text-[9px] font-bold uppercase tracking-wider">Total de Pedidos</span>
             <div className="p-1.5 bg-sky-500/15 text-sky-400 rounded-xl">
@@ -314,7 +314,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
           )}
         </div>
 
-        <div className="bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-2">
+        <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-2">
           <div className="flex justify-between items-center text-gray-400">
             <span className="text-[9px] font-bold uppercase tracking-wider">Ticket Médio</span>
             <div className="p-1.5 bg-amber-500/15 text-amber-400 rounded-xl">
@@ -328,7 +328,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
         </div>
 
         {(data?.clientes_ativos || 0) > 0 && (
-          <div className="bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-2">
+          <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-2">
             <div className="flex justify-between items-center text-gray-400">
               <span className="text-[9px] font-bold uppercase tracking-wider">Clientes Ativos</span>
               <div className="p-1.5 bg-purple-500/15 text-purple-400 rounded-xl">
@@ -344,8 +344,8 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
       </div>
 
       {/* Meta Mensal Block */}
-      <div className="bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-4">
-        <div className="flex justify-between items-center border-b border-[#27272A] pb-3">
+      <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4">
+        <div className="flex justify-between items-center border-b border-koma-border pb-3">
           <div className="flex items-center gap-2">
             <Target size={18} className="text-[#10b981]" />
             <span className="font-serif font-bold text-sm text-white">Acompanhamento da Meta Mensal</span>
@@ -357,19 +357,19 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
                 placeholder="R$ Meta"
                 value={newMetaInput}
                 onChange={(e) => setNewMetaInput(e.target.value)}
-                className="px-2.5 py-1 bg-[#09090B] border border-[#27272A] rounded-xl text-white font-mono text-[10px] w-28"
+                className="px-2.5 py-1 bg-koma-input border border-koma-border rounded-xl text-white font-mono text-[10px] w-28"
               />
               <button
                 type="button"
                 onClick={handleSaveMeta}
-                className="px-3 py-1 bg-[#10b981] hover:bg-[#059669] text-[#121214] rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer"
+                className="px-3 py-1 bg-[#10b981] hover:bg-[#059669] text-zinc-950 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer"
               >
                 Salvar
               </button>
               <button
                 type="button"
                 onClick={() => setEditingMeta(false)}
-                className="px-2 py-1 bg-[#1C1C1F] text-gray-400 hover:text-white rounded-lg text-[9px] font-bold"
+                className="px-2 py-1 bg-koma-raised text-gray-400 hover:text-white rounded-lg text-[9px] font-bold"
               >
                 X
               </button>
@@ -382,7 +382,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
                   setNewMetaInput(String(data?.meta_mensal || ''));
                   setEditingMeta(true);
                 }}
-                className="px-3 py-1 bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] text-gray-300 hover:text-white rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+                className="px-3 py-1 bg-koma-raised hover:bg-koma-card border border-koma-border text-gray-300 hover:text-white rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer"
               >
                 Configurar Meta
               </button>
@@ -420,7 +420,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
                 </span>
               </div>
 
-              <div className="w-full h-3 bg-[#09090B] border border-[#27272A] rounded-full overflow-hidden p-0.5">
+              <div className="w-full h-3 bg-koma-input border border-koma-border rounded-full overflow-hidden p-0.5">
                 <div
                   className="h-full bg-[#10b981] rounded-full transition-all duration-500"
                   style={{ width: `${Math.min(100, data?.meta_percentual || 0)}%` }}
@@ -429,19 +429,19 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-[10px]">
-              <div className="bg-[#1C1C1F]/60 border border-[#27272A]/60 p-3 rounded-2xl space-y-1">
+              <div className="bg-koma-raised/60 border border-koma-border/60 p-3 rounded-2xl space-y-1">
                 <span className="text-gray-400 text-[8px] font-bold uppercase tracking-wider block">Valor Restante</span>
                 <strong className="text-sm font-mono text-white block">
                   R$ {data?.meta_restante?.toFixed(2) ?? '0.00'}
                 </strong>
               </div>
-              <div className="bg-[#1C1C1F]/60 border border-[#27272A]/60 p-3 rounded-2xl space-y-1">
+              <div className="bg-koma-raised/60 border border-koma-border/60 p-3 rounded-2xl space-y-1">
                 <span className="text-gray-400 text-[8px] font-bold uppercase tracking-wider block">Projeção no Ritmo Atual</span>
                 <strong className="text-sm font-mono text-emerald-400 block">
                   R$ {data?.meta_projecao?.toFixed(2) ?? '0.00'}
                 </strong>
               </div>
-              <div className="bg-[#1C1C1F]/60 border border-[#27272A]/60 p-3 rounded-2xl space-y-1">
+              <div className="bg-koma-raised/60 border border-koma-border/60 p-3 rounded-2xl space-y-1">
                 <span className="text-gray-400 text-[8px] font-bold uppercase tracking-wider block">Média Diária Necessária</span>
                 <strong className="text-sm font-mono text-amber-400 block">
                   R$ {data?.meta_media_diaria_necessaria?.toFixed(2) ?? '0.00'} / dia
@@ -454,8 +454,8 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
 
       {/* Visão Gráfica: Evolução Diária & Horários de Pico */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <div className="bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-4">
-          <div className="flex justify-between items-center border-b border-[#27272A] pb-3">
+        <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4">
+          <div className="flex justify-between items-center border-b border-koma-border pb-3">
             <div className="flex items-center gap-2">
               <TrendingUp size={16} className="text-[#10b981]" />
               <span className="font-serif font-bold text-sm text-white">Evolução Diária do Faturamento</span>
@@ -486,8 +486,8 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
           </div>
         </div>
 
-        <div className="bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-4">
-          <div className="flex items-center gap-2 border-b border-[#27272A] pb-3">
+        <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4">
+          <div className="flex items-center gap-2 border-b border-koma-border pb-3">
             <Clock size={16} className="text-sky-400" />
             <span className="font-serif font-bold text-sm text-white">Horários de Pico do Salão</span>
           </div>
@@ -512,23 +512,23 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
 
       {/* Tabelas Detalhadas */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <div className="bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-4">
-          <div className="flex justify-between items-center border-b border-[#27272A] pb-2">
+        <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4">
+          <div className="flex justify-between items-center border-b border-koma-border pb-2">
             <span className="font-serif font-bold text-sm text-white">Detalhamento dos Pedidos por Dia</span>
           </div>
 
-          <div className="overflow-x-auto max-h-56 border border-[#27272A]/40 rounded-2xl">
+          <div className="overflow-x-auto max-h-56 border border-koma-border rounded-2xl">
             <table className="w-full text-left text-[10px]">
-              <thead className="bg-[#1C1C1F] border-b border-[#27272A] text-gray-400 uppercase tracking-wider font-bold sticky top-0">
+              <thead className="bg-koma-raised border-b border-koma-border text-gray-400 uppercase tracking-wider font-bold sticky top-0">
                 <tr>
                   <th className="p-3">Data</th>
                   <th className="p-3 font-mono text-center">Qtd Pedidos</th>
                   <th className="p-3 font-mono text-right">Faturamento</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#27272A]/40">
+              <tbody className="divide-y divide-koma-border">
                 {(data?.vendas_por_dia || []).map((v: any) => (
-                  <tr key={v.data} className="hover:bg-[#1C1C1F]/40 transition-colors">
+                  <tr key={v.data} className="hover:bg-koma-raised/50 transition-colors">
                     <td className="p-3 font-mono text-gray-300">{v.data}</td>
                     <td className="p-3 font-mono text-center font-bold text-white">{v.quantidade_pedidos}</td>
                     <td className="p-3 font-mono text-right font-extrabold text-[#10b981]">
@@ -541,26 +541,26 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
           </div>
         </div>
 
-        <div className="bg-[#121214] border border-[#27272A] p-5 rounded-3xl space-y-4">
-          <div className="flex items-center gap-2 border-b border-[#27272A] pb-2">
+        <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4">
+          <div className="flex items-center gap-2 border-b border-koma-border pb-2">
             <Clock size={16} className="text-[#10b981]" />
             <span className="font-serif font-bold text-sm text-white">Detalhamento por Faixa Horária</span>
           </div>
 
-          <div className="overflow-x-auto max-h-56 border border-[#27272A]/40 rounded-2xl">
+          <div className="overflow-x-auto max-h-56 border border-koma-border rounded-2xl">
             <table className="w-full text-left text-[10px]">
-              <thead className="bg-[#1C1C1F] border-b border-[#27272A] text-gray-400 uppercase tracking-wider font-bold sticky top-0">
+              <thead className="bg-koma-raised border-b border-koma-border text-gray-400 uppercase tracking-wider font-bold sticky top-0">
                 <tr>
                   <th className="p-3">Horário</th>
                   <th className="p-3 font-mono text-center">Total Pedidos</th>
                   <th className="p-3 font-mono text-right">Faturamento</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#27272A]/40">
+              <tbody className="divide-y divide-koma-border">
                 {(data?.horarios_pico || [])
                   .filter((h: any) => h.total_pedidos > 0)
                   .map((h: any) => (
-                    <tr key={h.hora} className="hover:bg-[#1C1C1F]/40 transition-colors">
+                    <tr key={h.hora} className="hover:bg-koma-raised/50 transition-colors">
                       <td className="p-3 font-mono font-bold text-white">{h.hora}</td>
                       <td className="p-3 font-mono text-center text-sky-400 font-bold">{h.total_pedidos}</td>
                       <td className="p-3 font-mono text-right font-bold text-emerald-400">

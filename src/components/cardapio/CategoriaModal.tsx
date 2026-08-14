@@ -146,9 +146,9 @@ export function CategoriaModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
-      <div className="relative w-full max-w-lg bg-[#121214] border border-[#27272A] rounded-3xl shadow-2xl overflow-hidden text-left font-sans">
+      <div className="relative w-full max-w-lg bg-koma-dialog border border-koma-border rounded-3xl shadow-2xl overflow-hidden text-left font-sans">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#27272A] bg-[#18181B]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-koma-border bg-koma-raised">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-xl bg-[#10b981]/10 text-[#10b981] border border-[#10b981]/20">
               <Printer size={18} />
@@ -165,7 +165,7 @@ export function CategoriaModal({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 text-gray-400 hover:text-white rounded-xl bg-[#27272A]/50 hover:bg-[#27272A] transition-colors cursor-pointer"
+            className="p-1.5 text-gray-400 hover:text-white rounded-xl bg-koma-card hover:bg-zinc-700 transition-colors cursor-pointer"
           >
             <X size={16} />
           </button>
@@ -189,7 +189,7 @@ export function CategoriaModal({
               value={nome}
               onChange={(e) => handleNomeChange(e.target.value)}
               placeholder="Ex: Hambúrgueres Bovinos, Bebidas, Sobremesas..."
-              className="w-full bg-[#1C1C1F] border border-[#27272A] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder:text-gray-500 focus:outline-none focus:border-[#10b981] transition-colors font-medium"
+              className="w-full bg-koma-input border border-koma-border rounded-xl px-3.5 py-2.5 text-xs text-white placeholder:text-gray-500 focus:outline-none focus:border-[#10b981] transition-colors font-medium"
               autoFocus
               required
             />
@@ -215,7 +215,7 @@ export function CategoriaModal({
                   'relative p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2',
                   destino === 'COZINHA'
                     ? 'bg-orange-500/15 border-orange-500/50 shadow-lg shadow-orange-950/20'
-                    : 'bg-[#1C1C1F]/60 border-[#27272A] hover:bg-[#1C1C1F] hover:border-gray-700'
+                    : 'bg-koma-raised/60 border-koma-border hover:bg-koma-raised hover:border-gray-700'
                 )}
               >
                 <div className="flex justify-between items-center">
@@ -246,7 +246,7 @@ export function CategoriaModal({
                   'relative p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2',
                   destino === 'BAR'
                     ? 'bg-blue-500/15 border-blue-500/50 shadow-lg shadow-blue-950/20'
-                    : 'bg-[#1C1C1F]/60 border-[#27272A] hover:bg-[#1C1C1F] hover:border-gray-700'
+                    : 'bg-koma-raised/60 border-koma-border hover:bg-koma-raised hover:border-gray-700'
                 )}
               >
                 <div className="flex justify-between items-center">
@@ -277,7 +277,7 @@ export function CategoriaModal({
                   'relative p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2',
                   destino === 'NENHUM'
                     ? 'bg-zinc-500/15 border-zinc-400/50 shadow-lg'
-                    : 'bg-[#1C1C1F]/60 border-[#27272A] hover:bg-[#1C1C1F] hover:border-gray-700'
+                    : 'bg-koma-raised/60 border-koma-border hover:bg-koma-raised hover:border-gray-700'
                 )}
               >
                 <div className="flex justify-between items-center">
@@ -303,19 +303,19 @@ export function CategoriaModal({
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#27272A]">
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-koma-border">
             <button
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="px-4 py-2 bg-[#1C1C1F] hover:bg-[#27272A] text-gray-300 rounded-xl text-xs font-bold transition-all cursor-pointer border border-[#27272A]"
+              className="px-4 py-2 bg-koma-raised hover:bg-koma-card text-gray-300 rounded-xl text-xs font-bold transition-all cursor-pointer border border-koma-border"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="flex items-center gap-2 px-5 py-2 bg-[#10b981] hover:bg-[#059669] text-[#121214] rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-lg disabled:opacity-50"
+              className="flex items-center gap-2 px-5 py-2 bg-[#10b981] hover:bg-[#059669] text-zinc-950 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-lg disabled:opacity-50"
             >
               {isSubmitting ? (
                 <>
@@ -362,7 +362,7 @@ export function DeleteCategoryModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
-      <div className="relative w-full max-w-md bg-[#121214] border border-red-900/40 rounded-3xl shadow-2xl p-6 text-left space-y-4 font-sans">
+      <div className="relative w-full max-w-md bg-koma-dialog border border-red-900/40 rounded-3xl shadow-2xl p-6 text-left space-y-4 font-sans">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-2xl bg-red-950/60 border border-red-900/60 text-red-400">
             <Ban size={22} />
@@ -382,7 +382,7 @@ export function DeleteCategoryModal({
             type="button"
             onClick={onClose}
             disabled={isDeleting}
-            className="px-4 py-2 bg-[#1C1C1F] hover:bg-[#27272A] text-gray-300 rounded-xl text-xs font-bold transition-all cursor-pointer border border-[#27272A]"
+            className="px-4 py-2 bg-koma-raised hover:bg-koma-card text-gray-300 rounded-xl text-xs font-bold transition-all cursor-pointer border border-koma-border"
           >
             Cancelar
           </button>
