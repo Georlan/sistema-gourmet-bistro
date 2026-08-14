@@ -24,8 +24,8 @@ export interface ProdutoRelatorioItem {
 const CustomChartTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-[#1C1C1F] border border-[#27272A] p-3 rounded-2xl shadow-xl text-left font-sans space-y-1 z-50">
-        <p className="text-[10px] font-bold text-white">{label}</p>
+      <div className="bg-koma-panel border border-koma-border p-3 rounded-2xl shadow-xl text-left font-sans space-y-1 z-50">
+        <p className="text-[10px] font-bold text-koma-foreground">{label}</p>
         {payload.map((entry: any, index: number) => (
           <p key={index} className="text-xs font-bold font-mono" style={{ color: entry.color }}>
             {entry.name}: {entry.dataKey === 'faturamento' ? `R$ ${entry.value.toFixed(2)}` : `${entry.value} un.`}
@@ -141,9 +141,9 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <Package size={18} className="text-[#10b981]" />
-            <h3 className="font-serif font-bold text-base text-white">Relatório de Desempenho de Produtos</h3>
+            <h3 className="font-serif font-bold text-base text-koma-foreground">Relatório de Desempenho de Produtos</h3>
           </div>
-          <p className="text-[10px] text-gray-400">
+          <p className="text-[10px] text-koma-subtle">
             Período: <strong className="text-gray-200">{dataInicio}</strong> até <strong className="text-gray-200">{dataFim}</strong>
           </p>
         </div>
@@ -152,7 +152,7 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
           <button
             type="button"
             onClick={() => setShowCalendarModal(true)}
-            className="px-3.5 py-2 bg-koma-raised hover:bg-koma-card border border-koma-border text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
+            className="px-3.5 py-2 bg-koma-raised hover:bg-koma-card border border-koma-border text-koma-foreground rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
           >
             <CalendarIcon size={14} className="text-[#10b981]" />
             Alterar Período
@@ -162,7 +162,7 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
             type="button"
             onClick={handleExportCsv}
             disabled={!produtos.length}
-            className="px-3.5 py-2 bg-koma-raised hover:bg-koma-card border border-koma-border text-gray-300 hover:text-white rounded-xl text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+            className="px-3.5 py-2 bg-koma-raised hover:bg-koma-card border border-koma-border text-koma-muted hover:text-koma-foreground rounded-xl text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
           >
             <Download size={14} />
             Exportar CSV
@@ -176,12 +176,12 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
             <span className="font-bold text-lg">!</span>
           </div>
           <div className="space-y-1">
-            <h3 className="text-white font-bold text-sm">Não foi possível carregar o relatório de produtos</h3>
-            <p className="text-gray-400 text-xs">Por favor, tente novamente.</p>
+            <h3 className="text-koma-foreground font-bold text-sm">Não foi possível carregar o relatório de produtos</h3>
+            <p className="text-koma-subtle text-xs">Por favor, tente novamente.</p>
           </div>
           <button
             onClick={() => fetchProdutosReport()}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition-all cursor-pointer"
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-koma-foreground font-bold text-xs rounded-xl transition-all cursor-pointer"
           >
             Tentar novamente
           </button>
@@ -194,16 +194,16 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
           <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4">
             <div className="flex items-center gap-2 border-b border-koma-border pb-3">
               <BarChart2 size={16} className="text-[#10b981]" />
-              <span className="font-serif font-bold text-sm text-white">Top Produtos por Unidades Vendidas</span>
+              <span className="font-serif font-bold text-sm text-koma-foreground">Top Produtos por Unidades Vendidas</span>
             </div>
 
             <div className="h-60 w-full pt-1">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={topProdutosChartData} margin={{ top: 10, right: 10, left: -15, bottom: 25 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#27272A" vertical={false} />
-                  <XAxis dataKey="name" stroke="#71717A" fontSize={9} interval={0} angle={-25} textAnchor="end" />
-                  <YAxis stroke="#71717A" fontSize={10} tickLine={false} axisLine={false} />
-                  <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--koma-border-default)" vertical={false} />
+                  <XAxis dataKey="name" stroke="var(--koma-text-subtle)" fontSize={9} interval={0} angle={-25} textAnchor="end" />
+                  <YAxis stroke="var(--koma-text-subtle)" fontSize={10} tickLine={false} axisLine={false} />
+                  <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'var(--koma-border-default)' }} />
                   <Bar dataKey="quantidade" name="Unidades Vendidas" fill="#10b981" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -213,16 +213,16 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
           <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4">
             <div className="flex items-center gap-2 border-b border-koma-border pb-3">
               <BarChart2 size={16} className="text-sky-400" />
-              <span className="font-serif font-bold text-sm text-white">Top Produtos por Faturamento (R$)</span>
+              <span className="font-serif font-bold text-sm text-koma-foreground">Top Produtos por Faturamento (R$)</span>
             </div>
 
             <div className="h-60 w-full pt-1">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={topProdutosChartData} margin={{ top: 10, right: 10, left: -15, bottom: 25 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#27272A" vertical={false} />
-                  <XAxis dataKey="name" stroke="#71717A" fontSize={9} interval={0} angle={-25} textAnchor="end" />
-                  <YAxis stroke="#71717A" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${v}`} />
-                  <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--koma-border-default)" vertical={false} />
+                  <XAxis dataKey="name" stroke="var(--koma-text-subtle)" fontSize={9} interval={0} angle={-25} textAnchor="end" />
+                  <YAxis stroke="var(--koma-text-subtle)" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${v}`} />
+                  <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'var(--koma-border-default)' }} />
                   <Bar dataKey="faturamento" name="Faturamento (R$)" fill="#0ea5e9" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -235,7 +235,7 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
       <div className={clsx('bg-koma-panel', 'border', 'border-koma-border', 'p-4', 'rounded-2xl', 'flex', 'flex-col', 'md:flex-row', 'items-center', 'justify-between', 'gap-3')}>
         {/* Ordenação */}
         <div className="flex items-center gap-1.5 w-full md:w-auto">
-          <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Filtro:</span>
+          <span className="text-[9px] font-bold text-koma-subtle uppercase tracking-wider block">Filtro:</span>
           <div className="flex bg-koma-input p-1 border border-koma-border rounded-xl gap-1">
             <button
               type="button"
@@ -243,7 +243,7 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
               className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase transition-all cursor-pointer ${
                 ordenacao === 'mais_vendidos'
                   ? 'bg-[#10b981] text-zinc-950 font-bold'
-                  : 'text-gray-400 hover:text-white'
+                  : 'text-koma-subtle hover:text-koma-foreground'
               }`}
             >
               Mais Vendidos
@@ -254,7 +254,7 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
               className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase transition-all cursor-pointer ${
                 ordenacao === 'menos_vendidos'
                   ? 'bg-[#10b981] text-zinc-950 font-bold'
-                  : 'text-gray-400 hover:text-white'
+                  : 'text-koma-subtle hover:text-koma-foreground'
               }`}
             >
               Menos Vendidos
@@ -265,7 +265,7 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
               className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase transition-all cursor-pointer ${
                 ordenacao === 'todos'
                   ? 'bg-[#10b981] text-zinc-950 font-bold'
-                  : 'text-gray-400 hover:text-white'
+                  : 'text-koma-subtle hover:text-koma-foreground'
               }`}
             >
               Todos
@@ -276,20 +276,20 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
         {/* Busca por Nome & Categoria */}
         <div className="flex items-center gap-2 w-full md:w-auto flex-1 max-w-lg">
           <form onSubmit={handleSearchSubmit} className="relative flex-1">
-            <Search size={14} className="absolute left-3 top-2.5 text-gray-500" />
+            <Search size={14} className="absolute left-3 top-2.5 text-koma-subtle" />
             <input
               type="text"
               placeholder="Buscar por nome do produto..."
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 bg-koma-input border border-koma-border rounded-xl text-white text-[10px]"
+              className="w-full pl-9 pr-3 py-1.5 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-[10px]"
             />
           </form>
 
           <select
             value={categoriaId}
             onChange={(e) => setCategoriaId(e.target.value)}
-            className="px-3 py-1.5 bg-koma-input border border-koma-border rounded-xl text-white text-[10px] cursor-pointer"
+            className="px-3 py-1.5 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-[10px] cursor-pointer"
           >
             <option value="">Todas as Categorias</option>
             {categorias.map((c) => (
@@ -304,17 +304,17 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
       {/* Products Table */}
       <div className={clsx('bg-koma-panel', 'border', 'border-koma-border', 'rounded-3xl', 'overflow-hidden')}>
         {isLoading ? (
-          <div className="p-12 text-center text-gray-400 text-xs animate-pulse">
+          <div className="p-12 text-center text-koma-subtle text-xs animate-pulse">
             Carregando desempenho de produtos...
           </div>
         ) : produtos.length === 0 ? (
-          <div className="p-12 text-center text-gray-500 text-xs">
+          <div className="p-12 text-center text-koma-subtle text-xs">
             Nenhum produto encontrado para os filtros selecionados.
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-[10px]">
-              <thead className="bg-koma-raised border-b border-koma-border text-gray-400 uppercase tracking-wider font-bold">
+              <thead className="bg-koma-raised border-b border-koma-border text-koma-subtle uppercase tracking-wider font-bold">
                 <tr>
                   <th className="p-3.5 text-center font-mono w-16">Posição</th>
                   <th className="p-3.5">Produto</th>
@@ -327,18 +327,18 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
               <tbody className="divide-y divide-koma-border">
                 {produtos.map((p) => (
                   <tr key={p.produto_id} className="hover:bg-koma-raised/50 transition-colors">
-                    <td className="p-3.5 text-center font-mono font-extrabold text-gray-400">
+                    <td className="p-3.5 text-center font-mono font-extrabold text-koma-subtle">
                       #{p.ranking}
                     </td>
-                    <td className="p-3.5 font-bold text-white">{p.produto_nome}</td>
-                    <td className="p-3.5 text-gray-300">{p.categoria_nome}</td>
+                    <td className="p-3.5 font-bold text-koma-foreground">{p.produto_nome}</td>
+                    <td className="p-3.5 text-koma-muted">{p.categoria_nome}</td>
                     <td className="p-3.5 text-center font-mono font-bold text-sky-400">
                       {p.quantidade_vendida}
                     </td>
                     <td className="p-3.5 text-right font-mono font-extrabold text-[#10b981]">
                       R$ {p.faturamento_total.toFixed(2)}
                     </td>
-                    <td className="p-3.5 text-right font-mono text-gray-300">
+                    <td className="p-3.5 text-right font-mono text-koma-muted">
                       R$ {p.ticket_medio_item.toFixed(2)}
                     </td>
                   </tr>

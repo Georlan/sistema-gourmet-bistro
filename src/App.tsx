@@ -432,6 +432,33 @@ export default function App() {
     };
   }, []);
 
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    return (localStorage.getItem('@koma:theme') as 'dark' | 'light') || 'dark';
+  });
+
+  const toggleTheme = () => {
+    const newTheme = theme === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('@koma:theme', newTheme);
+    setTheme(newTheme);
+    window.dispatchEvent(new Event('koma_theme_changed'));
+  };
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-koma-theme', theme);
+    const handleStorageChange = () => {
+      const stored = localStorage.getItem('@koma:theme') as 'dark' | 'light';
+      if (stored && ['dark', 'light'].includes(stored)) {
+        setTheme(stored);
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('koma_theme_changed', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('koma_theme_changed', handleStorageChange);
+    };
+  }, [theme]);
+
   // 1.5. Dynamic Salon Tables State and Fetcher
   const [salonTables, setSalonTables] = useState<Table[]>([]);
   const [fetchError, setFetchError] = useState<string | null>(null);

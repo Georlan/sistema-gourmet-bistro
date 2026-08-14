@@ -47,8 +47,8 @@ const ROLE_LABEL: Record<string, string> = {
 const CustomChartTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-[#1C1C1F] border border-[#27272A] p-3 rounded-2xl shadow-xl text-left font-sans space-y-1 z-50">
-        <p className="text-[10px] font-bold text-white">{label}</p>
+      <div className="bg-koma-panel border border-koma-border p-3 rounded-2xl shadow-xl text-left font-sans space-y-1 z-50">
+        <p className="text-[10px] font-bold text-koma-foreground">{label}</p>
         {payload.map((entry: any, index: number) => (
           <p key={index} className="text-xs font-bold font-mono" style={{ color: entry.color }}>
             {entry.name}: {entry.dataKey === 'faturamento' ? `R$ ${entry.value.toFixed(2)}` : `${entry.value} comandas`}
@@ -256,10 +256,10 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
             <div className="h-60 w-full pt-1">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={teamChartData} margin={{ top: 10, right: 10, left: -15, bottom: 10 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#27272A" vertical={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--koma-border-default)" vertical={false} />
                   <XAxis dataKey="name" stroke="#71717A" fontSize={10} tickLine={false} axisLine={false} />
                   <YAxis stroke="#71717A" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${v}`} />
-                  <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }} />
+                  <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'var(--koma-border-default)' }} />
                   <Bar dataKey="faturamento" name="Faturamento (R$)" fill="#10b981" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -275,10 +275,10 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
             <div className="h-60 w-full pt-1">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={teamChartData} margin={{ top: 10, right: 10, left: -15, bottom: 10 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#27272A" vertical={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--koma-border-default)" vertical={false} />
                   <XAxis dataKey="name" stroke="#71717A" fontSize={10} tickLine={false} axisLine={false} />
                   <YAxis stroke="#71717A" fontSize={10} tickLine={false} axisLine={false} />
-                  <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }} />
+                  <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'var(--koma-border-default)' }} />
                   <Bar dataKey="pedidos" name="Atendimentos" fill="#0ea5e9" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>

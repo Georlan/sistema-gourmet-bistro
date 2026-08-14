@@ -170,11 +170,11 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
             
             {/* Cart Header */}
             <div className="sticky top-0 z-40 -mx-3 -mt-3 mb-3 flex shrink-0 items-center justify-between gap-3 border-b border-koma-border bg-koma-panel px-3 pb-3 pt-3 shadow-[0_8px_18px_rgba(0,0,0,0.28)] sm:static sm:mx-0 sm:mt-0 sm:bg-transparent sm:px-0 sm:pt-0 sm:shadow-none">
-              <div className="flex items-center gap-1.5 text-white">
+              <div className="flex items-center gap-1.5 text-koma-foreground">
                 <ShoppingCart size={18} className="text-emerald-400" />
                 <div>
                   <h3 className="font-serif font-bold text-base leading-tight">Revisar pedido</h3>
-                  <p className="text-[10px] text-gray-400 mt-0.5">Mesa {tableId}</p>
+                  <p className="text-[10px] text-koma-subtle mt-0.5">Mesa {tableId}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -195,8 +195,8 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
             {/* Cart Body */}
             {draftItems.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 text-center space-y-3 flex-1">
-                <div className="text-sm text-white font-semibold font-sans">Nenhum item no pedido</div>
-                <p className="text-xs text-gray-400 max-w-[260px] leading-relaxed">Escolha os produtos da Mesa {tableId}.</p>
+                <div className="text-sm text-koma-foreground font-semibold font-sans">Nenhum item no pedido</div>
+                <p className="text-xs text-koma-subtle max-w-[260px] leading-relaxed">Escolha os produtos da Mesa {tableId}.</p>
                 <button
                   type="button"
                   onClick={openMenu}
@@ -210,8 +210,8 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                 <div className="flex-1 overflow-visible sm:overflow-y-auto min-h-0 sm:pr-1 space-y-3">
                 {/* Global table client name config */}
                 <div className="bg-koma-raised border border-koma-border p-3 rounded-xl space-y-2 shadow-sm">
-                  <label htmlFor="overall-client-name" className="text-[10px] font-sans font-bold text-gray-300 uppercase tracking-wider block">
-                    Cliente do pedido <span className="normal-case text-gray-500">(opcional)</span>
+                  <label htmlFor="overall-client-name" className="text-[10px] font-sans font-bold text-koma-muted uppercase tracking-wider block">
+                    Cliente do pedido <span className="normal-case text-koma-subtle">(opcional)</span>
                   </label>
                   <div className="relative">
                     <input
@@ -225,13 +225,13 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                         });
                       }}
                       placeholder="Ex: Pedro, Cláudia, Família..."
-                      className="w-full px-3 py-2 bg-koma-input text-white border border-koma-border rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 transition-all"
+                      className="w-full px-3 py-2 bg-koma-input text-koma-foreground border border-koma-border rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 transition-all"
                     />
                   </div>
 
                   {combinedSuggestions.length > 0 && (
                     <div className="space-y-1.5 pt-1">
-                      <span className="text-[9px] text-gray-400 font-sans block">Clientes atendidos nesta mesa (toque p/ preencher):</span>
+                      <span className="text-[9px] text-koma-subtle font-sans block">Clientes atendidos nesta mesa (toque p/ preencher):</span>
                       <div className="flex flex-wrap gap-1">
                         {combinedSuggestions.map((name) => (
                           <button
@@ -242,7 +242,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                                 onUpdateDraftItem(item.id, { clienteNome: name });
                               });
                             }}
-                            className="px-2 py-0.5 text-[9px] bg-koma-card hover:bg-emerald-500/15 text-gray-300 hover:text-white border border-koma-border rounded transition-colors font-medium cursor-pointer"
+                            className="px-2 py-0.5 text-[9px] bg-koma-card hover:bg-emerald-500/15 text-koma-muted hover:text-koma-foreground border border-koma-border rounded transition-colors font-medium cursor-pointer"
                           >
                             {name}
                           </button>
@@ -258,16 +258,16 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                     <div
                       key={item.id}
                       id={`draft-item-${item.id}`}
-                      className="p-3 bg-[#1C1C1F] border border-[#27272A] rounded-xl space-y-2.5 shadow-sm group"
+                      className="p-3 bg-koma-card border border-koma-border rounded-xl space-y-2.5 shadow-sm group"
                     >
                       {/* Item Header */}
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-start gap-1.5 min-w-0">
-                          <span className="text-[10px] font-bold font-mono bg-[#121214] text-gray-400 h-5 w-5 rounded-full flex items-center justify-center border border-[#27272A]">
+                          <span className="text-[10px] font-bold font-mono bg-koma-card text-koma-subtle h-5 w-5 rounded-full flex items-center justify-center border border-koma-border">
                             {index + 1}
                           </span>
                           <div className="min-w-0">
-                            <span className="text-xs font-bold text-white block leading-snug">{item.nome}</span>
+                            <span className="text-xs font-bold text-koma-foreground block leading-snug">{item.nome}</span>
                             {item.clienteNome && (
                               <span className="text-[9px] font-bold text-[#10b981] uppercase block">Para: {item.clienteNome}</span>
                             )}
@@ -280,7 +280,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                           </span>
                           
                           {/* Qty Selector */}
-                          <div className="flex items-center gap-1 bg-[#121214] rounded-lg border border-[#27272A] p-0.5">
+                          <div className="flex items-center gap-1 bg-koma-card rounded-lg border border-koma-border p-0.5">
                             <button
                               type="button"
                               onClick={() => {
@@ -290,18 +290,18 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                                   onRemoveFromDraft(item.id);
                                 }
                               }}
-                              className="p-1 hover:bg-[#27272A] text-gray-400 hover:text-rose-500 rounded transition-colors cursor-pointer"
+                              className="p-1 hover:bg-koma-raised text-koma-subtle hover:text-rose-500 rounded transition-colors cursor-pointer"
                               title="Reduzir quantidade"
                             >
                               <Minus size={11} />
                             </button>
-                            <span className="font-mono text-xs font-bold text-white px-1">{item.quantidade || 1}</span>
+                            <span className="font-mono text-xs font-bold text-koma-foreground px-1">{item.quantidade || 1}</span>
                             <button
                               type="button"
                               onClick={() => {
                                 onUpdateDraftItem(item.id, { quantidade: (item.quantidade || 1) + 1 });
                               }}
-                              className="p-1 hover:bg-[#27272A] text-gray-400 hover:text-emerald-500 rounded transition-colors cursor-pointer"
+                              className="p-1 hover:bg-koma-raised text-koma-subtle hover:text-emerald-500 rounded transition-colors cursor-pointer"
                               title="Aumentar quantidade"
                             >
                               <Plus size={11} />
@@ -311,7 +311,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                           <button
                             id={`remove-draft-item-${item.id}`}
                             onClick={() => onRemoveFromDraft(item.id)}
-                            className="text-gray-400 hover:text-rose-500 transition-colors p-1.5 rounded hover:bg-[#121214] cursor-pointer"
+                            className="text-koma-subtle hover:text-rose-500 transition-colors p-1.5 rounded hover:bg-koma-card cursor-pointer"
                             title="Remover item"
                           >
                             <Trash2 size={13} />
@@ -320,8 +320,8 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                       </div>
 
                       {/* Observations */}
-                      <div className="space-y-1.5 pt-1.5 border-t border-[#27272A]">
-                        <div className="flex items-center justify-between text-[10px] text-gray-300 font-sans font-medium">
+                      <div className="space-y-1.5 pt-1.5 border-t border-koma-border">
+                        <div className="flex items-center justify-between text-[10px] text-koma-muted font-sans font-medium">
                           <div className="flex items-center gap-1">
                             <FileText size={10} className="text-[#10b981]" />
                             <span>Observação de Preparo:</span>
@@ -342,7 +342,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                           value={item.observacao}
                           onChange={(e) => onUpdateDraftItem(item.id, { observacao: e.target.value })}
                           placeholder="Ex: sem cebola, molho à parte..."
-                          className="w-full px-2.5 py-1.5 text-xs bg-[#121214] border border-[#27272A] rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 text-white"
+                          className="w-full px-2.5 py-1.5 text-xs bg-koma-card border border-koma-border rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 text-koma-foreground"
                         />
 
                         {/* Presets */}
@@ -367,7 +367,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                                   className={`px-2 py-0.5 text-[9px] rounded border transition-colors font-medium cursor-pointer ${
                                     isActive 
                                       ? 'bg-[#10b981]/20 border-[#10b981]/40 text-[#10b981]'
-                                      : 'bg-[#27272A] hover:bg-[#10b981]/15 text-gray-300 hover:text-white border-[#27272A]'
+                                      : 'bg-koma-raised hover:bg-[#10b981]/15 text-koma-muted hover:text-koma-foreground border-koma-border'
                                   }`}
                                 >
                                   {isActive ? preset : `+${preset}`}
@@ -383,19 +383,19 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
               </div>
 
               {/* Submit Actions (Fixado no rodapé) */}
-                <div className="mt-4 pt-4 border-t border-[#27272A] space-y-3.5 shrink-0">
+                <div className="mt-4 pt-4 border-t border-koma-border space-y-3.5 shrink-0">
                   
                   {/* Order Type Toggle Selector */}
                   <div className="space-y-1.5 font-sans">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Tipo do Pedido:</span>
-                    <div className={`${allowExternalOrders ? 'grid-cols-2' : 'grid-cols-1'} grid bg-[#121214] border border-[#27272A] rounded-xl p-1`}>
+                    <span className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">Tipo do Pedido:</span>
+                    <div className={`${allowExternalOrders ? 'grid-cols-2' : 'grid-cols-1'} grid bg-koma-card border border-koma-border rounded-xl p-1`}>
                       <button
                         type="button"
                         onClick={() => setOrderType('Consumo no Local')}
                         className={`py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                           orderType === 'Consumo no Local'
                             ? 'bg-emerald-600/25 border border-emerald-500/30 text-emerald-400 shadow-sm font-bold'
-                            : 'text-gray-400 hover:text-white'
+                            : 'text-koma-subtle hover:text-koma-foreground'
                         }`}
                       >
                         Consumo no Local
@@ -407,7 +407,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                         className={`py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                           orderType === 'Retirada'
                             ? 'bg-emerald-600/25 border border-emerald-500/30 text-emerald-400 shadow-sm font-bold'
-                            : 'text-gray-400 hover:text-white'
+                            : 'text-koma-subtle hover:text-koma-foreground'
                         }`}
                       >
                         Retirada (Balcão)
@@ -417,15 +417,15 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                   </div>
 
                   <div className="flex justify-between items-baseline font-sans pt-1">
-                    <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Subtotal Rascunho:</span>
+                    <span className="text-xs text-koma-subtle font-bold uppercase tracking-wider">Subtotal Rascunho:</span>
                     <span className="text-2xl font-bold font-mono text-[#10b981]">
                       R$ {draftTotal.toFixed(2)}
                     </span>
                   </div>
 
-                  <div className="bg-[#1C1C1F] border border-[#27272A] rounded-xl px-3 py-2 flex items-start gap-2">
+                  <div className="bg-koma-card border border-koma-border rounded-xl px-3 py-2 flex items-start gap-2">
                     <Info size={14} className="text-[#10b981] shrink-0 mt-0.5" />
-                    <p className="text-[10px] text-gray-300 leading-normal font-sans">
+                    <p className="text-[10px] text-koma-muted leading-normal font-sans">
                       Ao lançar, os itens entram na conta da mesa e seguem para a cozinha.
                     </p>
                   </div>
@@ -434,7 +434,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                     id="submit-draft-order-btn"
                     disabled={isSubmitting}
                     onClick={() => onSubmitDraft(orderType)}
-                    className="hidden sm:flex w-full min-h-12 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-sm items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/10 transition-colors cursor-pointer uppercase tracking-wider font-sans border border-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="hidden sm:flex w-full min-h-12 py-3 bg-emerald-600 hover:bg-emerald-500 text-koma-foreground rounded-xl font-bold text-sm items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/10 transition-colors cursor-pointer uppercase tracking-wider font-sans border border-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <span>{isSubmitting ? 'Lançando...' : 'Lançar Pedido'}</span>
                     <ArrowRight size={14} />
@@ -442,10 +442,10 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                 </div>
 
                 {/* No celular, total e ação permanecem ao alcance do polegar. */}
-                <div className="sm:hidden fixed inset-x-0 bottom-0 z-[80] border-t border-emerald-500/20 bg-[#121214]/95 px-3 pt-2 pb-[calc(0.65rem+env(safe-area-inset-bottom))] shadow-[0_-12px_30px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+                <div className="sm:hidden fixed inset-x-0 bottom-0 z-[80] border-t border-emerald-500/20 bg-koma-card/95 px-3 pt-2 pb-[calc(0.65rem+env(safe-area-inset-bottom))] shadow-[0_-12px_30px_rgba(0,0,0,0.55)] backdrop-blur-xl">
                   <div className="mx-auto flex max-w-2xl items-center gap-3">
                     <div className="min-w-[92px]">
-                      <span className="block text-[9px] font-bold uppercase tracking-wider text-gray-400">Total</span>
+                      <span className="block text-[9px] font-bold uppercase tracking-wider text-koma-subtle">Total</span>
                       <span className="block font-mono text-lg font-bold leading-tight text-emerald-400">
                         R$ {draftTotal.toFixed(2)}
                       </span>
@@ -477,7 +477,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
             <div className="sticky top-0 z-40 -mx-3 -mt-3 flex items-center justify-between gap-3 border-b border-koma-border bg-koma-panel px-3 pb-3 pt-3 shadow-[0_8px_18px_rgba(0,0,0,0.28)] sm:static sm:mx-0 sm:mt-0 sm:bg-transparent sm:px-0 sm:pt-0 sm:shadow-none">
               <div className="min-w-0">
                 <div>
-                  <h3 className="font-serif text-lg sm:text-xl font-bold text-white tracking-tight">Adicionar itens</h3>
+                  <h3 className="font-serif text-lg sm:text-xl font-bold text-koma-foreground tracking-tight">Adicionar itens</h3>
                   <p className="text-[11px] sm:text-xs text-zinc-400 font-sans">Pedido da Mesa {tableId}</p>
                 </div>
               </div>
@@ -489,13 +489,13 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                   className={`min-h-10 px-3 py-2 text-xs font-bold rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 shadow-sm border ${
                     totalDraftQty > 0
                       ? 'bg-emerald-500 text-zinc-950 border-emerald-400 hover:bg-emerald-400'
-                      : 'bg-koma-raised text-white border-koma-border hover:bg-koma-card'
+                      : 'bg-koma-raised text-koma-foreground border-koma-border hover:bg-koma-card'
                   }`}
                 >
                   <ShoppingCart size={14} />
                   <span>Revisar</span>
                   <span className={`font-mono text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-0.5 ${
-                    totalDraftQty > 0 ? 'bg-black/15 text-black' : 'bg-koma-input text-gray-300'
+                    totalDraftQty > 0 ? 'bg-black/15 text-black' : 'bg-koma-input text-koma-muted'
                   }`}>
                     {totalDraftQty}
                   </span>
@@ -506,7 +506,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                   <button
                     id="toggle-menu-settings"
                     onClick={() => setShowSettings(!showSettings)}
-                    className="min-h-10 p-2.5 text-gray-400 hover:text-white bg-koma-raised hover:bg-koma-card rounded-xl transition-colors cursor-pointer border border-koma-border"
+                    className="min-h-10 p-2.5 text-koma-subtle hover:text-koma-foreground bg-koma-raised hover:bg-koma-card rounded-xl transition-colors cursor-pointer border border-koma-border"
                     title="Ajustar visualização"
                     aria-label="Ajustar visualização"
                   >
@@ -516,7 +516,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                   {showSettings && (
                     <div className="absolute right-0 top-full mt-2 w-56 bg-koma-dialog border border-koma-border shadow-xl rounded-xl p-3.5 z-30 space-y-2.5">
                       <span className="block text-[10px] font-sans font-bold text-zinc-400 mb-1 uppercase tracking-wider">Ajustes da Tela</span>
-                      <label className="flex items-center justify-between text-xs text-gray-300 cursor-pointer p-1.5 rounded hover:bg-koma-raised">
+                      <label className="flex items-center justify-between text-xs text-koma-muted cursor-pointer p-1.5 rounded hover:bg-koma-raised">
                         <span>Exibir imagens</span>
                         <input
                           id="toggle-images-setting"
@@ -526,7 +526,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                           className="rounded border-koma-border text-emerald-400 focus:ring-emerald-500 h-4 w-4 bg-koma-input"
                         />
                       </label>
-                      <label className="flex items-center justify-between text-xs text-gray-300 cursor-pointer p-1.5 rounded hover:bg-koma-raised">
+                      <label className="flex items-center justify-between text-xs text-koma-muted cursor-pointer p-1.5 rounded hover:bg-koma-raised">
                         <span>Exibir descrições</span>
                         <input
                           id="toggle-desc-setting"
@@ -552,7 +552,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Buscar no cardápio..."
-                  className="w-full pl-10 pr-4 py-2.5 text-sm bg-koma-input border border-koma-border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-white placeholder:text-zinc-500"
+                  className="w-full pl-10 pr-4 py-2.5 text-sm bg-koma-input border border-koma-border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-koma-foreground placeholder:text-zinc-500"
                 />
               </div>
 
@@ -569,7 +569,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                     const element = document.getElementById(`category-sec-${event.target.value.toLowerCase().replace(/\s+/g, '-')}`);
                     element?.scrollIntoView({ block: 'start' });
                   }}
-                  className="w-full min-h-11 px-3 bg-[#1C1C1F] border border-[#27272A] rounded-xl text-sm font-semibold text-white focus:outline-none focus:border-[#10b981]"
+                  className="w-full min-h-11 px-3 bg-koma-card border border-koma-border rounded-xl text-sm font-semibold text-koma-foreground focus:outline-none focus:border-[#10b981]"
                 >
                   {categoriesList.map((category) => (
                     <option key={category.id} value={category.nome}>{category.nome}</option>
@@ -592,8 +592,8 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                     }}
                     className={`px-4 py-2 text-xs font-semibold rounded-lg whitespace-nowrap transition-all cursor-pointer ${
                       selectedCategory === catObj.nome
-                        ? 'bg-rose-900/40 border border-rose-800/50 text-white shadow-md'
-                        : 'bg-[#1C1C1F] hover:bg-[#27272A] text-gray-300 hover:text-white border border-[#27272A]'
+                        ? 'bg-rose-900/40 border border-rose-800/50 text-koma-foreground shadow-md'
+                        : 'bg-koma-card hover:bg-koma-raised text-koma-muted hover:text-koma-foreground border border-koma-border'
                     }`}
                   >
                     {catObj.nome}
@@ -628,7 +628,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                         !searchQuery && selectedCategory !== catObj.nome ? 'hidden sm:block' : ''
                       }`}
                     >
-                      <h4 className="font-serif text-xs font-bold text-[#10b981] uppercase tracking-wider border-b border-[#27272A] pb-1.5 pt-1">
+                      <h4 className="font-serif text-xs font-bold text-[#10b981] uppercase tracking-wider border-b border-koma-border pb-1.5 pt-1">
                         {catObj.nome}
                       </h4>
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 sm:gap-4">
@@ -637,14 +637,14 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                           <div
                             key={product.id}
                             id={`product-card-${product.id}`}
-                            className="bg-[#161619] border border-[#27272A] hover:border-[#10b981]/30 rounded-xl sm:rounded-2xl p-3 sm:p-4 flex flex-col justify-between group cursor-pointer"
+                            className="bg-[#161619] border border-koma-border hover:border-[#10b981]/30 rounded-xl sm:rounded-2xl p-3 sm:p-4 flex flex-col justify-between group cursor-pointer"
                             onClick={() => handleOpenConfig(product)}
                           >
                             <div className="space-y-2 sm:space-y-3">
                               {/* Product Image */}
                               {settings.exibirImagens && product.imagem && (
                                 <div 
-                                  className="w-full h-32 rounded-lg overflow-hidden relative bg-[#1C1C1F] border border-[#27272A]"
+                                  className="w-full h-32 rounded-lg overflow-hidden relative bg-koma-card border border-koma-border"
                                 >
                                   <img
                                     src={product.imagem}
@@ -658,7 +658,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                               <div>
                                 <div className="flex justify-between items-start gap-2">
                                   <h4 
-                                    className="font-serif font-bold leading-tight text-sm text-white group-hover:text-[#10b981] transition-colors"
+                                    className="font-serif font-bold leading-tight text-sm text-koma-foreground group-hover:text-[#10b981] transition-colors"
                                   >
                                     {product.nome}
                                   </h4>
@@ -670,7 +670,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                                 </div>
                                 
                                 {settings.exibirDescricoes && (
-                                  <p className="text-[11px] text-gray-400 mt-1.5 leading-relaxed line-clamp-2 sm:line-clamp-none">
+                                  <p className="text-[11px] text-koma-subtle mt-1.5 leading-relaxed line-clamp-2 sm:line-clamp-none">
                                     {product.descricao}
                                   </p>
                                 )}
@@ -684,7 +684,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                                 e.stopPropagation();
                                 handleOpenConfig(product);
                               }}
-                              className="mt-2.5 sm:mt-4 w-full min-h-10 flex items-center justify-center gap-1 py-2 text-xs font-bold rounded-xl transition-colors border bg-[#1C1C1F] hover:bg-[#10b981]/20 text-[#10b981] cursor-pointer border-[#27272A]"
+                              className="mt-2.5 sm:mt-4 w-full min-h-10 flex items-center justify-center gap-1 py-2 text-xs font-bold rounded-xl transition-colors border bg-koma-card hover:bg-[#10b981]/20 text-[#10b981] cursor-pointer border-koma-border"
                             >
                               <Plus size={13} /><span>Adicionar</span>
                             </button>
@@ -697,7 +697,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
 
                 if (totalRendered === 0) {
                   return (
-                    <div className="py-12 text-center text-gray-400 text-sm italic font-serif">
+                    <div className="py-12 text-center text-koma-subtle text-sm italic font-serif">
                       {catalogReady
                         ? 'Nenhum item disponível no cardápio.'
                         : 'Carregando o cardápio…'}
@@ -721,20 +721,20 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
               setSelectedProductToConfigure(null);
             }
           }}
-          className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in cursor-pointer"
+          className="fixed inset-0 bg-koma-overlay z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in cursor-pointer"
         >
-          <div className="bg-[#1C1C1F] border border-[#27272A] rounded-t-3xl sm:rounded-3xl w-full max-w-md max-h-[92dvh] overflow-y-auto p-4 sm:p-6 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3 sm:space-y-4 shadow-2xl animate-scale-in">
+          <div className="bg-koma-card border border-koma-border rounded-t-3xl sm:rounded-3xl w-full max-w-md max-h-[92dvh] overflow-y-auto p-4 sm:p-6 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3 sm:space-y-4 shadow-2xl animate-scale-in">
             
             {/* Modal Header */}
-            <div className="flex justify-between items-start border-b border-[#27272A] pb-3">
+            <div className="flex justify-between items-start border-b border-koma-border pb-3">
               <div>
                 <span className="text-[10px] font-bold text-[#10b981] uppercase tracking-wider">{obterNomeCategoria(selectedProductToConfigure.categoria)}</span>
-                <h4 className="font-serif font-bold text-base sm:text-lg text-white mt-0.5">{selectedProductToConfigure.nome}</h4>
+                <h4 className="font-serif font-bold text-base sm:text-lg text-koma-foreground mt-0.5">{selectedProductToConfigure.nome}</h4>
               </div>
               <button
                 type="button"
                 onClick={() => setSelectedProductToConfigure(null)}
-                className="p-1 hover:bg-[#27272A] rounded-full text-gray-400 hover:text-white transition-colors cursor-pointer border border-transparent"
+                className="p-1 hover:bg-koma-raised rounded-full text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer border border-transparent"
               >
                 <X size={18} />
               </button>
@@ -762,7 +762,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                     >
                       <Minus size={14} />
                     </button>
-                    <span className="font-mono text-sm font-bold text-white px-4 min-w-[3rem] text-center">{configQty}</span>
+                    <span className="font-mono text-sm font-bold text-koma-foreground px-4 min-w-[3rem] text-center">{configQty}</span>
                     <button
                       type="button"
                       onClick={() => setConfigQty(prev => prev + 1)}
@@ -797,7 +797,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                   value={configObs}
                   onChange={(e) => setConfigObs(e.target.value)}
                   placeholder="Ex: sem cheddar, mal passado, sem cebola..."
-                  className="w-full px-3 py-2 bg-koma-input text-white border border-koma-border rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 transition-all"
+                  className="w-full px-3 py-2 bg-koma-input text-koma-foreground border border-koma-border rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 transition-all"
                 />
 
                 {/* Preset shortcuts */}
@@ -822,7 +822,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                           className={`px-2.5 py-1 text-[9px] rounded-lg border transition-colors font-medium cursor-pointer ${
                             isActive
                               ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
-                              : 'bg-koma-raised hover:bg-emerald-500/25 text-zinc-300 hover:text-white border-koma-border'
+                              : 'bg-koma-raised hover:bg-emerald-500/25 text-zinc-300 hover:text-koma-foreground border-koma-border'
                           }`}
                         >
                           {isActive ? preset : `+${preset}`}
@@ -844,12 +844,12 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                   value={configClient}
                   onChange={(e) => setConfigClient(e.target.value)}
                   placeholder="Ex: Pedro, Cláudia, Mesa Direita..."
-                  className="w-full px-3 py-2 bg-koma-input text-white border border-koma-border rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 transition-all"
+                  className="w-full px-3 py-2 bg-koma-input text-koma-foreground border border-koma-border rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 transition-all"
                 />
 
                 {combinedSuggestions.length > 0 && (
                   <div className="space-y-1 pt-0.5">
-                    <span className="text-[9px] text-gray-500 block">Escolher do atendimento atual:</span>
+                    <span className="text-[9px] text-koma-subtle block">Escolher do atendimento atual:</span>
                     <div className="flex flex-wrap gap-1">
                       {combinedSuggestions.map((name) => (
                         <button
@@ -859,7 +859,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                           className={`px-2 py-0.5 text-[9px] border rounded transition-colors font-medium cursor-pointer ${
                             configClient === name
                               ? 'bg-[#10b981]/20 text-[#10b981] border-[#10b981]/40'
-                              : 'bg-[#27272A] hover:bg-[#10b981]/15 text-gray-300 hover:text-white border-[#27272A]'
+                              : 'bg-koma-raised hover:bg-[#10b981]/15 text-koma-muted hover:text-koma-foreground border-koma-border'
                           }`}
                         >
                           {name}
@@ -873,18 +873,18 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
             </div>
 
             {/* Modal Actions */}
-            <div className="flex items-center gap-3 pt-3 border-t border-[#27272A]">
+            <div className="flex items-center gap-3 pt-3 border-t border-koma-border">
               <button
                 type="button"
                 onClick={() => setSelectedProductToConfigure(null)}
-                className="flex-1 py-2.5 border border-[#27272A] hover:bg-[#27272A] text-gray-300 hover:text-white text-xs font-bold rounded-xl transition-all cursor-pointer text-center"
+                className="flex-1 py-2.5 border border-koma-border hover:bg-koma-raised text-koma-muted hover:text-koma-foreground text-xs font-bold rounded-xl transition-all cursor-pointer text-center"
               >
                 Cancelar
               </button>
               <button
                 type="button"
                 onClick={handleConfirmAdd}
-                className="flex-1 py-2.5 bg-rose-900/40 border border-rose-800/50 hover:bg-[#601823] text-white text-xs font-bold rounded-xl transition-all cursor-pointer text-center shadow-lg shadow-[#f43f5e]/10"
+                className="flex-1 py-2.5 bg-rose-900/40 border border-rose-800/50 hover:bg-[#601823] text-koma-foreground text-xs font-bold rounded-xl transition-all cursor-pointer text-center shadow-lg shadow-[#f43f5e]/10"
               >
                 Confirmar
               </button>

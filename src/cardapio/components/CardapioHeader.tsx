@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { BrandConfig, LOCAL_LOGO_PLACEHOLDER } from "../CardapioTypes";
-import { Search, User, MapPin, Phone, ShoppingBag, Instagram, Facebook, Globe, Share2 } from "lucide-react";
+import { Search, User, MapPin, Phone, ShoppingBag, Instagram, Facebook, Globe, Share2, Sun, Moon } from "lucide-react";
 
 interface CardapioHeaderProps {
   activeBrand: BrandConfig;
@@ -46,6 +46,35 @@ export default function CardapioHeader({
   cartCount
 }: CardapioHeaderProps) {
   const [showToast, setShowToast] = useState(false);
+
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    if (typeof localStorage !== 'undefined') {
+      return (localStorage.getItem('@koma:theme') as 'dark' | 'light') || 'dark';
+    }
+    return 'dark';
+  });
+
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const stored = localStorage.getItem('@koma:theme') as 'dark' | 'light';
+      if (stored && ['dark', 'light'].includes(stored)) {
+        setTheme(stored);
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('koma_theme_changed', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('koma_theme_changed', handleStorageChange);
+    };
+  }, []);
+
+  const toggleTheme = () => {
+    const newTheme = theme === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('@koma:theme', newTheme);
+    setTheme(newTheme);
+    window.dispatchEvent(new Event('koma_theme_changed'));
+  };
 
   const handleShare = async () => {
     const shareData = {
@@ -150,6 +179,15 @@ export default function CardapioHeader({
 
           {/* Action Navigation Controls */}
           <div className="flex items-center gap-2 sm:gap-3 self-end sm:self-auto">
+            {/* Theme Toggle Button */}
+            <button
+              onClick={toggleTheme}
+              className="flex items-center justify-center h-9 w-9 rounded-xl border border-slate-500/10 hover:bg-slate-500/10 text-text-app/80 hover:text-primary transition cursor-pointer shrink-0"
+              title="Alternar Tema"
+            >
+              {theme === 'dark' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+            </button>
+
             {/* Share Button */}
             <button
               onClick={handleShare}

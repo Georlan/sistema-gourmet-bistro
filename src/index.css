@@ -62,6 +62,14 @@
   --koma-border-strong: rgba(231, 238, 234, 0.16);
   --koma-accent: #00c996;
   --koma-focus-ring: rgba(0, 201, 150, 0.34);
+  
+  --koma-waiter-bg: radial-gradient(circle at 88% 6%, rgba(0, 184, 148, 0.07), transparent 25rem), linear-gradient(180deg, var(--koma-surface-shell) 0%, #0b0c0b 58%, var(--koma-surface-shell) 100%);
+  --koma-sidebar-bg: radial-gradient(circle at 12% 0%, rgba(0, 201, 150, 0.055), transparent 15rem), linear-gradient(180deg, #0d100e 0%, #0b0d0c 100%);
+  --koma-main-bg: radial-gradient(circle at 89% 4%, rgba(0, 201, 150, 0.075), transparent 28rem), linear-gradient(180deg, #090b0a 0%, #0b0d0c 100%);
+  --koma-topbar-bg: rgba(12, 15, 13, 0.86);
+  --koma-hero-bg: linear-gradient(112deg, rgba(13, 17, 15, 0.98) 0 62%, rgba(3, 43, 33, 0.78) 62.1% 100%);
+  --koma-hero-accent: linear-gradient(122deg, transparent 38%, rgba(67, 241, 189, 0.32) 38.2%, transparent 38.7%), radial-gradient(circle at 72% 0, rgba(0, 217, 166, 0.13), transparent 56%);
+  
   color-scheme: dark;
 }
 
@@ -92,6 +100,14 @@
   --koma-border-strong: rgba(15, 23, 42, 0.24);
   --koma-accent: #00966d;
   --koma-focus-ring: rgba(0, 150, 109, 0.34);
+  
+  --koma-waiter-bg: linear-gradient(180deg, var(--koma-surface-shell) 0%, #f4f7f5 58%, var(--koma-surface-shell) 100%);
+  --koma-sidebar-bg: linear-gradient(180deg, #ffffff 0%, #f4f7f5 100%);
+  --koma-main-bg: linear-gradient(180deg, #f4f7f5 0%, #eef2f0 100%);
+  --koma-topbar-bg: rgba(255, 255, 255, 0.86);
+  --koma-hero-bg: linear-gradient(112deg, #ffffff 0 62%, rgba(0, 150, 109, 0.15) 62.1% 100%);
+  --koma-hero-accent: linear-gradient(122deg, transparent 38%, rgba(0, 150, 109, 0.12) 38.2%, transparent 38.7%), radial-gradient(circle at 72% 0, rgba(0, 150, 109, 0.08), transparent 56%);
+
   color-scheme: light;
 }
 
@@ -106,9 +122,7 @@ body {
 
 /* Waiter desktop workspace — shares the landing page's editorial planes. */
 .waiter-shell {
-  background:
-    radial-gradient(circle at 88% 6%, rgba(0, 184, 148, 0.07), transparent 25rem),
-    linear-gradient(180deg, var(--koma-surface-shell) 0%, #0b0c0b 58%, var(--koma-surface-shell) 100%);
+  background: var(--koma-waiter-bg);
   color: var(--koma-text-primary);
 }
 
@@ -126,10 +140,8 @@ body {
 }
 
 .cashier-sidebar {
-  background:
-    radial-gradient(circle at 12% 0%, rgba(0, 201, 150, 0.055), transparent 15rem),
-    linear-gradient(180deg, #0d100e 0%, #0b0d0c 100%) !important;
-  border-color: var(--cashier-line) !important;
+  background: var(--koma-sidebar-bg) !important;
+  border-color: var(--koma-border-default) !important;
   box-shadow: 14px 0 38px rgba(0, 0, 0, 0.12);
 }
 
@@ -161,9 +173,9 @@ body {
   flex: 0 0 auto;
   place-items: center;
   overflow: hidden;
-  border: 1px solid rgba(231, 238, 234, 0.09);
+  border: 1px solid var(--koma-border-subtle);
   border-radius: 0.72rem;
-  background: rgba(231, 238, 234, 0.035);
+  background: var(--koma-border-subtle);
 }
 
 .cashier-sidebar__brand-copy {
@@ -175,7 +187,7 @@ body {
 
 .cashier-sidebar__brand-copy strong {
   overflow: hidden;
-  color: #f3f6f4;
+  color: var(--koma-text-primary);
   font-family: var(--font-serif);
   font-size: 0.84rem;
   font-weight: 800;
@@ -187,7 +199,7 @@ body {
 
 .cashier-sidebar__brand-copy small {
   overflow: hidden;
-  color: #68726d;
+  color: var(--koma-text-muted);
   font-size: 0.54rem;
   font-weight: 600;
   line-height: 1.1;
@@ -201,18 +213,18 @@ body {
   height: 2rem;
   flex: 0 0 auto;
   place-items: center;
-  color: #87918c;
-  border: 1px solid rgba(231, 238, 234, 0.09);
+  color: var(--koma-text-subtle);
+  border: 1px solid var(--koma-border-subtle);
   border-radius: 0.68rem;
-  background: rgba(231, 238, 234, 0.035);
+  background: var(--koma-border-subtle);
   cursor: pointer;
   transition: color 140ms ease, background-color 140ms ease, border-color 140ms ease;
 }
 
 .cashier-sidebar__utility-button:hover {
-  color: #e6ebe8;
-  border-color: rgba(231, 238, 234, 0.16);
-  background: rgba(231, 238, 234, 0.075);
+  color: var(--koma-text-primary);
+  border-color: var(--koma-border-subtle);
+  background: var(--koma-border-subtle);
 }
 
 .cashier-shift-card {
@@ -222,9 +234,9 @@ body {
   justify-content: space-between;
   gap: 0.65rem;
   padding: 0.65rem 0.7rem;
-  border: 1px solid rgba(231, 238, 234, 0.095);
+  border: 1px solid var(--koma-border-subtle);
   border-radius: 0.85rem;
-  background: rgba(231, 238, 234, 0.035);
+  background: var(--koma-border-subtle);
 }
 
 .cashier-shift-card__status {
@@ -256,7 +268,7 @@ body {
 }
 
 .cashier-shift-card__copy small {
-  color: #68726d;
+  color: var(--koma-text-muted);
   font-size: 0.51rem;
   font-weight: 700;
   letter-spacing: 0.09em;
@@ -265,7 +277,7 @@ body {
 
 .cashier-shift-card__copy strong {
   overflow: hidden;
-  color: #e9eeeb;
+  color: var(--koma-text-primary);
   font-size: 0.65rem;
   font-weight: 700;
   text-overflow: ellipsis;
@@ -284,9 +296,9 @@ body {
 }
 
 .cashier-shift-card__action.is-close {
-  color: #9da7a2;
-  border: 1px solid rgba(231, 238, 234, 0.1);
-  background: rgba(231, 238, 234, 0.035);
+  color: var(--koma-text-subtle);
+  border: 1px solid var(--koma-border-default);
+  background: var(--koma-border-subtle);
 }
 
 .cashier-shift-card__action.is-close:hover {
@@ -315,7 +327,7 @@ body {
   height: 1.45rem;
   margin-top: 0.25rem;
   padding-inline: 0.65rem;
-  color: #59635e !important;
+  color: var(--koma-text-subtle) !important;
   font-size: 0.5rem !important;
   font-weight: 800 !important;
   letter-spacing: 0.12em;
@@ -326,17 +338,17 @@ body {
   gap: 0.62rem;
   padding: 0.35rem 0.5rem;
   border-radius: 0.68rem;
-  color: #9aa49f;
+  color: var(--koma-text-subtle);
   transition: color 140ms ease, background-color 140ms ease, border-color 140ms ease;
 }
 
 .cashier-sidebar [data-sidebar="menu-button"]:hover {
-  color: #e1e7e3;
+  color: var(--koma-text-primary);
   background: rgba(231, 238, 234, 0.045) !important;
 }
 
 .cashier-sidebar [data-sidebar="menu-button"][data-active="true"] {
-  color: #dcfff4 !important;
+  color: var(--koma-text-primary) !important;
   border-color: rgba(0, 201, 150, 0.22) !important;
   background: linear-gradient(90deg, rgba(0, 201, 150, 0.13), rgba(0, 201, 150, 0.055)) !important;
   box-shadow: inset 2px 0 0 rgba(0, 201, 150, 0.85) !important;
@@ -348,14 +360,14 @@ body {
   height: 1.65rem;
   flex: 0 0 auto;
   place-items: center;
-  color: #65706a;
+  color: var(--koma-text-muted);
   border: 1px solid transparent;
   border-radius: 0.5rem;
   transition: color 140ms ease, background-color 140ms ease, border-color 140ms ease;
 }
 
 .cashier-nav-item:hover .cashier-nav-icon {
-  color: #b9c2bd;
+  color: var(--koma-text-primary);
 }
 
 .cashier-nav-item[data-active="true"] .cashier-nav-icon {
@@ -400,7 +412,7 @@ body {
 .cashier-sidebar__footer {
   gap: 0.75rem;
   border-top: 1px solid var(--cashier-line);
-  background: rgba(8, 11, 9, 0.72) !important;
+  background: var(--koma-surface-panel) !important;
 }
 
 .cashier-font-control {
@@ -411,7 +423,7 @@ body {
 }
 
 .cashier-font-control__label {
-  color: #68726d;
+  color: var(--koma-text-muted);
   font-size: 0.52rem;
   font-weight: 700;
   white-space: nowrap;
@@ -421,16 +433,16 @@ body {
   display: flex;
   gap: 0.15rem;
   padding: 0.16rem;
-  border: 1px solid rgba(231, 238, 234, 0.08);
+  border: 1px solid var(--koma-border-subtle);
   border-radius: 0.55rem;
-  background: rgba(0, 0, 0, 0.22);
+  background: var(--koma-surface-input);
 }
 
 .cashier-font-control__button {
   min-width: 1.65rem;
   min-height: 1.25rem;
   padding-inline: 0.28rem;
-  color: #69736e;
+  color: var(--koma-text-subtle);
   border-radius: 0.38rem;
   font-size: 0.5rem;
   font-weight: 800;
@@ -439,11 +451,11 @@ body {
 }
 
 .cashier-font-control__button:hover {
-  color: #dfe5e1;
+  color: var(--koma-text-primary);
 }
 
 .cashier-font-control__button.is-active {
-  color: #d9fff3;
+  color: var(--koma-text-primary);
   background: rgba(0, 201, 150, 0.14);
 }
 
@@ -478,7 +490,7 @@ body {
 }
 
 .cashier-operator__copy small {
-  color: #5f6964;
+  color: var(--koma-text-subtle);
   font-size: 0.48rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -486,7 +498,7 @@ body {
 
 .cashier-operator__copy strong {
   overflow: hidden;
-  color: #e7ece9;
+  color: var(--koma-text-primary);
   font-size: 0.65rem;
   font-weight: 750;
   text-overflow: ellipsis;
@@ -510,15 +522,13 @@ body {
 }
 
 .cashier-main {
-  background:
-    radial-gradient(circle at 89% 4%, rgba(0, 201, 150, 0.075), transparent 28rem),
-    linear-gradient(180deg, #090b0a 0%, #0b0d0c 100%) !important;
+  background: var(--koma-main-bg) !important;
 }
 
 .cashier-topbar,
 .cashier-subnav {
-  background: rgba(12, 15, 13, 0.86) !important;
-  border-color: var(--cashier-line) !important;
+  background: var(--koma-topbar-bg) !important;
+  border-color: var(--koma-border-default) !important;
   backdrop-filter: blur(18px);
 }
 
@@ -542,8 +552,7 @@ body {
   overflow: hidden;
   border: 1px solid var(--cashier-line);
   border-radius: 1rem;
-  background:
-    linear-gradient(112deg, rgba(13, 17, 15, 0.98) 0 62%, rgba(3, 43, 33, 0.78) 62.1% 100%);
+  background: var(--koma-hero-bg);
   box-shadow: 0 14px 38px rgba(0, 0, 0, 0.16);
 }
 
@@ -552,9 +561,7 @@ body {
   position: absolute;
   z-index: -1;
   inset: 0 0 0 54%;
-  background:
-    linear-gradient(122deg, transparent 38%, rgba(67, 241, 189, 0.32) 38.2%, transparent 38.7%),
-    radial-gradient(circle at 72% 0, rgba(0, 217, 166, 0.13), transparent 56%);
+  background: var(--koma-hero-accent);
   clip-path: polygon(22% 0, 100% 0, 100% 100%, 0 100%);
   pointer-events: none;
 }
@@ -582,7 +589,7 @@ body {
 }
 
 .orders-hero h1 {
-  color: #f5f7f6;
+  color: var(--koma-text-primary);
   font-family: var(--font-serif);
   font-size: clamp(1.25rem, 1.75vw, 1.85rem);
   font-weight: 800;
@@ -598,7 +605,7 @@ body {
 .orders-hero__copy > p:last-child {
   max-width: 43rem;
   margin-top: 0.32rem;
-  color: #9aa49f;
+  color: var(--koma-text-subtle);
   font-size: 0.66rem;
   line-height: 1.35;
 }
@@ -632,7 +639,7 @@ body {
 
 .orders-hero__metrics span {
   margin-top: 0.2rem;
-  color: #9da8a2;
+  color: var(--koma-text-subtle);
   font-size: 0.54rem;
   font-weight: 600;
   white-space: nowrap;
@@ -648,7 +655,7 @@ body {
 
 .orders-hero__status span:last-child {
   margin: 0 0 0 0.45rem;
-  color: #b7c0bb;
+  color: var(--koma-text-subtle);
 }
 
 .orders-live-dot {
@@ -673,7 +680,7 @@ body {
   padding: 0.55rem 0.65rem;
   border: 1px solid var(--cashier-line);
   border-radius: 0.9rem;
-  border-color: var(--cashier-line) !important;
+  border-color: var(--koma-border-default) !important;
   background: rgba(14, 17, 15, 0.9) !important;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15) !important;
   backdrop-filter: blur(14px);
@@ -687,8 +694,8 @@ body {
   width: 100%;
   min-height: 2.25rem;
   padding: 0.52rem 2rem 0.52rem 2.25rem;
-  color: #f2f6f4;
-  border: 1px solid rgba(231, 238, 234, 0.1);
+  color: var(--koma-text-primary);
+  border: 1px solid var(--koma-border-default);
   border-radius: 0.65rem;
   outline: none;
   background: rgba(5, 8, 7, 0.58);
@@ -697,7 +704,7 @@ body {
 }
 
 .orders-search__input::placeholder {
-  color: #67716c;
+  color: var(--koma-text-subtle);
 }
 
 .orders-search__input:focus {
@@ -714,14 +721,14 @@ body {
   height: 1.15rem;
   translate: 0 -50%;
   place-items: center;
-  color: #84908a;
+  color: var(--koma-text-subtle);
   border-radius: 999px;
-  background: rgba(231, 238, 234, 0.08);
+  background: var(--koma-border-subtle);
   cursor: pointer;
 }
 
 .orders-search__result {
-  color: #84908a;
+  color: var(--koma-text-subtle);
   font-family: var(--font-mono);
   font-size: 0.58rem;
   white-space: nowrap;
@@ -738,7 +745,7 @@ body {
   display: flex;
   align-items: center;
   gap: 0.48rem;
-  color: #a1aaa5;
+  color: var(--koma-text-subtle);
   font-size: 0.68rem;
   font-weight: 600;
   white-space: nowrap;
@@ -749,9 +756,9 @@ body {
   position: relative;
   width: 1.9rem;
   height: 1.05rem;
-  border: 1px solid rgba(231, 238, 234, 0.14);
+  border: 1px solid var(--koma-border-default);
   border-radius: 999px;
-  background: #262b28;
+  background: var(--koma-surface-raised);
   transition: background-color 140ms ease, border-color 140ms ease;
 }
 
@@ -1318,7 +1325,7 @@ body {
   }
 
   .orders-mobile-stages__button.is-active {
-    color: #d9fff3;
+    color: var(--koma-text-primary);
     border-color: rgba(0, 201, 150, 0.25);
     background: rgba(0, 201, 150, 0.13);
   }
