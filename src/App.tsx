@@ -32,7 +32,7 @@ const MemoizedCaixaPanel = React.lazy(() =>
 );
 
 const CashierLoading = () => (
-  <div className="w-full h-full bg-[#090b0a] text-[#00c996] flex items-center justify-center font-mono text-[10px] uppercase tracking-[0.18em]">
+  <div className="w-full h-full bg-koma-page text-[#00c996] flex items-center justify-center font-mono text-[10px] uppercase tracking-[0.18em]">
     Preparando operação…
   </div>
 );
@@ -1915,12 +1915,12 @@ export default function App() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-[#0B0F19] flex items-center justify-center p-4">
-        <div className="w-full max-w-sm bg-[#111726] border border-emerald-500/10 rounded-2xl p-6 sm:p-8 shadow-2xl animate-scale-in">
+      <div className="min-h-screen bg-koma-page flex items-center justify-center p-4">
+        <div className="w-full max-w-sm bg-koma-card border border-emerald-500/10 rounded-2xl p-6 sm:p-8 shadow-2xl animate-scale-in">
           {/* Logo / Header */}
           <div className="text-center space-y-3 mb-7">
             <div className="flex justify-center">
-              <div className="h-20 w-20 bg-[#121214] border border-[#27272A] rounded-2xl flex items-center justify-center shadow-lg shrink-0 overflow-hidden">
+              <div className="h-20 w-20 bg-koma-card border border-koma-border rounded-2xl flex items-center justify-center shadow-lg shrink-0 overflow-hidden">
                 <img src={logoImg} alt="Kôma Logo" className="h-16 w-16 object-contain" />
               </div>
             </div>
@@ -1938,7 +1938,7 @@ export default function App() {
             )}
 
             <div className="space-y-1.5">
-              <label htmlFor="login-username" className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">E-MAIL</label>
+              <label htmlFor="login-username" className="text-[10px] text-koma-subtle font-bold uppercase tracking-wider block">E-MAIL</label>
               <input
                 id="login-username"
                 type="email"
@@ -1949,12 +1949,12 @@ export default function App() {
                 value={loginUsername}
                 onChange={(e) => setLoginUsername(e.target.value)}
                 placeholder="seu@email.com"
-                className="w-full bg-[#090D16] text-koma-foreground border border-[#27272A]/40 rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 placeholder-gray-600"
+                className="w-full bg-koma-panel text-koma-foreground border border-koma-border/40 rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 placeholder-gray-600"
               />
             </div>
 
             <div className="space-y-1.5">
-              <label htmlFor="login-password" className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Senha</label>
+              <label htmlFor="login-password" className="text-[10px] text-koma-subtle font-bold uppercase tracking-wider block">Senha</label>
               <input
                 id="login-password"
                 type="password"
@@ -1964,7 +1964,7 @@ export default function App() {
                 value={loginPassword}
                 onChange={(e) => setLoginPassword(e.target.value)}
                 placeholder="••••••"
-                className="w-full bg-[#090D16] text-koma-foreground border border-[#27272A]/40 rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 placeholder-gray-600"
+                className="w-full bg-koma-panel text-koma-foreground border border-koma-border/40 rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 placeholder-gray-600"
               />
             </div>
 
@@ -1983,7 +1983,7 @@ export default function App() {
 
   if (isManagementRole(activeRole)) {
     return (
-      <div className={`w-full h-screen bg-[#0B0C0E] text-koma-foreground flex flex-col font-sans overflow-hidden ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''}`}>
+      <div className={`w-full h-screen bg-koma-page text-koma-foreground flex flex-col font-sans overflow-hidden ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''}`}>
         <React.Suspense fallback={<CashierLoading />}>
           <MemoizedCaixaPanel
             orders={orders}
@@ -2017,9 +2017,9 @@ export default function App() {
   }
 
   return (
-    <div className={`waiter-shell min-h-screen bg-[#090a09] text-koma-foreground flex flex-col font-sans ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''}`}>
+    <div className={`waiter-shell min-h-screen bg-koma-page text-koma-foreground flex flex-col font-sans ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''}`}>
       {/* GLOBAL TOP HEADER */}
-      <header className="bg-[#090a09]/95 backdrop-blur-xl border-b border-koma-border-subtle text-koma-foreground shrink-0 sticky top-0 z-30">
+      <header className="bg-koma-page/95 backdrop-blur-xl border-b border-koma-border-subtle text-koma-foreground shrink-0 sticky top-0 z-30">
         <div className="max-w-[1680px] mx-auto px-3 sm:px-6 lg:px-10 py-3.5">
           <div className="flex justify-between items-center">
 
@@ -2040,7 +2040,7 @@ export default function App() {
                   <h1 className="font-serif text-base sm:text-lg font-black tracking-[-0.03em] text-koma-foreground leading-tight">
                     {restaurantName}
                   </h1>
-                  <p className="text-[9px] text-[#A1A1AA] font-sans leading-none mt-0.5">
+                  <p className="text-[9px] text-koma-subtle font-sans leading-none mt-0.5">
                     {activeWaiter.nome}
                   </p>
                 </div>
@@ -2078,19 +2078,19 @@ export default function App() {
           />
 
           {/* Drawer content */}
-          <div className="relative w-72 sm:w-80 max-w-sm bg-[#0E0E10] border-r border-emerald-500/10 h-full flex flex-col justify-between shadow-2xl z-10 p-4 sm:p-6 text-[#FAF7F2] overflow-y-auto animate-slide-in-left">
+          <div className="relative w-72 sm:w-80 max-w-sm bg-koma-panel border-r border-emerald-500/10 h-full flex flex-col justify-between shadow-2xl z-10 p-4 sm:p-6 text-koma-foreground overflow-y-auto animate-slide-in-left">
             <div className="space-y-6">
 
               {/* Header inside drawer */}
-              <div className={clsx('flex', 'items-center', 'justify-between', 'pb-4', 'border-b', 'border-[#27272A]')}>
+              <div className={clsx('flex', 'items-center', 'justify-between', 'pb-4', 'border-b', 'border-koma-border')}>
                 <div className={clsx('flex', 'items-center', 'gap-2.5')}>
                   <img src={logoImg} alt="Kôma Logo" className={clsx('h-7', 'w-7', 'object-contain', 'shrink-0')} />
-                  <span className={clsx('font-serif', 'font-bold', 'text-base', 'text-[#FAF7F2]', 'leading-none')}>{restaurantName}</span>
+                  <span className={clsx('font-serif', 'font-bold', 'text-base', 'text-koma-foreground', 'leading-none')}>{restaurantName}</span>
                 </div>
                 <button
                   id="close-sidebar-btn"
                   onClick={() => setIsSidebarOpen(false)}
-                  className={clsx('p-1.5', 'rounded-lg', 'hover:bg-[#1C1C1F]', 'text-[#A1A1AA]', 'hover:text-koma-foreground', 'transition-colors', 'cursor-pointer')}
+                  className={clsx('p-1.5', 'rounded-lg', 'hover:bg-koma-card', 'text-koma-subtle', 'hover:text-koma-foreground', 'transition-colors', 'cursor-pointer')}
                 >
                   <X size={18} />
                 </button>
@@ -2121,14 +2121,14 @@ export default function App() {
                     {/* GARÇOM - MINHA CONTA & DISPONIBILIDADE */}
                     <div className="space-y-2.5">
                       <h3 className="text-[10px] uppercase tracking-wider font-bold text-emerald-400 font-sans">Garçom em Atendimento</h3>
-                      <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-3.5 space-y-3">
+                      <div className="bg-koma-card border border-koma-border rounded-2xl p-3.5 space-y-3">
                         <div className="flex items-center gap-3">
                           <div className="h-10 w-10 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center font-bold">
                             {activeWaiter.nome ? activeWaiter.nome[0] : 'G'}
                           </div>
                           <div>
                             <h4 className="text-sm font-bold text-koma-foreground">{activeWaiter.nome || 'Garçom'}</h4>
-                            <p className="text-[10px] text-gray-400 font-sans">Atendimento • Salão Principal</p>
+                            <p className="text-[10px] text-koma-subtle font-sans">Atendimento • Salão Principal</p>
                           </div>
                         </div>
 
@@ -2164,23 +2164,23 @@ export default function App() {
                     {/* GARÇOM - RESUMO DO SALÃO EM TEMPO REAL */}
                     <div className="space-y-2.5">
                       <h3 className="text-[10px] uppercase tracking-wider font-bold text-emerald-400 font-sans">Status do Salão ao Vivo</h3>
-                      <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-3 space-y-2">
-                        <div className="flex items-center justify-between p-2.5 bg-[#121214] border border-[#27272A] rounded-xl text-xs">
+                      <div className="bg-koma-card border border-koma-border rounded-2xl p-3 space-y-2">
+                        <div className="flex items-center justify-between p-2.5 bg-koma-card border border-koma-border rounded-xl text-xs">
                           <div className="flex items-center gap-2">
                             <Utensils size={14} className="text-emerald-400" />
-                            <span className="text-gray-300 font-medium">Mesas Salão</span>
+                            <span className="text-koma-secondary font-medium">Mesas Salão</span>
                           </div>
                           <span className="font-mono font-bold text-koma-foreground">
                             <strong className="text-emerald-400">{mesasOcupadasCount}</strong> ocupadas / {mesasLivresCount} livres
                           </span>
                         </div>
 
-                        <div className="flex items-center justify-between p-2.5 bg-[#121214] border border-[#27272A] rounded-xl text-xs">
+                        <div className="flex items-center justify-between p-2.5 bg-koma-card border border-koma-border rounded-xl text-xs">
                           <div className="flex items-center gap-2">
-                            <CheckCircle2 size={14} className={pratosProntosCount > 0 ? "text-amber-400 animate-bounce" : "text-gray-500"} />
-                            <span className="text-gray-300 font-medium">Pratos Prontos</span>
+                            <CheckCircle2 size={14} className={pratosProntosCount > 0 ? "text-amber-400 animate-bounce" : "text-koma-muted"} />
+                            <span className="text-koma-secondary font-medium">Pratos Prontos</span>
                           </div>
-                          <span className={clsx('font-mono font-bold px-2 py-0.5 rounded-md text-[10px]', pratosProntosCount > 0 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-gray-400 bg-zinc-800')}>
+                          <span className={clsx('font-mono font-bold px-2 py-0.5 rounded-md text-[10px]', pratosProntosCount > 0 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-koma-subtle bg-koma-raised')}>
                             {pratosProntosCount} p/ servir
                           </span>
                         </div>
@@ -2190,7 +2190,7 @@ export default function App() {
                     {/* GARÇOM - ATALHOS DE ATENDIMENTO */}
                     <div className="space-y-2.5">
                       <h3 className="text-[10px] uppercase tracking-wider font-bold text-emerald-400 font-sans">Atalhos de Atendimento</h3>
-                      <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-3 space-y-2">
+                      <div className="bg-koma-card border border-koma-border rounded-2xl p-3 space-y-2">
                         <button
                           type="button"
                           onClick={() => {
@@ -2198,7 +2198,7 @@ export default function App() {
                             fetchOrdersFromAPI();
                             fetchTables();
                           }}
-                          className="w-full flex items-center justify-between p-2.5 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] rounded-xl text-xs text-koma-foreground transition-all cursor-pointer group"
+                          className="w-full flex items-center justify-between p-2.5 bg-koma-card hover:bg-koma-raised border border-koma-border rounded-xl text-xs text-koma-foreground transition-all cursor-pointer group"
                         >
                           <div className="flex items-center gap-2.5">
                             <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400 group-hover:bg-blue-500/20">
@@ -2216,7 +2216,7 @@ export default function App() {
                     {/* CAIXA - OPERADOR & TURNO */}
                     <div className="space-y-2.5">
                       <h3 className="text-[10px] uppercase tracking-wider font-bold text-emerald-400 font-sans">Operador do Caixa</h3>
-                      <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-3.5 space-y-3">
+                      <div className="bg-koma-card border border-koma-border rounded-2xl p-3.5 space-y-3">
                         <div className="flex items-center gap-3">
                           <div className="h-10 w-10 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center font-bold">
                             {activeWaiter.nome ? activeWaiter.nome[0] : 'C'}
@@ -2250,7 +2250,7 @@ export default function App() {
                           setIsSidebarOpen(false);
                           window.dispatchEvent(new CustomEvent('koma-open-impressoras'));
                         }}
-                        className="w-full flex items-center justify-between p-3 bg-[#1C1C1F] hover:bg-[#27272A] border border-[#27272A] rounded-2xl transition-all cursor-pointer group text-left"
+                        className="w-full flex items-center justify-between p-3 bg-koma-card hover:bg-koma-raised border border-koma-border rounded-2xl transition-all cursor-pointer group text-left"
                       >
                         <div className="flex items-center gap-2.5">
                           <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 group-hover:bg-emerald-500/20">
@@ -2261,28 +2261,28 @@ export default function App() {
                             <p className="text-[9px] text-emerald-400 font-medium">Servidor Online • Pronto</p>
                           </div>
                         </div>
-                        <span className="text-[9px] text-gray-400 font-mono font-bold bg-[#121214] px-2 py-1 rounded-lg border border-[#27272A]">0 Falhas</span>
+                        <span className="text-[9px] text-koma-subtle font-mono font-bold bg-koma-card px-2 py-1 rounded-lg border border-koma-border">0 Falhas</span>
                       </button>
                     </div>
 
                     {/* CAIXA - RESUMO DO TURNO EM TEMPO REAL (PRIORIDADE #2 - SINCRONIZADO COM BANCO DE DADOS) */}
                     <div className="space-y-2.5">
                       <h3 className="text-[10px] uppercase tracking-wider font-bold text-emerald-400 font-sans">Resumo do Turno ao Vivo</h3>
-                      <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-3 space-y-2">
-                        <div className="flex items-center justify-between p-2 bg-[#121214] border border-[#27272A] rounded-xl text-xs">
+                      <div className="bg-koma-card border border-koma-border rounded-2xl p-3 space-y-2">
+                        <div className="flex items-center justify-between p-2 bg-koma-card border border-koma-border rounded-xl text-xs">
                           <div className="flex items-center gap-2">
                             <TrendingUp size={13} className="text-emerald-400" />
-                            <span className="text-gray-300 font-medium text-[11px]">Vendas do Turno</span>
+                            <span className="text-koma-secondary font-medium text-[11px]">Vendas do Turno</span>
                           </div>
                           <span className="font-mono font-bold text-emerald-400">
                             R$ {(turnoResumo?.total_vendas ?? totalVendasTurno).toFixed(2)}
                           </span>
                         </div>
 
-                        <div className="flex items-center justify-between p-2 bg-[#121214] border border-[#27272A] rounded-xl text-xs">
+                        <div className="flex items-center justify-between p-2 bg-koma-card border border-koma-border rounded-xl text-xs">
                           <div className="flex items-center gap-2">
                             <Utensils size={13} className="text-blue-400" />
-                            <span className="text-gray-300 font-medium text-[11px]">Comandas Abertas</span>
+                            <span className="text-koma-secondary font-medium text-[11px]">Comandas Abertas</span>
                           </div>
                           <span className="font-mono font-bold text-koma-foreground">
                             {turnoResumo?.comandas_abertas_count ?? totalComandasAbertas} ativas
@@ -2306,14 +2306,14 @@ export default function App() {
                     {/* CAIXA - ATALHOS RÁPIDOS DE TESOURARIA */}
                     <div className="space-y-2.5">
                       <h3 className="text-[10px] uppercase tracking-wider font-bold text-emerald-400 font-sans">Operações de Tesouraria</h3>
-                      <div className="bg-[#1C1C1F] border border-[#27272A] rounded-2xl p-3 space-y-2">
+                      <div className="bg-koma-card border border-koma-border rounded-2xl p-3 space-y-2">
                         <button
                           type="button"
                           onClick={() => {
                             setIsSidebarOpen(false);
                             window.dispatchEvent(new CustomEvent('koma-open-suprimento'));
                           }}
-                          className="w-full flex items-center justify-between p-2.5 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] rounded-xl text-xs text-koma-foreground transition-all cursor-pointer group"
+                          className="w-full flex items-center justify-between p-2.5 bg-koma-card hover:bg-koma-raised border border-koma-border rounded-xl text-xs text-koma-foreground transition-all cursor-pointer group"
                         >
                           <div className="flex items-center gap-2.5">
                             <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 group-hover:bg-emerald-500/20">
@@ -2330,7 +2330,7 @@ export default function App() {
                             setIsSidebarOpen(false);
                             window.dispatchEvent(new CustomEvent('koma-open-sangria'));
                           }}
-                          className="w-full flex items-center justify-between p-2.5 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] rounded-xl text-xs text-koma-foreground transition-all cursor-pointer group"
+                          className="w-full flex items-center justify-between p-2.5 bg-koma-card hover:bg-koma-raised border border-koma-border rounded-xl text-xs text-koma-foreground transition-all cursor-pointer group"
                         >
                           <div className="flex items-center gap-2.5">
                             <div className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 group-hover:bg-rose-500/20">
@@ -2347,7 +2347,7 @@ export default function App() {
                             setIsSidebarOpen(false);
                             window.dispatchEvent(new CustomEvent('koma-sync-all'));
                           }}
-                          className="w-full flex items-center justify-between p-2.5 bg-[#121214] hover:bg-[#27272A] border border-[#27272A] rounded-xl text-xs text-koma-foreground transition-all cursor-pointer group"
+                          className="w-full flex items-center justify-between p-2.5 bg-koma-card hover:bg-koma-raised border border-koma-border rounded-xl text-xs text-koma-foreground transition-all cursor-pointer group"
                         >
                           <div className="flex items-center gap-2.5">
                             <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400 group-hover:bg-blue-500/20">
@@ -2369,26 +2369,26 @@ export default function App() {
               {/* SECTION 3: EXIBIÇÃO & PREFERÊNCIAS */}
               <div className="space-y-2.5">
                 <h3 className={clsx('text-[10px]', 'uppercase', 'tracking-wider', 'font-bold', 'text-emerald-400', 'font-sans')}>Exibição e Preferências</h3>
-                <div className={clsx('bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-2xl', 'p-3.5', 'space-y-2.5')}>
-                  <label className={clsx('flex', 'items-center', 'justify-between', 'text-xs', 'text-[#FAF7F2]', 'cursor-pointer', 'p-1', 'rounded', 'hover:bg-[#27272A]/40')}>
+                <div className={clsx('bg-koma-card', 'border', 'border-koma-border', 'rounded-2xl', 'p-3.5', 'space-y-2.5')}>
+                  <label className={clsx('flex', 'items-center', 'justify-between', 'text-xs', 'text-koma-foreground', 'cursor-pointer', 'p-1', 'rounded', 'hover:bg-koma-raised/40')}>
                     <span>Exibir Imagens dos Pratos</span>
                     <input
                       id="sidebar-toggle-images"
                       type="checkbox"
                       checked={settings.exibirImagens}
                       onChange={(e) => setSettings({ ...settings, exibirImagens: e.target.checked })}
-                      className={clsx('rounded', 'border-[#27272A]', 'text-emerald-500', 'focus:ring-emerald-500', 'h-4', 'w-4', 'bg-[#121214]')}
+                      className={clsx('rounded', 'border-koma-border', 'text-emerald-500', 'focus:ring-emerald-500', 'h-4', 'w-4', 'bg-koma-card')}
                     />
                   </label>
 
-                  <label className={clsx('flex', 'items-center', 'justify-between', 'text-xs', 'text-[#FAF7F2]', 'cursor-pointer', 'p-1', 'rounded', 'hover:bg-[#27272A]/40')}>
+                  <label className={clsx('flex', 'items-center', 'justify-between', 'text-xs', 'text-koma-foreground', 'cursor-pointer', 'p-1', 'rounded', 'hover:bg-koma-raised/40')}>
                     <span>Exibir Descrição dos Pratos</span>
                     <input
                       id="sidebar-toggle-descriptions"
                       type="checkbox"
                       checked={settings.exibirDescricoes}
                       onChange={(e) => setSettings({ ...settings, exibirDescricoes: e.target.checked })}
-                      className={clsx('rounded', 'border-[#27272A]', 'text-emerald-500', 'focus:ring-emerald-500', 'h-4', 'w-4', 'bg-[#121214]')}
+                      className={clsx('rounded', 'border-koma-border', 'text-emerald-500', 'focus:ring-emerald-500', 'h-4', 'w-4', 'bg-koma-card')}
                     />
                   </label>
                 </div>
@@ -2396,7 +2396,7 @@ export default function App() {
 
             </div>
 
-            <div className={clsx('pt-4', 'border-t', 'border-[#27272A]', 'text-center', 'text-[10px]', 'text-[#71717A]', 'font-sans')}>
+            <div className={clsx('pt-4', 'border-t', 'border-koma-border', 'text-center', 'text-[10px]', 'text-koma-muted', 'font-sans')}>
               <p>{restaurantName}</p>
               <p className={clsx('mt-0.5', 'font-mono')}>v3.5 • Dark Engine</p>
             </div>
@@ -2461,7 +2461,7 @@ export default function App() {
       </main>
 
       {/* FOOTER */}
-      <footer className={clsx('bg-[#090a09]', 'text-[#71717A]', 'border-t', 'border-white/[0.06]', 'py-4', 'text-center', 'text-xs', 'shrink-0', 'font-sans')}>
+      <footer className={clsx('bg-koma-page', 'text-koma-muted', 'border-t', 'border-white/[0.06]', 'py-4', 'text-center', 'text-xs', 'shrink-0', 'font-sans')}>
         <div className={clsx('max-w-[1680px]', 'mx-auto', 'px-4', 'flex', 'items-center', 'justify-center', 'gap-2')}>
           <p className={clsx('font-serif', 'text-sm', 'text-[#10b981]', 'font-medium')}>{restaurantName}</p>
           <span className="h-1 w-1 rounded-full bg-zinc-700" />

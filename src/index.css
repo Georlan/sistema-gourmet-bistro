@@ -75,38 +75,38 @@
 
 [data-koma-theme="light"] {
   --color-brand-primary: #00966d;
-  --color-brand-bg: #f8faf9;
-  --color-brand-text: #0f172a;
-  --color-brand-secondary: #eef2f0;
+  --color-brand-bg: #f5f7f6;
+  --color-brand-text: #1a2332;
+  --color-brand-secondary: #eaf0ed;
   --color-brand-card: #ffffff;
   --color-brand-accent: #00966d;
 
-  /* Theme contract — Light mode palette */
-  --koma-surface-page: #f4f7f5;
-  --koma-surface-canvas: #e9eeeb;
-  --koma-surface-shell: #ffffff;
+  /* Theme contract — Light mode palette (warm, low-fatigue) */
+  --koma-surface-page: #f0f4f2;
+  --koma-surface-canvas: #e6ece9;
+  --koma-surface-shell: #f7faf8;
   --koma-surface-panel: #ffffff;
-  --koma-surface-card: #ffffff;
-  --koma-surface-raised: #f8faf9;
-  --koma-surface-input: #ffffff;
+  --koma-surface-card: #fafcfb;
+  --koma-surface-raised: #f0f4f2;
+  --koma-surface-input: #f5f8f6;
   --koma-surface-dialog: #ffffff;
-  --koma-surface-overlay: rgba(15, 23, 42, 0.65);
-  --koma-text-primary: #0f172a;
-  --koma-text-secondary: #334155;
-  --koma-text-muted: #64748b;
-  --koma-text-subtle: #94a3b8;
-  --koma-border-subtle: rgba(15, 23, 42, 0.08);
-  --koma-border-default: rgba(15, 23, 42, 0.14);
-  --koma-border-strong: rgba(15, 23, 42, 0.24);
-  --koma-accent: #00966d;
-  --koma-focus-ring: rgba(0, 150, 109, 0.34);
-  
-  --koma-waiter-bg: linear-gradient(180deg, var(--koma-surface-shell) 0%, #f4f7f5 58%, var(--koma-surface-shell) 100%);
-  --koma-sidebar-bg: linear-gradient(180deg, #ffffff 0%, #f4f7f5 100%);
-  --koma-main-bg: linear-gradient(180deg, #f4f7f5 0%, #eef2f0 100%);
-  --koma-topbar-bg: rgba(255, 255, 255, 0.86);
-  --koma-hero-bg: linear-gradient(112deg, #ffffff 0 62%, rgba(0, 150, 109, 0.15) 62.1% 100%);
-  --koma-hero-accent: linear-gradient(122deg, transparent 38%, rgba(0, 150, 109, 0.12) 38.2%, transparent 38.7%), radial-gradient(circle at 72% 0, rgba(0, 150, 109, 0.08), transparent 56%);
+  --koma-surface-overlay: rgba(15, 23, 42, 0.55);
+  --koma-text-primary: #1a2332;
+  --koma-text-secondary: #3d4f5f;
+  --koma-text-muted: #5e7282;
+  --koma-text-subtle: #8899a6;
+  --koma-border-subtle: rgba(15, 40, 30, 0.07);
+  --koma-border-default: rgba(15, 40, 30, 0.13);
+  --koma-border-strong: rgba(15, 40, 30, 0.22);
+  --koma-accent: #00875f;
+  --koma-focus-ring: rgba(0, 135, 95, 0.30);
+
+  --koma-waiter-bg: linear-gradient(180deg, #f7faf8 0%, #f0f4f2 58%, #f7faf8 100%);
+  --koma-sidebar-bg: linear-gradient(180deg, #f7faf8 0%, #edf2ef 100%);
+  --koma-main-bg: linear-gradient(180deg, #f0f4f2 0%, #e6ece9 100%);
+  --koma-topbar-bg: rgba(247, 250, 248, 0.92);
+  --koma-hero-bg: linear-gradient(112deg, #f7faf8 0 62%, rgba(0, 135, 95, 0.10) 62.1% 100%);
+  --koma-hero-accent: linear-gradient(122deg, transparent 38%, rgba(0, 135, 95, 0.08) 38.2%, transparent 38.7%), radial-gradient(circle at 72% 0, rgba(0, 135, 95, 0.06), transparent 56%);
 
   color-scheme: light;
 }
@@ -143,6 +143,10 @@ body {
   background: var(--koma-sidebar-bg) !important;
   border-color: var(--koma-border-default) !important;
   box-shadow: 14px 0 38px rgba(0, 0, 0, 0.12);
+}
+
+[data-koma-theme="light"] .cashier-sidebar {
+  box-shadow: 1px 0 0 var(--koma-border-default), 8px 0 24px rgba(0, 40, 30, 0.06);
 }
 
 .cashier-sidebar__header {
@@ -347,11 +351,22 @@ body {
   background: rgba(231, 238, 234, 0.045) !important;
 }
 
+[data-koma-theme="light"] .cashier-sidebar [data-sidebar="menu-button"]:hover {
+  background: rgba(0, 135, 95, 0.06) !important;
+}
+
 .cashier-sidebar [data-sidebar="menu-button"][data-active="true"] {
   color: var(--koma-text-primary) !important;
   border-color: rgba(0, 201, 150, 0.22) !important;
   background: linear-gradient(90deg, rgba(0, 201, 150, 0.13), rgba(0, 201, 150, 0.055)) !important;
   box-shadow: inset 2px 0 0 rgba(0, 201, 150, 0.85) !important;
+}
+
+[data-koma-theme="light"] .cashier-sidebar [data-sidebar="menu-button"][data-active="true"] {
+  color: #0a5e45 !important;
+  border-color: rgba(0, 135, 95, 0.20) !important;
+  background: linear-gradient(90deg, rgba(0, 135, 95, 0.10), rgba(0, 135, 95, 0.04)) !important;
+  box-shadow: inset 2px 0 0 rgba(0, 135, 95, 0.75) !important;
 }
 
 .cashier-nav-icon {

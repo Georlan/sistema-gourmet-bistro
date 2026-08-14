@@ -164,7 +164,7 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
         <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(220px,1.3fr)_minmax(170px,.7fr)_minmax(155px,.6fr)_minmax(155px,.6fr)]">
           <label className="relative">
             <span className="sr-only">Buscar movimentação</span>
-            <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600" />
+            <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" />
             <input value={searchTerm} onChange={event => setSearchTerm(event.target.value)} placeholder="Buscar motivo, observação ou operador" className="h-10 w-full rounded-xl border border-[#2a302d] bg-koma-card pl-9 pr-3 text-xs text-koma-foreground outline-none transition-colors placeholder:text-zinc-600 focus:border-[#196b55]" />
           </label>
           <select value={filterTipo} onChange={event => setFilterTipo(event.target.value)} className="h-10 w-full rounded-xl border border-[#2a302d] bg-koma-card px-3 text-xs text-koma-foreground outline-none focus:border-[#196b55]">
@@ -172,8 +172,8 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
             <option value="suprimento">Suprimentos</option>
             <option value="sangria">Sangrias</option>
           </select>
-          <label className="relative"><span className="sr-only">Data inicial</span><CalendarDays size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600" /><input type="date" value={filterDataInicio} onChange={event => setFilterDataInicio(event.target.value)} className="h-10 w-full rounded-xl border border-[#2a302d] bg-koma-card pl-9 pr-2 text-xs text-koma-foreground outline-none focus:border-[#196b55]" /></label>
-          <label className="relative"><span className="sr-only">Data final</span><CalendarDays size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600" /><input type="date" value={filterDataFim} onChange={event => setFilterDataFim(event.target.value)} className="h-10 w-full rounded-xl border border-[#2a302d] bg-koma-card pl-9 pr-2 text-xs text-koma-foreground outline-none focus:border-[#196b55]" /></label>
+          <label className="relative"><span className="sr-only">Data inicial</span><CalendarDays size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" /><input type="date" value={filterDataInicio} onChange={event => setFilterDataInicio(event.target.value)} className="h-10 w-full rounded-xl border border-[#2a302d] bg-koma-card pl-9 pr-2 text-xs text-koma-foreground outline-none focus:border-[#196b55]" /></label>
+          <label className="relative"><span className="sr-only">Data final</span><CalendarDays size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" /><input type="date" value={filterDataFim} onChange={event => setFilterDataFim(event.target.value)} className="h-10 w-full rounded-xl border border-[#2a302d] bg-koma-card pl-9 pr-2 text-xs text-koma-foreground outline-none focus:border-[#196b55]" /></label>
         </div>
       </section>
 
@@ -184,7 +184,7 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
             <span className="rounded-full border border-[#2a302d] bg-koma-card px-2.5 py-1 text-[9px] font-bold text-koma-muted">{filteredMovs.length} registro(s)</span>
           </header>
           {filteredMovs.length === 0 ? (
-            <div className="flex min-h-64 flex-col items-center justify-center px-5 text-center"><History size={24} className="text-zinc-700" /><strong className="mt-3 text-xs text-koma-subtle">Nenhuma movimentação encontrada</strong><span className="mt-1 max-w-sm text-[10px] leading-relaxed text-zinc-600">Revise os filtros ou use o Turno atual para registrar sangria ou suprimento.</span></div>
+            <div className="flex min-h-64 flex-col items-center justify-center px-5 text-center"><History size={24} className="text-koma-muted" /><strong className="mt-3 text-xs text-koma-subtle">Nenhuma movimentação encontrada</strong><span className="mt-1 max-w-sm text-[10px] leading-relaxed text-koma-muted">Revise os filtros ou use o Turno atual para registrar sangria ou suprimento.</span></div>
           ) : (
             <ul className="divide-y divide-[#202522]">
               {filteredMovs.map(movimentacao => {
@@ -199,7 +199,7 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
                 return (
                   <li key={movimentacao.id} className="grid gap-3 px-4 py-3.5 transition-colors hover:bg-white/[0.015] sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center sm:px-5">
                     <span className={clsx('flex h-9 w-9 items-center justify-center rounded-xl border', isSupply ? 'border-[#145c49] bg-[#0b2d25] text-[#54d9b3]' : 'border-[#543535] bg-[#211414] text-[#dfabab]')}>{isSupply ? <ArrowDownRight size={15} /> : <ArrowUpRight size={15} />}</span>
-                    <span className="min-w-0"><span className="flex flex-wrap items-center gap-x-2 gap-y-0.5"><strong className="truncate text-xs text-koma-foreground">{movimentacao.descricao || (isSupply ? 'Suprimento' : 'Sangria')}</strong><span className="text-[9px] text-zinc-600">{dateLabel}</span></span><span className="mt-0.5 block truncate text-[10px] text-koma-muted">{movimentacao.usuario_nome || 'Operador'}{movimentacao.observacao ? ` · ${movimentacao.observacao}` : ''}</span><span className="mt-1 block text-[9px] tabular-nums text-zinc-600">Saldo: {formatCurrency(Number(movimentacao.saldo_anterior || 0))} → {formatCurrency(Number(movimentacao.saldo_posterior || 0))}</span></span>
+                    <span className="min-w-0"><span className="flex flex-wrap items-center gap-x-2 gap-y-0.5"><strong className="truncate text-xs text-koma-foreground">{movimentacao.descricao || (isSupply ? 'Suprimento' : 'Sangria')}</strong><span className="text-[9px] text-koma-muted">{dateLabel}</span></span><span className="mt-0.5 block truncate text-[10px] text-koma-muted">{movimentacao.usuario_nome || 'Operador'}{movimentacao.observacao ? ` · ${movimentacao.observacao}` : ''}</span><span className="mt-1 block text-[9px] tabular-nums text-koma-muted">Saldo: {formatCurrency(Number(movimentacao.saldo_anterior || 0))} → {formatCurrency(Number(movimentacao.saldo_posterior || 0))}</span></span>
                     <strong className={clsx('whitespace-nowrap text-sm font-bold tabular-nums sm:text-right', isSupply ? 'text-[#54d9b3]' : 'text-[#dfabab]')}>{isSupply ? '+' : '−'} {formatCurrency(Number(movimentacao.valor))}</strong>
                   </li>
                 );

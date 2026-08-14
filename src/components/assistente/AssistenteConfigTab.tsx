@@ -37,7 +37,7 @@ export function AssistenteConfigTab({
   return (
     <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5', 'text-left', 'animate-fade-in')}>
       {/* Left Column: System Prompt */}
-      <div className={clsx('lg:col-span-2', 'bg-[#121214]/60', 'border', 'border-koma-border', 'rounded-3xl', 'p-5', 'space-y-4')}>
+      <div className={clsx('lg:col-span-2', 'bg-koma-card/60', 'border', 'border-koma-border', 'rounded-3xl', 'p-5', 'space-y-4')}>
         <div className={clsx('border-b', 'border-koma-border', 'pb-3', 'flex', 'justify-between', 'items-center')}>
           <span className={clsx('font-serif', 'font-bold', 'text-koma-secondary')}>Prompt do Atendente Virtual</span>
           <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer')}>
@@ -61,7 +61,7 @@ export function AssistenteConfigTab({
       </div>
 
       {/* Right Column: Painel de Governança */}
-      <div className={clsx('bg-[#121214]/60', 'border', 'border-koma-border', 'rounded-3xl', 'p-5', 'space-y-4', 'flex', 'flex-col', 'justify-between')}>
+      <div className={clsx('bg-koma-card/60', 'border', 'border-koma-border', 'rounded-3xl', 'p-5', 'space-y-4', 'flex', 'flex-col', 'justify-between')}>
         <div className="space-y-4">
           <div className={clsx('border-b', 'border-koma-border', 'pb-2')}>
             <span className={clsx('font-serif', 'font-bold', 'text-koma-secondary', 'block')}>Segurança & Governança da IA</span>
@@ -69,7 +69,7 @@ export function AssistenteConfigTab({
           </div>
 
           {/* Negociar Descontos Toggle */}
-          <div className={clsx('bg-[#1C1C1F]/40', 'border', 'border-[#27272A]/40', 'rounded-xl', 'p-3', 'flex', 'justify-between', 'items-center')}>
+          <div className={clsx('bg-koma-card/40', 'border', 'border-koma-border/40', 'rounded-xl', 'p-3', 'flex', 'justify-between', 'items-center')}>
             <div className="space-y-0.5">
               <span className={clsx('text-[9px]', 'font-bold', 'text-koma-foreground', 'block')}>Negociar Descontos</span>
               <span className={clsx('text-[7px]', 'text-koma-muted', 'block')}>Autoriza IA a oferecer cupons no chat</span>
@@ -102,7 +102,7 @@ export function AssistenteConfigTab({
           )}
 
           {/* Upsell Ativo Toggle */}
-          <div className={clsx('bg-[#1C1C1F]/40', 'border', 'border-[#27272A]/40', 'rounded-xl', 'p-3', 'flex', 'justify-between', 'items-center')}>
+          <div className={clsx('bg-koma-card/40', 'border', 'border-koma-border/40', 'rounded-xl', 'p-3', 'flex', 'justify-between', 'items-center')}>
             <div className="space-y-0.5">
               <span className={clsx('text-[9px]', 'font-bold', 'text-koma-foreground', 'block')}>Upsell / Sugestões Ativas</span>
               <span className={clsx('text-[7px]', 'text-koma-muted', 'block')}>Sugere adicionais e bebidas para aumentar o ticket</span>
@@ -123,7 +123,7 @@ export function AssistenteConfigTab({
                 onClick={() => setIaVoiceTone('direto')}
                 className={`py-1.5 rounded-xl border text-[9px] font-bold transition-all cursor-pointer ${iaVoiceTone === 'direto'
                   ? 'bg-[#10b981]/15 border-[#10b981] text-[#10b981]'
-                  : 'bg-[#1C1C1F]/40 border-koma-border text-koma-muted'
+                  : 'bg-koma-card/40 border-koma-border text-koma-muted'
                   }`}
               >
                 Direto (Economiza Tokens)
@@ -132,7 +132,7 @@ export function AssistenteConfigTab({
                 onClick={() => setIaVoiceTone('conversador')}
                 className={`py-1.5 rounded-xl border text-[9px] font-bold transition-all cursor-pointer ${iaVoiceTone === 'conversador'
                   ? 'bg-[#10b981]/15 border-[#10b981] text-[#10b981]'
-                  : 'bg-[#1C1C1F]/40 border-koma-border text-koma-muted'
+                  : 'bg-koma-card/40 border-koma-border text-koma-muted'
                   }`}
               >
                 Conversador (Fidelidade)

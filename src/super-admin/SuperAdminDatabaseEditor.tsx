@@ -460,7 +460,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
           <button
             onClick={handleBackup}
             disabled={isBackingUp}
-            className="bg-koma-page border border-[#1e293b]/40 hover:border-slate-700 hover:bg-[#121420]/40 p-2 rounded text-koma-subtle hover:text-koma-foreground transition-all cursor-pointer text-xs font-mono font-bold flex items-center gap-1.5 shadow-[0_0_8px_rgba(0,0,0,0.5)]"
+            className="bg-koma-page border border-[#1e293b]/40 hover:border-slate-700 hover:bg-koma-card/40 p-2 rounded text-koma-subtle hover:text-koma-foreground transition-all cursor-pointer text-xs font-mono font-bold flex items-center gap-1.5 shadow-[0_0_8px_rgba(0,0,0,0.5)]"
             title="Executar backup instantâneo de segurança"
           >
             {isBackingUp ? (
@@ -566,7 +566,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
                   navigator.clipboard.writeText(sqlSuggestion.query);
                   onAddLog("Script SQL copiado com sucesso para o clipboard!", "success");
                 }}
-                className="absolute right-2 top-2 bg-[#1a1f2e] border border-[#334155] hover:bg-black hover:text-[#00b894] px-2 py-1 rounded text-[9px] font-bold cursor-pointer transition-colors"
+                className="absolute right-2 top-2 bg-koma-card border border-[#334155] hover:bg-black hover:text-[#00b894] px-2 py-1 rounded text-[9px] font-bold cursor-pointer transition-colors"
               >
                 COPIAR SQL
               </button>
@@ -620,7 +620,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
                 onClick={() => setSelectedTable(tbl)}
                 className={`w-full text-left font-mono text-xs px-3 py-2 rounded transition-all cursor-pointer flex flex-col justify-center space-y-0.5 ${
                   selectedTable === tbl 
-                    ? "bg-[#1a1f2e] text-[#00b894] border-l-2 border-[#00b894] font-bold" 
+                    ? "bg-koma-card text-[#00b894] border-l-2 border-[#00b894] font-bold" 
                     : "text-koma-subtle hover:bg-black/40 hover:text-koma-foreground"
                 }`}
               >
@@ -679,7 +679,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
             ) : (
               <table className="w-full text-left font-mono text-xs border-collapse">
                 <thead>
-                  <tr className="border-b border-[#1e293b]/40 bg-[#090c15]">
+                  <tr className="border-b border-[#1e293b]/40 bg-koma-input">
                     {headers.map(header => (
                       <th 
                         key={header} 
@@ -695,7 +695,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
                 </thead>
                 <tbody className="divide-y divide-zinc-900 text-koma-secondary">
                   {filteredRows.map((row) => (
-                    <tr key={row.id} className="hover:bg-[#1a1f2e]/20 transition-colors">
+                    <tr key={row.id} className="hover:bg-koma-card/20 transition-colors">
                       {headers.map((header) => {
                         const isEditing = editingCell?.rowId === row.id && editingCell?.colKey === header;
                         const isSaving = saveStatus?.rowId === row.id && saveStatus?.colKey === header;
@@ -726,7 +726,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
                           <td 
                             key={header} 
                             className={`p-2 border-r border-zinc-950 relative min-w-[120px] max-w-[240px] truncate ${
-                              hasIdHeader ? "bg-[#121420]/50 font-bold text-koma-muted text-[10px] select-all cursor-copy" : "cursor-pointer"
+                              hasIdHeader ? "bg-koma-card/50 font-bold text-koma-muted text-[10px] select-all cursor-copy" : "cursor-pointer"
                             }`}
                             onDoubleClick={() => {
                               if (!hasIdHeader) {
@@ -809,7 +809,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
                         );
                       })}
                       {/* Action Column Cell */}
-                      <td className="p-2 text-center bg-[#121420]/25 border-l border-[#1e293b]/40 w-[110px] shrink-0">
+                      <td className="p-2 text-center bg-koma-card/25 border-l border-[#1e293b]/40 w-[110px] shrink-0">
                         {deletingRowId === row.id ? (
                           <div className="flex items-center justify-center gap-1.5 font-sans">
                             <span className="text-[9px] text-amber-500 font-bold font-mono">Apagar?</span>

@@ -88,7 +88,7 @@ export function ManagerPinModal({
                 'w-12 h-14 rounded-xl border flex items-center justify-center text-2xl font-mono transition-all',
                 pin.length > index
                   ? 'border-amber-500 bg-amber-500/10 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.2)]'
-                  : 'border-koma-border bg-zinc-900/50 text-zinc-600'
+                  : 'border-koma-border bg-zinc-900/50 text-koma-muted'
               )}
             >
               {pin.length > index ? '•' : ''}

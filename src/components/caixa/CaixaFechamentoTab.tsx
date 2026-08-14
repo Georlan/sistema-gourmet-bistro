@@ -91,7 +91,7 @@ const CountField: React.FC<CountFieldProps> = ({
           Usar {formatMoney(expected)}
         </button>
       </div>
-      <label htmlFor={id} className="mt-3 flex items-center rounded-xl border border-koma-border bg-[#090c0a] px-3 focus-within:border-[#2a9f7d]">
+      <label htmlFor={id} className="mt-3 flex items-center rounded-xl border border-koma-border bg-koma-input px-3 focus-within:border-[#2a9f7d]">
         <span className="text-sm font-semibold text-koma-muted">R$</span>
         <input
           id={id}
@@ -363,7 +363,7 @@ ________________________________
             </button>
           )}
           
-          <button type="button" onClick={handlePrintComprovante} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-koma-border-subtle bg-koma-panel px-4 py-3 text-xs font-bold text-koma-secondary transition-colors hover:bg-[#1a201c] hover:text-koma-foreground">
+          <button type="button" onClick={handlePrintComprovante} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-koma-border-subtle bg-koma-panel px-4 py-3 text-xs font-bold text-koma-secondary transition-colors hover:bg-koma-raised hover:text-koma-foreground">
             <Printer size={16} /> Imprimir comprovante
           </button>
         </aside>
@@ -433,11 +433,11 @@ ________________________________
               <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-koma-muted">Diferença</span>
               <strong className="text-sm tabular-nums text-koma-secondary sm:text-base">{formatMoney(expectedTotal)}</strong>
               <strong className="text-sm tabular-nums text-koma-foreground sm:text-base">{hasMissingDeclarations ? '—' : formatMoney(declaredTotal)}</strong>
-              <strong className={clsx('text-sm tabular-nums sm:text-base', hasMissingDeclarations ? 'text-zinc-600' : Math.abs(liveDifference) < 0.01 ? 'text-[#54d9b3]' : 'text-[#f0b3aa]')}>
+              <strong className={clsx('text-sm tabular-nums sm:text-base', hasMissingDeclarations ? 'text-koma-muted' : Math.abs(liveDifference) < 0.01 ? 'text-[#54d9b3]' : 'text-[#f0b3aa]')}>
                 {hasMissingDeclarations ? '—' : `${liveDifference > 0 ? '+' : ''}${formatMoney(liveDifference)}`}
               </strong>
             </div>
-            <button type="submit" disabled={hasBlockingPending || hasMissingDeclarations || isSubmitting} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#1f8f70] bg-[#0f6f55] px-5 py-3 text-xs font-bold text-white transition-colors hover:bg-[#128364] disabled:cursor-not-allowed disabled:border-[#2d3531] disabled:bg-[#1a1f1c] disabled:text-zinc-600">
+            <button type="submit" disabled={hasBlockingPending || hasMissingDeclarations || isSubmitting} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#1f8f70] bg-[#0f6f55] px-5 py-3 text-xs font-bold text-white transition-colors hover:bg-[#128364] disabled:cursor-not-allowed disabled:border-koma-border-subtle disabled:bg-koma-raised disabled:text-zinc-600">
               <Lock size={15} /> Revisar e fechar caixa <ArrowRight size={15} />
             </button>
           </div>
@@ -500,7 +500,7 @@ ________________________________
             </div>
 
             <div className="mt-4 overflow-hidden rounded-2xl border border-koma-border bg-koma-panel text-[10px]">
-              <div className="grid grid-cols-[1fr_repeat(3,auto)] gap-x-3 border-b border-koma-border px-4 py-2 font-bold uppercase tracking-wider text-zinc-600">
+              <div className="grid grid-cols-[1fr_repeat(3,auto)] gap-x-3 border-b border-koma-border px-4 py-2 font-bold uppercase tracking-wider text-koma-muted">
                 <span>Meio</span><span>Esperado</span><span>Informado</span><span>Dif.</span>
               </div>
               {[

@@ -305,7 +305,7 @@ export default function SuperAdminTelegram({
                 className={`px-4 py-2 rounded text-xs font-mono font-bold flex items-center gap-1.5 transition-all ${
                   hasUnsavedRules 
                     ? "bg-[#00b894] text-black hover:bg-[#059669] cursor-pointer" 
-                    : "bg-zinc-850 text-zinc-600 cursor-not-allowed"
+                    : "bg-zinc-850 text-koma-muted cursor-not-allowed"
                 }`}
               >
                 <Save className="w-3.5 h-3.5" />

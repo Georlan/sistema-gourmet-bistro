@@ -134,7 +134,7 @@ export function MotoboyPwaPage() {
       )}
 
       {/* Header Sticky */}
-      <header className="sticky top-0 z-40 bg-[#121214]/90 backdrop-blur-md border-b border-koma-border px-4 py-3 flex items-center justify-between">
+      <header className="sticky top-0 z-40 bg-koma-card/90 backdrop-blur-md border-b border-koma-border px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-emerald-500/15 border border-emerald-500/30 rounded-xl flex items-center justify-center text-emerald-400 font-bold">
             <Truck className="w-5 h-5" />
@@ -150,7 +150,7 @@ export function MotoboyPwaPage() {
 
         <button
           onClick={() => token && carregarDadosPainel(token)}
-          className="p-2.5 bg-koma-card hover:bg-[#27272A] border border-koma-border rounded-xl text-koma-secondary transition-colors active:scale-95"
+          className="p-2.5 bg-koma-card hover:bg-koma-raised border border-koma-border rounded-xl text-koma-secondary transition-colors active:scale-95"
           title="Atualizar Pedidos"
         >
           <RefreshCw className="w-4 h-4" />
@@ -220,7 +220,7 @@ export function MotoboyPwaPage() {
                 </div>
 
                 {/* Items Summary */}
-                <div className="bg-[#18181B]/60 rounded-xl p-2.5 text-xs text-koma-subtle border border-[#27272A]/50">
+                <div className="bg-koma-card/60 rounded-xl p-2.5 text-xs text-koma-subtle border border-koma-border/50">
                   <div className="flex items-center gap-1.5 font-semibold text-koma-secondary mb-1 text-[11px]">
                     <ShoppingBag className="w-3.5 h-3.5 text-amber-400" /> Itens do Pedido:
                   </div>
@@ -252,7 +252,7 @@ export function MotoboyPwaPage() {
                   {telUrl ? (
                     <a
                       href={telUrl}
-                      className="py-2 px-3 bg-koma-card hover:bg-[#27272A] border border-koma-border text-gray-200 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors"
+                      className="py-2 px-3 bg-koma-card hover:bg-koma-raised border border-koma-border text-gray-200 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors"
                     >
                       <Phone className="w-3.5 h-3.5 text-emerald-400" /> Ligar para Cliente
                     </a>

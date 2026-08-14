@@ -49,7 +49,7 @@ export function AssistenteSimuladorTab({
   return (
     <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5', 'text-left', 'animate-fade-in')}>
       {/* Left Column: Interactive Chat Simulation */}
-      <div className={clsx('lg:col-span-2', 'bg-[#121214]/60', 'border', 'border-koma-border', 'rounded-3xl', 'p-5', 'flex', 'flex-col', 'overflow-hidden', 'h-[72vh]')}>
+      <div className={clsx('lg:col-span-2', 'bg-koma-card/60', 'border', 'border-koma-border', 'rounded-3xl', 'p-5', 'flex', 'flex-col', 'overflow-hidden', 'h-[72vh]')}>
         <div className={clsx('border-b', 'border-koma-border', 'pb-3', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
           <span className={clsx('font-serif', 'font-bold', 'text-koma-secondary')}>Simulador de Chat Kôma IA</span>
           <span className={clsx('text-[8px]', 'text-emerald-400', 'font-mono', 'flex', 'items-center', 'gap-1')}>
@@ -80,7 +80,7 @@ export function AssistenteSimuladorTab({
             <button
               type="submit"
               disabled={!aiBotActive}
-              className={clsx('p-2', 'bg-[#10b981]', 'hover:bg-[#059669]', 'disabled:bg-[#1C1C1F]', 'text-[#121214]', 'disabled:text-gray-500', 'rounded-xl', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'justify-center', 'shrink-0')}
+              className={clsx('p-2', 'bg-[#10b981]', 'hover:bg-[#059669]', 'disabled:bg-koma-card', 'text-[#121214]', 'disabled:text-gray-500', 'rounded-xl', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'justify-center', 'shrink-0')}
             >
               <Send size={14} />
             </button>
@@ -91,7 +91,7 @@ export function AssistenteSimuladorTab({
       {/* Right Column: Support Tickets and Feedbacks */}
       <div className="space-y-4">
         {/* Pending Chats */}
-        <div className={clsx('bg-[#121214]/60', 'border', 'border-koma-border', 'rounded-3xl', 'p-5', 'space-y-3', 'text-left')}>
+        <div className={clsx('bg-koma-card/60', 'border', 'border-koma-border', 'rounded-3xl', 'p-5', 'space-y-3', 'text-left')}>
           <span className={clsx('font-serif', 'font-bold', 'text-koma-secondary', 'block', 'pb-1', 'border-b', 'border-koma-border')}>Chamados de Clientes (IA Pendente)</span>
           <div className="space-y-2">
             {supportChats.length === 0 ? (
@@ -120,7 +120,7 @@ export function AssistenteSimuladorTab({
         </div>
 
         {/* Feedbacks list */}
-        <div className={clsx('bg-[#121214]/60', 'border', 'border-koma-border', 'rounded-3xl', 'p-5', 'space-y-3', 'text-left')}>
+        <div className={clsx('bg-koma-card/60', 'border', 'border-koma-border', 'rounded-3xl', 'p-5', 'space-y-3', 'text-left')}>
           <span className={clsx('font-serif', 'font-bold', 'text-koma-secondary', 'block', 'pb-1', 'border-b', 'border-koma-border')}>Últimos Feedbacks / Avaliações</span>
           <div className={clsx('space-y-2.5', 'max-h-[30vh]', 'overflow-y-auto', 'pr-1')}>
             {customerFeedbacks.map(fb => (

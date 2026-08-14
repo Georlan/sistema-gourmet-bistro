@@ -905,7 +905,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                               onMouseLeave={() => { if (isConfirming) setConfirmTransferTo(null); }}
                               className={`p-4 border rounded-2xl text-center transition-all flex flex-col items-center justify-center gap-1 group ${
                                 isTargetAlreadyMerged
-                                  ? 'bg-koma-panel border-koma-border text-zinc-600 cursor-not-allowed opacity-40'
+                                  ? 'bg-koma-panel border-koma-border text-koma-muted cursor-not-allowed opacity-40'
                                   : isConfirming
                                     ? 'bg-rose-900/40 border border-rose-800/50 animate-pulse text-koma-foreground cursor-pointer'
                                     : 'bg-koma-raised hover:bg-emerald-500/10 border border-rose-500/30 hover:border-emerald-500 text-koma-foreground cursor-pointer hover:scale-102'
@@ -954,7 +954,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                               onMouseLeave={() => { if (isConfirming) setConfirmTransferTo(null); }}
                               className={`p-4 border rounded-2xl text-center transition-all flex flex-col items-center justify-center gap-1 group opacity-60 ${
                                 isTargetAlreadyMerged
-                                  ? 'bg-koma-panel border-koma-border text-zinc-600 cursor-not-allowed opacity-40'
+                                  ? 'bg-koma-panel border-koma-border text-koma-muted cursor-not-allowed opacity-40'
                                   : isConfirming
                                     ? 'bg-rose-900/40 border border-rose-800/50 animate-pulse text-koma-foreground opacity-100 cursor-pointer'
                                     : 'bg-koma-raised hover:bg-emerald-500/10 border border-koma-border hover:border-emerald-500 text-koma-foreground hover:opacity-100 cursor-pointer'

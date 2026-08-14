@@ -532,7 +532,7 @@ export default function SuperAdminPanel() {
                 className={`w-full text-left font-mono text-xs px-3 py-2.5 rounded transition-all flex items-center justify-between cursor-pointer border ${
                   activeTab === "metrics" 
                     ? "bg-koma-page border-[#00b894] text-koma-foreground font-bold shadow-[0_0_8px_rgba(0,184,148,0.15)]" 
-                    : "border-transparent text-koma-subtle hover:bg-[#090a0f]/60 hover:text-koma-foreground"
+                    : "border-transparent text-koma-subtle hover:bg-koma-page/60 hover:text-koma-foreground"
                 }`}
               >
                 <div className="flex items-center gap-2.5">
@@ -546,7 +546,7 @@ export default function SuperAdminPanel() {
                 className={`w-full text-left font-mono text-xs px-3 py-2.5 rounded transition-all flex items-center justify-between cursor-pointer border ${
                   activeTab === "webhooks" 
                     ? "bg-koma-page border-[#00b894] text-koma-foreground font-bold shadow-[0_0_8px_rgba(0,184,148,0.15)]" 
-                    : "border-transparent text-koma-subtle hover:bg-[#090a0f]/60 hover:text-koma-foreground"
+                    : "border-transparent text-koma-subtle hover:bg-koma-page/60 hover:text-koma-foreground"
                 }`}
               >
                 <div className="flex items-center gap-2.5">
@@ -560,7 +560,7 @@ export default function SuperAdminPanel() {
                 className={`w-full text-left font-mono text-xs px-3 py-2.5 rounded transition-all flex items-center justify-between cursor-pointer border ${
                   activeTab === "database" 
                     ? "bg-koma-page border-[#00b894] text-koma-foreground font-bold shadow-[0_0_8px_rgba(0,184,148,0.15)]" 
-                    : "border-transparent text-koma-subtle hover:bg-[#090a0f]/60 hover:text-koma-foreground"
+                    : "border-transparent text-koma-subtle hover:bg-koma-page/60 hover:text-koma-foreground"
                 }`}
               >
                 <div className="flex items-center gap-2.5">
@@ -574,7 +574,7 @@ export default function SuperAdminPanel() {
                 className={`w-full text-left font-mono text-xs px-3 py-2.5 rounded transition-all flex items-center justify-between cursor-pointer border ${
                   activeTab === "devops" 
                     ? "bg-koma-page border-[#00b894] text-koma-foreground font-bold shadow-[0_0_8px_rgba(0,184,148,0.15)]" 
-                    : "border-transparent text-koma-subtle hover:bg-[#090a0f]/60 hover:text-koma-foreground"
+                    : "border-transparent text-koma-subtle hover:bg-koma-page/60 hover:text-koma-foreground"
                 }`}
               >
                 <div className="flex items-center gap-2.5">
@@ -588,7 +588,7 @@ export default function SuperAdminPanel() {
                 className={`w-full text-left font-mono text-xs px-3 py-2.5 rounded transition-all flex items-center justify-between cursor-pointer border ${
                   activeTab === "telegram" 
                     ? "bg-koma-page border-[#00b894] text-koma-foreground font-bold shadow-[0_0_8px_rgba(0,184,148,0.15)]" 
-                    : "border-transparent text-koma-subtle hover:bg-[#090a0f]/60 hover:text-koma-foreground"
+                    : "border-transparent text-koma-subtle hover:bg-koma-page/60 hover:text-koma-foreground"
                 }`}
               >
                 <div className="flex items-center gap-2.5">
@@ -602,7 +602,7 @@ export default function SuperAdminPanel() {
                 className={`w-full text-left font-mono text-xs px-3 py-2.5 rounded transition-all flex items-center justify-between cursor-pointer border ${
                   activeTab === "credentials" 
                     ? "bg-koma-page border-[#00b894] text-koma-foreground font-bold shadow-[0_0_8px_rgba(0,184,148,0.15)]" 
-                    : "border-transparent text-koma-subtle hover:bg-[#090a0f]/60 hover:text-koma-foreground"
+                    : "border-transparent text-koma-subtle hover:bg-koma-page/60 hover:text-koma-foreground"
                 }`}
               >
                 <div className="flex items-center gap-2.5">
@@ -616,7 +616,7 @@ export default function SuperAdminPanel() {
                 className={`w-full text-left font-mono text-xs px-3 py-2.5 rounded transition-all flex items-center justify-between cursor-pointer border ${
                   activeTab === "whitelabel" 
                     ? "bg-koma-page border-[#00b894] text-koma-foreground font-bold shadow-[0_0_8px_rgba(0,184,148,0.15)]" 
-                    : "border-transparent text-koma-subtle hover:bg-[#090a0f]/60 hover:text-koma-foreground"
+                    : "border-transparent text-koma-subtle hover:bg-koma-page/60 hover:text-koma-foreground"
                 }`}
               >
                 <div className="flex items-center gap-2.5">
@@ -626,10 +626,10 @@ export default function SuperAdminPanel() {
               </button>
             </nav>
 
-            <div className="h-px bg-[#1e293b] my-4"></div>
+            <div className="h-px bg-koma-raised my-4"></div>
 
             {/* Real-time WebSocket Devices Monitor Card */}
-            <div className="bg-[#090a0f]/60 border border-[#1e293b]/30 p-3 rounded font-mono text-[10px] space-y-2">
+            <div className="bg-koma-page/60 border border-[#1e293b]/30 p-3 rounded font-mono text-[10px] space-y-2">
               <span className="text-[#00b894] block uppercase font-bold border-b border-[#1e293b]/30 pb-1.5 tracking-wider flex items-center justify-between">
                 <span>[WEBSOCKET_DEVICES]</span>
                 <span className="h-1.5 w-1.5 rounded-full bg-[#00b894] animate-ping"></span>
@@ -671,7 +671,7 @@ export default function SuperAdminPanel() {
             </div>
 
             {/* Local Node Telemetry Box from the Cockpit Theme */}
-            <div className="bg-[#090a0f]/60 border border-[#1e293b]/30 p-3 rounded font-mono text-[10px] space-y-2">
+            <div className="bg-koma-page/60 border border-[#1e293b]/30 p-3 rounded font-mono text-[10px] space-y-2">
               <span className="text-koma-muted block uppercase font-bold border-b border-[#1e293b]/30 pb-1.5 tracking-wider">[LOCAL_TELEMETRY]</span>
               <div className="flex justify-between">
                 <span>FASTAPI PORT</span>

@@ -484,7 +484,7 @@ export default function SuperAdminTenantControl({
                     return (
                       <tr 
                         key={t.id} 
-                        className={`hover:bg-[#121420]/60 transition-colors ${isSuspended ? "bg-red-950/5 border-l-2 border-l-red-500" : ""}`}
+                        className={`hover:bg-koma-card/60 transition-colors ${isSuspended ? "bg-red-950/5 border-l-2 border-l-red-500" : ""}`}
                       >
                         <td className="py-3">
                           <div className="font-bold text-koma-foreground flex items-center gap-1.5">

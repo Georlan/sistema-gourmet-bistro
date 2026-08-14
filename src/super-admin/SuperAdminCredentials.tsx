@@ -384,7 +384,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                     value={keys.CLOUDFLARE_ZONE_ID}
                     onChange={(e) => handleChange("CLOUDFLARE_ZONE_ID", e.target.value)}
                     placeholder="Ex: d759e6912389104fa28330ffda987b7a (não use 'test')"
-                    className={`w-full bg-[#090a0f]/60 border rounded py-2 px-3 text-slate-200 placeholder:text-slate-600 focus:outline-none transition-all ${
+                    className={`w-full bg-koma-page/60 border rounded py-2 px-3 text-slate-200 placeholder:text-slate-600 focus:outline-none transition-all ${
                       validateField("CLOUDFLARE_ZONE_ID", keys.CLOUDFLARE_ZONE_ID)
                         ? "border-amber-500/50 focus:border-amber-500"
                         : "border-[#1e293b]/40 focus:border-[#00b894]"
@@ -414,7 +414,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                       value={keys.CLOUDFLARE_TOKEN}
                       onChange={(e) => handleChange("CLOUDFLARE_TOKEN", e.target.value)}
                       placeholder="Ex: bearer_token_com_permissao_dns_zone"
-                      className={`w-full bg-[#090a0f]/60 border rounded py-2 pl-3 pr-10 text-slate-200 placeholder:text-slate-600 focus:outline-none transition-all ${
+                      className={`w-full bg-koma-page/60 border rounded py-2 pl-3 pr-10 text-slate-200 placeholder:text-slate-600 focus:outline-none transition-all ${
                         validateField("CLOUDFLARE_TOKEN", keys.CLOUDFLARE_TOKEN)
                           ? "border-amber-500/50 focus:border-amber-500"
                           : "border-[#1e293b]/40 focus:border-[#00b894]"
@@ -506,7 +506,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                     value={keys.GITHUB_OWNER}
                     onChange={(e) => handleChange("GITHUB_OWNER", e.target.value)}
                     placeholder="Padrão: Georlan"
-                    className={clsx('w-full', 'bg-[#090a0f]/60', 'border', 'border-[#1e293b]/40', 'rounded', 'py-2', 'px-3', 'text-slate-200', 'placeholder:text-slate-600', 'focus:outline-none', 'focus:border-[#00b894]', 'transition-all')}
+                    className={clsx('w-full', 'bg-koma-page/60', 'border', 'border-[#1e293b]/40', 'rounded', 'py-2', 'px-3', 'text-slate-200', 'placeholder:text-slate-600', 'focus:outline-none', 'focus:border-[#00b894]', 'transition-all')}
                   />
                 </div>
 
@@ -525,7 +525,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                     value={keys.GITHUB_REPO}
                     onChange={(e) => handleChange("GITHUB_REPO", e.target.value)}
                     placeholder="Padrão: sistema-gourmet-bistro"
-                    className={clsx('w-full', 'bg-[#090a0f]/60', 'border', 'border-[#1e293b]/40', 'rounded', 'py-2', 'px-3', 'text-slate-200', 'placeholder:text-slate-600', 'focus:outline-none', 'focus:border-[#00b894]', 'transition-all')}
+                    className={clsx('w-full', 'bg-koma-page/60', 'border', 'border-[#1e293b]/40', 'rounded', 'py-2', 'px-3', 'text-slate-200', 'placeholder:text-slate-600', 'focus:outline-none', 'focus:border-[#00b894]', 'transition-all')}
                   />
                 </div>
 
@@ -545,7 +545,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                       value={keys.GITHUB_TOKEN}
                       onChange={(e) => handleChange("GITHUB_TOKEN", e.target.value)}
                       placeholder="Ex: ghp_xxxxxxxxxxxxxxxxxxxx"
-                      className={`w-full bg-[#090a0f]/60 border rounded py-2 pl-3 pr-10 text-slate-200 placeholder:text-slate-600 focus:outline-none transition-all ${
+                      className={`w-full bg-koma-page/60 border rounded py-2 pl-3 pr-10 text-slate-200 placeholder:text-slate-600 focus:outline-none transition-all ${
                         validateField("GITHUB_TOKEN", keys.GITHUB_TOKEN)
                           ? "border-amber-500/50 focus:border-amber-500"
                           : "border-[#1e293b]/40 focus:border-[#00b894]"
@@ -637,7 +637,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                     value={keys.RAILWAY_PROJECT_ID}
                     onChange={(e) => handleChange("RAILWAY_PROJECT_ID", e.target.value)}
                     placeholder="Ex: a1b2c3d4-1234-5678-abcd-1234567890ab"
-                    className={`w-full bg-[#090a0f]/60 border rounded py-2 px-3 text-slate-200 placeholder:text-slate-600 focus:outline-none transition-all ${
+                    className={`w-full bg-koma-page/60 border rounded py-2 px-3 text-slate-200 placeholder:text-slate-600 focus:outline-none transition-all ${
                       validateField("RAILWAY_PROJECT_ID", keys.RAILWAY_PROJECT_ID)
                         ? "border-amber-500/50 focus:border-amber-500"
                         : "border-[#1e293b]/40 focus:border-[#00b894]"
@@ -666,7 +666,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                     value={keys.RAILWAY_SERVICE_ID}
                     onChange={(e) => handleChange("RAILWAY_SERVICE_ID", e.target.value)}
                     placeholder="Ex: f9e8d7c6-1234-abcd-9876-ef0123456789"
-                    className={`w-full bg-[#090a0f]/60 border rounded py-2 px-3 text-slate-200 placeholder:text-slate-600 focus:outline-none transition-all ${
+                    className={`w-full bg-koma-page/60 border rounded py-2 px-3 text-slate-200 placeholder:text-slate-600 focus:outline-none transition-all ${
                       validateField("RAILWAY_SERVICE_ID", keys.RAILWAY_SERVICE_ID)
                         ? "border-amber-500/50 focus:border-amber-500"
                         : "border-[#1e293b]/40 focus:border-[#00b894]"
@@ -696,7 +696,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                       value={keys.RAILWAY_TOKEN}
                       onChange={(e) => handleChange("RAILWAY_TOKEN", e.target.value)}
                       placeholder="Ex: rly_xxxxxxxxxxxxxxxxxxxx"
-                      className={`w-full bg-[#090a0f]/60 border rounded py-2 pl-3 pr-10 text-slate-200 placeholder:text-slate-600 focus:outline-none transition-all ${
+                      className={`w-full bg-koma-page/60 border rounded py-2 pl-3 pr-10 text-slate-200 placeholder:text-slate-600 focus:outline-none transition-all ${
                         validateField("RAILWAY_TOKEN", keys.RAILWAY_TOKEN)
                           ? "border-amber-500/50 focus:border-amber-500"
                           : "border-[#1e293b]/40 focus:border-[#00b894]"
@@ -788,7 +788,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                     value={keys.SENTRY_ORG}
                     onChange={(e) => handleChange("SENTRY_ORG", e.target.value)}
                     placeholder="Ex: koma-saas"
-                    className={clsx('w-full', 'bg-[#090a0f]/60', 'border', 'border-[#1e293b]/40', 'rounded', 'py-2', 'px-3', 'text-slate-200', 'placeholder:text-slate-600', 'focus:outline-none', 'focus:border-[#00b894]', 'transition-all')}
+                    className={clsx('w-full', 'bg-koma-page/60', 'border', 'border-[#1e293b]/40', 'rounded', 'py-2', 'px-3', 'text-slate-200', 'placeholder:text-slate-600', 'focus:outline-none', 'focus:border-[#00b894]', 'transition-all')}
                   />
                 </div>
 
@@ -807,7 +807,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                     value={keys.SENTRY_PROJECT}
                     onChange={(e) => handleChange("SENTRY_PROJECT", e.target.value)}
                     placeholder="Ex: api-node-express"
-                    className={clsx('w-full', 'bg-[#090a0f]/60', 'border', 'border-[#1e293b]/40', 'rounded', 'py-2', 'px-3', 'text-slate-200', 'placeholder:text-slate-600', 'focus:outline-none', 'focus:border-[#00b894]', 'transition-all')}
+                    className={clsx('w-full', 'bg-koma-page/60', 'border', 'border-[#1e293b]/40', 'rounded', 'py-2', 'px-3', 'text-slate-200', 'placeholder:text-slate-600', 'focus:outline-none', 'focus:border-[#00b894]', 'transition-all')}
                   />
                 </div>
 
@@ -827,7 +827,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                       value={keys.SENTRY_AUTH_TOKEN}
                       onChange={(e) => handleChange("SENTRY_AUTH_TOKEN", e.target.value)}
                       placeholder="Ex: sentry_auth_token_com_projeto_read"
-                      className={`w-full bg-[#090a0f]/60 border rounded py-2 pl-3 pr-10 text-slate-200 placeholder:text-slate-600 focus:outline-none transition-all ${
+                      className={`w-full bg-koma-page/60 border rounded py-2 pl-3 pr-10 text-slate-200 placeholder:text-slate-600 focus:outline-none transition-all ${
                         validateField("SENTRY_AUTH_TOKEN", keys.SENTRY_AUTH_TOKEN)
                           ? "border-amber-500/50 focus:border-amber-500"
                           : "border-[#1e293b]/40 focus:border-[#00b894]"
@@ -886,7 +886,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                     value={keys.SUPABASE_URL}
                     onChange={(e) => handleChange("SUPABASE_URL", e.target.value)}
                     placeholder="Ex: https://abccdefgxyz.supabase.co"
-                    className={`w-full bg-[#090a0f]/60 border rounded py-2 px-3 text-slate-200 placeholder:text-slate-600 focus:outline-none transition-all ${
+                    className={`w-full bg-koma-page/60 border rounded py-2 px-3 text-slate-200 placeholder:text-slate-600 focus:outline-none transition-all ${
                       validateField("SUPABASE_URL", keys.SUPABASE_URL)
                         ? "border-amber-500/50 focus:border-amber-500"
                         : "border-[#1e293b]/40 focus:border-[#00b894]"
@@ -916,7 +916,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
                       value={keys.SUPABASE_KEY}
                       onChange={(e) => handleChange("SUPABASE_KEY", e.target.value)}
                       placeholder="Chave de API pública ou privada"
-                      className={clsx('w-full', 'bg-[#090a0f]/60', 'border', 'border-[#1e293b]/40', 'rounded', 'py-2', 'pl-3', 'pr-10', 'text-slate-200', 'placeholder:text-slate-600', 'focus:outline-none', 'focus:border-[#00b894]', 'transition-all')}
+                      className={clsx('w-full', 'bg-koma-page/60', 'border', 'border-[#1e293b]/40', 'rounded', 'py-2', 'pl-3', 'pr-10', 'text-slate-200', 'placeholder:text-slate-600', 'focus:outline-none', 'focus:border-[#00b894]', 'transition-all')}
                     />
                     <button
                       type="button"

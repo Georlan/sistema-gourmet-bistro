@@ -311,7 +311,7 @@ export function CardapioProdutosTab({
         <div className="flex min-h-64 items-center justify-center rounded-[22px] border border-koma-border bg-koma-panel/60 text-[10px] font-bold uppercase tracking-[0.16em] text-koma-muted">Carregando catálogo…</div>
       ) : filteredProducts.length === 0 ? (
         <div className="flex min-h-64 flex-col items-center justify-center rounded-[22px] border border-dashed border-koma-border bg-koma-panel/60 px-6 text-center">
-          <PackageOpen size={28} className="text-zinc-600" />
+          <PackageOpen size={28} className="text-koma-muted" />
           <strong className="mt-4 text-sm text-koma-secondary">Nenhum produto encontrado</strong>
           <p className="mt-1 max-w-sm text-[10px] leading-relaxed text-koma-muted">Ajuste os filtros ou cadastre o primeiro produto desta categoria.</p>
         </div>

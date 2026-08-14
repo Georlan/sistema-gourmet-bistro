@@ -159,7 +159,7 @@ export function CardapioCategoriasTab({
 
       {filteredCategories.length === 0 ? (
         <div className="flex min-h-64 flex-col items-center justify-center rounded-[22px] border border-dashed border-koma-border bg-koma-panel/60 px-6 text-center">
-          <Layers3 size={28} className="text-zinc-600" />
+          <Layers3 size={28} className="text-koma-muted" />
           <strong className="mt-4 text-sm text-koma-secondary">Nenhuma categoria encontrada</strong>
           <p className="mt-1 text-[10px] text-koma-muted">Ajuste a busca ou crie uma nova categoria.</p>
         </div>

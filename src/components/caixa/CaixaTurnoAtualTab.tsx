@@ -101,7 +101,7 @@ const ActivityRow = ({ activity }: { activity: CaixaAtividadeRecente }) => {
           <strong className="truncate text-xs text-koma-foreground">
             {activityLabel[activity.tipo] || activity.descricao}
           </strong>
-          <span className="text-[10px] text-zinc-600">{validDate ? timeFormatter.format(date!) : '—'}</span>
+          <span className="text-[10px] text-koma-muted">{validDate ? timeFormatter.format(date!) : '—'}</span>
         </span>
         <span className="mt-0.5 block truncate text-[11px] text-koma-muted">
           {activity.origem}{method ? ` · ${method}` : ''}{activity.operador_nome ? ` · ${activity.operador_nome}` : ''}
@@ -140,7 +140,7 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
   if (!isTurnoAberto) {
     return (
       <section className="rounded-[18px] border border-koma-border bg-koma-panel px-5 py-10 text-center animate-fade-in">
-        <Lock size={22} className="mx-auto text-zinc-600" />
+        <Lock size={22} className="mx-auto text-koma-muted" />
         <h2 className="mt-3 text-sm font-bold text-koma-foreground">Caixa fechado</h2>
         <p className="mx-auto mt-1 max-w-md text-xs leading-relaxed text-koma-muted">
           Abra um turno e informe o fundo de troco para começar a conciliação.
@@ -245,9 +245,9 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
             <ul>{activities.map(activity => <ActivityRow key={activity.id} activity={activity} />)}</ul>
           ) : (
             <div className="flex min-h-48 flex-col items-center justify-center px-5 text-center">
-              <History size={22} className="text-zinc-700" />
+              <History size={22} className="text-koma-muted" />
               <strong className="mt-3 text-xs text-koma-subtle">O turno ainda não teve movimentações</strong>
-              <span className="mt-1 text-[10px] text-zinc-600">Vendas recebidas, sangrias e suprimentos aparecerão aqui.</span>
+              <span className="mt-1 text-[10px] text-koma-muted">Vendas recebidas, sangrias e suprimentos aparecerão aqui.</span>
             </div>
           )}
         </article>
@@ -269,7 +269,7 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
 
           <article className={`rounded-[18px] border p-3 ${
             !isConnected || isTurnoEsquecido || pendingPaymentsCount > 0
-              ? 'border-[#3d3a30] bg-[#151511]'
+              ? 'border-[#3d3a30] bg-koma-card'
               : 'border-[#145c49] bg-[#0b211b]'
           }`}>
             <div className="flex items-start gap-3">

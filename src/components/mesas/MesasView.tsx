@@ -146,7 +146,7 @@ export function MesasView({
                     : 'bg-white/[0.035] text-koma-subtle hover:text-koma-foreground hover:bg-white/[0.07] border-koma-border'
                 }`}
               >
-                {filter.label} <span className={`font-mono text-[9px] ${isActive ? 'text-[#063f32]' : 'text-zinc-600'}`}>{filter.count}</span>
+                {filter.label} <span className={`font-mono text-[9px] ${isActive ? 'text-[#063f32]' : 'text-koma-muted'}`}>{filter.count}</span>
               </button>
             );
           })}

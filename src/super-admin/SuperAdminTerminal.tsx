@@ -204,7 +204,7 @@ export default function SuperAdminTerminal({
                         </div>
                         <div className="flex items-center gap-1.5 mt-1">
                           <span className="text-koma-muted font-mono text-[10px]">PEDIDO ID:</span>
-                          <span className="font-mono bg-[#090c15] px-1.5 py-0.5 text-koma-secondary rounded border border-[#1e293b]/40 text-[10px]">
+                          <span className="font-mono bg-koma-input px-1.5 py-0.5 text-koma-secondary rounded border border-[#1e293b]/40 text-[10px]">
                             {wh.orderId}
                           </span>
                         </div>
@@ -343,14 +343,14 @@ export default function SuperAdminTerminal({
                     Conectando à API oficial do Sentry e extraindo exceções de produção...
                   </div>
                 ) : sentryIssues.length === 0 ? (
-                  <div className="text-zinc-600 italic text-center py-16">
+                  <div className="text-koma-muted italic text-center py-16">
                     🟢 Excelente! Nenhuma exceção não resolvida registrada na produção do Sentry.
                   </div>
                 ) : (
                   sentryIssues.map(issue => {
                     const isCrit = issue.level === "fatal" || issue.level === "critical" || issue.title.includes("Timeout") || issue.title.includes("Refused") || issue.title.includes("Error");
                     return (
-                      <div key={issue.id} className="bg-[#090c15] border border-[#1e293b]/40 hover:border-slate-700 p-3 rounded transition-all flex flex-col space-y-2">
+                      <div key={issue.id} className="bg-koma-input border border-[#1e293b]/40 hover:border-slate-700 p-3 rounded transition-all flex flex-col space-y-2">
                         <div className="flex items-start justify-between gap-4">
                           <div>
                             <span className={`text-[8px] px-1.5 py-0.5 rounded font-bold uppercase mr-1.5 border ${
@@ -370,7 +370,7 @@ export default function SuperAdminTerminal({
                           </span>
                         </div>
 
-                        <div className="text-[10px] text-koma-subtle bg-[#090a0f]/60 p-2 rounded font-mono truncate border border-zinc-900/60">
+                        <div className="text-[10px] text-koma-subtle bg-koma-page/60 p-2 rounded font-mono truncate border border-zinc-900/60">
                           <span className="text-slate-600">ARQUIVO: </span>
                           {issue.culprit}
                         </div>
@@ -411,7 +411,7 @@ export default function SuperAdminTerminal({
 
               <div className="flex-1 overflow-y-auto space-y-1.5 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
                 {filteredLogs.length === 0 ? (
-                  <div className="text-zinc-600 italic text-center py-12">
+                  <div className="text-koma-muted italic text-center py-12">
                     No log entries matched your filter.
                   </div>
                 ) : (
@@ -423,7 +423,7 @@ export default function SuperAdminTerminal({
 
                     return (
                       <div key={log.id} className="hover:bg-zinc-950 p-1 rounded transition-colors text-[11px] leading-relaxed">
-                        <span className="text-zinc-600">[{log.timestamp}]</span>{" "}
+                        <span className="text-koma-muted">[{log.timestamp}]</span>{" "}
                         <span className={`${levelColor} font-mono`}>{log.level}</span>{" "}
                         <span className="text-koma-muted font-semibold">&lt;{log.service}&gt;</span>{" "}
                         <span className="text-koma-secondary font-sans">{log.message}</span>

@@ -531,7 +531,7 @@ export default function SuperAdminWhitelabel({
                       key={method} 
                       className={`flex items-center gap-3 p-3 rounded border font-mono text-xs cursor-pointer transition-all ${
                         formasPagamento[method] 
-                          ? "bg-[#090a0f]/80 border-[#00b894] text-koma-foreground" 
+                          ? "bg-koma-page/80 border-[#00b894] text-koma-foreground" 
                           : "bg-black/40 border-[#1e293b]/40 text-koma-subtle hover:border-slate-700"
                       }`}
                     >

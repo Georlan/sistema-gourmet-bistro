@@ -93,7 +93,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
       labelColor: 'text-sky-300',
     },
     mesclada: {
-      surface: 'bg-koma-panel hover:bg-[#141517]',
+      surface: 'bg-koma-panel hover:bg-koma-card',
       border: 'border-dashed border-koma-border hover:border-zinc-600 focus-visible:ring-zinc-400',
       accent: 'bg-zinc-600',
       dot: 'bg-zinc-600',

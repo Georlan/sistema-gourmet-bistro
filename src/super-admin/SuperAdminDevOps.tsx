@@ -734,7 +734,7 @@ export default function SuperAdminDevOps({
                   githubCommits.map((commit, idx) => (
                     <div key={idx} className="bg-koma-page border border-[#1e293b]/40 p-3 rounded flex flex-col space-y-2 text-xs font-mono">
                       <div className="flex items-center justify-between">
-                        <span className="text-koma-foreground font-bold flex items-center gap-1 bg-[#090c15] border border-[#1e293b]/40 px-1.5 py-0.5 rounded text-[10px]">
+                        <span className="text-koma-foreground font-bold flex items-center gap-1 bg-koma-input border border-[#1e293b]/40 px-1.5 py-0.5 rounded text-[10px]">
                           <GitBranch className="w-3.5 h-3.5 text-[#00b894]" />
                           {commit.branch}
                         </span>

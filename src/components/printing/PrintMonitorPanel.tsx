@@ -716,7 +716,7 @@ export function PrintMonitorPanel({
           type="button"
           onClick={() => void loadMonitor(true)}
           disabled={loading}
-          className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#333338] bg-koma-card px-4 py-2 text-[10px] font-bold text-gray-200 transition hover:border-gray-500 hover:bg-[#242428] disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+          className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#333338] bg-koma-card px-4 py-2 text-[10px] font-bold text-gray-200 transition hover:border-gray-500 hover:bg-koma-raised disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
         >
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           Atualizar status
@@ -815,7 +815,7 @@ export function PrintMonitorPanel({
                     ? 'Enviar um cupom real para a impressora USB'
                     : 'Conecte a impressora USB primeiro'
                 }
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#3a3a40] bg-koma-card px-5 py-2.5 text-[11px] font-bold text-koma-foreground transition hover:border-emerald-500/50 hover:bg-[#242428] disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#3a3a40] bg-koma-card px-5 py-2.5 text-[11px] font-bold text-koma-foreground transition hover:border-emerald-500/50 hover:bg-koma-raised disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
               >
                 {testInProgress
                   ? <RefreshCw size={16} className="animate-spin" />
@@ -845,7 +845,7 @@ export function PrintMonitorPanel({
         <button
           type="button"
           onClick={() => setShowQueue(current => !current)}
-          className="flex min-h-12 w-full items-center justify-between gap-3 bg-koma-card px-4 py-3 text-left transition hover:bg-[#202023] cursor-pointer"
+          className="flex min-h-12 w-full items-center justify-between gap-3 bg-koma-card px-4 py-3 text-left transition hover:bg-koma-raised cursor-pointer"
           aria-expanded={showQueue}
         >
           <span className="flex min-w-0 items-center gap-3">
@@ -986,7 +986,7 @@ export function PrintMonitorPanel({
                       agent => agent.agent_id === printer.agentId
                     )?.supports_usb_commands
                   }
-                  className="mt-4 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#3a3a40] bg-koma-card px-4 py-2 text-[10px] font-bold text-koma-foreground transition hover:border-emerald-500/50 hover:bg-[#242428] disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+                  className="mt-4 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#3a3a40] bg-koma-card px-4 py-2 text-[10px] font-bold text-koma-foreground transition hover:border-emerald-500/50 hover:bg-koma-raised disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
                 >
                   {busy
                     ? <RefreshCw size={14} className="animate-spin" />
@@ -1002,7 +1002,7 @@ export function PrintMonitorPanel({
               </div>
             );
           }) : (
-            <div className="md:col-span-2 rounded-2xl border border-dashed border-[#34343a] bg-[#0b0b0d] px-5 py-8 text-center">
+            <div className="md:col-span-2 rounded-2xl border border-dashed border-[#34343a] bg-koma-page px-5 py-8 text-center">
               <Usb size={24} className="mx-auto text-gray-600" />
               <strong className="mt-3 block text-[11px] text-koma-secondary">
                 Nenhuma impressora USB detectada
@@ -1019,7 +1019,7 @@ export function PrintMonitorPanel({
         <button
           type="button"
           onClick={() => setShowHistory(current => !current)}
-          className="flex min-h-11 w-full items-center justify-between gap-2 bg-koma-card px-4 py-2.5 text-[10px] font-bold text-gray-200 transition hover:bg-[#242428] cursor-pointer"
+          className="flex min-h-11 w-full items-center justify-between gap-2 bg-koma-card px-4 py-2.5 text-[10px] font-bold text-gray-200 transition hover:bg-koma-raised cursor-pointer"
           aria-expanded={showHistory}
         >
           <span className="flex items-center gap-2">

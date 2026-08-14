@@ -680,7 +680,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                                   row.pocket ? (
                                     <Check size={16} className="text-emerald-400 mx-auto" />
                                   ) : (
-                                    <X size={16} className="text-zinc-600 mx-auto" />
+                                    <X size={16} className="text-koma-muted mx-auto" />
                                   )
                                 ) : (
                                   <span className="text-koma-secondary">{row.pocket}</span>
@@ -692,7 +692,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                                   row.pro ? (
                                     <Check size={16} className="text-emerald-400 mx-auto" />
                                   ) : (
-                                    <X size={16} className="text-zinc-600 mx-auto" />
+                                    <X size={16} className="text-koma-muted mx-auto" />
                                   )
                                 ) : (
                                   <span className="font-bold text-emerald-300">{row.pro}</span>
@@ -704,7 +704,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                                   row.premium ? (
                                     <Check size={16} className="text-emerald-400 mx-auto" />
                                   ) : (
-                                    <X size={16} className="text-zinc-600 mx-auto" />
+                                    <X size={16} className="text-koma-muted mx-auto" />
                                   )
                                 ) : (
                                   <span className="font-bold text-emerald-400">{row.premium}</span>
