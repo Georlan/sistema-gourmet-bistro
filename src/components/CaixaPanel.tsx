@@ -6102,18 +6102,18 @@ export function CaixaPanel({
             <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5')}>
 
               {/* CRUD table list */}
-              <div className={clsx('lg:col-span-2', 'bg-koma-panel/60', 'border', 'border-koma-border', 'rounded-3xl', 'p-5', 'space-y-4')}>
-                <span className={clsx('font-serif', 'font-bold', 'text-koma-secondary', 'block', 'pb-1', 'border-b', 'border-koma-border')}>Cadastro de Funcionários (Equipe)</span>
+              <div className={clsx('lg:col-span-2', 'bg-koma-panel', 'border', 'border-koma-border', 'rounded-3xl', 'p-5', 'space-y-4', 'shadow-xs')}>
+                <span className={clsx('font-serif', 'font-bold', 'text-koma-foreground', 'block', 'pb-1', 'border-b', 'border-koma-border')}>Cadastro de Funcionários (Equipe)</span>
 
                 <div className="overflow-x-auto">
                   <table className={clsx('w-full', 'text-left', 'font-sans', 'text-xs', 'border-collapse')}>
                     <thead>
-                      <tr className={clsx('border-b', 'border-koma-border', 'text-koma-subtle', 'font-bold')}>
-                        <th className="py-2">Nome</th>
-                        <th className="py-2">Telefone</th>
-                        <th className="py-2">Cargo</th>
-                        <th className="py-2">Status</th>
-                        <th className={clsx('py-2', 'text-right')}>Ação</th>
+                      <tr className={clsx('border-b', 'border-koma-border', 'text-koma-muted', 'font-extrabold', 'uppercase', 'text-[9px]', 'tracking-wider')}>
+                        <th className="py-2.5">Nome</th>
+                        <th className="py-2.5">Telefone</th>
+                        <th className="py-2.5">Cargo</th>
+                        <th className="py-2.5">Status</th>
+                        <th className={clsx('py-2.5', 'text-right')}>Ação</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -6124,30 +6124,30 @@ export function CaixaPanel({
                         const isPendente = statusVal === 'pendente_ativacao';
 
                         return (
-                          <tr key={user.id} className={clsx('border-b', 'border-koma-border/40', 'hover:bg-koma-raised/30', 'transition-colors')}>
-                            <td className={clsx('py-2.5', 'text-koma-foreground', 'font-bold')}>{user.nome}</td>
-                            <td className={clsx('py-2.5', 'font-mono', 'text-koma-subtle')}>{formatarTelefoneTabela(user.telefone || user.usuario || '')}</td>
-                            <td className="py-2.5">
-                              <span className={`px-2 py-0.5 text-[8px] font-bold rounded uppercase tracking-wider ${cargoRaw === 'admin' ? 'bg-emerald-600/20 text-[#C46A74]' : cargoRaw === 'caixa' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-500/10 text-emerald-400'}`}>
+                          <tr key={user.id} className={clsx('border-b', 'border-koma-border/60', 'hover:bg-koma-raised/50', 'transition-colors')}>
+                            <td className={clsx('py-3', 'text-koma-foreground', 'font-bold')}>{user.nome}</td>
+                            <td className={clsx('py-3', 'font-mono', 'text-koma-muted', 'text-[11px]')}>{formatarTelefoneTabela(user.telefone || user.usuario || '')}</td>
+                            <td className="py-3">
+                              <span className={clsx('px-2.5', 'py-0.5', 'text-[8px]', 'font-extrabold', 'rounded-md', 'uppercase', 'tracking-wider', cargoRaw === 'admin' ? 'koma-badge-danger' : 'koma-badge-info')}>
                                 {cargoLabel}
                               </span>
                             </td>
-                            <td className="py-2.5">
+                            <td className="py-3">
                               {statusVal === 'ativo' ? (
-                                <span className={clsx('px-2', 'py-0.5', 'text-[8px]', 'font-bold', 'rounded', 'uppercase', 'tracking-wider', 'bg-emerald-500/10', 'text-emerald-400', 'border', 'border-emerald-500/20')}>
+                                <span className="koma-badge-success px-2.5 py-0.5 text-[8px] font-extrabold rounded-md uppercase tracking-wider">
                                   Ativo
                                 </span>
                               ) : (
-                                <span className={clsx('px-2', 'py-0.5', 'text-[8px]', 'font-bold', 'rounded', 'uppercase', 'tracking-wider', 'bg-amber-500/10', 'text-amber-400', 'border', 'border-amber-500/20')}>
+                                <span className="koma-badge-warning px-2.5 py-0.5 text-[8px] font-extrabold rounded-md uppercase tracking-wider">
                                   Pendente de Ativação
                                 </span>
                               )}
                             </td>
-                            <td className={clsx('py-2.5', 'text-right', 'flex', 'items-center', 'justify-end', 'gap-2')}>
+                            <td className={clsx('py-3', 'text-right', 'flex', 'items-center', 'justify-end', 'gap-2')}>
                               {isPendente && (
                                 <button
                                   onClick={() => handleResendInvite(user)}
-                                  className={clsx('px-2', 'py-1', 'text-[8px]', 'font-bold', 'bg-koma-raised', 'hover:bg-koma-card', 'text-koma-secondary', 'hover:text-koma-foreground', 'rounded-lg', 'border', 'border-koma-border', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'gap-1')}
+                                  className={clsx('px-2.5', 'py-1', 'text-[8px]', 'font-bold', 'bg-koma-raised', 'hover:bg-koma-card', 'text-koma-foreground', 'rounded-lg', 'border', 'border-koma-border', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'gap-1')}
                                   title="Reenviar link de ativação via WhatsApp"
                                 >
                                   <Send size={10} />
@@ -6157,10 +6157,10 @@ export function CaixaPanel({
                               {cargoRaw !== 'admin' && (
                                 <button
                                   onClick={() => handleDeleteUser(user.id)}
-                                  className={clsx('p-1', 'text-koma-muted', 'hover:text-rose-500', 'cursor-pointer')}
+                                  className={clsx('p-1.5', 'text-rose-600 dark:text-rose-400', 'hover:text-rose-700 dark:hover:text-rose-300', 'cursor-pointer', 'transition-colors')}
                                   title="Excluir funcionário"
                                 >
-                                  <Trash2 size={13} />
+                                  <Trash2 size={14} />
                                 </button>
                               )}
                             </td>
@@ -6176,38 +6176,38 @@ export function CaixaPanel({
               <div className="space-y-4">
 
                 {/* Add Waiter form */}
-                <div className={clsx('bg-koma-panel/60', 'border', 'border-koma-border', 'rounded-3xl', 'p-5')}>
-                  <span className={clsx('font-serif', 'font-bold', 'text-koma-secondary', 'block', 'pb-1', 'border-b', 'border-koma-border', 'mb-3')}>Registrar Funcionário</span>
+                <div className={clsx('bg-koma-panel', 'border', 'border-koma-border', 'rounded-3xl', 'p-5', 'shadow-xs')}>
+                  <span className={clsx('font-serif', 'font-bold', 'text-koma-foreground', 'block', 'pb-1', 'border-b', 'border-koma-border', 'mb-3')}>Registrar Funcionário</span>
 
                   <form onSubmit={handleAddUserSubmit} className={clsx('space-y-3', 'text-left')}>
                     <div className="space-y-1">
-                      <label className={clsx('text-[8px]', 'text-koma-subtle', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Nome Completo:</label>
+                      <label className={clsx('text-[9px]', 'text-koma-muted', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Nome Completo:</label>
                       <input
                         type="text"
                         required
                         placeholder="Ex: Pedro Henrique"
                         value={newUserNome}
                         onChange={(e) => setNewUserNome(e.target.value)}
-                        className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-[10px]')}
+                        className={clsx('w-full', 'px-3.5', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'focus:outline-none', 'focus:border-emerald-500/60')}
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className={clsx('text-[8px]', 'text-koma-subtle', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Telefone (WhatsApp):</label>
+                      <label className={clsx('text-[9px]', 'text-koma-muted', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Telefone (WhatsApp):</label>
                       <input
                         type="tel"
                         required
                         placeholder="(81) 99999-9999"
                         value={newUserTelefone}
                         onChange={(e) => setNewUserTelefone(aplicarMascaraTelefoneInput(e.target.value))}
-                        className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'font-mono', 'text-[10px]')}
+                        className={clsx('w-full', 'px-3.5', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'font-mono', 'text-xs', 'focus:outline-none', 'focus:border-emerald-500/60')}
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className={clsx('text-[8px]', 'text-koma-subtle', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Função / Cargo:</label>
+                      <label className={clsx('text-[9px]', 'text-koma-muted', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Função / Cargo:</label>
                       <select
                         value={newUserRole}
                         onChange={(e) => setNewUserRole(e.target.value)}
-                        className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-[10px]')}
+                        className={clsx('w-full', 'px-3.5', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'font-medium', 'focus:outline-none', 'focus:border-emerald-500/60')}
                       >
                         <option value="garcom">Garçom</option>
                         <option value="caixa">Operador Caixa</option>
@@ -6215,7 +6215,7 @@ export function CaixaPanel({
                         <option value="motoboy">Motoboy</option>
                       </select>
                     </div>
-                    <button type="submit" className={clsx('w-full', 'py-2', 'bg-emerald-500', 'hover:bg-emerald-400', 'text-zinc-950', 'font-bold', 'text-[9px]', 'uppercase', 'tracking-wider', 'rounded-lg', 'transition-all', 'cursor-pointer', 'shadow-sm')}>Cadastrar e Enviar Convite</button>
+                    <button type="submit" className={clsx('w-full', 'py-2.5', 'koma-btn-success', 'font-bold', 'text-[10px]', 'uppercase', 'tracking-wider', 'rounded-xl', 'transition-all', 'cursor-pointer', 'shadow-xs')}>Cadastrar e Enviar Convite</button>
                   </form>
                 </div>
 
@@ -6564,19 +6564,19 @@ export function CaixaPanel({
 
               {/* Printer messages & test (Right Column) */}
               {printingSettingsTab === 'impressao' && hasPrinting && (
-              <div className={clsx('bg-koma-panel', 'border', 'border-koma-border', 'rounded-[22px]', 'p-5', 'grid', 'grid-cols-1', 'xl:grid-cols-2', 'gap-6')}>
+              <div className={clsx('bg-koma-panel', 'border', 'border-koma-border', 'rounded-[22px]', 'p-5', 'grid', 'grid-cols-1', 'xl:grid-cols-2', 'gap-6', 'shadow-xs')}>
                 <div className="space-y-4">
                   <div className={clsx('flex', 'items-start', 'justify-between', 'gap-3', 'border-b', 'border-koma-border', 'pb-3')}>
                     <div>
                       <h3 className={clsx('text-sm', 'font-bold', 'text-koma-foreground')}>Personalização do cupom</h3>
-                      <p className={clsx('mt-1', 'text-[9px]', 'text-koma-muted')}>Uma configuração central para caixa, comandas e impressão automática.</p>
+                      <p className={clsx('mt-1', 'text-[10px]', 'text-koma-muted')}>Uma configuração central para caixa, comandas e impressão automática.</p>
                     </div>
-                    <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[8px] font-bold ${
+                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-[8px] font-extrabold ${
                       printSettingsSaveState === 'error'
-                        ? 'border-red-500/25 bg-red-500/[0.07] text-red-300'
+                        ? 'koma-badge-danger'
                         : printSettingsSaveState === 'dirty'
-                          ? 'border-amber-500/25 bg-amber-500/[0.07] text-amber-600 dark:text-amber-300'
-                          : 'border-emerald-500/20 bg-emerald-500/[0.06] text-emerald-600 dark:text-emerald-300'
+                          ? 'koma-badge-warning'
+                          : 'koma-badge-success'
                     }`}>
                       {printSettingsSaveState === 'saving'
                         ? 'SALVANDO…'
@@ -6590,7 +6590,7 @@ export function CaixaPanel({
 
                   <div className={clsx('space-y-3', 'text-left')}>
                     <div className="space-y-1">
-                      <label className={clsx('text-[9px]', 'font-bold', 'text-koma-secondary', 'uppercase', 'tracking-wider', 'block')}>Nome do restaurante no cupom:</label>
+                      <label className={clsx('text-[9px]', 'font-bold', 'text-koma-muted', 'uppercase', 'tracking-wider', 'block')}>Nome do restaurante no cupom:</label>
                       <input
                         type="text"
                         value={printHeader}
@@ -6600,18 +6600,18 @@ export function CaixaPanel({
                           setPrintSettingsSaveState('dirty');
                         }}
                         onBlur={() => updateConfiguracoes({ impressao_nome_restaurante: printHeader })}
-                        className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-page', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-[10px]')}
+                        className={clsx('w-full', 'px-3.5', 'py-2.5', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'font-medium', 'focus:outline-none', 'focus:border-emerald-500/60')}
                       />
                     </div>
 
                     <div className="space-y-1">
-                      <label className={clsx('text-[9px]', 'font-bold', 'text-koma-secondary', 'uppercase', 'tracking-wider', 'block')}>Onde imprimir o nome:</label>
+                      <label className={clsx('text-[9px]', 'font-bold', 'text-koma-muted', 'uppercase', 'tracking-wider', 'block')}>Onde imprimir o nome:</label>
                       <select
                         value={printNamePosition}
                         onChange={(e) => updateConfiguracoes({
                           impressao_nome_posicao: e.target.value as 'cabecalho' | 'rodape' | 'oculto'
                         })}
-                        className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-page', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-[10px]')}
+                        className={clsx('w-full', 'px-3.5', 'py-2.5', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'font-medium', 'focus:outline-none', 'focus:border-emerald-500/60')}
                       >
                         <option value="cabecalho">Cabeçalho — maior destaque</option>
                         <option value="rodape">Rodapé</option>
@@ -6620,7 +6620,7 @@ export function CaixaPanel({
                     </div>
 
                     <div className="space-y-1">
-                      <label className={clsx('text-[9px]', 'font-bold', 'text-koma-secondary', 'uppercase', 'tracking-wider', 'block')}>Mensagem adicional de rodapé:</label>
+                      <label className={clsx('text-[9px]', 'font-bold', 'text-koma-muted', 'uppercase', 'tracking-wider', 'block')}>Mensagem adicional de rodapé:</label>
                       <input
                         type="text"
                         value={printFooter}
@@ -6631,12 +6631,12 @@ export function CaixaPanel({
                           setPrintSettingsSaveState('dirty');
                         }}
                         onBlur={() => updateConfiguracoes({ impressao_mensagem_rodape: printFooter })}
-                        className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-page', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-[10px]')}
+                        className={clsx('w-full', 'px-3.5', 'py-2.5', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'focus:outline-none', 'focus:border-emerald-500/60')}
                       />
                     </div>
 
                     <div className={clsx('flex', 'justify-between', 'items-center', 'pt-2')}>
-                      <span className={clsx('text-[10px]', 'text-koma-secondary', 'font-semibold')}>Unificar Vias de Delivery (Via Única)</span>
+                      <span className={clsx('text-xs', 'text-koma-foreground', 'font-medium')}>Unificar Vias de Delivery (Via Única)</span>
                       <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer')}>
                         <input
                           type="checkbox"
@@ -6647,7 +6647,7 @@ export function CaixaPanel({
                           }}
                           className={clsx('sr-only', 'peer')}
                         />
-                        <div className={clsx('w-9', 'h-5', 'bg-koma-raised', 'peer-focus:outline-none', 'rounded-full', 'peer', 'peer-checked:after:translate-x-full', 'peer-checked:after:border-white', "after:content-['']", 'after:absolute', 'after:top-[2px]', 'after:left-[2px]', 'after:bg-white', 'after:border-gray-300', 'after:border', 'after:rounded-full', 'after:h-4', 'after:w-4', 'after:transition-all', 'peer-checked:bg-emerald-600')}></div>
+                        <div className={clsx('w-9', 'h-5', 'bg-zinc-300', 'dark:bg-zinc-700', 'peer-focus:outline-none', 'rounded-full', 'peer', 'peer-checked:after:translate-x-full', 'peer-checked:after:border-white', "after:content-['']", 'after:absolute', 'after:top-[2px]', 'after:left-[2px]', 'after:bg-white', 'after:border-gray-300', 'after:border', 'after:rounded-full', 'after:h-4', 'after:w-4', 'after:transition-all', 'peer-checked:bg-emerald-600')}></div>
                       </label>
                     </div>
 
@@ -8175,19 +8175,19 @@ export function CaixaPanel({
                       key={contact.id}
                       onClick={() => setActiveChatContactId(contact.id)}
                       className={`w-full p-3 rounded-2xl border text-left transition-all flex flex-col gap-1.5 cursor-pointer relative ${activeChatContactId === contact.id
-                        ? 'bg-emerald-500/15 border-emerald-500/30 text-white'
-                        : 'bg-koma-panel/40 border-transparent hover:bg-koma-panel/80 text-koma-subtle'
+                        ? 'bg-emerald-500/10 border-emerald-500/30 text-koma-foreground shadow-xs'
+                        : 'bg-koma-panel/40 border-transparent hover:bg-koma-panel/80 text-koma-muted'
                         }`}
                     >
                       <div className={clsx('flex', 'justify-between', 'items-center')}>
-                        <span className={clsx('text-[10px]', 'font-bold', 'text-koma-foreground', 'block')}>{contact.name}</span>
-                        <span className={clsx('text-[8px]', 'text-koma-muted')}>{contact.time}</span>
+                        <span className={clsx('text-xs', 'font-bold', 'text-koma-foreground', 'block')}>{contact.name}</span>
+                        <span className={clsx('text-[9px]', 'text-koma-muted', 'font-medium')}>{contact.time}</span>
                       </div>
-                      <span className={clsx('text-[8px]', 'truncate', 'leading-relaxed', 'block')}>{contact.lastMsg}</span>
+                      <span className={clsx('text-[10px]', 'truncate', 'leading-relaxed', 'block', 'text-koma-muted')}>{contact.lastMsg}</span>
                       <div className={clsx('flex', 'justify-between', 'items-center', 'pt-1')}>
-                        <span className={`text-[7px] font-bold px-1.5 py-0.5 rounded-full ${contact.iaStatus === 'Aguardando Co-Piloto' ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' :
-                          contact.iaStatus === 'Piloto Automático' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' :
-                            'bg-gray-500/10 text-koma-subtle border border-gray-500/20'
+                        <span className={`text-[8px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider ${contact.iaStatus === 'Aguardando Co-Piloto' ? 'koma-badge-warning' :
+                          contact.iaStatus === 'Piloto Automático' ? 'koma-badge-success' :
+                            'bg-koma-raised text-koma-muted border border-koma-border'
                           }`}>
                           {contact.iaStatus}
                         </span>
@@ -8201,16 +8201,16 @@ export function CaixaPanel({
               </div>
 
               {/* Center Column: Janela de Chat */}
-              <div className={clsx('flex-1', 'bg-koma-card', 'border', 'border-koma-border', 'rounded-3xl', 'flex', 'flex-col', 'overflow-hidden', 'relative')}>
+              <div className={clsx('flex-1', 'bg-koma-card', 'border', 'border-koma-border', 'rounded-3xl', 'flex', 'flex-col', 'overflow-hidden', 'relative', 'shadow-xs')}>
                 {/* Active Contact Header */}
                 {(() => {
                   const contact = copilotContacts.find(c => c.id === activeChatContactId);
                   if (!contact) return null;
                   return (
-                    <div className={clsx('p-4', 'border-b', 'border-koma-border', 'bg-koma-panel/50', 'flex', 'justify-between', 'items-center')}>
+                    <div className={clsx('p-4', 'border-b', 'border-koma-border', 'bg-koma-panel', 'flex', 'justify-between', 'items-center')}>
                       <div>
-                        <span className={clsx('text-[11px]', 'font-bold', 'text-koma-foreground', 'block')}>{contact.name}</span>
-                        <span className={clsx('text-[8px]', 'text-koma-subtle', 'block')}>{contact.phone} • WhatsApp</span>
+                        <span className={clsx('text-xs', 'font-bold', 'text-koma-foreground', 'block')}>{contact.name}</span>
+                        <span className={clsx('text-[9px]', 'text-koma-muted', 'block')}>{contact.phone} • WhatsApp</span>
                       </div>
                       <div className={clsx('flex', 'items-center', 'gap-2')}>
                         <button
@@ -8218,7 +8218,7 @@ export function CaixaPanel({
                             setCopilotContacts(prev => prev.map(c => c.id === activeChatContactId ? { ...c, iaStatus: "Atendimento Humano", pendingAction: false } : c));
                             alert('A IA foi pausada. Modo de intervenção manual ativo.');
                           }}
-                          className={clsx('px-2.5', 'py-1', 'bg-emerald-600', 'hover:bg-[#8d2a3a]', 'text-white', 'rounded-lg', 'text-[8px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}
+                          className={clsx('px-3', 'py-1.5', 'koma-badge-warning', 'hover:bg-amber-200 dark:hover:bg-amber-900/40', 'rounded-xl', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}
                         >
                           ⚠️ Assumir Atendimento
                         </button>
@@ -8231,27 +8231,27 @@ export function CaixaPanel({
                 <div className={clsx('flex-1', 'overflow-y-auto', 'p-4', 'space-y-4')}>
                   {copilotMessages.filter(m => m.contactId === activeChatContactId).map((msg, index) => (
                     <div key={index} className={`flex ${msg.sender === 'cliente' ? 'justify-start' : 'justify-end'}`}>
-                      <div className={`max-w-[70%] rounded-2xl p-3 text-[10px] space-y-1.5 ${msg.sender === 'cliente'
+                      <div className={`max-w-[70%] rounded-2xl p-3 text-[11px] space-y-1.5 ${msg.sender === 'cliente'
                         ? 'bg-koma-panel text-koma-foreground border border-koma-border'
-                        : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30'
+                        : 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30'
                         }`}>
-                        <div className={clsx('flex', 'justify-between', 'gap-4', 'text-koma-subtle', 'text-[8px]')}>
+                        <div className={clsx('flex', 'justify-between', 'gap-4', 'text-koma-muted', 'text-[9px]', 'font-semibold')}>
                           <span className={clsx('font-bold', 'uppercase')}>{msg.sender === 'cliente' ? 'Cliente' : msg.sender === 'ia' ? 'IA Co-Piloto' : 'Atendente'}</span>
                           <span>{msg.time}</span>
                         </div>
                         {msg.isAudio ? (
                           <div className="space-y-2">
-                            <div className={clsx('flex', 'items-center', 'gap-2', 'bg-koma-card', 'p-2', 'rounded-xl', 'border', 'border-koma-border')}>
-                              <button className={clsx('h-6', 'w-6', 'bg-[#10b981]', 'text-[#121214]', 'rounded-full', 'flex', 'items-center', 'justify-center', 'cursor-pointer')}>▶</button>
+                            <div className={clsx('flex', 'items-center', 'gap-2', 'bg-koma-raised', 'p-2', 'rounded-xl', 'border', 'border-koma-border')}>
+                              <button className={clsx('h-6', 'w-6', 'koma-btn-success', 'rounded-full', 'flex', 'items-center', 'justify-center', 'cursor-pointer', 'text-[9px]')}>▶</button>
                               <div className={clsx('flex', 'gap-0.5', 'items-center', 'flex-1', 'h-3')}>
                                 {[3, 6, 4, 8, 12, 6, 4, 9, 14, 10, 7, 5, 8, 3, 2, 6, 9, 11, 8, 4].map((h, i) => (
-                                  <div key={i} className={clsx('bg-sky-400', 'flex-1', 'rounded-sm')} style={{ height: `${h * 7}%` }} />
+                                  <div key={i} className={clsx('bg-sky-500', 'flex-1', 'rounded-sm')} style={{ height: `${h * 7}%` }} />
                                 ))}
                               </div>
                             </div>
-                            <div className={clsx('bg-sky-500/10', 'border', 'border-sky-500/20', 'p-2.5', 'rounded-xl', 'space-y-1')}>
-                              <span className={clsx('bg-sky-400', 'text-[#121214]', 'text-[7px]', 'font-bold', 'px-1.5', 'py-0.5', 'rounded-full', 'uppercase', 'tracking-wider')}>IA Transcrição</span>
-                              <p className={clsx('text-sky-100', 'leading-relaxed', 'font-serif', 'text-[9px]', 'italic')}>"{msg.audioText}"</p>
+                            <div className={clsx('bg-sky-50 dark:bg-sky-950/40', 'border', 'border-sky-300 dark:border-sky-800', 'p-2.5', 'rounded-xl', 'space-y-1.5')}>
+                              <span className={clsx('bg-sky-600', 'text-white', 'text-[8px]', 'font-extrabold', 'px-2', 'py-0.5', 'rounded-full', 'uppercase', 'tracking-wider', 'inline-block')}>IA Transcrição</span>
+                              <p className={clsx('text-sky-950 dark:text-sky-100', 'leading-relaxed', 'font-medium', 'text-[11px]')}>"{msg.audioText}"</p>
                             </div>
                           </div>
                         ) : (
@@ -8267,23 +8267,23 @@ export function CaixaPanel({
                   <input
                     type="text"
                     placeholder="Escreva uma mensagem de intervenção humana..."
-                    className={clsx('flex-1', 'px-3', 'py-2', 'bg-koma-page', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-[10px]', 'focus:outline-none', 'focus:border-[#10b981]')}
+                    className={clsx('flex-1', 'px-3.5', 'py-2.5', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'focus:outline-none', 'focus:border-emerald-500/60')}
                   />
-                  <button className={clsx('px-4', 'py-2', 'bg-[#10b981]', 'text-[#121214]', 'font-bold', 'rounded-xl', 'text-[9px]', 'uppercase', 'tracking-wider', 'cursor-pointer')}>Enviar</button>
+                  <button className={clsx('px-4', 'py-2.5', 'koma-btn-success', 'rounded-xl', 'text-xs', 'font-bold', 'uppercase', 'tracking-wider', 'cursor-pointer', 'shadow-xs')}>Enviar</button>
                 </div>
               </div>
 
               {/* Right Column: Painel Co-Piloto */}
-              <div className={clsx('w-1/4', 'bg-koma-card', 'border', 'border-koma-border', 'rounded-3xl', 'p-4', 'flex', 'flex-col', 'justify-between', 'overflow-y-auto')}>
+              <div className={clsx('w-1/4', 'bg-koma-panel', 'border', 'border-koma-border', 'rounded-3xl', 'p-4', 'flex', 'flex-col', 'justify-between', 'overflow-y-auto', 'shadow-xs')}>
                 <div className="space-y-4">
                   <div className={clsx('border-b', 'border-koma-border', 'pb-2')}>
                     <span className={clsx('font-serif', 'font-bold', 'text-xs', 'text-koma-foreground', 'block')}>Ações do Co-Piloto</span>
-                    <span className={clsx('text-[8px]', 'text-koma-muted', 'block', 'leading-relaxed')}>Revise e edite a resposta e os itens antes de enviar ao cliente.</span>
+                    <span className={clsx('text-[9px]', 'text-koma-muted', 'block', 'leading-relaxed')}>Revise e edite a resposta e os itens antes de enviar ao cliente.</span>
                   </div>
 
                   {/* Resposta Sugerida */}
                   <div className="space-y-1.5">
-                    <label className={clsx('text-[8px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-widest', 'block')}>Resposta Sugerida pela IA:</label>
+                    <label className={clsx('text-[9px]', 'font-bold', 'text-koma-muted', 'uppercase', 'tracking-widest', 'block')}>Resposta Sugerida pela IA:</label>
                     <textarea
                       value={copilotDraftResponses[activeChatContactId] || ''}
                       onChange={(e) => {
@@ -8291,34 +8291,34 @@ export function CaixaPanel({
                         setCopilotDraftResponses(prev => ({ ...prev, [activeChatContactId]: val }));
                       }}
                       rows={4}
-                      className={clsx('w-full', 'p-2.5', 'bg-koma-page', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-[9px]', 'leading-relaxed', 'resize-none', 'focus:outline-none', 'focus:border-[#10b981]')}
+                      className={clsx('w-full', 'p-3', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-[11px]', 'leading-relaxed', 'resize-none', 'focus:outline-none', 'focus:border-emerald-500/60')}
                     />
                   </div>
 
                   {/* Carrinho Rascunhado */}
                   <div className="space-y-2">
-                    <label className={clsx('text-[8px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-widest', 'block')}>Carrinho Rascunhado (IA):</label>
+                    <label className={clsx('text-[9px]', 'font-bold', 'text-koma-muted', 'uppercase', 'tracking-widest', 'block')}>Carrinho Rascunhado (IA):</label>
                     {copilotDraftCarts[activeChatContactId] && copilotDraftCarts[activeChatContactId].length > 0 ? (
-                      <div className={clsx('bg-koma-panel', 'border', 'border-koma-border/80', 'rounded-2xl', 'p-3', 'space-y-2')}>
+                      <div className={clsx('bg-koma-raised', 'border', 'border-koma-border', 'rounded-2xl', 'p-3', 'space-y-2')}>
                         {copilotDraftCarts[activeChatContactId].map((item, idx) => (
-                          <div key={idx} className={clsx('flex', 'justify-between', 'items-center', 'border-b', 'border-koma-border/40', 'pb-1.5', 'last:border-b-0', 'last:pb-0', 'text-[9px]')}>
+                          <div key={idx} className={clsx('flex', 'justify-between', 'items-center', 'border-b', 'border-koma-border', 'pb-1.5', 'last:border-b-0', 'last:pb-0', 'text-[10px]')}>
                             <div>
                               <strong className={clsx('text-koma-foreground', 'block', 'font-bold')}>{item.product.nome}</strong>
-                              <span className={clsx('text-[8px]', 'text-koma-subtle', 'block')}>{item.quantity}x • R$ {item.product.preco.toFixed(2)}</span>
+                              <span className={clsx('text-[9px]', 'text-koma-muted', 'block')}>{item.quantity}x • R$ {item.product.preco.toFixed(2)}</span>
                             </div>
                             <span className={clsx('font-bold', 'font-mono', 'text-emerald-700 dark:text-emerald-400')}>R$ {(item.product.preco * item.quantity).toFixed(2)}</span>
                           </div>
                         ))}
-                        <div className={clsx('pt-1.5', 'border-t', 'border-koma-border', 'flex', 'justify-between', 'items-center', 'text-[10px]')}>
+                        <div className={clsx('pt-1.5', 'border-t', 'border-koma-border', 'flex', 'justify-between', 'items-center', 'text-xs')}>
                           <strong className={clsx('text-koma-foreground', 'font-serif')}>Subtotal Rascunho</strong>
-                          <strong className={clsx('text-emerald-400', 'font-mono', 'font-bold')}>
+                          <strong className={clsx('text-emerald-700 dark:text-emerald-400', 'font-mono', 'font-bold')}>
                             R$ {copilotDraftCarts[activeChatContactId].reduce((acc, c) => acc + (c.product.preco * c.quantity), 0).toFixed(2)}
                           </strong>
                         </div>
                       </div>
                     ) : (
-                      <div className={clsx('text-center', 'p-4', 'bg-koma-panel', 'border', 'border-koma-border/60', 'rounded-2xl')}>
-                        <span className={clsx('text-[9px]', 'text-koma-muted', 'italic', 'block')}>Nenhum carrinho detectado neste chat.</span>
+                      <div className={clsx('text-center', 'p-4', 'bg-koma-raised/60', 'border', 'border-koma-border', 'rounded-2xl')}>
+                        <span className={clsx('text-[10px]', 'text-koma-muted', 'italic', 'block')}>Nenhum carrinho detectado neste chat.</span>
                       </div>
                     )}
                   </div>
@@ -8362,7 +8362,7 @@ export function CaixaPanel({
                       // 3. Update contact status to responded / clear pending
                       setCopilotContacts(prev => prev.map(c => c.id === activeChatContactId ? { ...c, iaStatus: "Resposta Enviada", pendingAction: false } : c));
                     }}
-                    className={clsx('w-full', 'py-2.5', 'bg-emerald-600', 'hover:bg-emerald-700', 'disabled:opacity-50', 'text-white', 'font-bold', 'rounded-xl', 'text-[9px]', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-lg')}
+                    className={clsx('w-full', 'py-2.5', 'koma-btn-success', 'rounded-xl', 'text-xs', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-xs', 'disabled:opacity-50')}
                   >
                     Aprovar e Enviar (WhatsApp)
                   </button>
@@ -8372,7 +8372,7 @@ export function CaixaPanel({
                       setCopilotDraftResponses(prev => ({ ...prev, [activeChatContactId]: "" }));
                       setCopilotContacts(prev => prev.map(c => c.id === activeChatContactId ? { ...c, pendingAction: false, iaStatus: "Rascunho Limpo" } : c));
                     }}
-                    className={clsx('w-full', 'py-1.5', 'bg-koma-panel', 'hover:bg-koma-raised', 'border', 'border-koma-border', 'text-koma-subtle', 'hover:text-koma-foreground', 'rounded-xl', 'text-[8px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}
+                    className={clsx('w-full', 'py-2', 'bg-koma-raised', 'hover:bg-koma-card', 'border', 'border-koma-border', 'text-koma-muted', 'hover:text-koma-foreground', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}
                   >
                     Limpar Rascunhos
                   </button>

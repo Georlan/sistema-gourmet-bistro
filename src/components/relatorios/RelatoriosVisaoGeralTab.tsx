@@ -301,50 +301,50 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
           {data?.comparativo_anterior && (
             <div className="flex items-center gap-1 text-[9px]">
               {data.comparativo_anterior.variacao_pedidos_pct >= 0 ? (
-                <span className="text-emerald-400 font-bold flex items-center">
+                <span className="text-emerald-700 dark:text-emerald-400 font-extrabold flex items-center">
                   <ArrowUpRight size={12} /> +{data.comparativo_anterior.variacao_pedidos_pct}%
                 </span>
               ) : (
-                <span className="text-rose-400 font-bold flex items-center">
+                <span className="text-rose-700 dark:text-rose-400 font-extrabold flex items-center">
                   <ArrowDownRight size={12} /> {data.comparativo_anterior.variacao_pedidos_pct}%
                 </span>
               )}
-              <span className="text-koma-subtle">vs período anterior</span>
+              <span className="text-koma-muted font-medium">vs período anterior</span>
             </div>
           )}
         </div>
 
-        <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-2">
-          <div className="flex justify-between items-center text-koma-subtle">
+        <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-2 shadow-xs">
+          <div className="flex justify-between items-center text-koma-muted">
             <span className="text-[9px] font-bold uppercase tracking-wider">Ticket Médio</span>
-            <div className="p-1.5 bg-amber-500/15 text-amber-400 rounded-xl">
+            <div className="p-1.5 koma-badge-warning rounded-xl">
               <TrendingUp size={16} />
             </div>
           </div>
           <strong className="text-2xl text-koma-foreground font-mono block">
             R$ {data?.ticket_medio?.toFixed(2) ?? '0.00'}
           </strong>
-          <span className="text-[9px] text-koma-subtle block">Média por comanda finalizada</span>
+          <span className="text-[10px] text-koma-muted block font-medium">Médio por comanda finalizada</span>
         </div>
 
         {(data?.clientes_ativos || 0) > 0 && (
-          <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-2">
-            <div className="flex justify-between items-center text-koma-subtle">
+          <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-2 shadow-xs">
+            <div className="flex justify-between items-center text-koma-muted">
               <span className="text-[9px] font-bold uppercase tracking-wider">Clientes Ativos</span>
-              <div className="p-1.5 bg-purple-500/15 text-purple-400 rounded-xl">
+              <div className="p-1.5 bg-purple-500/15 text-purple-600 dark:text-purple-300 rounded-xl">
                 <Users size={16} />
               </div>
             </div>
             <strong className="text-2xl text-koma-foreground font-mono block">
               {data.clientes_ativos}
             </strong>
-            <span className="text-[9px] text-koma-subtle block">Clientes cadastrados com identificação</span>
+            <span className="text-[10px] text-koma-muted block font-medium">Clientes cadastrados com identificação</span>
           </div>
         )}
       </div>
 
       {/* Meta Mensal Block */}
-      <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4">
+      <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4 shadow-xs">
         <div className="flex justify-between items-center border-b border-koma-border pb-3">
           <div className="flex items-center gap-2">
             <Target size={18} className="text-emerald-700 dark:text-emerald-400" />
@@ -362,14 +362,14 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
               <button
                 type="button"
                 onClick={handleSaveMeta}
-                className="px-3 py-1 bg-[#10b981] hover:bg-[#059669] text-zinc-950 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer"
+                className="px-3 py-1 koma-btn-success rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer shadow-xs"
               >
                 Salvar
               </button>
               <button
                 type="button"
                 onClick={() => setEditingMeta(false)}
-                className="px-2 py-1 bg-koma-raised text-koma-subtle hover:text-koma-foreground rounded-lg text-[9px] font-bold"
+                className="px-2 py-1 bg-koma-raised text-koma-muted hover:text-koma-foreground rounded-lg text-[9px] font-bold"
               >
                 X
               </button>
@@ -392,16 +392,16 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
 
         {(data?.meta_mensal || 0) <= 0 && !editingMeta ? (
           <div className="py-6 text-center space-y-3">
-            <p className="text-xs text-koma-subtle">Nenhuma meta de faturamento mensal definida para este período.</p>
+            <p className="text-xs text-koma-muted font-medium">Nenhuma meta de faturamento mensal definida para este período.</p>
             <button
               type="button"
               onClick={() => {
                 setNewMetaInput('');
                 setEditingMeta(true);
               }}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-koma-foreground rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-sm"
+              className="px-5 py-2.5 koma-btn-success rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-2 shadow-xs"
             >
-              <Target size={14} />
+              <Target size={15} />
               <span>Definir Meta Mensal</span>
             </button>
           </div>
@@ -473,22 +473,22 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
                       <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--koma-border-default)" vertical={false} />
-                  <XAxis dataKey="data" stroke="var(--koma-text-subtle)" fontSize={10} tickLine={false} axisLine={false} />
-                  <YAxis stroke="var(--koma-text-subtle)" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${v}`} />
-                  <Tooltip content={<CustomChartTooltip />} cursor={{ stroke: '#10b981', strokeWidth: 1, strokeDasharray: '3 3' }} />
-                  <Area type="monotone" dataKey="faturamento" name="Faturamento (R$)" stroke="#10b981" strokeWidth={2.5} fillOpacity={1} fill="url(#emeraldGradient)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--koma-border-default)" vertical={false} opacity={0.6} />
+                  <XAxis dataKey="data" stroke="var(--koma-text-muted)" fontSize={11} tickLine={false} axisLine={false} />
+                  <YAxis stroke="var(--koma-text-muted)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${v}`} />
+                  <Tooltip content={<CustomChartTooltip />} cursor={{ stroke: '#059669', strokeWidth: 1, strokeDasharray: '3 3' }} />
+                  <Area type="monotone" dataKey="faturamento" name="Faturamento (R$)" stroke="#059669" strokeWidth={2.5} fillOpacity={1} fill="url(#emeraldGradient)" />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-full flex items-center justify-center text-xs text-koma-subtle">Sem dados no período</div>
+              <div className="h-full flex items-center justify-center text-xs text-koma-muted">Sem dados no período</div>
             )}
           </div>
         </div>
 
-        <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4">
+        <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4 shadow-xs">
           <div className="flex items-center gap-2 border-b border-koma-border pb-3">
-            <Clock size={16} className="text-sky-400" />
+            <Clock size={16} className="text-sky-600 dark:text-sky-400" />
             <span className="font-serif font-bold text-sm text-koma-foreground">Horários de Pico do Salão</span>
           </div>
 
@@ -496,15 +496,15 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
             {horariosPicoChartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={horariosPicoChartData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--koma-border-default)" vertical={false} />
-                  <XAxis dataKey="hora" stroke="var(--koma-text-subtle)" fontSize={10} tickLine={false} axisLine={false} />
-                  <YAxis stroke="var(--koma-text-subtle)" fontSize={10} tickLine={false} axisLine={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--koma-border-default)" vertical={false} opacity={0.6} />
+                  <XAxis dataKey="hora" stroke="var(--koma-text-muted)" fontSize={11} tickLine={false} axisLine={false} />
+                  <YAxis stroke="var(--koma-text-muted)" fontSize={11} tickLine={false} axisLine={false} />
                   <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'var(--koma-border-default)' }} />
-                  <Bar dataKey="pedidos" name="Pedidos Atendidos" fill="#0ea5e9" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="pedidos" name="Pedidos Atendidos" fill="#0284c7" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-full flex items-center justify-center text-xs text-koma-subtle">Nenhum pedido registrado nos horários</div>
+              <div className="h-full flex items-center justify-center text-xs text-koma-muted">Nenhum pedido registrado nos horários</div>
             )}
           </div>
         </div>

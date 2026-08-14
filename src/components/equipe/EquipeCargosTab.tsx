@@ -88,7 +88,7 @@ export const EquipeCargosTab: React.FC<EquipeCargosTabProps> = ({ apiBaseUrl, au
         {!isLoading && !hasError && cargos.length > 0 && (
           <div className="overflow-x-auto border border-koma-border rounded-2xl">
             <table className="w-full text-left text-[10px]">
-              <thead className="bg-koma-raised border-b border-koma-border text-koma-subtle uppercase tracking-wider font-bold">
+              <thead className="bg-koma-raised border-b border-koma-border text-koma-muted uppercase tracking-wider font-extrabold text-[9px]">
                 <tr>
                   <th className="p-3.5">Cargo</th>
                   <th className="p-3.5 text-center font-mono">Funcionários</th>
@@ -101,15 +101,15 @@ export const EquipeCargosTab: React.FC<EquipeCargosTabProps> = ({ apiBaseUrl, au
                 {cargos.map(cargo => (
                   <tr key={cargo.slug} className="hover:bg-koma-raised/50 transition-colors">
                     <td className="p-3.5 font-bold text-koma-foreground">{cargo.label}</td>
-                    <td className="p-3.5 text-center font-mono text-sky-400 font-bold">
+                    <td className="p-3.5 text-center font-mono text-koma-foreground font-bold text-xs">
                       {cargo.total_funcionarios}
                     </td>
                     {PERM_COLS.map(col => (
                       <td key={col.key} className="p-3.5">
-                        <span className={`px-2 py-0.5 text-[8px] font-bold rounded uppercase tracking-wider ${
+                        <span className={`px-2.5 py-0.5 text-[8px] font-extrabold rounded-md uppercase tracking-wider ${
                           cargo.permissoes[col.key]
-                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                            : 'bg-koma-raised text-koma-muted'
+                            ? 'koma-badge-success'
+                            : 'bg-koma-raised border border-koma-border text-koma-muted'
                         }`}>
                           {cargo.permissoes[col.key] ? 'Sim' : 'Não'}
                         </span>
