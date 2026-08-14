@@ -201,18 +201,18 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
         </div>
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
           {!isConnected && (
-            <button type="button" onClick={onRefresh} disabled={isLoading} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#303532] bg-koma-card px-3 py-2 text-[10px] font-bold text-koma-secondary transition-colors hover:border-emerald-300 dark:border-emerald-900/50 hover:text-emerald-800 dark:text-emerald-300 disabled:cursor-wait disabled:opacity-60">
+            <button type="button" onClick={onRefresh} disabled={isLoading} className="inline-flex items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card px-3 py-2 text-[10px] font-bold text-koma-secondary transition-colors hover:border-emerald-500 hover:text-emerald-800 dark:text-emerald-300 disabled:cursor-wait disabled:opacity-60 cursor-pointer shadow-xs">
               <RefreshCw size={13} className={isLoading ? 'animate-spin' : ''} /> Tentar sincronizar
             </button>
           )}
-          <button type="button" onClick={onOpenSuprimentoModal} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#303532] bg-koma-card px-3 py-2 text-[10px] font-bold text-koma-secondary transition-colors hover:border-emerald-300 dark:border-emerald-900/50 hover:text-emerald-800 dark:text-emerald-300">
-            <ArrowDownRight size={13} /> Suprimento
+          <button type="button" onClick={onOpenSuprimentoModal} className="inline-flex items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card px-3.5 py-2 text-[11px] font-bold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:border-emerald-500/50 transition-all cursor-pointer shadow-xs">
+            <ArrowDownRight size={14} className="text-emerald-700 dark:text-emerald-400" /> Suprimento
           </button>
-          <button type="button" onClick={onOpenSangriaModal} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#303532] bg-koma-card px-3 py-2 text-[10px] font-bold text-koma-secondary transition-colors hover:border-rose-300 dark:border-rose-900/50 hover:text-rose-800 dark:text-rose-300">
-            <ArrowUpRight size={13} /> Sangria
+          <button type="button" onClick={onOpenSangriaModal} className="inline-flex items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card px-3.5 py-2 text-[11px] font-bold text-rose-800 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:border-rose-500/50 transition-all cursor-pointer shadow-xs">
+            <ArrowUpRight size={14} className="text-rose-700 dark:text-rose-400" /> Sangria
           </button>
-          <button type="button" onClick={onNavigateToFechamento} className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-300 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.08em] text-emerald-800 dark:text-emerald-300 transition-colors hover:bg-emerald-100 dark:hover:bg-emerald-900/40">
-            <Lock size={13} /> Fechar caixa
+          <button type="button" onClick={onNavigateToFechamento} className="inline-flex items-center justify-center gap-2 rounded-xl koma-btn-success px-4 py-2 text-[11px] font-bold uppercase tracking-[0.08em] transition-all cursor-pointer shadow-sm">
+            <Lock size={14} /> Fechar caixa
           </button>
         </div>
       </section>

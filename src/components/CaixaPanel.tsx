@@ -5814,7 +5814,7 @@ export function CaixaPanel({
                                         const checkoutTotal = subtotal * (1.0 + (taxaServicoAtiva ? serviceTaxRate / 100 : 0));
                                         setPaymentValor(Math.max(0, checkoutTotal - Number(checkoutOrder.valorPago || 0)).toFixed(2));
                                       }}
-                                      className={clsx('flex', 'min-h-9', 'flex-1', 'items-center', 'justify-center', 'gap-1.5', 'rounded-lg', 'border', 'border-amber-400 dark:border-[#874550]', 'bg-amber-500 dark:bg-[#4b222b]', 'px-2', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wide', 'text-zinc-950 dark:text-[#f0b5bd]', 'transition-colors', 'hover:bg-amber-400 dark:hover:bg-[#5a2933]', 'disabled:cursor-wait', 'disabled:opacity-45')}
+                                      className={clsx('flex', 'min-h-9', 'flex-1', 'items-center', 'justify-center', 'gap-1.5', 'rounded-lg', 'koma-badge-warning', 'hover:bg-amber-200 dark:hover:bg-amber-900/40', 'px-2', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wide', 'transition-colors', 'disabled:cursor-wait', 'disabled:opacity-45', 'cursor-pointer')}
                                     >
                                       <CreditCard size={12} />
                                       Receber conta
@@ -5824,7 +5824,7 @@ export function CaixaPanel({
                                       type="button"
                                       disabled={tableOrders.length === 0}
                                       onClick={() => tableOrders[0] && setSelectedKanbanOrder(tableOrders[0])}
-                                      className={clsx('flex', 'min-h-9', 'flex-1', 'items-center', 'justify-center', 'gap-1.5', 'rounded-lg', 'border', 'border-rose-300 dark:border-[#6b2e38]', 'bg-rose-100 dark:bg-[#241317]', 'px-2', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wide', 'text-rose-800 dark:text-[#e4a3ac]', 'transition-colors', 'hover:bg-rose-200 dark:hover:bg-[#32181e]', 'disabled:cursor-wait', 'disabled:opacity-45')}
+                                      className={clsx('flex', 'min-h-9', 'flex-1', 'items-center', 'justify-center', 'gap-1.5', 'rounded-lg', 'koma-badge-danger', 'hover:bg-rose-200 dark:hover:bg-rose-900/40', 'px-2', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wide', 'transition-colors', 'disabled:cursor-wait', 'disabled:opacity-45', 'cursor-pointer')}
                                     >
                                       <Receipt size={12} />
                                       Ver comanda
@@ -5839,7 +5839,7 @@ export function CaixaPanel({
                                       setBalcaoMobileView('produtos');
                                       setActiveSubTab('balcao');
                                     }}
-                                    className={clsx('flex', 'min-h-9', 'flex-1', 'items-center', 'justify-center', 'gap-1.5', 'rounded-lg', 'border', 'border-emerald-600 dark:border-[#24483e]', 'bg-emerald-600 dark:bg-[#101815]', 'px-2', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wide', 'text-white dark:text-emerald-800 dark:text-emerald-300', 'transition-colors', 'hover:bg-emerald-500 dark:hover:bg-[#153028]')}
+                                    className={clsx('flex', 'min-h-9', 'flex-1', 'items-center', 'justify-center', 'gap-1.5', 'rounded-lg', 'koma-btn-success', 'px-2', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wide', 'transition-colors', 'cursor-pointer', 'shadow-xs')}
                                   >
                                     <Plus size={12} />
                                     Abrir pedido
