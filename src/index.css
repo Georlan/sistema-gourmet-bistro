@@ -1461,43 +1461,82 @@ body {
   .orders-mobile-stages {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0.3rem;
-    padding: 0.3rem;
-    border: 1px solid var(--cashier-line);
-    border-radius: 0.8rem;
-    background: rgba(8, 10, 9, 0.92);
+    gap: 0.35rem;
+    padding: 0.35rem;
+    border: 1px solid var(--koma-border-default);
+    border-radius: 0.85rem;
+    background: var(--koma-surface-panel);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   }
 
   .orders-mobile-stages__button {
     display: flex;
     min-width: 0;
-    min-height: 2.65rem;
+    min-height: 2.75rem;
     align-items: center;
     justify-content: space-between;
     gap: 0.35rem;
-    padding: 0.45rem 0.55rem;
-    color: #8e9993;
+    padding: 0.45rem 0.65rem;
+    color: var(--koma-text-muted);
     border: 1px solid transparent;
-    border-radius: 0.62rem;
-    font-size: 0.62rem;
-    font-weight: 750;
+    border-radius: 0.65rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    transition: all 150ms ease;
   }
 
   .orders-mobile-stages__button strong {
     display: grid;
-    min-width: 1.25rem;
-    height: 1.25rem;
+    min-width: 1.3rem;
+    height: 1.3rem;
     place-items: center;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.055);
+    background: var(--koma-surface-raised);
+    color: var(--koma-text-primary);
+    border: 1px solid var(--koma-border-subtle);
     font-family: var(--font-mono);
-    font-size: 0.58rem;
+    font-size: 0.62rem;
+    font-weight: 700;
   }
 
   .orders-mobile-stages__button.is-active {
-    color: var(--koma-text-primary);
-    border-color: rgba(0, 201, 150, 0.25);
-    background: rgba(0, 201, 150, 0.13);
+    color: #065f46;
+    border-color: #99e6d0;
+    background: #e6f7f2;
+  }
+
+  .orders-mobile-stages__button.is-active strong {
+    background: #059669;
+    color: #ffffff;
+    border-color: #059669;
+  }
+
+  [data-koma-theme="dark"] .orders-mobile-stages {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(14, 18, 16, 0.95);
+    box-shadow: none;
+  }
+
+  [data-koma-theme="dark"] .orders-mobile-stages__button {
+    color: #8e9993;
+  }
+
+  [data-koma-theme="dark"] .orders-mobile-stages__button strong {
+    background: rgba(255, 255, 255, 0.06);
+    color: #8e9993;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  [data-koma-theme="dark"] .orders-mobile-stages__button.is-active {
+    color: #00c996;
+    border-color: rgba(0, 201, 150, 0.35);
+    background: rgba(0, 201, 150, 0.15);
+  }
+
+  [data-koma-theme="dark"] .orders-mobile-stages__button.is-active strong {
+    background: rgba(0, 201, 150, 0.3);
+    color: #00c996;
+    border-color: rgba(0, 201, 150, 0.4);
   }
 
   .orders-board {
