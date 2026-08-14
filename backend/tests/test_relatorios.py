@@ -264,6 +264,48 @@ def test_visao_geral_uses_local_payment_day_and_ignores_empty_comandas():
     assert day12.json()["vendas_por_dia"] == []
 
 
+def test_financeiro_counts_paid_comandas_and_consolidates_split_payments():
+    db = TestingSessionLocal()
+    try:
+        now = datetime.datetime.now()
+        db.add(Comanda(
+            id="cmd-empty-financeiro", restaurante_id=1, garcom_id="u-garcom",
+            fechada=True, fechado_em=now - datetime.timedelta(days=2),
+            criado_em=now - datetime.timedelta(days=2), numero_pedido=99,
+            valor_pago=0.0,
+        ))
+        db.add(Pagamento(
+            id="pay-1-split", restaurante_id=1, comanda_id="cmd-1", turno_id=1,
+            valor=20.0, metodo="cartao", status="aprovado",
+            criado_em=now - datetime.timedelta(days=15),
+            idempotency_key="report-pay-1-split",
+        ))
+        db.commit()
+    finally:
+        db.close()
+
+    client = TestClient(app)
+    headers = get_auth_headers(client, "admin", "123")
+    today = datetime.datetime.now().date()
+    start = today - datetime.timedelta(days=30)
+    response = client.get(
+        f"/comandas/estatisticas/geral?data_inicio={start.isoformat()}&data_fim={today.isoformat()}",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total_pedidos"] == 1
+    assert data["faturamento"] == 70.0
+    assert data["ticket_medio"] == 70.0
+    assert data["breakdown_pagamentos"] == {
+        "dinheiro": 0.0,
+        "pix": 50.0,
+        "cartao": 20.0,
+    }
+    assert sum(data["pedidos_modalidade"].values()) == 1
+
+
 # ---------------------------------------------------------------------------
 # Filtro por cargo
 # ---------------------------------------------------------------------------

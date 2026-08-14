@@ -87,7 +87,8 @@ def test_peak_hours_pure_sql():
     assert resp.status_code == 200
     data = resp.json()
     assert len(data) > 0
-    assert data[0]["hora"] == "19h"
+    # 19:30 UTC corresponde a 16:30 no fuso operacional de Fortaleza.
+    assert data[0]["hora"] == "16h"
 
 def test_stock_purchase_suggestions():
     client = TestClient(app)

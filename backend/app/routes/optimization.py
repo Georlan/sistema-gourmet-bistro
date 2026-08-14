@@ -29,6 +29,7 @@ from ..timezone_utils import (
     to_database_utc,
     to_operational_local_time,
 )
+from .relatorios import _orders_from_payments
 
 logger = logging.getLogger("koma.optimization")
 
@@ -138,7 +139,13 @@ def get_estatisticas_geral(
         )
         
     pags = pags_query.all()
-    faturamento = sum(p.valor for p in pags)
+    paid_orders = _orders_from_payments(pags)
+    paid_comanda_ids = list(paid_orders)
+
+    # O grão do relatório é a venda paga, não toda comanda fechada. Isso
+    # exclui comandas vazias/testes e consolida pagamentos divididos como
+    # uma única venda, igual às demais abas de relatórios.
+    faturamento = sum(order["total"] for order in paid_orders.values())
     faturamento_dinheiro = sum(p.valor for p in pags if p.metodo == "dinheiro")
     faturamento_pix = sum(p.valor for p in pags if p.metodo == "pix")
     faturamento_cartao = sum(p.valor for p in pags if p.metodo in ["cartao", "cartao_debito", "cartao_credito"])
@@ -158,24 +165,16 @@ def get_estatisticas_geral(
     from sqlalchemy.orm import joinedload
     from ..models import Item as ComandaItem
 
-    # 2. Total de comandas fechadas (com eager loading joinedload para evitar N+1 no Sentry)
+    # 2. Carrega somente as comandas que possuem pagamento aprovado no
+    # período (com eager loading para evitar N+1 no Sentry).
     comandas_query = db.query(Comanda).options(
         joinedload(Comanda.itens).joinedload(ComandaItem.produto)
     ).filter(
         Comanda.restaurante_id == rest_id,
-        Comanda.fechada == True
+        Comanda.id.in_(paid_comanda_ids),
     )
-    if db_inicio:
-        comandas_query = comandas_query.filter(Comanda.fechado_em >= db_inicio)
-    if db_fim:
-        comandas_query = comandas_query.filter(
-            Comanda.fechado_em < db_fim
-            if fim_eh_dia
-            else Comanda.fechado_em <= db_fim
-        )
-        
-    comandas = comandas_query.all()
-    total_pedidos = len(comandas)
+    comandas = comandas_query.all() if paid_comanda_ids else []
+    total_pedidos = len(paid_orders)
     
     # 3. Ticket médio
     ticket_medio = faturamento / total_pedidos if total_pedidos > 0 else 0.0
