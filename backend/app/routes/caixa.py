@@ -793,13 +793,26 @@ def fechar_turno_caixa(
     total_esperado = _valor_monetario(esperado_dinheiro + esperado_cartao + esperado_pix)
     diferenca_total = _valor_monetario(total_declarado - total_esperado)
 
+    # Proteção Backend: Justificativa obrigatória em caso de divergência/quebra de caixa
+    tem_divergencia = any([
+        abs(diferenca_dinheiro) >= 0.01,
+        abs(diferenca_cartao) >= 0.01,
+        abs(diferenca_pix) >= 0.01,
+        abs(diferenca_total) >= 0.01,
+    ])
+    if tem_divergencia and not (req.observacao and req.observacao.strip()):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Diferença de caixa identificada. É obrigatório informar o motivo na observação para auditoria gerencial."
+        )
+
     fechado_em = datetime.datetime.now(datetime.timezone.utc)
     turno.fechado_em = fechado_em
     turno.fechado_por_id = current_user.id if current_user else None
     turno.declarado_dinheiro = declarado_dinheiro
     turno.declarado_cartao = declarado_cartao
     turno.declarado_pix = declarado_pix
-    turno.observacao = req.observacao
+    turno.observacao = req.observacao.strip() if req.observacao else None
     turno.status = "fechado"
 
     db.commit()

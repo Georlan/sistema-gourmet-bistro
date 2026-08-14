@@ -458,3 +458,57 @@ def test_historico_movimentacoes_limita_100_e_inclui_operador():
     assert movimentacoes[0]["descricao"] == "Movimentação 104"
     assert movimentacoes[-1]["descricao"] == "Movimentação 005"
     assert all(item["usuario_nome"] == "Operador Caixa 888" for item in movimentacoes)
+
+
+def test_fechamento_exige_observacao_obrigatoria_quando_divergente():
+    """Valida que fechamento com diferença de caixa sem justificativa é bloqueado pelo backend com 400."""
+    headers = get_auth_headers()
+    open_response = client.post(
+        "/caixa/turno/abrir",
+        json={"saldo_inicial": 100.0},
+        headers=headers,
+    )
+    assert open_response.status_code == 201
+
+    # 1. Tentativa de fechamento divergente (declarado 80 vs esperado 100) SEM observação -> Rejeitado 400
+    res_sem_obs = client.post(
+        "/caixa/fechamento",
+        json={
+            "declarado_dinheiro": 80.0,
+            "declarado_cartao": 0.0,
+            "declarado_pix": 0.0,
+            "observacao": "",
+        },
+        headers=headers,
+    )
+    assert res_sem_obs.status_code == 400
+    assert "Diferença de caixa identificada" in res_sem_obs.json()["detail"]
+
+    # 2. Tentativa com espaços vazios -> Rejeitado 400
+    res_espacos = client.post(
+        "/caixa/fechamento",
+        json={
+            "declarado_dinheiro": 80.0,
+            "declarado_cartao": 0.0,
+            "declarado_pix": 0.0,
+            "observacao": "    ",
+        },
+        headers=headers,
+    )
+    assert res_espacos.status_code == 400
+
+    # 3. Tentativa com justificativa válida -> Aprovado 200
+    res_com_obs = client.post(
+        "/caixa/fechamento",
+        json={
+            "declarado_dinheiro": 80.0,
+            "declarado_cartao": 0.0,
+            "declarado_pix": 0.0,
+            "observacao": "Falta de troco autorizada pela gerência",
+        },
+        headers=headers,
+    )
+    assert res_com_obs.status_code == 200
+    assert res_com_obs.json()["status"] == "fechado"
+    assert res_com_obs.json()["diferenca_total"] == -20.0
+
