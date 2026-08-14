@@ -204,42 +204,42 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-2">
-          <div className="flex justify-between items-center text-koma-subtle">
+        <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-2 shadow-xs">
+          <div className="flex justify-between items-center text-koma-muted">
             <span className="text-[9px] font-bold uppercase tracking-wider">Total Atendimentos</span>
-            <div className="p-1.5 bg-sky-500/15 text-sky-400 rounded-xl">
+            <div className="p-1.5 bg-sky-500/15 text-sky-600 dark:text-sky-300 rounded-xl">
               <ShoppingBag size={16} />
             </div>
           </div>
-          <strong className="text-2xl text-koma-foreground font-mono block">{totalAtendimentos}</strong>
-          <span className="text-[9px] text-koma-muted block">Comandas atendidas pela equipe</span>
+          <strong className="text-2xl text-koma-foreground font-mono block font-bold">{totalAtendimentos}</strong>
+          <span className="text-[10px] text-koma-muted block font-medium">Comandas atendidas pela equipe</span>
         </div>
 
-        <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-2">
-          <div className="flex justify-between items-center text-koma-subtle">
+        <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-2 shadow-xs">
+          <div className="flex justify-between items-center text-koma-muted">
             <span className="text-[9px] font-bold uppercase tracking-wider">Faturamento Gerado</span>
             <div className="p-1.5 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 rounded-xl">
               <DollarSign size={16} />
             </div>
           </div>
-          <strong className="text-2xl text-koma-foreground font-mono block">
+          <strong className="text-2xl text-emerald-700 dark:text-emerald-400 font-mono font-extrabold block">
             R$ {totalFaturamento.toFixed(2)}
           </strong>
-          <span className="text-[9px] text-koma-muted block">Vendas diretas da equipe</span>
+          <span className="text-[10px] text-koma-muted block font-medium">Vendas diretas da equipe</span>
         </div>
 
         {taxaAtiva && (
-          <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-2">
-            <div className="flex justify-between items-center text-koma-subtle">
+          <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-2 shadow-xs">
+            <div className="flex justify-between items-center text-koma-muted">
               <span className="text-[9px] font-bold uppercase tracking-wider">Comissão Total Proporcional</span>
-              <div className="p-1.5 bg-purple-500/15 text-purple-400 rounded-xl">
+              <div className="p-1.5 bg-purple-500/15 text-purple-600 dark:text-purple-300 rounded-xl">
                 <Percent size={16} />
               </div>
             </div>
-            <strong className="text-2xl text-purple-400 font-mono block">
+            <strong className="text-2xl text-purple-700 dark:text-purple-300 font-mono font-extrabold block">
               R$ {totalComissao.toFixed(2)}
             </strong>
-            <span className="text-[9px] text-koma-muted block">Calculada individualmente conforme vendas</span>
+            <span className="text-[10px] text-koma-muted block font-medium">Calculada individualmente conforme vendas</span>
           </div>
         )}
       </div>
@@ -247,7 +247,7 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
       {/* Team Charts */}
       {teamChartData.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4">
+          <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4 shadow-xs">
             <div className="flex items-center gap-2 border-b border-koma-border pb-3">
               <BarChart2 size={16} className="text-emerald-700 dark:text-emerald-400" />
               <span className="font-serif font-bold text-sm text-koma-foreground">Faturamento Gerado por Atendente</span>
@@ -256,30 +256,30 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
             <div className="h-60 w-full pt-1">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={teamChartData} margin={{ top: 10, right: 10, left: -15, bottom: 10 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--koma-border-default)" vertical={false} />
-                  <XAxis dataKey="name" stroke="#71717A" fontSize={10} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#71717A" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${v}`} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--koma-border-default)" vertical={false} opacity={0.6} />
+                  <XAxis dataKey="name" stroke="var(--koma-text-muted)" fontSize={11} tickLine={false} axisLine={false} />
+                  <YAxis stroke="var(--koma-text-muted)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${v}`} />
                   <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'var(--koma-border-default)' }} />
-                  <Bar dataKey="faturamento" name="Faturamento (R$)" fill="#10b981" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="faturamento" name="Faturamento (R$)" fill="#059669" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
 
-          <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4">
+          <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4 shadow-xs">
             <div className="flex items-center gap-2 border-b border-koma-border pb-3">
-              <BarChart2 size={16} className="text-sky-400" />
+              <BarChart2 size={16} className="text-sky-600 dark:text-sky-400" />
               <span className="font-serif font-bold text-sm text-koma-foreground">Volume de Atendimentos por Garçom</span>
             </div>
 
             <div className="h-60 w-full pt-1">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={teamChartData} margin={{ top: 10, right: 10, left: -15, bottom: 10 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--koma-border-default)" vertical={false} />
-                  <XAxis dataKey="name" stroke="#71717A" fontSize={10} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#71717A" fontSize={10} tickLine={false} axisLine={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--koma-border-default)" vertical={false} opacity={0.6} />
+                  <XAxis dataKey="name" stroke="var(--koma-text-muted)" fontSize={11} tickLine={false} axisLine={false} />
+                  <YAxis stroke="var(--koma-text-muted)" fontSize={11} tickLine={false} axisLine={false} />
                   <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'var(--koma-border-default)' }} />
-                  <Bar dataKey="pedidos" name="Atendimentos" fill="#0ea5e9" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="pedidos" name="Atendimentos" fill="#0284c7" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -288,24 +288,24 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
       )}
 
       {/* Team Performance Table */}
-      <div className="bg-koma-panel border border-koma-border rounded-3xl overflow-hidden p-5 space-y-4">
+      <div className="bg-koma-panel border border-koma-border rounded-3xl overflow-hidden p-5 space-y-4 shadow-xs">
         <div className="border-b border-koma-border pb-2 flex items-center justify-between">
           <span className="font-serif font-bold text-sm text-koma-foreground">Desempenho por Funcionário</span>
-          <span className="text-[9px] text-koma-muted font-mono">{membros.length} funcionário{membros.length !== 1 ? 's' : ''}</span>
+          <span className="text-[9px] text-koma-muted font-mono font-medium">{membros.length} funcionário{membros.length !== 1 ? 's' : ''}</span>
         </div>
 
         {isLoading ? (
-          <div className="p-12 text-center text-koma-subtle text-xs animate-pulse">
+          <div className="p-12 text-center text-koma-muted text-xs animate-pulse">
             Carregando desempenho da equipe...
           </div>
         ) : membros.length === 0 ? (
-          <div className="p-12 text-center text-koma-muted text-xs">
+          <div className="p-12 text-center text-koma-muted text-xs font-medium">
             Nenhum funcionário encontrado no período para o filtro selecionado.
           </div>
         ) : (
           <div className="overflow-x-auto border border-koma-border rounded-2xl">
             <table className="w-full text-left text-[10px]">
-              <thead className="bg-koma-raised border-b border-koma-border text-koma-subtle uppercase tracking-wider font-bold">
+              <thead className="bg-koma-raised border-b border-koma-border text-koma-muted uppercase tracking-wider font-extrabold text-[9px]">
                 <tr>
                   <th className="p-3.5">#</th>
                   <th className="p-3.5">Funcionário</th>
@@ -319,27 +319,27 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
               <tbody className="divide-y divide-koma-border">
                 {membros.map((m, idx) => (
                   <tr key={m.id} className="hover:bg-koma-raised/50 transition-colors">
-                    <td className="p-3.5 font-mono text-koma-muted text-center">{idx + 1}</td>
+                    <td className="p-3.5 font-mono text-koma-muted text-center font-bold">{idx + 1}</td>
                     <td className="p-3.5 font-bold text-koma-foreground">
                       <div>
                         <span>{m.nome}</span>
-                        {m.email && <span className="text-[8px] text-koma-muted block">{m.email}</span>}
+                        {m.email && <span className="text-[9px] text-koma-muted block font-mono">{m.email}</span>}
                       </div>
                     </td>
-                    <td className="p-3.5 text-koma-secondary capitalize">
+                    <td className="p-3.5 text-koma-muted font-medium capitalize">
                       {ROLE_LABEL[m.role] || m.role}
                     </td>
-                    <td className="p-3.5 text-center font-mono font-bold text-sky-400">
+                    <td className="p-3.5 text-center font-mono font-bold text-koma-foreground text-xs">
                       {m.pedidos_atendidos}
                     </td>
                     <td className="p-3.5 text-right font-mono font-bold text-koma-foreground">
                       R$ {m.faturamento.toFixed(2)}
                     </td>
-                    <td className="p-3.5 text-right font-mono text-koma-secondary">
+                    <td className="p-3.5 text-right font-mono text-koma-muted font-medium">
                       R$ {m.ticket_medio.toFixed(2)}
                     </td>
                     {taxaAtiva && (
-                      <td className="p-3.5 text-right font-mono font-extrabold text-purple-400">
+                      <td className="p-3.5 text-right font-mono font-extrabold text-purple-700 dark:text-purple-300">
                         R$ {m.comissao.toFixed(2)}
                       </td>
                     )}

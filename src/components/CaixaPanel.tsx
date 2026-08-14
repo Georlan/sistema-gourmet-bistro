@@ -8081,9 +8081,9 @@ export function CaixaPanel({
 
           {/* CRM CLIENTES — REAL DATA */}
           {activeTab === 'clientes' && ['clientes', 'crm', 'banco_clientes', 'fidelidade', 'programa_fidelidade'].includes(activeSubTab) && (
-            <div className={clsx('bg-koma-card/60', 'border', 'border-koma-border', 'rounded-3xl', 'p-5', 'space-y-4', 'text-left', 'animate-fade-in', 'max-w-3xl')}>
+            <div className={clsx('bg-koma-panel', 'border', 'border-koma-border', 'rounded-3xl', 'p-5', 'space-y-4', 'text-left', 'animate-fade-in', 'max-w-3xl', 'shadow-xs')}>
               <div className={clsx('flex', 'justify-between', 'items-center', 'border-b', 'border-koma-border', 'pb-2')}>
-                <span className={clsx('font-serif', 'font-bold', 'text-koma-secondary')}>CRM — Cadastro de Clientes</span>
+                <span className={clsx('font-serif', 'font-bold', 'text-koma-foreground', 'text-sm')}>CRM — Cadastro de Clientes</span>
                 <button
                   type="button"
                   onClick={() => {
@@ -8092,15 +8092,15 @@ export function CaixaPanel({
                     setNewCrmSaldo('0');
                     setShowNewCrmModal(true);
                   }}
-                  className={clsx('px-3', 'py-1', 'bg-emerald-600', 'hover:bg-emerald-500', 'text-white', 'rounded-lg', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-sm')}
+                  className={clsx('px-3.5', 'py-1.5', 'koma-btn-success', 'rounded-xl', 'text-xs', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-xs')}
                 >
                   + Novo Cliente
                 </button>
               </div>
-              <div className={clsx('overflow-hidden', 'border', 'border-koma-border/40', 'rounded-2xl')}>
+              <div className={clsx('overflow-hidden', 'border', 'border-koma-border', 'rounded-2xl')}>
                 <table className={clsx('w-full', 'text-left', 'text-[10px]')}>
                   <thead>
-                    <tr className={clsx('bg-koma-panel', 'border-b', 'border-koma-border', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'font-bold')}>
+                    <tr className={clsx('bg-koma-raised', 'border-b', 'border-koma-border', 'text-koma-muted', 'uppercase', 'tracking-wider', 'font-extrabold', 'text-[9px]')}>
                       <th className="p-3.5">WhatsApp</th>
                       <th className="p-3.5">Nome</th>
                       <th className={clsx('p-3.5', 'font-mono')}>Saldo</th>
@@ -8109,10 +8109,10 @@ export function CaixaPanel({
                   </thead>
                   <tbody className={clsx('divide-y', 'divide-koma-border')}>
                     {loyaltyUsers.map((user) => (
-                      <tr key={user.id} className={clsx('hover:bg-koma-panel/20', 'transition-colors')}>
-                        <td className={clsx('p-3.5', 'font-mono', 'text-koma-secondary')}>{formatarTelefoneTabela(user.telefone)}</td>
+                      <tr key={user.id} className={clsx('hover:bg-koma-raised/50', 'transition-colors')}>
+                        <td className={clsx('p-3.5', 'font-mono', 'text-koma-muted', 'text-[11px]')}>{formatarTelefoneTabela(user.telefone)}</td>
                         <td className={clsx('p-3.5', 'font-bold', 'text-koma-foreground')}>{user.cliente}</td>
-                        <td className={clsx('p-3.5', 'font-mono', 'text-emerald-400')}>
+                        <td className={clsx('p-3.5', 'font-mono', 'text-emerald-700 dark:text-emerald-400', 'font-extrabold')}>
                           {fidelidadeConfig.tipo_recompensa === 'PONTOS' ? `${user.pontos} pts` : `R$ ${user.saldoCashback.toFixed(2)}`}
                         </td>
                         <td className={clsx('p-3.5', 'text-right')}>
@@ -8124,7 +8124,7 @@ export function CaixaPanel({
                               setCrmFormPontos(user.pontos || 0);
                               setCrmFormCashback(user.saldoCashback || 0);
                             }}
-                            className={clsx('px-2.5', 'py-1', 'border', 'border-koma-border', 'hover:border-koma-border', 'bg-koma-input', 'hover:bg-koma-raised', 'text-koma-secondary', 'hover:text-koma-foreground', 'rounded-lg', 'transition-all', 'cursor-pointer', 'font-bold')}
+                            className={clsx('px-3', 'py-1', 'border', 'border-koma-border', 'bg-koma-raised', 'hover:bg-koma-card', 'text-koma-foreground', 'rounded-lg', 'transition-all', 'cursor-pointer', 'font-bold')}
                           >
                             Editar
                           </button>
@@ -8133,7 +8133,7 @@ export function CaixaPanel({
                     ))}
                     {loyaltyUsers.length === 0 && (
                       <tr>
-                        <td colSpan={4} className={clsx('p-8', 'text-center', 'text-koma-muted')}>
+                        <td colSpan={4} className={clsx('p-8', 'text-center', 'text-koma-muted', 'text-xs', 'font-medium')}>
                           Nenhum cliente cadastrado. O primeiro cadastro feito aqui, no balcão ou no cardápio aparecerá automaticamente.
                         </td>
                       </tr>

@@ -124,48 +124,48 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-koma-panel/80 border border-koma-border p-4 rounded-2xl space-y-1">
-          <span className="text-[9px] font-bold uppercase tracking-wider text-koma-subtle block">Faturamento Total</span>
-          <strong className="text-base font-mono font-bold text-emerald-400 block">
+        <div className="bg-koma-panel border border-koma-border p-4 rounded-2xl space-y-1 shadow-xs">
+          <span className="text-[9px] font-bold uppercase tracking-wider text-koma-muted block">Faturamento Total</span>
+          <strong className="text-base font-mono font-extrabold text-emerald-700 dark:text-emerald-400 block">
             {faturamentoBruto !== null ? `R$ ${Number(faturamentoBruto).toFixed(2)}` : 'Dados indisponíveis'}
           </strong>
-          <span className="text-[8px] text-koma-subtle block">Período de {periodoDias} dias</span>
+          <span className="text-[9px] text-koma-muted block font-medium">Período de {periodoDias} dias</span>
         </div>
 
-        <div className="bg-koma-panel/80 border border-koma-border p-4 rounded-2xl space-y-1">
-          <span className="text-[9px] font-bold uppercase tracking-wider text-koma-subtle block">Vendas de Hoje</span>
+        <div className="bg-koma-panel border border-koma-border p-4 rounded-2xl space-y-1 shadow-xs">
+          <span className="text-[9px] font-bold uppercase tracking-wider text-koma-muted block">Vendas de Hoje</span>
           <strong className="text-base font-mono font-bold text-koma-foreground block">
             {faturamentoHoje !== null ? `R$ ${Number(faturamentoHoje).toFixed(2)}` : 'Dados indisponíveis'}
           </strong>
-          <span className="text-[8px] text-emerald-500/80 block">Data atual</span>
+          <span className="text-[9px] text-emerald-700 dark:text-emerald-400 block font-semibold">Data atual</span>
         </div>
 
-        <div className="bg-koma-panel/80 border border-koma-border p-4 rounded-2xl space-y-1">
-          <span className="text-[9px] font-bold uppercase tracking-wider text-koma-subtle block">Pedidos Finalizados</span>
-          <strong className="text-base font-mono font-bold text-sky-400 block">
+        <div className="bg-koma-panel border border-koma-border p-4 rounded-2xl space-y-1 shadow-xs">
+          <span className="text-[9px] font-bold uppercase tracking-wider text-koma-muted block">Pedidos Finalizados</span>
+          <strong className="text-base font-mono font-bold text-sky-700 dark:text-sky-400 block">
             {totalPedidos !== null ? `${totalPedidos} comandas` : 'Dados indisponíveis'}
           </strong>
-          <span className="text-[8px] text-koma-subtle block">Volume do período</span>
+          <span className="text-[9px] text-koma-muted block font-medium">Volume do período</span>
         </div>
 
-        <div className="bg-koma-panel/80 border border-koma-border p-4 rounded-2xl space-y-1">
-          <span className="text-[9px] font-bold uppercase tracking-wider text-koma-subtle block">Ticket Médio por Pedido</span>
-          <strong className="text-base font-mono font-bold text-purple-400 block">
+        <div className="bg-koma-panel border border-koma-border p-4 rounded-2xl space-y-1 shadow-xs">
+          <span className="text-[9px] font-bold uppercase tracking-wider text-koma-muted block">Ticket Médio por Pedido</span>
+          <strong className="text-base font-mono font-extrabold text-purple-700 dark:text-purple-300 block">
             {ticketMedio !== null ? `R$ ${Number(ticketMedio).toFixed(2)}` : 'Dados indisponíveis'}
           </strong>
-          <span className="text-[8px] text-koma-subtle block">Faturamento ÷ Pedidos</span>
+          <span className="text-[9px] text-koma-muted block font-medium">Faturamento ÷ Pedidos</span>
         </div>
       </div>
 
       {/* Gráfico de Meios de Pagamento */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <div className="bg-koma-panel/60 border border-koma-border rounded-3xl p-5 space-y-4">
+        <div className="bg-koma-panel border border-koma-border rounded-3xl p-5 space-y-4 shadow-xs">
           <div className="border-b border-koma-border pb-2 flex items-center justify-between">
             <h4 className="font-serif text-sm font-bold text-koma-foreground flex items-center gap-2">
-              <PieIcon size={16} className="text-emerald-400" />
+              <PieIcon size={16} className="text-emerald-700 dark:text-emerald-400" />
               <span>Vendas por Meio de Pagamento</span>
             </h4>
-            <span className="text-[9px] text-koma-subtle font-mono">Últimos {periodoDias} dias</span>
+            <span className="text-[9px] text-koma-muted font-mono font-medium">Últimos {periodoDias} dias</span>
           </div>
 
           <div className="h-56 w-full pt-1">
@@ -189,36 +189,36 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-full flex items-center justify-center text-xs text-koma-subtle">Sem dados de pagamento no período</div>
+              <div className="h-full flex items-center justify-center text-xs text-koma-muted">Sem dados de pagamento no período</div>
             )}
           </div>
 
-          <div className="flex justify-center items-center gap-4 text-xs font-medium">
-            <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /><span>Pix</span></div>
-            <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-sky-500 inline-block" /><span>Cartão</span></div>
-            <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" /><span>Dinheiro</span></div>
+          <div className="flex justify-center items-center gap-4 text-xs font-bold">
+            <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-600 inline-block" /><span>Pix</span></div>
+            <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-sky-600 inline-block" /><span>Cartão</span></div>
+            <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-600 inline-block" /><span>Dinheiro</span></div>
           </div>
         </div>
 
-        <div className="bg-koma-panel/60 border border-koma-border rounded-3xl p-5 space-y-4">
+        <div className="bg-koma-panel border border-koma-border rounded-3xl p-5 space-y-4 shadow-xs">
           <div className="border-b border-koma-border pb-2 flex items-center justify-between">
             <h4 className="font-serif text-sm font-bold text-koma-foreground flex items-center gap-2">
-              <BarChart3 size={16} className="text-sky-400" />
+              <BarChart3 size={16} className="text-sky-600 dark:text-sky-400" />
               <span>Comparativo dos Meios de Recebimento</span>
             </h4>
-            <span className="text-[9px] text-koma-subtle font-mono">Em R$</span>
+            <span className="text-[9px] text-koma-muted font-mono font-medium">Em R$</span>
           </div>
 
           <div className="h-56 w-full pt-1">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={paymentBarData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--koma-border-default)" vertical={false} />
-                <XAxis dataKey="name" stroke="var(--koma-text-subtle)" fontSize={11} tickLine={false} axisLine={false} />
-                <YAxis stroke="var(--koma-text-subtle)" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${v}`} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--koma-border-default)" vertical={false} opacity={0.6} />
+                <XAxis dataKey="name" stroke="var(--koma-text-muted)" fontSize={11} tickLine={false} axisLine={false} />
+                <YAxis stroke="var(--koma-text-muted)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${v}`} />
                 <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'var(--koma-border-default)' }} />
                 <Bar dataKey="valor" radius={[6, 6, 0, 0]}>
                   {paymentBarData.map((entry, index) => (
-                    <Cell key={`bar-${index}`} fill={entry.fill} />
+                    <Cell key={`bar-${index}`} fill={entry.fill === '#10b981' ? '#059669' : entry.fill === '#0ea5e9' ? '#0284c7' : '#d97706'} />
                   ))}
                 </Bar>
               </BarChart>
@@ -228,66 +228,66 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
       </div>
 
       {/* Real Sales & Payment Breakdown Table */}
-      <div className="bg-koma-panel/60 border border-koma-border rounded-3xl p-5 space-y-4 text-left">
+      <div className="bg-koma-panel border border-koma-border rounded-3xl p-5 space-y-4 text-left shadow-xs">
         <div className="border-b border-koma-border pb-2 flex items-center justify-between">
           <h4 className="font-serif text-sm font-bold text-koma-foreground flex items-center gap-2">
-            <BarChart3 size={16} className="text-emerald-400" />
+            <BarChart3 size={16} className="text-emerald-700 dark:text-emerald-400" />
             <span>Detalhamento Financeiro de Vendas</span>
           </h4>
-          <span className="text-[9px] text-koma-subtle font-mono">Últimos {periodoDias} dias</span>
+          <span className="text-[9px] text-koma-muted font-mono font-medium">Últimos {periodoDias} dias</span>
         </div>
 
         <div className="overflow-x-auto border border-koma-border rounded-2xl">
           <table className="w-full text-left text-xs font-mono">
             <thead>
-              <tr className="bg-koma-raised border-b border-koma-border text-koma-subtle uppercase text-[9px] tracking-wider">
-                <th className="p-3">Forma de Recebimento</th>
-                <th className="p-3 text-right font-mono">Valor Total</th>
-                <th className="p-3 text-right font-mono">% do Faturamento</th>
+              <tr className="bg-koma-raised border-b border-koma-border text-koma-muted uppercase text-[9px] tracking-wider font-extrabold">
+                <th className="p-3.5">Forma de Recebimento</th>
+                <th className="p-3.5 text-right font-mono">Valor Total</th>
+                <th className="p-3.5 text-right font-mono">% do Faturamento</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-koma-border text-koma-secondary">
-              <tr className="bg-koma-raised/60 font-bold">
-                <td className="p-3 font-sans text-emerald-400">1. FATURAMENTO TOTAL BRUTO</td>
-                <td className="p-3 text-right text-emerald-400 font-bold">
+            <tbody className="divide-y divide-koma-border">
+              <tr className="bg-koma-raised/80 font-extrabold">
+                <td className="p-3.5 font-sans text-emerald-700 dark:text-emerald-400">1. FATURAMENTO TOTAL BRUTO</td>
+                <td className="p-3.5 text-right text-emerald-700 dark:text-emerald-400 font-extrabold">
                   {faturamentoBruto !== null ? `R$ ${Number(faturamentoBruto).toFixed(2)}` : 'R$ 0.00'}
                 </td>
-                <td className="p-3 text-right text-emerald-400 font-bold">100.0%</td>
+                <td className="p-3.5 text-right text-emerald-700 dark:text-emerald-400 font-extrabold">100.0%</td>
               </tr>
               {(() => {
                 const total = Number(faturamentoBruto || 0);
                 return (
                   <>
-                    <tr>
-                      <td className="p-3 pl-6 text-koma-muted font-sans flex items-center gap-2">
+                    <tr className="hover:bg-koma-raised/50 transition-colors">
+                      <td className="p-3.5 pl-6 text-koma-foreground font-sans font-medium flex items-center gap-2">
                         <span>💵 Recebimentos em Dinheiro</span>
                       </td>
-                      <td className="p-3 text-right text-koma-foreground font-bold">
+                      <td className="p-3.5 text-right text-koma-foreground font-bold">
                         R$ {din.toFixed(2)}
                       </td>
-                      <td className="p-3 text-right text-koma-subtle">
+                      <td className="p-3.5 text-right text-koma-muted font-semibold">
                         {total > 0 ? `${((din / total) * 100).toFixed(1)}%` : '0.0%'}
                       </td>
                     </tr>
-                    <tr>
-                      <td className="p-3 pl-6 text-koma-muted font-sans flex items-center gap-2">
+                    <tr className="hover:bg-koma-raised/50 transition-colors">
+                      <td className="p-3.5 pl-6 text-koma-foreground font-sans font-medium flex items-center gap-2">
                         <span>⚡ Recebimentos via Pix</span>
                       </td>
-                      <td className="p-3 text-right text-koma-foreground font-bold">
+                      <td className="p-3.5 text-right text-koma-foreground font-bold">
                         R$ {pix.toFixed(2)}
                       </td>
-                      <td className="p-3 text-right text-koma-subtle">
+                      <td className="p-3.5 text-right text-koma-muted font-semibold">
                         {total > 0 ? `${((pix / total) * 100).toFixed(1)}%` : '0.0%'}
                       </td>
                     </tr>
-                    <tr>
-                      <td className="p-3 pl-6 text-koma-muted font-sans flex items-center gap-2">
+                    <tr className="hover:bg-koma-raised/50 transition-colors">
+                      <td className="p-3.5 pl-6 text-koma-foreground font-sans font-medium flex items-center gap-2">
                         <span>💳 Recebimentos em Cartão (Débito/Crédito)</span>
                       </td>
-                      <td className="p-3 text-right text-koma-foreground font-bold">
+                      <td className="p-3.5 text-right text-koma-foreground font-bold">
                         R$ {car.toFixed(2)}
                       </td>
-                      <td className="p-3 text-right text-koma-subtle">
+                      <td className="p-3.5 text-right text-koma-muted font-semibold">
                         {total > 0 ? `${((car / total) * 100).toFixed(1)}%` : '0.0%'}
                       </td>
                     </tr>

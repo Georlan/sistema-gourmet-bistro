@@ -142,15 +142,15 @@ export function CardapioProdutosTab({
       >
         <div className="flex min-w-0 items-start gap-3">
           <div className={clsx(
-            'relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-koma-border bg-koma-card',
+            'relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-koma-border bg-koma-raised',
             !isPublished && 'opacity-60 grayscale',
           )}>
             {product.imagem ? (
               <img src={product.imagem} alt="" className="h-full w-full object-cover" loading="lazy" />
             ) : (
-              <ImageIcon size={18} className="text-koma-muted" aria-hidden="true" />
+              <ImageIcon size={20} className="text-koma-muted" aria-hidden="true" />
             )}
-            <span className="absolute bottom-1 left-1 rounded-md bg-black/70 px-1.5 py-0.5 font-mono text-[8px] font-bold text-koma-secondary backdrop-blur-sm">
+            <span className="absolute bottom-1 left-1 rounded-md bg-zinc-900/80 px-1.5 py-0.5 font-mono text-[8px] font-bold text-white backdrop-blur-sm">
               #{product.id}
             </span>
           </div>
@@ -161,7 +161,7 @@ export function CardapioProdutosTab({
                 {product.nome}
               </h3>
               <span className={clsx(
-                'rounded-full border px-2 py-0.5 text-[8px] font-bold uppercase tracking-[0.1em]',
+                'rounded-full px-2 py-0.5 text-[8px] font-extrabold uppercase tracking-wider',
                 isPublished
                   ? 'koma-badge-success'
                   : 'koma-badge-warning',
@@ -169,7 +169,7 @@ export function CardapioProdutosTab({
                 {isPublished ? 'Publicado' : 'Pausado'}
               </span>
             </div>
-            <p className="mt-1 line-clamp-2 max-w-3xl text-[10px] leading-relaxed text-koma-subtle">
+            <p className="mt-1 line-clamp-2 max-w-3xl text-[10px] leading-relaxed text-koma-muted font-medium">
               {product.descricao || 'Sem descrição. Adicione detalhes para facilitar a escolha do cliente.'}
             </p>
             <strong className="mt-1.5 block font-mono text-xs font-extrabold text-emerald-700 dark:text-emerald-400">
@@ -186,24 +186,24 @@ export function CardapioProdutosTab({
             aria-pressed={isPublished}
             aria-label={`${isPublished ? 'Pausar' : 'Publicar'} ${product.nome}`}
             className={clsx(
-              'inline-flex min-w-[112px] items-center justify-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-bold transition-all disabled:cursor-wait disabled:opacity-50 cursor-pointer shadow-sm',
+              'inline-flex min-w-[112px] items-center justify-center gap-2 rounded-xl px-3 py-2 text-[10px] font-extrabold uppercase tracking-wider transition-all disabled:cursor-wait disabled:opacity-50 cursor-pointer shadow-xs',
               isPublished
-                ? 'koma-btn-success'
-                : 'border-koma-border bg-koma-card text-koma-muted hover:border-koma-border-strong hover:text-koma-foreground',
+                ? 'koma-badge-success'
+                : 'koma-badge-warning',
             )}
           >
-            <span className={clsx('h-2 w-2 rounded-full', isPublished ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,.7)]' : 'bg-zinc-500')} />
-            {isPending ? 'Salvando…' : isPublished ? 'Disponível' : 'Publicar'}
+            <span className={clsx('h-2 w-2 rounded-full', isPublished ? 'bg-emerald-600 dark:bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,.7)]' : 'bg-amber-600 dark:bg-amber-400')} />
+            {isPending ? 'Salvando…' : isPublished ? 'Disponível' : 'Pausado'}
           </button>
 
           <div className="flex items-center rounded-xl border border-koma-border bg-koma-input p-1">
-            <button type="button" onClick={() => onDuplicateProduct(product)} className="rounded-lg p-2 text-koma-subtle transition-colors hover:bg-white/[0.05] hover:text-emerald-600 dark:text-emerald-300 cursor-pointer" title="Duplicar produto" aria-label={`Duplicar ${product.nome}`}>
+            <button type="button" onClick={() => onDuplicateProduct(product)} className="rounded-lg p-2 text-koma-muted transition-colors hover:bg-koma-raised hover:text-emerald-700 dark:hover:text-emerald-300 cursor-pointer" title="Duplicar produto" aria-label={`Duplicar ${product.nome}`}>
               <Copy size={14} />
             </button>
-            <button type="button" onClick={() => onEditProduct(product)} className="rounded-lg p-2 text-koma-subtle transition-colors hover:bg-white/[0.05] hover:text-koma-foreground cursor-pointer" title="Editar produto" aria-label={`Editar ${product.nome}`}>
+            <button type="button" onClick={() => onEditProduct(product)} className="rounded-lg p-2 text-koma-muted transition-colors hover:bg-koma-raised hover:text-koma-foreground cursor-pointer" title="Editar produto" aria-label={`Editar ${product.nome}`}>
               <Edit3 size={14} />
             </button>
-            <button type="button" onClick={() => void onRemoveProduct(product)} className="rounded-lg p-2 text-koma-subtle transition-colors hover:bg-rose-500/10 hover:text-rose-600 dark:text-rose-300 cursor-pointer" title="Remover do cardápio" aria-label={`Remover ${product.nome} do cardápio`}>
+            <button type="button" onClick={() => void onRemoveProduct(product)} className="rounded-lg p-2 text-rose-600 dark:text-rose-400 transition-colors hover:bg-rose-500/10 hover:text-rose-700 cursor-pointer" title="Remover do cardápio" aria-label={`Remover ${product.nome} do cardápio`}>
               <Trash2 size={14} />
             </button>
           </div>
@@ -216,15 +216,15 @@ export function CardapioProdutosTab({
     const publishedCount = products.filter((product) => product.ativo !== false).length;
     const allPublished = publishedCount === products.length;
     return (
-      <section key={category.id} className="overflow-hidden rounded-[22px] border border-koma-border bg-koma-panel/60 shadow-[0_18px_50px_rgba(0,0,0,.18)]">
-        <header className="flex flex-col gap-3 border-b border-koma-border bg-white/[0.018] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <section key={category.id} className="overflow-hidden rounded-[22px] border border-koma-border bg-koma-panel shadow-xs">
+        <header className="flex flex-col gap-3 border-b border-koma-border bg-koma-raised/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-emerald-400/15 bg-emerald-400/[0.07] text-emerald-600 dark:text-emerald-300">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
               <Utensils size={15} />
             </span>
             <div className="min-w-0">
               <h2 className="truncate text-xs font-bold text-koma-foreground">{category.nome}</h2>
-              <p className="mt-0.5 text-[9px] text-koma-subtle">
+              <p className="mt-0.5 text-[9px] text-koma-muted font-medium">
                 {products.length} {products.length === 1 ? 'produto' : 'produtos'} · {publishedCount} disponíveis
               </p>
             </div>
@@ -234,10 +234,10 @@ export function CardapioProdutosTab({
             onClick={() => void handleCategoryAvailability(category.id, products.map((product) => product.id), !allPublished)}
             disabled={Boolean(pendingCategoryId)}
             className={clsx(
-              'inline-flex items-center justify-center gap-1.5 self-start rounded-xl border px-3 py-2 text-[9px] font-bold transition-colors disabled:cursor-wait disabled:opacity-50 sm:self-auto cursor-pointer',
+              'inline-flex items-center justify-center gap-1.5 self-start rounded-xl px-3 py-1.5 text-[9px] font-extrabold uppercase tracking-wider transition-colors disabled:cursor-wait disabled:opacity-50 sm:self-auto cursor-pointer shadow-xs',
               allPublished
-                ? 'border-amber-400/15 bg-amber-400/[0.06] text-amber-600 dark:text-amber-300 hover:bg-amber-400/[0.11]'
-                : 'border-emerald-400/15 bg-emerald-400/[0.07] text-emerald-600 dark:text-emerald-300 hover:bg-emerald-400/[0.12]',
+                ? 'koma-badge-warning hover:bg-amber-200 dark:hover:bg-amber-900/40'
+                : 'koma-badge-success hover:bg-emerald-200 dark:hover:bg-emerald-900/40',
             )}
           >
             {allPublished ? <EyeOff size={13} /> : <Eye size={13} />}
