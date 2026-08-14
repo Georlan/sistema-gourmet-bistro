@@ -232,11 +232,11 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
           <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-2 shadow-xs">
             <div className="flex justify-between items-center text-koma-muted">
               <span className="text-[9px] font-bold uppercase tracking-wider">Comissão Total Proporcional</span>
-              <div className="p-1.5 bg-amber-500/15 text-amber-800 dark:text-amber-300 rounded-xl">
+              <div className="p-1.5 bg-purple-500/15 text-purple-600 dark:text-purple-300 rounded-xl">
                 <Percent size={16} />
               </div>
             </div>
-            <strong className="text-2xl text-amber-800 dark:text-amber-300 font-mono font-extrabold block">
+            <strong className="text-2xl text-purple-700 dark:text-purple-300 font-mono font-extrabold block">
               R$ {totalComissao.toFixed(2)}
             </strong>
             <span className="text-[10px] text-koma-muted block font-medium">Calculada individualmente conforme vendas</span>
@@ -249,7 +249,7 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4 shadow-xs">
             <div className="flex items-center gap-2 border-b border-koma-border pb-3">
-              <BarChart2 size={16} className="text-koma-accent" />
+              <BarChart2 size={16} className="text-emerald-700 dark:text-emerald-400" />
               <span className="font-serif font-bold text-sm text-koma-foreground">Faturamento Gerado por Atendente</span>
             </div>
 
@@ -268,7 +268,7 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
 
           <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4 shadow-xs">
             <div className="flex items-center gap-2 border-b border-koma-border pb-3">
-              <BarChart2 size={16} className="text-koma-accent" />
+              <BarChart2 size={16} className="text-sky-600 dark:text-sky-400" />
               <span className="font-serif font-bold text-sm text-koma-foreground">Volume de Atendimentos por Garçom</span>
             </div>
 
@@ -279,7 +279,7 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
                   <XAxis dataKey="name" stroke="var(--koma-text-muted)" fontSize={11} tickLine={false} axisLine={false} />
                   <YAxis stroke="var(--koma-text-muted)" fontSize={11} tickLine={false} axisLine={false} />
                   <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'var(--koma-border-default)' }} />
-                  <Bar dataKey="pedidos" name="Atendimentos" fill="#475569" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="pedidos" name="Atendimentos" fill="#0284c7" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

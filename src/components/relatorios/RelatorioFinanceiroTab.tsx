@@ -73,13 +73,13 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
 
   const paymentChartData = [
     { name: 'Pix', value: pix, color: '#059669' },
-    { name: 'Cartão', value: car, color: '#475569' },
+    { name: 'Cartão', value: car, color: '#0284c7' },
     { name: 'Dinheiro', value: din, color: '#d97706' }
   ].filter(item => item.value > 0);
 
   const paymentBarData = [
     { name: 'Pix', valor: pix, fill: '#059669' },
-    { name: 'Cartão', valor: car, fill: '#475569' },
+    { name: 'Cartão', valor: car, fill: '#0284c7' },
     { name: 'Dinheiro', valor: din, fill: '#d97706' }
   ];
 
@@ -195,7 +195,7 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
 
           <div className="flex justify-center items-center gap-4 text-xs font-bold">
             <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#059669] inline-block" /><span>Pix</span></div>
-            <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#475569] inline-block" /><span>Cartão</span></div>
+            <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#0284c7] inline-block" /><span>Cartão</span></div>
             <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#d97706] inline-block" /><span>Dinheiro</span></div>
           </div>
         </div>
@@ -203,7 +203,7 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
         <div className="bg-koma-panel border border-koma-border rounded-3xl p-5 space-y-4 shadow-xs">
           <div className="border-b border-koma-border pb-2 flex items-center justify-between">
             <h4 className="font-serif text-sm font-bold text-koma-foreground flex items-center gap-2">
-              <BarChart3 size={16} className="text-koma-accent" />
+              <BarChart3 size={16} className="text-sky-600 dark:text-sky-400" />
               <span>Comparativo dos Meios de Recebimento</span>
             </h4>
             <span className="text-[9px] text-koma-muted font-mono font-medium">Em R$</span>

@@ -652,13 +652,13 @@ export function PrintMonitorPanel({
     success: 'border-emerald-400/80 bg-emerald-50/90 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-300',
     warning: 'border-amber-400/90 bg-amber-50 dark:bg-amber-950/25 text-amber-950 dark:text-amber-200',
     danger: 'border-rose-400/90 bg-rose-50 dark:bg-rose-950/25 text-rose-950 dark:text-rose-200',
-    neutral: 'border-slate-300 bg-slate-50 dark:bg-slate-900/40 text-slate-900 dark:text-slate-200'
+    neutral: 'border-sky-400/80 bg-sky-50 dark:bg-sky-950/25 text-sky-950 dark:text-sky-200'
   };
   const diagnosticIconStyle: Record<DiagnosticTone, string> = {
     success: 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30',
     warning: 'bg-amber-500/20 text-amber-900 dark:text-amber-300 border border-amber-500/40',
     danger: 'bg-rose-500/20 text-rose-900 dark:text-rose-300 border border-rose-500/40',
-    neutral: 'bg-slate-500/20 text-slate-800 dark:text-slate-300 border border-slate-500/30'
+    neutral: 'bg-sky-500/20 text-sky-800 dark:text-sky-300 border border-sky-500/30'
   };
 
   const equipmentState = hasReadyPrinter

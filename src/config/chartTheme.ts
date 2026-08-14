@@ -9,30 +9,30 @@ export const KOMA_CHART_COLORS = {
   primaryLight: '#34d399', // Mint
   primaryDark: '#047857',
 
-  // Secondary metrics (Comparativos, Meta, Quantidades)
-  secondary: '#475569', // Graphite / Slate
-  secondaryLight: '#64748b',
+  // Secondary metrics (Volume, Atendimentos, Horários de Pico, Cartão)
+  secondary: '#0284c7', // Sky Blue
+  secondaryLight: '#38bdf8',
 
-  // Semantic status colors (Somente quando o dado tiver significado operacional)
+  // Semantic status colors
   warning: '#d97706', // Âmbar (Atenção / Pendente / Dinheiro)
   danger: '#dc2626',  // Vermelho / Vinho (Cancelamento / Queda)
-  info: '#0284c7',    // Azul Informacional (Cartão / Pix se necessário)
-  neutral: '#94a3b8', // Cinza neutro
+  info: '#0284c7',    // Azul Informacional
+  neutral: '#64748b', // Slate
 
   // Sequência ordenada para gráficos de pizza/rosca ou múltiplas séries
   series: [
     '#059669', // Teal Kôma (1º)
-    '#475569', // Grafite (2º)
-    '#34d399', // Menta (3º)
-    '#d97706', // Âmbar (4º)
-    '#0284c7', // Azul informativo (5º)
+    '#0284c7', // Sky Blue (2º)
+    '#d97706', // Âmbar (3º)
+    '#475569', // Grafite (4º)
+    '#34d399', // Menta (5º)
     '#94a3b8', // Cinza neutro (6º)
   ],
 
   // Formas de pagamento padronizadas
   paymentMethods: {
     pix: '#059669',      // Pix: Teal Kôma
-    cartao: '#475569',   // Cartão: Grafite
+    cartao: '#0284c7',   // Cartão: Sky Blue
     dinheiro: '#d97706', // Dinheiro: Âmbar
     outros: '#94a3b8',   // Outros: Cinza neutro
   },

@@ -87,12 +87,12 @@ export const MesaCard = React.memo<MesaCardProps>(({
       labelColor: 'text-amber-900 dark:text-amber-300',
     },
     entregue: {
-      surface: 'bg-slate-50 dark:bg-[#0b1621] hover:bg-slate-100/80 dark:hover:bg-[#0d1d2c]',
-      border: 'border-slate-300 dark:border-slate-800 hover:border-slate-400 focus-visible:ring-slate-400',
-      accent: 'bg-slate-600 dark:bg-slate-400',
-      dot: 'bg-slate-600 dark:bg-slate-400',
+      surface: 'bg-sky-50 dark:bg-[#0b1621] hover:bg-sky-100/80 dark:hover:bg-[#0d1d2c]',
+      border: 'border-sky-300 dark:border-sky-900/60 hover:border-sky-500 focus-visible:ring-sky-400',
+      accent: 'bg-sky-500 dark:bg-sky-400',
+      dot: 'bg-sky-500 dark:bg-sky-400',
       label: 'Aguardando conta',
-      labelColor: 'text-slate-800 dark:text-slate-300',
+      labelColor: 'text-sky-800 dark:text-sky-300',
     },
     mesclada: {
       surface: 'bg-koma-panel hover:bg-koma-card',
