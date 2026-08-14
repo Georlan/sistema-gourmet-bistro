@@ -26,13 +26,29 @@ router = APIRouter(
 )
 
 
-def _lookup_user_before_tenant(db: Session, identifier: str):
-    """Resolve somente id/tenant antes do RLS conhecer o restaurante."""
+def _lookup_users_before_tenant(
+    db: Session,
+    identifier: str,
+    restaurante_id: int | None = None,
+):
+    """Resolve candidatos mínimos antes de o RLS conhecer o restaurante.
+
+    Um identificador pode pertencer legitimamente a contas de restaurantes
+    diferentes. Por isso esta etapa nunca escolhe uma linha com ``LIMIT 1``:
+    a senha (e, quando informado, o tenant) precisa produzir uma identidade
+    inequívoca antes de vincular a sessão ao restaurante.
+    """
     if db.get_bind().dialect.name == "postgresql":
         return db.execute(
-            text("SELECT id, restaurante_id, senha_hash FROM koma_internal.auth_user(:identifier)"),
-            {"identifier": identifier},
-        ).mappings().first()
+            text(
+                "SELECT id, restaurante_id, senha_hash "
+                "FROM koma_internal.auth_user_candidates(:identifier, :restaurante_id)"
+            ),
+            {
+                "identifier": identifier,
+                "restaurante_id": restaurante_id,
+            },
+        ).mappings().all()
     # O fallback SQLite precisa ignorar o filtro ORM de tenant exatamente como
     # a função interna do PostgreSQL. Retorna somente os três campos mínimos.
     return db.execute(
@@ -40,13 +56,41 @@ def _lookup_user_before_tenant(db: Session, identifier: str):
             """
             SELECT id, restaurante_id, senha_hash
             FROM usuarios
-            WHERE lower(coalesce(email, '')) = :identifier
-               OR telefone = :identifier
-            LIMIT 1
+            WHERE (
+                    lower(coalesce(email, '')) = :identifier
+                 OR lower(coalesce(telefone, '')) = :identifier
+            )
+              AND (:restaurante_id IS NULL OR restaurante_id = :restaurante_id)
+            ORDER BY restaurante_id, id
+            LIMIT 10
             """
         ),
-        {"identifier": identifier},
-    ).mappings().first()
+        {
+            "identifier": identifier,
+            "restaurante_id": restaurante_id,
+        },
+    ).mappings().all()
+
+
+def _select_login_identity(candidates, password: str):
+    """Seleciona uma única conta pela senha sem assumir um tenant arbitrário."""
+    matches = [
+        candidate
+        for candidate in candidates
+        if candidate.get("senha_hash")
+        and verify_password(password, candidate["senha_hash"])
+    ]
+    if not matches:
+        return None
+    if len(matches) > 1:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Este login está associado a mais de um restaurante. "
+                "Selecione o estabelecimento para continuar."
+            ),
+        )
+    return matches[0]
 
 
 def _lookup_invite_before_tenant(db: Session, token: str):
@@ -74,8 +118,13 @@ def login(login_data: LoginRequest, db: Session = Depends(get_db)):
     Retorna o token JWT e as informações do usuário.
     """
     username_val = (login_data.username or "").strip().lower()
-    identity = _lookup_user_before_tenant(db, username_val)
-    if not identity or not verify_password(login_data.password, identity["senha_hash"]):
+    candidates = _lookup_users_before_tenant(
+        db,
+        username_val,
+        login_data.restaurante_id,
+    )
+    identity = _select_login_identity(candidates, login_data.password)
+    if not identity:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Usuário ou senha incorretos"

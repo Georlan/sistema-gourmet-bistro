@@ -7,6 +7,7 @@ import uuid
 class LoginRequest(BaseModel):
     username: str
     password: str
+    restaurante_id: Optional[int] = Field(default=None, gt=0)
 
 class UsuarioResponse(BaseModel):
     id: str

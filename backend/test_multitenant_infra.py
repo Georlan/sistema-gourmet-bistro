@@ -38,6 +38,7 @@ TENANT_SCOPED_MODEL_TABLES = {
     "mensagens_whatsapp",
     "mesas",
     "motoboys",
+    "motoboy_tokens_ativos",
     "movimentacoes_estoque",
     "notas_entrada",
     "observacoes_predefinidas",
@@ -54,6 +55,11 @@ TENANT_SCOPED_MODEL_TABLES = {
     "usuarios",
 }
 
+# Eventos recebidos da Meta podem chegar antes de o provedor permitir
+# correlacioná-los a uma mensagem/tenant. A tabela continua sob RLS e linhas
+# sem tenant não são visíveis ao runtime, mas a coluna é intencionalmente nula.
+UNRESOLVED_PLATFORM_EVENT_TABLES = {"notificacoes_whatsapp"}
+
 
 def test_all_tenant_models_declare_a_required_context_default():
     """Impede que uma tabela protegida por RLS volte a ser omitida pelo ORM."""
@@ -66,9 +72,14 @@ def test_all_tenant_models_declare_a_required_context_default():
         if "restaurante_id" in table.c
     }
 
-    assert set(mapped_tables) == TENANT_SCOPED_MODEL_TABLES
+    assert set(mapped_tables) == (
+        TENANT_SCOPED_MODEL_TABLES | UNRESOLVED_PLATFORM_EVENT_TABLES
+    )
     for table_name, table in mapped_tables.items():
         tenant_column = table.c.restaurante_id
+        if table_name in UNRESOLVED_PLATFORM_EVENT_TABLES:
+            assert tenant_column.nullable is True, table_name
+            continue
         assert tenant_column.nullable is False, table_name
         assert tenant_column.default is not None, table_name
 

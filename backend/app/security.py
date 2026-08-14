@@ -93,6 +93,50 @@ def create_access_token(
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
+
+def _authenticated_user_from_token(token: str, db: Session) -> Usuario:
+    """Valida assinatura, tenant e estado atual da conta no banco.
+
+    O JWT seleciona o escopo RLS da requisição, mas nunca é a fonte final de
+    cargo ou status. Esses atributos são sempre recarregados da conta atual.
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Credenciais inválidas ou ausentes.",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(
+            token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM],
+        )
+        user_id = payload.get("sub")
+        restaurante_id = payload.get("restaurante_id")
+        if (
+            user_id is None
+            or not isinstance(restaurante_id, int)
+            or isinstance(restaurante_id, bool)
+            or restaurante_id <= 0
+        ):
+            raise credentials_exception
+    except jwt.PyJWTError:
+        raise credentials_exception
+
+    user = db.query(Usuario).filter(Usuario.id == str(user_id)).first()
+    if user is None or user.restaurante_id != restaurante_id:
+        raise credentials_exception
+
+    status_val = str(
+        getattr(user, "status", "pendente_ativacao") or "pendente_ativacao"
+    ).lower().strip()
+    if status_val != "ativo":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Conta de usuário pendente, inativa ou bloqueada.",
+        )
+    return user
+
 def get_current_garcom_optional(
     token: Optional[str] = Depends(oauth2_scheme),
     db: Session = Depends(get_db)
@@ -103,15 +147,7 @@ def get_current_garcom_optional(
     """
     if not token:
         return None
-    try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        garcom_id: str = payload.get("sub")
-        if garcom_id is None:
-            return None
-    except jwt.PyJWTError:
-        return None
-    
-    return db.query(Usuario).filter(Usuario.id == garcom_id).first()
+    return _authenticated_user_from_token(token, db)
 
 
 def get_current_user(
@@ -122,34 +158,13 @@ def get_current_user(
     Dependency obrigatória. Levanta 401 se não houver token válido ou
     se o usuário não existir mais no banco.
     """
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Credenciais inválidas ou ausentes.",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
     if not token:
-        raise credentials_exception
-    try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        garcom_id: str = payload.get("sub")
-        if garcom_id is None:
-            raise credentials_exception
-    except jwt.PyJWTError:
-        raise credentials_exception
-
-    user = db.query(Usuario).filter(Usuario.id == garcom_id).first()
-    if user is None:
-        raise credentials_exception
-        
-    status_val = str(
-        getattr(user, "status", "pendente_ativacao") or "pendente_ativacao"
-    ).lower().strip()
-    if status_val != "ativo":
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Conta de usuário pendente, inativa ou bloqueada."
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciais inválidas ou ausentes.",
+            headers={"WWW-Authenticate": "Bearer"},
         )
-    return user
+    return _authenticated_user_from_token(token, db)
 
 
 def ensure_permission(current_user: Optional[Usuario], permission: str) -> Usuario:
@@ -314,4 +329,3 @@ class IPRateLimiter:
         self.history[client_ip] = timestamps
 
 motoboy_rate_limiter = IPRateLimiter(requests_per_minute=30)
-
