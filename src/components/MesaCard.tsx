@@ -128,7 +128,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
             <span className="block text-[8px] sm:text-[9px] font-mono font-bold uppercase tracking-[0.16em] text-zinc-500">
               {hasCustomName ? `Mesa ${table.id}` : 'Mesa'}
             </span>
-            <strong className={`${hasCustomName ? 'text-base sm:text-lg truncate' : 'text-2xl sm:text-3xl'} mt-0.5 block font-serif font-black tracking-[-0.05em] leading-none text-white`}>
+            <strong className={`${hasCustomName ? 'text-xs sm:text-sm font-bold tracking-tight leading-tight line-clamp-2 break-words' : 'text-2xl sm:text-3xl font-serif font-black tracking-[-0.05em] leading-none'} mt-0.5 block text-white`}>
               {hasCustomName ? table.nome : table.id}
             </strong>
             {mergedSources.length > 0 && (

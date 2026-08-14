@@ -129,7 +129,7 @@ export function MesasView({
           <span className="text-[10px] font-bold uppercase tracking-[0.14em]">Estrutura física do salão</span>
         </div>
 
-        <div role="group" aria-label="Filtrar mesas por status" className="grid grid-cols-4 gap-1.5 w-full lg:w-auto">
+        <div role="group" aria-label="Filtrar mesas por status" className="flex w-full min-w-0 max-w-full gap-1.5 overflow-x-auto rounded-xl p-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:grid sm:grid-cols-4 lg:w-auto">
           {filters.map((filter) => {
             const isActive = currentFilter === filter.id;
             return (
@@ -138,7 +138,7 @@ export function MesasView({
                 type="button"
                 onClick={() => !readOnly && handleFilterSelect(filter.id)}
                 aria-pressed={isActive}
-                className={`min-w-0 lg:min-w-[108px] px-2.5 py-2.5 rounded-xl text-[10px] sm:text-xs font-bold transition-all text-center border ${
+                className={`shrink-0 whitespace-nowrap px-3 py-2.5 sm:px-2.5 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-bold transition-all text-center border ${
                   readOnly ? 'cursor-default' : 'cursor-pointer'
                 } ${
                   isActive

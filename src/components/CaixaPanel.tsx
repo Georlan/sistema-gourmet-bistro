@@ -5592,7 +5592,7 @@ export function CaixaPanel({
 
               <section className={clsx('flex', 'min-h-0', 'flex-1', 'flex-col', 'overflow-hidden', 'rounded-[22px]', 'border', 'border-[#252b28]', 'bg-[#0d100f]')}>
                 <div className={clsx('flex', 'flex-col', 'gap-2', 'border-b', 'border-[#252b28]', 'px-3', 'py-3', 'sm:flex-row', 'sm:items-center', 'sm:justify-between', 'sm:px-4')}>
-                  <div className={clsx('flex', 'w-full', 'min-w-0', 'max-w-full', 'gap-1', 'overflow-x-auto', 'overscroll-x-contain', 'rounded-xl', 'bg-[#080a09]', 'p-1', '[scrollbar-width:none]', '[&::-webkit-scrollbar]:hidden')}>
+                  <div className={clsx('flex', 'w-full', 'min-w-0', 'max-w-full', 'gap-1', 'overflow-x-auto', 'overscroll-x-contain', 'rounded-xl', 'bg-[#080a09]', 'p-1.5', 'pr-3', '[scrollbar-width:none]', '[&::-webkit-scrollbar]:hidden')}>
                     {[
                       { id: 'all' as const, label: 'Todas', count: tableStatusCounts.all, dot: 'bg-zinc-500' },
                       { id: 'free' as const, label: 'Livres', count: tableStatusCounts.free, dot: 'bg-[#45b995]' },
@@ -5619,6 +5619,7 @@ export function CaixaPanel({
                         {filter.label} <span className={clsx('ml-1', 'font-mono', 'opacity-70')}>{filter.count}</span>
                       </button>
                     ))}
+                    <span className="w-2 shrink-0" aria-hidden="true" />
                   </div>
                 </div>
 
@@ -5675,7 +5676,7 @@ export function CaixaPanel({
                                 <div className={clsx('mt-0.5', 'flex', 'items-baseline', 'gap-2')}>
                                   <strong className={clsx('text-2xl', 'font-extrabold', 'leading-none', 'text-white')}>{table.id}</strong>
                                   {table.nome && table.nome !== `Mesa ${table.id}` && (
-                                    <span className={clsx('truncate', 'text-[10px]', 'font-medium', 'text-zinc-400')}>{table.nome}</span>
+                                    <span className={clsx('line-clamp-1', 'break-words', 'text-[10px]', 'font-semibold', 'text-zinc-300')}>{table.nome}</span>
                                   )}
                                 </div>
                               </div>
