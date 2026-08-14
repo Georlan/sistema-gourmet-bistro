@@ -128,7 +128,7 @@ export const SidebarProvider = React.forwardRef<
             } as React.CSSProperties
           }
           className={cn(
-            "group/sidebar-wrapper flex min-h-svh w-full has-[[data-variant=inset]]:bg-[#09090b]",
+            "group/sidebar-wrapper flex min-h-svh w-full has-[[data-variant=inset]]:bg-koma-page",
             className
           )}
           ref={ref}
@@ -167,7 +167,7 @@ export const Sidebar = React.forwardRef<
       return (
         <div
           className={cn(
-            "flex h-full w-[var(--sidebar-width)] flex-col bg-[#121214] text-white border-r border-[#27272A]",
+            "flex h-full w-[var(--sidebar-width)] flex-col bg-koma-panel text-koma-foreground border-r border-koma-border",
             className
           )}
           ref={ref}
@@ -183,12 +183,12 @@ export const Sidebar = React.forwardRef<
         openMobile && (
           <div className="fixed inset-0 z-50 flex">
             <div
-              className="fixed inset-0 bg-black/80 backdrop-blur-xs transition-opacity"
+              className="fixed inset-0 bg-koma-overlay backdrop-blur-xs transition-opacity"
               onClick={() => setOpenMobile(false)}
             />
             <div
               className={cn(
-                "relative flex h-full w-[var(--sidebar-width-mobile)] flex-col bg-[#121214] border-r border-[#27272A] p-4 text-white shadow-2xl z-10 animate-in slide-in-from-left duration-200",
+                "relative flex h-full w-[var(--sidebar-width-mobile)] flex-col bg-koma-panel border-r border-koma-border p-4 text-koma-foreground shadow-2xl z-10 animate-in slide-in-from-left duration-200",
                 className
               )}
               ref={ref}
@@ -204,7 +204,7 @@ export const Sidebar = React.forwardRef<
     return (
       <div
         ref={ref}
-        className="group peer hidden md:block text-white"
+        className="group peer hidden md:block text-koma-foreground"
         data-state={state}
         data-collapsible={state === "collapsed" ? collapsible : ""}
         data-variant={variant}
@@ -228,14 +228,14 @@ export const Sidebar = React.forwardRef<
               : "right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]",
             variant === "floating" || variant === "inset"
               ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4)_+_2px)]"
-              : "group-data-[collapsible=icon]:w-[var(--sidebar-width-icon)] group-data-[side=left]:border-r group-data-[side=right]:border-l border-[#27272A]",
+              : "group-data-[collapsible=icon]:w-[var(--sidebar-width-icon)] group-data-[side=left]:border-r group-data-[side=right]:border-l border-koma-border",
             className
           )}
           {...props}
         >
           <div
             data-sidebar="sidebar"
-            className="flex h-full w-full flex-col bg-[#121214] text-[#F4F4F5] group-data-[variant=floating]:rounded-2xl group-data-[variant=floating]:border group-data-[variant=floating]:border-[#27272A] group-data-[variant=floating]:shadow-xl"
+            className="flex h-full w-full flex-col bg-koma-panel text-koma-foreground group-data-[variant=floating]:rounded-2xl group-data-[variant=floating]:border group-data-[variant=floating]:border-koma-border group-data-[variant=floating]:shadow-xl"
           >
             {children}
           </div>
@@ -257,7 +257,7 @@ export const SidebarTrigger = React.forwardRef<
       data-sidebar="trigger"
       type="button"
       className={cn(
-        "p-2 rounded-xl bg-[#1C1C1F] hover:bg-[#27272A] text-gray-300 hover:text-white border border-[#27272A] transition-colors cursor-pointer flex items-center justify-center",
+        "p-2 rounded-xl bg-koma-raised hover:bg-koma-card text-koma-secondary hover:text-koma-foreground border border-koma-border transition-colors cursor-pointer flex items-center justify-center",
         className
       )}
       onClick={(event) => {
@@ -304,7 +304,7 @@ export const SidebarInset = React.forwardRef<
     <main
       ref={ref}
       className={cn(
-        "relative flex min-h-svh flex-1 flex-col bg-[#09090B] text-white",
+        "relative flex min-h-svh flex-1 flex-col bg-koma-page text-koma-foreground",
         "peer-data-[variant=inset]:min-h-[calc(100svh-theme(spacing.4))] md:peer-data-[variant=inset]:m-2 md:peer-data-[state=collapsed]:peer-data-[variant=inset]:ml-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-2xl md:peer-data-[variant=inset]:shadow-sm",
         className
       )}
@@ -322,7 +322,7 @@ export const SidebarHeader = React.forwardRef<
     <div
       ref={ref}
       data-sidebar="header"
-      className={cn("flex flex-col gap-1.5 p-2.5 border-b border-[#27272A]", className)}
+      className={cn("flex flex-col gap-1.5 p-2.5 border-b border-koma-border", className)}
       {...props}
     />
   );
@@ -337,7 +337,7 @@ export const SidebarFooter = React.forwardRef<
     <div
       ref={ref}
       data-sidebar="footer"
-      className={cn("flex flex-col gap-1.5 p-2 border-t border-[#27272A] bg-[#18181B]/40", className)}
+      className={cn("flex flex-col gap-1.5 p-2 border-t border-koma-border bg-koma-panel/40", className)}
       {...props}
     />
   );
@@ -353,7 +353,7 @@ export const SidebarContent = React.forwardRef<
       ref={ref}
       data-sidebar="content"
       className={cn(
-        "flex min-h-0 flex-1 flex-col gap-1.5 overflow-auto p-2 scrollbar-thin scrollbar-thumb-zinc-800",
+        "flex min-h-0 flex-1 flex-col gap-1.5 overflow-auto p-2 scrollbar-thin",
         className
       )}
       {...props}
@@ -386,7 +386,7 @@ export const SidebarGroupLabel = React.forwardRef<
       ref={ref}
       data-sidebar="group-label"
       className={cn(
-        "duration-200 flex h-5 shrink-0 items-center rounded-md px-2 text-[9px] font-extrabold uppercase tracking-wider text-emerald-400 select-none py-0.5 mt-1",
+        "duration-200 flex h-5 shrink-0 items-center rounded-md px-2 text-[9px] font-extrabold uppercase tracking-wider text-emerald-500 select-none py-0.5 mt-1",
         "group-data-[collapsible=icon]:hidden",
         className
       )}
@@ -450,8 +450,8 @@ export const SidebarMenuButton = React.forwardRef<
       className={cn(
         "peer/menu-button flex w-full items-center gap-2.5 overflow-hidden rounded-lg py-1.5 px-2.5 text-left text-xs font-semibold outline-none transition-all cursor-pointer group/button",
         isActive
-          ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 font-bold shadow-inner"
-          : "text-gray-400 hover:bg-[#1C1C1F]/60 hover:text-white border border-transparent",
+          ? "bg-emerald-500/15 text-emerald-500 border border-emerald-500/20 font-bold shadow-inner"
+          : "text-koma-subtle hover:bg-koma-raised hover:text-koma-foreground border border-transparent",
         className
       )}
       {...props}
