@@ -10103,8 +10103,8 @@ export function CaixaPanel({
           onClick={(e) => { if (e.target === e.currentTarget) setShowNewInsumoModal(false); }}
           className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4', 'overflow-y-auto', 'cursor-pointer')}
         >
-          <div className={clsx('w-full', 'max-w-md', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-6', 'space-y-4', 'text-left', 'shadow-2xl', 'relative', 'animate-scale-in', 'my-8')}>
-            <div className={clsx('flex', 'justify-between', 'items-center', 'pb-2', 'border-b', 'border-[#27272A]')}>
+          <div className={clsx('w-full', 'max-w-md', 'bg-koma-dialog', 'border', 'border-koma-border', 'rounded-3xl', 'p-6', 'space-y-4', 'text-left', 'shadow-2xl', 'relative', 'animate-scale-in', 'my-8')}>
+            <div className={clsx('flex', 'justify-between', 'items-center', 'pb-2', 'border-b', 'border-koma-border')}>
               <h3 className={clsx('font-serif', 'text-sm', 'font-bold', 'text-white')}>
                 Cadastrar Novo Ingrediente
               </h3>
@@ -10137,7 +10137,7 @@ export function CaixaPanel({
                     placeholder="ex: carne-bovina"
                     value={insumoFormId}
                     onChange={(e) => setInsumoFormId(e.target.value.toLowerCase().replace(/\s+/g, '-'))}
-                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono', 'text-xs')}
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono', 'text-xs')}
                   />
                 </div>
 
@@ -10149,7 +10149,7 @@ export function CaixaPanel({
                     placeholder="ex: Contra Filé"
                     value={insumoFormNome}
                     onChange={(e) => setInsumoFormNome(e.target.value)}
-                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]')}
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]')}
                   />
                 </div>
               </div>
@@ -10163,7 +10163,7 @@ export function CaixaPanel({
                     placeholder="ex: kg, un, l"
                     value={insumoFormUnidade}
                     onChange={(e) => setInsumoFormUnidade(e.target.value)}
-                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]')}
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]')}
                   />
                 </div>
 
@@ -10174,7 +10174,7 @@ export function CaixaPanel({
                     required
                     value={insumoFormMinimo}
                     onChange={(e) => setInsumoFormMinimo(Number(e.target.value))}
-                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono')}
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono')}
                   />
                 </div>
 
@@ -10185,7 +10185,7 @@ export function CaixaPanel({
                     required
                     value={insumoFormMaximo}
                     onChange={(e) => setInsumoFormMaximo(Number(e.target.value))}
-                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono')}
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono')}
                   />
                 </div>
               </div>
@@ -10198,7 +10198,7 @@ export function CaixaPanel({
                   required
                   value={insumoFormCusto}
                   onChange={(e) => setInsumoFormCusto(Number(e.target.value))}
-                  className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono', 'text-xs')}
+                  className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono', 'text-xs')}
                 />
               </div>
 
@@ -10206,13 +10206,13 @@ export function CaixaPanel({
                 <button
                   type="button"
                   onClick={() => setShowNewInsumoModal(false)}
-                  className={clsx('flex-1', 'py-2', 'border', 'border-zinc-800', 'hover:border-zinc-700', 'bg-zinc-950', 'text-gray-400', 'hover:text-white', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
+                  className={clsx('flex-1', 'py-2', 'border', 'border-koma-border', 'hover:border-zinc-700', 'bg-koma-raised', 'text-gray-400', 'hover:text-white', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className={clsx('flex-1', 'py-2', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
+                  className={clsx('flex-1', 'py-2', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-zinc-950', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
                 >
                   Criar Ingrediente
                 </button>
@@ -10227,8 +10227,8 @@ export function CaixaPanel({
           onClick={(e) => { if (e.target === e.currentTarget) setShowEditInsumoModal(false); }}
           className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4', 'overflow-y-auto', 'cursor-pointer')}
         >
-          <div className={clsx('w-full', 'max-w-md', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-6', 'space-y-4', 'text-left', 'shadow-2xl', 'relative', 'animate-scale-in', 'my-8')}>
-            <div className={clsx('flex', 'justify-between', 'items-center', 'pb-2', 'border-b', 'border-[#27272A]')}>
+          <div className={clsx('w-full', 'max-w-md', 'bg-koma-dialog', 'border', 'border-koma-border', 'rounded-3xl', 'p-6', 'space-y-4', 'text-left', 'shadow-2xl', 'relative', 'animate-scale-in', 'my-8')}>
+            <div className={clsx('flex', 'justify-between', 'items-center', 'pb-2', 'border-b', 'border-koma-border')}>
               <h3 className={clsx('font-serif', 'text-sm', 'font-bold', 'text-white')}>
                 Editar Ingrediente
               </h3>
@@ -10258,7 +10258,7 @@ export function CaixaPanel({
                   type="text"
                   disabled
                   value={selectedInsumo.id}
-                  className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]/40', 'border', 'border-[#27272A]/50', 'rounded-xl', 'text-gray-500', 'font-mono', 'text-xs', 'opacity-60')}
+                  className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input/40', 'border', 'border-koma-border/50', 'rounded-xl', 'text-gray-500', 'font-mono', 'text-xs', 'opacity-60')}
                 />
               </div>
 
@@ -10269,7 +10269,7 @@ export function CaixaPanel({
                   required
                   value={insumoFormNome}
                   onChange={(e) => setInsumoFormNome(e.target.value)}
-                  className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]')}
+                  className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]')}
                 />
               </div>
 
@@ -10281,7 +10281,7 @@ export function CaixaPanel({
                     required
                     value={insumoFormUnidade}
                     onChange={(e) => setInsumoFormUnidade(e.target.value)}
-                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]')}
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]')}
                   />
                 </div>
 
@@ -10292,7 +10292,7 @@ export function CaixaPanel({
                     required
                     value={insumoFormMinimo}
                     onChange={(e) => setInsumoFormMinimo(Number(e.target.value))}
-                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono')}
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono')}
                   />
                 </div>
 
@@ -10303,7 +10303,7 @@ export function CaixaPanel({
                     required
                     value={insumoFormMaximo}
                     onChange={(e) => setInsumoFormMaximo(Number(e.target.value))}
-                    className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono')}
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono')}
                   />
                 </div>
               </div>
@@ -10316,7 +10316,7 @@ export function CaixaPanel({
                   required
                   value={insumoFormCusto}
                   onChange={(e) => setInsumoFormCusto(Number(e.target.value))}
-                  className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono', 'text-xs')}
+                  className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono', 'text-xs')}
                 />
               </div>
 
@@ -10324,13 +10324,13 @@ export function CaixaPanel({
                 <button
                   type="button"
                   onClick={() => setShowEditInsumoModal(false)}
-                  className={clsx('flex-1', 'py-2', 'border', 'border-zinc-800', 'hover:border-zinc-700', 'bg-zinc-950', 'text-gray-400', 'hover:text-white', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
+                  className={clsx('flex-1', 'py-2', 'border', 'border-koma-border', 'hover:border-zinc-700', 'bg-koma-raised', 'text-gray-400', 'hover:text-white', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className={clsx('flex-1', 'py-2', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
+                  className={clsx('flex-1', 'py-2', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-zinc-950', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
                 >
                   Salvar Alterações
                 </button>
@@ -10345,8 +10345,8 @@ export function CaixaPanel({
           onClick={(e) => { if (e.target === e.currentTarget) setShowAjusteInsumoModal(false); }}
           className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4', 'overflow-y-auto', 'cursor-pointer')}
         >
-          <div className={clsx('w-full', 'max-w-md', 'bg-[#121214]', 'border', 'border-[#27272A]', 'rounded-3xl', 'p-6', 'space-y-4', 'text-left', 'shadow-2xl', 'relative', 'animate-scale-in', 'my-8')}>
-            <div className={clsx('flex', 'justify-between', 'items-center', 'pb-2', 'border-b', 'border-[#27272A]')}>
+          <div className={clsx('w-full', 'max-w-md', 'bg-koma-dialog', 'border', 'border-koma-border', 'rounded-3xl', 'p-6', 'space-y-4', 'text-left', 'shadow-2xl', 'relative', 'animate-scale-in', 'my-8')}>
+            <div className={clsx('flex', 'justify-between', 'items-center', 'pb-2', 'border-b', 'border-koma-border')}>
               <h3 className={clsx('font-serif', 'text-sm', 'font-bold', 'text-white')}>
                 Ajustar Estoque: {selectedInsumo.nome}
               </h3>
@@ -10380,7 +10380,7 @@ export function CaixaPanel({
                       'py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider border transition-all cursor-pointer',
                       ajusteTipo === 'ENTRADA'
                         ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400 font-bold'
-                        : 'bg-zinc-950 border-zinc-800 text-gray-400 hover:text-white font-bold'
+                        : 'bg-koma-raised border-koma-border text-gray-400 hover:text-white font-bold'
                     )}
                   >
                     Entrada (+)
@@ -10392,7 +10392,7 @@ export function CaixaPanel({
                       'py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider border transition-all cursor-pointer',
                       ajusteTipo === 'SAIDA'
                         ? 'bg-red-500/10 border-red-500/60 text-red-400 font-bold'
-                        : 'bg-zinc-950 border-zinc-800 text-gray-400 hover:text-white font-bold'
+                        : 'bg-koma-raised border-koma-border text-gray-400 hover:text-white font-bold'
                     )}
                   >
                     Saída (-)
@@ -10408,7 +10408,7 @@ export function CaixaPanel({
                   required
                   value={ajusteQtd}
                   onChange={(e) => setAjusteQtd(Number(e.target.value))}
-                  className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono', 'text-xs')}
+                  className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono', 'text-xs')}
                 />
               </div>
 
@@ -10420,7 +10420,7 @@ export function CaixaPanel({
                   placeholder="ex: Ajuste de inventário / Perda por validade"
                   value={ajusteJustificativa}
                   onChange={(e) => setAjusteJustificativa(e.target.value)}
-                  className={clsx('w-full', 'px-3', 'py-2', 'bg-[#1C1C1F]', 'border', 'border-[#27272A]', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]')}
+                  className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-white', 'focus:outline-none', 'focus:border-[#10b981]')}
                 />
               </div>
 
@@ -10428,13 +10428,13 @@ export function CaixaPanel({
                 <button
                   type="button"
                   onClick={() => setShowAjusteInsumoModal(false)}
-                  className={clsx('flex-1', 'py-2', 'border', 'border-zinc-800', 'hover:border-zinc-700', 'bg-zinc-950', 'text-gray-400', 'hover:text-white', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
+                  className={clsx('flex-1', 'py-2', 'border', 'border-koma-border', 'hover:border-zinc-700', 'bg-koma-raised', 'text-gray-400', 'hover:text-white', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className={clsx('flex-1', 'py-2', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
+                  className={clsx('flex-1', 'py-2', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-zinc-950', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
                 >
                   Confirmar Ajuste
                 </button>
