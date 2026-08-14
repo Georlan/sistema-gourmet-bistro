@@ -15,6 +15,7 @@ import {
   Zap,
   Wifi,
   WifiOff,
+  Printer,
 } from 'lucide-react';
 import { CaixaTurnoResumo, FechamentoCaixaResult } from '../../types';
 import { formatBackendDateTime } from '../../utils/dateTime';
@@ -153,6 +154,7 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
     [declaradoCartao, declaradoDinheiro, declaradoPix],
   );
   const liveDifference = declaredTotal - expectedTotal;
+  const isDivergent = !hasMissingDeclarations && Math.abs(liveDifference) >= 0.01;
 
   useEffect(() => {
     setDeclaradoDinheiro('');
@@ -191,6 +193,10 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
       setErrorMsg('Resolva as contas e confirmações pendentes antes de fechar o turno.');
       return;
     }
+    if (isDivergent && !observacao.trim()) {
+      setErrorMsg('Diferença de caixa identificada. É obrigatório informar o motivo na observação para auditoria gerencial.');
+      return;
+    }
     setShowConfirmModal(true);
   };
 
@@ -211,6 +217,55 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+
+  const handlePrintComprovante = () => {
+    if (!fechamentoResult) return;
+    const isSurplus = fechamentoResult.diferenca_total > 0;
+    const isExact = Math.abs(fechamentoResult.diferenca_total) < 0.01;
+    const diferencaLabel = isExact ? "Caixa exato" : (isSurplus ? "Sobra de caixa" : "Quebra/Falta de caixa");
+    
+    const comprovanteText = `
+--------------------------------
+    COMPROVANTE DE FECHAMENTO
+--------------------------------
+Turno: #${fechamentoResult.turno_id}
+Operador: ${fechamentoResult.fechado_por_nome}
+Fechado em: ${formatBackendDateTime(fechamentoResult.fechado_em)}
+Status: ${fechamentoResult.status.toUpperCase()}
+--------------------------------
+VALORES ESPERADOS (SISTEMA)
+Dinheiro: ${formatMoney(fechamentoResult.esperado_dinheiro)}
+Cartões: ${formatMoney(fechamentoResult.esperado_cartao)}
+Pix: ${formatMoney(fechamentoResult.esperado_pix)}
+Total Esperado: ${formatMoney(fechamentoResult.total_esperado)}
+--------------------------------
+VALORES DECLARADOS (FÍSICO)
+Dinheiro: ${formatMoney(fechamentoResult.declarado_dinheiro)}
+Cartões: ${formatMoney(fechamentoResult.declarado_cartao)}
+Pix: ${formatMoney(fechamentoResult.declarado_pix)}
+Total Declarado: ${formatMoney(fechamentoResult.total_declarado)}
+--------------------------------
+DIFERENÇA
+Dinheiro: ${formatMoney(fechamentoResult.diferenca_dinheiro)}
+Cartões: ${formatMoney(fechamentoResult.diferenca_cartao)}
+Pix: ${formatMoney(fechamentoResult.diferenca_pix)}
+--------------------------------
+RESULTADO FINAL
+${diferencaLabel}
+Diferença Total: ${formatMoney(fechamentoResult.diferenca_total)}
+--------------------------------
+    CONFERIDO POR:
+
+________________________________
+    Assinatura do Responsável
+`.trim();
+
+    const event = new CustomEvent('koma-print', {
+      detail: { title: 'Comprovante de Fechamento', content: comprovanteText }
+    });
+    window.dispatchEvent(event);
   };
 
   if (!isTurnoAberto && fechamentoResult) {
@@ -307,6 +362,10 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
               <DollarSign size={16} /> Abrir novo turno
             </button>
           )}
+          
+          <button type="button" onClick={handlePrintComprovante} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#2d3531] bg-[#151a17] px-4 py-3 text-xs font-bold text-zinc-300 transition-colors hover:bg-[#1a201c] hover:text-white">
+            <Printer size={16} /> Imprimir comprovante
+          </button>
         </aside>
       </div>
     );
@@ -361,8 +420,10 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
           </div>
 
           <label htmlFor="closing-note" className="mt-4 block">
-            <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-zinc-500">Observação do fechamento <span className="normal-case tracking-normal">(opcional)</span></span>
-            <textarea id="closing-note" rows={2} maxLength={500} placeholder="Ex.: comprovante ausente, valor deixado para troco..." value={observacao} onChange={(event) => setObservacao(event.target.value)} className="mt-2 w-full resize-none rounded-xl border border-[#252b28] bg-[#111512] px-3 py-3 text-xs text-white outline-none placeholder:text-zinc-700 focus:border-[#2a9f7d]" />
+            <span className={clsx("text-[9px] font-bold uppercase tracking-[0.12em]", isDivergent ? "text-[#f0b3aa]" : "text-zinc-500")}>
+              Observação do fechamento {isDivergent ? <span className="normal-case tracking-normal ml-1 text-[#f0b3aa]">* Obrigatório para justificar divergência</span> : <span className="normal-case tracking-normal">(opcional)</span>}
+            </span>
+            <textarea id="closing-note" rows={2} maxLength={500} placeholder={isDivergent ? "Justifique a diferença de caixa..." : "Ex.: comprovante ausente, valor deixado para troco..."} value={observacao} onChange={(event) => setObservacao(event.target.value)} required={isDivergent} className={clsx("mt-2 w-full resize-none rounded-xl border bg-[#111512] px-3 py-3 text-xs text-white outline-none placeholder:text-zinc-700 focus:border-[#2a9f7d]", isDivergent && !observacao.trim() ? "border-[#5d2b31] focus:border-[#f0b3aa]" : "border-[#252b28]")} />
           </label>
 
           <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-[#252b28] bg-[#111512] p-4 sm:flex-row sm:items-center sm:justify-between">
