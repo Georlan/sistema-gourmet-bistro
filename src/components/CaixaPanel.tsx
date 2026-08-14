@@ -5269,9 +5269,9 @@ export function CaixaPanel({
                           <h4 className={clsx('font-semibold', 'text-koma-foreground', 'text-xs', 'sm:text-[13px]', 'group-hover:text-koma-foreground', 'transition-colors', 'leading-snug', 'line-clamp-2')}>{productLabel.name}</h4>
                           {p.descricao && <p className={clsx('text-[9px]', 'sm:text-[10px]', 'text-koma-muted', 'mt-1', 'line-clamp-1', 'leading-tight')}>{p.descricao}</p>}
                         </div>
-                        <div className={clsx('flex', 'justify-between', 'items-center', 'border-t', 'border-white/[0.06]', 'pt-2.5')}>
+                        <div className={clsx('flex', 'justify-between', 'items-center', 'border-t', 'border-koma-border', 'pt-2.5')}>
                           <span className={clsx('font-semibold', 'text-koma-foreground', 'font-mono', 'text-xs')}>R$ {p.preco.toFixed(2).replace('.', ',')}</span>
-                          <span className={clsx('inline-flex', 'items-center', 'gap-1', 'text-[9px]', 'font-bold', 'text-[#4fe0bc]', 'group-hover:text-[#75ebce]')}>
+                          <span className={clsx('inline-flex', 'items-center', 'gap-1', 'text-[9px]', 'font-bold', 'text-emerald-700 dark:text-[#4fe0bc]', 'group-hover:text-emerald-800 dark:group-hover:text-[#75ebce]')}>
                             <Plus size={13} /> Adicionar
                           </span>
                         </div>
@@ -5484,8 +5484,8 @@ export function CaixaPanel({
                         className={clsx(
                           'flex min-h-10 items-center gap-2.5 rounded-xl border px-3 py-2 text-left',
                           selectedPdvTableOption?.isOccupied
-                            ? 'border-[#6b2d37]/80 bg-[#261317]'
-                            : 'border-koma-border-subtle bg-white/[0.02]'
+                            ? 'border-rose-300 dark:border-[#6b2d37]/80 bg-rose-50/90 dark:bg-[#261317]'
+                            : 'border-koma-border bg-koma-input'
                         )}
                       >
                         <span
@@ -5493,16 +5493,16 @@ export function CaixaPanel({
                           className={clsx(
                             'h-2 w-2 shrink-0 rounded-full',
                             selectedPdvTableOption?.isOccupied
-                              ? 'bg-[#b95764] shadow-[0_0_0_3px_rgba(107,45,55,0.24)]'
+                              ? 'bg-rose-500 shadow-[0_0_0_3px_rgba(244,63,94,0.2)]'
                               : selectedPdvTableOption
-                                ? 'bg-[#45b995]'
-                                : 'bg-zinc-600'
+                                ? 'bg-emerald-500'
+                                : 'bg-koma-muted'
                           )}
                         />
                         <div className="min-w-0">
                           <strong className={clsx(
                             'block text-[9px] font-semibold',
-                            selectedPdvTableOption?.isOccupied ? 'text-[#e4a3ac]' : 'text-koma-secondary'
+                            selectedPdvTableOption?.isOccupied ? 'text-rose-800 dark:text-[#e4a3ac]' : 'text-koma-foreground'
                           )}>
                             {!selectedPdvTableOption
                               ? 'Escolha onde este pedido será lançado'
@@ -5716,11 +5716,11 @@ export function CaixaPanel({
                             key={table.id}
                             data-table-status={isMerged ? 'merged' : hasPendingPayment ? 'payment' : isOccupied ? 'occupied' : 'free'}
                             className={clsx(
-                              'group flex min-h-[132px] flex-col justify-between gap-2.5 rounded-2xl border p-3 transition-colors sm:min-h-[148px] sm:gap-3 sm:p-3.5',
-                              isMerged && 'border-dashed border-koma-border bg-black/20 opacity-65',
-                              hasPendingPayment && 'border-[#74404b] bg-[#241419] hover:border-[#92515e]',
-                              isOccupied && !hasPendingPayment && 'border-[#5f2831] bg-[#1b1013] hover:border-[#7d3540]',
-                              !isOccupied && !isMerged && 'border-[#292e2c] bg-koma-panel hover:border-[#2a5e50]'
+                              'group flex min-h-[132px] flex-col justify-between gap-2.5 rounded-2xl border p-3 transition-colors sm:min-h-[148px] sm:gap-3 sm:p-3.5 shadow-sm',
+                              isMerged && 'border-dashed border-koma-border bg-black/10 dark:bg-black/20 opacity-65',
+                              hasPendingPayment && 'border-amber-300 dark:border-[#74404b] bg-amber-50/90 dark:bg-[#241419] hover:border-amber-500',
+                              isOccupied && !hasPendingPayment && 'border-rose-300 dark:border-[#5f2831] bg-rose-50/90 dark:bg-[#1b1013] hover:border-rose-500',
+                              !isOccupied && !isMerged && 'border-koma-border bg-koma-card hover:border-emerald-500'
                             )}
                           >
                             <div className={clsx('flex', 'items-start', 'justify-between', 'gap-2')}>
@@ -5740,14 +5740,14 @@ export function CaixaPanel({
                                 <span className={clsx(
                                   'rounded-full border px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider',
                                   isMerged && 'border-koma-border bg-koma-card text-koma-muted',
-                                  hasPendingPayment && 'border-[#8a4753] bg-[#4b222b] text-[#efb2bc]',
-                                  isOccupied && !hasPendingPayment && 'border-[#6b2e38] bg-[#38191f] text-[#e4a3ac]',
-                                  !isOccupied && !isMerged && 'border-koma-border-subtle bg-white/[0.025] text-koma-subtle'
+                                  hasPendingPayment && 'border-amber-300 dark:border-[#8a4753] bg-amber-100 dark:bg-[#4b222b] text-amber-900 dark:text-[#efb2bc]',
+                                  isOccupied && !hasPendingPayment && 'border-rose-300 dark:border-[#6b2e38] bg-rose-100 dark:bg-[#38191f] text-rose-800 dark:text-[#e4a3ac]',
+                                  !isOccupied && !isMerged && 'border-emerald-300 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300'
                                 )}>
                                   <span
                                     className={clsx(
                                       'mr-1 inline-block h-1.5 w-1.5 rounded-full align-middle',
-                                      hasPendingPayment ? 'bg-[#d17a86]' : isOccupied ? 'bg-[#b95764]' : 'bg-[#45b995]'
+                                      hasPendingPayment ? 'bg-amber-500' : isOccupied ? 'bg-rose-500' : 'bg-emerald-500'
                                     )}
                                     aria-hidden="true"
                                   />
@@ -5765,7 +5765,7 @@ export function CaixaPanel({
                                       <span className={clsx('text-[9px]', 'text-koma-muted')}>Consumo atual</span>
                                       <strong className={clsx(
                                         'font-mono text-sm',
-                                        hasPendingPayment ? 'text-[#efb2bc]' : 'text-[#e4a3ac]'
+                                        hasPendingPayment ? 'text-amber-800 dark:text-[#efb2bc]' : 'text-rose-800 dark:text-[#e4a3ac]'
                                       )}>
                                         {total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                       </strong>
@@ -5786,7 +5786,7 @@ export function CaixaPanel({
                             </div>
 
                             {!isMerged && (
-                              <div className={clsx('flex', 'gap-1.5', 'border-t', 'border-white/[0.06]', 'pt-2.5')}>
+                              <div className={clsx('flex', 'gap-1.5', 'border-t', 'border-koma-border', 'pt-2.5')}>
                                 {isOccupied ? (
                                   hasPendingPayment ? (
                                     <button
@@ -5806,7 +5806,7 @@ export function CaixaPanel({
                                         const checkoutTotal = subtotal * (1.0 + (taxaServicoAtiva ? serviceTaxRate / 100 : 0));
                                         setPaymentValor(Math.max(0, checkoutTotal - Number(checkoutOrder.valorPago || 0)).toFixed(2));
                                       }}
-                                      className={clsx('flex', 'min-h-9', 'flex-1', 'items-center', 'justify-center', 'gap-1.5', 'rounded-lg', 'border', 'border-[#874550]', 'bg-[#4b222b]', 'px-2', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wide', 'text-[#f0b5bd]', 'transition-colors', 'hover:bg-[#5a2933]', 'disabled:cursor-wait', 'disabled:opacity-45')}
+                                      className={clsx('flex', 'min-h-9', 'flex-1', 'items-center', 'justify-center', 'gap-1.5', 'rounded-lg', 'border', 'border-amber-400 dark:border-[#874550]', 'bg-amber-500 dark:bg-[#4b222b]', 'px-2', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wide', 'text-zinc-950 dark:text-[#f0b5bd]', 'transition-colors', 'hover:bg-amber-400 dark:hover:bg-[#5a2933]', 'disabled:cursor-wait', 'disabled:opacity-45')}
                                     >
                                       <CreditCard size={12} />
                                       Receber conta
@@ -5816,7 +5816,7 @@ export function CaixaPanel({
                                       type="button"
                                       disabled={tableOrders.length === 0}
                                       onClick={() => tableOrders[0] && setSelectedKanbanOrder(tableOrders[0])}
-                                      className={clsx('flex', 'min-h-9', 'flex-1', 'items-center', 'justify-center', 'gap-1.5', 'rounded-lg', 'border', 'border-[#6b2e38]', 'bg-[#241317]', 'px-2', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wide', 'text-[#e4a3ac]', 'transition-colors', 'hover:bg-[#32181e]', 'disabled:cursor-wait', 'disabled:opacity-45')}
+                                      className={clsx('flex', 'min-h-9', 'flex-1', 'items-center', 'justify-center', 'gap-1.5', 'rounded-lg', 'border', 'border-rose-300 dark:border-[#6b2e38]', 'bg-rose-100 dark:bg-[#241317]', 'px-2', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wide', 'text-rose-800 dark:text-[#e4a3ac]', 'transition-colors', 'hover:bg-rose-200 dark:hover:bg-[#32181e]', 'disabled:cursor-wait', 'disabled:opacity-45')}
                                     >
                                       <Receipt size={12} />
                                       Ver comanda
@@ -5831,7 +5831,7 @@ export function CaixaPanel({
                                       setBalcaoMobileView('produtos');
                                       setActiveSubTab('balcao');
                                     }}
-                                    className={clsx('flex', 'min-h-9', 'flex-1', 'items-center', 'justify-center', 'gap-1.5', 'rounded-lg', 'border', 'border-[#24483e]', 'bg-[#101815]', 'px-2', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wide', 'text-[#6ee7b7]', 'transition-colors', 'hover:bg-[#153028]')}
+                                    className={clsx('flex', 'min-h-9', 'flex-1', 'items-center', 'justify-center', 'gap-1.5', 'rounded-lg', 'border', 'border-emerald-600 dark:border-[#24483e]', 'bg-emerald-600 dark:bg-[#101815]', 'px-2', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wide', 'text-white dark:text-[#6ee7b7]', 'transition-colors', 'hover:bg-emerald-500 dark:hover:bg-[#153028]')}
                                   >
                                     <Plus size={12} />
                                     Abrir pedido
@@ -9680,7 +9680,7 @@ export function CaixaPanel({
                     <button
                       type="button"
                       onClick={() => openCancelTableConfirmation(Number(selectedKanbanOrder.mesaId))}
-                      className={clsx('flex', 'min-h-10', 'w-full', 'items-center', 'justify-center', 'gap-2', 'rounded-xl', 'border', 'border-rose-900/40', 'bg-rose-950/15', 'px-3', 'text-[10px]', 'font-bold', 'text-rose-600 dark:text-rose-300', 'transition-colors', 'hover:bg-rose-950/30')}
+                      className={clsx('flex', 'min-h-10', 'w-full', 'items-center', 'justify-center', 'gap-2', 'rounded-xl', 'border', 'border-rose-300 dark:border-rose-900/40', 'bg-rose-50 dark:bg-rose-950/20', 'px-3', 'text-[10px]', 'font-bold', 'text-rose-700 dark:text-rose-300', 'transition-colors', 'hover:bg-rose-100 dark:hover:bg-rose-950/40')}
                     >
                       <Trash2 size={13} />
                       Cancelar consumo e liberar mesa

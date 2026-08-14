@@ -59,46 +59,48 @@ export const MesaCard = React.memo<MesaCardProps>(({
 
   const statusConfig = {
     livre: {
-      surface: 'bg-[#0b1713] hover:bg-[#0e211a]',
-      border: 'border-emerald-900/50 hover:border-emerald-600/60 focus-visible:ring-emerald-400',
-      accent: 'bg-[#00b894]',
-      dot: 'bg-[#00d9a6]',
+      surface: 'bg-white dark:bg-[#0b1713] hover:bg-emerald-50/70 dark:hover:bg-[#0e211a]',
+      border: 'border-emerald-300 dark:border-emerald-900/50 hover:border-emerald-500 focus-visible:ring-emerald-400',
+      accent: 'bg-emerald-600 dark:bg-[#00b894]',
+      dot: 'bg-emerald-600 dark:bg-[#00d9a6]',
       label: 'Livre',
-      labelColor: 'text-[#00d9a6]',
+      labelColor: 'text-emerald-700 dark:text-[#00d9a6]',
     },
     ocupada: {
-      surface: hasPendingPayment ? 'bg-[#20180b] hover:bg-[#2a1f0c]' : 'bg-[#1b0d10] hover:bg-[#251014]',
+      surface: hasPendingPayment
+        ? 'bg-amber-50/90 dark:bg-[#20180b] hover:bg-amber-100/90 dark:hover:bg-[#2a1f0c]'
+        : 'bg-rose-50/90 dark:bg-[#1b0d10] hover:bg-rose-100/90 dark:hover:bg-[#251014]',
       border: hasPendingPayment
-        ? 'border-amber-800/60 hover:border-amber-500/60 focus-visible:ring-amber-400'
-        : 'border-rose-950 hover:border-rose-700/70 focus-visible:ring-rose-400',
-      accent: hasPendingPayment ? 'bg-amber-400' : 'bg-rose-500',
-      dot: hasPendingPayment ? 'bg-amber-400' : 'bg-rose-400',
+        ? 'border-amber-300 dark:border-amber-800/60 hover:border-amber-500 focus-visible:ring-amber-400'
+        : 'border-rose-300 dark:border-rose-950 hover:border-rose-500 focus-visible:ring-rose-400',
+      accent: hasPendingPayment ? 'bg-amber-500 dark:bg-amber-400' : 'bg-rose-600 dark:bg-rose-500',
+      dot: hasPendingPayment ? 'bg-amber-500 dark:bg-amber-400' : 'bg-rose-600 dark:bg-rose-400',
       label: hasPendingPayment ? 'Aprovar dinheiro' : 'Em atendimento',
-      labelColor: hasPendingPayment ? 'text-amber-600 dark:text-amber-300' : 'text-rose-600 dark:text-rose-300',
+      labelColor: hasPendingPayment ? 'text-amber-800 dark:text-amber-300' : 'text-rose-800 dark:text-rose-300',
     },
     pronto: {
-      surface: 'bg-[#211707] hover:bg-[#2b1e08]',
-      border: 'border-amber-800/60 hover:border-amber-500/70 focus-visible:ring-amber-400',
-      accent: 'bg-amber-400',
-      dot: 'bg-amber-400 animate-pulse',
+      surface: 'bg-amber-50/90 dark:bg-[#211707] hover:bg-amber-100/90 dark:hover:bg-[#2b1e08]',
+      border: 'border-amber-300 dark:border-amber-800/60 hover:border-amber-500 focus-visible:ring-amber-400',
+      accent: 'bg-amber-500 dark:bg-amber-400',
+      dot: 'bg-amber-500 dark:bg-amber-400 animate-pulse',
       label: 'Pronto para servir',
-      labelColor: 'text-amber-600 dark:text-amber-300',
+      labelColor: 'text-amber-800 dark:text-amber-300',
     },
     entregue: {
-      surface: 'bg-[#0b1621] hover:bg-[#0d1d2c]',
-      border: 'border-sky-900/60 hover:border-sky-600/60 focus-visible:ring-sky-400',
-      accent: 'bg-sky-400',
-      dot: 'bg-sky-400',
+      surface: 'bg-sky-50/90 dark:bg-[#0b1621] hover:bg-sky-100/90 dark:hover:bg-[#0d1d2c]',
+      border: 'border-sky-300 dark:border-sky-900/60 hover:border-sky-500 focus-visible:ring-sky-400',
+      accent: 'bg-sky-500 dark:bg-sky-400',
+      dot: 'bg-sky-500 dark:bg-sky-400',
       label: 'Aguardando conta',
-      labelColor: 'text-sky-600 dark:text-sky-300',
+      labelColor: 'text-sky-800 dark:text-sky-300',
     },
     mesclada: {
       surface: 'bg-koma-panel hover:bg-koma-card',
-      border: 'border-dashed border-koma-border hover:border-zinc-600 focus-visible:ring-zinc-400',
-      accent: 'bg-zinc-600',
-      dot: 'bg-zinc-600',
+      border: 'border-dashed border-koma-border hover:border-zinc-400 dark:hover:border-zinc-600 focus-visible:ring-zinc-400',
+      accent: 'bg-zinc-400 dark:bg-zinc-600',
+      dot: 'bg-zinc-400 dark:bg-zinc-600',
       label: `Unida à mesa ${mergedIntoMesaId}`,
-      labelColor: 'text-koma-subtle',
+      labelColor: 'text-koma-muted',
     },
   }[status];
 
