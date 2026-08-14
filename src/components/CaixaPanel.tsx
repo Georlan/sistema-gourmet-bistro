@@ -433,6 +433,23 @@ export function CaixaPanel({
   const [balcaoMobileView, setBalcaoMobileView] = useState<'produtos' | 'carrinho'>('produtos');
 
   useEffect(() => {
+    if (!isMobileSidebarOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsMobileSidebarOpen(false);
+    };
+
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isMobileSidebarOpen]);
+
+  useEffect(() => {
     sessionStorage.setItem('koma_active_tab', activeTab);
   }, [activeTab]);
 
@@ -3722,7 +3739,13 @@ export function CaixaPanel({
               onClick={() => setIsMobileSidebarOpen(false)}
               className={clsx('fixed', 'inset-0', 'bg-black/80', 'backdrop-blur-sm')}
             />
-            <Sidebar className={clsx('cashier-sidebar', 'cashier-sidebar--mobile', 'relative', 'w-[17rem]', 'max-w-[88vw]', 'flex', 'flex-col', 'justify-between', 'shrink-0', 'h-full', 'z-10', 'shadow-2xl', 'overflow-y-auto')}>
+            <aside
+              id="mobile-caixa-sidebar"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Menu principal"
+              className={clsx('cashier-sidebar', 'cashier-sidebar--mobile', 'relative', 'w-[17rem]', 'max-w-[88vw]', 'flex', 'flex-col', 'justify-between', 'shrink-0', 'h-full', 'z-10', 'shadow-2xl', 'overflow-y-auto')}
+            >
               <SidebarHeader className={clsx('cashier-sidebar__header', 'p-3')}>
                 <div className="cashier-sidebar__brand-row">
                   <div className="cashier-sidebar__brand">
@@ -3852,7 +3875,7 @@ export function CaixaPanel({
                   </span>
                 </div>
               </SidebarFooter>
-            </Sidebar>
+            </aside>
           </div>
         )}
 
@@ -3986,6 +4009,9 @@ export function CaixaPanel({
               onClick={() => setIsMobileSidebarOpen(true)}
               className={clsx('lg:hidden', 'p-1.5', 'bg-[#1C1C1F]', 'hover:bg-[#27272A]', 'text-emerald-400', 'rounded-xl', 'border', 'border-[#27272A]', 'flex', 'items-center', 'justify-center', 'cursor-pointer', 'shrink-0')}
               title="Abrir Menu do Caixa"
+              aria-label="Abrir menu principal"
+              aria-controls="mobile-caixa-sidebar"
+              aria-expanded={isMobileSidebarOpen}
               id="btn-mobile-caixa-sidebar-open"
             >
               <Menu size={16} />
@@ -4017,6 +4043,7 @@ export function CaixaPanel({
                   : 'bg-[#1C1C1F] text-gray-300 border-[#27272A] hover:bg-[#27272A] hover:text-white'
               )}
               title={isFullscreen ? "Sair do Modo PDV Tela Cheia" : "Entrar no Modo PDV Tela Cheia"}
+              aria-label={isFullscreen ? "Sair do modo PDV em tela cheia" : "Entrar no modo PDV em tela cheia"}
               id="btn-modo-pdv-fullscreen"
             >
               {isFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
@@ -5544,7 +5571,7 @@ export function CaixaPanel({
 
               <section className={clsx('flex', 'min-h-0', 'flex-1', 'flex-col', 'overflow-hidden', 'rounded-[22px]', 'border', 'border-[#252b28]', 'bg-[#0d100f]')}>
                 <div className={clsx('flex', 'flex-col', 'gap-2', 'border-b', 'border-[#252b28]', 'px-3', 'py-3', 'sm:flex-row', 'sm:items-center', 'sm:justify-between', 'sm:px-4')}>
-                  <div className={clsx('flex', 'max-w-full', 'gap-1', 'overflow-x-auto', 'rounded-xl', 'bg-[#080a09]', 'p-1', '[scrollbar-width:none]', '[&::-webkit-scrollbar]:hidden')}>
+                  <div className={clsx('flex', 'w-full', 'min-w-0', 'max-w-full', 'gap-1', 'overflow-x-auto', 'overscroll-x-contain', 'rounded-xl', 'bg-[#080a09]', 'p-1', '[scrollbar-width:none]', '[&::-webkit-scrollbar]:hidden')}>
                     {[
                       { id: 'all' as const, label: 'Todas', count: tableStatusCounts.all, dot: 'bg-zinc-500' },
                       { id: 'free' as const, label: 'Livres', count: tableStatusCounts.free, dot: 'bg-[#45b995]' },
@@ -5557,7 +5584,7 @@ export function CaixaPanel({
                         aria-pressed={tableStatusFilter === filter.id}
                         onClick={() => setTableStatusFilter(filter.id)}
                         className={clsx(
-                          'whitespace-nowrap rounded-lg px-3 py-2 text-[10px] font-bold transition-colors',
+                          'shrink-0 whitespace-nowrap rounded-lg px-3 py-2 text-[10px] font-bold transition-colors',
                           tableStatusFilter === filter.id
                             ? filter.id === 'occupied'
                               ? 'bg-[#38191f] text-[#e4a3ac]'
