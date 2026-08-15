@@ -200,7 +200,7 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
           </div>
         </div>
 
-        <div className="bg-koma-panel border border-koma-border rounded-3xl p-5 space-y-4 shadow-xs">
+        <div className="bg-koma-panel border border-koma-border rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 space-y-4 shadow-xs">
           <div className="border-b border-koma-border pb-2 flex items-center justify-between">
             <h4 className="font-serif text-sm font-bold text-koma-foreground flex items-center gap-2">
               <BarChart3 size={16} className="text-sky-600 dark:text-sky-400" />
@@ -211,11 +211,11 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
 
           <div className="h-56 w-full pt-1">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={paymentBarData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+              <BarChart data={paymentBarData} margin={{ top: 10, right: 10, left: 12, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--koma-border-default)" vertical={false} opacity={0.6} />
                 <XAxis dataKey="name" stroke="var(--koma-text-muted)" fontSize={11} tickLine={false} axisLine={false} />
-                <YAxis stroke="var(--koma-text-muted)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${v}`} />
-                <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'var(--koma-border-default)' }} />
+                <YAxis stroke="var(--koma-text-muted)" fontSize={11} width={50} tickLine={false} axisLine={false} tickFormatter={(v) => `R$ ${v}`} />
+                <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'var(--koma-border-default)', opacity: 0.3 }} />
                 <Bar dataKey="valor" radius={[6, 6, 0, 0]}>
                   {paymentBarData.map((entry, index) => (
                     <Cell key={`bar-${index}`} fill={entry.fill} />
@@ -228,7 +228,7 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
       </div>
 
       {/* Real Sales & Payment Breakdown Table */}
-      <div className="bg-koma-panel border border-koma-border rounded-3xl p-5 space-y-4 text-left shadow-xs">
+      <div className="bg-koma-panel border border-koma-border rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 space-y-3 sm:space-y-4 text-left shadow-xs">
         <div className="border-b border-koma-border pb-2 flex items-center justify-between">
           <h4 className="font-serif text-sm font-bold text-koma-foreground flex items-center gap-2">
             <BarChart3 size={16} className="text-emerald-700 dark:text-emerald-400" />

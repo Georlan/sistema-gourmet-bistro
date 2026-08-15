@@ -190,39 +190,39 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
 
       {/* Gráficos Visuais dos Mais Vendidos */}
       {topProdutosChartData.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4 shadow-xs">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
+          <div className="bg-koma-panel border border-koma-border p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl space-y-3 sm:space-y-4 shadow-xs">
             <div className="flex items-center gap-2 border-b border-koma-border pb-3">
               <BarChart2 size={16} className="text-emerald-700 dark:text-emerald-400" />
               <span className="font-serif font-bold text-sm text-koma-foreground">Top Produtos por Unidades Vendidas</span>
             </div>
 
-            <div className="h-60 w-full pt-1">
+            <div className="h-64 sm:h-72 w-full pt-1">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={topProdutosChartData} margin={{ top: 10, right: 10, left: -15, bottom: 25 }}>
+                <BarChart data={topProdutosChartData} margin={{ top: 10, right: 10, left: 0, bottom: 50 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--koma-border-default)" vertical={false} opacity={0.6} />
-                  <XAxis dataKey="name" stroke="var(--koma-text-muted)" fontSize={10} interval={0} angle={-25} textAnchor="end" />
-                  <YAxis stroke="var(--koma-text-muted)" fontSize={11} tickLine={false} axisLine={false} />
-                  <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'var(--koma-border-default)' }} />
+                  <XAxis dataKey="name" stroke="var(--koma-text-muted)" fontSize={9} interval={0} angle={-35} textAnchor="end" height={55} />
+                  <YAxis stroke="var(--koma-text-muted)" fontSize={11} width={28} tickLine={false} axisLine={false} />
+                  <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'var(--koma-border-default)', opacity: 0.3 }} />
                   <Bar dataKey="quantidade" name="Unidades Vendidas" fill="#059669" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
 
-          <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4 shadow-xs">
+          <div className="bg-koma-panel border border-koma-border p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl space-y-3 sm:space-y-4 shadow-xs">
             <div className="flex items-center gap-2 border-b border-koma-border pb-3">
               <BarChart2 size={16} className="text-sky-600 dark:text-sky-400" />
               <span className="font-serif font-bold text-sm text-koma-foreground">Top Produtos por Faturamento (R$)</span>
             </div>
 
-            <div className="h-60 w-full pt-1">
+            <div className="h-64 sm:h-72 w-full pt-1">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={topProdutosChartData} margin={{ top: 10, right: 10, left: -15, bottom: 25 }}>
+                <BarChart data={topProdutosChartData} margin={{ top: 10, right: 10, left: 12, bottom: 50 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--koma-border-default)" vertical={false} opacity={0.6} />
-                  <XAxis dataKey="name" stroke="var(--koma-text-muted)" fontSize={10} interval={0} angle={-25} textAnchor="end" />
-                  <YAxis stroke="var(--koma-text-muted)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${v}`} />
-                  <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'var(--koma-border-default)' }} />
+                  <XAxis dataKey="name" stroke="var(--koma-text-muted)" fontSize={9} interval={0} angle={-35} textAnchor="end" height={55} />
+                  <YAxis stroke="var(--koma-text-muted)" fontSize={11} width={50} tickLine={false} axisLine={false} tickFormatter={(v) => `R$ ${v}`} />
+                  <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'var(--koma-border-default)', opacity: 0.3 }} />
                   <Bar dataKey="faturamento" name="Faturamento (R$)" fill="#0284c7" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>

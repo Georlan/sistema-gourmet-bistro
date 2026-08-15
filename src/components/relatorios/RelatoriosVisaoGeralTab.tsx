@@ -466,7 +466,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
           <div className="h-64 w-full pt-2">
             {vendasPorDiaChartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={vendasPorDiaChartData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+                <AreaChart data={vendasPorDiaChartData} margin={{ top: 10, right: 10, left: 12, bottom: 0 }}>
                   <defs>
                     <linearGradient id="emeraldGradient" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
@@ -475,7 +475,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--koma-border-default)" vertical={false} opacity={0.6} />
                   <XAxis dataKey="data" stroke="var(--koma-text-muted)" fontSize={11} tickLine={false} axisLine={false} />
-                  <YAxis stroke="var(--koma-text-muted)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${v}`} />
+                  <YAxis stroke="var(--koma-text-muted)" fontSize={11} width={50} tickLine={false} axisLine={false} tickFormatter={(v) => `R$ ${v}`} />
                   <Tooltip content={<CustomChartTooltip />} cursor={{ stroke: '#059669', strokeWidth: 1, strokeDasharray: '3 3' }} />
                   <Area type="monotone" dataKey="faturamento" name="Faturamento (R$)" stroke="#059669" strokeWidth={2.5} fillOpacity={1} fill="url(#emeraldGradient)" />
                 </AreaChart>
@@ -486,7 +486,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
           </div>
         </div>
 
-        <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4 shadow-xs">
+        <div className="bg-koma-panel border border-koma-border p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl space-y-4 shadow-xs">
           <div className="flex items-center gap-2 border-b border-koma-border pb-3">
             <Clock size={16} className="text-sky-600 dark:text-sky-400" />
             <span className="font-serif font-bold text-sm text-koma-foreground">Horários de Pico do Salão</span>
@@ -495,11 +495,11 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
           <div className="h-64 w-full pt-2">
             {horariosPicoChartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={horariosPicoChartData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+                <BarChart data={horariosPicoChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--koma-border-default)" vertical={false} opacity={0.6} />
                   <XAxis dataKey="hora" stroke="var(--koma-text-muted)" fontSize={11} tickLine={false} axisLine={false} />
-                  <YAxis stroke="var(--koma-text-muted)" fontSize={11} tickLine={false} axisLine={false} />
-                  <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'var(--koma-border-default)' }} />
+                  <YAxis stroke="var(--koma-text-muted)" fontSize={11} width={28} tickLine={false} axisLine={false} />
+                  <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'var(--koma-border-default)', opacity: 0.3 }} />
                   <Bar dataKey="pedidos" name="Pedidos Atendidos" fill="#0284c7" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -511,31 +511,35 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
       </div>
 
       {/* Tabelas Detalhadas */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
+        <div className="bg-koma-panel border border-koma-border p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl space-y-3 sm:space-y-4 shadow-xs">
           <div className="flex justify-between items-center border-b border-koma-border pb-2">
             <span className="font-serif font-bold text-sm text-koma-foreground">Detalhamento dos Pedidos por Dia</span>
           </div>
 
-          <div className="overflow-x-auto max-h-56 border border-koma-border rounded-2xl">
+          <div className="overflow-x-auto max-h-56 border border-koma-border rounded-xl sm:rounded-2xl">
             <table className="w-full text-left text-[10px]">
               <thead className="bg-koma-raised border-b border-koma-border text-koma-subtle uppercase tracking-wider font-bold sticky top-0">
                 <tr>
-                  <th className="p-3">Data</th>
-                  <th className="p-3 font-mono text-center">Qtd Pedidos</th>
-                  <th className="p-3 font-mono text-right">Faturamento</th>
+                  <th className="p-2.5 sm:p-3">Data</th>
+                  <th className="p-2.5 sm:p-3 font-mono text-center">Qtd Pedidos</th>
+                  <th className="p-2.5 sm:p-3 font-mono text-right">Faturamento</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-koma-border">
-                {(data?.vendas_por_dia || []).map((v: any) => (
-                  <tr key={v.data} className="hover:bg-koma-raised/50 transition-colors">
-                    <td className="p-3 font-mono text-koma-muted">{v.data}</td>
-                    <td className="p-3 font-mono text-center font-bold text-koma-foreground">{v.quantidade_pedidos}</td>
-                    <td className="p-3 font-mono text-right font-extrabold text-emerald-700 dark:text-emerald-400">
-                      R$ {v.total.toFixed(2)}
-                    </td>
-                  </tr>
-                ))}
+                {(data?.vendas_por_dia || []).map((v: any) => {
+                  const parts = (v.data || '').split('-');
+                  const formattedDate = parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : v.data;
+                  return (
+                    <tr key={v.data} className="hover:bg-koma-raised/50 transition-colors">
+                      <td className="p-2.5 sm:p-3 font-mono font-semibold text-koma-foreground">{formattedDate}</td>
+                      <td className="p-2.5 sm:p-3 font-mono text-center font-bold text-koma-foreground">{v.quantidade_pedidos}</td>
+                      <td className="p-2.5 sm:p-3 font-mono text-right font-extrabold text-emerald-700 dark:text-emerald-400">
+                        R$ {v.total.toFixed(2)}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
