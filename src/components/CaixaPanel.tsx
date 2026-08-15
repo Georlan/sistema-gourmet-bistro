@@ -11,7 +11,7 @@ import {
   MapPin, ClipboardList, BarChart2, Package, Shield, ShieldCheck, Star,
   MessageSquare, Send, Printer, Cpu, HelpCircle, Smartphone,
   Gift, Tag, TrendingUp, Heart, Globe, Menu, Maximize2, Minimize2,
-  SlidersHorizontal, Upload, Copy, Search, Sun, Moon} from 'lucide-react';
+  SlidersHorizontal, Upload, Copy, Search, Sun, Moon, Volume2, VolumeX, Bell } from 'lucide-react';
 import { Order, OrderItem, CaixaTurno, CaixaMovimentacao, Pagamento, Table, Product, EntradaEstoque, MovimentacaoEstoque, SessaoContagemEstoque, CaixaTurnoResumo, FechamentoCaixaResult } from '../types';
 import { EstoqueEntradasTab } from './estoque/EstoqueEntradasTab';
 import { EntradaManualModal } from './estoque/EntradaManualModal';
@@ -1487,34 +1487,169 @@ export function CaixaPanel({
   const [novoMotoboyNome, setNewMotoboyNome] = useState('');
   const [novoMotoboyTelefone, setNewMotoboyTelefone] = useState('');
 
-  // ── Gaveta de Aceite (Floating Drawer) ──────────────────────────────────────
+  // ── Gaveta de Aceite (Floating Drawer) & Sistema de Áudio Unificado do Caixa ────
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const prevPendingCountRef = useRef(0);
   const audioCtxRef = useRef<AudioContext | null>(null);
 
-  // Alerta sonoro via Web Audio API — sem arquivo externo
-  const playPendingAlert = () => {
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
+    return localStorage.getItem('@koma:sound_enabled') !== 'false';
+  });
+
+  const toggleSound = () => {
+    const next = !soundEnabled;
+    setSoundEnabled(next);
+    localStorage.setItem('@koma:sound_enabled', String(next));
+    if (next) {
+      playOrderAlert('test');
+    }
+  };
+
+  // Motor de Síntese Sonora Web Audio API — Independente, sem arquivo de áudio externo
+  const playOrderAlert = useCallback((type: 'new_order' | 'bill_requested' | 'delivery_pending' | 'test' = 'new_order') => {
+    if (type !== 'test' && !soundEnabled) return;
     try {
       if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
         audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       }
       const ctx = audioCtxRef.current;
-      const frequencies = [880, 1100, 880];
-      frequencies.forEach((freq, i) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.frequency.value = freq;
-        osc.type = 'sine';
-        gain.gain.setValueAtTime(0, ctx.currentTime + i * 0.18);
-        gain.gain.linearRampToValueAtTime(0.35, ctx.currentTime + i * 0.18 + 0.05);
-        gain.gain.linearRampToValueAtTime(0, ctx.currentTime + i * 0.18 + 0.16);
-        osc.start(ctx.currentTime + i * 0.18);
-        osc.stop(ctx.currentTime + i * 0.18 + 0.2);
-      });
-    } catch (e) { /* audio not available */ }
-  };
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+      const t = ctx.currentTime;
+
+      if (type === 'new_order') {
+        // Bipe duplo suave e moderno de novo pedido (Garçom / Caixa / Balcão): D5 (587Hz) -> A5 (880Hz)
+        const notes = [
+          { freq: 587.33, start: 0, dur: 0.12, vol: 0.28 },
+          { freq: 880.00, start: 0.10, dur: 0.22, vol: 0.35 },
+        ];
+        notes.forEach(({ freq, start, dur, vol }) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, t + start);
+          gain.gain.setValueAtTime(0.001, t + start);
+          gain.gain.exponentialRampToValueAtTime(vol, t + start + 0.03);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + start + dur);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(t + start);
+          osc.stop(t + start + dur + 0.05);
+        });
+      } else if (type === 'bill_requested') {
+        // Alerta de mesa pedindo conta / pré-conta (Ding-Dong: C6 -> G5)
+        const notes = [
+          { freq: 1046.50, start: 0, dur: 0.14, vol: 0.35 },
+          { freq: 783.99, start: 0.14, dur: 0.28, vol: 0.40 },
+        ];
+        notes.forEach(({ freq, start, dur, vol }) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, t + start);
+          gain.gain.setValueAtTime(0.001, t + start);
+          gain.gain.exponentialRampToValueAtTime(vol, t + start + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + start + dur);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(t + start);
+          osc.stop(t + start + dur + 0.05);
+        });
+      } else if (type === 'delivery_pending') {
+        // Alerta de pedido online / WhatsApp / Retirada: 880 -> 1174 -> 880
+        const notes = [
+          { freq: 880.00, start: 0, dur: 0.10, vol: 0.30 },
+          { freq: 1174.66, start: 0.12, dur: 0.14, vol: 0.38 },
+          { freq: 880.00, start: 0.28, dur: 0.18, vol: 0.30 },
+        ];
+        notes.forEach(({ freq, start, dur, vol }) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, t + start);
+          gain.gain.setValueAtTime(0.001, t + start);
+          gain.gain.exponentialRampToValueAtTime(vol, t + start + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + start + dur);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(t + start);
+          osc.stop(t + start + dur + 0.05);
+        });
+      } else if (type === 'test') {
+        // Teste de som: 3 notas ascendentes (C5 -> E5 -> G5)
+        const notes = [
+          { freq: 523.25, start: 0, dur: 0.10, vol: 0.25 },
+          { freq: 659.25, start: 0.10, dur: 0.10, vol: 0.30 },
+          { freq: 783.99, start: 0.20, dur: 0.22, vol: 0.35 },
+        ];
+        notes.forEach(({ freq, start, dur, vol }) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, t + start);
+          gain.gain.setValueAtTime(0.001, t + start);
+          gain.gain.exponentialRampToValueAtTime(vol, t + start + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + start + dur);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(t + start);
+          osc.stop(t + start + dur + 0.05);
+        });
+      }
+    } catch (e) { /* audio context unavailable */ }
+  }, [soundEnabled]);
+
+  // Desbloqueia o contexto de áudio na primeira interação do usuário na tela
+  useEffect(() => {
+    const unlock = () => {
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      if (audioCtxRef.current.state === 'suspended') {
+        audioCtxRef.current.resume();
+      }
+    };
+    window.addEventListener('click', unlock, { passive: true });
+    window.addEventListener('keydown', unlock, { passive: true });
+    return () => {
+      window.removeEventListener('click', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+  }, []);
+
+  // Monitor universal de pedidos e mesas (Garçom / Caixa / Salão)
+  const isInitialOrdersMountRef = useRef(true);
+  const prevOrdersSignatureRef = useRef({
+    orderCount: 0,
+    itemsCount: 0,
+    billRequestedCount: 0
+  });
+
+  useEffect(() => {
+    const active = orders.filter(o => o.status !== 'fechada' && o.status !== 'cancelado');
+    const orderCount = active.length;
+    const itemsCount = active.reduce((sum, o) => sum + (o.itens ? o.itens.length : 0), 0);
+    const billRequestedCount = active.filter(o =>
+      (o as any).status_comanda === 'aguardando_pagamento' ||
+      (o as any).statusComanda === 'aguardando_pagamento' ||
+      (o as any).contaPedida === true
+    ).length;
+
+    if (isInitialOrdersMountRef.current) {
+      isInitialOrdersMountRef.current = false;
+      prevOrdersSignatureRef.current = { orderCount, itemsCount, billRequestedCount };
+      return;
+    }
+
+    const prev = prevOrdersSignatureRef.current;
+    if (billRequestedCount > prev.billRequestedCount) {
+      playOrderAlert('bill_requested');
+    } else if (itemsCount > prev.itemsCount || orderCount > prev.orderCount) {
+      playOrderAlert('new_order');
+    }
+
+    prevOrdersSignatureRef.current = { orderCount, itemsCount, billRequestedCount };
+  }, [orders, playOrderAlert]);
 
   // Drawer Overlay do Operador/Login
   const [isOperatorDrawerOpen, setIsOperatorDrawerOpen] = useState(false);
@@ -1710,7 +1845,7 @@ export function CaixaPanel({
     try {
       let url = "";
       if (order.mesaId && Number(order.mesaId) > 0) {
-        url = `${apiBaseUrl}/mesas/${order.mesaId}/imprimir-recibo?apenas_valores=true`;
+        url = `${apiBaseUrl}/mesas/${order.mesaId}/imprimir-recibo?apenas_valores=false`;
       } else {
         url = `${apiBaseUrl}/comandas/${order.id}/imprimir-recibo`;
       }
@@ -1829,14 +1964,19 @@ export function CaixaPanel({
     }
   };
 
-  // Watch for new pending orders → play alert sound
+  // Monitor de pedidos delivery / online pendentes
+  const prevDeliveryPendingCountRef = useRef<number | null>(null);
   useEffect(() => {
-    const pendingCount = deliveryOrders.filter(o => o.status === 'pendente').length;
-    if (pendingCount > prevPendingCountRef.current && !isDrawerOpen) {
-      playPendingAlert();
+    const pendingCount = deliveryOrders.filter(o => o.status === 'pendente' || o.status === 'analise').length;
+    if (prevDeliveryPendingCountRef.current === null) {
+      prevDeliveryPendingCountRef.current = pendingCount;
+      return;
     }
-    prevPendingCountRef.current = pendingCount;
-  }, [deliveryOrders, isDrawerOpen]);
+    if (pendingCount > prevDeliveryPendingCountRef.current && !isDrawerOpen) {
+      playOrderAlert('delivery_pending');
+    }
+    prevDeliveryPendingCountRef.current = pendingCount;
+  }, [deliveryOrders, isDrawerOpen, playOrderAlert]);
 
   const fetchMotoboys = async () => {
     try {
@@ -3317,6 +3457,7 @@ export function CaixaPanel({
       });
 
       if (res.ok) {
+        playOrderAlert('new_order');
         onRefreshOrders();
         fetchDeliveryOrders();
         window.dispatchEvent(new Event('koma_orders_updated'));
@@ -10918,7 +11059,7 @@ export function CaixaPanel({
           try {
             const targetOrder = orders.find(o => o.id === comandaId) || quickActionsOrder;
             const mesaId = targetOrder?.mesaId || 0;
-            const url = `${apiBaseUrl}/mesas/${mesaId}/imprimir-recibo?apenas_valores=true`;
+            const url = `${apiBaseUrl}/mesas/${mesaId}/imprimir-recibo?apenas_valores=false`;
 
             const res = await fetch(url, {
               method: 'POST',
@@ -11232,6 +11373,40 @@ export function CaixaPanel({
                       </button>
                     ))}
                   </div>
+                </div>
+
+                {/* Alertas Sonoros do Caixa */}
+                <div className="pt-2 border-t border-koma-border space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      {soundEnabled ? <Volume2 size={15} className="text-emerald-400" /> : <VolumeX size={15} className="text-rose-400" />}
+                      <span className="text-xs text-koma-secondary font-medium">Sons e Alertas do Caixa</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={toggleSound}
+                      className={clsx(
+                        'px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer border',
+                        soundEnabled
+                          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
+                          : 'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20'
+                      )}
+                    >
+                      {soundEnabled ? 'Ativado' : 'Mudo'}
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      playOrderAlert('test');
+                      showToast("🔊 Teste de som emitido na saída do computador!", "info");
+                    }}
+                    className="w-full flex items-center justify-center gap-1.5 py-2 px-3 bg-koma-card hover:bg-koma-raised border border-koma-border text-xs font-bold text-koma-foreground rounded-xl transition-all cursor-pointer"
+                  >
+                    <Bell size={13} className="text-amber-400" />
+                    <span>Testar Caixa de Som (Bip)</span>
+                  </button>
                 </div>
               </div>
             </div>
