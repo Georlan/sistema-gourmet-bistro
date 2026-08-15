@@ -278,13 +278,18 @@ class PrinterService:
                 or "Consumo Geral"
             ) or "Consumo Geral"
             quantidade = max(int(safe_get(item, "quantidade") or 1), 1)
+            preco_unit = float(
+                safe_get(item, "preco_unit")
+                or safe_get(item, "preco")
+                or 0.0
+            )
 
             client_key = cliente.casefold()
             client_group = grouped_by_client.setdefault(
                 client_key,
                 {"label": cliente, "items": {}},
             )
-            item_key = (codigo, nome, observacao)
+            item_key = (codigo, nome, observacao, preco_unit)
             client_group["items"][item_key] = (
                 client_group["items"].get(item_key, 0) + quantidade
             )
@@ -305,27 +310,16 @@ class PrinterService:
                 codigo,
                 nome,
                 observacao,
+                preco_unit,
             ), quantidade in client_group["items"].items():
                 printable_name = _printable_product_name(codigo, nome)
-                item_text = f"{quantidade}x {printable_name}"
-                item_lines = textwrap.wrap(
-                    item_text,
-                    width=width,
-                    break_long_words=True,
-                    break_on_hyphens=False,
-                ) or [""]
-                rendered_item_lines = item_lines[:1]
-                rendered_item_lines.extend(
-                    f"   {part}"[:width] for part in item_lines[1:]
+                left = f"{quantidade}x {printable_name.upper()}"
+                _append_bold_amount_line(
+                    lines,
+                    left,
+                    _format_brl(quantidade * preco_unit),
+                    width,
                 )
-                rendered_item_lines[0] = (
-                    ESC_FONT_A
-                    + ESC_DOUBLE_HEIGHT_ON
-                    + ESC_BOLD_ON
-                    + rendered_item_lines[0]
-                )
-                rendered_item_lines[-1] += ESC_BOLD_OFF + ESC_NORMAL_SIZE
-                lines.extend(rendered_item_lines)
 
                 if observacao:
                     _append_wrapped_in_font(
@@ -346,6 +340,7 @@ class PrinterService:
                 ESC_BOLD_ON + align_center(brand.upper(), width) + ESC_BOLD_OFF
             )
         lines.append(align_center("Gerenciado por Kôma", width))
+        lines.append(align_center("Documento não fiscal", width))
 
         return "\n".join(lines)
 
