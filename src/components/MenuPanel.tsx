@@ -553,7 +553,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                 </div>
               </div>
 
-              {/* Direct 1-Touch Horizontal Category Chips Carousel (Mobile & Desktop) */}
+              {/* Direct 1-Touch Horizontal Category Chips Carousel (JUMP ANCHORS) */}
               <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none no-scrollbar -mx-0.5 px-0.5">
                 {categoriesList.map((catObj) => (
                   <button
@@ -561,11 +561,11 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                     id={`cat-btn-${catObj.nome.toLowerCase().replace(/\s+/g, '-')}`}
                     onClick={() => {
                       setSelectedCategory(catObj.nome);
-                      setSearchQuery('');
+                      if (searchQuery) setSearchQuery('');
                       setTimeout(() => {
                         const element = document.getElementById(`category-sec-${catObj.nome.toLowerCase().replace(/\s+/g, '-')}`);
                         element?.scrollIntoView({ block: 'start', behavior: 'smooth' });
-                      }, 50);
+                      }, 40);
                     }}
                     className={`px-3 py-1.5 text-xs font-bold rounded-xl whitespace-nowrap transition-all cursor-pointer shrink-0 ${
                       selectedCategory === catObj.nome
@@ -579,8 +579,8 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
               </div>
             </div>
 
-            {/* Scrollable Products List grouped by Categories */}
-            <div className="p-3 sm:p-5 flex flex-col gap-4 sm:gap-6 sm:max-h-[50vh] sm:overflow-y-auto max-h-none overflow-y-visible sm:pr-1">
+            {/* Continuous Scrollable Products Feed */}
+            <div className="p-3 sm:p-5 pb-28 sm:pb-8 flex flex-col gap-5 sm:gap-6 sm:max-h-[55vh] sm:overflow-y-auto max-h-none overflow-y-visible sm:pr-1">
               {(() => {
                 let totalRendered = 0;
                 const productsList = liveProdutos.filter((product) => product.ativo !== false);
@@ -601,14 +601,15 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                     <div 
                       key={catObj.id} 
                       id={`category-sec-${catObj.nome.toLowerCase().replace(/\s+/g, '-')}`}
-                      className={`space-y-2 sm:space-y-3 scroll-mt-2 pt-1 sm:pt-2 ${
-                        !searchQuery && selectedCategory !== catObj.nome ? 'hidden sm:block' : ''
-                      }`}
+                      className="space-y-2.5 scroll-mt-24 sm:scroll-mt-28"
                     >
-                      <h4 className="font-serif text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider border-b border-koma-border pb-1.5 pt-1">
-                        {catObj.nome}
-                      </h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 sm:gap-4 pb-28 sm:pb-6">
+                      <div className="flex items-center gap-2 border-b border-koma-border/80 pb-1 pt-1">
+                        <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
+                        <h4 className="font-serif text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
+                          {catObj.nome}
+                        </h4>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 sm:gap-4">
                         {categoryProducts.map((product) => {
                           const matchingDraftItems = draftItems.filter((it) => it.produtoId === product.id);
                           const currentCountInDraft = matchingDraftItems.reduce((acc, it) => acc + (it.quantidade || 1), 0);
