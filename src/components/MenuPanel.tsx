@@ -651,7 +651,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                       <h4 className="font-serif text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider border-b border-koma-border pb-1.5 pt-1">
                         {catObj.nome}
                       </h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 sm:gap-4 pb-20 sm:pb-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 sm:gap-4 pb-28 sm:pb-6">
                         {categoryProducts.map((product) => {
                           const matchingDraftItems = draftItems.filter((it) => it.produtoId === product.id);
                           const currentCountInDraft = matchingDraftItems.reduce((acc, it) => acc + (it.quantidade || 1), 0);
@@ -791,17 +791,17 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
 
             {/* STICKY BOTTOM CART BAR (MOBILE & SALÃO) */}
             {view === 'menu' && totalDraftQty > 0 && (
-              <div className="sticky bottom-0 left-0 right-0 z-40 -mx-3 -mb-3 sm:-mx-5 sm:-mb-5 p-3 bg-koma-panel/95 backdrop-blur-md border-t border-koma-border shadow-[0_-8px_24px_rgba(0,0,0,0.35)] animate-slide-up">
-                <div className="flex items-center justify-between gap-3 max-w-2xl mx-auto">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="h-10 w-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold shrink-0 font-mono text-sm shadow-sm">
+              <div className="sticky bottom-0 left-0 right-0 z-40 -mx-3 -mb-3 sm:-mx-5 sm:-mb-5 p-2.5 sm:p-3 bg-koma-panel/95 backdrop-blur-md border-t border-koma-border shadow-[0_-8px_24px_rgba(0,0,0,0.35)] animate-slide-up">
+                <div className="flex items-center justify-between gap-2 sm:gap-3 max-w-2xl mx-auto">
+                  <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+                    <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-extrabold shrink-0 font-mono text-xs sm:text-sm shadow-sm">
                       {totalDraftQty}
                     </div>
                     <div className="min-w-0">
-                      <span className="text-xs font-bold text-koma-foreground block truncate">
-                        {totalDraftQty} {totalDraftQty === 1 ? 'item selecionado' : 'itens no pedido'}
+                      <span className="text-[11px] sm:text-xs font-bold text-koma-foreground block truncate leading-tight">
+                        {totalDraftQty === 1 ? '1 item' : `${totalDraftQty} itens`}
                       </span>
-                      <span className="text-xs font-bold font-mono text-emerald-400 block">
+                      <span className="text-xs sm:text-sm font-bold font-mono text-emerald-400 block leading-tight">
                         R$ {draftTotal.toFixed(2)}
                       </span>
                     </div>
@@ -810,10 +810,10 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                   <button
                     type="button"
                     onClick={openCartReview}
-                    className="min-h-11 px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-zinc-950 text-xs font-extrabold rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-lg shadow-emerald-900/30 border border-emerald-400 shrink-0"
+                    className="min-h-10 sm:min-h-11 px-3.5 sm:px-5 py-2 sm:py-2.5 bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-zinc-950 text-xs font-extrabold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 shadow-lg shadow-emerald-900/30 border border-emerald-400 shrink-0"
                   >
                     <span>Revisar Pedido</span>
-                    <ArrowRight size={15} />
+                    <ArrowRight size={14} className="shrink-0" />
                   </button>
                 </div>
               </div>
