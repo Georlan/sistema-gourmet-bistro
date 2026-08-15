@@ -232,15 +232,15 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
       )}
 
       {/* Filters Toolbar */}
-      <div className={clsx('bg-koma-panel', 'border', 'border-koma-border', 'p-4', 'rounded-2xl', 'flex', 'flex-col', 'md:flex-row', 'items-center', 'justify-between', 'gap-3', 'shadow-xs')}>
+      <div className={clsx('bg-koma-panel', 'border', 'border-koma-border', 'p-3', 'sm:p-4', 'rounded-2xl', 'flex', 'flex-col', 'lg:flex-row', 'items-stretch', 'lg:items-center', 'justify-between', 'gap-2.5', 'sm:gap-3', 'shadow-xs')}>
         {/* Ordenação */}
-        <div className="flex items-center gap-1.5 w-full md:w-auto">
-          <span className="text-[9px] font-bold text-koma-muted uppercase tracking-wider block">Filtro:</span>
-          <div className="flex bg-koma-input p-1 border border-koma-border rounded-xl gap-1">
+        <div className="flex items-center gap-1.5 w-full lg:w-auto">
+          <span className="text-[9px] font-bold text-koma-muted uppercase tracking-wider block shrink-0">Filtro:</span>
+          <div className="grid grid-cols-3 bg-koma-input p-0.5 sm:p-1 border border-koma-border rounded-xl gap-0.5 sm:gap-1 flex-1 sm:flex-none">
             <button
               type="button"
               onClick={() => setOrdenacao('mais_vendidos')}
-              className={`px-3 py-1.5 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer ${
+              className={`px-2.5 py-1.5 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer text-center ${
                 ordenacao === 'mais_vendidos'
                   ? 'koma-btn-success'
                   : 'text-koma-muted hover:text-koma-foreground'
@@ -251,7 +251,7 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
             <button
               type="button"
               onClick={() => setOrdenacao('menos_vendidos')}
-              className={`px-3 py-1.5 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer ${
+              className={`px-2.5 py-1.5 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer text-center ${
                 ordenacao === 'menos_vendidos'
                   ? 'koma-btn-success'
                   : 'text-koma-muted hover:text-koma-foreground'
@@ -262,7 +262,7 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
             <button
               type="button"
               onClick={() => setOrdenacao('todos')}
-              className={`px-3 py-1.5 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer ${
+              className={`px-2.5 py-1.5 rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer text-center ${
                 ordenacao === 'todos'
                   ? 'koma-btn-success'
                   : 'text-koma-muted hover:text-koma-foreground'
@@ -274,22 +274,22 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
         </div>
 
         {/* Busca por Nome & Categoria */}
-        <div className="flex items-center gap-2 w-full md:w-auto flex-1 max-w-lg">
-          <form onSubmit={handleSearchSubmit} className="relative flex-1">
-            <Search size={14} className="absolute left-3 top-3 text-koma-muted" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full lg:w-auto flex-1 max-w-lg">
+          <form onSubmit={handleSearchSubmit} className="relative w-full">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" />
             <input
               type="text"
-              placeholder="Buscar por nome do produto..."
+              placeholder="Buscar produto..."
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
-              className="w-full pl-9 pr-3.5 py-2 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs focus:outline-none focus:border-emerald-500/60"
+              className="w-full pl-8 pr-3 py-2 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs focus:outline-none focus:border-emerald-500/60"
             />
           </form>
 
           <select
             value={categoriaId}
             onChange={(e) => setCategoriaId(e.target.value)}
-            className="px-3.5 py-2 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs font-medium cursor-pointer focus:outline-none focus:border-emerald-500/60"
+            className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs font-medium cursor-pointer focus:outline-none focus:border-emerald-500/60 truncate"
           >
             <option value="">Todas as Categorias</option>
             {categorias.map((c) => (
@@ -302,7 +302,7 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
       </div>
 
       {/* Products Table */}
-      <div className={clsx('bg-koma-panel', 'border', 'border-koma-border', 'rounded-3xl', 'overflow-hidden', 'shadow-xs')}>
+      <div className={clsx('bg-koma-panel', 'border', 'border-koma-border', 'rounded-2xl', 'sm:rounded-3xl', 'overflow-hidden', 'shadow-xs')}>
         {isLoading ? (
           <div className="p-12 text-center text-koma-muted text-xs animate-pulse">
             Carregando desempenho de produtos...
@@ -312,33 +312,33 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
             Nenhum produto encontrado para os filtros selecionados.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-[10px]">
-              <thead className="bg-koma-raised border-b border-koma-border text-koma-muted uppercase tracking-wider font-extrabold text-[9px]">
+          <div className="overflow-x-auto scrollbar-thin">
+            <table className="w-full min-w-[540px] text-left text-[10px]">
+              <thead className="bg-koma-raised border-b border-koma-border text-koma-subtle uppercase tracking-wider font-extrabold text-[9px]">
                 <tr>
-                  <th className="p-3.5 text-center font-mono w-16">Posição</th>
-                  <th className="p-3.5">Produto</th>
-                  <th className="p-3.5">Categoria</th>
-                  <th className="p-3.5 text-center font-mono">Qtd Vendida</th>
-                  <th className="p-3.5 text-right font-mono">Faturamento Total</th>
-                  <th className="p-3.5 text-right font-mono">Ticket Médio do Item</th>
+                  <th className="p-2.5 sm:p-3.5 text-center font-mono w-14 sm:w-16">Posição</th>
+                  <th className="p-2.5 sm:p-3.5">Produto</th>
+                  <th className="p-2.5 sm:p-3.5">Categoria</th>
+                  <th className="p-2.5 sm:p-3.5 text-center font-mono">Qtd Vendida</th>
+                  <th className="p-2.5 sm:p-3.5 text-right font-mono">Faturamento Total</th>
+                  <th className="p-2.5 sm:p-3.5 text-right font-mono">Ticket Médio</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-koma-border">
                 {produtos.map((p) => (
                   <tr key={p.produto_id} className="hover:bg-koma-raised/50 transition-colors">
-                    <td className="p-3.5 text-center font-mono font-extrabold text-koma-muted">
+                    <td className="p-2.5 sm:p-3.5 text-center font-mono font-extrabold text-koma-muted">
                       #{p.ranking}
                     </td>
-                    <td className="p-3.5 font-bold text-koma-foreground">{p.produto_nome}</td>
-                    <td className="p-3.5 text-koma-muted font-medium">{p.categoria_nome}</td>
-                    <td className="p-3.5 text-center font-mono font-bold text-koma-foreground text-xs">
+                    <td className="p-2.5 sm:p-3.5 font-bold text-koma-foreground">{p.produto_nome}</td>
+                    <td className="p-2.5 sm:p-3.5 text-koma-muted font-medium">{p.categoria_nome}</td>
+                    <td className="p-2.5 sm:p-3.5 text-center font-mono font-bold text-koma-foreground text-xs">
                       {p.quantidade_vendida}
                     </td>
-                    <td className="p-3.5 text-right font-mono font-extrabold text-emerald-700 dark:text-emerald-400">
+                    <td className="p-2.5 sm:p-3.5 text-right font-mono font-extrabold text-emerald-700 dark:text-emerald-400">
                       R$ {p.faturamento_total.toFixed(2)}
                     </td>
-                    <td className="p-3.5 text-right font-mono text-koma-foreground font-medium">
+                    <td className="p-2.5 sm:p-3.5 text-right font-mono text-koma-foreground font-medium">
                       R$ {p.ticket_medio_item.toFixed(2)}
                     </td>
                   </tr>

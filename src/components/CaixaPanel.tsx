@@ -6104,7 +6104,7 @@ export function CaixaPanel({
             <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-6', 'max-w-6xl', 'text-left', 'animate-fade-in')}>
 
               {/* CRUD table list */}
-              <div className={clsx('lg:col-span-2', 'bg-koma-panel', 'border', 'border-koma-border', 'rounded-3xl', 'p-5', 'space-y-4', 'shadow-xs')}>
+              <div className={clsx('lg:col-span-2', 'bg-koma-panel', 'border', 'border-koma-border', 'rounded-2xl', 'sm:rounded-3xl', 'p-3.5', 'sm:p-5', 'space-y-4', 'shadow-xs')}>
                 <div className={clsx('flex', 'justify-between', 'items-center', 'border-b', 'border-koma-border', 'pb-3')}>
                   <div>
                     <span className={clsx('font-serif', 'font-bold', 'text-koma-foreground', 'text-base', 'block')}>Equipe & Funcionários</span>
@@ -6115,15 +6115,15 @@ export function CaixaPanel({
                 </div>
 
                 {systemUsers.length > 0 ? (
-                  <div className="overflow-x-auto border border-koma-border rounded-2xl">
-                    <table className={clsx('w-full', 'text-left', 'font-sans', 'text-xs')}>
+                  <div className="overflow-x-auto scrollbar-thin border border-koma-border rounded-xl sm:rounded-2xl">
+                    <table className={clsx('w-full', 'min-w-[480px]', 'text-left', 'font-sans', 'text-xs')}>
                       <thead>
                         <tr className={clsx('bg-koma-raised', 'border-b', 'border-koma-border', 'text-koma-muted', 'font-extrabold', 'uppercase', 'text-[9px]', 'tracking-wider')}>
-                          <th className="p-3.5">Nome</th>
-                          <th className="p-3.5">WhatsApp</th>
-                          <th className="p-3.5">Função</th>
-                          <th className="p-3.5">Status</th>
-                          <th className={clsx('p-3.5', 'text-right')}>Ações</th>
+                          <th className="p-2.5 sm:p-3.5">Nome</th>
+                          <th className="p-2.5 sm:p-3.5">WhatsApp</th>
+                          <th className="p-2.5 sm:p-3.5">Função</th>
+                          <th className="p-2.5 sm:p-3.5">Status</th>
+                          <th className={clsx('p-2.5', 'sm:p-3.5', 'text-right')}>Ações</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-koma-border">
@@ -6135,14 +6135,14 @@ export function CaixaPanel({
 
                           return (
                             <tr key={user.id} className={clsx('hover:bg-koma-raised/50', 'transition-colors')}>
-                              <td className={clsx('p-3.5', 'text-koma-foreground', 'font-bold')}>{user.nome}</td>
-                              <td className={clsx('p-3.5', 'font-mono', 'text-koma-muted', 'text-xs')}>{formatarTelefoneTabela(user.telefone || user.usuario || '')}</td>
-                              <td className="p-3.5">
+                              <td className={clsx('p-2.5', 'sm:p-3.5', 'text-koma-foreground', 'font-bold')}>{user.nome}</td>
+                              <td className={clsx('p-2.5', 'sm:p-3.5', 'font-mono', 'text-koma-muted', 'text-xs')}>{formatarTelefoneTabela(user.telefone || user.usuario || '')}</td>
+                              <td className="p-2.5 sm:p-3.5">
                                 <span className={clsx('px-2.5', 'py-0.5', 'text-[8px]', 'font-extrabold', 'rounded-md', 'uppercase', 'tracking-wider', cargoRaw === 'admin' ? 'koma-badge-danger' : 'koma-badge-info')}>
                                   {cargoLabel}
                                 </span>
                               </td>
-                              <td className="p-3.5">
+                              <td className="p-2.5 sm:p-3.5">
                                 {statusVal === 'ativo' ? (
                                   <span className="koma-badge-success px-2.5 py-0.5 text-[8px] font-extrabold rounded-md uppercase tracking-wider">
                                     Ativo
@@ -6153,7 +6153,7 @@ export function CaixaPanel({
                                   </span>
                                 )}
                               </td>
-                              <td className={clsx('p-3.5', 'text-right')}>
+                              <td className={clsx('p-2.5', 'sm:p-3.5', 'text-right')}>
                                 <div className="flex items-center justify-end gap-2">
                                   {isPendente && (
                                     <button

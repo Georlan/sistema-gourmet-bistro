@@ -484,7 +484,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
           </div>
 
           {/* GRID RESPONSIVO DE PLANOS */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 items-stretch max-w-7xl mx-auto py-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-5 items-stretch max-w-7xl mx-auto pt-4 pb-2">
             {SUBSCRIPTION_PLANS.map((plan, index) => {
               const isCurrent = currentPlanId === plan.id;
               const isSelected = selectedPlanId === plan.id;
@@ -500,12 +500,12 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                   animationNum={4 + index}
                   timelineRef={pricingRef}
                   customVariants={revealVariants}
-                  className="flex flex-col"
+                  className={clsx('flex flex-col', isPopular && 'mt-3 md:mt-0')}
                 >
                   <Card
                     onClick={() => setSelectedPlanId(plan.id)}
                     className={clsx(
-                      'relative h-full flex flex-col justify-between transition-all duration-200 cursor-pointer rounded-3xl border text-left overflow-visible',
+                      'relative h-full flex flex-col justify-between transition-all duration-200 cursor-pointer rounded-2xl sm:rounded-3xl border text-left overflow-visible',
                       isPopular
                         ? 'bg-koma-card border-emerald-500 shadow-lg ring-2 ring-emerald-500/20 md:-translate-y-1 z-10'
                         : isSelected
@@ -515,28 +515,28 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                   >
                     {/* Badge Mais Popular */}
                     {isPopular && (
-                      <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3.5 py-1 rounded-full bg-emerald-600 text-white text-[9px] font-extrabold uppercase tracking-widest shadow-md flex items-center gap-1">
+                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 sm:px-3.5 sm:py-1 rounded-full bg-emerald-600 text-white text-[8px] sm:text-[9px] font-extrabold uppercase tracking-widest shadow-md flex items-center gap-1 z-20">
                         <Sparkles size={11} />
                         <span>Mais Popular</span>
                       </div>
                     )}
 
-                    <CardHeader className="p-5 pb-3">
+                    <CardHeader className="p-4 sm:p-5 pb-2 sm:pb-3">
                       <div className="flex justify-between items-start">
-                        <h4 className="text-xl font-bold text-koma-foreground mb-1 font-serif">
+                        <h4 className="text-lg sm:text-xl font-bold text-koma-foreground mb-0.5 sm:mb-1 font-serif">
                           {plan.name}
                         </h4>
                       </div>
-                      <p className="text-xs text-koma-subtle min-h-[32px]">{plan.tagline}</p>
+                      <p className="text-xs text-koma-subtle min-h-0 sm:min-h-[32px]">{plan.tagline}</p>
 
-                      <div className="mt-4 pt-4 border-t border-koma-border min-w-0">
+                      <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-koma-border min-w-0">
                         <div className="flex items-end gap-1 whitespace-nowrap">
-                          <span className="text-3xl font-extrabold font-mono text-emerald-700 dark:text-emerald-400 tracking-tight">
+                          <span className="text-2xl sm:text-3xl font-extrabold font-mono text-emerald-700 dark:text-emerald-400 tracking-tight">
                             {formatCurrency(displayPrice)}
                           </span>
-                          <span className="text-koma-muted text-xs font-mono pb-1">/mês</span>
+                          <span className="text-koma-muted text-xs font-mono pb-0.5 sm:pb-1">/mês</span>
                         </div>
-                        <p className="mt-1 min-h-4 text-[10px] leading-4 text-koma-muted font-medium">
+                        <p className="mt-0.5 sm:mt-1 min-h-4 text-[10px] leading-4 text-koma-muted font-medium">
                           {isYearly
                             ? `${formatCurrency(pricing.annualTotal)} cobrados anualmente`
                             : 'Cobrança mensal'}
@@ -544,7 +544,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                       </div>
                     </CardHeader>
 
-                    <CardContent className="p-5 pt-2 flex-grow flex flex-col justify-between space-y-4">
+                    <CardContent className="p-4 sm:p-5 pt-1 sm:pt-2 flex-grow flex flex-col justify-between space-y-3 sm:space-y-4">
                       {/* Botão de Ação do Card */}
                       <div className="pt-1">
                         {isCurrent ? (
@@ -572,15 +572,15 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                       </div>
 
                       {/* Lista de Recursos com Ícone CheckCheck */}
-                      <div className="space-y-3 pt-2">
+                      <div className="space-y-2 sm:space-y-3 pt-1 sm:pt-2">
                         <span className="text-[9px] font-bold text-koma-muted uppercase tracking-wider block">
                           Recursos Inclusos:
                         </span>
-                        <ul className="space-y-2 font-medium text-xs">
+                        <ul className="space-y-1.5 sm:space-y-2 font-medium text-xs">
                           {plan.features.map((feature, featureIndex) => (
                             <li key={featureIndex} className="flex items-start">
-                              <span className="h-5 w-5 bg-emerald-500/15 border border-emerald-500/30 rounded-full grid place-content-center mt-0.5 mr-2.5 shrink-0">
-                                <CheckCheck className="h-3 w-3 text-emerald-700 dark:text-emerald-400" />
+                              <span className="h-4 w-4 sm:h-5 sm:w-5 bg-emerald-500/15 border border-emerald-500/30 rounded-full grid place-content-center mt-0.5 mr-2 shrink-0">
+                                <CheckCheck className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-emerald-700 dark:text-emerald-400" />
                               </span>
                               <span className="text-xs text-koma-foreground leading-snug">{feature}</span>
                             </li>
