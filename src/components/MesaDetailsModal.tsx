@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { X, Clock, Receipt, PlusCircle, Move, ShoppingBag, Printer, Trash2, ArrowLeft, Edit2, GitMerge } from 'lucide-react';
+import { X, Clock, Receipt, PlusCircle, Move, ShoppingBag, Printer, Trash2, ArrowLeft, Edit2, Edit3, GitMerge } from 'lucide-react';
 import { Table, Order, DraftItem, AppSettings, Product, AppRole, OrderItem } from '../types';
 import { getTableTotal, getCustomerSubtotals, formatElapsedTime, normalizeOperationalTimestamp } from '../domain';
 import { MenuPanel } from './MenuPanel';
@@ -616,7 +616,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                                         type="button"
                                         onClick={() => {
                                           if (confirm(`Tem certeza que deseja cancelar "${item.nome}"?`)) {
-                                            onCancelItem(order.id, item.id);
+                                            onCancelItem(item.id);
                                           }
                                         }}
                                         className="p-1 text-koma-subtle hover:text-red-400 transition-colors cursor-pointer"
