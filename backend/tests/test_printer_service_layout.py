@@ -15,7 +15,7 @@ def _service() -> PrinterService:
     return service
 
 
-def test_kitchen_ticket_groups_people_and_repeated_items_once():
+def test_kitchen_ticket_groups_people_repeated_items_and_prices_once():
     ticket = _service().generate_kitchen_ticket(
         num_pedido=305,
         tipo="Consumo no Local",
@@ -29,6 +29,7 @@ def test_kitchen_ticket_groups_people_and_repeated_items_once():
                 "descricao": "Hambúrguer bovino, queijo e bacon.",
                 "observacao": "sem bacon",
                 "cliente_nome": "Paulo",
+                "preco_unit": 25.0,
             },
             {
                 "codigo": "003",
@@ -36,12 +37,14 @@ def test_kitchen_ticket_groups_people_and_repeated_items_once():
                 "descricao": "Hambúrguer bovino, queijo e bacon.",
                 "observacao": "sem bacon",
                 "cliente_nome": "paulo",
+                "preco_unit": 25.0,
             },
             {
                 "codigo": "001",
                 "nome": "Hambúrguer Tradicional",
                 "observacao": "sem cheddar",
                 "cliente_nome": "Consumo Geral",
+                "preco_unit": 19.0,
             },
         ],
     )
@@ -49,7 +52,9 @@ def test_kitchen_ticket_groups_people_and_repeated_items_once():
     assert ticket.count("CLIENTE: PAULO") == 1
     assert "CLIENTE: CONSUMO GERAL" not in ticket
     assert "[PAULO]" not in ticket
-    assert "2x Cheese Bacon" in ticket
+    assert "2x CHEESE BACON" in ticket
+    assert "R$ 50,00" in ticket
+    assert "R$ 19,00" in ticket
     assert "[003]" not in ticket
     assert "003 -" not in ticket
     assert "DESCRIÇÃO:" not in ticket
@@ -59,10 +64,32 @@ def test_kitchen_ticket_groups_people_and_repeated_items_once():
     assert "CONSUMO NO LOCAL" in ticket
     assert "PIZZARIA BELLA ITALIA" in ticket
     assert f"{ESC_DOUBLE_HEIGHT_ON}{ESC_BOLD_ON}PEDIDO: #305" in ticket
-    assert (
-        f"{ESC_FONT_A}{ESC_DOUBLE_HEIGHT_ON}{ESC_BOLD_ON}2x Cheese Bacon"
-        in ticket
+    assert f"{ESC_BOLD_ON}2x CHEESE BACON" in ticket
+    assert "Gerenciado por Kôma" in ticket
+    assert "Documento não fiscal" in ticket
+
+
+def test_kitchen_reprint_keeps_prices_and_marks_reprint():
+    ticket = _service().generate_kitchen_ticket(
+        num_pedido=42,
+        tipo="Consumo no Local",
+        mesa_id=10,
+        garcom_nome="Georlan",
+        is_reprint=True,
+        items=[
+            {
+                "codigo": "001",
+                "nome": "Hambúrguer Bovino",
+                "cliente_nome": "A",
+                "preco_unit": 19.0,
+            }
+        ],
     )
+
+    assert "REIMPRESSÃO" in ticket
+    assert "CLIENTE: A" in ticket
+    assert "1x HAMBÚRGUER BOVINO" in ticket
+    assert "R$ 19,00" in ticket
 
 
 def test_values_receipt_groups_quantity_and_shows_each_person_subtotal():
