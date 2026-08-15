@@ -434,39 +434,44 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                         </button>
                       </div>
 
-                      {/* Action Row 2: + Mais Itens e Fechamento da Mesa */}
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setActiveTab('lancamento')}
-                          className="py-2.5 px-2 bg-koma-raised hover:bg-koma-card border border-koma-border hover:border-emerald-500/30 text-koma-foreground rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
-                        >
-                          <PlusCircle size={14} className="text-emerald-400 shrink-0" />
-                          <span>+ Mais Itens</span>
-                        </button>
+                      {/* Action Row 2: + Mais Itens e Fechamento da Mesa (Dinâmico sem buracos vazios) */}
+                      {(() => {
+                        const canCloseTable = Boolean(onCloseTable && !(activeRole === 'garcom' && !restauranteConfig?.perm_garcom_fechar));
+                        return (
+                          <div className={canCloseTable ? "grid grid-cols-2 gap-2" : "w-full"}>
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab('lancamento')}
+                              className="w-full py-2.5 px-2 bg-koma-raised hover:bg-koma-card border border-koma-border hover:border-emerald-500/30 text-koma-foreground rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                            >
+                              <PlusCircle size={14} className="text-emerald-400 shrink-0" />
+                              <span>+ Mais Itens</span>
+                            </button>
 
-                        {onCloseTable && !(activeRole === 'garcom' && !restauranteConfig?.perm_garcom_fechar) && (
-                          <button
-                            id="close-table-btn-consumo"
-                            onClick={() => {
-                              if (confirmClear) {
-                                onCloseTable();
-                              } else {
-                                setConfirmClear(true);
-                                setTimeout(() => setConfirmClear(false), 4000);
-                              }
-                            }}
-                            className={`py-2.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer font-sans transition-all border ${
-                              confirmClear
-                                ? 'bg-rose-800/40 border-rose-700/50 text-rose-300 animate-pulse'
-                                : 'bg-koma-raised hover:bg-rose-950/30 border-koma-border hover:border-rose-800/40 text-rose-400'
-                            }`}
-                          >
-                            <CheckCircle2 size={13} className="shrink-0" />
-                            <span>{confirmClear ? 'Confirmar Fechar?' : 'Fechar Mesa'}</span>
-                          </button>
-                        )}
-                      </div>
+                            {canCloseTable && (
+                              <button
+                                id="close-table-btn-consumo"
+                                onClick={() => {
+                                  if (confirmClear) {
+                                    onCloseTable();
+                                  } else {
+                                    setConfirmClear(true);
+                                    setTimeout(() => setConfirmClear(false), 4000);
+                                  }
+                                }}
+                                className={`py-2.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer font-sans transition-all border ${
+                                  confirmClear
+                                    ? 'bg-rose-800/40 border-rose-700/50 text-rose-300 animate-pulse'
+                                    : 'bg-koma-raised hover:bg-rose-950/30 border-koma-border hover:border-rose-800/40 text-rose-400'
+                                }`}
+                              >
+                                <CheckCircle2 size={13} className="shrink-0" />
+                                <span>{confirmClear ? 'Confirmar Fechar?' : 'Fechar Mesa'}</span>
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })()}
 
                       {/* Transfer / Merge Quick Actions */}
                       <div className="flex items-center gap-2 pt-0.5">
