@@ -1,4 +1,5 @@
 from typing import List
+from ...timezone_utils import get_operational_now
 from .models import OrderPrintData
 from .types import PaperWidth
 from .grouping import group_items_by_customer, group_equivalent_items, normalize_observation
@@ -56,6 +57,7 @@ def format_production_document(data: OrderPrintData, width: PaperWidth = PaperWi
     """
     w = width.value if isinstance(width, PaperWidth) else int(width)
     lines: List[str] = []
+    now = get_operational_now()
 
     restaurante = (data.restaurante_nome or "KÔMA").upper()
     lines.append(_center(restaurante, w))
@@ -89,13 +91,10 @@ def format_production_document(data: OrderPrintData, width: PaperWidth = PaperWi
     elif mesa_str:
         lines.append(mesa_str)
 
-    horario_str = data.horario or ""
-    if data.garcom_nome and horario_str:
-        lines.append(_justify(f"GARÇOM: {data.garcom_nome}", f"HORA: {horario_str}", w))
-    elif data.garcom_nome:
+    horario_str = data.horario or now.strftime("%H:%M")
+    lines.append(_justify(f"DATA: {now.strftime('%d/%m/%Y')}", f"HORA: {horario_str}", w))
+    if data.garcom_nome:
         lines.append(f"GARÇOM: {data.garcom_nome}")
-    elif horario_str:
-        lines.append(f"HORA: {horario_str}")
 
     lines.append(_separator("-", w))
 
