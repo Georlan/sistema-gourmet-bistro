@@ -305,11 +305,11 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
         </div>
 
         {/* MODAL BODY WITH SCROLL */}
-        <div className="p-2.5 sm:p-5 overflow-y-auto flex-1 text-left">
+        <div className="overflow-y-auto flex-1 text-left p-0">
           
           {/* TAB 1: CONSUMO ATIVO */}
           {activeTab === 'consumo' && (
-            <div className="space-y-4 sm:space-y-6">
+            <div className="p-3 sm:p-5 space-y-4 sm:space-y-6">
               {orders.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-center space-y-3">
                   <div className="p-3.5 bg-koma-panel text-emerald-400 rounded-full border border-koma-border">

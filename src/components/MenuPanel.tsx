@@ -185,7 +185,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
     <div className="relative sm:h-full">
       {/* 1. VIEW: CART (CARRINHO DE COMPRAS) */}
       {view === 'cart' && (
-        <div className="bg-koma-panel sm:border sm:border-koma-border sm:rounded-2xl p-0 sm:p-4 pb-20 sm:pb-4 flex flex-col sm:h-full max-w-2xl mx-auto border-0 rounded-none">
+        <div className="bg-koma-panel sm:border sm:border-koma-border sm:rounded-2xl p-3 sm:p-5 pb-20 sm:pb-5 flex flex-col sm:h-full max-w-2xl mx-auto border-0 rounded-none">
           <div className="flex flex-col sm:h-full justify-between min-h-0 space-y-3">
             
             {/* Cart Header */}
@@ -485,11 +485,11 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
 
       {/* 2. VIEW: MENU (CARDÁPIO DE PRODUTOS) */}
       {view === 'menu' && (
-        <div className="flex flex-col justify-between max-w-4xl mx-auto bg-koma-panel sm:border sm:border-koma-border sm:rounded-3xl p-2 sm:p-4 border-0 rounded-none">
-          <div className="space-y-2.5">
+        <div className="flex flex-col justify-between max-w-4xl mx-auto bg-koma-panel sm:border sm:border-koma-border sm:rounded-3xl p-0 border-0 rounded-none">
+          <div>
             
-            {/* Sticky Search & Direct 1-Touch Categories Bar */}
-            <div className="sticky top-0 z-30 bg-koma-panel -mx-2 -mt-2 px-2 pt-2 pb-2 border-b border-koma-border space-y-2 shadow-sm">
+            {/* Sticky Search & Direct 1-Touch Categories Bar (FLUSH TOP ZERO GAP) */}
+            <div className="sticky top-0 z-30 bg-koma-panel px-3 sm:px-5 pt-2.5 pb-2 border-b border-koma-border space-y-2 shadow-sm">
               {/* Search Bar + Settings View Toggle */}
               <div className="flex items-center gap-2">
                 <div className="relative flex-1">
@@ -580,7 +580,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
             </div>
 
             {/* Scrollable Products List grouped by Categories */}
-            <div className="flex flex-col gap-4 sm:gap-6 sm:max-h-[50vh] sm:overflow-y-auto max-h-none overflow-y-visible sm:pr-1">
+            <div className="p-3 sm:p-5 flex flex-col gap-4 sm:gap-6 sm:max-h-[50vh] sm:overflow-y-auto max-h-none overflow-y-visible sm:pr-1">
               {(() => {
                 let totalRendered = 0;
                 const productsList = liveProdutos.filter((product) => product.ativo !== false);
