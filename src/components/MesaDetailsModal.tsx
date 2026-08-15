@@ -344,12 +344,12 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                             <div className="flex flex-wrap gap-1.5 pb-0.5">
                               {transferOrigin && (
                                 <span className="px-2 py-0.5 text-[9px] bg-purple-500/20 text-purple-300 border border-purple-500/35 rounded-md font-sans font-bold uppercase tracking-wider">
-                                  🔗 Transf. de Mesa {transferOrigin}
+                                  Transf. da Mesa {transferOrigin}
                                 </span>
                               )}
                               {mergedOrigins.map(mId => (
                                 <span key={mId} className="px-2 py-0.5 text-[9px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/35 rounded-md font-sans font-bold uppercase tracking-wider">
-                                  🔀 Mesclada com Mesa {mId}
+                                  Mesclada com Mesa {mId}
                                 </span>
                               ))}
                             </div>
@@ -372,7 +372,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                             </div>
                             {hasTax && (
                               <div className="flex justify-between items-baseline font-sans text-xs text-koma-subtle">
-                                <span className="font-bold uppercase tracking-wider">Taxa Serviço ({taxRate}%):</span>
+                                <span className="font-bold uppercase tracking-wider">Taxa de Serviço ({taxRate}%):</span>
                                 <span className="font-mono font-medium">R$ {taxVal.toFixed(2)}</span>
                               </div>
                             )}
@@ -404,7 +404,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                               setIsPrintingDirect(true);
                               try {
                                 await onPrintReceipt(true);
-                                setDirectPrintToast('🖨️ Apenas Valores impresso com sucesso!');
+                                setDirectPrintToast('Impressão enviada com sucesso.');
                                 setTimeout(() => setDirectPrintToast(''), 3000);
                               } catch (e) {
                                 console.error(e);
@@ -434,7 +434,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                         </button>
                       </div>
 
-                      {/* Action Row 2: + Mais Itens e Fechamento da Mesa (Dinâmico sem buracos vazios) */}
+                      {/* Action Row 2: Adicionar Itens e Fechamento da Mesa (Dinâmico sem buracos vazios) */}
                       {(() => {
                         const canCloseTable = Boolean(onCloseTable && !(activeRole === 'garcom' && !restauranteConfig?.perm_garcom_fechar));
                         return (
@@ -445,7 +445,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                               className="w-full py-2.5 px-2 bg-koma-raised hover:bg-koma-card border border-koma-border hover:border-emerald-500/30 text-koma-foreground rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
                             >
                               <PlusCircle size={14} className="text-emerald-400 shrink-0" />
-                              <span>+ Mais Itens</span>
+                              <span>Adicionar Itens</span>
                             </button>
 
                             {canCloseTable && (
@@ -466,7 +466,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                                 }`}
                               >
                                 <CheckCircle2 size={13} className="shrink-0" />
-                                <span>{confirmClear ? 'Confirmar Fechar?' : 'Fechar Mesa'}</span>
+                                <span>{confirmClear ? 'Confirmar Fechamento?' : 'Fechar Mesa'}</span>
                               </button>
                             )}
                           </div>
@@ -1041,7 +1041,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
             <div className="flex-1 overflow-y-auto bg-koma-page border border-koma-border rounded-2xl p-5 font-mono text-[11px] text-koma-muted space-y-4 shadow-inner max-h-[50vh] scrollbar-thin">
               <div className="text-center space-y-1 border-b border-dashed border-koma-border pb-3">
                 <p className="font-serif font-bold text-base text-koma-foreground tracking-tight">{restaurantName.toUpperCase()}</p>
-                <p className="text-[9px] text-emerald-700 dark:text-emerald-400 leading-normal font-sans">Mesa de Atendimento de Excelência</p>
+                <p className="text-[9px] text-emerald-700 dark:text-emerald-400 leading-normal font-sans">Conferência de Mesa</p>
               </div>
 
               <div className="space-y-1 border-b border-dashed border-koma-border pb-3">
@@ -1053,7 +1053,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
               {/* Items List */}
               <div className="space-y-2 border-b border-dashed border-koma-border pb-3">
                 <div className="flex justify-between font-bold text-[9px] text-koma-subtle uppercase font-sans tracking-wider pb-1">
-                  <span>IGUARIA</span>
+                  <span>ITEM</span>
                   <span>PREÇO</span>
                 </div>
                 
@@ -1151,7 +1151,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                       </div>
                       {hasTax && (
                         <div className="flex justify-between">
-                          <span>Taxa Serviço ({taxRate}%):</span>
+                          <span>Taxa de Serviço ({taxRate}%):</span>
                           <span className="font-mono">R$ {taxVal.toFixed(2)}</span>
                         </div>
                       )}
@@ -1165,15 +1165,15 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
               </div>
 
               <div className="text-center pt-3 border-t border-dashed border-koma-border text-[9px] text-koma-subtle font-sans">
-                <p>Obrigado pelo seu consumo!</p>
-                <p>Documento para conferência interna</p>
+                <p>Conferência de mesa</p>
+                <p>Não é documento fiscal</p>
               </div>
             </div>
 
             {/* Print Status Feedback */}
             {printSuccess && (
               <div className="bg-emerald-600/15 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-900/40 text-emerald-800 dark:text-emerald-300 p-2.5 rounded-xl text-center text-[10px] font-bold font-sans uppercase tracking-wider">
-                Impressão enviada com sucesso!
+                Impressão enviada com sucesso.
               </div>
             )}
 

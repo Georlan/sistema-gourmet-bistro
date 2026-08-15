@@ -1393,7 +1393,7 @@ export default function App() {
     setSelectedTableId(null);
 
     // Exibe toast informativo inicial
-    showToast('🚀 Enviando pedido para a cozinha...', 'info');
+    showToast('Enviando pedido para a cozinha...', 'info');
 
     const restoreDraftAndNotify = (errorMessage?: string) => {
       // Restaura o rascunho da mesa no estado e no localStorage
@@ -1408,8 +1408,8 @@ export default function App() {
       // Notifica o garçom
       showToast(
         errorMessage
-          ? `⚠️ ${errorMessage} Seu pedido foi preservado na mesa.`
-          : '⚠️ Conexão oscilou. Seu pedido foi preservado na mesa para reenviar!',
+          ? `${errorMessage}. Pedido preservado na mesa.`
+          : 'Falha de conexão. Pedido preservado na mesa para reenviar.',
         'error'
       );
     };
@@ -1466,9 +1466,9 @@ export default function App() {
 
       const launchData = await launchRes.json();
       if (launchData.dispensado_impressao) {
-        showToast('✅ Pedido registrado! (Itens sem impressão física)', 'info');
+        showToast('Pedido registrado (sem impressão física).', 'info');
       } else {
-        showToast('✅ Pedido enviado para a cozinha com sucesso!', 'success');
+        showToast('Pedido lançado para a cozinha com sucesso.', 'success');
       }
 
       // Sync real com dados do servidor (substitui itens otimistas pelos reais com IDs corretos)
@@ -1579,7 +1579,7 @@ export default function App() {
     // 0ms: remove a mesa do estado local imediatamente
     setOrders(prev => prev.filter(o => o.mesaId !== mesaId));
     setSelectedTableId(null);
-    showToast(`✅ Mesa ${mesaId} encerrada e liberada!`, 'success');
+    showToast(`Mesa ${mesaId} encerrada e liberada.`, 'success');
 
     try {
       for (const comanda of tableComandas) {
@@ -1652,7 +1652,7 @@ export default function App() {
         showToast(`Erro ao liquidar comanda do cliente: ${errData.detail}`, 'error');
         return;
       }
-      showToast(`✅ Consumo de "${customerName}" liquidado!`, 'success');
+      showToast(`Consumo de "${customerName}" liquidado com sucesso.`, 'success');
       fetchOrdersFromAPI();
     } catch (err) {
       console.error(err);
@@ -1768,7 +1768,7 @@ export default function App() {
   const handleTransferItem = async (itemId: string, targetTableId: number) => {
     // 0ms: remove item da mesa origem imediatamente
     setOrders(prev => prev.map(o => ({ ...o, itens: o.itens.filter(it => it.id !== itemId) })));
-    showToast(`✅ Item transferido para a Mesa ${targetTableId}!`, 'success');
+    showToast(`Item transferido para a Mesa ${targetTableId}.`, 'success');
 
     try {
       const res = await fetch(`${API_BASE_URL}/comandas/itens/${itemId}/transferir/${targetTableId}`, {
@@ -1793,7 +1793,7 @@ export default function App() {
     // 0ms: remove itens da mesa origem imediatamente
     const idSet = new Set(itemIds);
     setOrders(prev => prev.map(o => ({ ...o, itens: o.itens.filter(it => !idSet.has(it.id)) })));
-    showToast(`✅ ${itemIds.length} item(ns) transferido(s) para a Mesa ${targetTableId}!`, 'success');
+    showToast(`${itemIds.length} itens transferidos para a Mesa ${targetTableId}.`, 'success');
 
     try {
       let failMessage = "";
@@ -1822,7 +1822,7 @@ export default function App() {
   const handleCancelItem = async (itemId: string) => {
     // 0ms: remove item do estado local imediatamente
     setOrders(prev => prev.map(o => ({ ...o, itens: o.itens.filter(it => it.id !== itemId) })));
-    showToast('✅ Item cancelado!', 'success');
+    showToast('Item cancelado.', 'success');
 
     try {
       const res = await fetch(`${API_BASE_URL}/comandas/itens/${itemId}/cancelar`, {
@@ -1851,7 +1851,7 @@ export default function App() {
         it.id === itemId ? { ...it, observacao, clienteNome } : it
       )
     })));
-    showToast('✅ Item atualizado!', 'success');
+    showToast('Item atualizado.', 'success');
 
     try {
       const res = await fetch(`${API_BASE_URL}/comandas/itens/${itemId}`, {

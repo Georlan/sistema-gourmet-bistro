@@ -203,7 +203,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                 className="min-h-8 px-3 py-1 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold rounded-xl transition-colors cursor-pointer flex items-center gap-1 shrink-0 shadow-sm"
               >
                 <Plus size={13} />
-                <span>+ Adicionar</span>
+                <span>Adicionar</span>
               </button>
             </div>
 
