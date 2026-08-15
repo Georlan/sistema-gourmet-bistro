@@ -490,43 +490,40 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
 
       {/* 2. VIEW: MENU (CARDÁPIO DE PRODUTOS) */}
       {view === 'menu' && (
-        <div className="lg:col-span-12 flex flex-col justify-between max-w-4xl mx-auto bg-koma-panel sm:border sm:border-koma-border sm:rounded-3xl p-3 sm:p-5 sm:min-h-[450px] border-0 rounded-none">
-          <div className="space-y-3 sm:space-y-4">
+        <div className="flex flex-col justify-between max-w-4xl mx-auto bg-koma-panel sm:border sm:border-koma-border sm:rounded-3xl p-2 sm:p-4 border-0 rounded-none">
+          <div className="space-y-2.5">
             
-            {/* Header: Title and Back button */}
-            <div className="sticky top-0 z-40 -mx-3 -mt-3 flex items-center justify-between gap-3 border-b border-koma-border bg-koma-panel px-3 pb-3 pt-3 shadow-[0_8px_18px_rgba(0,0,0,0.28)] sm:static sm:mx-0 sm:mt-0 sm:bg-transparent sm:px-0 sm:pt-0 sm:shadow-none">
-              <div className="min-w-0">
-                <div>
-                  <h3 className="font-serif text-lg sm:text-xl font-bold text-koma-foreground tracking-tight">Adicionar itens</h3>
-                  <p className="text-[11px] sm:text-xs text-koma-subtle font-sans">Pedido da Mesa {tableId}</p>
+            {/* Sticky Search & Direct 1-Touch Categories Bar */}
+            <div className="sticky top-0 z-30 bg-koma-panel -mx-2 -mt-2 px-2 pt-2 pb-2 border-b border-koma-border space-y-2 shadow-sm">
+              {/* Search Bar + Settings View Toggle */}
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-koma-subtle" />
+                  <input
+                    id="search-products-input"
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Buscar no cardápio..."
+                    className="w-full pl-9 pr-7 py-2 text-xs sm:text-sm bg-koma-input border border-koma-border rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-koma-foreground placeholder:text-zinc-500"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-2.5 top-2.5 text-koma-subtle hover:text-koma-foreground cursor-pointer"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
                 </div>
-              </div>
 
-              <div className="flex items-center gap-1.5 shrink-0">
-                <button
-                  type="button"
-                  onClick={openCartReview}
-                  className={`min-h-10 px-3 py-2 text-xs font-bold rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 shadow-sm border ${
-                    totalDraftQty > 0
-                      ? 'bg-emerald-500 text-zinc-950 border-emerald-400 hover:bg-emerald-400'
-                      : 'bg-koma-raised text-koma-foreground border-koma-border hover:bg-koma-card'
-                  }`}
-                >
-                  <ShoppingCart size={14} />
-                  <span>Revisar</span>
-                  <span className={`font-mono text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-0.5 ${
-                    totalDraftQty > 0 ? 'bg-black/15 text-black' : 'bg-koma-input text-koma-muted'
-                  }`}>
-                    {totalDraftQty}
-                  </span>
-                </button>
-                
                 {/* Settings Toggle */}
-                <div className="relative">
+                <div className="relative shrink-0">
                   <button
                     id="toggle-menu-settings"
                     onClick={() => setShowSettings(!showSettings)}
-                    className="min-h-10 p-2.5 text-koma-subtle hover:text-koma-foreground bg-koma-raised hover:bg-koma-card rounded-xl transition-colors cursor-pointer border border-koma-border"
+                    className="min-h-9 p-2 text-koma-subtle hover:text-koma-foreground bg-koma-card hover:bg-koma-raised rounded-xl transition-colors cursor-pointer border border-koma-border"
                     title="Ajustar visualização"
                     aria-label="Ajustar visualização"
                   >
@@ -534,9 +531,9 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                   </button>
 
                   {showSettings && (
-                    <div className="absolute right-0 top-full mt-2 w-56 bg-koma-dialog border border-koma-border shadow-xl rounded-xl p-3.5 z-30 space-y-2.5">
-                      <span className="block text-[10px] font-sans font-bold text-koma-subtle mb-1 uppercase tracking-wider">Ajustes da Tela</span>
-                      <label className="flex items-center justify-between text-xs text-koma-muted cursor-pointer p-1.5 rounded hover:bg-koma-raised">
+                    <div className="absolute right-0 top-full mt-2 w-52 bg-koma-dialog border border-koma-border shadow-2xl rounded-2xl p-3 z-50 space-y-2">
+                      <span className="block text-[10px] font-sans font-bold text-koma-subtle uppercase tracking-wider">Ajustes da Tela</span>
+                      <label className="flex items-center justify-between text-xs text-koma-muted cursor-pointer p-1.5 rounded-lg hover:bg-koma-raised">
                         <span>Exibir imagens</span>
                         <input
                           id="toggle-images-setting"
@@ -546,7 +543,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                           className="rounded border-koma-border text-emerald-400 focus:ring-emerald-500 h-4 w-4 bg-koma-input"
                         />
                       </label>
-                      <label className="flex items-center justify-between text-xs text-koma-muted cursor-pointer p-1.5 rounded hover:bg-koma-raised">
+                      <label className="flex items-center justify-between text-xs text-koma-muted cursor-pointer p-1.5 rounded-lg hover:bg-koma-raised">
                         <span>Exibir descrições</span>
                         <input
                           id="toggle-desc-setting"
@@ -560,44 +557,9 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                   )}
                 </div>
               </div>
-            </div>
 
-            {/* Search & Categories */}
-            <div className="bg-koma-panel pt-1 pb-1.5 space-y-2.5">
-              <div className="relative">
-                <Search className="absolute left-3.5 top-3.5 h-4 w-4 text-koma-subtle" />
-                <input
-                  id="search-products-input"
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Buscar no cardápio..."
-                  className="w-full pl-10 pr-4 py-2.5 text-sm bg-koma-input border border-koma-border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-koma-foreground placeholder:text-zinc-500"
-                />
-              </div>
-
-              {/* No celular, o seletor evita uma faixa horizontal difícil de
-                  controlar. Os chips permanecem disponíveis em telas maiores. */}
-              <label className="block sm:hidden">
-                <span className="sr-only">Categoria</span>
-                <select
-                  id="mobile-category-select"
-                  value={selectedCategory}
-                  onChange={(event) => {
-                    setSelectedCategory(event.target.value);
-                    setSearchQuery('');
-                    const element = document.getElementById(`category-sec-${event.target.value.toLowerCase().replace(/\s+/g, '-')}`);
-                    element?.scrollIntoView({ block: 'start' });
-                  }}
-                  className="w-full min-h-11 px-3 bg-koma-card border border-koma-border rounded-xl text-sm font-semibold text-koma-foreground focus:outline-none focus:border-emerald-500"
-                >
-                  {categoriesList.map((category) => (
-                    <option key={category.id} value={category.nome}>{category.nome}</option>
-                  ))}
-                </select>
-              </label>
-
-              <div className="hidden sm:flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+              {/* Direct 1-Touch Horizontal Category Chips Carousel (Mobile & Desktop) */}
+              <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none no-scrollbar -mx-0.5 px-0.5">
                 {categoriesList.map((catObj) => (
                   <button
                     key={catObj.id}
@@ -607,10 +569,10 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                       setSearchQuery('');
                       setTimeout(() => {
                         const element = document.getElementById(`category-sec-${catObj.nome.toLowerCase().replace(/\s+/g, '-')}`);
-                        element?.scrollIntoView({ block: 'start' });
+                        element?.scrollIntoView({ block: 'start', behavior: 'smooth' });
                       }, 50);
                     }}
-                    className={`px-4 py-2 text-xs font-bold rounded-xl whitespace-nowrap transition-all cursor-pointer ${
+                    className={`px-3 py-1.5 text-xs font-bold rounded-xl whitespace-nowrap transition-all cursor-pointer shrink-0 ${
                       selectedCategory === catObj.nome
                         ? 'bg-emerald-500 text-zinc-950 shadow-md font-extrabold'
                         : 'bg-koma-card hover:bg-koma-raised text-koma-muted hover:text-koma-foreground border border-koma-border'
