@@ -408,7 +408,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                               <button
                                 type="button"
                                 onClick={() => setSelectedOrderToPrint(order)}
-                                className="px-2.5 py-1 bg-koma-raised hover:bg-[#10b981]/20 text-koma-muted hover:text-koma-foreground border border-koma-border hover:border-emerald-500/30 rounded-lg text-[10px] font-sans font-semibold transition-all cursor-pointer flex items-center gap-1 shadow-sm"
+                                className="px-2.5 py-1 bg-koma-raised hover:bg-emerald-500/15 text-koma-muted hover:text-koma-foreground border border-koma-border hover:border-emerald-500/30 rounded-lg text-[10px] font-sans font-semibold transition-all cursor-pointer flex items-center gap-1 shadow-sm"
                                 title="Reimprimir este lote de pedidos"
                               >
                                 <Printer size={11} className="text-emerald-700 dark:text-emerald-400" />
@@ -825,8 +825,8 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                             !hasSelected
                               ? 'bg-koma-panel/40 border-koma-border/40 text-gray-600 cursor-not-allowed'
                               : isConfirming
-                                ? 'bg-rose-900/40 border border-rose-800/50 border-rose-900/50 animate-pulse text-koma-foreground cursor-pointer hover:scale-102'
-                                : 'bg-koma-panel hover:bg-emerald-500/15 border border-koma-border hover:border-[#10b981] text-koma-foreground cursor-pointer hover:scale-102'
+                                ? 'bg-amber-500/20 border border-amber-500/40 animate-pulse text-amber-300 cursor-pointer hover:scale-102 font-bold'
+                                : 'bg-koma-panel hover:bg-emerald-500/15 border border-koma-border hover:border-emerald-500/40 text-koma-foreground cursor-pointer hover:scale-102'
                           }`}
                         >
                           <span className={`text-base font-bold ${hasSelected ? 'text-koma-foreground group-hover:text-emerald-700 dark:text-emerald-400' : 'text-gray-600'}`}>

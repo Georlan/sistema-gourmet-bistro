@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Search, Plus, Minus, Trash2, SlidersHorizontal, ArrowRight, FileText, Info, ShoppingCart, X } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, SlidersHorizontal, ArrowRight, FileText, Info, ShoppingCart, X, Edit3, Check } from 'lucide-react';
 import { Product, DraftItem, AppSettings, Order } from '../types';
 import { getProductPresets, obterNomeCategoria, smartSearchMatch } from '../domain';
 import type { CatalogCategory } from '../catalog/catalog';
@@ -155,6 +155,26 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
     onAddToDraft(selectedProductToConfigure, configQty, configObs, configClient);
     setSelectedProductToConfigure(null);
     openCartReview();
+  };
+
+  // Adição rápida com 1 toque direto no card
+  const handleQuickAdd = (product: Product, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const defaultClient = draftItems.length > 0 ? (draftItems[0].clienteNome || '') : '';
+    onAddToDraft(product, 1, '', defaultClient);
+  };
+
+  // Redução rápida de quantidade direto no card
+  const handleQuickSubtract = (product: Product, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const matching = draftItems.filter(item => item.produtoId === product.id);
+    if (matching.length === 0) return;
+    const lastItem = matching[matching.length - 1];
+    if ((lastItem.quantidade || 1) > 1) {
+      onUpdateDraftItem(lastItem.id, { quantidade: (lastItem.quantidade || 1) - 1 });
+    } else {
+      onRemoveFromDraft(lastItem.id);
+    }
   };
 
   // Total draft count and price
@@ -366,7 +386,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                                   }}
                                   className={`px-2 py-0.5 text-[9px] rounded border transition-colors font-medium cursor-pointer ${
                                     isActive 
-                                      ? 'bg-[#10b981]/20 border-[#10b981]/40 text-emerald-700 dark:text-emerald-400'
+                                      ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-700 dark:text-emerald-400 font-bold'
                                       : 'bg-koma-raised hover:bg-emerald-500/15 text-koma-muted hover:text-koma-foreground border-koma-border'
                                   }`}
                                 >
@@ -569,7 +589,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                     const element = document.getElementById(`category-sec-${event.target.value.toLowerCase().replace(/\s+/g, '-')}`);
                     element?.scrollIntoView({ block: 'start' });
                   }}
-                  className="w-full min-h-11 px-3 bg-koma-card border border-koma-border rounded-xl text-sm font-semibold text-koma-foreground focus:outline-none focus:border-[#10b981]"
+                  className="w-full min-h-11 px-3 bg-koma-card border border-koma-border rounded-xl text-sm font-semibold text-koma-foreground focus:outline-none focus:border-emerald-500"
                 >
                   {categoriesList.map((category) => (
                     <option key={category.id} value={category.nome}>{category.nome}</option>
@@ -631,13 +651,20 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                       <h4 className="font-serif text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider border-b border-koma-border pb-1.5 pt-1">
                         {catObj.nome}
                       </h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 sm:gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 sm:gap-4 pb-20 sm:pb-4">
                         {categoryProducts.map((product) => {
+                          const matchingDraftItems = draftItems.filter((it) => it.produtoId === product.id);
+                          const currentCountInDraft = matchingDraftItems.reduce((acc, it) => acc + (it.quantidade || 1), 0);
+
                           return (
                           <div
                             key={product.id}
                             id={`product-card-${product.id}`}
-                            className="bg-koma-card border border-koma-border hover:border-emerald-500/30 rounded-xl sm:rounded-2xl p-3 sm:p-4 flex flex-col justify-between group cursor-pointer"
+                            className={`border rounded-xl sm:rounded-2xl p-3 sm:p-4 flex flex-col justify-between group cursor-pointer transition-all ${
+                              currentCountInDraft > 0
+                                ? 'bg-emerald-500/10 border-emerald-500/40 shadow-sm'
+                                : 'bg-koma-card border-koma-border hover:border-emerald-500/30'
+                            }`}
                             onClick={() => handleOpenConfig(product)}
                           >
                             <div className="space-y-2 sm:space-y-3">
@@ -677,17 +704,70 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                               </div>
                             </div>
 
-                            <button
-                              id={`add-product-btn-${product.id}`}
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenConfig(product);
-                              }}
-                              className="mt-2.5 sm:mt-4 w-full min-h-10 flex items-center justify-center gap-1 py-2 text-xs font-bold rounded-xl transition-colors border bg-koma-card hover:bg-[#10b981]/20 text-emerald-700 dark:text-emerald-400 cursor-pointer border-koma-border"
-                            >
-                              <Plus size={13} /><span>Adicionar</span>
-                            </button>
+                            {/* Controles de Adição Rápida e Personalização */}
+                            <div className="mt-2.5 sm:mt-4 pt-2 border-t border-koma-border/60">
+                              {currentCountInDraft > 0 ? (
+                                <div className="flex items-center justify-between gap-1.5">
+                                  <div className="flex items-center gap-1 bg-koma-input rounded-xl border border-emerald-500/30 p-0.5 shadow-sm">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => handleQuickSubtract(product, e)}
+                                      className="p-1.5 hover:bg-koma-raised text-koma-secondary hover:text-rose-400 rounded-lg transition-colors cursor-pointer"
+                                      title="Diminuir quantidade"
+                                    >
+                                      <Minus size={13} />
+                                    </button>
+                                    <span className="font-mono text-xs font-extrabold text-emerald-700 dark:text-emerald-400 px-2 min-w-[1.75rem] text-center">
+                                      {currentCountInDraft}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => handleQuickAdd(product, e)}
+                                      className="p-1.5 hover:bg-koma-raised text-koma-secondary hover:text-emerald-400 rounded-lg transition-colors cursor-pointer"
+                                      title="Adicionar mais um"
+                                    >
+                                      <Plus size={13} />
+                                    </button>
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleOpenConfig(product);
+                                    }}
+                                    className="min-h-9 px-2.5 py-1.5 flex items-center gap-1 bg-koma-raised hover:bg-emerald-500/15 border border-koma-border hover:border-emerald-500/30 text-koma-muted hover:text-koma-foreground text-[11px] font-bold rounded-xl transition-all cursor-pointer"
+                                    title="Personalizar (Obs de cozinha / Cliente)"
+                                  >
+                                    <Edit3 size={12} className="text-amber-400" />
+                                    <span>Obs</span>
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    id={`add-product-btn-${product.id}`}
+                                    type="button"
+                                    onClick={(e) => handleQuickAdd(product, e)}
+                                    className="flex-1 min-h-10 flex items-center justify-center gap-1 py-2 text-xs font-bold rounded-xl transition-all border bg-emerald-500 hover:bg-emerald-400 text-zinc-950 shadow-sm border-emerald-400 cursor-pointer active:scale-95"
+                                  >
+                                    <Plus size={14} />
+                                    <span>Adicionar</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleOpenConfig(product);
+                                    }}
+                                    className="min-h-10 px-3 flex items-center justify-center bg-koma-raised hover:bg-koma-card border border-koma-border text-koma-subtle hover:text-koma-foreground rounded-xl transition-all cursor-pointer"
+                                    title="Personalizar (Obs / Cliente)"
+                                  >
+                                    <Edit3 size={14} />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         );})}
                       </div>
@@ -708,6 +788,36 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                 return renderedSections;
               })()}
             </div>
+
+            {/* STICKY BOTTOM CART BAR (MOBILE & SALÃO) */}
+            {view === 'menu' && totalDraftQty > 0 && (
+              <div className="sticky bottom-0 left-0 right-0 z-40 -mx-3 -mb-3 sm:-mx-5 sm:-mb-5 p-3 bg-koma-panel/95 backdrop-blur-md border-t border-koma-border shadow-[0_-8px_24px_rgba(0,0,0,0.35)] animate-slide-up">
+                <div className="flex items-center justify-between gap-3 max-w-2xl mx-auto">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="h-10 w-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold shrink-0 font-mono text-sm shadow-sm">
+                      {totalDraftQty}
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-xs font-bold text-koma-foreground block truncate">
+                        {totalDraftQty} {totalDraftQty === 1 ? 'item selecionado' : 'itens no pedido'}
+                      </span>
+                      <span className="text-xs font-bold font-mono text-emerald-400 block">
+                        R$ {draftTotal.toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={openCartReview}
+                    className="min-h-11 px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-zinc-950 text-xs font-extrabold rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-lg shadow-emerald-900/30 border border-emerald-400 shrink-0"
+                  >
+                    <span>Revisar Pedido</span>
+                    <ArrowRight size={15} />
+                  </button>
+                </div>
+              </div>
+            )}
 
           </div>
         </div>
@@ -858,7 +968,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                           onClick={() => setConfigClient(name)}
                           className={`px-2 py-0.5 text-[9px] border rounded transition-colors font-medium cursor-pointer ${
                             configClient === name
-                              ? 'bg-[#10b981]/20 text-emerald-700 dark:text-emerald-400 border-[#10b981]/40'
+                              ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/40 font-bold'
                               : 'bg-koma-raised hover:bg-emerald-500/15 text-koma-muted hover:text-koma-foreground border-koma-border'
                           }`}
                         >
@@ -884,9 +994,9 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
               <button
                 type="button"
                 onClick={handleConfirmAdd}
-                className="flex-1 py-2.5 bg-rose-900/40 border border-rose-800/50 hover:bg-[#601823] text-koma-foreground text-xs font-bold rounded-xl transition-all cursor-pointer text-center shadow-lg shadow-[#f43f5e]/10"
+                className="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-400 border border-emerald-400 text-zinc-950 text-xs font-extrabold rounded-xl transition-all cursor-pointer text-center shadow-md shadow-emerald-900/30 active:scale-95"
               >
-                Confirmar
+                Adicionar ao Pedido
               </button>
             </div>
 
