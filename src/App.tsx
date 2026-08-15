@@ -1392,8 +1392,27 @@ export default function App() {
     });
     setSelectedTableId(null);
 
-    // Exibe toast imediatamente
-    showToast('✅ Pedido enviado para a cozinha!', 'success');
+    // Exibe toast informativo inicial
+    showToast('🚀 Enviando pedido para a cozinha...', 'info');
+
+    const restoreDraftAndNotify = (errorMessage?: string) => {
+      // Restaura o rascunho da mesa no estado e no localStorage
+      setDrafts(prev => ({
+        ...prev,
+        [mesaId]: items
+      }));
+      // Reabre a mesa com o carrinho preservado para o garçom reenviar com 1 clique
+      setSelectedTableId(mesaId);
+      // Rollback dos itens otimistas na memória
+      fetchOrdersFromAPI();
+      // Notifica o garçom
+      showToast(
+        errorMessage
+          ? `⚠️ ${errorMessage} Seu pedido foi preservado na mesa.`
+          : '⚠️ Conexão oscilou. Seu pedido foi preservado na mesa para reenviar!',
+        'error'
+      );
+    };
 
     try {
       const activeComanda = orders.find(o => o.mesaId === mesaId);
@@ -1410,10 +1429,9 @@ export default function App() {
           })
         });
         if (!openRes.ok) {
-          const errData = await openRes.json();
-          showToast(`Erro ao abrir comanda: ${errData.detail || openRes.statusText}`, 'error');
+          const errData = await openRes.json().catch(() => null);
+          restoreDraftAndNotify(errData?.detail || `Falha ao abrir comanda (${openRes.statusText})`);
           setIsSubmitting(false);
-          fetchOrdersFromAPI(); // Rollback
           return;
         }
         const newComanda = await openRes.json();
@@ -1440,9 +1458,8 @@ export default function App() {
         })
       });
       if (!launchRes.ok) {
-        const errData = await launchRes.json();
-        showToast(`Erro ao lançar itens: ${errData.detail || launchRes.statusText}`, 'error');
-        fetchOrdersFromAPI(); // Rollback
+        const errData = await launchRes.json().catch(() => null);
+        restoreDraftAndNotify(errData?.detail || `Falha ao lançar itens (${launchRes.statusText})`);
         setIsSubmitting(false);
         return;
       }
@@ -1450,14 +1467,15 @@ export default function App() {
       const launchData = await launchRes.json();
       if (launchData.dispensado_impressao) {
         showToast('✅ Pedido registrado! (Itens sem impressão física)', 'info');
+      } else {
+        showToast('✅ Pedido enviado para a cozinha com sucesso!', 'success');
       }
 
       // Sync real com dados do servidor (substitui itens otimistas pelos reais com IDs corretos)
       fetchOrdersFromAPI();
     } catch (err) {
       console.error(err);
-      showToast("Erro ao conectar ao servidor para enviar o pedido.", 'error');
-      fetchOrdersFromAPI(); // Rollback
+      restoreDraftAndNotify('Erro de conexão com o servidor.');
     } finally {
       isSubmittingRef.current = false;
       setIsSubmitting(false);

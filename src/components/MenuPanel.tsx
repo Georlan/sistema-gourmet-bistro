@@ -590,9 +590,9 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                         element?.scrollIntoView({ block: 'start' });
                       }, 50);
                     }}
-                    className={`px-4 py-2 text-xs font-semibold rounded-lg whitespace-nowrap transition-all cursor-pointer ${
+                    className={`px-4 py-2 text-xs font-bold rounded-xl whitespace-nowrap transition-all cursor-pointer ${
                       selectedCategory === catObj.nome
-                        ? 'bg-rose-900/40 border border-rose-800/50 text-koma-foreground shadow-md'
+                        ? 'bg-emerald-500 text-zinc-950 shadow-md font-extrabold'
                         : 'bg-koma-card hover:bg-koma-raised text-koma-muted hover:text-koma-foreground border border-koma-border'
                     }`}
                   >
