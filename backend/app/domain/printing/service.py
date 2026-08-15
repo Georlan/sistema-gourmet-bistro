@@ -7,32 +7,57 @@ from .production_formatter import format_production_document
 from .closing_formatter import format_closing_document
 from .delivery_formatter import format_delivery_document
 
+
+def _resolve_restaurant_name(current_name: str) -> str:
+    """Substitui o placeholder Kôma pelo nome configurado do tenant atual."""
+    name = (current_name or "").strip()
+    if name.casefold() not in {"kôma", "koma"}:
+        return name or "KÔMA"
+
+    db = None
+    try:
+        from sqlalchemy.orm import joinedload
+        from ...database import SessionLocal, current_restaurante_id
+        from ...models import ConfiguracaoRestaurante
+
+        restaurante_id = current_restaurante_id.get()
+        if not restaurante_id:
+            return name or "KÔMA"
+        db = SessionLocal(restaurante_id=restaurante_id)
+        config = (
+            db.query(ConfiguracaoRestaurante)
+            .options(joinedload(ConfiguracaoRestaurante.restaurante))
+            .filter(ConfiguracaoRestaurante.restaurante_id == restaurante_id)
+            .first()
+        )
+        if config:
+            return (
+                config.impressao_nome_restaurante
+                or (config.restaurante.nome if config.restaurante else None)
+                or name
+                or "KÔMA"
+            )
+    except Exception:
+        pass
+    finally:
+        if db is not None:
+            db.close()
+    return name or "KÔMA"
+
+
 class PrintDocumentService:
-    """
-    Serviço central unificado de geração de documentos de impressão do Kôma.
-    Fonte oficial de regras de impressão no backend.
-    """
+    """Serviço central de geração dos documentos de impressão do Kôma."""
 
     @staticmethod
     def group_items_by_print_destination(items: List[PrintItem]) -> Dict[str, List[PrintItem]]:
-        """
-        Agrupa itens pelo seu destino de impressão de categoria.
-        Destinos NENHUM são ignorados e não entram no resultado.
-        """
         return group_items_by_print_destination(items)
 
     @staticmethod
     def group_items_by_customer(items: List[PrintItem]) -> Dict[str, List[PrintItem]]:
-        """
-        Agrupa itens por cliente identificado.
-        """
         return group_items_by_customer(items)
 
     @staticmethod
     def group_equivalent_items(items: List[PrintItem], match_observations: bool = True) -> List[PrintItem]:
-        """
-        Soma quantidades de itens equivalentes.
-        """
         return group_equivalent_items(items, match_observations=match_observations)
 
     @staticmethod
@@ -40,27 +65,17 @@ class PrintDocumentService:
         order: Union[OrderPrintData, dict],
         width: Union[PaperWidth, int] = PaperWidth.WIDTH_80MM
     ) -> Optional[Dict[str, str]]:
-        """
-        Gera os documentos de PRODUÇÃO agrupados por destino de preparação (ex: COZINHA, BAR).
-        
-        REGRA CRÍTICA:
-        1. Filtra itens por categoria com destino != NENHUM.
-        2. Se nenhum item for de produção (ex: apenas bebidas NENHUM), retorna None (Nenhum documento gerado).
-        3. Se houver itens de produção, retorna um dicionário { "COZINHA": "texto...", "BAR": "texto..." }.
-        """
+        """Gera vias de produção por destino, descartando itens NENHUM."""
         parsed_order = PrintDocumentService._parse_order_data(order)
-        
-        # Roteia os itens pelos seus destinos de produção (descarta NENHUM)
+        parsed_order.restaurante_nome = _resolve_restaurant_name(
+            parsed_order.restaurante_nome
+        )
         destinations_map = group_items_by_print_destination(parsed_order.itens)
-
         if not destinations_map:
-            # Nenhum item de produção neste pedido
             return None
 
         result_docs: Dict[str, str] = {}
-
         for dest_name, dest_items in destinations_map.items():
-            # Cria cópia do pedido apenas com os itens deste destino específico
             sub_order = OrderPrintData(
                 restaurante_nome=parsed_order.restaurante_nome,
                 numero_pedido=parsed_order.numero_pedido,
@@ -71,9 +86,7 @@ class PrintDocumentService:
                 numero_lancamento=parsed_order.numero_lancamento,
                 itens=dest_items
             )
-            doc_text = format_production_document(sub_order, width)
-            result_docs[dest_name] = doc_text
-
+            result_docs[dest_name] = format_production_document(sub_order, width)
         return result_docs
 
     @staticmethod
@@ -81,10 +94,6 @@ class PrintDocumentService:
         command: Union[CommandPrintData, dict],
         width: Union[PaperWidth, int] = PaperWidth.WIDTH_80MM
     ) -> str:
-        """
-        Gera o documento de FECHAMENTO (Conta / Conferência).
-        Inclui TODOS os itens cobrados, independente de destino de produção (inclusive NENHUM).
-        """
         parsed_command = PrintDocumentService._parse_command_data(command)
         return format_closing_document(parsed_command, width)
 
@@ -93,14 +102,9 @@ class PrintDocumentService:
         delivery_order: Union[DeliveryOrderPrintData, dict],
         width: Union[PaperWidth, int] = PaperWidth.WIDTH_80MM
     ) -> str:
-        """
-        Gera o documento de ENTREGA (Motoboy / Delivery).
-        Inclui TODOS os itens cobrados, endereço completo e dados financeiros.
-        """
         parsed_delivery = PrintDocumentService._parse_delivery_data(delivery_order)
         return format_delivery_document(parsed_delivery, width)
 
-    # --- PARSERS AUXILIARES DE ENTRADA FLEXÍVEL ---
     @staticmethod
     def _parse_item(item_raw: Any) -> PrintItem:
         if isinstance(item_raw, PrintItem):
@@ -116,12 +120,10 @@ class PrintDocumentService:
                 observacao=str(item_raw.get("observacao") or ""),
                 destino_impressao=dest
             )
-        
-        # Leitura de objeto SQLAlchemy ou similar
+
         produto = getattr(item_raw, "produto", None)
         categoria = getattr(produto, "categoria", None) if produto else None
         dest_db = getattr(categoria, "destino_impressao", "COZINHA") if categoria else "COZINHA"
-        
         codigo = getattr(produto, "id", None) or getattr(item_raw, "produto_id", "")
         nome = getattr(produto, "nome", None) or getattr(item_raw, "nome", "")
         return PrintItem(
