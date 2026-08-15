@@ -185,31 +185,26 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
     <div className="relative sm:h-full">
       {/* 1. VIEW: CART (CARRINHO DE COMPRAS) */}
       {view === 'cart' && (
-        <div className="bg-koma-panel sm:border sm:border-koma-border sm:rounded-3xl p-3 pb-28 sm:p-5 flex flex-col sm:h-full max-w-2xl mx-auto border-0 rounded-none overflow-visible sm:overflow-hidden min-h-0">
-          <div className="flex flex-col sm:h-full justify-between min-h-0">
+        <div className="bg-koma-panel sm:border sm:border-koma-border sm:rounded-2xl p-0 sm:p-4 pb-20 sm:pb-4 flex flex-col sm:h-full max-w-2xl mx-auto border-0 rounded-none">
+          <div className="flex flex-col sm:h-full justify-between min-h-0 space-y-3">
             
             {/* Cart Header */}
-            <div className="sticky top-0 z-40 -mx-3 -mt-3 mb-3 flex shrink-0 items-center justify-between gap-3 border-b border-koma-border bg-koma-panel px-3 pb-3 pt-3 shadow-[0_8px_18px_rgba(0,0,0,0.28)] sm:static sm:mx-0 sm:mt-0 sm:bg-transparent sm:px-0 sm:pt-0 sm:shadow-none">
-              <div className="flex items-center gap-1.5 text-koma-foreground">
-                <ShoppingCart size={18} className="text-emerald-400" />
-                <div>
-                  <h3 className="font-serif font-bold text-base leading-tight">Revisar pedido</h3>
-                  <p className="text-[10px] text-koma-subtle mt-0.5">Mesa {tableId}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={openMenu}
-                  className="min-h-10 px-3 py-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold rounded-xl transition-colors cursor-pointer flex items-center gap-1 border border-emerald-400 shadow-sm"
-                >
-                  <Plus size={13} />
-                  <span>Adicionar</span>
-                </button>
-                <span className="px-2.5 py-0.5 text-xs font-bold font-mono bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full">
+            <div className="flex items-center justify-between gap-2 border-b border-koma-border pb-2.5 shrink-0">
+              <div className="flex items-center gap-2 text-koma-foreground min-w-0">
+                <ShoppingCart size={16} className="text-emerald-400 shrink-0" />
+                <h3 className="font-serif font-bold text-sm sm:text-base leading-tight truncate">Revisar Pedido</h3>
+                <span className="px-2 py-0.5 text-[10px] font-bold font-mono bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full shrink-0">
                   {totalDraftQty} {totalDraftQty === 1 ? 'item' : 'itens'}
                 </span>
               </div>
+              <button
+                type="button"
+                onClick={openMenu}
+                className="min-h-8 px-3 py-1 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold rounded-xl transition-colors cursor-pointer flex items-center gap-1 shrink-0 shadow-sm"
+              >
+                <Plus size={13} />
+                <span>+ Adicionar</span>
+              </button>
             </div>
 
             {/* Cart Body */}

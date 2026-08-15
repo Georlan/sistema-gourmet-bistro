@@ -305,39 +305,162 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
         </div>
 
         {/* MODAL BODY WITH SCROLL */}
-        <div className="p-4 sm:p-6 overflow-y-auto flex-1 text-left">
+        <div className="p-2.5 sm:p-5 overflow-y-auto flex-1 text-left">
           
           {/* TAB 1: CONSUMO ATIVO */}
           {activeTab === 'consumo' && (
-            <div className="space-y-6">
+            <div className="space-y-4 sm:space-y-6">
               {orders.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
-                  <div className="p-4 bg-koma-panel text-emerald-400 rounded-full border border-koma-border">
-                    <ShoppingBag size={32} />
+                <div className="flex flex-col items-center justify-center py-16 text-center space-y-3">
+                  <div className="p-3.5 bg-koma-panel text-emerald-400 rounded-full border border-koma-border">
+                    <ShoppingBag size={28} />
                   </div>
-                  <h3 className="font-serif text-xl font-bold text-koma-foreground">Mesa sem consumo ativo</h3>
+                  <h3 className="font-serif text-lg font-bold text-koma-foreground">Mesa sem consumo ativo</h3>
                   <p className="text-xs text-koma-subtle max-w-sm leading-relaxed">
-                    Nenhum pedido ativo foi lançado nesta mesa ainda. Use a aba de <strong>La Carte (Lançar)</strong> para preparar e confirmar o primeiro rascunho de pedido.
+                    Nenhum pedido ativo foi lançado nesta mesa ainda. Use a aba de <strong>Cardápio</strong> para lançar o primeiro pedido.
                   </p>
                   <button
                     id="go-to-billing-tab-btn"
                     onClick={() => setActiveTab('lancamento')}
-                    className="mt-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-koma-foreground rounded-xl text-xs font-bold tracking-wider uppercase transition-colors cursor-pointer border border-emerald-500/20 shadow-md shadow-emerald-500/5"
+                    className="mt-2 px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 rounded-xl text-xs font-extrabold tracking-wider uppercase transition-colors cursor-pointer border border-emerald-400 shadow-md"
                   >
-                    Lançar Pedidos
+                    + Lançar Pedidos
                   </button>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+                <div className="flex flex-col lg:grid lg:grid-cols-12 gap-4 sm:gap-6 items-stretch">
                   
-                  {/* Itemized Order History (Col-7) */}
-                  <div className="lg:col-span-7 space-y-4">
-                    <div className="flex items-center justify-between border-b border-koma-border pb-3">
-                      <h3 className="font-serif font-bold text-koma-foreground text-base">Comanda de Pedidos</h3>
-                      <span className="text-[10px] font-semibold text-koma-subtle uppercase tracking-wider font-sans">Lotes Consolidados: {orders.length}</span>
+                  {/* 1. RESUMO FINANCEIRO & AÇÕES RÁPIDAS (RENDERIZA NO TOPO NO MOBILE - 0 ROLAGEM) */}
+                  <div className="order-1 lg:order-2 lg:col-span-5 bg-koma-panel border border-koma-border rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 flex flex-col justify-between space-y-3 shadow-sm">
+                    <div className="space-y-3">
+                      {/* Financial Total */}
+                      {(() => {
+                        const hasTax = restauranteConfig?.taxa_servico_ativa ?? true;
+                        const taxRate = restauranteConfig?.taxa_servico_padrao ?? 10;
+                        const taxVal = hasTax ? totalValue * (taxRate / 100) : 0;
+                        const grandTotal = totalValue + taxVal;
+                        return (
+                          <div className="bg-koma-raised border border-koma-border rounded-xl p-3 space-y-1.5 shadow-sm">
+                            <div className="flex justify-between items-baseline font-sans text-xs text-koma-subtle">
+                              <span className="font-bold uppercase tracking-wider">Subtotal:</span>
+                              <span className="font-mono font-medium">R$ {totalValue.toFixed(2)}</span>
+                            </div>
+                            {hasTax && (
+                              <div className="flex justify-between items-baseline font-sans text-xs text-koma-subtle">
+                                <span className="font-bold uppercase tracking-wider">Taxa Serviço ({taxRate}%):</span>
+                                <span className="font-mono font-medium">R$ {taxVal.toFixed(2)}</span>
+                              </div>
+                            )}
+                            <div className="flex justify-between items-center font-sans border-t border-koma-border/70 pt-2 mt-1">
+                              <span className="text-xs text-koma-subtle font-bold uppercase tracking-wider">Total Geral:</span>
+                              <span className="text-xl sm:text-2xl font-bold font-mono text-emerald-700 dark:text-emerald-400">
+                                R$ {grandTotal.toFixed(2)}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Main Action Buttons: Prévia/Extrato + Novo Pedido */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          id="print-invoice-preview-btn"
+                          onClick={handlePrintPreview}
+                          className="py-2.5 px-3 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 border border-emerald-400 rounded-xl font-extrabold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md shadow-emerald-950/20 active:scale-95"
+                        >
+                          <Printer size={14} className="shrink-0" />
+                          <span>Prévia e Extrato</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('lancamento')}
+                          className="py-2.5 px-3 bg-koma-raised hover:bg-koma-card border border-koma-border hover:border-emerald-500/30 text-koma-foreground rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                        >
+                          <PlusCircle size={14} className="text-emerald-400 shrink-0" />
+                          <span>+ Mais Itens</span>
+                        </button>
+                      </div>
+
+                      {/* Transfer / Merge / Close Table Quick Actions */}
+                      <div className="flex items-center gap-2 pt-1">
+                        {(canTransferTables || canTransferItems) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveTab('transferir');
+                              setTransferType(canTransferTables ? 'total' : 'parcial');
+                            }}
+                            className="flex-1 py-2 bg-koma-card hover:bg-koma-raised border border-koma-border text-koma-subtle hover:text-koma-foreground rounded-lg font-bold text-[10px] flex items-center justify-center gap-1 transition-colors cursor-pointer uppercase font-sans"
+                          >
+                            <Move size={11} className="text-emerald-400" />
+                            <span>Transferir</span>
+                          </button>
+                        )}
+                        {onMergeTables && canTransferTables && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveTab('mesclar');
+                              setTransferType('mesclar');
+                            }}
+                            className="flex-1 py-2 bg-koma-card hover:bg-koma-raised border border-koma-border text-koma-subtle hover:text-koma-foreground rounded-lg font-bold text-[10px] flex items-center justify-center gap-1 transition-colors cursor-pointer uppercase font-sans"
+                          >
+                            <GitMerge size={11} className="text-emerald-400" />
+                            <span>Mesclar</span>
+                          </button>
+                        )}
+                        {onCloseTable && !(activeRole === 'garcom' && !restauranteConfig?.perm_garcom_fechar) && (
+                          <button
+                            id="close-table-btn-consumo"
+                            onClick={() => {
+                              if (confirmClear) {
+                                onCloseTable();
+                              } else {
+                                setConfirmClear(true);
+                                setTimeout(() => setConfirmClear(false), 4000);
+                              }
+                            }}
+                            className={`flex-1 py-2 rounded-lg font-bold text-[10px] flex items-center justify-center gap-1 cursor-pointer uppercase font-sans transition-all border ${
+                              confirmClear
+                                ? 'bg-rose-800/40 border-rose-700/50 text-rose-300 animate-pulse'
+                                : 'bg-koma-card hover:bg-rose-950/30 border-koma-border hover:border-rose-800/40 text-koma-muted hover:text-rose-400'
+                            }`}
+                          >
+                            <X size={11} />
+                            <span>{confirmClear ? 'Confirmar?' : 'Fechar'}</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Customer subtotal breakdown */}
+                      {customerSubtotals.length > 1 && (
+                        <div className="pt-2 border-t border-koma-border space-y-1.5">
+                          <span className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">Divisão por Cliente:</span>
+                          <div className="space-y-1.5 max-h-32 overflow-y-auto scrollbar-thin">
+                            {customerSubtotals.map((cust) => (
+                              <div
+                                key={cust.name}
+                                className="bg-koma-raised/70 border border-koma-border/60 rounded-xl px-3 py-1.5 flex items-center justify-between text-xs"
+                              >
+                                <span className="font-bold text-koma-foreground truncate max-w-[140px]">{cust.name}</span>
+                                <span className="font-mono font-bold text-emerald-400">R$ {cust.total.toFixed(2)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 2. HISTÓRICO DE PEDIDOS LANÇADOS (NA COZINHA / PRONTO / ENTREGUE) */}
+                  <div className="order-2 lg:order-1 lg:col-span-7 space-y-3">
+                    <div className="flex items-center justify-between border-b border-koma-border pb-2">
+                      <h3 className="font-serif font-bold text-koma-foreground text-sm sm:text-base">Comanda de Pedidos</h3>
+                      <span className="text-[10px] font-semibold text-koma-subtle uppercase tracking-wider font-sans">Lotes: {orders.length}</span>
                     </div>
 
-                    <div className="space-y-4 sm:max-h-[45vh] sm:overflow-y-auto max-h-none overflow-y-visible pr-1 scrollbar-thin">
+                    <div className="space-y-3 sm:max-h-[45vh] sm:overflow-y-auto max-h-none overflow-y-visible pr-1 scrollbar-thin">
                       {orders.map((order) => {
                         const unpaidItems = order.itens.filter((item: any) => !item.pago);
                         if (unpaidItems.length === 0) return null;
@@ -346,11 +469,11 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                         <div
                           key={order.id}
                           id={`placed-order-${order.id}`}
-                          className="border border-koma-border rounded-2xl overflow-hidden bg-koma-panel/40"
+                          className="border border-koma-border rounded-xl sm:rounded-2xl overflow-hidden bg-koma-panel/40"
                         >
                           {/* Order Header */}
-                          <div className="bg-koma-raised px-4 py-2.5 flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-koma-border gap-2 w-full">
-                            <div className="flex items-center gap-2 flex-wrap">
+                          <div className="bg-koma-raised px-3.5 py-2 flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-koma-border gap-2 w-full">
+                            <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="text-xs font-bold text-koma-foreground font-sans">Lote #{order.id.slice(-4)}</span>
                               <span className="text-[10px] bg-koma-panel text-koma-muted px-2 py-0.5 rounded font-bold font-sans">
                                 Garçom: {order.garcomNome}
@@ -375,7 +498,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                                 </span>
                               )}
                             </div>
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2">
                               <span className="text-[10px] text-koma-subtle font-mono font-bold">
                                 {formatBackendTime(order.timestamp)}
                               </span>
@@ -385,7 +508,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                                   type="button"
                                   disabled={activeRole === 'garcom' && !restauranteConfig?.perm_garcom_transferir_mesa}
                                   onClick={() => onUnmergeTable(order.id)}
-                                  className={`px-2.5 py-1 rounded-lg text-[10px] font-sans font-semibold transition-all flex items-center gap-1 shadow-sm ${
+                                  className={`px-2 py-0.5 rounded-lg text-[10px] font-sans font-semibold transition-all flex items-center gap-1 shadow-sm ${
                                     (activeRole === 'garcom' && !restauranteConfig?.perm_garcom_transferir_mesa)
                                       ? 'bg-koma-panel/40 border border-koma-border/40 text-gray-600 cursor-not-allowed'
                                       : 'bg-purple-950/40 hover:bg-purple-900/30 text-purple-300 hover:text-koma-foreground border border-purple-900/40 cursor-pointer'
@@ -399,7 +522,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                               <button
                                 type="button"
                                 onClick={() => setSelectedOrderToPrint(order)}
-                                className="px-2.5 py-1 bg-koma-raised hover:bg-emerald-500/15 text-koma-muted hover:text-koma-foreground border border-koma-border hover:border-emerald-500/30 rounded-lg text-[10px] font-sans font-semibold transition-all cursor-pointer flex items-center gap-1 shadow-sm"
+                                className="px-2 py-0.5 bg-koma-raised hover:bg-emerald-500/15 text-koma-muted hover:text-koma-foreground border border-koma-border hover:border-emerald-500/30 rounded-lg text-[10px] font-sans font-semibold transition-all cursor-pointer flex items-center gap-1 shadow-sm"
                                 title="Reimprimir este lote de pedidos"
                               >
                                 <Printer size={11} className="text-emerald-700 dark:text-emerald-400" />
@@ -409,12 +532,12 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                           </div>
 
                           {/* Order Items */}
-                          <div className="p-4 divide-y divide-koma-border">
+                          <div className="p-3 divide-y divide-koma-border">
                             {unpaidItems.map((item) => (
                               <div
                                 key={item.id}
                                 id={`placed-item-${item.id}`}
-                                className="py-3 flex justify-between items-start gap-4 text-xs first:pt-0 last:pb-0 font-sans"
+                                className="py-2.5 flex justify-between items-start gap-3 text-xs first:pt-0 last:pb-0 font-sans"
                               >
                                 <div className="space-y-1 flex-1">
                                   <div className="flex flex-wrap items-baseline gap-2">
@@ -428,31 +551,31 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
 
                                   {/* Item Unit Observation */}
                                   {item.observacao ? (
-                                    <p className="text-[11px] text-koma-subtle italic bg-koma-panel px-2.5 py-1 rounded border border-dashed border-koma-border inline-block">
+                                    <p className="text-[11px] text-koma-subtle italic bg-koma-panel px-2 py-0.5 rounded border border-dashed border-koma-border inline-block">
                                       Obs: "{item.observacao}"
                                     </p>
                                   ) : null}
                                 </div>
 
                                 {/* Status Badge & Waiter Delivery Control */}
-                                <div className="flex items-center gap-3">
-                                  <span className="font-mono font-bold text-koma-foreground text-sm">R$ {(item.preco ?? 0).toFixed(2)}</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono font-bold text-koma-foreground text-xs sm:text-sm">R$ {(item.preco ?? 0).toFixed(2)}</span>
                                   
                                   {item.status === 'preparando' && (
-                                    <span className="px-2.5 py-1 text-[10px] font-bold bg-rose-900/40 border border-rose-800/50/20 text-rose-400 rounded-md border border-rose-900/50/30 animate-pulse-subtle uppercase tracking-wider">
+                                    <span className="px-2 py-0.5 text-[9px] font-bold bg-amber-500/15 border border-amber-500/30 text-amber-400 rounded-md animate-pulse-subtle uppercase tracking-wider">
                                       Na Cozinha
                                     </span>
                                   )}
 
                                   {item.status === 'pronto' && (
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="px-2.5 py-1 text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 rounded-md border border-emerald-500/30 animate-pulse uppercase tracking-wider">
+                                    <div className="flex items-center gap-1">
+                                      <span className="px-2 py-0.5 text-[9px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 rounded-md border border-emerald-500/30 animate-pulse uppercase tracking-wider">
                                         Pronto!
                                       </span>
                                       <button
                                         id={`deliver-item-btn-${item.id}`}
                                         onClick={() => onDeliverItem(order.id, item.id)}
-                                        className="px-2.5 py-1 bg-emerald-600/15 dark:bg-emerald-950/30 hover:bg-emerald-600 text-koma-foreground rounded-md text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer border border-emerald-300 dark:border-emerald-900/40"
+                                        className="px-2 py-0.5 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 rounded-md text-[9px] font-extrabold uppercase tracking-wider transition-colors cursor-pointer"
                                         title="Marcar como entregue à mesa"
                                       >
                                         Servir
@@ -461,14 +584,14 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                                   )}
 
                                   {item.status === 'entregue' && (
-                                    <span className="px-2.5 py-1 text-[10px] font-bold bg-emerald-600/15 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 rounded-md border border-emerald-300 dark:border-emerald-900/40 flex items-center gap-1 uppercase tracking-wider">
-                                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-600/15 dark:bg-emerald-950/30"></span>
+                                    <span className="px-2 py-0.5 text-[9px] font-bold bg-emerald-500/10 text-emerald-400 rounded-md border border-emerald-500/20 flex items-center gap-1 uppercase tracking-wider">
+                                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
                                       Servido
                                     </span>
                                   )}
 
                                   {/* Ações de Cancelamento e Transferência Individual de Item */}
-                                  <div className="flex items-center gap-1.5 border-l border-koma-border pl-2 ml-1">
+                                  <div className="flex items-center gap-1 border-l border-koma-border pl-1.5 ml-1">
                                     {((activeRole !== 'garcom' || restauranteConfig?.perm_garcom_editar)) && (
                                       <button
                                         type="button"
@@ -478,51 +601,28 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                                             produtoId: item.produtoId,
                                             nome: item.nome,
                                             observacao: item.observacao,
-                                            clienteNome: item.clienteNome,
-                                            quantidade: 1
+                                            orderId: order.id
                                           });
                                         }}
-                                        className="p-1 text-koma-subtle hover:text-amber-500 transition-colors cursor-pointer"
-                                        title="Editar observações / cliente do item"
+                                        className="p-1 text-koma-subtle hover:text-emerald-400 transition-colors cursor-pointer"
+                                        title="Editar observação do item"
                                       >
-                                        <Edit2 size={12} />
+                                        <Edit3 size={11} />
                                       </button>
                                     )}
-                                    {canTransferItems && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        const maxTableId = salonTables ? Math.max(...salonTables.map(t => t.id), RESTAURANT_CONFIG.totalMesas) : RESTAURANT_CONFIG.totalMesas;
-                                        const target = prompt(`Transferir item "${item.nome}" para qual mesa (1-${maxTableId})?`);
-                                        if (target) {
-                                          const tableNum = parseInt(target, 10);
-                                          const isValidTable = salonTables ? salonTables.some(t => t.id === tableNum) : (tableNum >= 1 && tableNum <= RESTAURANT_CONFIG.totalMesas);
-                                          if (!isNaN(tableNum) && isValidTable) {
-                                            onTransferItem(item.id, tableNum);
-                                          } else {
-                                            alert(`Número de mesa inválido!`);
-                                          }
-                                        }
-                                      }}
-                                      className="p-1 text-koma-subtle hover:text-emerald-700 dark:text-emerald-400 transition-colors cursor-pointer"
-                                      title="Transferir este item para outra mesa"
-                                    >
-                                      <Move size={12} />
-                                    </button>
-                                    )}
-                                    
-                                    {(!(activeRole === 'garcom' && !restauranteConfig?.perm_garcom_cancelar)) && (
+
+                                    {((activeRole !== 'garcom' || restauranteConfig?.perm_garcom_cancelar_item)) && (
                                       <button
                                         type="button"
                                         onClick={() => {
-                                          if (confirm(`Deseja realmente cancelar o item "${item.nome}"?`)) {
-                                            onCancelItem(item.id);
+                                          if (confirm(`Tem certeza que deseja cancelar "${item.nome}"?`)) {
+                                            onCancelItem(order.id, item.id);
                                           }
                                         }}
                                         className="p-1 text-koma-subtle hover:text-red-400 transition-colors cursor-pointer"
                                         title="Cancelar este item"
                                       >
-                                        <Trash2 size={12} />
+                                        <Trash2 size={11} />
                                       </button>
                                     )}
                                   </div>
@@ -533,141 +633,6 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                         </div>
                       )})}
                     </div>
-                  </div>
-
-                  {/* DIVISÃO DE CONTA / EXTRATO DE CONSUMO POR CLIENTE (Col-5) */}
-                  <div className="lg:col-span-5 bg-koma-panel border border-koma-border rounded-3xl p-5 flex flex-col justify-between h-full min-h-[400px]">
-                    <div className="space-y-4">
-                      
-                      <div className="flex items-center justify-between pb-3.5 border-b border-koma-border">
-                        <div className="flex items-center gap-1.5 text-koma-foreground">
-                          <Receipt size={16} className="text-emerald-400" />
-                          <h3 className="font-serif font-bold text-sm uppercase tracking-wide">Extrato por Cliente</h3>
-                        </div>
-                        <span className="text-[10px] font-sans font-bold text-koma-subtle uppercase tracking-wider">Divisão Ativa</span>
-                      </div>
-
-                      {/* Customer list with subtotal calculations */}
-                      <div className="space-y-2.5 sm:max-h-[30vh] sm:overflow-y-auto max-h-none overflow-y-visible pr-1 scrollbar-thin">
-                        {customerSubtotals.map((cust) => (
-                          <div
-                            key={cust.name}
-                            id={`customer-total-${cust.name.toLowerCase().replace(/\s+/g, '-')}`}
-                            className="bg-koma-raised border border-koma-border rounded-2xl p-4 flex items-center justify-between shadow-sm"
-                          >
-                            <div className="space-y-1 font-sans">
-                              <span className="text-xs font-bold text-koma-foreground truncate block max-w-[150px]">
-                                {cust.name}
-                              </span>
-                              <span className="text-[10px] text-koma-subtle font-medium block">
-                                {cust.count} {cust.count === 1 ? 'item consumido' : 'itens consumidos'}
-                              </span>
-                            </div>
-
-                            <div className="flex items-center gap-3">
-                              <span className="font-mono text-xs sm:text-sm font-bold text-emerald-700 dark:text-emerald-400">
-                                R$ {cust.total.toFixed(2)}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                    </div>
-
-                    {/* Grand Total & Closing Table Commands */}
-                    <div className="mt-4 pt-4 border-t border-koma-border space-y-3.5">
-                      {(() => {
-                        const hasTax = restauranteConfig?.taxa_servico_ativa ?? true;
-                        const taxRate = restauranteConfig?.taxa_servico_padrao ?? 10;
-                        const taxVal = hasTax ? totalValue * (taxRate / 100) : 0;
-                        const grandTotal = totalValue + taxVal;
-                        return (
-                          <div className="space-y-1.5">
-                            <div className="flex justify-between items-baseline font-sans text-xs text-koma-subtle">
-                              <span className="font-bold uppercase tracking-wider">Subtotal:</span>
-                              <span className="font-mono">R$ {totalValue.toFixed(2)}</span>
-                            </div>
-                            {hasTax && (
-                              <div className="flex justify-between items-baseline font-sans text-xs text-koma-subtle">
-                                <span className="font-bold uppercase tracking-wider">Taxa Serviço ({taxRate}%):</span>
-                                <span className="font-mono">R$ {taxVal.toFixed(2)}</span>
-                              </div>
-                            )}
-                            <div className="flex justify-between items-baseline font-sans border-t border-koma-border pt-2">
-                              <span className="text-xs text-koma-subtle font-bold uppercase tracking-wider">Total Geral:</span>
-                              <span className="text-2xl font-bold font-mono text-emerald-700 dark:text-emerald-400">
-                                R$ {grandTotal.toFixed(2)}
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })()}
-
-                      <div className="pt-2 flex flex-col gap-2">
-                        {/* Print Preview Button for waitstaff */}
-                        <button
-                          id="print-invoice-preview-btn"
-                          onClick={handlePrintPreview}
-                          className="w-full py-3 bg-koma-panel hover:bg-koma-raised border border-koma-border hover:border-emerald-500/30 text-koma-foreground rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer uppercase tracking-wider font-sans"
-                        >
-                          <Printer size={13} className="text-emerald-700 dark:text-emerald-400" />
-                          <span>Prévia e Extrato</span>
-                        </button>
-
-                        {(canTransferTables || canTransferItems) && (
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setActiveTab('transferir');
-                              setTransferType(canTransferTables ? 'total' : 'parcial');
-                            }}
-                            className="py-2.5 bg-koma-panel hover:bg-koma-raised border border-koma-border hover:border-emerald-500/30 text-koma-foreground rounded-xl font-bold text-[10px] flex items-center justify-center gap-1.5 transition-colors cursor-pointer uppercase tracking-wider font-sans"
-                          >
-                            <Move size={11} className="text-emerald-700 dark:text-emerald-400" />
-                            <span>Transferir</span>
-                          </button>
-                          {onMergeTables && canTransferTables && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setActiveTab('mesclar');
-                                setTransferType('mesclar');
-                              }}
-                              className="py-2.5 bg-koma-panel hover:bg-koma-raised border border-koma-border hover:border-emerald-500/30 text-koma-foreground rounded-xl font-bold text-[10px] flex items-center justify-center gap-1.5 transition-colors cursor-pointer uppercase tracking-wider font-sans"
-                            >
-                              <GitMerge size={11} className="text-emerald-700 dark:text-emerald-400" />
-                              <span>Mesclar</span>
-                            </button>
-                          )}
-                        </div>
-                        )}
-
-                        {onCloseTable && !(activeRole === 'garcom' && !restauranteConfig?.perm_garcom_fechar) && (
-                          <button
-                            id="close-table-btn-consumo"
-                            onClick={() => {
-                              if (confirmClear) {
-                                onCloseTable();
-                              } else {
-                                setConfirmClear(true);
-                                setTimeout(() => setConfirmClear(false), 4000);
-                              }
-                            }}
-                            className={`w-full py-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider font-sans transition-all border ${
-                              confirmClear
-                                ? 'bg-rose-800/40 border-rose-700/50 text-rose-600 dark:text-rose-300 animate-pulse'
-                                : 'bg-koma-panel hover:bg-rose-950/30 border-koma-border hover:border-rose-800/40 text-koma-muted hover:text-rose-600 dark:text-rose-300'
-                            }`}
-                          >
-                            <X size={13} />
-                            <span>{confirmClear ? 'Confirmar Fechamento?' : 'Fechar Mesa'}</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
                   </div>
 
                 </div>
