@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { X, Clock, Receipt, PlusCircle, Move, ShoppingBag, Printer, Trash2, ArrowLeft, Edit2, Edit3, GitMerge, Zap, CheckCircle2 } from 'lucide-react';
+import { X, Clock, Receipt, PlusCircle, Move, ShoppingBag, Printer, Trash2, ArrowLeft, Edit2, Edit3, GitMerge, Zap, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { Table, Order, DraftItem, AppSettings, Product, AppRole, OrderItem } from '../types';
 import { getTableTotal, getCustomerSubtotals, formatElapsedTime, normalizeOperationalTimestamp } from '../domain';
 import { MenuPanel } from './MenuPanel';
@@ -894,7 +894,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                 </div>
               ) : (
                 <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-3.5 text-xs text-amber-600 dark:text-amber-300 font-sans flex items-start gap-2">
-                  <span className="text-sm shrink-0">⚠️</span>
+                  <AlertTriangle size={15} className="shrink-0 mt-0.5" />
                   <span>A mesclagem une as comandas. Use a aba <strong>Transferência → Selecionar Itens</strong> se quiser mover itens específicos sem mesclar a conta.</span>
                 </div>
               )}

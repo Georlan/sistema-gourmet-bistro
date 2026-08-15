@@ -40,7 +40,7 @@ export function openWhatsAppMessage(phone?: string | null, text?: string): boole
 export function buildPedidoConfirmadoMsg(nome: string, itensStr: string, totalVal: number | string): string {
   const clienteNome = (nome || '').trim() || 'Cliente';
   const totalStr = typeof totalVal === 'number' ? totalVal.toFixed(2) : totalVal;
-  return `Olá, ${clienteNome}! Seu pedido no *Kôma* foi recebido! 🍔\n\n*Resumo:* ${itensStr}\n*Total:* R$ ${totalStr}\n\nAcompanhe o status do seu pedido!`;
+  return `Olá, ${clienteNome}! Seu pedido no *Kôma* foi recebido.\n\n*Resumo:* ${itensStr}\n*Total:* R$ ${totalStr}\n\nAcompanhe o status do seu pedido!`;
 }
 
 /**
@@ -49,7 +49,7 @@ export function buildPedidoConfirmadoMsg(nome: string, itensStr: string, totalVa
 export function buildStatusUpdateMsg(nome: string, isDelivery: boolean): string {
   const clienteNome = (nome || '').trim() || 'Cliente';
   const acao = isDelivery ? 'SAIU PARA ENTREGA' : 'ESTÁ PRONTO PARA RETIRADA';
-  return `Olá, ${clienteNome}! Seu pedido no *Kôma* ${acao}! 🎉`;
+  return `Olá, ${clienteNome}! Seu pedido no *Kôma* ${acao}.`;
 }
 
 /**

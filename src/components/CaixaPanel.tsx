@@ -1756,7 +1756,7 @@ export function CaixaPanel({
       order.criadoEm;
 
     const elapsedMinutes = calcularMinutosDecorridos(timestampReal, now);
-    const labelText = `⏱️ ${timeFormatted}`;
+    const labelText = timeFormatted;
 
     if (elapsedMinutes > 25) {
       return {
@@ -2121,13 +2121,13 @@ export function CaixaPanel({
         if (typeof onRefreshOrders === 'function') onRefreshOrders();
 
         const mbTel = (mb.telefone || '').replace(/\D/g, '');
-        const msg = `*NOVA ENTREGA - KÔMA* 🛵💨\n\n` +
-          `📦 *Pedido:* #${order.numero_pedido || order.id}\n` +
-          `👤 *Cliente:* ${order.cliente || order.identificador || 'Cliente'}\n` +
-          `📍 *Endereço:* ${order.endereco || order.delivery_endereco || 'Não informado'}\n` +
-          `📞 *Telefone Cliente:* ${order.telefone || order.delivery_telefone || 'Não informado'}\n` +
-          `💰 *Valor a Cobrar:* R$ ${(order.total || 0).toFixed(2)}\n\n` +
-          `📲 *Acesse o Painel do Entregador:* ${linkPwa}`;
+        const msg = `*NOVA ENTREGA - KÔMA*\n\n` +
+          `*Pedido:* #${order.numero_pedido || order.id}\n` +
+          `*Cliente:* ${order.cliente || order.identificador || 'Cliente'}\n` +
+          `*Endereço:* ${order.endereco || order.delivery_endereco || 'Não informado'}\n` +
+          `*Telefone Cliente:* ${order.telefone || order.delivery_telefone || 'Não informado'}\n` +
+          `*Valor a Cobrar:* R$ ${(order.total || 0).toFixed(2)}\n\n` +
+          `*Acesse o Painel do Entregador:* ${linkPwa}`;
 
         const waUrl = mbTel ? `https://wa.me/55${mbTel}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`;
         window.open(waUrl, '_blank');
@@ -3385,7 +3385,7 @@ export function CaixaPanel({
     // ⚡ TRANSIÇÃO INSTANTÂNEA DE TELA (0ms delay)
     setActiveTab('operacao');
     setActiveSubTab('pedidos');
-    showToast("⚡ Enviando pedido para a cozinha...", 'success');
+    showToast("Enviando pedido para a cozinha...", 'info');
 
     // ⚡ CRIAÇÃO OTIMISTA DO PEDIDO (Aparece imediatamente no Kanban a 0ms)
     if (onOptimisticAddOrder) {
@@ -7930,8 +7930,8 @@ export function CaixaPanel({
                             <td className={clsx('p-3', 'font-mono', 'text-koma-secondary')}>R$ {ins.preco_medio_custo.toFixed(2)}</td>
                             <td className={clsx('p-3', 'text-right')}>
                               {isLow
-                                ? <span className={clsx('px-2', 'py-0.5', 'bg-amber-500/15', 'text-amber-400', 'rounded-full', 'text-[8px]', 'font-bold', 'uppercase')}>⚠ Baixo</span>
-                                : <span className={clsx('px-2', 'py-0.5', 'bg-emerald-500/10', 'text-emerald-400', 'rounded-full', 'text-[8px]', 'font-bold', 'uppercase')}>✓ Ok</span>
+                                ? <span className={clsx('px-2', 'py-0.5', 'bg-amber-500/15', 'text-amber-400', 'rounded-full', 'text-[8px]', 'font-bold', 'uppercase')}>Baixo</span>
+                                : <span className={clsx('px-2', 'py-0.5', 'bg-emerald-500/10', 'text-emerald-400', 'rounded-full', 'text-[8px]', 'font-bold', 'uppercase')}>Normal</span>
                               }
                             </td>
                             <td className={clsx('p-3', 'text-right', 'space-x-1.5', 'whitespace-nowrap')}>
@@ -8412,7 +8412,7 @@ export function CaixaPanel({
                           }}
                           className={clsx('px-3', 'py-1.5', 'koma-badge-warning', 'hover:bg-amber-200 dark:hover:bg-amber-900/40', 'rounded-xl', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}
                         >
-                          ⚠️ Assumir Atendimento
+                          Assumir Atendimento
                         </button>
                       </div>
                     </div>
@@ -8639,7 +8639,7 @@ export function CaixaPanel({
                                   className={clsx('py-1.5', 'px-2.5', 'bg-[#10b981]/20', 'hover:bg-[#10b981]/30', 'border', 'border-[#10b981]/40', 'disabled:opacity-40', 'text-emerald-600 dark:text-emerald-300', 'font-bold', 'rounded-xl', 'text-[10px]', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer', 'flex', 'items-center', 'gap-1')}
                                   title="Despachar pedido e enviar link PWA pelo WhatsApp do Motoboy"
                                 >
-                                  💬 WhatsApp
+                                  WhatsApp
                                 </button>
                                 <button
                                   type="button"
@@ -8648,7 +8648,7 @@ export function CaixaPanel({
                                   className={clsx('py-1.5', 'px-2.5', 'bg-rose-500/20', 'hover:bg-rose-500/30', 'border', 'border-rose-500/40', 'disabled:opacity-40', 'text-rose-600 dark:text-rose-300', 'font-bold', 'rounded-xl', 'text-[10px]', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer', 'flex', 'items-center', 'gap-1')}
                                   title="Revogar todos os links ativos do entregador selecionado"
                                 >
-                                  🚫 Revogar
+                                  Revogar
                                 </button>
                               </div>
                             </div>
@@ -9269,7 +9269,7 @@ export function CaixaPanel({
                         className={clsx('flex-1', 'py-2', 'bg-koma-panel', 'hover:bg-koma-raised', 'border', 'border-koma-border', 'rounded-xl', 'text-[10px]', 'font-bold', 'text-koma-foreground', 'transition-all', 'cursor-pointer', 'text-center')}
                         title="Imprime a via térmica completa com todos os itens consumidos"
                       >
-                        🖨️ Completo
+                        Extrato Completo
                       </button>
                       <button
                         type="button"
@@ -9297,7 +9297,7 @@ export function CaixaPanel({
                         className={clsx('flex-1', 'py-2', 'bg-koma-panel', 'hover:bg-koma-raised', 'border', 'border-koma-border', 'rounded-xl', 'text-[10px]', 'font-bold', 'text-koma-foreground', 'transition-all', 'cursor-pointer', 'text-center')}
                         title="Imprime apenas o resumo de subtotais e taxas de serviço para economizar papel"
                       >
-                        🖨️ Só Valores
+                        Apenas Valores
                       </button>
                     </div>
                   </div>
@@ -9437,7 +9437,7 @@ export function CaixaPanel({
                         </button>
                       </div>
                       <span className={clsx('text-[8px]', 'text-koma-muted', 'block', 'mt-1.5', 'leading-normal')}>
-                        💡 <strong>Dica:</strong> {selectedItemIds.length > 0
+                        <strong>Dica:</strong> {selectedItemIds.length > 0
                           ? 'Os itens marcados serão baixados juntos. Use “Usar Saldo Total” ou desmarque-os para lançar um valor livre.'
                           : isTableCheckoutOrder(selectedOrder)
                             ? 'Sem itens marcados, qualquer baixa abate o saldo geral da mesa. Você pode receber uma parte no Pix e o restante no cartão.'
@@ -11085,7 +11085,7 @@ export function CaixaPanel({
               headers: authHeaders
             });
             if (res.ok) {
-              showToast(`✅ Comanda #${comandaId.slice(-4)} finalizada (${metodoPagamento.toUpperCase()}) — R$ ${totalFinal.toFixed(2)}`);
+              showToast(`Comanda #${comandaId.slice(-4)} finalizada (${metodoPagamento.toUpperCase()}) - R$ ${totalFinal.toFixed(2)}`, 'success');
               onRefreshOrders();
               fetchDeliveryOrders();
               setSelectedKanbanOrder(null);

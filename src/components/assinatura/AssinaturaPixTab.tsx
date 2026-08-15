@@ -342,7 +342,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                   ? 'koma-badge-success'
                   : 'koma-badge-warning'
               )}>
-                {hasOnlineMenu ? '✓ Cardápio Digital Ativo' : '⚡ Cardápio Digital Opcional (+R$ 49/mês)'}
+                {hasOnlineMenu ? 'Cardápio Digital Ativo' : 'Cardápio Digital Opcional (+R$ 49/mês)'}
               </span>
               <span className="px-3 py-1 rounded-xl border border-koma-border bg-koma-raised text-koma-foreground font-medium">
                 Taxa Pix In-App: <strong className="text-emerald-700 dark:text-emerald-400 font-bold">{currentPlan.rates.pixInApp}</strong>
@@ -388,7 +388,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                   Gera um QR Code Pix dinâmico na mesa. Libera a comanda e o caixa de forma autônoma.
                 </p>
                 <span className="text-[9px] text-koma-muted block font-mono">
-                  💡 No Kôma Pro a taxa reduz para <strong className="text-emerald-600 dark:text-emerald-300">0,79%</strong> e no Premium para <strong className="text-emerald-600 dark:text-emerald-300">0,49%</strong>.
+                  No Kôma Pro a taxa reduz para <strong className="text-emerald-600 dark:text-emerald-300">0,79%</strong> e no Premium para <strong className="text-emerald-600 dark:text-emerald-300">0,49%</strong>.
                 </span>
               </div>
 
@@ -417,7 +417,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                   Permite pagamento com cartão direto no celular do cliente pela comanda digital.
                 </p>
                 <span className="text-[9px] text-koma-muted block font-mono">
-                  💡 No Kôma Pro a taxa reduz para <strong className="text-sky-600 dark:text-sky-300">1,99% + R$0,29</strong> e no Premium para <strong className="text-sky-600 dark:text-sky-300">1,49% + R$0,19</strong>.
+                  No Kôma Pro a taxa reduz para <strong className="text-sky-600 dark:text-sky-300">1,99% + R$0,29</strong> e no Premium para <strong className="text-sky-600 dark:text-sky-300">1,49% + R$0,19</strong>.
                 </span>
               </div>
 

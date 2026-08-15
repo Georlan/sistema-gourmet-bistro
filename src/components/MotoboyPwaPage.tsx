@@ -81,7 +81,7 @@ export function MotoboyPwaPage() {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.detail || 'Falha ao confirmar entrega');
       }
-      showToast('Entrega confirmada com sucesso! 🛵💨', 'success');
+      showToast('Entrega confirmada com sucesso.', 'success');
       // Remove da lista otimistamente
       setEntregas(prev => prev.filter(e => e.id !== comandaId));
     } catch (err: any) {
@@ -179,7 +179,7 @@ export function MotoboyPwaPage() {
           entregas.map((entrega) => {
             const cleanTel = formatWhatsAppPhone(entrega.delivery_telefone);
             const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(entrega.delivery_endereco || '')}`;
-            const waUrl = cleanTel ? `https://wa.me/${cleanTel}?text=${encodeURIComponent(`Olá ${entrega.cliente_nome}! Sou o entregador do *Kôma* a caminho com seu pedido #${entrega.numero_pedido || entrega.id}! 🎉`)}` : null;
+            const waUrl = cleanTel ? `https://wa.me/${cleanTel}?text=${encodeURIComponent(`Olá ${entrega.cliente_nome}! Sou o entregador do *Kôma* a caminho com seu pedido #${entrega.numero_pedido || entrega.id}.`)}` : null;
             const telUrl = cleanTel ? `tel:${cleanTel}` : null;
 
             return (

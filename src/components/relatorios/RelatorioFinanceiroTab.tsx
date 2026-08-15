@@ -260,7 +260,7 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
                   <>
                     <tr className="hover:bg-koma-raised/50 transition-colors">
                       <td className="p-3.5 pl-6 text-koma-foreground font-sans font-medium flex items-center gap-2">
-                        <span>💵 Recebimentos em Dinheiro</span>
+                        <span>Recebimentos em Dinheiro</span>
                       </td>
                       <td className="p-3.5 text-right text-koma-foreground font-bold">
                         R$ {din.toFixed(2)}
@@ -271,7 +271,7 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
                     </tr>
                     <tr className="hover:bg-koma-raised/50 transition-colors">
                       <td className="p-3.5 pl-6 text-koma-foreground font-sans font-medium flex items-center gap-2">
-                        <span>⚡ Recebimentos via Pix</span>
+                        <span>Recebimentos via Pix</span>
                       </td>
                       <td className="p-3.5 text-right text-koma-foreground font-bold">
                         R$ {pix.toFixed(2)}
@@ -282,7 +282,7 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
                     </tr>
                     <tr className="hover:bg-koma-raised/50 transition-colors">
                       <td className="p-3.5 pl-6 text-koma-foreground font-sans font-medium flex items-center gap-2">
-                        <span>💳 Recebimentos em Cartão (Débito/Crédito)</span>
+                        <span>Recebimentos em Cartão (Débito/Crédito)</span>
                       </td>
                       <td className="p-3.5 text-right text-koma-foreground font-bold">
                         R$ {car.toFixed(2)}

@@ -907,7 +907,7 @@ export default function App() {
                 }
             );
             if (data.detail && data.detail.type === "pagamento_registrado" && data.detail.status === "pendente") {
-              showToast(`💵 CONFIRMAR DINHEIRO: R$ ${data.detail.valor.toFixed(2)} - Garçom ${data.detail.garcom_nome}`, 'info', 5000);
+              showToast(`Confirmar recebimento em dinheiro: R$ ${data.detail.valor.toFixed(2)} - Garçom ${data.detail.garcom_nome}`, 'info', 5000);
             }
           } else if (eventName === "MESA_ATUALIZADA" || eventName === "MESA_UPDATED") {
             scheduleRealtimeRefresh({ orders: true });

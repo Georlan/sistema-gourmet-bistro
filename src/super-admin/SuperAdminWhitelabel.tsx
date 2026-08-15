@@ -758,7 +758,7 @@ export default function SuperAdminWhitelabel({
 
               {/* Informational Footer of preview */}
               <div className="text-[9px] text-koma-muted font-mono leading-relaxed mt-2 text-center border-t border-[#1e293b]/20 pt-2 w-full">
-                💡 O preview acima é atualizado dinamicamente enquanto você digita e marca as caixas.
+                O preview acima é atualizado dinamicamente enquanto você edita as opções.
               </div>
 
             </div>

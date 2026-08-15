@@ -56,7 +56,7 @@ export function ManagerPinModal({
       setErrorMsg(null);
       onSuccess();
     } else {
-      setErrorMsg('⚠️ PIN de Gerente Incorreto. Ação Não Autorizada!');
+      setErrorMsg('PIN de gerente incorreto. Ação não autorizada.');
       setPin('');
     }
   };

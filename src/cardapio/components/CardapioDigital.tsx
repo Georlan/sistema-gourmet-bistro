@@ -247,9 +247,9 @@ export default function CardapioDigital({
                   Obrigado, <strong className="text-text-app">{customerName}</strong>. Seu pedido foi enviado diretamente ao sistema do restaurante e já está em processamento.
                 </p>
                 <div className="p-3 bg-slate-500/5 rounded-2xl border border-slate-500/10 text-[11px] text-text-app/70 text-left space-y-1">
-                  <p>📍 <strong>Modalidade:</strong> {deliveryMethod === "delivery" ? `Entrega em ${address}` : "Retirada no Balcão"}</p>
-                  <p>📞 <strong>Telefone:</strong> {customerPhone}</p>
-                  <p>💰 <strong>Total a Pagar no Atendimento:</strong> R$ {estimatedTotal.toFixed(2)}</p>
+                  <p><strong>Modalidade:</strong> {deliveryMethod === "delivery" ? `Entrega em ${address}` : "Retirada no Balcão"}</p>
+                  <p><strong>Telefone:</strong> {customerPhone}</p>
+                  <p><strong>Total a pagar:</strong> R$ {estimatedTotal.toFixed(2)}</p>
                 </div>
               </div>
               <div className="w-full max-w-xs space-y-2 mt-4">
@@ -270,7 +270,7 @@ export default function CardapioDigital({
                     }}
                     className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-koma-secondary text-[10px] font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 border border-slate-700"
                   >
-                    <span>💬 Falar com o Restaurante no WhatsApp (Opcional)</span>
+                    <span>Falar com o Restaurante no WhatsApp (Opcional)</span>
                   </button>
                 )}
               </div>
@@ -280,11 +280,11 @@ export default function CardapioDigital({
               <div className="p-4 rounded-2xl bg-slate-500/5 border border-slate-500/10 space-y-2 text-xs">
                 <h3 className="font-bold text-text-app/90 text-xs uppercase tracking-wider">Dados do Pedido</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-text-app/70 leading-relaxed">
-                  <p>👤 <strong className="text-text-app">Cliente:</strong> {customerName}</p>
-                  <p>📞 <strong className="text-text-app">Telefone:</strong> {customerPhone}</p>
+                  <p><strong className="text-text-app">Cliente:</strong> {customerName}</p>
+                  <p><strong className="text-text-app">Telefone:</strong> {customerPhone}</p>
                 </div>
                 <p className="text-text-app/70 leading-relaxed">
-                  📍 <strong className="text-text-app">Destino:</strong>{" "}
+                  <strong className="text-text-app">Destino:</strong>{" "}
                   {deliveryMethod === "delivery" ? address : "Retirada no balcão"}
                 </p>
               </div>
