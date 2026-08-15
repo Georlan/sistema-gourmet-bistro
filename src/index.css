@@ -1399,63 +1399,7 @@ body {
   }
 
   .orders-hero {
-    min-height: auto;
-    padding: 0.8rem;
-  }
-
-  .orders-hero::before {
-    inset-inline-start: 30%;
-    opacity: 0.55;
-  }
-
-  .orders-hero__metrics {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 0.25rem;
-    margin-top: 0.6rem;
-  }
-
-  .orders-hero__status {
-    display: flex;
-  }
-
-  .orders-eyebrow {
-    margin-bottom: 0.12rem;
-    font-size: 0.46rem;
-  }
-
-  .orders-hero h1 {
-    font-size: 1.2rem;
-  }
-
-  .orders-hero__copy > p:last-child {
-    display: none;
-  }
-
-  .orders-hero__metrics > div {
-    min-height: 2.65rem;
-    padding: 0.4rem 0.35rem;
-  }
-
-  .orders-hero__metrics strong {
-    overflow: hidden;
-    font-size: 0.72rem;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .orders-hero__metrics span {
-    overflow: hidden;
-    font-size: 0.45rem;
-    text-overflow: ellipsis;
-  }
-
-  .orders-hero__status {
-    align-items: center;
-    justify-content: center;
-  }
-
-  .orders-hero__status span:last-child {
-    display: none;
+    display: none !important;
   }
 
   .orders-mobile-stages {

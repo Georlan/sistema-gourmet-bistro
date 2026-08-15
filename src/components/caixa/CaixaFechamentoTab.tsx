@@ -388,19 +388,19 @@ ________________________________
 
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,.55fr)]">
-      <section className="rounded-3xl border border-koma-border bg-koma-panel p-5 sm:p-6">
-        <div className="flex flex-col gap-3 border-b border-koma-border pb-4 sm:flex-row sm:items-start sm:justify-between">
+      <section className="rounded-2xl sm:rounded-3xl border border-koma-border bg-koma-panel p-4 sm:p-6">
+        <div className="flex flex-col gap-2.5 border-b border-koma-border pb-3 sm:pb-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-emerald-800 dark:text-emerald-300">Conferência assistida</p>
-            <h2 className="mt-1 text-lg font-bold text-koma-foreground">Confira e feche mais rápido</h2>
-            <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-koma-muted">Compare cada meio com o sistema. Use os valores esperados e altere apenas quando houver divergência.</p>
+            <h2 className="mt-0.5 text-base sm:text-lg font-bold text-koma-foreground">Confira e feche mais rápido</h2>
+            <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-koma-muted hidden sm:block">Compare cada meio com o sistema. Use os valores esperados e altere apenas quando houver divergência.</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={handleRefresh} disabled={!onRefresh || isRefreshing} className="inline-flex w-fit items-center gap-2 rounded-xl border border-koma-border-subtle bg-koma-panel px-3 py-2 text-[10px] font-semibold text-koma-secondary hover:border-[#3a4540] hover:text-koma-foreground disabled:opacity-50">
-              <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} /> Atualizar
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={handleRefresh} disabled={!onRefresh || isRefreshing} className="inline-flex w-fit items-center gap-1.5 rounded-xl border border-koma-border-subtle bg-koma-panel px-3 py-2 text-[10px] font-semibold text-koma-secondary hover:border-[#3a4540] hover:text-koma-foreground disabled:opacity-50">
+              <RefreshCw size={13} className={isRefreshing ? 'animate-spin' : ''} /> Atualizar
             </button>
-            <button type="button" onClick={useExpectedValues} className="inline-flex w-fit items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-600 hover:bg-emerald-500 px-3 py-2 text-[10px] font-bold text-white transition-colors hover:bg-emerald-600 hover:bg-emerald-500">
-              <Zap size={14} /> Preencher esperados
+            <button type="button" onClick={useExpectedValues} className="inline-flex w-fit items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-600 hover:bg-emerald-500 px-3 py-2 text-[10px] font-bold text-white transition-colors hover:bg-emerald-600 hover:bg-emerald-500">
+              <Zap size={13} /> Preencher esperados
             </button>
           </div>
         </div>

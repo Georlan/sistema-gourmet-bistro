@@ -161,19 +161,21 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
             </button>
           </div>
         </div>
-        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(220px,1.3fr)_minmax(170px,.7fr)_minmax(155px,.6fr)_minmax(155px,.6fr)]">
+        <div className="grid gap-2 grid-cols-1 sm:grid-cols-2 xl:grid-cols-[minmax(220px,1.3fr)_minmax(170px,.7fr)_minmax(155px,.6fr)_minmax(155px,.6fr)]">
           <label className="relative">
             <span className="sr-only">Buscar movimentação</span>
             <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" />
-            <input value={searchTerm} onChange={event => setSearchTerm(event.target.value)} placeholder="Buscar motivo, observação ou operador" className="h-10 w-full rounded-xl border border-koma-border bg-koma-card pl-9 pr-3 text-xs text-koma-foreground outline-none transition-colors placeholder:text-koma-muted focus:border-emerald-500" />
+            <input value={searchTerm} onChange={event => setSearchTerm(event.target.value)} placeholder="Buscar motivo, observação ou operador" className="h-9 sm:h-10 w-full rounded-xl border border-koma-border bg-koma-card pl-9 pr-3 text-xs text-koma-foreground outline-none transition-colors placeholder:text-koma-muted focus:border-emerald-500" />
           </label>
-          <select value={filterTipo} onChange={event => setFilterTipo(event.target.value)} className="h-10 w-full rounded-xl border border-koma-border bg-koma-card px-3 text-xs text-koma-foreground outline-none focus:border-emerald-500">
+          <select value={filterTipo} onChange={event => setFilterTipo(event.target.value)} className="h-9 sm:h-10 w-full rounded-xl border border-koma-border bg-koma-card px-3 text-xs text-koma-foreground outline-none focus:border-emerald-500">
             <option value="todos">Todas as operações</option>
             <option value="suprimento">Suprimentos</option>
             <option value="sangria">Sangrias</option>
           </select>
-          <label className="relative"><span className="sr-only">Data inicial</span><CalendarDays size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" /><input type="date" value={filterDataInicio} onChange={event => setFilterDataInicio(event.target.value)} className="h-10 w-full rounded-xl border border-koma-border bg-koma-card pl-9 pr-2 text-xs text-koma-foreground outline-none focus:border-emerald-500" /></label>
-          <label className="relative"><span className="sr-only">Data final</span><CalendarDays size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" /><input type="date" value={filterDataFim} onChange={event => setFilterDataFim(event.target.value)} className="h-10 w-full rounded-xl border border-koma-border bg-koma-card pl-9 pr-2 text-xs text-koma-foreground outline-none focus:border-emerald-500" /></label>
+          <div className="grid grid-cols-2 gap-2 sm:col-span-2 xl:col-span-2">
+            <label className="relative"><span className="sr-only">Data inicial</span><CalendarDays size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" /><input type="date" value={filterDataInicio} onChange={event => setFilterDataInicio(event.target.value)} className="h-9 sm:h-10 w-full rounded-xl border border-koma-border bg-koma-card pl-9 pr-2 text-[11px] text-koma-foreground outline-none focus:border-emerald-500" /></label>
+            <label className="relative"><span className="sr-only">Data final</span><CalendarDays size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" /><input type="date" value={filterDataFim} onChange={event => setFilterDataFim(event.target.value)} className="h-9 sm:h-10 w-full rounded-xl border border-koma-border bg-koma-card pl-9 pr-2 text-[11px] text-koma-foreground outline-none focus:border-emerald-500" /></label>
+          </div>
         </div>
       </section>
 

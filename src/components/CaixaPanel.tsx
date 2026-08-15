@@ -5259,7 +5259,7 @@ export function CaixaPanel({
 
                 <div className={clsx('flex-1', 'min-h-0', 'overflow-y-auto', 'pr-1', 'overscroll-contain')}>
                   {filteredProducts.length > 0 ? (
-                  <div className={clsx('grid', 'grid-cols-1', 'min-[430px]:grid-cols-2', 'md:grid-cols-3', '2xl:grid-cols-4', 'gap-2.5', 'pb-2')}>
+                  <div className={clsx('grid', 'grid-cols-2', 'sm:grid-cols-2', 'md:grid-cols-3', '2xl:grid-cols-4', 'gap-2', 'sm:gap-2.5', 'pb-2')}>
                     {filteredProducts.map((p) => {
                       const productLabel = splitProductLabel(p.nome);
                       return (
@@ -5267,20 +5267,20 @@ export function CaixaPanel({
                         type="button"
                         key={p.id}
                         onClick={() => handlePdvAddToCart(p)}
-                        className={clsx('relative', 'min-h-[112px]', 'bg-koma-panel', 'border', 'border-koma-border', 'hover:border-emerald-500/60', 'active:border-emerald-500', 'p-3.5', 'rounded-2xl', 'flex', 'flex-col', 'justify-between', 'gap-3', 'cursor-pointer', 'group', 'transition-colors', 'text-left', 'focus:outline-none', 'focus-visible:ring-2', 'focus-visible:ring-emerald-500/40 shadow-sm')}
+                        className={clsx('relative', 'min-h-[96px]', 'sm:min-h-[112px]', 'bg-koma-panel', 'border', 'border-koma-border', 'hover:border-emerald-500/60', 'active:border-emerald-500', 'p-2.5', 'sm:p-3.5', 'rounded-xl', 'sm:rounded-2xl', 'flex', 'flex-col', 'justify-between', 'gap-2', 'sm:gap-3', 'cursor-pointer', 'group', 'transition-colors', 'text-left', 'focus:outline-none', 'focus-visible:ring-2', 'focus-visible:ring-emerald-500/40 shadow-sm')}
                       >
                         {p.imagem && (
-                          <img src={p.imagem} alt="" loading="lazy" className={clsx('w-full', 'h-20', 'object-cover', 'rounded-xl')} />
+                          <img src={p.imagem} alt="" loading="lazy" className={clsx('w-full', 'h-16', 'sm:h-20', 'object-cover', 'rounded-lg', 'sm:rounded-xl')} />
                         )}
-                        <div className="min-h-[34px]">
-                          {productLabel.code && <span className={clsx('mb-1', 'block', 'font-mono', 'text-[8px]', 'font-bold', 'tracking-[0.14em]', 'text-koma-muted')}>CÓD. {productLabel.code}</span>}
+                        <div className="min-h-[28px] sm:min-h-[34px]">
+                          {productLabel.code && <span className={clsx('mb-0.5', 'sm:mb-1', 'block', 'font-mono', 'text-[8px]', 'font-bold', 'tracking-[0.14em]', 'text-koma-muted')}>CÓD. {productLabel.code}</span>}
                           <h4 className={clsx('font-semibold', 'text-koma-foreground', 'text-xs', 'sm:text-[13px]', 'group-hover:text-koma-foreground', 'transition-colors', 'leading-snug', 'line-clamp-2')}>{productLabel.name}</h4>
-                          {p.descricao && <p className={clsx('text-[9px]', 'sm:text-[10px]', 'text-koma-muted', 'mt-1', 'line-clamp-1', 'leading-tight')}>{p.descricao}</p>}
+                          {p.descricao && <p className={clsx('hidden', 'sm:block', 'text-[9px]', 'sm:text-[10px]', 'text-koma-muted', 'mt-1', 'line-clamp-1', 'leading-tight')}>{p.descricao}</p>}
                         </div>
-                        <div className={clsx('flex', 'justify-between', 'items-center', 'border-t', 'border-koma-border', 'pt-2.5')}>
+                        <div className={clsx('flex', 'justify-between', 'items-center', 'border-t', 'border-koma-border', 'pt-2', 'sm:pt-2.5')}>
                           <span className={clsx('font-bold', 'text-emerald-700 dark:text-emerald-400', 'font-mono', 'text-xs')}>R$ {p.preco.toFixed(2).replace('.', ',')}</span>
                           <span className={clsx('inline-flex', 'items-center', 'gap-1', 'text-[9px]', 'font-bold', 'text-emerald-700 dark:text-[#4fe0bc]', 'group-hover:text-emerald-800 dark:group-hover:text-[#75ebce]')}>
-                            <Plus size={13} /> Adicionar
+                            <Plus size={13} /> <span className="hidden min-[380px]:inline">Adicionar</span>
                           </span>
                         </div>
                       </button>
@@ -5726,7 +5726,7 @@ export function CaixaPanel({
                             key={table.id}
                             data-table-status={isMerged ? 'merged' : hasPendingPayment ? 'payment' : isOccupied ? 'occupied' : 'free'}
                             className={clsx(
-                              'group flex min-h-[132px] flex-col justify-between gap-2.5 rounded-2xl border p-3 transition-colors sm:min-h-[148px] sm:gap-3 sm:p-3.5 shadow-sm',
+                              'group flex min-h-[106px] sm:min-h-[148px] flex-col justify-between gap-2 sm:gap-3 rounded-xl sm:rounded-2xl border p-2.5 sm:p-3.5 transition-colors shadow-sm',
                               isMerged && 'border-dashed border-koma-border bg-black/10 dark:bg-black/20 opacity-65',
                               hasPendingPayment && 'border-amber-300 dark:border-[#74404b] bg-amber-50/90 dark:bg-[#241419] hover:border-amber-500',
                               isOccupied && !hasPendingPayment && 'border-rose-300 dark:border-[#5f2831] bg-rose-50/90 dark:bg-[#1b1013] hover:border-rose-500',
@@ -5737,7 +5737,7 @@ export function CaixaPanel({
                               <div className="min-w-0">
                                 <span className={clsx('block', 'font-mono', 'text-[8px]', 'font-bold', 'uppercase', 'tracking-[0.2em]', 'text-koma-muted')}>Mesa</span>
                                 <div className={clsx('mt-0.5', 'flex', 'items-baseline', 'gap-2')}>
-                                  <strong className={clsx('text-2xl', 'font-extrabold', 'leading-none', 'text-koma-foreground')}>{table.id}</strong>
+                                  <strong className={clsx('text-xl sm:text-2xl', 'font-extrabold', 'leading-none', 'text-koma-foreground')}>{table.id}</strong>
                                   {table.nome && table.nome !== `Mesa ${table.id}` && (
                                     <span className={clsx('line-clamp-1', 'break-words', 'text-[10px]', 'font-semibold', 'text-koma-secondary')}>{table.nome}</span>
                                   )}
@@ -5745,7 +5745,7 @@ export function CaixaPanel({
                               </div>
                             </div>
 
-                            <div className="space-y-2">
+                            <div className="space-y-1.5 sm:space-y-2">
                               <div className={clsx('flex', 'flex-wrap', 'items-center', 'gap-1.5')}>
                                 <span className={clsx(
                                   'rounded-full border px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider',
@@ -5764,7 +5764,7 @@ export function CaixaPanel({
                                   {statusLabel}
                                 </span>
                                 <span className={clsx('flex', 'items-center', 'gap-1', 'text-[9px]', 'text-koma-muted')}>
-                                  <Users size={10} /> {table.capacidade || 4} lugares
+                                  <Users size={10} /> {table.capacidade || 4}
                                 </span>
                               </div>
 
@@ -5772,31 +5772,31 @@ export function CaixaPanel({
                                 <div className={clsx('flex', 'items-end', 'justify-between', 'gap-2')}>
                                   {tableOrders.length > 0 ? (
                                     <>
-                                      <span className={clsx('text-[9px]', 'text-koma-muted')}>Consumo atual</span>
+                                      <span className={clsx('text-[9px]', 'text-koma-muted')}>Consumo</span>
                                       <strong className={clsx(
-                                        'font-mono text-sm',
+                                        'font-mono text-xs sm:text-sm',
                                         hasPendingPayment ? 'text-amber-800 dark:text-[#efb2bc]' : 'text-rose-800 dark:text-[#e4a3ac]'
                                       )}>
                                         {total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                       </strong>
                                     </>
                                   ) : (
-                                    <span className={clsx('text-[9px]', 'text-koma-muted')}>Sincronizando atendimento…</span>
+                                    <span className={clsx('text-[9px]', 'text-koma-muted')}>Sincronizando…</span>
                                   )}
                                 </div>
                               ) : (
-                                <span className={clsx('block', 'text-[10px]', 'text-koma-muted')}>Pronta para receber clientes</span>
+                                <span className={clsx('hidden', 'sm:block', 'text-[10px]', 'text-koma-muted')}>Pronta para receber clientes</span>
                               )}
 
                               {(originId || transferredFromId) && (
                                 <span className={clsx('block', 'truncate', 'text-[9px]', 'text-koma-muted')}>
-                                  {originId ? `Unida à Mesa ${originId}` : `Transferida da Mesa ${transferredFromId}`}
+                                  {originId ? `Unida à M${originId}` : `Transf. M${transferredFromId}`}
                                 </span>
                               )}
                             </div>
 
                             {!isMerged && (
-                              <div className={clsx('flex', 'gap-1.5', 'border-t', 'border-koma-border', 'pt-2.5')}>
+                              <div className={clsx('flex', 'gap-1.5', 'border-t', 'border-koma-border', 'pt-2 sm:pt-2.5')}>
                                 {isOccupied ? (
                                   hasPendingPayment ? (
                                     <button
@@ -5816,20 +5816,20 @@ export function CaixaPanel({
                                         const checkoutTotal = subtotal * (1.0 + (taxaServicoAtiva ? serviceTaxRate / 100 : 0));
                                         setPaymentValor(Math.max(0, checkoutTotal - Number(checkoutOrder.valorPago || 0)).toFixed(2));
                                       }}
-                                      className={clsx('flex', 'min-h-9', 'flex-1', 'items-center', 'justify-center', 'gap-1.5', 'rounded-lg', 'koma-badge-warning', 'hover:bg-amber-200 dark:hover:bg-amber-900/40', 'px-2', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wide', 'transition-colors', 'disabled:cursor-wait', 'disabled:opacity-45', 'cursor-pointer')}
+                                      className={clsx('flex', 'min-h-8 sm:min-h-9', 'flex-1', 'items-center', 'justify-center', 'gap-1', 'rounded-lg', 'koma-badge-warning', 'hover:bg-amber-200 dark:hover:bg-amber-900/40', 'px-2', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wide', 'transition-colors', 'disabled:cursor-wait', 'disabled:opacity-45', 'cursor-pointer')}
                                     >
-                                      <CreditCard size={12} />
-                                      Receber conta
+                                      <CreditCard size={11} />
+                                      Receber
                                     </button>
                                   ) : (
                                     <button
                                       type="button"
                                       disabled={tableOrders.length === 0}
                                       onClick={() => tableOrders[0] && setSelectedKanbanOrder(tableOrders[0])}
-                                      className={clsx('flex', 'min-h-9', 'flex-1', 'items-center', 'justify-center', 'gap-1.5', 'rounded-lg', 'koma-badge-danger', 'hover:bg-rose-200 dark:hover:bg-rose-900/40', 'px-2', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wide', 'transition-colors', 'disabled:cursor-wait', 'disabled:opacity-45', 'cursor-pointer')}
+                                      className={clsx('flex', 'min-h-8 sm:min-h-9', 'flex-1', 'items-center', 'justify-center', 'gap-1', 'rounded-lg', 'koma-badge-danger', 'hover:bg-rose-200 dark:hover:bg-rose-900/40', 'px-2', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wide', 'transition-colors', 'disabled:cursor-wait', 'disabled:opacity-45', 'cursor-pointer')}
                                     >
-                                      <Receipt size={12} />
-                                      Ver comanda
+                                      <Receipt size={11} />
+                                      Comanda
                                     </button>
                                   )
                                 ) : (
@@ -5841,9 +5841,9 @@ export function CaixaPanel({
                                       setBalcaoMobileView('produtos');
                                       setActiveSubTab('balcao');
                                     }}
-                                    className={clsx('flex', 'min-h-9', 'flex-1', 'items-center', 'justify-center', 'gap-1.5', 'rounded-lg', 'koma-btn-success', 'px-2', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wide', 'transition-colors', 'cursor-pointer', 'shadow-xs')}
+                                    className={clsx('flex', 'min-h-8 sm:min-h-9', 'flex-1', 'items-center', 'justify-center', 'gap-1', 'rounded-lg', 'koma-btn-success', 'px-2', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wide', 'transition-colors', 'cursor-pointer', 'shadow-xs')}
                                   >
-                                    <Plus size={12} />
+                                    <Plus size={11} />
                                     Abrir pedido
                                   </button>
                                 )}
