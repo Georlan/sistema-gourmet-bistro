@@ -265,42 +265,42 @@ export function CardapioProdutosTab({
         ]}
       />
 
-      <section className="space-y-3 rounded-[22px] border border-koma-border bg-koma-panel/60 p-3.5 sm:p-4">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+      <section className="space-y-2.5 sm:space-y-3 rounded-2xl sm:rounded-[22px] border border-koma-border bg-koma-panel/60 p-2.5 sm:p-4">
+        <div className="flex flex-col gap-2 sm:gap-3 xl:flex-row xl:items-center">
           <div className="relative flex-1">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-koma-muted" size={15} />
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por nome, descrição ou código…" className="h-11 w-full rounded-xl border border-koma-border bg-koma-input pl-10 pr-10 text-[11px] text-koma-foreground outline-none transition-colors placeholder:text-zinc-500 focus:border-emerald-400/30" />
-            {search && <button type="button" onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1 text-koma-muted hover:text-koma-foreground cursor-pointer" aria-label="Limpar busca"><X size={13} /></button>}
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" size={14} />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por nome, descrição ou código…" className="h-9 sm:h-11 w-full rounded-xl border border-koma-border bg-koma-input pl-9 pr-9 text-[11px] text-koma-foreground outline-none transition-colors placeholder:text-zinc-500 focus:border-emerald-400/30" />
+            {search && <button type="button" onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-lg p-1 text-koma-muted hover:text-koma-foreground cursor-pointer" aria-label="Limpar busca"><X size={13} /></button>}
           </div>
-          <div className="grid grid-cols-3 rounded-xl border border-koma-border bg-koma-input p-1 lg:w-auto">
+          <div className="grid grid-cols-3 rounded-xl border border-koma-border bg-koma-input p-0.5 sm:p-1 lg:w-auto">
             {([
               ['todos', 'Todos'],
               ['publicados', 'Disponíveis'],
               ['pausados', 'Pausados'],
             ] as Array<[AvailabilityFilter, string]>).map(([value, label]) => (
-              <button key={value} type="button" onClick={() => setAvailabilityFilter(value)} className={clsx('rounded-lg px-3 py-2 text-[9px] font-bold transition-colors cursor-pointer', availabilityFilter === value ? 'bg-koma-card text-koma-foreground' : 'text-koma-subtle hover:text-koma-secondary')}>
+              <button key={value} type="button" onClick={() => setAvailabilityFilter(value)} className={clsx('rounded-lg px-2.5 py-1.5 sm:px-3 sm:py-2 text-[9px] font-bold transition-colors cursor-pointer text-center', availabilityFilter === value ? 'bg-koma-card text-koma-foreground' : 'text-koma-subtle hover:text-koma-secondary')}>
                 {label}
               </button>
             ))}
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-3 gap-1.5 sm:flex sm:flex-wrap sm:gap-2">
             {previewUrl && (
-              <a href={previewUrl} target="_blank" rel="noreferrer" className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card px-3 py-2.5 text-[9px] font-bold text-koma-secondary transition-colors hover:bg-koma-raised sm:flex-none">
-                <Eye size={13} /> Ver cardápio
+              <a href={previewUrl} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-1 sm:gap-2 rounded-xl border border-koma-border bg-koma-card px-2 sm:px-3 py-2 sm:py-2.5 text-[9px] font-bold text-koma-secondary transition-colors hover:bg-koma-raised">
+                <Eye size={12} className="sm:w-3.5 sm:h-3.5" /> <span className="truncate">Ver cardápio</span>
               </a>
             )}
-            <button type="button" onClick={onCreateCategory} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-emerald-300/15 bg-emerald-300/[0.06] px-3 py-2.5 text-[9px] font-bold text-emerald-600 dark:text-emerald-300 transition-colors hover:bg-emerald-300/[0.11] sm:flex-none cursor-pointer">
-              <Layers3 size={13} /> Nova categoria
+            <button type="button" onClick={onCreateCategory} className="inline-flex items-center justify-center gap-1 sm:gap-2 rounded-xl border border-emerald-300/15 bg-emerald-300/[0.06] px-2 sm:px-3 py-2 sm:py-2.5 text-[9px] font-bold text-emerald-600 dark:text-emerald-300 transition-colors hover:bg-emerald-300/[0.11] cursor-pointer">
+              <Layers3 size={12} className="sm:w-3.5 sm:h-3.5" /> <span className="truncate">Nova categoria</span>
             </button>
-            <button type="button" onClick={onCreateProduct} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-3 py-2.5 text-[9px] font-black text-zinc-950 transition-colors hover:bg-emerald-400 sm:flex-none cursor-pointer shadow-sm">
-              <Plus size={13} /> Novo produto
+            <button type="button" onClick={onCreateProduct} className="inline-flex items-center justify-center gap-1 sm:gap-2 rounded-xl bg-emerald-500 px-2 sm:px-3 py-2 sm:py-2.5 text-[9px] font-black text-zinc-950 transition-colors hover:bg-emerald-400 cursor-pointer shadow-sm">
+              <Plus size={12} className="sm:w-3.5 sm:h-3.5" /> <span className="truncate">Novo produto</span>
             </button>
           </div>
         </div>
-        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-          <button type="button" onClick={() => setCategoryFilter('todos')} className={clsx('shrink-0 rounded-full border px-3 py-1.5 text-[9px] font-bold transition-colors cursor-pointer', categoryFilter === 'todos' ? 'border-emerald-300/25 bg-emerald-300/[0.09] text-emerald-600 dark:text-emerald-300' : 'border-koma-border text-koma-subtle hover:text-koma-secondary')}>Todas as categorias</button>
+        <div className="flex gap-1.5 sm:gap-2 overflow-x-auto pb-0.5 scrollbar-none">
+          <button type="button" onClick={() => setCategoryFilter('todos')} className={clsx('shrink-0 rounded-full border px-2.5 py-1 text-[9px] font-bold transition-colors cursor-pointer', categoryFilter === 'todos' ? 'border-emerald-300/25 bg-emerald-300/[0.09] text-emerald-600 dark:text-emerald-300' : 'border-koma-border text-koma-subtle hover:text-koma-secondary')}>Todas as categorias</button>
           {categorias.map((category) => (
-            <button key={category.id} type="button" onClick={() => setCategoryFilter(category.id)} className={clsx('shrink-0 rounded-full border px-3 py-1.5 text-[9px] font-bold transition-colors cursor-pointer', categoryFilter === category.id ? 'border-emerald-300/25 bg-emerald-300/[0.09] text-emerald-600 dark:text-emerald-300' : 'border-koma-border text-koma-subtle hover:text-koma-secondary')}>
+            <button key={category.id} type="button" onClick={() => setCategoryFilter(category.id)} className={clsx('shrink-0 rounded-full border px-2.5 py-1 text-[9px] font-bold transition-colors cursor-pointer', categoryFilter === category.id ? 'border-emerald-300/25 bg-emerald-300/[0.09] text-emerald-600 dark:text-emerald-300' : 'border-koma-border text-koma-subtle hover:text-koma-secondary')}>
               {category.nome}
             </button>
           ))}

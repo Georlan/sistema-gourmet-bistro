@@ -261,84 +261,84 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
       )}
 
       {/* Main Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-2">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+        <div className="bg-koma-panel border border-koma-border p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl space-y-1.5 sm:space-y-2 shadow-xs">
           <div className="flex justify-between items-center text-koma-subtle">
-            <span className="text-[9px] font-bold uppercase tracking-wider">Faturamento Total</span>
-            <div className="p-1.5 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 rounded-xl">
-              <TrendingUp size={16} />
+            <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-wider truncate">Faturamento Total</span>
+            <div className="p-1 sm:p-1.5 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 rounded-lg sm:rounded-xl">
+              <TrendingUp size={14} className="sm:w-4 sm:h-4" />
             </div>
           </div>
-          <strong className="text-2xl text-koma-foreground font-mono block">
+          <strong className="text-lg sm:text-2xl text-koma-foreground font-mono block">
             R$ {data?.faturamento_total?.toFixed(2) ?? '0.00'}
           </strong>
           {data?.comparativo_anterior && (
-            <div className="flex items-center gap-1 text-[9px]">
+            <div className="flex items-center gap-1 text-[8px] sm:text-[9px]">
               {data.comparativo_anterior.variacao_faturamento_pct >= 0 ? (
-                <span className="text-emerald-400 font-bold flex items-center">
-                  <ArrowUpRight size={12} /> +{data.comparativo_anterior.variacao_faturamento_pct}%
-                </span>
-              ) : (
-                <span className="text-rose-400 font-bold flex items-center">
-                  <ArrowDownRight size={12} /> {data.comparativo_anterior.variacao_faturamento_pct}%
-                </span>
-              )}
-              <span className="text-koma-subtle">vs período anterior</span>
-            </div>
-          )}
-        </div>
-
-        <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-2">
-          <div className="flex justify-between items-center text-koma-subtle">
-            <span className="text-[9px] font-bold uppercase tracking-wider">Total de Pedidos</span>
-            <div className="p-1.5 bg-sky-500/15 text-sky-400 rounded-xl">
-              <ShoppingBag size={16} />
-            </div>
-          </div>
-          <strong className="text-2xl text-koma-foreground font-mono block">
-            {data?.total_pedidos ?? 0}
-          </strong>
-          {data?.comparativo_anterior && (
-            <div className="flex items-center gap-1 text-[9px]">
-              {data.comparativo_anterior.variacao_pedidos_pct >= 0 ? (
                 <span className="text-emerald-700 dark:text-emerald-400 font-extrabold flex items-center">
-                  <ArrowUpRight size={12} /> +{data.comparativo_anterior.variacao_pedidos_pct}%
+                  <ArrowUpRight size={11} /> +{data.comparativo_anterior.variacao_faturamento_pct}%
                 </span>
               ) : (
                 <span className="text-rose-700 dark:text-rose-400 font-extrabold flex items-center">
-                  <ArrowDownRight size={12} /> {data.comparativo_anterior.variacao_pedidos_pct}%
+                  <ArrowDownRight size={11} /> {data.comparativo_anterior.variacao_faturamento_pct}%
                 </span>
               )}
-              <span className="text-koma-muted font-medium">vs período anterior</span>
+              <span className="text-koma-muted hidden min-[360px]:inline">vs anterior</span>
             </div>
           )}
         </div>
 
-        <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-2 shadow-xs">
-          <div className="flex justify-between items-center text-koma-muted">
-            <span className="text-[9px] font-bold uppercase tracking-wider">Ticket Médio</span>
-            <div className="p-1.5 koma-badge-warning rounded-xl">
-              <TrendingUp size={16} />
+        <div className="bg-koma-panel border border-koma-border p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl space-y-1.5 sm:space-y-2 shadow-xs">
+          <div className="flex justify-between items-center text-koma-subtle">
+            <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-wider truncate">Total de Pedidos</span>
+            <div className="p-1 sm:p-1.5 bg-sky-500/15 text-sky-600 dark:text-sky-400 rounded-lg sm:rounded-xl">
+              <ShoppingBag size={14} className="sm:w-4 sm:h-4" />
             </div>
           </div>
-          <strong className="text-2xl text-koma-foreground font-mono block">
+          <strong className="text-lg sm:text-2xl text-koma-foreground font-mono block">
+            {data?.total_pedidos ?? 0}
+          </strong>
+          {data?.comparativo_anterior && (
+            <div className="flex items-center gap-1 text-[8px] sm:text-[9px]">
+              {data.comparativo_anterior.variacao_pedidos_pct >= 0 ? (
+                <span className="text-emerald-700 dark:text-emerald-400 font-extrabold flex items-center">
+                  <ArrowUpRight size={11} /> +{data.comparativo_anterior.variacao_pedidos_pct}%
+                </span>
+              ) : (
+                <span className="text-rose-700 dark:text-rose-400 font-extrabold flex items-center">
+                  <ArrowDownRight size={11} /> {data.comparativo_anterior.variacao_pedidos_pct}%
+                </span>
+              )}
+              <span className="text-koma-muted hidden min-[360px]:inline">vs anterior</span>
+            </div>
+          )}
+        </div>
+
+        <div className="bg-koma-panel border border-koma-border p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl space-y-1.5 sm:space-y-2 shadow-xs">
+          <div className="flex justify-between items-center text-koma-muted">
+            <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-wider truncate">Ticket Médio</span>
+            <div className="p-1 sm:p-1.5 koma-badge-warning rounded-lg sm:rounded-xl">
+              <TrendingUp size={14} className="sm:w-4 sm:h-4" />
+            </div>
+          </div>
+          <strong className="text-lg sm:text-2xl text-koma-foreground font-mono block">
             R$ {data?.ticket_medio?.toFixed(2) ?? '0.00'}
           </strong>
-          <span className="text-[10px] text-koma-muted block font-medium">Médio por comanda finalizada</span>
+          <span className="text-[9px] sm:text-[10px] text-koma-muted block font-medium truncate">Por comanda</span>
         </div>
 
         {(data?.clientes_ativos || 0) > 0 && (
-          <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-2 shadow-xs">
+          <div className="bg-koma-panel border border-koma-border p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl space-y-1.5 sm:space-y-2 shadow-xs">
             <div className="flex justify-between items-center text-koma-muted">
-              <span className="text-[9px] font-bold uppercase tracking-wider">Clientes Ativos</span>
-              <div className="p-1.5 bg-purple-500/15 text-purple-600 dark:text-purple-300 rounded-xl">
-                <Users size={16} />
+              <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-wider truncate">Clientes Ativos</span>
+              <div className="p-1 sm:p-1.5 bg-purple-500/15 text-purple-600 dark:text-purple-300 rounded-lg sm:rounded-xl">
+                <Users size={14} className="sm:w-4 sm:h-4" />
               </div>
             </div>
-            <strong className="text-2xl text-koma-foreground font-mono block">
+            <strong className="text-lg sm:text-2xl text-koma-foreground font-mono block">
               {data.clientes_ativos}
             </strong>
-            <span className="text-[10px] text-koma-muted block font-medium">Clientes cadastrados com identificação</span>
+            <span className="text-[9px] sm:text-[10px] text-koma-muted block font-medium truncate">Cadastrados</span>
           </div>
         )}
       </div>

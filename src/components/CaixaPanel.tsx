@@ -6894,10 +6894,10 @@ export function CaixaPanel({
 
           {/* VIEW: CUPONS DE DESCONTO */}
           {['cupons', 'cupom', 'descontos', 'cupons_desconto'].includes(activeSubTab) && (
-            <div className={clsx('grid', 'grid-cols-1', 'md:grid-cols-3', 'gap-5', 'text-left', 'animate-fade-in')}>
-              <div className={clsx('md:col-span-1', 'bg-koma-card', 'border', 'border-koma-border', 'p-5', 'rounded-3xl', 'space-y-4', 'h-fit')}>
+            <div className={clsx('grid', 'grid-cols-1', 'md:grid-cols-3', 'gap-4', 'sm:gap-5', 'text-left', 'animate-fade-in')}>
+              <div className={clsx('md:col-span-1', 'bg-koma-card', 'border', 'border-koma-border', 'p-3.5', 'sm:p-5', 'rounded-2xl', 'sm:rounded-3xl', 'space-y-3', 'sm:space-y-4', 'h-fit')}>
                 <span className={clsx('font-serif', 'font-bold', 'text-koma-secondary', 'block', 'pb-1', 'border-b', 'border-koma-border')}>Criar Novo Cupom</span>
-                <form onSubmit={handleAddCoupon} className="space-y-4">
+                <form onSubmit={handleAddCoupon} className="space-y-3">
                   <div className="space-y-1">
                     <label className={clsx('text-[9px]', 'font-bold', 'text-koma-secondary', 'uppercase', 'tracking-wider', 'block')}>Código do Cupom:</label>
                     <input
@@ -6905,45 +6905,47 @@ export function CaixaPanel({
                       placeholder="EX: FESTA20"
                       value={newCouponCode}
                       onChange={(e) => setNewCouponCode(e.target.value)}
-                      className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-page', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-[10px]')}
+                      className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-[10px]')}
                     />
                   </div>
 
-                  <div className="space-y-1">
-                    <label className={clsx('text-[9px]', 'font-bold', 'text-koma-secondary', 'uppercase', 'tracking-wider', 'block')}>Tipo de Desconto:</label>
-                    <select
-                      value={newCouponTipo}
-                      onChange={(e) => setNewCouponTipo(e.target.value as any)}
-                      className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-page', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-[10px]')}
-                    >
-                      <option value="percentual">Percentual (%)</option>
-                      <option value="fixo">Fixo (R$)</option>
-                    </select>
-                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className={clsx('text-[9px]', 'font-bold', 'text-koma-secondary', 'uppercase', 'tracking-wider', 'block')}>Tipo:</label>
+                      <select
+                        value={newCouponTipo}
+                        onChange={(e) => setNewCouponTipo(e.target.value as any)}
+                        className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-[10px]')}
+                      >
+                        <option value="percentual">Percentual (%)</option>
+                        <option value="fixo">Fixo (R$)</option>
+                      </select>
+                    </div>
 
-                  <div className="space-y-1">
-                    <label className={clsx('text-[9px]', 'font-bold', 'text-koma-secondary', 'uppercase', 'tracking-wider', 'block')}>Valor do Desconto:</label>
-                    <input
-                      type="number"
-                      value={newCouponVal}
-                      onChange={(e) => setNewCouponVal(Number(e.target.value))}
-                      className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-page', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'font-mono', 'text-[10px]')}
-                    />
+                    <div className="space-y-1">
+                      <label className={clsx('text-[9px]', 'font-bold', 'text-koma-secondary', 'uppercase', 'tracking-wider', 'block')}>Valor:</label>
+                      <input
+                        type="number"
+                        value={newCouponVal}
+                        onChange={(e) => setNewCouponVal(Number(e.target.value))}
+                        className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'font-mono', 'text-[10px]')}
+                      />
+                    </div>
                   </div>
 
                   <button
                     type="submit"
-                    className={clsx('w-full', 'py-2', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'font-bold', 'rounded-xl', 'text-[9px]', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}
+                    className={clsx('w-full', 'py-2.5', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'font-bold', 'rounded-xl', 'text-[10px]', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}
                   >
                     Salvar Cupom
                   </button>
                 </form>
               </div>
 
-              <div className={clsx('md:col-span-2', 'bg-koma-card/60', 'border', 'border-koma-border', 'rounded-3xl', 'p-5', 'space-y-4')}>
+              <div className={clsx('md:col-span-2', 'bg-koma-card/60', 'border', 'border-koma-border', 'rounded-2xl', 'sm:rounded-3xl', 'p-3.5', 'sm:p-5', 'space-y-3', 'sm:space-y-4')}>
                 <span className={clsx('font-serif', 'font-bold', 'text-koma-secondary', 'block', 'pb-1', 'border-b', 'border-koma-border')}>Cupons Cadastrados</span>
-                <div className={clsx('overflow-hidden', 'border', 'border-koma-border/40', 'rounded-2xl')}>
-                  <table className={clsx('w-full', 'text-left', 'text-[10px]')}>
+                <div className={clsx('overflow-x-auto', 'border', 'border-koma-border/40', 'rounded-2xl')}>
+                  <table className={clsx('w-full', 'min-w-[420px]', 'text-left', 'text-[10px]')}>
                     <thead>
                       <tr className={clsx('bg-koma-panel', 'border-b', 'border-koma-border', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'font-bold')}>
                         <th className="p-3">Código</th>
@@ -7732,7 +7734,7 @@ export function CaixaPanel({
           {/* LIVE VIEW: ESTOQUE DE INSUMOS */}
           {activeTab === 'estoque' && activeSubTab === 'insumos' && (
             <div className={clsx('animate-fade-in', 'space-y-4', 'text-left')}>
-              <div className={clsx('bg-koma-card/60', 'border', 'border-koma-border', 'rounded-3xl', 'p-3', 'sm:p-5', 'space-y-3')}>
+              <div className={clsx('bg-koma-card/60', 'border', 'border-koma-border', 'rounded-2xl', 'sm:rounded-3xl', 'p-3', 'sm:p-5', 'space-y-3')}>
                 <div className={clsx('grid', 'grid-cols-2', 'gap-2', 'border-b', 'border-koma-border', 'pb-3', 'sm:flex', 'sm:items-center', 'sm:justify-between')}>
                   <span className={clsx('col-span-2', 'font-serif', 'font-bold', 'text-koma-secondary', 'sm:col-span-1', 'sm:mr-auto')}>Ingredientes</span>
                   <button
@@ -7746,14 +7748,14 @@ export function CaixaPanel({
                       setInsumoFormCusto(0);
                       setShowNewInsumoModal(true);
                     }}
-                    className={clsx('min-h-10', 'px-3', 'py-1', 'bg-emerald-600', 'hover:bg-emerald-500', 'text-white', 'rounded-lg', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-sm')}
+                    className={clsx('min-h-9', 'sm:min-h-10', 'px-3', 'py-1', 'bg-emerald-600', 'hover:bg-emerald-500', 'text-white', 'rounded-xl', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-sm')}
                   >
                     + Novo Ingrediente
                   </button>
                   <button
                     type="button"
                     onClick={() => setActiveSubTab('entradas')}
-                    className={clsx('min-h-10', 'px-3', 'py-1', 'bg-koma-raised', 'hover:bg-koma-raised', 'text-emerald-400', 'border', 'border-emerald-500/30', 'rounded-lg', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-sm', 'flex', 'items-center', 'justify-center', 'gap-1')}
+                    className={clsx('min-h-9', 'sm:min-h-10', 'px-3', 'py-1', 'bg-koma-raised', 'hover:bg-koma-raised', 'text-emerald-700 dark:text-emerald-400', 'border', 'border-emerald-500/30', 'rounded-xl', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-sm', 'flex', 'items-center', 'justify-center', 'gap-1')}
                     title="Importar Nota Fiscal Eletrônica XML"
                   >
                     <Upload size={11} />
@@ -7761,7 +7763,7 @@ export function CaixaPanel({
                   </button>
                 </div>
                 <div className={clsx('overflow-x-auto', 'overscroll-x-contain', 'border', 'border-koma-border/40', 'rounded-2xl')}>
-                  <table className={clsx('w-full', 'min-w-[680px]', 'text-left', 'text-[10px]')}>
+                  <table className={clsx('w-full', 'min-w-[580px]', 'text-left', 'text-[10px]')}>
                     <thead>
                       <tr className={clsx('bg-koma-panel', 'border-b', 'border-koma-border', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'font-bold')}>
                         <th className="p-3">Ingrediente</th>
@@ -7774,7 +7776,7 @@ export function CaixaPanel({
                     </thead>
                     <tbody className={clsx('divide-y', 'divide-koma-border')}>
                       {estoqueInsumos.length === 0 ? (
-                        <tr><td colSpan={6} className={clsx('p-8', 'text-center', 'text-koma-muted', 'italic')}>Nenhum ingrediente cadastrado. Clique em Novo Ingrediente ou importe uma NF-e para começar.</td></tr>
+                        <tr><td colSpan={6} className={clsx('p-6 sm:p-8', 'text-center', 'text-koma-muted', 'italic', 'text-[11px]')}>Nenhum ingrediente cadastrado. Clique em Novo Ingrediente ou importe uma NF-e para começar.</td></tr>
                       ) : estoqueInsumos.map(ins => {
                         const isLow = ins.estoque_atual <= ins.estoque_minimo;
                         return (

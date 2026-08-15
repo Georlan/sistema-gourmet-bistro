@@ -146,9 +146,9 @@ export function CardapioCategoriasTab({
         ]}
       />
 
-      <section className="flex flex-col gap-3 rounded-[22px] border border-koma-border bg-koma-panel p-3.5 sm:flex-row sm:items-center sm:justify-between">
+      <section className="flex flex-col gap-2 rounded-2xl border border-koma-border bg-koma-panel p-2.5 sm:p-3.5 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative flex-1">
-          <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-koma-muted" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" />
           <input
             type="text"
             value={search}
@@ -157,37 +157,37 @@ export function CardapioCategoriasTab({
             className="w-full rounded-xl border border-koma-border bg-koma-input py-2 pl-9 pr-3 text-xs text-koma-foreground placeholder:text-koma-muted focus:border-emerald-500 focus:outline-none"
           />
         </div>
-        <button type="button" onClick={handleOpenCreate} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-3 text-[10px] font-black text-zinc-950 transition-colors hover:bg-emerald-400 cursor-pointer shadow-sm">
+        <button type="button" onClick={handleOpenCreate} className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-500 px-3.5 py-2.5 text-[10px] font-black text-zinc-950 transition-colors hover:bg-emerald-400 cursor-pointer shadow-sm">
           <Plus size={14} /> Nova categoria
         </button>
       </section>
 
       {filteredCategories.length === 0 ? (
-        <div className="flex min-h-64 flex-col items-center justify-center rounded-[22px] border border-dashed border-koma-border bg-koma-panel px-6 text-center">
+        <div className="flex min-h-64 flex-col items-center justify-center rounded-2xl sm:rounded-[22px] border border-dashed border-koma-border bg-koma-panel px-6 text-center">
           <Layers3 size={28} className="text-koma-muted" />
           <strong className="mt-4 text-sm text-koma-secondary">Nenhuma categoria encontrada</strong>
           <p className="mt-1 text-[10px] text-koma-muted">Ajuste a busca ou crie uma nova categoria.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-2.5 sm:gap-3 md:grid-cols-2 xl:grid-cols-3">
           {filteredCategories.map((category) => {
             const meta = destinationMeta[category.destino_impressao as keyof typeof destinationMeta] || destinationMeta.NENHUM;
             const Icon = meta.icon;
             return (
-              <article key={category.id} className="group flex min-h-[160px] flex-col justify-between rounded-[22px] border border-koma-border bg-koma-card p-4 shadow-sm transition-colors hover:border-koma-border-strong">
+              <article key={category.id} className="group flex min-h-[118px] sm:min-h-[160px] flex-col justify-between rounded-xl sm:rounded-[22px] border border-koma-border bg-koma-card p-3 sm:p-4 shadow-sm transition-colors hover:border-koma-border-strong">
                 <div>
                   <div className="flex items-start justify-between gap-3">
-                    <span className={clsx('flex h-10 w-10 items-center justify-center rounded-xl border', meta.className)}><Icon size={16} /></span>
-                    <span className="max-w-[60%] truncate rounded-full border border-koma-border bg-koma-input px-2 py-1 font-mono text-[8px] text-koma-muted">{category.id}</span>
+                    <span className={clsx('flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg sm:rounded-xl border', meta.className)}><Icon size={14} className="sm:w-4 sm:h-4" /></span>
+                    <span className="max-w-[60%] truncate rounded-full border border-koma-border bg-koma-input px-2 py-0.5 font-mono text-[8px] text-koma-muted">{category.id}</span>
                   </div>
-                  <h2 className="mt-4 text-sm font-bold text-koma-foreground">{category.nome}</h2>
-                  <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">{meta.description}</p>
+                  <h2 className="mt-2 sm:mt-4 text-xs sm:text-sm font-bold text-koma-foreground">{category.nome}</h2>
+                  <p className="mt-0.5 sm:mt-1 text-[9px] sm:text-[10px] leading-relaxed text-koma-muted line-clamp-1 sm:line-clamp-2">{meta.description}</p>
                 </div>
-                <div className="mt-4 flex items-center justify-between border-t border-koma-border pt-3">
-                  <span className={clsx('text-[9px] font-bold', meta.className.split(' ').at(-1))}>{meta.label}</span>
+                <div className="mt-2 sm:mt-4 flex items-center justify-between border-t border-koma-border pt-2 sm:pt-3">
+                  <span className={clsx('text-[8px] sm:text-[9px] font-bold', meta.className.split(' ').at(-1))}>{meta.label}</span>
                   <div className="flex items-center gap-1">
-                    <button type="button" onClick={() => { setEditingCategory(category); setModalOpen(true); }} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[9px] font-bold text-koma-subtle transition-colors hover:bg-white/[0.05] hover:text-koma-foreground cursor-pointer"><Edit3 size={12} /> Editar</button>
-                    <button type="button" onClick={() => { setDeletingCategory(category); setDeleteModalOpen(true); }} className="rounded-lg p-2 text-koma-muted transition-colors hover:bg-rose-500/10 hover:text-rose-600 dark:text-rose-300 cursor-pointer" title="Excluir categoria" aria-label={`Excluir ${category.nome}`}><Trash2 size={13} /></button>
+                    <button type="button" onClick={() => { setEditingCategory(category); setModalOpen(true); }} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[9px] font-bold text-koma-subtle transition-colors hover:bg-white/[0.05] hover:text-koma-foreground cursor-pointer"><Edit3 size={11} /> Editar</button>
+                    <button type="button" onClick={() => { setDeletingCategory(category); setDeleteModalOpen(true); }} className="rounded-lg p-1.5 text-koma-muted transition-colors hover:bg-rose-500/10 hover:text-rose-600 dark:text-rose-300 cursor-pointer" title="Excluir categoria" aria-label={`Excluir ${category.nome}`}><Trash2 size={12} /></button>
                   </div>
                 </div>
               </article>

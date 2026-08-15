@@ -1382,7 +1382,7 @@ body {
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 768px) {
   .cashier-content {
     padding: 0.7rem !important;
     scrollbar-gutter: auto;
