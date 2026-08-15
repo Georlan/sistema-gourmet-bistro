@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { X, Clock, Receipt, PlusCircle, Move, ShoppingBag, Printer, Trash2, ArrowLeft, Edit2, Edit3, GitMerge } from 'lucide-react';
+import { X, Clock, Receipt, PlusCircle, Move, ShoppingBag, Printer, Trash2, ArrowLeft, Edit2, Edit3, GitMerge, Zap, CheckCircle2 } from 'lucide-react';
 import { Table, Order, DraftItem, AppSettings, Product, AppRole, OrderItem } from '../types';
 import { getTableTotal, getCustomerSubtotals, formatElapsedTime, normalizeOperationalTimestamp } from '../domain';
 import { MenuPanel } from './MenuPanel';
@@ -101,6 +101,8 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
   const [selectedItemsForTransfer, setSelectedItemsForTransfer] = useState<string[]>([]);
   const [transferType, setTransferType] = useState<'total' | 'parcial' | 'mesclar'>('total');
   const [printSuccess, setPrintSuccess] = useState<boolean>(false);
+  const [isPrintingDirect, setIsPrintingDirect] = useState<boolean>(false);
+  const [directPrintToast, setDirectPrintToast] = useState<string>('');
   const [confirmClear, setConfirmClear] = useState<boolean>(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [expandedOrders, setExpandedOrders] = useState<Record<string, boolean>>({});
@@ -333,6 +335,29 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                   {/* 1. RESUMO FINANCEIRO & AÇÕES RÁPIDAS (RENDERIZA NO TOPO NO MOBILE - 0 ROLAGEM) */}
                   <div className="order-1 lg:order-2 lg:col-span-5 bg-koma-panel border border-koma-border rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 flex flex-col justify-between space-y-3 shadow-sm">
                     <div className="space-y-3">
+                      {/* Origin & Transfer Badges */}
+                      {(() => {
+                        const transferOrigin = orders.find(o => o.mesaTransferidaDe)?.mesaTransferidaDe;
+                        const mergedOrigins = Array.from(new Set(orders.map(o => o.mesaOrigemId).filter((id): id is number => id !== null && id !== undefined && id !== table.id)));
+                        if (transferOrigin || mergedOrigins.length > 0) {
+                          return (
+                            <div className="flex flex-wrap gap-1.5 pb-0.5">
+                              {transferOrigin && (
+                                <span className="px-2 py-0.5 text-[9px] bg-purple-500/20 text-purple-300 border border-purple-500/35 rounded-md font-sans font-bold uppercase tracking-wider">
+                                  🔗 Transf. de Mesa {transferOrigin}
+                                </span>
+                              )}
+                              {mergedOrigins.map(mId => (
+                                <span key={mId} className="px-2 py-0.5 text-[9px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/35 rounded-md font-sans font-bold uppercase tracking-wider">
+                                  🔀 Mesclada com Mesa {mId}
+                                </span>
+                              ))}
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+
                       {/* Financial Total */}
                       {(() => {
                         const hasTax = restauranteConfig?.taxa_servico_ativa ?? true;
@@ -361,29 +386,90 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                         );
                       })()}
 
-                      {/* Main Action Buttons: Prévia/Extrato + Novo Pedido */}
+                      {/* Direct Print Feedback Toast */}
+                      {directPrintToast && (
+                        <div className="bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 px-3 py-1.5 rounded-xl text-center text-xs font-bold font-sans animate-fade-in">
+                          {directPrintToast}
+                        </div>
+                      )}
+
+                      {/* Action Row 1: Direct Print Values (1-Touch) + Extrato Completo */}
                       <div className="grid grid-cols-2 gap-2">
                         <button
-                          id="print-invoice-preview-btn"
-                          onClick={handlePrintPreview}
-                          className="py-2.5 px-3 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 border border-emerald-400 rounded-xl font-extrabold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md shadow-emerald-950/20 active:scale-95"
+                          id="quick-print-values-btn"
+                          type="button"
+                          disabled={isPrintingDirect}
+                          onClick={async () => {
+                            if (onPrintReceipt) {
+                              setIsPrintingDirect(true);
+                              try {
+                                await onPrintReceipt(true);
+                                setDirectPrintToast('🖨️ Apenas Valores impresso com sucesso!');
+                                setTimeout(() => setDirectPrintToast(''), 3000);
+                              } catch (e) {
+                                console.error(e);
+                                alert('Erro ao enviar impressão de fechamento');
+                              } finally {
+                                setIsPrintingDirect(false);
+                              }
+                            } else {
+                              handlePrintPreview();
+                            }
+                          }}
+                          className="py-2.5 px-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 border border-emerald-400 rounded-xl font-extrabold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md shadow-emerald-950/20 active:scale-95 disabled:opacity-50"
+                          title="Imprimir direto recibo de fechamento apenas com valores"
                         >
-                          <Printer size={14} className="shrink-0" />
-                          <span>Prévia e Extrato</span>
+                          <Zap size={14} className="shrink-0 text-zinc-950" />
+                          <span>{isPrintingDirect ? 'Imprimindo...' : 'Apenas Valores'}</span>
                         </button>
 
                         <button
+                          id="print-invoice-preview-btn"
+                          onClick={handlePrintPreview}
+                          className="py-2.5 px-2 bg-koma-raised hover:bg-koma-card border border-koma-border hover:border-emerald-500/30 text-koma-foreground rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                          title="Ver prévia e imprimir extrato detalhado com itens"
+                        >
+                          <Printer size={14} className="text-emerald-400 shrink-0" />
+                          <span>Extrato Completo</span>
+                        </button>
+                      </div>
+
+                      {/* Action Row 2: + Mais Itens e Fechamento da Mesa */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
                           type="button"
                           onClick={() => setActiveTab('lancamento')}
-                          className="py-2.5 px-3 bg-koma-raised hover:bg-koma-card border border-koma-border hover:border-emerald-500/30 text-koma-foreground rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                          className="py-2.5 px-2 bg-koma-raised hover:bg-koma-card border border-koma-border hover:border-emerald-500/30 text-koma-foreground rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
                         >
                           <PlusCircle size={14} className="text-emerald-400 shrink-0" />
                           <span>+ Mais Itens</span>
                         </button>
+
+                        {onCloseTable && !(activeRole === 'garcom' && !restauranteConfig?.perm_garcom_fechar) && (
+                          <button
+                            id="close-table-btn-consumo"
+                            onClick={() => {
+                              if (confirmClear) {
+                                onCloseTable();
+                              } else {
+                                setConfirmClear(true);
+                                setTimeout(() => setConfirmClear(false), 4000);
+                              }
+                            }}
+                            className={`py-2.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer font-sans transition-all border ${
+                              confirmClear
+                                ? 'bg-rose-800/40 border-rose-700/50 text-rose-300 animate-pulse'
+                                : 'bg-koma-raised hover:bg-rose-950/30 border-koma-border hover:border-rose-800/40 text-rose-400'
+                            }`}
+                          >
+                            <CheckCircle2 size={13} className="shrink-0" />
+                            <span>{confirmClear ? 'Confirmar Fechar?' : 'Fechar Mesa'}</span>
+                          </button>
+                        )}
                       </div>
 
-                      {/* Transfer / Merge / Close Table Quick Actions */}
-                      <div className="flex items-center gap-2 pt-1">
+                      {/* Transfer / Merge Quick Actions */}
+                      <div className="flex items-center gap-2 pt-0.5">
                         {(canTransferTables || canTransferItems) && (
                           <button
                             type="button"
@@ -391,7 +477,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                               setActiveTab('transferir');
                               setTransferType(canTransferTables ? 'total' : 'parcial');
                             }}
-                            className="flex-1 py-2 bg-koma-card hover:bg-koma-raised border border-koma-border text-koma-subtle hover:text-koma-foreground rounded-lg font-bold text-[10px] flex items-center justify-center gap-1 transition-colors cursor-pointer uppercase font-sans"
+                            className="flex-1 py-1.5 bg-koma-card hover:bg-koma-raised border border-koma-border text-koma-subtle hover:text-koma-foreground rounded-lg font-bold text-[10px] flex items-center justify-center gap-1 transition-colors cursor-pointer uppercase font-sans"
                           >
                             <Move size={11} className="text-emerald-400" />
                             <span>Transferir</span>
@@ -404,31 +490,10 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                               setActiveTab('mesclar');
                               setTransferType('mesclar');
                             }}
-                            className="flex-1 py-2 bg-koma-card hover:bg-koma-raised border border-koma-border text-koma-subtle hover:text-koma-foreground rounded-lg font-bold text-[10px] flex items-center justify-center gap-1 transition-colors cursor-pointer uppercase font-sans"
+                            className="flex-1 py-1.5 bg-koma-card hover:bg-koma-raised border border-koma-border text-koma-subtle hover:text-koma-foreground rounded-lg font-bold text-[10px] flex items-center justify-center gap-1 transition-colors cursor-pointer uppercase font-sans"
                           >
                             <GitMerge size={11} className="text-emerald-400" />
                             <span>Mesclar</span>
-                          </button>
-                        )}
-                        {onCloseTable && !(activeRole === 'garcom' && !restauranteConfig?.perm_garcom_fechar) && (
-                          <button
-                            id="close-table-btn-consumo"
-                            onClick={() => {
-                              if (confirmClear) {
-                                onCloseTable();
-                              } else {
-                                setConfirmClear(true);
-                                setTimeout(() => setConfirmClear(false), 4000);
-                              }
-                            }}
-                            className={`flex-1 py-2 rounded-lg font-bold text-[10px] flex items-center justify-center gap-1 cursor-pointer uppercase font-sans transition-all border ${
-                              confirmClear
-                                ? 'bg-rose-800/40 border-rose-700/50 text-rose-300 animate-pulse'
-                                : 'bg-koma-card hover:bg-rose-950/30 border-koma-border hover:border-rose-800/40 text-koma-muted hover:text-rose-400'
-                            }`}
-                          >
-                            <X size={11} />
-                            <span>{confirmClear ? 'Confirmar?' : 'Fechar'}</span>
                           </button>
                         )}
                       </div>
