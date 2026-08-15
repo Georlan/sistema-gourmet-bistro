@@ -30,27 +30,36 @@ def _is_general_client(name: str) -> bool:
     return (name or "").strip().casefold() in {"", "geral", "consumo geral"}
 
 
-def format_production_document(data: OrderPrintData, width: PaperWidth = PaperWidth.WIDTH_80MM) -> str:
-    """
-    Gera a comanda de PRODUÇÃO usada para pedidos lançados no salão.
+def _printable_name(code: str, name: str) -> str:
+    clean_name = (name or "").strip()
+    clean_code = (code or "").strip()
+    if not clean_code:
+        return clean_name
+    lowered = clean_name.casefold()
+    for prefix in (
+        f"{clean_code} - ",
+        f"{clean_code}-",
+        f"[{clean_code}] ",
+        f"[{clean_code}]",
+    ):
+        if lowered.startswith(prefix.casefold()):
+            return clean_name[len(prefix):].lstrip()
+    return clean_name
 
-    Regras de padronização:
-    - Caixa e garçom usam este mesmo documento para Consumo no Local.
-    - Imprime o valor total de cada linha.
-    - Filtra itens com destino NENHUM.
-    - Agrupa itens por cliente; "Consumo Geral" não ganha cabeçalho próprio.
-    - Somente agrupa quantidades se produto e observação forem equivalentes.
-    - Observações aparecem abaixo do item correspondente.
-    - Reimpressões mantêm o mesmo layout e recebem apenas o marcador REIMPRESSÃO.
+
+def format_production_document(data: OrderPrintData, width: PaperWidth = PaperWidth.WIDTH_80MM) -> str:
+    """Gera a comanda de produção padronizada para pedidos do salão.
+
+    Caixa e garçom usam a mesma estrutura para Consumo no Local. O documento
+    mostra valores, agrupa por cliente, omite o bloco de Consumo Geral quando
+    ele é o único identificador e preserva observações operacionais.
     """
     w = width.value if isinstance(width, PaperWidth) else int(width)
     lines: List[str] = []
 
     restaurante = (data.restaurante_nome or "KÔMA").upper()
     lines.append(_center(restaurante, w))
-
-    tipo_str = (data.tipo_pedido or "CONSUMO NO LOCAL").upper()
-    lines.append(_center(tipo_str, w))
+    lines.append(_center((data.tipo_pedido or "CONSUMO NO LOCAL").upper(), w))
 
     reprint_marker = (data.numero_lancamento or "").strip().upper()
     if reprint_marker in {"REIMPRESSAO", "REIMPRESSÃO"}:
@@ -66,7 +75,6 @@ def format_production_document(data: OrderPrintData, width: PaperWidth = PaperWi
         if ped_num
         else ""
     )
-
     mesa_val = str(data.mesa).strip() if data.mesa else ""
     mesa_str = (
         f"MESA: {mesa_val}"
@@ -103,22 +111,16 @@ def format_production_document(data: OrderPrintData, width: PaperWidth = PaperWi
     for client_name, client_items in by_client.items():
         if not client_items:
             continue
-
         if not first_block:
             lines.append(_separator("-", w))
         first_block = False
 
         if not _is_general_client(client_name):
-            lines.append(_center(f"CLIENTE: {client_name}", w))
+            lines.append(_center(f"CLIENTE: {client_name.upper()}", w))
 
-        grouped_items = group_equivalent_items(
-            client_items,
-            match_observations=True,
-        )
-
-        for item in grouped_items:
-            code_str = f"{item.codigo} - " if item.codigo else ""
-            left = f"{item.quantidade}x {code_str}{item.nome.upper()}".strip()
+        for item in group_equivalent_items(client_items, match_observations=True):
+            printable_name = _printable_name(item.codigo, item.nome).upper()
+            left = f"{item.quantidade}x {printable_name}".strip()
             right = f"R$ {_format_curr(item.total)}"
             lines.append(_justify(left, right, w))
 
