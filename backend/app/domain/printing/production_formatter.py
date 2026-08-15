@@ -1,13 +1,16 @@
-from typing import List, Dict
-from .models import OrderPrintData, PrintItem
+from typing import List
+from .models import OrderPrintData
 from .types import PaperWidth
 from .grouping import group_items_by_customer, group_equivalent_items, normalize_observation
+
 
 def _center(text: str, width: int) -> str:
     return text.strip().center(width)
 
+
 def _separator(char: str = "-", width: int = 48) -> str:
     return char * width
+
 
 def _justify(left: str, right: str, width: int) -> str:
     l_str = left.strip()
@@ -18,33 +21,58 @@ def _justify(left: str, right: str, width: int) -> str:
     spaces = max(width - len(l_str) - len(r_str), 1)
     return l_str + (" " * spaces) + r_str
 
+
 def _format_curr(value: float) -> str:
     return f"{value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
+
+def _is_general_client(name: str) -> bool:
+    return (name or "").strip().casefold() in {"", "geral", "consumo geral"}
+
+
 def format_production_document(data: OrderPrintData, width: PaperWidth = PaperWidth.WIDTH_80MM) -> str:
     """
-    Gera o texto puro formatado para o documento TIPO 1 - PRODUÇÃO (cozinha).
+    Gera a comanda de PRODUÇÃO usada para pedidos lançados no salão.
 
-    Regras:
-    - Imprime o total do item alinhado à direita (sem preço unitário separado).
+    Regras de padronização:
+    - Caixa e garçom usam este mesmo documento para Consumo no Local.
+    - Imprime o valor total de cada linha.
     - Filtra itens com destino NENHUM.
-    - Agrupa itens por cliente. Omite o nome 'GERAL' se for cliente único sem identificação.
-    - Somente agrupa quantidades se produto e observação forem exatamente iguais.
-    - Observações aparecem indentadas abaixo do item.
-    - Economiza papel ao máximo — sem cabeçalho de colunas.
+    - Agrupa itens por cliente; "Consumo Geral" não ganha cabeçalho próprio.
+    - Somente agrupa quantidades se produto e observação forem equivalentes.
+    - Observações aparecem abaixo do item correspondente.
+    - Reimpressões mantêm o mesmo layout e recebem apenas o marcador REIMPRESSÃO.
     """
     w = width.value if isinstance(width, PaperWidth) else int(width)
     lines: List[str] = []
 
-    # 1. Cabeçalho
     restaurante = (data.restaurante_nome or "KÔMA").upper()
     lines.append(_center(restaurante, w))
 
+    tipo_str = (data.tipo_pedido or "CONSUMO NO LOCAL").upper()
+    lines.append(_center(tipo_str, w))
+
+    reprint_marker = (data.numero_lancamento or "").strip().upper()
+    if reprint_marker in {"REIMPRESSAO", "REIMPRESSÃO"}:
+        lines.append(_center("REIMPRESSÃO", w))
+
+    lines.append(_separator("-", w))
+
     ped_num = str(data.numero_pedido).strip()
-    ped_str = f"PED #{ped_num}" if ped_num and not ped_num.startswith("#") else f"PED {ped_num}" if ped_num else ""
-    
+    ped_str = (
+        f"PEDIDO: #{ped_num}"
+        if ped_num and not ped_num.startswith("#")
+        else f"PEDIDO: {ped_num}"
+        if ped_num
+        else ""
+    )
+
     mesa_val = str(data.mesa).strip() if data.mesa else ""
-    mesa_str = f"MESA {mesa_val}" if mesa_val and not mesa_val.upper().startswith("MESA") else mesa_val.upper()
+    mesa_str = (
+        f"MESA: {mesa_val}"
+        if mesa_val and not mesa_val.upper().startswith("MESA")
+        else mesa_val.upper()
+    )
 
     if ped_str and mesa_str:
         lines.append(_justify(ped_str, mesa_str, w))
@@ -53,52 +81,52 @@ def format_production_document(data: OrderPrintData, width: PaperWidth = PaperWi
     elif mesa_str:
         lines.append(mesa_str)
 
-    tipo_str = (data.tipo_pedido or "LOCAL").upper()
     horario_str = data.horario or ""
-    if tipo_str and horario_str:
-        lines.append(_justify(tipo_str, horario_str, w))
-    elif tipo_str:
-        lines.append(tipo_str)
-
-    if data.garcom_nome:
-        lines.append(_center(f"GARÇOM: {data.garcom_nome.upper()}", w))
+    if data.garcom_nome and horario_str:
+        lines.append(_justify(f"GARÇOM: {data.garcom_nome}", f"HORA: {horario_str}", w))
+    elif data.garcom_nome:
+        lines.append(f"GARÇOM: {data.garcom_nome}")
+    elif horario_str:
+        lines.append(f"HORA: {horario_str}")
 
     lines.append(_separator("-", w))
 
-    # 2. Agrupamento por Cliente
-    # Filtra apenas itens com destino diferente de NENHUM
-    prod_items = [i for i in data.itens if (i.destino_impressao or "COZINHA").upper() not in ("NENHUM", "NONE", "")]
-    
+    prod_items = [
+        item
+        for item in data.itens
+        if (item.destino_impressao or "COZINHA").upper()
+        not in ("NENHUM", "NONE", "")
+    ]
     by_client = group_items_by_customer(prod_items)
-    
-    # Se houver apenas 1 bloco chamado "GERAL", omitimos o cabeçalho do cliente para economizar papel
-    omit_client_header = len(by_client) == 1 and "GERAL" in by_client
 
     first_block = True
-    for client_name, c_items in by_client.items():
-        if not c_items:
+    for client_name, client_items in by_client.items():
+        if not client_items:
             continue
 
-        if not first_block and not omit_client_header:
+        if not first_block:
             lines.append(_separator("-", w))
         first_block = False
 
-        if not omit_client_header:
-            lines.append(client_name)
+        if not _is_general_client(client_name):
+            lines.append(_center(f"CLIENTE: {client_name}", w))
 
-        # Agrupa itens equivalentes dentro do cliente (mesmo produto + mesma observação)
-        grouped_c_items = group_equivalent_items(c_items, match_observations=True)
+        grouped_items = group_equivalent_items(
+            client_items,
+            match_observations=True,
+        )
 
-        for item in grouped_c_items:
+        for item in grouped_items:
             code_str = f"{item.codigo} - " if item.codigo else ""
-            left = f"{item.quantidade} x {code_str}{item.nome.upper()}".strip()
+            left = f"{item.quantidade}x {code_str}{item.nome.upper()}".strip()
             right = f"R$ {_format_curr(item.total)}"
-            item_line = _justify(left, right, w)
-            lines.append(item_line)
+            lines.append(_justify(left, right, w))
 
-            obs = normalize_observation(item.observacao)
-            if obs:
-                lines.append(f"   {obs.upper()}")
+            observation = normalize_observation(item.observacao)
+            if observation:
+                lines.append(f"   OBS: {observation.upper()}")
 
     lines.append(_separator("-", w))
+    lines.append(_center("Gerenciado por Kôma", w))
+    lines.append(_center("Documento não fiscal", w))
     return "\n".join(lines)
