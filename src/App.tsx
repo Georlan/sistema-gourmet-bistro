@@ -7,7 +7,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import logoImg from './assets/logo.png';
 import { KomaLogo } from './components/KomaLogo';
 import { LoginButton } from '../components/shadcnblocks/login-button';
-import { Menu, X, User, Wifi, WifiOff, SlidersHorizontal, ArrowDownRight, ArrowUpRight, RefreshCw, Bell, Printer, TrendingUp, Utensils, CheckCircle2, UserCheck, UserX, ShoppingBag } from 'lucide-react';
+import { Menu, X, User, Wifi, WifiOff, SlidersHorizontal, ArrowDownRight, ArrowUpRight, RefreshCw, Bell, Printer, TrendingUp, Utensils, CheckCircle2, UserCheck, UserX, ShoppingBag, Sun, Moon } from 'lucide-react';
 import { Table, Order, DraftItem, AppSettings, AppRole, Product, CaixaTurnoResumo } from './types';
 import { TABLES, WAITERS, RESTAURANT_CONFIG } from './data';
 import { normalizeCatalogSnapshot, type CatalogCategory } from './catalog/catalog';
@@ -1916,7 +1916,21 @@ export default function App() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-koma-page flex items-center justify-center p-4">
+      <div className="min-h-screen bg-koma-page relative flex items-center justify-center p-4">
+        {/* Quick theme switcher button on login screen */}
+        <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-20">
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-koma-card border border-koma-border text-koma-secondary hover:text-koma-foreground hover:bg-koma-raised transition-all text-xs font-bold shadow-md cursor-pointer"
+            title={theme === 'dark' ? 'Mudar para Modo Claro' : 'Mudar para Modo Escuro'}
+            aria-label="Alternar tema claro e escuro"
+          >
+            {theme === 'dark' ? <Sun size={15} className="text-amber-400" /> : <Moon size={15} className="text-sky-500" />}
+            <span className="hidden sm:inline">{theme === 'dark' ? 'Modo Claro' : 'Modo Escuro'}</span>
+          </button>
+        </div>
+
         <div className="w-full max-w-sm bg-koma-card border border-emerald-500/10 rounded-2xl p-6 sm:p-8 shadow-2xl animate-scale-in">
           {/* Logo / Header */}
           <div className="text-center space-y-3 mb-7">
@@ -2382,6 +2396,19 @@ export default function App() {
               <div className="space-y-2.5">
                 <h3 className={clsx('text-[10px]', 'uppercase', 'tracking-wider', 'font-bold', 'text-emerald-400', 'font-sans')}>Exibição e Preferências</h3>
                 <div className={clsx('bg-koma-card', 'border', 'border-koma-border', 'rounded-2xl', 'p-3.5', 'space-y-2.5')}>
+                  <div className="flex items-center justify-between p-1 rounded">
+                    <span className="text-xs text-koma-foreground font-medium">Tema Visual</span>
+                    <button
+                      type="button"
+                      onClick={toggleTheme}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-koma-panel border border-koma-border text-xs font-bold text-koma-foreground hover:bg-koma-raised transition-colors cursor-pointer"
+                      title={theme === 'dark' ? 'Mudar para Modo Claro' : 'Mudar para Modo Escuro'}
+                    >
+                      {theme === 'dark' ? <Sun size={13} className="text-amber-400" /> : <Moon size={13} className="text-sky-500" />}
+                      <span className="text-[10px] font-mono uppercase">{theme === 'dark' ? 'Escuro' : 'Claro'}</span>
+                    </button>
+                  </div>
+
                   <label className={clsx('flex', 'items-center', 'justify-between', 'text-xs', 'text-koma-foreground', 'cursor-pointer', 'p-1', 'rounded', 'hover:bg-koma-raised/40')}>
                     <span>Exibir Imagens dos Pratos</span>
                     <input
