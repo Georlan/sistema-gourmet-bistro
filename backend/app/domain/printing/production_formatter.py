@@ -63,6 +63,7 @@ def _format_local_with_canonical_receipt(data: OrderPrintData, width: int) -> st
         garcom_nome=data.garcom_nome or "CAIXA",
         items=items,
         restaurant_name=data.restaurante_nome,
+        source_committed=True,
     )
 
 
