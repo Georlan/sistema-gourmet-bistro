@@ -22,6 +22,7 @@ from ..schemas import (
     ObservacaoPredefinidaResponse,
 )
 from ..security import get_current_garcom_optional, get_current_user, require_permission
+from ..services.printing import PrintingRequestError, enqueue_table_receipt
 from ..websocket_manager import manager
 
 router = APIRouter(
@@ -289,145 +290,44 @@ def imprimir_recibo_mesa(
     db: Session = Depends(get_db),
     current_garcom: Usuario = Depends(get_current_user)
 ):
+    """Enfileira a via canônica de uma mesa aberta.
+
+    ``apenas_valores=false`` é o Extrato Completo. ``true`` é o Fechamento de
+    mesa pré-pagamento. Ambos usam o mesmo snapshot e o mesmo formatter usados
+    pelas impressões automáticas e reimpressões de consumo no local.
     """
-    Imprime o recibo de consumo de todas as comandas abertas da mesa.
-    Aceita qualquer operador autenticado (garçom ou caixa).
-    """
-    # Allow any authenticated user OR allow unauthenticated (LAN-only access is the security boundary)
-        
-    mesa = db.query(Mesa).filter(Mesa.id == mesa_id).first()
-    if not mesa:
-        raise HTTPException(
-            status_code=404,
-            detail="Mesa não encontrada"
-        )
-        
-    # Gathers open comandas for this table
-    comandas = db.query(Comanda).filter(
-        Comanda.mesa_id == mesa_id,
-        Comanda.fechada == False
-    ).all()
-    
-    if not comandas:
-        raise HTTPException(
-            status_code=400,
-            detail="Não há comandas abertas nesta mesa"
-        )
-        
-    # Check if there are active items to print
-    has_active_items = False
-    comandas_details = []
-    
-    for comanda in comandas:
-        comanda_data = {
-            "id": comanda.id,
-            "identificador": comanda.identificador,
-            "itens": []
-        }
-        for item in comanda.itens:
-            if item.status != "cancelado":
-                has_active_items = True
-            comanda_data["itens"].append({
-                "id": item.id,
-                "preco_unit": item.preco_unit,
-                "status": item.status,
-                "cliente_nome": item.cliente_nome,
-                "codigo": item.produto.id,
-                "descricao": item.produto.descricao,
-                "observacao": item.observacao,
-                "produto": {
-                    "id": item.produto.id,
-                    "nome": item.produto.nome,
-                    "descricao": item.produto.descricao,
-                }
-            })
-        comandas_details.append(comanda_data)
-        
-    if not has_active_items:
-        raise HTTPException(
-            status_code=400,
-            detail="Não há itens ativos para imprimir nesta mesa"
-        )
-        
+    del current_garcom
+    rest_id = require_tenant_id()
     try:
-        from ..printer_service import printer_service
-        
-        # Use info from the first comanda
-        first_comanda = comandas[0]
-        num_pedido = first_comanda.numero_pedido
-        tipo = first_comanda.tipo
-        garcom_nome = first_comanda.criada_por.nome if first_comanda.criada_por else "Garçom"
-        from ..timezone_utils import to_operational_local_time
-        opened_at_raw = min(
-            (
-                comanda.criado_em
-                for comanda in comandas
-                if comanda.criado_em is not None
-            ),
-            default=None,
-        )
-        opened_at = to_operational_local_time(opened_at_raw)
-        
-        from ..models import ConfiguracaoRestaurante
-        config = db.query(ConfiguracaoRestaurante).filter(
-            ConfiguracaoRestaurante.restaurante_id == first_comanda.restaurante_id
-        ).first()
-        taxa_servico_ativa = config.taxa_servico_ativa if config else True
-        taxa_servico_padrao = config.taxa_servico_padrao if config else 10.0
-        configured_name = (
-            print_header
-            or (config.impressao_nome_restaurante if config else None)
-            or (
-                config.restaurante.nome
-                if config and config.restaurante
-                else None
-            )
-            or "Kôma Gourmet Bistrô"
-        )
-        configured_footer = (
-            print_footer
-            or (config.impressao_mensagem_rodape if config else None)
-        )
-        
-        receipt_text = printer_service.generate_receipt(
-            num_pedido=num_pedido,
-            tipo=tipo,
-            mesa_id=mesa_id,
-            garcom_nome=garcom_nome,
-            comandas_details=comandas_details,
-            opened_at=opened_at,
-            print_header=configured_name,
-            print_footer=configured_footer,
-            taxa_servico_ativa=taxa_servico_ativa,
-            taxa_servico_padrao=taxa_servico_padrao,
+        job = enqueue_table_receipt(
+            db,
+            rest_id,
+            mesa_id,
             apenas_valores=apenas_valores,
-            restaurant_name_position=(
-                config.impressao_nome_posicao if config else "cabecalho"
-            ),
-        )
-        
-        from ..models import PrintJob
-        rest_id = require_tenant_id()
-        ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d%H%M%S%f")
-        ikey = f"fechamento:mesa:{mesa_id}:{ts}"
-        
-        job = PrintJob(
-            restaurante_id=rest_id,
-            document_type="fechamento",
-            destination="FECHAMENTO",
-            source_type="comanda",
+            source_type="mesa",
             source_id=str(mesa_id),
-            payload_text=receipt_text.replace("\x00", "\\x00"),
-            status="pending",
-            idempotency_key=ikey
+            print_header=print_header,
+            print_footer=print_footer,
         )
-        db.add(job)
         db.commit()
-        print(f"[PRINT JOB ENQUEUED] Job de fechamento ID {job.id} enfileirado para o Kôma Agent!")
-    except Exception as print_err:
+    except PrintingRequestError as exc:
+        db.rollback()
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    except Exception as exc:
+        db.rollback()
         raise HTTPException(
-            status_code=500,
-            detail=f"Erro ao enfileirar impressão do recibo: {print_err}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erro ao enfileirar impressão do recibo.",
+        ) from exc
+
+    if job is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="A impressão física não está disponível no plano atual.",
         )
-        
-    return {"status": "success", "detail": "Impressão do recibo enviada com sucesso para a fila de impressão"}
+
+    return {
+        "status": "success",
+        "detail": "Impressão do recibo enviada com sucesso para a fila de impressão",
+        "job_id": job.id,
+    }
