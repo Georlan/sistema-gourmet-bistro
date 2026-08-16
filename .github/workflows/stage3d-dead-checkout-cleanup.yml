@@ -70,7 +70,7 @@ jobs:
           rm .github/workflows/stage3d-dead-checkout-cleanup.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/components/CaixaPanel.tsx src/components/ComandaActionsModal.tsx .github/workflows/stage3d-dead-checkout-cleanup.yml
+          git add -A
           git diff --cached --check
           git commit -m "refactor(finance): remove checkout legado inativo"
           git push origin HEAD:${{ github.head_ref }}
