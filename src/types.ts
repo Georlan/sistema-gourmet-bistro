@@ -41,6 +41,8 @@ export interface OrderItem {
 
 export interface Order {
   id: string;
+  /** Quando o card representa um lote específico, mantém o id real do lançamento. */
+  lancamentoId?: string;
   clienteId?: string | null;
   clientePhone?: string | null;
   mesaId: number;

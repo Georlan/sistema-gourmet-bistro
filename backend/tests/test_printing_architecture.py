@@ -31,7 +31,10 @@ USER_ID = "usr-print-arch-1881"
 CAIXA_ID = "caixa-print-arch-1881"
 PRODUTO_1 = "prod-print-arch-1"
 PRODUTO_2 = "prod-print-arch-2"
+PRODUTO_SEM_IMPRESSAO_1 = "prod-print-arch-none-1"
+PRODUTO_SEM_IMPRESSAO_2 = "prod-print-arch-none-2"
 CATEGORIA_ID = "cat-print-arch"
+CATEGORIA_SEM_IMPRESSAO_ID = "cat-print-arch-none"
 
 client = TestClient(app)
 
@@ -100,6 +103,12 @@ def setup_printing_architecture(monkeypatch):
                 nome="Lanches",
                 destino_impressao="COZINHA",
             ),
+            Categoria(
+                id=CATEGORIA_SEM_IMPRESSAO_ID,
+                restaurante_id=TENANT_ID,
+                nome="Bebidas sem via própria",
+                destino_impressao="NENHUM",
+            ),
             Produto(
                 id=PRODUTO_1,
                 restaurante_id=TENANT_ID,
@@ -114,6 +123,22 @@ def setup_printing_architecture(monkeypatch):
                 categoria_id=CATEGORIA_ID,
                 nome="Cheese Arquitetura",
                 preco=25.0,
+                ativo=True,
+            ),
+            Produto(
+                id=PRODUTO_SEM_IMPRESSAO_1,
+                restaurante_id=TENANT_ID,
+                categoria_id=CATEGORIA_SEM_IMPRESSAO_ID,
+                nome="Coca Cola Lata",
+                preco=6.0,
+                ativo=True,
+            ),
+            Produto(
+                id=PRODUTO_SEM_IMPRESSAO_2,
+                restaurante_id=TENANT_ID,
+                categoria_id=CATEGORIA_SEM_IMPRESSAO_ID,
+                nome="Água Mineral",
+                preco=4.0,
                 ativo=True,
             ),
         ])
@@ -162,21 +187,32 @@ def _open_table_order() -> str:
     return response.json()["id"]
 
 
-def _launch(comanda_id: str, produto_id: str, cliente: str = "Consumo Geral") -> str:
+def _launch_items(
+    comanda_id: str,
+    produto_ids: list[str],
+    cliente: str = "Consumo Geral",
+) -> str:
     response = client.post(
         f"/comandas/{comanda_id}/lancamentos",
         headers=_headers(USER_ID),
         json={
             "garcom_id": USER_ID,
-            "itens": [{
-                "produto_id": produto_id,
-                "observacao": "",
-                "cliente_nome": cliente,
-            }],
+            "itens": [
+                {
+                    "produto_id": produto_id,
+                    "observacao": "",
+                    "cliente_nome": cliente,
+                }
+                for produto_id in produto_ids
+            ],
         },
     )
     assert response.status_code == 201, response.text
     return response.json()["id"]
+
+
+def _launch(comanda_id: str, produto_id: str, cliente: str = "Consumo Geral") -> str:
+    return _launch_items(comanda_id, [produto_id], cliente)
 
 
 def _jobs() -> list[PrintJob]:
@@ -236,6 +272,52 @@ def test_lancamentos_automaticos_sao_parciais_e_extrato_e_mesa_inteira():
     assert "R$ 44,00" in complete.payload_text
     assert "TOTAL GERAL DA MESA:" in complete.payload_text
     assert "TOTAL DESTE PEDIDO:" not in complete.payload_text
+
+
+def test_lote_misto_imprime_todos_os_itens_quando_um_item_habilita_a_via():
+    comanda_id = _open_table_order()
+    lancamento_id = _launch_items(
+        comanda_id,
+        [PRODUTO_1, PRODUTO_SEM_IMPRESSAO_1],
+    )
+
+    jobs = _jobs()
+    assert len(jobs) == 1
+    job = jobs[0]
+    assert job.source_type == "lancamento"
+    assert job.source_id == lancamento_id
+    assert "1x HAMBÚRGUER ARQUITETURA" in job.payload_text
+    assert "1x COCA COLA LATA" in job.payload_text
+    assert "R$ 19,00" in job.payload_text
+    assert "R$ 6,00" in job.payload_text
+    assert "TOTAL DESTE PEDIDO:" in job.payload_text
+    assert "R$ 25,00" in job.payload_text
+
+
+def test_lote_so_com_itens_sem_impressao_nao_dispara_automatico_mas_pode_imprimir_manual():
+    comanda_id = _open_table_order()
+    lancamento_id = _launch_items(
+        comanda_id,
+        [PRODUTO_SEM_IMPRESSAO_1, PRODUTO_SEM_IMPRESSAO_2],
+    )
+
+    assert _jobs() == []
+
+    response = client.post(
+        f"/comandas/lancamentos/{lancamento_id}/reimprimir",
+        headers=_headers(USER_ID),
+    )
+    assert response.status_code == 200, response.text
+
+    jobs = _jobs()
+    assert len(jobs) == 1
+    manual = jobs[0]
+    assert manual.source_type == "reimpressao"
+    assert manual.source_id == lancamento_id
+    assert "1x COCA COLA LATA" in manual.payload_text
+    assert "1x ÁGUA MINERAL" in manual.payload_text
+    assert "TOTAL DESTE PEDIDO:" in manual.payload_text
+    assert "R$ 10,00" in manual.payload_text
 
 
 def test_reimpressao_de_lote_repete_somente_a_instancia_original():

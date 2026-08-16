@@ -1,0 +1,1476 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState } from 'react';
+import { X, Clock, Receipt, PlusCircle, Move, ShoppingBag, Printer, Trash2, ArrowLeft, Edit2, Edit3, GitMerge, Zap, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Table, Order, DraftItem, AppSettings, Product, AppRole, OrderItem } from '../types';
+import { getTableTotal, getCustomerSubtotals, formatElapsedTime, normalizeOperationalTimestamp } from '../domain';
+import { MenuPanel } from './MenuPanel';
+import { TABLES, RESTAURANT_CONFIG } from '../data';
+import type { CatalogCategory } from '../catalog/catalog';
+import { formatBackendDateTime, formatBackendTime } from '../utils/dateTime';
+
+interface MesaDetailsModalProps {
+  table: Table;
+  orders: Order[];
+  allOrders?: Order[]; // The full list of active orders across all tables to identify empty tables
+  draftItems: DraftItem[];
+  settings: AppSettings;
+  activeRole: AppRole;
+  activeWaiterId: string;
+  activeWaiterNome: string;
+  currentTime: number;
+  onClose: () => void;
+  onUpdateSettings: (settings: AppSettings) => void;
+  onAddToDraft: (product: Product, quantity?: number, observacao?: string, clienteNome?: string) => void;
+  onRemoveFromDraft: (draftItemId: string) => void;
+  onUpdateDraftItem: (draftItemId: string, updates: Partial<DraftItem>) => void;
+  onSubmitDraft: (orderType: 'Consumo no Local' | 'Retirada' | 'Entrega') => void;
+  otherWaitersServing?: string[];
+  onTransferTable: (targetTableId: number) => void;
+  onTransferItem: (itemId: string, targetTableId: number) => void;
+  onTransferItems: (itemIds: string[], targetTableId: number) => void;
+  onCancelItem: (itemId: string) => void;
+  onCloseTable: () => void;
+  onSettleCustomer?: (customerName: string) => void;
+  onDeliverItem?: (orderId: string, itemId: string) => void;
+  historicClients?: string[];
+  restaurantName?: string;
+  onClearTableOrders?: () => void;
+  onPrintReceipt?: (apenasValores?: boolean) => void | Promise<void>;
+  onPrintKitchenLaunch?: (orderId: string) => void | Promise<void>;
+  salonTables?: Table[];
+  liveProdutos?: Product[];
+  liveCategorias?: CatalogCategory[];
+  catalogReady?: boolean;
+  restauranteConfig?: any;
+  onUpdateItemDetails?: (itemId: string, observacao: string, clienteNome: string, quantidadeAdicional?: number) => void | Promise<void>;
+  isSubmitting?: boolean;
+  onMergeTables?: (sourceTableId: number, targetTableId: number) => void;
+  onUnmergeTable?: (comandaId: string) => void;
+}
+
+export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
+  table,
+  orders,
+  allOrders = [],
+  draftItems,
+  isSubmitting = false,
+  settings,
+  activeRole,
+  activeWaiterId,
+  activeWaiterNome,
+  currentTime,
+  onClose,
+  onUpdateSettings,
+  onAddToDraft,
+  onRemoveFromDraft,
+  onUpdateDraftItem,
+  onSubmitDraft,
+  otherWaitersServing = [],
+  onTransferTable,
+  onTransferItem,
+  onTransferItems,
+  onCancelItem,
+  onCloseTable,
+  onSettleCustomer,
+  onDeliverItem,
+  historicClients = [],
+  restaurantName = RESTAURANT_CONFIG.nomePadrao,
+  onClearTableOrders,
+  onPrintReceipt,
+  onPrintKitchenLaunch,
+  salonTables,
+  liveProdutos = [],
+  liveCategorias = [],
+  catalogReady = false,
+  restauranteConfig,
+  onUpdateItemDetails,
+  onMergeTables,
+  onUnmergeTable,
+}) => {
+  // Dynamic default tab based on whether table is active or empty
+  const [activeTab, setActiveTab] = useState<'consumo' | 'lancamento' | 'transferir' | 'mesclar'>(
+    orders.length === 0 ? 'lancamento' : 'consumo'
+  );
+  const [showPrintPreview, setShowPrintPreview] = useState<boolean>(false);
+  const [selectedOrderToPrint, setSelectedOrderToPrint] = useState<Order | null>(null);
+  const [confirmTransferTo, setConfirmTransferTo] = useState<number | null>(null);
+  const [selectedItemsForTransfer, setSelectedItemsForTransfer] = useState<string[]>([]);
+  const [transferType, setTransferType] = useState<'total' | 'parcial' | 'mesclar'>('total');
+  const [printSuccess, setPrintSuccess] = useState<boolean>(false);
+  const [isPrintingDirect, setIsPrintingDirect] = useState<boolean>(false);
+  const [directPrintToast, setDirectPrintToast] = useState<string>('');
+  const [confirmClear, setConfirmClear] = useState<boolean>(false);
+  const [editingItem, setEditingItem] = useState<any>(null);
+  const [expandedOrders, setExpandedOrders] = useState<Record<string, boolean>>({});
+  const canTransferTables = activeRole !== 'garcom'
+    || Boolean(restauranteConfig?.perm_garcom_transferir_mesa);
+  const canTransferItems = activeRole !== 'garcom'
+    || Boolean(restauranteConfig?.perm_garcom_transferir_item);
+  const canCreateExternalOrder = activeRole !== 'garcom'
+    || Boolean(restauranteConfig?.perm_garcom_delivery);
+  const canAppendOrderItems = activeRole !== 'garcom'
+    || orders.length === 0
+    || Boolean(restauranteConfig?.perm_garcom_editar);
+
+  // Lock background scroll when modal is active
+  React.useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, []);
+
+  const totalValue = getTableTotal(orders);
+  const customerSubtotals = getCustomerSubtotals(orders);
+
+  // Find oldest order timestamp
+  const validTimestamps = orders
+    .map(o => (o as any).created_at || o.timestamp)
+    .map(t => normalizeOperationalTimestamp(t, currentTime))
+    .filter((t): t is number => t !== null);
+  const firstTimestamp = validTimestamps.length > 0 ? Math.min(...validTimestamps) : undefined;
+  const permanenceTime = formatElapsedTime(firstTimestamp, currentTime);
+
+  // Get other tables that are available for transfer (any table except the original one)
+  const tablesList = salonTables || [];
+  const availableTablesForTransfer = tablesList.filter(t => t.id !== table.id);
+
+  // Tables with active orders (for merge target — merge only makes sense into an occupied table)
+  const tablesWithOrders = tablesList.filter(t => t.id !== table.id && allOrders.some(o => o.mesaId === t.id));
+  const tablesWithoutOrders = tablesList.filter(t => t.id !== table.id && !allOrders.some(o => o.mesaId === t.id));
+
+  const originIds = Array.from(new Set(orders.map(o => o.mesaOrigemId).filter((id): id is number => id !== null && id !== undefined && id !== table.id)));
+  const originStr = originIds.length > 0 ? ` + ${originIds.join(' + ')}` : '';
+
+  // Print invoice helper
+  const handlePrintPreview = () => {
+    setShowPrintPreview(true);
+  };
+
+  return (
+    <div 
+      id="modal-outer-overlay"
+      onClick={(e) => {
+        if ((e.target as HTMLElement).id === 'modal-outer-overlay') {
+          onClose();
+        }
+      }}
+      className="fixed inset-0 bg-black/75 flex items-center justify-center p-0 sm:p-4 z-40 animate-fade-in overflow-y-auto"
+    >
+      <div className="bg-koma-card rounded-none sm:rounded-3xl border-0 sm:border border-koma-border shadow-2xl w-full max-w-5xl overflow-hidden h-full sm:h-auto max-h-full sm:max-h-[90vh] flex flex-col">
+               {/* MODAL HEADER */}
+        <div className="bg-koma-raised text-koma-foreground px-3 py-2.5 sm:p-5 flex flex-col gap-1.5 shrink-0 border-b border-koma-border z-30">
+          {/* Top Line: Title + Status + Close Button */}
+          <div className="flex justify-between items-center w-full">
+            <div className="flex items-center gap-2 min-w-0">
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-1.5 hover:bg-koma-card rounded-xl text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer border border-koma-border shrink-0"
+                title="Voltar ao mapa"
+              >
+                <ArrowLeft size={16} />
+              </button>
+              <div className="flex items-center gap-2 min-w-0">
+                <h2 className="font-serif text-base sm:text-2xl font-bold tracking-tight text-koma-foreground truncate">
+                  Mesa {table.id}{originStr}
+                </h2>
+                <span className={`px-2 py-0.5 text-[9px] font-sans font-bold tracking-wider uppercase rounded-full border shrink-0 ${
+                  orders.length === 0 
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                    : orders.some(o => o.itens.some(i => i.status === 'pronto'))
+                      ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30'
+                      : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                }`}>
+                  {orders.length === 0 ? 'Livre' : orders.some(o => o.itens.some(i => i.status === 'pronto')) ? 'Pronto' : 'Ocupada'}
+                </span>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-[10px] uppercase tracking-wider bg-koma-panel px-2.5 py-1 rounded-lg border border-koma-border font-sans text-emerald-700 dark:text-emerald-400 font-bold hidden sm:inline-block">
+                Garçom: <strong className="text-koma-foreground">{activeWaiterNome}</strong>
+              </span>
+              <button
+                id="close-mesa-modal-btn"
+                onClick={onClose}
+                className="p-1.5 rounded-xl hover:bg-white/5 text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer border border-transparent hover:border-koma-border"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          </div>
+
+          {/* Sub Line for active orders or mobile info */}
+          {orders.length > 0 && (
+            <div className="flex items-center justify-between gap-2 text-[11px] text-koma-subtle font-sans pt-0.5 border-t border-koma-border/50">
+              <span className="flex items-center gap-1">
+                <Clock size={11} className="text-emerald-700 dark:text-emerald-400" />
+                Permanência: <strong className="text-koma-foreground font-medium font-mono">{permanenceTime}</strong>
+              </span>
+              <span className="text-[10px] text-emerald-400 font-bold sm:hidden">
+                {activeWaiterNome}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* MODAL TABS */}
+        <div
+          role="tablist"
+          aria-label="Ações da mesa"
+          className="bg-koma-panel border-b border-koma-border px-2.5 sm:px-5 py-1.5 flex items-center gap-1.5 sm:gap-2 shrink-0 overflow-x-auto scrollbar-none no-scrollbar z-20"
+        >
+          <button
+            id="tab-consumo-btn"
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'consumo'}
+            onClick={() => setActiveTab('consumo')}
+            className={`flex-1 sm:flex-initial min-h-9 px-3 sm:px-4 py-1.5 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider font-sans whitespace-nowrap border ${
+              activeTab === 'consumo' 
+                ? 'bg-koma-raised text-emerald-400 shadow-sm border-koma-border' 
+                : 'text-koma-subtle hover:text-koma-foreground border-transparent'
+            }`}
+          >
+            <Receipt size={13} className="text-emerald-400" />
+            <span>Consumo</span>
+          </button>
+
+          {canAppendOrderItems && (
+          <button
+            id="tab-lancamento-btn"
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'lancamento'}
+            onClick={() => setActiveTab('lancamento')}
+            className={`flex-1 sm:flex-initial min-h-9 px-3 sm:px-4 py-1.5 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider font-sans whitespace-nowrap border ${
+              activeTab === 'lancamento' 
+                ? 'bg-koma-raised text-emerald-400 shadow-sm border-koma-border' 
+                : 'text-koma-subtle hover:text-koma-foreground border-transparent'
+            }`}
+          >
+            <PlusCircle size={13} className="text-emerald-400" />
+            <span>Cardápio</span>
+            {draftItems.length > 0 && (
+              <span className="min-w-4 h-4 px-1 rounded-full bg-emerald-500 text-zinc-950 text-[9px] font-mono font-extrabold flex items-center justify-center">
+                {draftItems.reduce((total, item) => total + (item.quantidade || 1), 0)}
+              </span>
+            )}
+          </button>
+          )}
+
+          {orders.length > 0 && (canTransferTables || canTransferItems) && (
+            <button
+              id="tab-transferir-btn"
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'transferir'}
+              onClick={() => {
+                setActiveTab('transferir');
+                setTransferType(canTransferTables ? 'total' : 'parcial');
+              }}
+              className={`flex-1 sm:flex-initial min-h-9 px-3 sm:px-4 py-1.5 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider font-sans whitespace-nowrap border ${
+                activeTab === 'transferir' 
+                  ? 'bg-koma-raised text-emerald-400 shadow-sm border-koma-border' 
+                  : 'text-koma-subtle hover:text-koma-foreground border-transparent'
+              }`}
+            >
+              <Move size={13} className="text-emerald-400" />
+              <span>Transferir</span>
+            </button>
+          )}
+
+          {orders.length > 0 && onMergeTables && canTransferTables && (
+            <button
+              id="tab-mesclar-btn"
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'mesclar'}
+              onClick={() => {
+                setActiveTab('mesclar');
+              }}
+              className={`flex-1 sm:flex-initial min-h-9 px-3 sm:px-4 py-1.5 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider font-sans whitespace-nowrap border ${
+                activeTab === 'mesclar' 
+                  ? 'bg-koma-raised text-emerald-400 shadow-sm border-koma-border' 
+                  : 'text-koma-subtle hover:text-koma-foreground border-transparent'
+              }`}
+            >
+              <GitMerge size={13} className="text-emerald-400" />
+              <span>Mesclar</span>
+            </button>
+          )}
+        </div>
+
+        {/* MODAL BODY WITH SCROLL */}
+        <div className="overflow-y-auto flex-1 text-left p-0">
+          
+          {/* TAB 1: CONSUMO ATIVO */}
+          {activeTab === 'consumo' && (
+            <div className="p-3 sm:p-5 space-y-4 sm:space-y-6">
+              {orders.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-center space-y-3">
+                  <div className="p-3.5 bg-koma-panel text-emerald-400 rounded-full border border-koma-border">
+                    <ShoppingBag size={28} />
+                  </div>
+                  <h3 className="font-serif text-lg font-bold text-koma-foreground">Mesa sem consumo ativo</h3>
+                  <p className="text-xs text-koma-subtle max-w-sm leading-relaxed">
+                    Nenhum pedido ativo foi lançado nesta mesa ainda. Use a aba de <strong>Cardápio</strong> para lançar o primeiro pedido.
+                  </p>
+                  <button
+                    id="go-to-billing-tab-btn"
+                    onClick={() => setActiveTab('lancamento')}
+                    className="mt-2 px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 rounded-xl text-xs font-extrabold tracking-wider uppercase transition-colors cursor-pointer border border-emerald-400 shadow-md"
+                  >
+                    + Lançar Pedidos
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-col lg:grid lg:grid-cols-12 gap-4 sm:gap-6 items-stretch">
+                  
+                  {/* 1. RESUMO FINANCEIRO & AÇÕES RÁPIDAS (RENDERIZA NO TOPO NO MOBILE - 0 ROLAGEM) */}
+                  <div className="order-1 lg:order-2 lg:col-span-5 bg-koma-panel border border-koma-border rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 flex flex-col justify-between space-y-3 shadow-sm">
+                    <div className="space-y-3">
+                      {/* Origin & Transfer Badges */}
+                      {(() => {
+                        const transferOrigin = orders.find(o => o.mesaTransferidaDe)?.mesaTransferidaDe;
+                        const mergedOrigins = Array.from(new Set(orders.map(o => o.mesaOrigemId).filter((id): id is number => id !== null && id !== undefined && id !== table.id)));
+                        if (transferOrigin || mergedOrigins.length > 0) {
+                          return (
+                            <div className="flex flex-wrap gap-1.5 pb-0.5">
+                              {transferOrigin && (
+                                <span className="px-2 py-0.5 text-[9px] bg-purple-500/20 text-purple-300 border border-purple-500/35 rounded-md font-sans font-bold uppercase tracking-wider">
+                                  Transf. da Mesa {transferOrigin}
+                                </span>
+                              )}
+                              {mergedOrigins.map(mId => (
+                                <span key={mId} className="px-2 py-0.5 text-[9px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/35 rounded-md font-sans font-bold uppercase tracking-wider">
+                                  Mesclada com Mesa {mId}
+                                </span>
+                              ))}
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+
+                      {/* Financial Total */}
+                      {(() => {
+                        const hasTax = restauranteConfig?.taxa_servico_ativa ?? true;
+                        const taxRate = restauranteConfig?.taxa_servico_padrao ?? 10;
+                        const taxVal = hasTax ? totalValue * (taxRate / 100) : 0;
+                        const grandTotal = totalValue + taxVal;
+                        return (
+                          <div className="bg-koma-raised border border-koma-border rounded-xl p-3 space-y-1.5 shadow-sm">
+                            <div className="flex justify-between items-baseline font-sans text-xs text-koma-subtle">
+                              <span className="font-bold uppercase tracking-wider">Subtotal:</span>
+                              <span className="font-mono font-medium">R$ {totalValue.toFixed(2)}</span>
+                            </div>
+                            {hasTax && (
+                              <div className="flex justify-between items-baseline font-sans text-xs text-koma-subtle">
+                                <span className="font-bold uppercase tracking-wider">Taxa de Serviço ({taxRate}%):</span>
+                                <span className="font-mono font-medium">R$ {taxVal.toFixed(2)}</span>
+                              </div>
+                            )}
+                            <div className="flex justify-between items-center font-sans border-t border-koma-border/70 pt-2 mt-1">
+                              <span className="text-xs text-koma-subtle font-bold uppercase tracking-wider">Total Geral:</span>
+                              <span className="text-xl sm:text-2xl font-bold font-mono text-emerald-700 dark:text-emerald-400">
+                                R$ {grandTotal.toFixed(2)}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Direct Print Feedback Toast */}
+                      {directPrintToast && (
+                        <div className="bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 px-3 py-1.5 rounded-xl text-center text-xs font-bold font-sans animate-fade-in">
+                          {directPrintToast}
+                        </div>
+                      )}
+
+                      {/* Action Row 1: Direct Print Values (1-Touch) + Extrato Completo */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          id="quick-print-values-btn"
+                          type="button"
+                          disabled={isPrintingDirect}
+                          onClick={async () => {
+                            if (onPrintReceipt) {
+                              setIsPrintingDirect(true);
+                              try {
+                                await onPrintReceipt(true);
+                                setDirectPrintToast('Impressão enviada com sucesso.');
+                                setTimeout(() => setDirectPrintToast(''), 3000);
+                              } catch (e) {
+                                console.error(e);
+                                alert('Erro ao enviar impressão de fechamento');
+                              } finally {
+                                setIsPrintingDirect(false);
+                              }
+                            } else {
+                              handlePrintPreview();
+                            }
+                          }}
+                          className="py-2.5 px-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 border border-emerald-400 rounded-xl font-extrabold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md shadow-emerald-950/20 active:scale-95 disabled:opacity-50"
+                          title="Imprimir direto recibo de fechamento apenas com valores"
+                        >
+                          <Zap size={14} className="shrink-0 text-zinc-950" />
+                          <span>{isPrintingDirect ? 'Imprimindo...' : 'Apenas Valores'}</span>
+                        </button>
+
+                        <button
+                          id="print-invoice-preview-btn"
+                          onClick={handlePrintPreview}
+                          className="py-2.5 px-2 bg-koma-raised hover:bg-koma-card border border-koma-border hover:border-emerald-500/30 text-koma-foreground rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                          title="Ver prévia e imprimir extrato detalhado com itens"
+                        >
+                          <Printer size={14} className="text-emerald-400 shrink-0" />
+                          <span>Extrato Completo</span>
+                        </button>
+                      </div>
+
+                      {/* Action Row 2: Adicionar Itens e Fechamento da Mesa (Dinâmico sem buracos vazios) */}
+                      {(() => {
+                        const canCloseTable = Boolean(onCloseTable && !(activeRole === 'garcom' && !restauranteConfig?.perm_garcom_fechar));
+                        return (
+                          <div className={canCloseTable ? "grid grid-cols-2 gap-2" : "w-full"}>
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab('lancamento')}
+                              className="w-full py-2.5 px-2 bg-koma-raised hover:bg-koma-card border border-koma-border hover:border-emerald-500/30 text-koma-foreground rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                            >
+                              <PlusCircle size={14} className="text-emerald-400 shrink-0" />
+                              <span>Adicionar Itens</span>
+                            </button>
+
+                            {canCloseTable && (
+                              <button
+                                id="close-table-btn-consumo"
+                                onClick={() => {
+                                  if (confirmClear) {
+                                    onCloseTable();
+                                  } else {
+                                    setConfirmClear(true);
+                                    setTimeout(() => setConfirmClear(false), 4000);
+                                  }
+                                }}
+                                className={`py-2.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer font-sans transition-all border ${
+                                  confirmClear
+                                    ? 'bg-rose-800/40 border-rose-700/50 text-rose-300 animate-pulse'
+                                    : 'bg-koma-raised hover:bg-rose-950/30 border-koma-border hover:border-rose-800/40 text-rose-400'
+                                }`}
+                              >
+                                <CheckCircle2 size={13} className="shrink-0" />
+                                <span>{confirmClear ? 'Confirmar Fechamento?' : 'Fechar Mesa'}</span>
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })()}
+
+                      {/* Transfer / Merge Quick Actions */}
+                      <div className="flex items-center gap-2 pt-0.5">
+                        {(canTransferTables || canTransferItems) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveTab('transferir');
+                              setTransferType(canTransferTables ? 'total' : 'parcial');
+                            }}
+                            className="flex-1 py-1.5 bg-koma-card hover:bg-koma-raised border border-koma-border text-koma-subtle hover:text-koma-foreground rounded-lg font-bold text-[10px] flex items-center justify-center gap-1 transition-colors cursor-pointer uppercase font-sans"
+                          >
+                            <Move size={11} className="text-emerald-400" />
+                            <span>Transferir</span>
+                          </button>
+                        )}
+                        {onMergeTables && canTransferTables && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveTab('mesclar');
+                              setTransferType('mesclar');
+                            }}
+                            className="flex-1 py-1.5 bg-koma-card hover:bg-koma-raised border border-koma-border text-koma-subtle hover:text-koma-foreground rounded-lg font-bold text-[10px] flex items-center justify-center gap-1 transition-colors cursor-pointer uppercase font-sans"
+                          >
+                            <GitMerge size={11} className="text-emerald-400" />
+                            <span>Mesclar</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Customer subtotal breakdown */}
+                      {customerSubtotals.length > 1 && (
+                        <div className="pt-2 border-t border-koma-border space-y-1.5">
+                          <span className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">Divisão por Cliente:</span>
+                          <div className="space-y-1.5 max-h-32 overflow-y-auto scrollbar-thin">
+                            {customerSubtotals.map((cust) => (
+                              <div
+                                key={cust.name}
+                                className="bg-koma-raised/70 border border-koma-border/60 rounded-xl px-3 py-1.5 flex items-center justify-between text-xs"
+                              >
+                                <span className="font-bold text-koma-foreground truncate max-w-[140px]">{cust.name}</span>
+                                <span className="font-mono font-bold text-emerald-400">R$ {cust.total.toFixed(2)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 2. HISTÓRICO DE PEDIDOS LANÇADOS (NA COZINHA / PRONTO / ENTREGUE) */}
+                  <div className="order-2 lg:order-1 lg:col-span-7 space-y-3">
+                    <div className="flex items-center justify-between border-b border-koma-border pb-2">
+                      <h3 className="font-serif font-bold text-koma-foreground text-sm sm:text-base">Comanda de Pedidos</h3>
+                      <span className="text-[10px] font-semibold text-koma-subtle uppercase tracking-wider font-sans">Lotes: {orders.length}</span>
+                    </div>
+
+                    <div className="space-y-3 sm:max-h-[45vh] sm:overflow-y-auto max-h-none overflow-y-visible pr-1 scrollbar-thin">
+                      {orders.map((order) => {
+                        const unpaidItems = order.itens.filter((item: any) => !item.pago);
+                        if (unpaidItems.length === 0) return null;
+
+                        return (
+                        <div
+                          key={order.id}
+                          id={`placed-order-${order.id}`}
+                          className="border border-koma-border rounded-xl sm:rounded-2xl overflow-hidden bg-koma-panel/40"
+                        >
+                          {/* Order Header */}
+                          <div className="bg-koma-raised px-3.5 py-2 flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-koma-border gap-2 w-full">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-xs font-bold text-koma-foreground font-sans">Lote #{order.id.slice(-4)}</span>
+                              <span className="text-[10px] bg-koma-panel text-koma-muted px-2 py-0.5 rounded font-bold font-sans">
+                                Garçom: {order.garcomNome}
+                              </span>
+                              {order.tipo && (
+                                <span className={`text-[8px] sm:text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${
+                                  order.tipo === 'Retirada'
+                                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                    : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                }`}>
+                                  {order.tipo}
+                                </span>
+                              )}
+                              {order.mesaOrigemId && (
+                                <span className="text-[8px] sm:text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                  Mesclado da Mesa {order.mesaOrigemId}
+                                </span>
+                              )}
+                              {order.mesaTransferidaDe && (
+                                <span className="text-[8px] sm:text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+                                  Transferido da Mesa {order.mesaTransferidaDe}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] text-koma-subtle font-mono font-bold">
+                                {formatBackendTime(order.timestamp)}
+                              </span>
+                              
+                              {order.mesaOrigemId && onUnmergeTable && (
+                                <button
+                                  type="button"
+                                  disabled={activeRole === 'garcom' && !restauranteConfig?.perm_garcom_transferir_mesa}
+                                  onClick={() => onUnmergeTable(order.id)}
+                                  className={`px-2 py-0.5 rounded-lg text-[10px] font-sans font-semibold transition-all flex items-center gap-1 shadow-sm ${
+                                    (activeRole === 'garcom' && !restauranteConfig?.perm_garcom_transferir_mesa)
+                                      ? 'bg-koma-panel/40 border border-koma-border/40 text-gray-600 cursor-not-allowed'
+                                      : 'bg-purple-950/40 hover:bg-purple-900/30 text-purple-300 hover:text-koma-foreground border border-purple-900/40 cursor-pointer'
+                                  }`}
+                                  title="Desmembrar este pedido de volta para sua mesa de origem"
+                                >
+                                  <span>Desmembrar</span>
+                                </button>
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={() => setSelectedOrderToPrint(order)}
+                                className="px-2 py-0.5 bg-koma-raised hover:bg-emerald-500/15 text-koma-muted hover:text-koma-foreground border border-koma-border hover:border-emerald-500/30 rounded-lg text-[10px] font-sans font-semibold transition-all cursor-pointer flex items-center gap-1 shadow-sm"
+                                title="Reimprimir este lote de pedidos"
+                              >
+                                <Printer size={11} className="text-emerald-700 dark:text-emerald-400" />
+                                <span>Reimprimir</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Order Items */}
+                          <div className="p-3 divide-y divide-koma-border">
+                            {unpaidItems.map((item) => (
+                              <div
+                                key={item.id}
+                                id={`placed-item-${item.id}`}
+                                className="py-2.5 flex justify-between items-start gap-3 text-xs first:pt-0 last:pb-0 font-sans"
+                              >
+                                <div className="space-y-1 flex-1">
+                                  <div className="flex flex-wrap items-baseline gap-2">
+                                    <span className="font-bold text-koma-foreground">{item.nome}</span>
+                                    {item.clienteNome && (
+                                      <span className="text-[9px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/15 px-2 py-0.5 rounded border border-emerald-500/30 uppercase tracking-wider">
+                                        Para: {item.clienteNome}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {/* Item Unit Observation */}
+                                  {item.observacao ? (
+                                    <p className="text-[11px] text-koma-subtle italic bg-koma-panel px-2 py-0.5 rounded border border-dashed border-koma-border inline-block">
+                                      Obs: "{item.observacao}"
+                                    </p>
+                                  ) : null}
+                                </div>
+
+                                {/* Status Badge & Waiter Delivery Control */}
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono font-bold text-koma-foreground text-xs sm:text-sm">R$ {(item.preco ?? 0).toFixed(2)}</span>
+                                  
+                                  {item.status === 'preparando' && (
+                                    <span className="px-2 py-0.5 text-[9px] font-bold bg-amber-500/15 border border-amber-500/30 text-amber-400 rounded-md animate-pulse-subtle uppercase tracking-wider">
+                                      Na Cozinha
+                                    </span>
+                                  )}
+
+                                  {item.status === 'pronto' && (
+                                    <div className="flex items-center gap-1">
+                                      <span className="px-2 py-0.5 text-[9px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 rounded-md border border-emerald-500/30 animate-pulse uppercase tracking-wider">
+                                        Pronto!
+                                      </span>
+                                      <button
+                                        id={`deliver-item-btn-${item.id}`}
+                                        onClick={() => onDeliverItem(order.id, item.id)}
+                                        className="px-2 py-0.5 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 rounded-md text-[9px] font-extrabold uppercase tracking-wider transition-colors cursor-pointer"
+                                        title="Marcar como entregue à mesa"
+                                      >
+                                        Servir
+                                      </button>
+                                    </div>
+                                  )}
+
+                                  {item.status === 'entregue' && (
+                                    <span className="px-2 py-0.5 text-[9px] font-bold bg-emerald-500/10 text-emerald-400 rounded-md border border-emerald-500/20 flex items-center gap-1 uppercase tracking-wider">
+                                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+                                      Servido
+                                    </span>
+                                  )}
+
+                                  {/* Ações de Cancelamento e Transferência Individual de Item */}
+                                  <div className="flex items-center gap-1 border-l border-koma-border pl-1.5 ml-1">
+                                    {((activeRole !== 'garcom' || restauranteConfig?.perm_garcom_editar)) && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setEditingItem({
+                                            id: item.id,
+                                            produtoId: item.produtoId,
+                                            nome: item.nome,
+                                            observacao: item.observacao,
+                                            orderId: order.id
+                                          });
+                                        }}
+                                        className="p-1 text-koma-subtle hover:text-emerald-400 transition-colors cursor-pointer"
+                                        title="Editar observação do item"
+                                      >
+                                        <Edit3 size={11} />
+                                      </button>
+                                    )}
+
+                                    {((activeRole !== 'garcom' || restauranteConfig?.perm_garcom_cancelar_item)) && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          if (confirm(`Tem certeza que deseja cancelar "${item.nome}"?`)) {
+                                            onCancelItem(item.id);
+                                          }
+                                        }}
+                                        className="p-1 text-koma-subtle hover:text-red-400 transition-colors cursor-pointer"
+                                        title="Cancelar este item"
+                                      >
+                                        <Trash2 size={11} />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )})}
+                    </div>
+                  </div>
+
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 2: LANÇAR ITENS (MOUNTS MENUPANEL) */}
+          {activeTab === 'lancamento' && (
+            <MenuPanel
+              tableId={table.id}
+              draftItems={draftItems}
+              existingOrders={orders}
+              settings={settings}
+              onUpdateSettings={onUpdateSettings}
+              onAddToDraft={onAddToDraft}
+              onRemoveFromDraft={onRemoveFromDraft}
+              onUpdateDraftItem={onUpdateDraftItem}
+              onSubmitDraft={onSubmitDraft}
+              historicClients={historicClients}
+              isSubmitting={isSubmitting}
+              liveProdutos={liveProdutos}
+              liveCategorias={liveCategorias}
+              catalogReady={catalogReady}
+              allowExternalOrders={canCreateExternalOrder}
+            />
+          )}
+
+          {/* TAB 3: TRANSFERIR MESA */}
+          {activeTab === 'transferir' && (
+            <div className="space-y-6 max-w-2xl mx-auto py-4">
+              <div className="text-center space-y-2">
+                <div className="p-3 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 rounded-full inline-block border border-emerald-500/30">
+                  <Move size={24} />
+                </div>
+                <h3 className="font-serif text-xl font-bold text-koma-foreground">Transferência de Mesa</h3>
+                <p className="text-xs text-koma-subtle font-sans">
+                  Selecione o tipo de transferência e a mesa de destino abaixo.
+                </p>
+              </div>
+
+              {/* Selector for transfer type */}
+              <div className="flex bg-koma-panel p-1 border border-koma-border rounded-xl font-sans text-xs">
+                {canTransferTables && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTransferType('total');
+                    setSelectedItemsForTransfer([]);
+                  }}
+                  className={`flex-1 py-2 rounded-lg font-bold transition-all cursor-pointer ${
+                    transferType === 'total' ? 'bg-rose-900/40 border border-rose-800/50 text-koma-foreground shadow-lg' : 'text-koma-subtle hover:text-koma-foreground'
+                  }`}
+                >
+                  Mesa Inteira
+                </button>
+                )}
+                {canTransferItems && (
+                <button
+                  type="button"
+                  onClick={() => setTransferType('parcial')}
+                  className={`flex-1 py-2 rounded-lg font-bold transition-all cursor-pointer ${
+                    transferType === 'parcial' ? 'bg-rose-900/40 border border-rose-800/50 text-koma-foreground shadow-lg' : 'text-koma-subtle hover:text-koma-foreground'
+                  }`}
+                >
+                  Selecionar Itens
+                </button>
+                )}
+              </div>
+
+              {/* If partial, show items checklist */}
+              {transferType === 'parcial' && (
+                <div className="space-y-2 bg-koma-panel/50 border border-koma-border rounded-2xl p-4 max-h-48 overflow-y-auto">
+                  <span className="text-[10px] text-koma-subtle block font-bold uppercase tracking-wider mb-2">Selecione os itens para transferir:</span>
+                  {orders.flatMap(o => o.itens).length === 0 ? (
+                    <span className="text-xs text-koma-subtle italic">Não há itens lançados para transferir.</span>
+                  ) : (
+                    orders.flatMap(o => o.itens).map(item => {
+                      const isChecked = selectedItemsForTransfer.includes(item.id);
+                      return (
+                        <label
+                          key={item.id}
+                          className="flex items-center justify-between p-2 rounded-lg border border-koma-border hover:bg-koma-raised/50 transition-all cursor-pointer text-xs"
+                        >
+                          <div className="flex items-center gap-2.5 text-koma-foreground">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {
+                                if (isChecked) {
+                                  setSelectedItemsForTransfer(prev => prev.filter(id => id !== item.id));
+                                } else {
+                                  setSelectedItemsForTransfer(prev => [...prev, item.id]);
+                                }
+                              }}
+                              className="rounded border-koma-border text-rose-400 focus:ring-rose-500 h-3.5 w-3.5 bg-koma-input"
+                            />
+                            <span>{item.nome}</span>
+                            {item.clienteNome && <span className="text-[9px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1 rounded">Para: {item.clienteNome}</span>}
+                          </div>
+                          <span className="font-mono text-koma-subtle">R$ {(item.preco ?? 0).toFixed(2)}</span>
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+
+              {/* Target tables grid */}
+              <div className="space-y-2">
+                <span className="text-[10px] text-koma-subtle block font-bold uppercase tracking-wider text-center">Mesa de Destino:</span>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 pt-1">
+                  {availableTablesForTransfer.length === 0 ? (
+                    <div className="col-span-full py-8 text-center text-koma-subtle text-sm italic font-sans">
+                      Nenhuma mesa disponível no momento.
+                    </div>
+                  ) : (
+                    availableTablesForTransfer.map((t) => {
+                      const isConfirming = confirmTransferTo === t.id;
+                      const hasSelected = transferType === 'total' || selectedItemsForTransfer.length > 0;
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
+                          disabled={!hasSelected}
+                          id={`transfer-target-mesa-${t.id}`}
+                          onClick={() => {
+                            if (!hasSelected) return;
+                            if (isConfirming) {
+                              if (transferType === 'total') {
+                                onTransferTable(t.id);
+                              } else {
+                                // Transfer multiple items!
+                                onTransferItems(selectedItemsForTransfer, t.id);
+                                setSelectedItemsForTransfer([]);
+                              }
+                              setConfirmTransferTo(null);
+                            } else {
+                              setConfirmTransferTo(t.id);
+                            }
+                          }}
+                          onMouseLeave={() => {
+                            if (isConfirming) setConfirmTransferTo(null);
+                          }}
+                          className={`p-4 border rounded-2xl text-center transition-all flex flex-col items-center justify-center gap-1 group ${
+                            !hasSelected
+                              ? 'bg-koma-panel/40 border-koma-border/40 text-gray-600 cursor-not-allowed'
+                              : isConfirming
+                                ? 'bg-amber-500/20 border border-amber-500/40 animate-pulse text-amber-300 cursor-pointer hover:scale-102 font-bold'
+                                : 'bg-koma-panel hover:bg-emerald-500/15 border border-koma-border hover:border-emerald-500/40 text-koma-foreground cursor-pointer hover:scale-102'
+                          }`}
+                        >
+                          <span className={`text-base font-bold ${hasSelected ? 'text-koma-foreground group-hover:text-emerald-700 dark:text-emerald-400' : 'text-gray-600'}`}>
+                            {isConfirming ? 'Confirmar?' : `Mesa ${t.id}`}
+                          </span>
+                          {isConfirming && (
+                            <span className="text-[9px] text-koma-muted font-sans">Toque para confirmar</span>
+                          )}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: MESCLAR MESA */}
+          {activeTab === 'mesclar' && (
+            <div className="space-y-6 max-w-2xl mx-auto py-4">
+              <div className="text-center space-y-2">
+                <div className="p-3 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 rounded-full inline-block border border-emerald-500/30">
+                  <GitMerge size={24} />
+                </div>
+                <h3 className="font-serif text-xl font-bold text-koma-foreground">Mesclar Mesa {table.id} com outra</h3>
+                <p className="text-xs text-koma-subtle font-sans">
+                  Todo o consumo desta mesa será incorporado à mesa de destino. A mesa origem ficará livre.
+                </p>
+              </div>
+
+              {/* Info banner ou bloqueio por limite de mesclagem */}
+              {originIds.length > 0 ? (
+                <div className="bg-rose-500/10 border border-rose-500/20 rounded-2xl p-4 text-xs text-rose-600 dark:text-rose-300 font-sans flex items-start gap-2 max-w-md mx-auto">
+                  <span className="text-sm shrink-0">🚫</span>
+                  <div>
+                    <strong className="block text-rose-400 font-bold mb-0.5">Limite de Mesclagem Excedido</strong>
+                    <span>Esta mesa já possui consumo mesclado da <strong>Mesa {originIds.join(', ')}</strong>. O limite máximo é de 2 mesas mescladas juntas.</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-3.5 text-xs text-amber-600 dark:text-amber-300 font-sans flex items-start gap-2">
+                  <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+                  <span>A mesclagem une as comandas. Use a aba <strong>Transferência → Selecionar Itens</strong> se quiser mover itens específicos sem mesclar a conta.</span>
+                </div>
+              )}
+
+              {originIds.length === 0 && (
+                <>
+                  {/* Occupied tables (recommended for merge) */}
+                  <div className="space-y-2">
+                    <span className="text-[10px] text-koma-subtle block font-bold uppercase tracking-wider text-center">Mesa Destino — Mesas Ocupadas:</span>
+                    {tablesWithOrders.length === 0 ? (
+                      <div className="py-6 text-center text-koma-subtle text-sm italic font-sans bg-koma-panel/40 rounded-2xl border border-koma-border/40">
+                        Nenhuma outra mesa está ocupada no momento.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 pt-1">
+                        {tablesWithOrders.map((t) => {
+                          const isConfirming = confirmTransferTo === t.id;
+                          const isTargetAlreadyMerged = allOrders?.some(o => o.mesaId === t.id && o.mesaOrigemId !== null && o.mesaOrigemId !== t.id);
+
+                          return (
+                            <button
+                              key={t.id}
+                              type="button"
+                              id={`merge-target-mesa-${t.id}`}
+                              disabled={isTargetAlreadyMerged}
+                              onClick={() => {
+                                if (isConfirming) {
+                                  if (onMergeTables) onMergeTables(table.id, t.id);
+                                  setConfirmTransferTo(null);
+                                } else {
+                                  setConfirmTransferTo(t.id);
+                                }
+                              }}
+                              onMouseLeave={() => { if (isConfirming) setConfirmTransferTo(null); }}
+                              className={`p-4 border rounded-2xl text-center transition-all flex flex-col items-center justify-center gap-1 group ${
+                                isTargetAlreadyMerged
+                                  ? 'bg-koma-panel border-koma-border text-koma-muted cursor-not-allowed opacity-40'
+                                  : isConfirming
+                                    ? 'bg-rose-900/40 border border-rose-800/50 animate-pulse text-koma-foreground cursor-pointer'
+                                    : 'bg-koma-raised hover:bg-emerald-500/10 border border-rose-500/30 hover:border-emerald-500 text-koma-foreground cursor-pointer hover:scale-102'
+                              }`}
+                            >
+                              <span className={`text-base font-bold text-koma-foreground ${!isTargetAlreadyMerged && 'group-hover:text-emerald-400'}`}>
+                                {isConfirming ? 'Confirmar?' : `Mesa ${t.id}`}
+                              </span>
+                              {isTargetAlreadyMerged ? (
+                                <span className="text-[8px] text-koma-muted font-bold uppercase tracking-wider">Limite Atingido</span>
+                              ) : !isConfirming ? (
+                                <span className="text-[8px] text-rose-400 font-bold uppercase tracking-wider">Ocupada</span>
+                              ) : (
+                                <span className="text-[9px] text-koma-muted font-sans">Toque para confirmar</span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Empty tables (less common for merge, but allowed) */}
+                  {tablesWithoutOrders.length > 0 && (
+                    <div className="space-y-2">
+                      <span className="text-[10px] text-koma-subtle block font-bold uppercase tracking-wider text-center">Mesas Livres (mesclar criará consumo nelas):</span>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 pt-1">
+                        {tablesWithoutOrders.map((t) => {
+                          const isConfirming = confirmTransferTo === t.id;
+                          const isTargetAlreadyMerged = allOrders?.some(o => o.mesaId === t.id && o.mesaOrigemId !== null && o.mesaOrigemId !== t.id);
+
+                          return (
+                            <button
+                              key={t.id}
+                              type="button"
+                              id={`merge-target-mesa-free-${t.id}`}
+                              disabled={isTargetAlreadyMerged}
+                              onClick={() => {
+                                if (isConfirming) {
+                                  if (onMergeTables) onMergeTables(table.id, t.id);
+                                  setConfirmTransferTo(null);
+                                } else {
+                                  setConfirmTransferTo(t.id);
+                                }
+                              }}
+                              onMouseLeave={() => { if (isConfirming) setConfirmTransferTo(null); }}
+                              className={`p-4 border rounded-2xl text-center transition-all flex flex-col items-center justify-center gap-1 group opacity-60 ${
+                                isTargetAlreadyMerged
+                                  ? 'bg-koma-panel border-koma-border text-koma-muted cursor-not-allowed opacity-40'
+                                  : isConfirming
+                                    ? 'bg-rose-900/40 border border-rose-800/50 animate-pulse text-koma-foreground opacity-100 cursor-pointer'
+                                    : 'bg-koma-raised hover:bg-emerald-500/10 border border-koma-border hover:border-emerald-500 text-koma-foreground hover:opacity-100 cursor-pointer'
+                              }`}
+                            >
+                              <span className="text-base font-bold text-koma-foreground group-hover:text-emerald-400">
+                                {isConfirming ? 'Confirmar?' : `Mesa ${t.id}`}
+                              </span>
+                              {isTargetAlreadyMerged ? (
+                                <span className="text-[8px] text-koma-muted font-bold uppercase tracking-wider">Limite Atingido</span>
+                              ) : !isConfirming ? (
+                                <span className="text-[8px] text-emerald-400 font-bold uppercase tracking-wider">Livre</span>
+                              ) : (
+                                <span className="text-[9px] text-koma-muted font-sans">Toque para confirmar</span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+        </div>
+
+      </div>
+
+      {/* EMBEDDED PRINT PREVIEW (RECEIPT) POPUP MODAL */}
+      {showPrintPreview && (
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowPrintPreview(false);
+            }
+          }}
+          className="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50 animate-fade-in cursor-pointer"
+        >
+          <div className="bg-koma-panel border border-koma-border rounded-3xl shadow-2xl max-w-sm w-full p-6 space-y-4 max-h-[85vh] flex flex-col justify-between">
+            
+            {/* Invoice Header */}
+            <div className="space-y-2 pb-3 border-b border-koma-border">
+              <div className="flex justify-between items-center font-sans">
+                <span className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider">Extrato de Mesa</span>
+                <button
+                  id="close-print-preview-btn"
+                  onClick={() => setShowPrintPreview(false)}
+                  className="p-1 hover:bg-koma-raised border border-transparent hover:border-koma-border rounded-full transition-colors text-koma-subtle hover:text-koma-foreground cursor-pointer"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            </div>
+
+            {/* RECEIPT GRAPHICS */}
+            <div className="flex-1 overflow-y-auto bg-koma-page border border-koma-border rounded-2xl p-5 font-mono text-[11px] text-koma-muted space-y-4 shadow-inner max-h-[50vh] scrollbar-thin">
+              <div className="text-center space-y-1 border-b border-dashed border-koma-border pb-3">
+                <p className="font-serif font-bold text-base text-koma-foreground tracking-tight">{restaurantName.toUpperCase()}</p>
+                <p className="text-[9px] text-emerald-700 dark:text-emerald-400 leading-normal font-sans">Conferência de Mesa</p>
+              </div>
+
+              <div className="space-y-1 border-b border-dashed border-koma-border pb-3">
+                <p><strong>DATA:</strong> {new Date().toLocaleDateString('pt-BR')} {new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})}</p>
+                <p><strong>MESA:</strong> #{table.id}</p>
+                <p><strong>ATENDIMENTO:</strong> {activeWaiterNome}</p>
+              </div>
+
+              {/* Items List */}
+              <div className="space-y-2 border-b border-dashed border-koma-border pb-3">
+                <div className="flex justify-between font-bold text-[9px] text-koma-subtle uppercase font-sans tracking-wider pb-1">
+                  <span>ITEM</span>
+                  <span>PREÇO</span>
+                </div>
+                
+                {(() => {
+                  const items = orders.flatMap(o => o.itens);
+                  
+                  // Check if there are any items with actual client names
+                  const clientsWithItems = Array.from(new Set(
+                    items.map(i => i.clienteNome ? i.clienteNome.trim() : '')
+                  )).filter(name => name !== '' && name !== 'Consumo Geral');
+
+                  if (clientsWithItems.length === 0) {
+                    // No custom clients, group identical items globally
+                    const globalGrouped: { [key: string]: { nome: string, preco: number, quantidade: number } } = {};
+                    items.forEach(item => {
+                      const key = `${item.nome}_${item.preco}`;
+                      if (!globalGrouped[key]) {
+                        globalGrouped[key] = { nome: item.nome, preco: item.preco, quantidade: 0 };
+                      }
+                      globalGrouped[key].quantidade += 1;
+                    });
+
+                    return (
+                      <div className="space-y-1">
+                        {Object.values(globalGrouped).map((item, idx) => (
+                          <div key={idx} className="flex justify-between">
+                            <span>{item.quantidade}x {item.nome}</span>
+                            <span className="font-bold">R$ {((item.preco ?? 0) * (item.quantidade ?? 1)).toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  } else {
+                    // Group items by client name, and put ones without client name in 'Consumo Geral'
+                    const grouped: { [client: string]: typeof items } = {};
+                    items.forEach(item => {
+                      const client = item.clienteNome ? item.clienteNome.trim() : 'Consumo Geral';
+                      if (!grouped[client]) {
+                        grouped[client] = [];
+                      }
+                      grouped[client].push(item);
+                    });
+
+                    return (
+                      <div className="space-y-3">
+                        {Object.entries(grouped).map(([client, clientItems]) => {
+                          // Group identical items within this client section
+                          const clientGrouped: { [key: string]: { nome: string, preco: number, quantidade: number } } = {};
+                          clientItems.forEach(item => {
+                            const key = `${item.nome}_${item.preco}`;
+                            if (!clientGrouped[key]) {
+                              clientGrouped[key] = { nome: item.nome, preco: item.preco, quantidade: 0 };
+                            }
+                            clientGrouped[key].quantidade += 1;
+                          });
+
+                          return (
+                            <div key={client} className="space-y-1 border-t border-dashed border-koma-border pt-2 first:border-0 first:pt-0">
+                              <span className="font-bold text-[10px] text-emerald-700 dark:text-emerald-400 uppercase font-sans tracking-wider block">
+                                Cliente: {client}
+                              </span>
+                              {Object.values(clientGrouped).map((item, idx) => (
+                                <div key={idx} className="flex justify-between pl-2">
+                                  <span>{item.quantidade}x {item.nome}</span>
+                                  <span className="font-bold">R$ {((item.preco ?? 0) * (item.quantidade ?? 1)).toFixed(2)}</span>
+                                </div>
+                              ))}
+                              <div className="text-right text-[10px] font-bold text-koma-subtle pr-1 pt-0.5">
+                                Subtotal {client}: R$ {clientItems.reduce((s, i) => s + (i.preco ?? 0), 0).toFixed(2)}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  }
+                })()}
+              </div>
+
+              {/* Math totals */}
+              <div className="space-y-1 pt-1 text-right">
+                {(() => {
+                  const itemsFiltered = orders.flatMap(o => o.itens);
+                  const subTotal = itemsFiltered.reduce((s, i) => s + i.preco, 0);
+                  const hasTax = restauranteConfig?.taxa_servico_ativa ?? true;
+                  const taxRate = restauranteConfig?.taxa_servico_padrao ?? 10;
+                  const taxVal = hasTax ? subTotal * (taxRate / 100) : 0;
+                  const grandTotal = subTotal + taxVal;
+
+                  return (
+                    <div className="space-y-1 text-right text-[10px] text-koma-subtle font-sans">
+                      <div className="flex justify-between">
+                        <span>Subtotal Consumo:</span>
+                        <span className="font-mono">R$ {subTotal.toFixed(2)}</span>
+                      </div>
+                      {hasTax && (
+                        <div className="flex justify-between">
+                          <span>Taxa de Serviço ({taxRate}%):</span>
+                          <span className="font-mono">R$ {taxVal.toFixed(2)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-xs font-bold text-emerald-700 dark:text-emerald-400 border-t border-dotted border-koma-border pt-2.5 mt-2.5">
+                        <span>TOTAL GERAL:</span>
+                        <span className="font-mono">R$ {grandTotal.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              <div className="text-center pt-3 border-t border-dashed border-koma-border text-[9px] text-koma-subtle font-sans">
+                <p>Conferência de mesa</p>
+                <p>Não é documento fiscal</p>
+              </div>
+            </div>
+
+            {/* Print Status Feedback */}
+            {printSuccess && (
+              <div className="bg-emerald-600/15 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-900/40 text-emerald-800 dark:text-emerald-300 p-2.5 rounded-xl text-center text-[10px] font-bold font-sans uppercase tracking-wider">
+                Impressão enviada com sucesso.
+              </div>
+            )}
+
+            {/* Simulated Print Button */}
+            <div className="flex gap-2 w-full">
+              <button
+                id="finalize-physical-print-mock-btn"
+                onClick={async () => {
+                  if (onPrintReceipt) {
+                    try {
+                      await onPrintReceipt(false);
+                      setPrintSuccess(true);
+                      setTimeout(() => {
+                        setPrintSuccess(false);
+                        setShowPrintPreview(false);
+                      }, 1500);
+                    } catch (err) {
+                      console.error("Error printing receipt:", err);
+                      alert("Erro ao enviar impressão do recibo completo");
+                    }
+                  } else {
+                    setPrintSuccess(true);
+                    setTimeout(() => {
+                      setPrintSuccess(false);
+                      setShowPrintPreview(false);
+                    }, 1500);
+                  }
+                }}
+                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-koma-foreground rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider border border-emerald-500/20 transition-all shadow-lg shadow-emerald-500/10"
+              >
+                <Printer size={13} className="text-koma-foreground" />
+                <span>Extrato Completo</span>
+              </button>
+
+              <button
+                onClick={async () => {
+                  if (onPrintReceipt) {
+                    try {
+                      await onPrintReceipt(true);
+                      setPrintSuccess(true);
+                      setTimeout(() => {
+                        setPrintSuccess(false);
+                        setShowPrintPreview(false);
+                      }, 1500);
+                    } catch (err) {
+                      console.error("Error printing receipt:", err);
+                      alert("Erro ao enviar impressão do extrato resumido");
+                    }
+                  } else {
+                    setPrintSuccess(true);
+                    setTimeout(() => {
+                      setPrintSuccess(false);
+                      setShowPrintPreview(false);
+                    }, 1500);
+                  }
+                }}
+                className="flex-1 py-3 bg-amber-600 hover:bg-amber-500 text-koma-foreground rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider border border-amber-500/20 transition-all shadow-lg shadow-amber-500/10"
+              >
+                <Printer size={13} className="text-koma-foreground" />
+                <span>Apenas Valores</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* REPRINT ORDER MODAL (VIA DE COZINHA) */}
+      {selectedOrderToPrint && (
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setSelectedOrderToPrint(null);
+            }
+          }}
+          className="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50 animate-fade-in cursor-pointer"
+        >
+          <div className="bg-koma-panel border border-koma-border rounded-3xl shadow-2xl max-w-sm w-full p-6 space-y-4 max-h-[85vh] flex flex-col justify-between">
+            
+            {/* Invoice Header */}
+            <div className="space-y-2 pb-3 border-b border-koma-border">
+              <div className="flex justify-between items-center font-sans">
+                <span className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider">Reimpressão de Lote (Cozinha)</span>
+                <button
+                  onClick={() => setSelectedOrderToPrint(null)}
+                  className="p-1 hover:bg-koma-raised border border-transparent hover:border-koma-border rounded-full transition-colors text-koma-subtle hover:text-koma-foreground cursor-pointer"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            </div>
+
+            {/* RECEIPT GRAPHICS */}
+            <div className="flex-1 overflow-y-auto bg-koma-page border border-koma-border rounded-2xl p-5 font-mono text-[11px] text-koma-muted space-y-4 shadow-inner max-h-[50vh] scrollbar-thin">
+              <div className="text-center space-y-1 border-b border-dashed border-koma-border pb-3">
+                <p className="font-serif font-bold text-base text-koma-foreground tracking-tight">{restaurantName.toUpperCase()}</p>
+                <p className="text-[9px] text-rose-400 leading-normal font-sans font-bold">REIMPRESSÃO • VIA COZINHA</p>
+              </div>
+
+              <div className="space-y-1 border-b border-dashed border-koma-border pb-3">
+                <p><strong>LOTE:</strong> #{selectedOrderToPrint.id.slice(-4)}</p>
+                {selectedOrderToPrint.tipo && <p><strong>TIPO:</strong> {selectedOrderToPrint.tipo.toUpperCase()}</p>}
+                <p><strong>DATA:</strong> {formatBackendDateTime(selectedOrderToPrint.timestamp)}</p>
+                <p><strong>MESA:</strong> #{table.id}</p>
+                <p><strong>ATENDIMENTO:</strong> {selectedOrderToPrint.garcomNome}</p>
+              </div>
+
+              {/* Items List */}
+              <div className="space-y-2 border-b border-dashed border-koma-border pb-3">
+                <div className="flex justify-between font-bold text-[9px] text-koma-subtle uppercase font-sans tracking-wider pb-1">
+                  <span>ITEM</span>
+                  <span>PREÇO</span>
+                </div>
+                
+                <div className="space-y-2.5">
+                  {/* Group duplicate items by name + observation + clientName to display quantity cleanly */}
+                  {(() => {
+                    interface GroupedKey {
+                      nome: string;
+                      observacao: string;
+                      clienteNome: string;
+                      preco: number;
+                    }
+                    const groupedMap = new Map<string, { item: GroupedKey; qty: number }>();
+                    selectedOrderToPrint.itens.forEach(item => {
+                      const key = `${item.nome}||${item.observacao}||${item.clienteNome}`;
+                      const existing = groupedMap.get(key);
+                      if (existing) {
+                        existing.qty += 1;
+                      } else {
+                        groupedMap.set(key, {
+                          item: {
+                            nome: item.nome,
+                            observacao: item.observacao,
+                            clienteNome: item.clienteNome,
+                            preco: item.preco
+                          },
+                          qty: 1
+                        });
+                      }
+                    });
+
+                    return Array.from(groupedMap.values()).map(({ item, qty }, idx) => (
+                      <div key={idx} className="space-y-0.5">
+                        <div className="flex justify-between font-bold">
+                          <span>{qty}x {item.nome}</span>
+                          <span className="text-koma-subtle">R$ {((item.preco ?? 0) * qty).toFixed(2)}</span>
+                        </div>
+                        {item.clienteNome && item.clienteNome !== 'Consumo Geral' && (
+                          <p className="text-[9px] text-emerald-700 dark:text-emerald-400 uppercase font-bold">Para: {item.clienteNome}</p>
+                        )}
+                        {item.observacao && (
+                          <p className="text-[10px] text-rose-600 dark:text-rose-300 italic pl-2 border-l border-dashed border-rose-900/50/50">
+                            Obs: "{item.observacao}"
+                          </p>
+                        )}
+                      </div>
+                    ));
+                  })()}
+                </div>
+              </div>
+
+              <div className="text-center pt-3 border-t border-dashed border-koma-border text-[9px] text-koma-subtle font-sans">
+                <p>Reimpressão de Comanda de Produção</p>
+                <p>Controle Interno de Cozinha</p>
+              </div>
+            </div>
+
+            {/* Print Status Feedback */}
+            {printSuccess && (
+              <div className="bg-emerald-600/15 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-900/40 text-emerald-800 dark:text-emerald-300 p-2.5 rounded-xl text-center text-[10px] font-bold font-sans uppercase tracking-wider">
+                Reimpressão enviada com sucesso!
+              </div>
+            )}
+
+            {/* Simulated Print Button */}
+            <button
+              onClick={async () => {
+                if (onPrintKitchenLaunch && selectedOrderToPrint) {
+                  try {
+                    await onPrintKitchenLaunch(selectedOrderToPrint.id);
+                    setPrintSuccess(true);
+                    setTimeout(() => {
+                      setPrintSuccess(false);
+                      setSelectedOrderToPrint(null);
+                    }, 1500);
+                  } catch (err) {
+                    console.error("Error reprinting kitchen launch:", err);
+                    alert("Erro ao enviar reimpressão para a cozinha");
+                  }
+                } else {
+                  setPrintSuccess(true);
+                  setTimeout(() => {
+                    setPrintSuccess(false);
+                    setSelectedOrderToPrint(null);
+                  }, 1500);
+                }
+              }}
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-koma-foreground rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider border border-emerald-500/20 transition-all shadow-lg shadow-emerald-500/10"
+            >
+              <Printer size={13} className="text-koma-foreground" />
+              <span>Imprimir Via Cozinha</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {editingItem && (
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setEditingItem(null);
+            }
+          }}
+          className="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4 cursor-pointer"
+        >
+          <div className="w-full max-w-sm bg-koma-dialog border border-koma-border rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in">
+            <div className="flex justify-between items-center pb-2 border-b border-koma-border">
+              <h3 className="font-serif text-sm font-bold text-koma-foreground">Editar Item: {editingItem.nome}</h3>
+              <button 
+                type="button"
+                onClick={() => setEditingItem(null)} 
+                className="p-1 text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Quantity Selector */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">Quantidade:</label>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setEditingItem({ ...editingItem, quantidade: Math.max(1, editingItem.quantidade - 1) })}
+                    className="w-8 h-8 rounded-xl bg-koma-raised hover:bg-koma-card border border-koma-border flex items-center justify-center text-koma-foreground font-bold cursor-pointer transition-colors"
+                  >
+                    -
+                  </button>
+                  <span className="text-sm font-bold text-koma-foreground font-mono w-6 text-center">{editingItem.quantidade}</span>
+                  <button
+                    type="button"
+                    onClick={() => setEditingItem({ ...editingItem, quantidade: editingItem.quantidade + 1 })}
+                    className="w-8 h-8 rounded-xl bg-koma-raised hover:bg-koma-card border border-koma-border flex items-center justify-center text-koma-foreground font-bold cursor-pointer transition-colors"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              {/* Observations Input */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">Observações de Preparo:</label>
+                <input
+                  type="text"
+                  value={editingItem.observacao}
+                  onChange={(e) => setEditingItem({ ...editingItem, observacao: e.target.value })}
+                  className="w-full px-3.5 py-2 text-xs bg-koma-input border border-koma-border rounded-xl focus:outline-none focus:border-emerald-400/30 text-koma-foreground"
+                  placeholder="Ex: Sem cebola, Bem frito, etc."
+                />
+              </div>
+
+              {/* Customer Name Input */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">Nome do Cliente:</label>
+                <input
+                  type="text"
+                  value={editingItem.clienteNome === 'Consumo Geral' ? '' : editingItem.clienteNome}
+                  onChange={(e) => setEditingItem({ ...editingItem, clienteNome: e.target.value })}
+                  className="w-full px-3.5 py-2 text-xs bg-koma-input border border-koma-border rounded-xl focus:outline-none focus:border-emerald-400/30 text-koma-foreground"
+                  placeholder="Ex: Maria (Opcional)"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  const finalClient = editingItem.clienteNome.trim() || 'Consumo Geral';
+                  if (onUpdateItemDetails) {
+                    await onUpdateItemDetails(
+                      editingItem.id, 
+                      editingItem.observacao, 
+                      finalClient,
+                      editingItem.quantidade
+                    );
+                  }
+                  setEditingItem(null);
+                }}
+                className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center shadow-sm"
+              >
+                Confirmar Alterações
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+};
