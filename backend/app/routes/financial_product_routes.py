@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Optional
 
 from fastapi import Depends, HTTPException, Query
@@ -8,6 +9,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db, require_tenant_id
 from ..models import Categoria, Item as ComandaItem, Produto, Usuario
 from ..security import require_permission
+from ..services.financeiro import money
 from ..services.financial_read import load_financial_snapshot
 from . import relatorios as legacy_reports
 
@@ -76,38 +78,48 @@ def get_relatorio_produtos_operacional(
         else []
     )
 
-    consumption: dict[str, dict[str, float | int]] = {}
+    consumption: dict[str, dict[str, Decimal | int]] = {}
     for item in items:
         if not item.produto_id:
             continue
         product_id = str(item.produto_id)
         quantity = int(getattr(item, "quantidade", 1) or 1)
-        unit_value = float(getattr(item, "preco_unit", 0) or 0)
-        row = consumption.setdefault(product_id, {"quantity": 0, "value": 0.0})
+        unit_value = money(getattr(item, "preco_unit", 0) or 0)
+        row = consumption.setdefault(
+            product_id,
+            {"quantity": 0, "value": Decimal("0.00")},
+        )
         row["quantity"] = int(row["quantity"]) + quantity
-        row["value"] = float(row["value"]) + unit_value * quantity
+        row["value"] = money(Decimal(str(row["value"])) + unit_value * quantity)
 
     result = []
     for product in products:
-        row = consumption.get(str(product.id), {"quantity": 0, "value": 0.0})
+        row = consumption.get(
+            str(product.id),
+            {"quantity": 0, "value": Decimal("0.00")},
+        )
         quantity = int(row["quantity"])
-        consumed_value = round(float(row["value"]), 2)
-        average_unit_value = round(consumed_value / quantity, 2) if quantity else 0.0
+        consumed_value = money(row["value"])
+        average_unit_value = (
+            money(consumed_value / quantity)
+            if quantity
+            else Decimal("0.00")
+        )
         result.append(
             {
                 "produto_id": str(product.id),
                 "produto_nome": product.nome,
                 "categoria_nome": category_map.get(str(product.categoria_id), "Sem Categoria"),
                 "quantidade_consumida": quantity,
-                "valor_consumido": consumed_value,
-                "preco_medio_item": average_unit_value,
+                "valor_consumido": float(consumed_value),
+                "preco_medio_item": float(average_unit_value),
                 "natureza_valor": "consumo_operacional_nao_receita",
                 # Compatibilidade de leitura durante a migração do frontend.
                 # `faturamento_total` deixa de carregar um número para impedir
                 # que clientes antigos o somem como receita por engano.
                 "quantidade_vendida": quantity,
                 "faturamento_total": None,
-                "ticket_medio_item": average_unit_value,
+                "ticket_medio_item": float(average_unit_value),
             }
         )
 
