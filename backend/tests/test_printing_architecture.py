@@ -45,8 +45,10 @@ def setup_printing_architecture(monkeypatch):
     fixed_now = datetime.datetime(2026, 8, 15, 21, 30, tzinfo=datetime.timezone(datetime.timedelta(hours=-3)))
     monkeypatch.setattr(printer_module, "get_operational_now", lambda: fixed_now)
 
-    token = current_restaurante_id.set(TENANT_ID)
-    db = SessionLocal()
+    # Este fixture é deliberadamente administrativo: prepara dois tenants para
+    # provar isolamento. Não deve fingir ser uma sessão operacional do tenant 1881.
+    token = current_restaurante_id.set(None)
+    db = SessionLocal(restaurante_id=None)
     try:
         db.query(PrintJob).filter(PrintJob.restaurante_id.in_([TENANT_ID, OTHER_TENANT_ID])).delete(synchronize_session=False)
         db.query(Item).filter(Item.restaurante_id.in_([TENANT_ID, OTHER_TENANT_ID])).delete(synchronize_session=False)

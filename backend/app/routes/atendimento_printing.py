@@ -9,6 +9,7 @@ from ..database import get_db, require_tenant_id
 from ..models import Comanda, Item, Lancamento, Usuario
 from ..security import get_current_user
 from ..services.printing import PrintingRequestError, enqueue_table_receipt
+from ..waiter_permissions import require_waiter_permission
 
 
 router = APIRouter(tags=["Impressão de Atendimentos"])
@@ -32,6 +33,7 @@ def reimprimir_lancamento_na_mesa_atual(
     origem passa a aparecer em dois cards, o `mesa_id` remove a ambiguidade e
     garante que o botão da Mesa 8 não reimprima os itens que ficaram na Mesa 3.
     """
+    require_waiter_permission(db, current_user, "perm_garcom_print")
     rid = require_tenant_id()
 
     # Compatibilidade para vias antigas de Delivery/Retirada que usam a própria

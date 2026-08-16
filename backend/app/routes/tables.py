@@ -23,6 +23,7 @@ from ..schemas import (
 )
 from ..security import get_current_garcom_optional, get_current_user, require_permission
 from ..services.printing import PrintingRequestError, enqueue_table_receipt
+from ..waiter_permissions import require_waiter_permission
 from ..websocket_manager import manager
 
 router = APIRouter(
@@ -270,7 +271,10 @@ def cancelar_consumo_mesa(
 @router.get("/observacoes/todas", response_model=List[ObservacaoPredefinidaResponse])
 def get_todas_observacoes(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """Retorna a lista completa de observações predefinidas do salão."""
-    return db.query(ObservacaoPredefinida).all()
+    rest_id = require_tenant_id()
+    return db.query(ObservacaoPredefinida).filter(
+        ObservacaoPredefinida.restaurante_id == rest_id
+    ).all()
 
 @router.get("/observacoes/categoria/{categoria_id}", response_model=List[ObservacaoPredefinidaResponse])
 def get_observacoes_por_categoria(categoria_id: str, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
@@ -278,7 +282,11 @@ def get_observacoes_por_categoria(categoria_id: str, db: Session = Depends(get_d
     Retorna as observações predefinidas filtradas por uma categoria de prato.
     Ex: Categoria 'Hambúrgueres Bovinos' retorna ['Sem Cheddar', 'Sem cebola'].
     """
-    return db.query(ObservacaoPredefinida).filter(ObservacaoPredefinida.categoria_id == categoria_id).all()
+    rest_id = require_tenant_id()
+    return db.query(ObservacaoPredefinida).filter(
+        ObservacaoPredefinida.restaurante_id == rest_id,
+        ObservacaoPredefinida.categoria_id == categoria_id,
+    ).all()
 
 
 @router.post("/{mesa_id}/imprimir-recibo", status_code=status.HTTP_200_OK)
@@ -296,7 +304,7 @@ def imprimir_recibo_mesa(
     mesa pré-pagamento. Ambos usam o mesmo snapshot e o mesmo formatter usados
     pelas impressões automáticas e reimpressões de consumo no local.
     """
-    del current_garcom
+    require_waiter_permission(db, current_garcom, "perm_garcom_print")
     rest_id = require_tenant_id()
     try:
         job = enqueue_table_receipt(
@@ -308,6 +316,7 @@ def imprimir_recibo_mesa(
             source_id=str(mesa_id),
             print_header=print_header,
             print_footer=print_footer,
+            printed_by=current_garcom.nome,
         )
         db.commit()
     except PrintingRequestError as exc:

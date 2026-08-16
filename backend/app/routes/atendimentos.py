@@ -119,6 +119,7 @@ def imprimir_recibo_mesa_com_identidade(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
+    require_waiter_permission(db, current_user, "perm_garcom_print")
     rid = require_tenant_id()
     try:
         _materialize_table_accounts(db, rid, mesa_id, actor_id=current_user.id)

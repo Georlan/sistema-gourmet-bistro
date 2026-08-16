@@ -93,8 +93,10 @@ run_flow_test \
   "tests/test_critical_pdv_caixa_flow.py"
 
 run_flow_test \
-  "5. Autenticação e Autorização Interna (Login JWT & Permissões)" \
-  "tests/test_critical_auth_flow.py"
+  "5. Autenticação e Autorização Interna (Login JWT, tenant e matriz RBAC)" \
+  "tests/test_critical_auth_flow.py" \
+  "tests/test_auth_tenant_session_hardening.py" \
+  "tests/test_authorization.py"
 
 run_flow_test \
   "6. Arquitetura, layout e snapshot da impressão" \
@@ -113,6 +115,10 @@ run_flow_test \
   "tests/test_atendimento_http_flow.py" \
   "tests/test_atendimento_caixa_merge.py" \
   "tests/test_order_numbering_unified.py"
+
+run_flow_test \
+  "9. Hardening multi-tenant e RBAC (sessão, escrita, JWT, público e impressão)" \
+  "tests/test_stage2_multitenant_rbac.py"
 
 echo ""
 echo -e "${BLUE}${BOLD}========================================================================${NC}"

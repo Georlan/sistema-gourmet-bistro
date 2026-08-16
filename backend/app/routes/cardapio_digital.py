@@ -14,6 +14,7 @@ from ..database import (
     current_restaurante_id,
     get_db,
     require_tenant_id,
+    tenant_session_scope,
 )
 from ..models import Restaurante, Usuario, Categoria, Produto
 from ..security import require_permission, get_current_garcom_optional
@@ -116,13 +117,16 @@ def resolve_restaurant_id(
     slug: Optional[str],
     db: Session,
     current_user: Optional[Usuario] = None,
+    *,
+    bind_session: bool = True,
 ) -> int:
     """
     Resolve um identificador público sem consultar tabelas tenant via ORM.
 
     No PostgreSQL, a função SECURITY DEFINER é a única operação autorizada antes
-    de a sessão receber o tenant. Depois da resolução, a transação sentinela é
-    descartada e toda consulta seguinte recebe ``app.current_restaurante_id``.
+    de a sessão receber o tenant. Consumidores diretos mantêm o comportamento
+    legado de vincular a sessão; escopos temporários usam ``bind_session=False``
+    e deixam a troca/restauração sob responsabilidade de ``tenant_session_scope``.
     """
     restaurant_identifier = (
         str(restaurante_id).strip() if restaurante_id is not None else ""
@@ -186,7 +190,8 @@ def resolve_restaurant_id(
                 detail="Identificador de restaurante é obrigatório.",
             )
 
-    bind_session_to_tenant(db, rest_id)
+    if bind_session:
+        bind_session_to_tenant(db, rest_id)
     return rest_id
 
 
@@ -197,13 +202,16 @@ def public_tenant_scope(
     db: Session,
     current_user: Optional[Usuario] = None,
 ):
-    """Mantém ORM e RLS vinculados ao mesmo tenant durante a operação pública."""
-    rest_id = resolve_restaurant_id(restaurante_id, slug, db, current_user)
-    token = current_restaurante_id.set(rest_id)
-    try:
+    """Mantém ORM e RLS vinculados ao mesmo tenant e restaura a sessão ao sair."""
+    rest_id = resolve_restaurant_id(
+        restaurante_id,
+        slug,
+        db,
+        current_user,
+        bind_session=False,
+    )
+    with tenant_session_scope(db, rest_id):
         yield rest_id
-    finally:
-        current_restaurante_id.reset(token)
 
 
 def _ordered_categories(categories: list[Categoria]) -> list[Categoria]:

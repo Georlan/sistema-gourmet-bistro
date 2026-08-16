@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from ..config import settings
-from ..database import bind_session_to_tenant, current_restaurante_id, get_db
+from ..database import get_db, tenant_session_scope
 from ..models import Produto, PublicRateLimit, Restaurante
 
 router = APIRouter(
@@ -82,9 +82,7 @@ async def chat_waiter(
 
     forwarded = request.headers.get("x-forwarded-for", "").split(",", 1)[0].strip()
     client_address = forwarded or (request.client.host if request.client else "unknown")
-    tenant_context = current_restaurante_id.set(payload.restaurante_id)
-    bind_session_to_tenant(db, payload.restaurante_id)
-    try:
+    with tenant_session_scope(db, payload.restaurante_id):
         restaurant = db.query(Restaurante).filter(
             Restaurante.id == payload.restaurante_id
         ).first()
@@ -117,8 +115,6 @@ async def chat_waiter(
             Produto.ativo.is_(True)
         ).limit(200).all()
         brand_name = restaurant.nome
-    finally:
-        current_restaurante_id.reset(tenant_context)
 
     def get_local_reply(msg: str) -> str:
         lower = msg.lower()

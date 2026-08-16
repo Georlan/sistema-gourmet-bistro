@@ -18,11 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..database import (
-    bind_session_to_tenant,
-    current_restaurante_id,
-    get_db,
-)
+from ..database import get_db, tenant_session_scope
 from ..models import Cliente, OtpChallenge, PublicRateLimit
 from ..schemas import (
     CustomerOtpRequest,
@@ -149,12 +145,8 @@ def customer_token_scope(
             detail=str(exc),
         ) from exc
 
-    bind_session_to_tenant(db, claims.restaurante_id)
-    context_token = current_restaurante_id.set(claims.restaurante_id)
-    try:
+    with tenant_session_scope(db, claims.restaurante_id):
         yield claims
-    finally:
-        current_restaurante_id.reset(context_token)
 
 
 def authenticated_customer(
