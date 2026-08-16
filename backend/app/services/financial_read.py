@@ -234,9 +234,12 @@ def project_payment_allocations(
     alocação usam AtendimentoComanda da comanda original; fluxos sem Atendimento
     (delivery/balcão/legado) usam a própria comanda como identidade financeira.
 
-    Se um ledger parcial não fechar exatamente com o pagamento, o residual vira
-    uma identidade explícita `unattributed:<payment>` em vez de ser perdido ou
-    rateado por suposição.
+    Um ledger parcialmente conhecido conserva as parcelas válidas e deixa o
+    residual positivo como `unattributed:<payment>`. Se o ledger estiver
+    sobrealocado (soma maior que o pagamento), nenhuma atribuição é confiável:
+    a leitura descarta as parcelas daquele pagamento e projeta exatamente o
+    valor aprovado como não atribuído. Assim uma inconsistência histórica nunca
+    consegue fabricar receita adicional em detalhes, gráficos ou contagens.
     """
     payment_ids = [str(payment.id) for payment in payments]
     by_payment = _allocation_rows(db, restaurante_id, payment_ids)
@@ -252,14 +255,25 @@ def project_payment_allocations(
             continue
 
         rows = by_payment.get(str(payment.id), [])
+        payment_total = money(payment.valor)
+        payment_projection_start = len(projections)
         allocated = Decimal("0.00")
+
         for row in rows:
             value = money(row.valor)
             if value <= 0:
                 continue
             command_id = str(row.comanda_id)
-            atendimento_id = str(row.atendimento_id) if row.atendimento_id else fallback_attendance.get(command_id)
-            sale_key = f"atendimento:{atendimento_id}" if atendimento_id else f"comanda:{command_id}"
+            atendimento_id = (
+                str(row.atendimento_id)
+                if row.atendimento_id
+                else fallback_attendance.get(command_id)
+            )
+            sale_key = (
+                f"atendimento:{atendimento_id}"
+                if atendimento_id
+                else f"comanda:{command_id}"
+            )
             projections.append(
                 AllocationProjection(
                     payment_id=str(payment.id),
@@ -274,12 +288,14 @@ def project_payment_allocations(
             )
             allocated += value
 
-        payment_total = money(payment.valor)
-        residual = money(payment_total - allocated)
         if not rows:
             command_id = str(payment.comanda_id)
             atendimento_id = fallback_attendance.get(command_id)
-            sale_key = f"atendimento:{atendimento_id}" if atendimento_id else f"comanda:{command_id}"
+            sale_key = (
+                f"atendimento:{atendimento_id}"
+                if atendimento_id
+                else f"comanda:{command_id}"
+            )
             projections.append(
                 AllocationProjection(
                     payment_id=str(payment.id),
@@ -292,15 +308,37 @@ def project_payment_allocations(
                     method=str(payment.metodo or ""),
                 )
             )
-        elif residual != Decimal("0.00"):
-            # Nunca inventar para qual Conta pertence um residual inconsistente.
-            command_id = str(payment.comanda_id)
+            continue
+
+        allocated = money(allocated)
+        if allocated > payment_total:
+            # Fail-safe: os detalhes daquele ledger estão corrompidos. Preserva
+            # apenas a verdade incontestável — o valor do Pagamento aprovado.
+            del projections[payment_projection_start:]
             projections.append(
                 AllocationProjection(
                     payment_id=str(payment.id),
                     sale_key=f"unattributed:{payment.id}",
                     atendimento_id=None,
-                    command_id=command_id,
+                    command_id=str(payment.comanda_id),
+                    value=payment_total,
+                    paid_at=payment.criado_em,
+                    operational_day=operational_day,
+                    method=str(payment.metodo or ""),
+                )
+            )
+            continue
+
+        residual = money(payment_total - allocated)
+        if residual > Decimal("0.00"):
+            # As parcelas conhecidas continuam válidas; apenas o restante fica
+            # sem atribuição em vez de ser rateado por suposição.
+            projections.append(
+                AllocationProjection(
+                    payment_id=str(payment.id),
+                    sale_key=f"unattributed:{payment.id}",
+                    atendimento_id=None,
+                    command_id=str(payment.comanda_id),
                     value=residual,
                     paid_at=payment.criado_em,
                     operational_day=operational_day,
