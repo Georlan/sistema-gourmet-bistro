@@ -12,10 +12,10 @@ from . import financial_read_routes as _financial_read_routes  # noqa: F401,E402
 from . import financial_product_routes as _financial_product_routes  # noqa: F401,E402
 from . import financial_cash_routes as _financial_cash_routes  # noqa: F401,E402
 
-# A rota 3C usa o guard histórico sobre o mesmo serviço transacional. O símbolo
-# é resolvido em runtime pela função da rota; não há fórmula financeira paralela.
-# Isso mantém a camada de compatibilidade isolada enquanto protege estornos 3A
-# que ainda não possuíam origem por Conta materializada.
+# Compatibilidade isolada sobre as rotas legadas: continua existindo UMA fonte
+# transacional para estorno e UMA composição do feed do turno.
 from ..services.refund_guard import create_refund_guarded as _create_refund_guarded  # noqa: E402
+from ..services.cash_activity import recent_cash_activities as _recent_cash_activities  # noqa: E402
 
 _financial_cash_routes.create_refund = _create_refund_guarded
+_financial_cash_routes.legacy_cash._atividades_recentes_turno = _recent_cash_activities
