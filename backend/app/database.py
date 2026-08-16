@@ -1,8 +1,11 @@
-from sqlalchemy import create_engine, event, text
-from sqlalchemy.orm import sessionmaker, declarative_base, Session, with_loader_criteria
+from contextlib import contextmanager
 from contextvars import ContextVar
-from fastapi import Request
 import os
+
+from fastapi import Request
+from sqlalchemy import create_engine, event, text
+from sqlalchemy.orm import Session, declarative_base, sessionmaker, with_loader_criteria
+
 from .config import settings
 
 # AJUSTADO: connect_args agora é condicional para não travar no PostgreSQL (Supabase)
@@ -13,7 +16,21 @@ if settings.DATABASE_URL.startswith("sqlite"):
 Base = declarative_base()
 
 # ContextVar to track the logical restaurante_id for the current request context
-current_restaurante_id: ContextVar[int | None] = ContextVar("current_restaurante_id", default=None)
+current_restaurante_id: ContextVar[int | None] = ContextVar(
+    "current_restaurante_id", default=None
+)
+
+
+class TenantScopeError(RuntimeError):
+    """Indica divergência ou tentativa de escrita fora do tenant da sessão."""
+
+
+def _valid_tenant_id(restaurante_id: object) -> bool:
+    return (
+        isinstance(restaurante_id, int)
+        and not isinstance(restaurante_id, bool)
+        and restaurante_id > 0
+    )
 
 
 def require_tenant_id() -> int:
@@ -23,27 +40,46 @@ def require_tenant_id() -> int:
     Nunca retorna fallback como 1 — cada rota deve ter tenant explícito.
     """
     from fastapi import HTTPException
+
     rid = current_restaurante_id.get()
-    if rid is None:
+    if not _valid_tenant_id(rid):
         raise HTTPException(
             status_code=401,
-            detail="Sessão sem tenant identificado. Faça login novamente."
+            detail="Sessão sem tenant identificado. Faça login novamente.",
         )
-    return rid
+    return int(rid)
+
 
 class TenantSession(Session):
     def __init__(self, *args, **kwargs):
         restaurante_id = kwargs.pop("restaurante_id", current_restaurante_id.get())
         super().__init__(*args, **kwargs)
-        self.restaurante_id: int | None = restaurante_id
+        self.restaurante_id: int | None = (
+            int(restaurante_id) if _valid_tenant_id(restaurante_id) else None
+        )
 
 
-def _valid_tenant_id(restaurante_id: object) -> bool:
-    return (
-        isinstance(restaurante_id, int)
-        and not isinstance(restaurante_id, bool)
-        and restaurante_id > 0
-    )
+def _effective_tenant_id(session: Session | None = None) -> int | None:
+    """Resolve uma única identidade de tenant para ORM e RLS.
+
+    Sessões explicitamente vinculadas têm precedência. Se também existir um
+    ContextVar válido, ambos precisam concordar; a aplicação falha fechada em
+    vez de executar ORM sob um tenant e PostgreSQL RLS sob outro.
+    """
+    session_tenant = getattr(session, "restaurante_id", None) if session else None
+    context_tenant = current_restaurante_id.get()
+    session_valid = _valid_tenant_id(session_tenant)
+    context_valid = _valid_tenant_id(context_tenant)
+
+    if session_valid and context_valid and int(session_tenant) != int(context_tenant):
+        raise TenantScopeError(
+            "Escopo multi-tenant inconsistente entre sessão e contexto da requisição."
+        )
+    if session_valid:
+        return int(session_tenant)
+    if context_valid:
+        return int(context_tenant)
+    return None
 
 
 def bind_session_to_tenant(db: TenantSession, restaurante_id: int) -> None:
@@ -57,36 +93,90 @@ def bind_session_to_tenant(db: TenantSession, restaurante_id: int) -> None:
         raise ValueError("restaurante_id deve ser um inteiro positivo")
     if db.in_transaction():
         db.rollback()
-    db.restaurante_id = restaurante_id
+    db.restaurante_id = int(restaurante_id)
+
+
+@contextmanager
+def tenant_session_scope(db: TenantSession, restaurante_id: int):
+    """Troca temporariamente ContextVar + sessão e restaura ambos ao sair.
+
+    O helper é destinado a fluxos públicos que primeiro resolvem o restaurante
+    e só então podem consultar tabelas protegidas. Qualquer transação ainda
+    aberta é revertida ao sair para impedir que uma conexão continue carregando
+    o tenant temporário. Rotas que escrevem dentro do escopo devem fazer commit
+    antes do fim do bloco, como já ocorre nos fluxos de OTP e rate limit.
+    """
+    if not _valid_tenant_id(restaurante_id):
+        raise ValueError("restaurante_id deve ser um inteiro positivo")
+
+    previous_session_tenant = getattr(db, "restaurante_id", None)
+    context_token = current_restaurante_id.set(int(restaurante_id))
+    try:
+        bind_session_to_tenant(db, int(restaurante_id))
+        yield int(restaurante_id)
+    finally:
+        if db.in_transaction():
+            db.rollback()
+        db.restaurante_id = (
+            int(previous_session_tenant)
+            if _valid_tenant_id(previous_session_tenant)
+            else None
+        )
+        current_restaurante_id.reset(context_token)
 
 
 @event.listens_for(TenantSession, "after_begin")
 def _set_postgres_tenant_for_transaction(session, transaction, connection):
-    """Aplica o tenant em toda transação, inclusive sessões de background."""
+    """Aplica o mesmo tenant efetivo do ORM a toda transação PostgreSQL."""
     if connection.dialect.name != "postgresql":
         return
 
-    restaurante_id = session.restaurante_id
-    if not _valid_tenant_id(restaurante_id):
-        restaurante_id = current_restaurante_id.get()
-    target_id = get_tenant_id_str(restaurante_id)
+    restaurante_id = _effective_tenant_id(session)
     connection.execute(
         text("SELECT set_config('app.current_restaurante_id', :id, true)"),
-        {"id": target_id},
+        {"id": get_tenant_id_str(restaurante_id)},
     )
-    session.restaurante_id = restaurante_id if _valid_tenant_id(restaurante_id) else None
+
+
+@event.listens_for(TenantSession, "before_flush")
+def _guard_tenant_writes(session, flush_context, instances):
+    """Bloqueia escrita cross-tenant antes de SQL/RLS e cobre também SQLite."""
+    tenant_id = _effective_tenant_id(session)
+    if tenant_id is None:
+        return
+
+    seen: set[int] = set()
+    for obj in list(session.new) + list(session.dirty) + list(session.deleted):
+        marker = id(obj)
+        if marker in seen:
+            continue
+        seen.add(marker)
+        if not hasattr(type(obj), "restaurante_id"):
+            continue
+
+        object_tenant = getattr(obj, "restaurante_id", None)
+        if obj in session.new and object_tenant is None:
+            setattr(obj, "restaurante_id", tenant_id)
+            object_tenant = tenant_id
+
+        if not _valid_tenant_id(object_tenant) or int(object_tenant) != tenant_id:
+            raise TenantScopeError(
+                f"Escrita cross-tenant bloqueada para {type(obj).__name__}: "
+                f"sessão={tenant_id}, objeto={object_tenant!r}."
+            )
+
 
 @event.listens_for(Session, "do_orm_execute")
 def _add_tenant_id_filtering_criteria(execute_state):
-    # Garante que a filtragem se aplica apenas a consultas SELECT comuns de entidades
+    # Garante que a filtragem se aplica apenas a consultas SELECT comuns de entidades.
     if (
         execute_state.is_select
         and not execute_state.is_column_load
         and not execute_state.is_relationship_load
     ):
-        tenant_id = current_restaurante_id.get()  # Fonte única de verdade segura
+        tenant_id = _effective_tenant_id(execute_state.session)
         if tenant_id is not None:
-            # Aplica recursivamente o filtro para todas as classes mapeadas que tenham "restaurante_id"
+            # Aplica recursivamente o filtro para todas as classes mapeadas que tenham restaurante_id.
             for mapper in Base.registry.mappers:
                 cls = mapper.class_
                 if hasattr(cls, "restaurante_id"):
@@ -94,7 +184,7 @@ def _add_tenant_id_filtering_criteria(execute_state):
                         with_loader_criteria(
                             cls,
                             lambda target_cls: target_cls.restaurante_id == tenant_id,
-                            track_closure_variables=True
+                            track_closure_variables=True,
                         )
                     )
 
@@ -114,7 +204,12 @@ else:
         pool_pre_ping=True,
         connect_args=connect_args,
     )
-SessionLocal = sessionmaker(class_=TenantSession, autocommit=False, autoflush=False, bind=engine)
+SessionLocal = sessionmaker(
+    class_=TenantSession,
+    autocommit=False,
+    autoflush=False,
+    bind=engine,
+)
 
 
 @event.listens_for(engine, "connect")
@@ -126,38 +221,49 @@ def set_default_sqlite_pragma(dbapi_connection, connection_record):
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
 
+
 # Pre-populate registry cache
 engines = {"default": engine}
 sessionmakers = {"default": SessionLocal}
 
+
 @event.listens_for(Base.metadata, "after_create")
 def insert_default_restaurant(target, connection, **kw):
     connection.execute(
-        text("INSERT INTO restaurantes (id, nome, plano) VALUES (1, 'Kôma Bistrô', 'pocket') ON CONFLICT (id) DO NOTHING")
+        text(
+            "INSERT INTO restaurantes (id, nome, plano) VALUES "
+            "(1, 'Kôma Bistrô', 'pocket') ON CONFLICT (id) DO NOTHING"
+        )
     )
 
+
 def get_tenant_id_str(restaurante_id: int | None) -> str:
-    if restaurante_id is not None and isinstance(restaurante_id, int) and not isinstance(restaurante_id, bool) and restaurante_id > 0:
+    if _valid_tenant_id(restaurante_id):
         return str(restaurante_id)
     return "0"
+
 
 # DB Session dependency generator supporting dynamic tenant databases
 def get_db(request: Request = None):
     tenant_id = "default"
-    restaurante_id = current_restaurante_id.get()  # Lê a variável de contexto centralizada definida pelo middleware
+    restaurante_id = current_restaurante_id.get()
 
     if request:
         tenant_id = request.headers.get("X-Tenant-ID", "default")
 
     try:
         import sentry_sdk
+
         sentry_sdk.set_tag("tenant_id", tenant_id)
-        sentry_sdk.set_tag("restaurante_id", str(restaurante_id) if restaurante_id is not None else "")
+        sentry_sdk.set_tag(
+            "restaurante_id",
+            str(restaurante_id) if restaurante_id is not None else "",
+        )
     except Exception:
         pass
 
-    # O listener ``after_begin`` aplica SET LOCAL em toda transação. Isso evita
-    # que sessões criadas fora do dependency HTTP (jobs/background) pulem o RLS.
+    # O listener after_begin aplica SET LOCAL em toda transação. Isso evita que
+    # sessões criadas fora do dependency HTTP (jobs/background) pulem o RLS.
     db = SessionLocal(restaurante_id=restaurante_id)
 
     try:
@@ -173,7 +279,9 @@ def validate_postgres_runtime_role() -> None:
 
     print("[DATABASE] Validando role PostgreSQL de runtime...", flush=True)
     with engine.connect() as connection:
-        role = connection.execute(text("""
+        role = connection.execute(
+            text(
+                """
             SELECT
                 current_user AS role_name,
                 rol.rolsuper AS is_superuser,
@@ -199,7 +307,9 @@ def validate_postgres_runtime_role() -> None:
                 ) AS owns_tenant_table
             FROM pg_roles rol
             WHERE rol.rolname = current_user
-        """)).mappings().one()
+            """
+            )
+        ).mappings().one()
 
     failures = []
     if role["is_superuser"]:
@@ -219,8 +329,9 @@ def validate_postgres_runtime_role() -> None:
             )
         else:
             print(
-                f"[DATABASE] Aviso: Role PostgreSQL {role['role_name']!r} ({', '.join(failures)}). "
-                "Executando sem trava estrita para ambiente PaaS (Railway).",
+                f"[DATABASE] Aviso: Role PostgreSQL {role['role_name']!r} "
+                f"({', '.join(failures)}). Executando sem trava estrita para "
+                "ambiente PaaS (Railway).",
                 flush=True,
             )
     else:
