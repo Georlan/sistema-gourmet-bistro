@@ -57,7 +57,7 @@ export const MoneyInput: React.FC<MoneyInputProps> = ({
   const formatter = formatterFor(safeFractionDigits);
   const displayValue = value === ''
     ? ''
-    : formatter.format(Number(value) || 0);
+    : formatter.format(Number(value));
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const raw = event.target.value;
@@ -81,9 +81,15 @@ export const MoneyInput: React.FC<MoneyInputProps> = ({
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (allowNegative && event.key === '-' && value !== '') {
+    if (allowNegative && event.key === '-') {
       event.preventDefault();
-      onValueChange(Number(value) === 0 ? 0 : -Number(value));
+      if (value === '') {
+        onValueChange(-0);
+      } else {
+        const current = Number(value);
+        const isCurrentlyNegative = current < 0 || Object.is(current, -0);
+        onValueChange(isCurrentlyNegative ? Math.abs(current) : (current === 0 ? -0 : -current));
+      }
     }
     onKeyDown?.(event);
   };
