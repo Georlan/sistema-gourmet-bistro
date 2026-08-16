@@ -196,6 +196,71 @@ def _resolve_service_charge_settings() -> tuple[bool, float]:
             db.close()
 
 
+def _load_open_table_receipt_items(mesa_id: object) -> list[dict]:
+    """Carrega o snapshot financeiro atual da mesa para a mesma via canônica."""
+    if mesa_id is None:
+        return []
+
+    mesa_lookup = mesa_id
+    try:
+        raw_mesa = str(mesa_id).strip()
+        if raw_mesa.isdigit():
+            mesa_lookup = int(raw_mesa)
+    except Exception:
+        mesa_lookup = mesa_id
+
+    db = None
+    try:
+        from sqlalchemy.orm import joinedload
+
+        from .database import SessionLocal, current_restaurante_id
+        from .models import Comanda, Item
+
+        restaurante_id = current_restaurante_id.get()
+        if not restaurante_id:
+            return []
+
+        db = SessionLocal(restaurante_id=restaurante_id)
+        rows = (
+            db.query(Item)
+            .join(Comanda, Comanda.id == Item.comanda_id)
+            .options(joinedload(Item.produto))
+            .filter(
+                Item.restaurante_id == restaurante_id,
+                Comanda.restaurante_id == restaurante_id,
+                Comanda.mesa_id == mesa_lookup,
+                Comanda.fechada == False,
+                Item.status != "cancelado",
+            )
+            .order_by(Comanda.criado_em.asc(), Item.id.asc())
+            .all()
+        )
+        result = []
+        for item in rows:
+            if item.produto is None:
+                continue
+            result.append(
+                {
+                    "codigo": str(item.produto_id or item.produto.id),
+                    "produto": {
+                        "id": str(item.produto_id or item.produto.id),
+                        "nome": item.produto.nome,
+                    },
+                    "preco_unit": float(item.preco_unit or 0.0),
+                    "status": item.status or "preparando",
+                    "cliente_nome": item.cliente_nome or "Consumo Geral",
+                    "observacao": item.observacao or "",
+                    "quantidade": 1,
+                }
+            )
+        return result
+    except Exception:
+        return []
+    finally:
+        if db is not None:
+            db.close()
+
+
 def format_item_line(name: str, qty: int, price_unit: float, width: int = 40) -> str:
     qty_str = f"{qty}x"
     price_str = f"{price_unit:.2f}"
@@ -248,6 +313,7 @@ class PrinterService:
         restaurant_name: Optional[str] = None,
         restaurant_name_position: str = "cabecalho",
         print_footer: Optional[str] = None,
+        source_committed: bool = False,
     ) -> str:
         """Compatibilidade com os fluxos antigos de produção.
 
@@ -292,6 +358,14 @@ class PrinterService:
                         "observacao": safe_get(item, "observacao") or "",
                         "quantidade": max(int(safe_get(item, "quantidade") or 1), 1),
                     }
+                )
+
+            table_snapshot = _load_open_table_receipt_items(mesa_id)
+            if table_snapshot:
+                receipt_items = (
+                    table_snapshot
+                    if is_reprint or source_committed
+                    else table_snapshot + receipt_items
                 )
 
             return self.generate_receipt(
