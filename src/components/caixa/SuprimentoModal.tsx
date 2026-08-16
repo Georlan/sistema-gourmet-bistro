@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, AlertTriangle } from 'lucide-react';
+import { MoneyInput } from '../MoneyInput';
 
 interface SuprimentoModalProps {
   onClose: () => void;
@@ -10,7 +11,7 @@ export const SuprimentoModal: React.FC<SuprimentoModalProps> = ({
   onClose,
   onSubmit
 }) => {
-  const [valor, setValor] = useState<number>(0);
+  const [valor, setValor] = useState<number | ''>('');
   const [motivo, setMotivo] = useState<string>('');
   const [observacao, setObservacao] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -20,7 +21,8 @@ export const SuprimentoModal: React.FC<SuprimentoModalProps> = ({
     e.preventDefault();
     setErrorMsg(null);
 
-    if (valor <= 0) {
+    const valorNumerico = Number(valor || 0);
+    if (valorNumerico <= 0) {
       setErrorMsg('O valor do suprimento deve ser maior que zero.');
       return;
     }
@@ -28,7 +30,7 @@ export const SuprimentoModal: React.FC<SuprimentoModalProps> = ({
     try {
       setIsSubmitting(true);
       await onSubmit({
-        valor: Number(valor),
+        valor: valorNumerico,
         motivo: motivo.trim(),
         observacao: observacao.trim()
       });
@@ -46,7 +48,6 @@ export const SuprimentoModal: React.FC<SuprimentoModalProps> = ({
       className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto cursor-pointer"
     >
       <div className="w-full max-w-md bg-koma-dialog border border-koma-border rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
-        {/* Header */}
         <div className="flex justify-between items-center pb-2 border-b border-koma-border">
           <div>
             <h3 className="font-serif text-sm font-bold text-koma-foreground">Novo Suprimento de Caixa</h3>
@@ -65,24 +66,21 @@ export const SuprimentoModal: React.FC<SuprimentoModalProps> = ({
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Valor */}
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">
               Valor do Suprimento (R$) <span className="text-red-400">*</span>:
             </label>
-            <input
-              type="number"
-              step="0.01"
-              min="0.01"
+            <MoneyInput
               required
               placeholder="0,00"
-              value={valor || ''}
-              onChange={(e) => setValor(parseFloat(e.target.value) || 0)}
+              value={valor}
+              onValueChange={setValor}
+              selectOnFocus
+              aria-label="Valor do suprimento"
               className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-sm font-mono focus:outline-none focus:border-emerald-500"
             />
           </div>
 
-          {/* Motivo Opcional */}
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">Motivo (Opcional):</label>
             <input
@@ -94,7 +92,6 @@ export const SuprimentoModal: React.FC<SuprimentoModalProps> = ({
             />
           </div>
 
-          {/* Observação Opcional */}
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">Observação (Opcional):</label>
             <textarea
@@ -106,7 +103,6 @@ export const SuprimentoModal: React.FC<SuprimentoModalProps> = ({
             />
           </div>
 
-          {/* Actions */}
           <div className="flex gap-2 pt-2">
             <button
               type="button"
