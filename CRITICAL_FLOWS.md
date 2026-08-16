@@ -66,6 +66,23 @@
 - Valores monetários persistidos usam precisão decimal fixa; inputs monetários usam centavos automáticos no padrão brasileiro.
 - Caixa, Relatórios, Dashboard e Fechamento devem convergir para os mesmos totais financeiros no mesmo recorte operacional.
 
+#### Invariantes de estorno e caixa — Etapa 3C
+- `PagamentoEstorno.metodo` preserva o meio ORIGINAL do recebimento para análise de receita; `PagamentoEstornoLiquidacao.metodo_devolucao` registra por onde a devolução realmente saiu no turno atual.
+- Venda em cartão devolvida em dinheiro reduz receita de cartão nos relatórios e reduz espécie no caixa atual, sem reclassificar a venda original.
+- Venda em um turno pode ser estornada em outro turno: a venda continua no dia original e a saída pertence ao turno/dia da devolução.
+- Dinheiro físico esperado nunca pode ficar negativo por estorno. Se não houver espécie suficiente, a devolução em dinheiro falha antes de criar evento financeiro.
+- Pix/cartão líquidos podem ficar negativos quando um turno processa devoluções de vendas antigas; o fechamento precisa aceitar e reconciliar esse cenário.
+- Estorno parcial de pagamento com múltiplas Contas exige origem explícita. Estorno integral do saldo remanescente pode distribuir exatamente os resíduos conhecidos sem inferência.
+- Um estorno parcial nunca reabre Conta/Comanda, altera itens ou reduz retroativamente `Pagamento.valor`; ele acrescenta um evento imutável ao ledger.
+- `PagamentoEstornoAlocacao` preserva a origem por Conta/comanda de cada parcela devolvida.
+- Estornos legados sem origem materializada só podem ser absorvidos automaticamente quando existe uma única origem possível. Em pagamento multi-Conta, a operação falha fechada para revisão financeira.
+- O saldo estornável exibido e o saldo validado no POST usam a mesma leitura protegida; a UI não pode oferecer valor que o ledger histórico já consumiu.
+- A mesma `idempotency_key` com o mesmo conteúdo retorna o mesmo estorno, inclusive após um estorno integral deixar saldo restante igual a zero. Reutilização com conteúdo diferente falha com conflito.
+- Estornos concorrentes do mesmo pagamento são serializados pelo lock do pagamento. Estorno e fechamento concorrentes são serializados pelo lock do turno.
+- O feed de atividade registra estorno como saída pelo meio efetivo da devolução.
+- Resumo do turno, sangria, fechamento e comprovante impresso consomem a mesma fonte reconciliada de totais; não existe fórmula financeira separada para impressão.
+- Identidades técnicas permanecem internas; ao escolher origem de estorno o operador vê `Conta #N`, Mesa/Pedido/Retirada/Delivery quando aplicável.
+
 ---
 
 ## Simulações financeiras obrigatórias da Etapa 3
@@ -80,7 +97,25 @@ O fluxo financeiro crítico deve cobrir, além dos casos normais:
 - estorno em turno posterior afetando o dia da devolução, sem reescrever o dia da venda original;
 - relatório e Dashboard reconciliando bruto, estornos, líquido e meios de pagamento;
 - produto de R$ 100 com apenas R$ 20 pagos permanecendo R$ 100 de consumo operacional e apenas R$ 20 de receita reconhecida;
-- ledger historicamente corrompido/sobrealocado nunca fazendo a soma dos detalhes ultrapassar o Pagamento aprovado.
+- ledger historicamente corrompido/sobrealocado nunca fazendo a soma dos detalhes ultrapassar o Pagamento aprovado;
+- venda em cartão devolvida em dinheiro, distinguindo meio original e meio efetivo da saída;
+- devolução Pix/cartão de venda antiga produzindo líquido digital negativo no turno atual sem gerar diferença falsa no fechamento;
+- tentativa de devolução em dinheiro maior que a espécie disponível;
+- pagamento multi-Conta com estorno parcial sem origem, com origem explícita e com estorno integral do residual;
+- estorno legado sem origem em pagamento multi-Conta falhando fechado, sem inventar distribuição retroativa;
+- histórico já estornado acima do pagamento bloqueando novas operações;
+- três estornos de R$ 0,01 fechando exatamente R$ 0,03 sem resíduo binário;
+- devolução exatamente do último centavo físico disponível seguida de tentativa de mais R$ 0,01;
+- meio de devolução inválido falhando antes de qualquer mutação;
+- mesma chave idempotente reaplicada ao mesmo evento e reaplicada com outro conteúdo/pagamento;
+- retry de rede após estorno integral retornando o evento já persistido mesmo com saldo estornável restante igual a zero;
+- estorno não reabrindo Conta/Comanda nem alterando o estado operacional do consumo;
+- feed do caixa exibindo o meio efetivo da devolução;
+- fechamento e estorno concorrentes não produzindo saída em turno já encerrado.
+
+### Achado transversal monitorado
+
+A fidelidade é creditada no fluxo de pagamento concluído. A política de reversão de pontos após estorno precisa ser tratada como regra própria porque pontos ganhos podem já ter sido utilizados em outra compra. O ledger financeiro não apaga nem altera pontos por suposição; essa decisão não pode ser embutida silenciosamente no estorno de caixa.
 
 ---
 
@@ -150,6 +185,10 @@ O script local aceita tanto `backend/venv/bin/python` quanto um `python3/python`
 - `backend/tests/test_financial_read_stage3b.py`
 - `backend/tests/test_product_read_stage3b.py`
 - `backend/tests/test_financial_read_adversarial_stage3b.py`
+- `backend/tests/test_financial_cash_stage3c.py`
+- `backend/tests/test_financial_refund_history_stage3c.py`
+- `backend/tests/test_financial_cash_extreme_stage3c.py`
+- `backend/tests/test_financial_refund_retry_stage3c.py`
 
 ---
 
