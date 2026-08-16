@@ -70,7 +70,7 @@ jobs:
           printf '%s\n' "$heads"
           count="$(printf '%s\n' "$heads" | grep -c '(head)')"
           test "$count" -eq 1
-          printf '%s\n' "$heads" | grep -q '^3f91a8c7d2e4 '
+          printf '%s\n' "$heads" | grep -q '^7ab3d91e42c6 '
 
       - name: Run critical regression suite
         env:
