@@ -20,6 +20,7 @@ from app.services.atendimentos import (
     reopen_command_guarded,
     transfer_items_batch,
 )
+from app.services.printing import render_table_receipt, render_table_source_receipt
 
 
 TENANT = 1961
@@ -171,14 +172,14 @@ def test_reopen_is_blocked_if_original_table_was_reused():
 
         current = _command(db, "c-reopen-current", 1, 47)
         _launch(db, current, "l-reopen-current", "i-reopen-current")
-        ensure_atendimento_for_comanda(db, current, actor_id=USER)
+        current_account = ensure_atendimento_for_comanda(db, current, actor_id=USER)
         db.flush()
 
         with pytest.raises(AtendimentoError) as blocked:
             reopen_command_guarded(db, TENANT, old.id, actor_id=USER)
         assert blocked.value.status_code == 409
         assert old.fechada is True
-        assert old_account.id != ensure_atendimento_for_comanda(db, current).id
+        assert old_account.id != current_account.id
         db.rollback()
     finally:
         db.close()
@@ -230,15 +231,80 @@ def test_transferred_item_is_projected_with_original_human_order_id():
         view = build_table_family_view(db, TENANT, 5)
         assert len(view) == 1
         assert view[0]["numero_conta"] != 46
-        assert view[0]["lancamentos"] == [
-            pytest.approx(view[0]["lancamentos"][0], nan_ok=True)
-        ] if False else view[0]["lancamentos"]
         assert len(view[0]["lancamentos"]) == 1
         projected = view[0]["lancamentos"][0]
         assert projected["pedido_id"] == "46-A"
         assert projected["lancamento_id"] == launch.id
         assert projected["transferido"] is True
         assert projected["atendimento_origem_id"] == identity.atendimento_id
+        db.commit()
+    finally:
+        db.close()
+
+
+def test_partial_full_and_closing_prints_use_the_new_identity_semantics():
+    db = SessionLocal()
+    try:
+        command = _command(db, "c-print-46", 1, 46)
+        launch = _launch(db, command, "l-print-46-a", "i-print-46-a")
+        assert ensure_launch_identity(db, launch).label == "46-A"
+
+        partial = render_table_source_receipt(
+            db,
+            TENANT,
+            1,
+            source_type="lancamento",
+            source_id=launch.id,
+        )
+        assert "PEDIDO: #46-A" in partial
+        assert "TOTAL DESTE PEDIDO:" in partial
+
+        complete = render_table_receipt(db, TENANT, 1, apenas_valores=False)
+        assert "CONTA: #46" in complete
+        assert "TOTAL GERAL DA MESA:" in complete
+
+        closing = render_table_receipt(
+            db,
+            TENANT,
+            1,
+            apenas_valores=True,
+            printed_by="Operador Edge",
+        )
+        assert "FECHAMENTO" in closing
+        assert "CONTA: #46" in closing
+        assert "MESA: 1" in closing
+        assert "ABERTURA:" in closing
+        assert "DATA:" in closing
+        assert "HORA:" in closing
+        assert "IMPRESSO POR: OPERADOR EDGE" in closing
+        assert "PEDIDO: #" not in closing
+        db.commit()
+    finally:
+        db.close()
+
+
+def test_merged_closing_lists_both_account_families_without_listing_launches():
+    db = SessionLocal()
+    try:
+        source = _command(db, "c-print-merge-46", 3, 46)
+        target = _command(db, "c-print-merge-47", 2, 47)
+        _launch(db, source, "l-print-merge-46-a", "i-print-merge-46-a")
+        _launch(db, target, "l-print-merge-47-a", "i-print-merge-47-a")
+        ensure_atendimento_for_comanda(db, source, actor_id=USER)
+        ensure_atendimento_for_comanda(db, target, actor_id=USER)
+        merge_tables(db, TENANT, 3, 2, actor_id=USER)
+
+        closing = render_table_receipt(
+            db,
+            TENANT,
+            2,
+            apenas_valores=True,
+            printed_by="Operador Edge",
+        )
+        assert "CONTAS: #46 + #47" in closing or "CONTAS: #47 + #46" in closing
+        assert "PEDIDO: #46-A" not in closing
+        assert "PEDIDO: #47-A" not in closing
+        assert "IMPRESSO POR: OPERADOR EDGE" in closing
         db.commit()
     finally:
         db.close()
