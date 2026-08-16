@@ -28,8 +28,13 @@ if ! "$PYTHON_BIN" -c "import pytest" >/dev/null 2>&1; then
   exit 1
 fi
 
-LOG_FILE="$(mktemp -t koma-regression-XXXXXX.log)"
-trap 'rm -f "$LOG_FILE"' EXIT
+if [ -n "${KOMA_REGRESSION_LOG:-}" ]; then
+  LOG_FILE="$KOMA_REGRESSION_LOG"
+  : >"$LOG_FILE"
+else
+  LOG_FILE="$(mktemp -t koma-regression-XXXXXX.log)"
+  trap 'rm -f "$LOG_FILE"' EXIT
+fi
 
 FAIL_COUNT=0
 PASS_COUNT=0
@@ -39,18 +44,31 @@ run_flow_test() {
   shift
 
   echo -n "• ${flow_name} ... "
+  local flow_log
+  flow_log="$(mktemp -t koma-flow-XXXXXX.log)"
   if (
     cd "${BACKEND_DIR}"
-    "$PYTHON_BIN" -m pytest "$@" -q --tb=short >"$LOG_FILE" 2>&1
+    "$PYTHON_BIN" -m pytest "$@" -q --tb=short >"$flow_log" 2>&1
   ); then
     echo -e "${GREEN}${BOLD}[PASS]${NC}"
+    {
+      echo "===== PASS: ${flow_name} ====="
+      cat "$flow_log"
+      echo
+    } >>"$LOG_FILE"
     PASS_COUNT=$((PASS_COUNT + 1))
   else
     echo -e "${RED}${BOLD}[FAIL]${NC}"
     echo -e "${RED}Log de falha no fluxo '${flow_name}':${NC}"
-    cat "$LOG_FILE"
+    cat "$flow_log"
+    {
+      echo "===== FAIL: ${flow_name} ====="
+      cat "$flow_log"
+      echo
+    } >>"$LOG_FILE"
     FAIL_COUNT=$((FAIL_COUNT + 1))
   fi
+  rm -f "$flow_log"
 }
 
 echo -e "${BLUE}${BOLD}========================================================================${NC}"
