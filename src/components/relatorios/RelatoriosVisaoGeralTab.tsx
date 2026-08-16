@@ -27,6 +27,7 @@ import {
 } from 'recharts';
 import { PeriodoCalendarioModal } from './PeriodoCalendarioModal';
 import { VendasDetalhesDrawer, VendaDetalheItem } from './VendasDetalhesDrawer';
+import { MoneyInput } from '../MoneyInput';
 
 interface RelatoriosVisaoGeralTabProps {
   apiBaseUrl: string;
@@ -74,7 +75,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
   const [showCalendarModal, setShowCalendarModal] = useState(false);
   const [showVendasDrawer, setShowVendasDrawer] = useState(false);
   const [editingMeta, setEditingMeta] = useState(false);
-  const [newMetaInput, setNewMetaInput] = useState('');
+  const [newMetaInput, setNewMetaInput] = useState<number | ''>('');
 
   const [data, setData] = useState<any>(null);
   const [hasError, setHasError] = useState(false);
@@ -131,8 +132,8 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
   };
 
   const handleSaveMeta = async () => {
-    const val = parseFloat(newMetaInput);
-    if (isNaN(val) || val < 0) {
+    const val = Number(newMetaInput);
+    if (newMetaInput === '' || !Number.isFinite(val) || val < 0) {
       showToast('Por favor insira um valor válido de meta.');
       return;
     }
@@ -352,12 +353,13 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
           </div>
           {editingMeta ? (
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                placeholder="R$ Meta"
+              <MoneyInput
+                placeholder="0,00"
                 value={newMetaInput}
-                onChange={(e) => setNewMetaInput(e.target.value)}
-                className="px-2.5 py-1 bg-koma-input border border-koma-border rounded-xl text-koma-foreground font-mono text-[10px] w-28"
+                onValueChange={setNewMetaInput}
+                selectOnFocus
+                aria-label="Meta mensal"
+                className="px-2.5 py-1 bg-koma-input border border-koma-border rounded-xl text-koma-foreground font-mono text-[10px] w-28 outline-none focus:border-emerald-500/50"
               />
               <button
                 type="button"
@@ -379,7 +381,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
               <button
                 type="button"
                 onClick={() => {
-                  setNewMetaInput(String(data?.meta_mensal || ''));
+                  setNewMetaInput(Number(data?.meta_mensal || 0));
                   setEditingMeta(true);
                 }}
                 className="px-3 py-1 bg-koma-raised hover:bg-koma-card border border-koma-border text-koma-muted hover:text-koma-foreground rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer"
