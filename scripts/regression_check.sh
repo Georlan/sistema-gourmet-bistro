@@ -1,62 +1,103 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
-# Colors for clear terminal reporting
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 BLUE='\033[0;34m'
 BOLD='\033[1m'
-NC='\033[0m' # No Color
+NC='\033[0m'
+
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+BACKEND_DIR="${ROOT_DIR}/backend"
+VENV_PYTHON="${BACKEND_DIR}/venv/bin/python"
+
+if [ -x "$VENV_PYTHON" ]; then
+  PYTHON_BIN="$VENV_PYTHON"
+elif command -v python3 >/dev/null 2>&1; then
+  PYTHON_BIN="$(command -v python3)"
+elif command -v python >/dev/null 2>&1; then
+  PYTHON_BIN="$(command -v python)"
+else
+  echo -e "${RED}Erro: Python não encontrado. Instale as dependências de backend antes de rodar a regressão.${NC}"
+  exit 1
+fi
+
+if ! "$PYTHON_BIN" -c "import pytest" >/dev/null 2>&1; then
+  echo -e "${RED}Erro: pytest não está instalado para ${PYTHON_BIN}.${NC}"
+  echo "Instale com: pip install -r backend/requirements-dev.txt"
+  exit 1
+fi
+
+LOG_FILE="$(mktemp -t koma-regression-XXXXXX.log)"
+trap 'rm -f "$LOG_FILE"' EXIT
+
+FAIL_COUNT=0
+PASS_COUNT=0
+
+run_flow_test() {
+  local flow_name="$1"
+  shift
+
+  echo -n "• ${flow_name} ... "
+  if (
+    cd "${BACKEND_DIR}"
+    "$PYTHON_BIN" -m pytest "$@" -q --tb=short >"$LOG_FILE" 2>&1
+  ); then
+    echo -e "${GREEN}${BOLD}[PASS]${NC}"
+    PASS_COUNT=$((PASS_COUNT + 1))
+  else
+    echo -e "${RED}${BOLD}[FAIL]${NC}"
+    echo -e "${RED}Log de falha no fluxo '${flow_name}':${NC}"
+    cat "$LOG_FILE"
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+  fi
+}
 
 echo -e "${BLUE}${BOLD}========================================================================${NC}"
 echo -e "${BLUE}${BOLD}      VERIFICAÇÃO DE REGRESSÃO DE FLUXOS CRÍTICOS - KÔMA SAAS           ${NC}"
 echo -e "${BLUE}${BOLD}========================================================================${NC}"
 echo ""
 
-ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-BACKEND_DIR="${ROOT_DIR}/backend"
-PYTHON_VENV="${BACKEND_DIR}/venv/bin/pytest"
+run_flow_test \
+  "1. Cardápio Digital Público (Config, Categorias, Produtos, Pedido)" \
+  "tests/test_critical_cardapio_flow.py"
 
-if [ ! -f "$PYTHON_VENV" ]; then
-  echo -e "${RED}Erro: Ambiente virtual python não encontrado em ${BACKEND_DIR}/venv${NC}"
-  exit 1
-fi
+run_flow_test \
+  "2. Segmentação de Audiência do WebSocket (Público vs Interno)" \
+  "tests/test_websocket_segmentation.py"
 
-FAIL_COUNT=0
+run_flow_test \
+  "3. Isolamento Multi-Tenant & RLS (Garantia por restaurante_id)" \
+  "tests/test_critical_multitenant_rls.py"
 
-run_flow_test() {
-  local flow_name="$1"
-  local test_file="$2"
+run_flow_test \
+  "4. Operação de PDV e Caixa (Abertura, Resumo, Fechamento)" \
+  "tests/test_critical_pdv_caixa_flow.py"
 
-  echo -n "• ${flow_name} ... "
-  if cd "${BACKEND_DIR}" && "${PYTHON_VENV}" "${test_file}" -q --tb=short > /tmp/pytest_flow_output.log 2>&1; then
-    echo -e "${GREEN}${BOLD}[PASS]${NC}"
-  else
-    echo -e "${RED}${BOLD}[FAIL]${NC}"
-    echo -e "${RED}Log de falha no fluxo '${flow_name}':${NC}"
-    cat /tmp/pytest_flow_output.log
-    FAIL_COUNT=$((FAIL_COUNT + 1))
-  fi
-}
+run_flow_test \
+  "5. Autenticação e Autorização Interna (Login JWT & Permissões)" \
+  "tests/test_critical_auth_flow.py"
 
-# Run tests per critical flow module mapped in CRITICAL_FLOWS.md
-run_flow_test "1. Cardápio Digital Público (Config, Categorias, Produtos, Pedido)" "tests/test_critical_cardapio_flow.py"
-run_flow_test "2. Segmentação de Audiência do WebSocket (Público vs Interno)" "tests/test_websocket_segmentation.py"
-run_flow_test "3. Isolamento Multi-Tenant & RLS (Garantia por restaurante_id)" "tests/test_critical_multitenant_rls.py"
-run_flow_test "4. Operação de PDV e Caixa (Abertura, Resumo, Fechamento)" "tests/test_critical_pdv_caixa_flow.py"
-run_flow_test "5. Autenticação e Autorização Interna (Login JWT & Permissões)" "tests/test_critical_auth_flow.py"
+run_flow_test \
+  "6. Layout e snapshot da impressão de mesa" \
+  "tests/test_printer_service_layout.py" \
+  "tests/test_table_print_snapshot.py"
+
+run_flow_test \
+  "7. Fila de impressão (claim atômico, anti-duplicação e recuperação)" \
+  "tests/test_print_agents.py"
 
 echo ""
 echo -e "${BLUE}${BOLD}========================================================================${NC}"
 
 if [ "$FAIL_COUNT" -eq 0 ]; then
-  echo -e "${GREEN}${BOLD} SUCCESS: TODOS OS 5 FLUXOS CRÍTICOS PASSARAM SEM REGRESSÃO!${NC}"
-  echo -e "${GREEN} O sistema está seguro para deploy em produção.${NC}"
+  echo -e "${GREEN}${BOLD} SUCCESS: ${PASS_COUNT} FLUXOS CRÍTICOS PASSARAM SEM REGRESSÃO.${NC}"
+  echo -e "${GREEN} O gate crítico de backend está aprovado.${NC}"
   echo -e "${BLUE}${BOLD}========================================================================${NC}"
   exit 0
-else
-  echo -e "${RED}${BOLD} FALHA: ${FAIL_COUNT} FLUXO(S) CRÍTICO(S) APRESENTARAM REGRESSÃO!${NC}"
-  echo -e "${RED} BLOQUEIO DE DEPLOY: A alteração NÃO pode ir para produção.${NC}"
-  echo -e "${BLUE}${BOLD}========================================================================${NC}"
-  exit 1
 fi
+
+echo -e "${RED}${BOLD} FALHA: ${FAIL_COUNT} FLUXO(S) CRÍTICO(S) APRESENTARAM REGRESSÃO.${NC}"
+echo -e "${RED} BLOQUEIO DE DEPLOY: a alteração não deve ir para produção até o gate voltar a 100%.${NC}"
+echo -e "${BLUE}${BOLD}========================================================================${NC}"
+exit 1
