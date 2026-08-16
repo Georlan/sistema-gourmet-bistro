@@ -79,9 +79,10 @@ run_flow_test \
   "tests/test_critical_auth_flow.py"
 
 run_flow_test \
-  "6. Layout e snapshot da impressão de mesa" \
+  "6. Arquitetura, layout e snapshot da impressão" \
   "tests/test_printer_service_layout.py" \
-  "tests/test_table_print_snapshot.py"
+  "tests/test_table_print_snapshot.py" \
+  "tests/test_printing_architecture.py"
 
 run_flow_test \
   "7. Fila de impressão (claim atômico, anti-duplicação e recuperação)" \
