@@ -52,10 +52,7 @@ async def lifespan(app: FastAPI):
     if run_migrations_here:
         await run_migrations_on_startup()
     else:
-        print(
-            "[ALEMBIC] Migração no startup ignorada; usando o pre-deploy.",
-            flush=True,
-        )
+        print("[ALEMBIC] Migração no startup ignorada; usando o pre-deploy.", flush=True)
 
     from .database import validate_postgres_runtime_role
 
@@ -110,9 +107,7 @@ async def run_migrations_on_startup():
         elif not migration_ran:
             print("[ALEMBIC] Estado inconsistente detectado; restaurando o marco inicial.")
             with migration_engine.connect() as conn:
-                conn.execute(
-                    sa.text("UPDATE alembic_version SET version_num = 'dcbca6699d38'")
-                )
+                conn.execute(sa.text("UPDATE alembic_version SET version_num = 'dcbca6699d38'"))
                 conn.commit()
 
         print("[ALEMBIC] Rodando upgrade heads...")
@@ -125,9 +120,7 @@ async def run_migrations_on_startup():
                 columns = {column["name"] for column in insp.get_columns("comandas")}
                 if "mesa_transferida_de" not in columns:
                     print("[DATABASE] Adicionando coluna 'mesa_transferida_de' na tabela comandas...")
-                    conn.execute(
-                        sa.text("ALTER TABLE comandas ADD COLUMN mesa_transferida_de INTEGER;")
-                    )
+                    conn.execute(sa.text("ALTER TABLE comandas ADD COLUMN mesa_transferida_de INTEGER;"))
                     conn.commit()
     except Exception as exc:
         print(f"[ALEMBIC] Erro ao rodar migrações automáticas: {exc}")
@@ -182,16 +175,11 @@ async def add_sentry_context_and_tenant(request: Request, call_next):
             parts = auth_header.split(" ")
             if len(parts) < 2:
                 import jwt
-
                 raise jwt.DecodeError("Token ausente no cabeçalho Bearer")
             token = parts[1]
             import jwt
 
-            payload = jwt.decode(
-                token,
-                settings.SECRET_KEY,
-                algorithms=[settings.ALGORITHM],
-            )
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
             rid = payload.get("restaurante_id")
             role = payload.get("role", "")
             if isinstance(rid, bool):
@@ -224,10 +212,7 @@ async def add_sentry_context_and_tenant(request: Request, call_next):
             )
 
     sentry_sdk.set_tag("tenant_id", tenant_id)
-    sentry_sdk.set_tag(
-        "restaurante_id",
-        str(restaurante_id) if restaurante_id is not None else "",
-    )
+    sentry_sdk.set_tag("restaurante_id", str(restaurante_id) if restaurante_id is not None else "")
 
     if restaurante_id is None:
         return await call_next(request)
@@ -248,16 +233,11 @@ async def add_security_headers_middleware(request: Request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
 
     env = os.getenv("ENVIRONMENT", "production").lower()
-    is_https = (
-        request.url.scheme == "https"
-        or request.headers.get("x-forwarded-proto") == "https"
-    )
+    is_https = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
     hostname = request.url.hostname or ""
     is_localhost = hostname in ("localhost", "127.0.0.1")
     if env == "production" and is_https and not is_localhost:
-        response.headers["Strict-Transport-Security"] = (
-            "max-age=31536000; includeSubDomains"
-        )
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
 
 
@@ -300,12 +280,12 @@ app.add_middleware(
 )
 
 
-# Atendimentos vem antes de orders para substituir, sem quebrar URLs legadas,
-# as operações de transferência/mesclagem/reabertura por versões atômicas.
+# O router de atendimentos vem antes de tables/orders para sombrear somente as
+# URLs legadas que ganharam semântica transacional nova, sem quebrar o frontend.
 app.include_router(auth.router)
 app.include_router(products.router)
-app.include_router(tables.router)
 app.include_router(atendimentos.router)
+app.include_router(tables.router)
 app.include_router(orders.router)
 app.include_router(websocket.router)
 app.include_router(caixa.router)
