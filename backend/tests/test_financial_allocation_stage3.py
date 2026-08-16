@@ -1,9 +1,10 @@
 import pytest
 
 from app.database import Base, SessionLocal, current_restaurante_id, engine
-from app.financial_models import PagamentoAlocacao
+from app.financial_models import PagamentoAlocacao, PagamentoEstorno
 from app.models import CaixaTurno, Comanda, Mesa, Pagamento, Restaurante, Usuario
 from app.operational_models import AtendimentoComanda, AtendimentoMesa
+from app.services.financeiro import registrar_estorno, totais_financeiros
 
 
 TENANT = 3181
@@ -16,6 +17,9 @@ def setup_financial_allocation():
     token = current_restaurante_id.set(TENANT)
     db = SessionLocal(restaurante_id=TENANT)
     try:
+        db.query(PagamentoEstorno).filter(
+            PagamentoEstorno.restaurante_id == TENANT
+        ).delete(synchronize_session=False)
         db.query(PagamentoAlocacao).filter(
             PagamentoAlocacao.restaurante_id == TENANT
         ).delete(synchronize_session=False)
@@ -206,5 +210,94 @@ def test_pending_payment_is_allocated_only_when_approved(setup_financial_allocat
         assert allocation.comanda_id == command_a.id
         assert allocation.atendimento_id == "a-fin-46"
         assert allocation.valor == 10.0
+    finally:
+        db.close()
+
+
+def test_refund_preserves_original_payment_and_cannot_exceed_approved_value(
+    setup_financial_allocation,
+):
+    db = SessionLocal(restaurante_id=TENANT)
+    try:
+        command_a = db.query(Comanda).filter(Comanda.id == "cmd-fin-a").one()
+        command_a.valor_pago = 30.00
+        payment = Pagamento(
+            id="p-fin-refund",
+            restaurante_id=TENANT,
+            comanda_id=command_a.id,
+            turno_id=setup_financial_allocation,
+            valor=30.00,
+            metodo="dinheiro",
+            status="aprovado",
+            idempotency_key="fin-stage3-refund-payment",
+        )
+        db.add(payment)
+        db.commit()
+
+        first = registrar_estorno(
+            db,
+            restaurante_id=TENANT,
+            pagamento_id=payment.id,
+            turno_id=setup_financial_allocation,
+            usuario_id=USER,
+            valor=15.00,
+            motivo="Devolução parcial de teste",
+            idempotency_key="fin-stage3-refund-1",
+        )
+        db.commit()
+        first_id = first.id
+
+        repeated = registrar_estorno(
+            db,
+            restaurante_id=TENANT,
+            pagamento_id=payment.id,
+            turno_id=setup_financial_allocation,
+            usuario_id=USER,
+            valor=15.00,
+            motivo="Devolução parcial de teste",
+            idempotency_key="fin-stage3-refund-1",
+        )
+        assert repeated.id == first_id
+        assert db.query(PagamentoEstorno).filter(
+            PagamentoEstorno.pagamento_id == payment.id
+        ).count() == 1
+
+        with pytest.raises(ValueError, match="excede o saldo disponível"):
+            registrar_estorno(
+                db,
+                restaurante_id=TENANT,
+                pagamento_id=payment.id,
+                turno_id=setup_financial_allocation,
+                usuario_id=USER,
+                valor=16.00,
+                motivo="Tentativa acima do saldo",
+                idempotency_key="fin-stage3-refund-too-much",
+            )
+
+        second = registrar_estorno(
+            db,
+            restaurante_id=TENANT,
+            pagamento_id=payment.id,
+            turno_id=setup_financial_allocation,
+            usuario_id=USER,
+            valor=15.00,
+            motivo="Devolução final de teste",
+            idempotency_key="fin-stage3-refund-2",
+        )
+        db.commit()
+
+        refunds = db.query(PagamentoEstorno).filter(
+            PagamentoEstorno.pagamento_id == payment.id
+        ).order_by(PagamentoEstorno.criado_em).all()
+        totals = totais_financeiros([payment], refunds)
+
+        assert payment.status == "aprovado"
+        assert payment.valor == 30.0
+        assert first.id != second.id
+        assert len(refunds) == 2
+        assert float(totals.vendas_brutas) == 30.0
+        assert float(totals.estornos) == 30.0
+        assert float(totals.vendas_liquidas) == 0.0
+        assert float(totals.liquido_por_metodo["dinheiro"]) == 0.0
     finally:
         db.close()
