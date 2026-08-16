@@ -136,8 +136,8 @@ export function CardapioProdutosTab({
         key={product.id}
         className={clsx(
           'group grid gap-3 border-b border-koma-border px-3 py-3.5 transition-colors last:border-b-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-4',
-          'hover:bg-white/[0.025]',
-          !isPublished && 'bg-black/10',
+          'hover:bg-koma-raised/50',
+          !isPublished && 'bg-koma-canvas/40',
         )}
       >
         <div className="flex min-w-0 items-start gap-3">
@@ -178,7 +178,7 @@ export function CardapioProdutosTab({
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-2 pl-[4.25rem] sm:justify-end sm:pl-0">
+        <div className="flex flex-wrap items-center justify-between gap-2 pl-0 sm:flex-nowrap sm:justify-end">
           <button
             type="button"
             onClick={() => void handleToggle(product)}
@@ -186,7 +186,7 @@ export function CardapioProdutosTab({
             aria-pressed={isPublished}
             aria-label={`${isPublished ? 'Pausar' : 'Publicar'} ${product.nome}`}
             className={clsx(
-              'inline-flex min-w-[112px] items-center justify-center gap-2 rounded-xl px-3 py-2 text-[10px] font-extrabold uppercase tracking-wider transition-all disabled:cursor-wait disabled:opacity-50 cursor-pointer shadow-xs',
+              'inline-flex min-w-0 flex-1 items-center sm:min-w-[112px] sm:flex-none justify-center gap-2 rounded-xl px-3 py-2 text-[10px] font-extrabold uppercase tracking-wider transition-all disabled:cursor-wait disabled:opacity-50 cursor-pointer shadow-xs',
               isPublished
                 ? 'koma-badge-success'
                 : 'koma-badge-warning',
@@ -269,7 +269,7 @@ export function CardapioProdutosTab({
         <div className="flex flex-col gap-2 sm:gap-3 xl:flex-row xl:items-center">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" size={14} />
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por nome, descrição ou código…" className="h-9 sm:h-11 w-full rounded-xl border border-koma-border bg-koma-input pl-9 pr-9 text-[11px] text-koma-foreground outline-none transition-colors placeholder:text-zinc-500 focus:border-emerald-400/30" />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por nome, descrição ou código…" className="h-9 sm:h-11 w-full rounded-xl border border-koma-border bg-koma-input pl-9 pr-9 text-[11px] text-koma-foreground outline-none transition-colors placeholder:text-koma-muted focus:border-koma-accent" />
             {search && <button type="button" onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-lg p-1 text-koma-muted hover:text-koma-foreground cursor-pointer" aria-label="Limpar busca"><X size={13} /></button>}
           </div>
           <div className="grid grid-cols-3 rounded-xl border border-koma-border bg-koma-input p-0.5 sm:p-1 lg:w-auto">

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, BarChart3, Filter, PieChart as PieIcon, RefreshCw } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { localCalendarDate } from '../../utils/dateTime';
+import { KOMA_CHART_COLORS } from '../../config/chartTheme';
 
 interface RelatorioFinanceiroTabProps {
   apiBaseUrl: string;
@@ -77,7 +78,7 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
       gross: Number(grossBreakdown.pix || 0),
       refunds: Number(refundBreakdown.pix || 0),
       net: Number(netBreakdown.pix || 0),
-      fill: '#059669',
+      fill: KOMA_CHART_COLORS.paymentMethods.pix,
     },
     {
       key: 'cartao',
@@ -85,7 +86,7 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
       gross: Number(grossBreakdown.cartao || 0),
       refunds: Number(refundBreakdown.cartao || 0),
       net: Number(netBreakdown.cartao || 0),
-      fill: '#0284c7',
+      fill: KOMA_CHART_COLORS.paymentMethods.cartao,
     },
     {
       key: 'dinheiro',
@@ -93,7 +94,7 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
       gross: Number(grossBreakdown.dinheiro || 0),
       refunds: Number(refundBreakdown.dinheiro || 0),
       net: Number(netBreakdown.dinheiro || 0),
-      fill: '#d97706',
+      fill: KOMA_CHART_COLORS.paymentMethods.dinheiro,
     },
   ], [grossBreakdown, refundBreakdown, netBreakdown]);
 
@@ -123,10 +124,10 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
             Fonte: pagamentos aprovados menos estornos · dia operacional por turno · {operationalRange}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 rounded-xl border border-koma-border bg-koma-raised px-2.5 py-1">
+        <div className="flex w-full items-center gap-2 sm:w-auto">
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-xl border border-koma-border bg-koma-raised px-2.5 py-1 sm:flex-none">
             <Filter size={12} className="text-koma-subtle" />
-            <select value={periodoDias} onChange={(e) => setPeriodoDias(e.target.value)} className="cursor-pointer bg-transparent text-xs font-bold text-koma-foreground focus:outline-none">
+            <select value={periodoDias} onChange={(e) => setPeriodoDias(e.target.value)} className="min-w-0 flex-1 cursor-pointer bg-transparent text-xs font-bold text-koma-foreground focus:outline-none sm:flex-none">
               <option value="7">Últimos 7 dias</option>
               <option value="30">Últimos 30 dias</option>
               <option value="90">Últimos 90 dias</option>
@@ -139,12 +140,12 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
       </div>
 
       {errorMsg && (
-        <div className="flex items-center gap-2 rounded-2xl border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-400">
+        <div className="flex items-center gap-2 rounded-2xl border border-koma-danger-border bg-koma-danger-bg p-3 text-xs text-koma-danger-text">
           <AlertCircle size={16} className="shrink-0" /> {errorMsg}
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 lg:grid-cols-4">
         {kpis.map((kpi) => (
           <div key={kpi.label} className="space-y-1 rounded-2xl border border-koma-border bg-koma-panel p-4 shadow-xs">
             <span className="block text-[9px] font-bold uppercase tracking-wider text-koma-muted">{kpi.label}</span>

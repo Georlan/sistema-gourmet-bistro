@@ -1,6 +1,5 @@
 import { CardapioAssetUploader } from './CardapioAssetUploader';
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import logoImg from '../assets/logo.png';
 import { KomaLogo } from './KomaLogo';
 import { KomaEmptyState } from './shared/KomaEmptyState';
 import { LoginButton } from '../../components/shadcnblocks/login-button';
@@ -924,8 +923,8 @@ export function CaixaPanel({
     
     csvContent += `MÉTRICAS GERAIS\n`;
     csvContent += `Indicador;Valor\n`;
-    csvContent += `Faturamento Total;R$ ${generalStats.faturamento.toFixed(2)}\n`;
-    csvContent += `Faturamento de Hoje;R$ ${generalStats.faturamento_hoje.toFixed(2)}\n`;
+    csvContent += `Vendas Líquidas;R$ ${generalStats.faturamento.toFixed(2)}\n`;
+    csvContent += `Líquido de Hoje;R$ ${generalStats.faturamento_hoje.toFixed(2)}\n`;
     csvContent += `Ticket Médio;R$ ${generalStats.ticket_medio.toFixed(2)}\n`;
     csvContent += `Total de Pedidos;${generalStats.total_pedidos}\n`;
     csvContent += `Clientes Ativos;${generalStats.clientes_ativos}\n`;
@@ -6005,7 +6004,7 @@ export function CaixaPanel({
               {/* Header metrics boxes */}
               <div className={clsx('grid', 'grid-cols-2', 'md:grid-cols-4', 'gap-4')}>
                 <div className={clsx('bg-koma-card', 'border', 'border-koma-border', 'p-4', 'rounded-2xl')}>
-                  <span className={clsx('text-[9px]', 'uppercase', 'tracking-wider', 'font-bold', 'text-koma-subtle', 'block')}>Faturamento de Hoje</span>
+                  <span className={clsx('text-[9px]', 'uppercase', 'tracking-wider', 'font-bold', 'text-koma-subtle', 'block')}>Líquido de Hoje</span>
                   <strong className={clsx('text-xl', 'text-koma-foreground', 'font-mono', 'block', 'mt-1')}>
                     R$ ${(generalStats?.faturamento_hoje ?? 0.00).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </strong>
@@ -6059,7 +6058,7 @@ export function CaixaPanel({
                 <div className={clsx('grid', 'grid-cols-1', 'md:grid-cols-3', 'gap-4', 'font-mono')}>
                   <div className={clsx('bg-koma-panel', 'p-3.5', 'rounded-xl', 'border', 'border-koma-border/50', 'flex', 'justify-between', 'items-center')}>
                     <div>
-                      <span className={clsx('text-[8px]', 'font-bold', 'font-sans', 'text-koma-subtle', 'uppercase', 'tracking-widest', 'block')}>Faturamento</span>
+                      <span className={clsx('text-[8px]', 'font-bold', 'font-sans', 'text-koma-subtle', 'uppercase', 'tracking-widest', 'block')}>Receita Líquida</span>
                       <strong className={clsx('text-base', 'text-koma-foreground', 'mt-1', 'block')}>
                         R$ ${(generalStats?.faturamento ?? 0.00).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </strong>
@@ -9860,7 +9859,7 @@ export function CaixaPanel({
                 <h3 className={clsx('font-serif', 'text-sm', 'font-bold', 'text-koma-foreground')}>
                   {selectedKanbanOrder.mesaId && selectedKanbanOrder.mesaId > 0 ? `Detalhes: Mesa ${selectedKanbanOrder.mesaId}` : 'Detalhes: Balcão'}
                 </h3>
-                <span className={clsx('text-[9px]', 'text-koma-muted', 'font-mono', 'block', 'mt-0.5')}>Lote: #{selectedKanbanOrder.id.slice(-4)}</span>
+                <span className={clsx('text-[9px]', 'text-koma-muted', 'font-mono', 'block', 'mt-0.5')}>Pedido: #{selectedKanbanOrder.id.slice(-4)}</span>
               </div>
               <button
                 type="button"
@@ -9902,7 +9901,7 @@ export function CaixaPanel({
               )}
 
               <div className={clsx('space-y-2', 'max-h-48', 'overflow-y-auto')}>
-                <span className={clsx('text-[10px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>Itens do Lote:</span>
+                <span className={clsx('text-[10px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>Itens do Pedido:</span>
                 {selectedKanbanOrder.itens.map((item: any, idx: number) => (
                   <div key={idx} className={clsx('flex', 'justify-between', 'items-start', 'bg-koma-panel/40', 'p-2.5', 'rounded-xl', 'border', 'border-koma-border/40', 'text-xs')}>
                     <div>
