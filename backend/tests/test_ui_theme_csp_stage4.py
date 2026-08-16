@@ -48,6 +48,29 @@ def test_theme_is_bootstrapped_before_first_paint_and_react_for_every_route():
         assert token in css
 
 
+def test_cashier_theme_toggle_uses_shared_realtime_theme_contract():
+    caixa = source("src/components/CaixaPanel.tsx")
+    theme = source("src/config/theme.ts")
+
+    assert "KOMA_THEME_CHANGED_EVENT" in caixa
+    assert "nextKomaTheme" in caixa
+    assert "persistKomaTheme" in caixa
+    assert "readKomaTheme" in caixa
+    assert "type KomaTheme" in caixa
+    assert "useState<KomaTheme>(() => readKomaTheme())" in caixa
+
+    # Desktop e mobile usam a mesma operação, que persiste e aplica o tema no DOM
+    # antes de emitir o evento de sincronização para os outros shells.
+    assert caixa.count("setTheme(persistKomaTheme(nextKomaTheme(theme)))") == 2
+    assert "localStorage.setItem('@koma:theme'" not in caixa
+    assert "new Event('koma_theme_changed')" not in caixa
+
+    storage_index = theme.index("storage.setItem(KOMA_THEME_STORAGE_KEY, theme);")
+    apply_index = theme.index("applyKomaTheme(theme);", storage_index)
+    event_index = theme.index("window.dispatchEvent(new Event(KOMA_THEME_CHANGED_EVENT));", apply_index)
+    assert storage_index < apply_index < event_index
+
+
 def test_koma_logo_uses_explicit_background_variants_and_semantic_text_color():
     logo = source("src/components/KomaLogo.tsx")
     html = source("index.html")
@@ -140,3 +163,4 @@ def test_mobile_contracts_cover_salao_cardapio_relatorios_and_fechamento():
 def test_temporary_stage4_patch_workflows_are_not_part_of_runtime_branch():
     assert not (ROOT / ".github/workflows/stage4b-one-shot.yml").exists()
     assert not (ROOT / ".github/workflows/stage4c-one-shot.yml").exists()
+    assert not (ROOT / ".github/workflows/hotfix-theme-toggle-one-shot.yml").exists()
