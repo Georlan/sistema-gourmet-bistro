@@ -139,7 +139,11 @@ def _open(mesa: int, identificador: str | None = None) -> dict:
     return response.json()
 
 
-def _launch(comanda_id: str, cliente: str = "Consumo Geral") -> dict:
+def _launch_items(
+    comanda_id: str,
+    observations: list[str],
+    cliente: str = "Consumo Geral",
+) -> dict:
     response = client.post(
         f"/comandas/{comanda_id}/lancamentos",
         headers=_headers(),
@@ -148,14 +152,19 @@ def _launch(comanda_id: str, cliente: str = "Consumo Geral") -> dict:
             "itens": [
                 {
                     "produto_id": PRODUCT,
-                    "observacao": "",
+                    "observacao": observation,
                     "cliente_nome": cliente,
                 }
+                for observation in observations
             ],
         },
     )
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def _launch(comanda_id: str, cliente: str = "Consumo Geral") -> dict:
+    return _launch_items(comanda_id, [""], cliente)
 
 
 def _families(mesa: int) -> list[dict]:
@@ -164,16 +173,34 @@ def _families(mesa: int) -> list[dict]:
     return response.json()["familias"]
 
 
+def _latest_job_for_source(source_id: str) -> PrintJob:
+    db = SessionLocal()
+    try:
+        job = (
+            db.query(PrintJob)
+            .filter(
+                PrintJob.restaurante_id == TENANT,
+                PrintJob.source_id == source_id,
+            )
+            .order_by(PrintJob.created_at.desc(), PrintJob.id.desc())
+            .first()
+        )
+        assert job is not None
+        db.expunge(job)
+        return job
+    finally:
+        db.close()
+
+
 def test_busy_http_day_preserves_family_ids_and_atomic_table_semantics():
-    # 18:00 — a mesma ocupação possui duas comandas (Consumo Geral + Cliente B),
-    # mas UMA família humana e uma sequência única de pedidos.
+    # 18:00 — duas comandas da mesma ocupação compartilham UMA família humana.
     geral = _open(1)
     cliente_b = _open(1, "Cliente B")
     assert geral["numero_pedido"] == cliente_b["numero_pedido"]
     base46 = geral["numero_pedido"]
 
     first = _launch(geral["id"])
-    second = _launch(cliente_b["id"], "Cliente B")
+    _launch(cliente_b["id"], "Cliente B")
     table1 = _families(1)
     assert len(table1) == 1
     assert [launch["pedido_id"] for launch in table1[0]["lancamentos"]] == [
@@ -181,8 +208,7 @@ def test_busy_http_day_preserves_family_ids_and_atomic_table_semantics():
         f"{base46}-B",
     ]
 
-    # O fechamento é resolvido pela rota HTTP real; isso prova que o handler
-    # novo está à frente do legado, porque somente ele injeta o ator da impressão.
+    # A rota HTTP real de fechamento precisa conhecer o operador que imprimiu.
     closing = client.post(
         "/mesas/1/imprimir-recibo",
         params={"apenas_valores": "true"},
@@ -206,7 +232,7 @@ def test_busy_http_day_preserves_family_ids_and_atomic_table_semantics():
     finally:
         db.close()
 
-    # 18:30 — M1 -> M2. Uma única chamada move TODAS as comandas da família.
+    # M1 -> M2: uma única chamada move TODAS as comandas da família.
     transferred = client.post(
         f"/comandas/{geral['id']}/transferir/2",
         headers=_headers(),
@@ -222,19 +248,19 @@ def test_busy_http_day_preserves_family_ids_and_atomic_table_semantics():
     finally:
         db.close()
 
-    # Retry legado sobre a segunda comanda é idempotente, não uma segunda mutação.
+    # Retry legado sobre a segunda comanda não causa uma segunda mutação.
     retry = client.post(
         f"/comandas/{cliente_b['id']}/transferir/2",
         headers=_headers(),
     )
     assert retry.status_code == 200, retry.text
 
-    # 18:45 — M3 abre uma família independente.
+    # M3 abre uma família independente.
     destino = _open(3)
     target_base = destino["numero_pedido"]
     _launch(destino["id"])
 
-    # Transferência para mesa ocupada é proibida: exige a semântica explícita de Mesclar.
+    # Destino ocupado exige Mesclar, nunca uma transferência implícita.
     blocked = client.post(
         f"/comandas/{geral['id']}/transferir/3",
         headers=_headers(),
@@ -252,8 +278,8 @@ def test_busy_http_day_preserves_family_ids_and_atomic_table_semantics():
     principal = next(family for family in families_after_merge if family["principal"])
     assert principal["numero_conta"] == target_base
 
-    # 19:00 — mesmo enviando a confirmação pela antiga comanda da família origem,
-    # o NOVO pedido entra na família principal da mesa destino.
+    # Mesmo confirmando pela antiga Comanda #46, o novo pedido entra na família
+    # principal da mesa destino.
     new_after_merge = _launch(geral["id"])
     families_after_new = _families(3)
     target_family = next(
@@ -271,16 +297,12 @@ def test_busy_http_day_preserves_family_ids_and_atomic_table_semantics():
         f"{base46}-B",
     ]
 
+    automatic = _latest_job_for_source(new_after_merge["id"])
+    assert f"PEDIDO: #{target_base}-B" in automatic.payload_text
+
+    # Transfere um item histórico da família incorporada para uma mesa vazia.
     db = SessionLocal()
     try:
-        automatic = db.query(PrintJob).filter(
-            PrintJob.restaurante_id == TENANT,
-            PrintJob.source_id == new_after_merge["id"],
-        ).first()
-        assert automatic is not None
-        assert f"PEDIDO: #{target_base}-B" in automatic.payload_text
-
-        # Escolhe um item histórico da família incorporada para uma transferência parcial.
         first_item = db.query(Item).filter(
             Item.restaurante_id == TENANT,
             Item.lancamento_id == first["id"],
@@ -290,7 +312,6 @@ def test_busy_http_day_preserves_family_ids_and_atomic_table_semantics():
     finally:
         db.close()
 
-    # 19:20 — transferência parcial é uma única mutação HTTP em lote.
     moved = client.post(
         "/comandas/itens/transferir-lote/4",
         headers=_headers(),
@@ -304,7 +325,6 @@ def test_busy_http_day_preserves_family_ids_and_atomic_table_semantics():
     assert projected[0]["pedido_id"] == f"{base46}-A"
     assert projected[0]["transferido"] is True
 
-    # O lançamento técnico nunca foi renumerado/mutado.
     db = SessionLocal()
     try:
         moved_item = db.query(Item).filter(
@@ -315,3 +335,72 @@ def test_busy_http_day_preserves_family_ids_and_atomic_table_semantics():
         assert moved_item.comanda.mesa_id == 4
     finally:
         db.close()
+
+    # Cria um único Pedido com dois itens e depois divide fisicamente esse mesmo
+    # lançamento entre M3 e M5. As duas vias devem manter o MESMO ID humano, mas
+    # cada botão reimprime apenas o fragmento da mesa onde o card está aberto.
+    split_launch = _launch_items(
+        destino["id"],
+        ["FICA NA MESA 3", "VAI PARA MESA 5"],
+    )
+    families_before_split = _families(3)
+    target_family = next(
+        family for family in families_before_split if family["numero_conta"] == target_base
+    )
+    split_label = next(
+        row["pedido_id"]
+        for row in target_family["lancamentos"]
+        if row["lancamento_id"] == split_launch["id"]
+    )
+    assert split_label == f"{target_base}-C"
+
+    db = SessionLocal()
+    try:
+        split_items = db.query(Item).filter(
+            Item.restaurante_id == TENANT,
+            Item.lancamento_id == split_launch["id"],
+        ).order_by(Item.id.asc()).all()
+        assert len(split_items) == 2
+        item_to_move = next(
+            item for item in split_items if item.observacao == "VAI PARA MESA 5"
+        )
+        item_to_move_id = item_to_move.id
+    finally:
+        db.close()
+
+    move_split = client.post(
+        "/comandas/itens/transferir-lote/5",
+        headers=_headers(),
+        json={"item_ids": [item_to_move_id]},
+    )
+    assert move_split.status_code == 200, move_split.text
+
+    ambiguous = client.post(
+        f"/comandas/lancamentos/{split_launch['id']}/reimprimir",
+        headers=_headers(),
+    )
+    assert ambiguous.status_code == 409, ambiguous.text
+
+    reprint_m3 = client.post(
+        f"/comandas/lancamentos/{split_launch['id']}/reimprimir",
+        params={"mesa_id": 3},
+        headers=_headers(),
+    )
+    assert reprint_m3.status_code == 200, reprint_m3.text
+    payload_m3 = _latest_job_for_source(split_launch["id"]).payload_text
+    assert f"PEDIDO: #{split_label}" in payload_m3
+    assert "MESA: 3" in payload_m3
+    assert "FICA NA MESA 3" in payload_m3
+    assert "VAI PARA MESA 5" not in payload_m3
+
+    reprint_m5 = client.post(
+        f"/comandas/lancamentos/{split_launch['id']}/reimprimir",
+        params={"mesa_id": 5},
+        headers=_headers(),
+    )
+    assert reprint_m5.status_code == 200, reprint_m5.text
+    payload_m5 = _latest_job_for_source(split_launch["id"]).payload_text
+    assert f"PEDIDO: #{split_label}" in payload_m5
+    assert "MESA: 5" in payload_m5
+    assert "VAI PARA MESA 5" in payload_m5
+    assert "FICA NA MESA 3" not in payload_m5
