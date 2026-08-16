@@ -20,6 +20,7 @@ import {
 import { CaixaTurnoResumo, FechamentoCaixaResult } from '../../types';
 import { imprimirComprovanteFechamento } from '../../config/caixaService';
 import { formatBackendDateTime } from '../../utils/dateTime';
+import { MoneyInput } from '../MoneyInput';
 
 interface CaixaFechamentoTabProps {
   isTurnoAberto: boolean;
@@ -47,12 +48,6 @@ const money = new Intl.NumberFormat('pt-BR', {
 
 const formatMoney = (value: number) => money.format(Number(value) || 0);
 
-const valueFromInput = (value: string): number | '' => {
-  if (value === '') return '';
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : '';
-};
-
 interface CountFieldProps {
   id: string;
   label: string;
@@ -61,6 +56,7 @@ interface CountFieldProps {
   value: number | '';
   expected: number;
   required?: boolean;
+  allowNegative?: boolean;
   onChange: (value: number | '') => void;
   onUseExpected: () => void;
 }
@@ -73,6 +69,7 @@ const CountField: React.FC<CountFieldProps> = ({
   value,
   expected,
   required,
+  allowNegative = false,
   onChange,
   onUseExpected,
 }) => {
@@ -94,18 +91,15 @@ const CountField: React.FC<CountFieldProps> = ({
       </div>
       <label htmlFor={id} className="mt-3 flex items-center rounded-xl border border-koma-border bg-koma-input px-3 focus-within:border-[#2a9f7d]">
         <span className="text-sm font-semibold text-koma-muted">R$</span>
-        <input
+        <MoneyInput
           id={id}
-          type="number"
-          inputMode="decimal"
-          step="0.01"
-          min="0"
           required={required}
           placeholder="0,00"
           value={value}
-          onChange={(event) => onChange(valueFromInput(event.target.value))}
-          onFocus={(event) => event.currentTarget.select()}
-          className="min-w-0 flex-1 appearance-none bg-transparent px-2 py-3 text-lg font-semibold tabular-nums text-koma-foreground outline-none placeholder:text-zinc-700 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          onValueChange={onChange}
+          allowNegative={allowNegative}
+          selectOnFocus
+          className="min-w-0 flex-1 bg-transparent px-2 py-3 text-lg font-semibold tabular-nums text-koma-foreground outline-none placeholder:text-zinc-700"
         />
       </label>
       <div className="mt-2 flex items-center justify-between gap-3 text-[10px]">
@@ -386,9 +380,9 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
 
         <form onSubmit={handlePreSubmit} className="mt-5">
           <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-            <CountField id="closing-cash" label="Dinheiro na gaveta" help="Fundo + vendas + suprimentos − sangrias." icon={DollarSign} value={declaradoDinheiro} expected={expectedCash} required onChange={setDeclaradoDinheiro} onUseExpected={() => setDeclaradoDinheiro(expectedCash)} />
-            <CountField id="closing-card" label="Cartões" help="Débito e crédito registrados no turno." icon={CreditCard} value={declaradoCartao} expected={expectedCard} required onChange={setDeclaradoCartao} onUseExpected={() => setDeclaradoCartao(expectedCard)} />
-            <CountField id="closing-pix" label="Pix" help="Recebimentos Pix aprovados no turno." icon={Smartphone} value={declaradoPix} expected={expectedPix} required onChange={setDeclaradoPix} onUseExpected={() => setDeclaradoPix(expectedPix)} />
+            <CountField id="closing-cash" label="Dinheiro na gaveta" help="Fundo + vendas líquidas em dinheiro + suprimentos − sangrias." icon={DollarSign} value={declaradoDinheiro} expected={expectedCash} required onChange={setDeclaradoDinheiro} onUseExpected={() => setDeclaradoDinheiro(expectedCash)} />
+            <CountField id="closing-card" label="Cartões" help="Recebimentos aprovados − devoluções efetivadas em cartão." icon={CreditCard} value={declaradoCartao} expected={expectedCard} required allowNegative onChange={setDeclaradoCartao} onUseExpected={() => setDeclaradoCartao(expectedCard)} />
+            <CountField id="closing-pix" label="Pix" help="Recebimentos aprovados − devoluções efetivadas via Pix." icon={Smartphone} value={declaradoPix} expected={expectedPix} required allowNegative onChange={setDeclaradoPix} onUseExpected={() => setDeclaradoPix(expectedPix)} />
           </div>
 
           <label htmlFor="closing-note" className="mt-4 block">

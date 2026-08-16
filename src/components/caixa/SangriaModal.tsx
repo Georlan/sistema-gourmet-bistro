@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { ManagerPinModal } from '../ManagerPinModal';
+import { MoneyInput } from '../MoneyInput';
 
 interface SangriaModalProps {
   saldoDisponivelDinheiro: number;
@@ -13,7 +14,7 @@ export const SangriaModal: React.FC<SangriaModalProps> = ({
   onClose,
   onSubmit
 }) => {
-  const [valor, setValor] = useState<number>(0);
+  const [valor, setValor] = useState<number | ''>('');
   const [motivo, setMotivo] = useState<string>('');
   const [observacao, setObservacao] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -24,12 +25,13 @@ export const SangriaModal: React.FC<SangriaModalProps> = ({
     e.preventDefault();
     setErrorMsg(null);
 
-    if (valor <= 0) {
+    const valorNumerico = Number(valor || 0);
+    if (valorNumerico <= 0) {
       setErrorMsg('O valor da sangria deve ser maior que zero.');
       return;
     }
 
-    if (valor > saldoDisponivelDinheiro) {
+    if (valorNumerico > saldoDisponivelDinheiro) {
       setErrorMsg(`Saldo em dinheiro insuficiente! O caixa possui R$ ${saldoDisponivelDinheiro.toFixed(2)} disponível.`);
       return;
     }
@@ -39,7 +41,6 @@ export const SangriaModal: React.FC<SangriaModalProps> = ({
       return;
     }
 
-    // Solicita o PIN de Gerente antes de prosseguir
     setShowPinModal(true);
   };
 
@@ -47,39 +48,12 @@ export const SangriaModal: React.FC<SangriaModalProps> = ({
     setShowPinModal(false);
     try {
       setIsSubmitting(true);
+      const valorNumerico = Number(valor || 0);
       await onSubmit({
-        valor: Number(valor),
+        valor: valorNumerico,
         motivo: motivo.trim(),
         observacao: observacao.trim()
       });
-
-      // Dispara payload de impressão de comprovante térmico de sangria
-      try {
-        const dataHora = new Date().toLocaleString('pt-BR');
-        const comprovanteText = `
-==============================================
-          COMPROVANTE DE SANGRIA
-              RESTAURANTE KÔMA
-==============================================
-Data/Hora: ${dataHora}
-Turno: Caixa 1
-Autorizado por: Gerente (PIN Confirmado)
-
-TIPO: SANGRIA DE CAIXA
-VALOR: R$ ${Number(valor).toFixed(2)}
-MOTIVO: ${motivo.trim()}
-==============================================
-Assinatura do Responsável: _________________
-==============================================
-        `.trim();
-
-        window.dispatchEvent(new CustomEvent('koma_print_receipt', {
-          detail: { title: 'Comprovante de Sangria', content: comprovanteText }
-        }));
-      } catch (printErr) {
-        console.warn('Erro ao disparar impressão de sangria:', printErr);
-      }
-
       onClose();
     } catch (err: any) {
       setErrorMsg(err.message || 'Erro ao registrar sangria.');
@@ -95,7 +69,6 @@ Assinatura do Responsável: _________________
         className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto cursor-pointer"
       >
         <div className="w-full max-w-md bg-koma-dialog border border-koma-border rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
-          {/* Header */}
           <div className="flex justify-between items-center pb-2 border-b border-koma-border">
             <div>
               <h3 className="font-serif text-sm font-bold text-koma-foreground flex items-center gap-2">
@@ -122,24 +95,21 @@ Assinatura do Responsável: _________________
           </div>
 
           <form onSubmit={handlePreSubmit} className="space-y-4">
-            {/* Valor */}
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">
                 Valor da Sangria (R$) <span className="text-red-400">*</span>:
               </label>
-              <input
-                type="number"
-                step="0.01"
-                min="0.01"
+              <MoneyInput
                 required
                 placeholder="0,00"
-                value={valor || ''}
-                onChange={(e) => setValor(parseFloat(e.target.value) || 0)}
+                value={valor}
+                onValueChange={setValor}
+                selectOnFocus
+                aria-label="Valor da sangria"
                 className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-sm font-mono focus:outline-none focus:border-amber-500"
               />
             </div>
 
-            {/* Motivo Obrigatório */}
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">
                 Motivo / Justificativa <span className="text-red-400">* (Obrigatório)</span>:
@@ -154,7 +124,6 @@ Assinatura do Responsável: _________________
               />
             </div>
 
-            {/* Observação Opcional */}
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">Observação (Opcional):</label>
               <textarea
@@ -166,7 +135,6 @@ Assinatura do Responsável: _________________
               />
             </div>
 
-            {/* Actions */}
             <div className="flex gap-2 pt-2">
               <button
                 type="button"

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
 import { Distribuidor, Insumo } from '../../types';
 import { localCalendarDate } from '../../utils/dateTime';
+import { MoneyInput } from '../MoneyInput';
 
 interface ItemFormState {
   insumo_id: string;
@@ -9,7 +10,7 @@ interface ItemFormState {
   is_novo_insumo: boolean;
   quantidade: number;
   unidade_medida: string;
-  custo_unitario: number;
+  custo_unitario: number | '';
 }
 
 interface EntradaManualModalProps {
@@ -95,8 +96,8 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
         setErrorMsg(`A quantidade no item ${idx + 1} deve ser maior que zero.`);
         return;
       }
-      if (item.custo_unitario < 0) {
-        setErrorMsg(`O custo unitário no item ${idx + 1} não pode ser negativo.`);
+      if (item.custo_unitario === '' || Number(item.custo_unitario) < 0) {
+        setErrorMsg(`Informe um custo unitário válido no item ${idx + 1}.`);
         return;
       }
     }
@@ -301,14 +302,14 @@ export const EntradaManualModal: React.FC<EntradaManualModalProps> = ({
 
                   {/* Unit Cost */}
                   <div className="col-span-2">
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
+                    <MoneyInput
                       required
-                      placeholder="R$ Unit"
+                      fractionDigits={4}
+                      placeholder="0,0000"
                       value={item.custo_unitario}
-                      onChange={(e) => handleItemChange(idx, 'custo_unitario', parseFloat(e.target.value) || 0)}
+                      onValueChange={(value) => handleItemChange(idx, 'custo_unitario', value)}
+                      selectOnFocus
+                      aria-label={`Custo unitário do item ${idx + 1}`}
                       className="w-full px-2.5 py-1.5 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs text-right focus:outline-none focus:border-emerald-500 font-mono"
                     />
                   </div>

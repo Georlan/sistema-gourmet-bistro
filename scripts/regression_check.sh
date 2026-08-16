@@ -120,6 +120,22 @@ run_flow_test \
   "9. Hardening multi-tenant e RBAC (sessão, escrita, JWT, público e impressão)" \
   "tests/test_stage2_multitenant_rbac.py"
 
+run_flow_test \
+  "10. Consistência financeira (ledger, leitura, caixa, estornos, Conta e dia operacional)" \
+  "tests/test_money_types.py" \
+  "tests/test_financial_ledger_stage3.py" \
+  "tests/test_financial_allocation_stage3.py" \
+  "tests/test_financial_read_stage3b.py" \
+  "tests/test_product_read_stage3b.py" \
+  "tests/test_financial_read_adversarial_stage3b.py" \
+  "tests/test_financial_cash_stage3c.py" \
+  "tests/test_financial_refund_history_stage3c.py" \
+  "tests/test_financial_cash_extreme_stage3c.py" \
+  "tests/test_financial_refund_retry_stage3c.py" \
+  "tests/test_financial_refund_listing_stage3c.py" \
+  "tests/test_financial_final_reconciliation_stage3d.py" \
+  "tests/test_money_input_stage3d.py"
+
 echo ""
 echo -e "${BLUE}${BOLD}========================================================================${NC}"
 
