@@ -100,7 +100,7 @@ def _item_detail(item: Item) -> Optional[dict]:
 
 
 def _item_is_printable(item: Item) -> bool:
-    """Define se o item participa da via operacional automática do lançamento."""
+    """Define se um item habilita a impressão automática do lançamento."""
     produto = item.produto
     if produto is None:
         return False
@@ -110,7 +110,7 @@ def _item_is_printable(item: Item) -> bool:
         if categoria is not None
         else "COZINHA"
     )
-    return (destino or "COZINHA").upper() not in {"NENHUM", "NONE", ""}
+    return (destino or "COZINHA").strip().upper() not in {"NENHUM", "NONE", ""}
 
 
 def load_open_table_snapshot(
@@ -205,9 +205,15 @@ def load_table_source_snapshot(
     - ``pedido``: a comanda criada em uma venda direta do caixa.
     - ``reimpressao``: respeita o ID recebido (lote ``l-`` ou comanda ``c-``).
 
-    Itens marcados com destino NENHUM não entram nessa via automática/parcial.
-    O Extrato Completo continua usando ``load_open_table_snapshot`` e, portanto,
-    inclui todo o consumo ativo da mesa independentemente do destino de produção.
+    A regra de impressão automática é decidida no nível do lote: se existir ao
+    menos um item imprimível, a via contém TODOS os itens ativos daquele lote,
+    inclusive bebidas/categorias com destino NENHUM. Um lote composto somente
+    por itens não imprimíveis não gera via automática. Na impressão manual de
+    um lote, o pedido explícito do operador prevalece e o lote ativo pode ser
+    impresso mesmo que nenhum item habilite impressão automática.
+
+    O Extrato Completo continua usando ``load_open_table_snapshot`` e inclui
+    todo o consumo ativo da mesa.
     """
     db.flush()
     normalized_source = (source_type or "").strip().casefold()
@@ -272,19 +278,28 @@ def load_table_source_snapshot(
     else:
         raise PrintingRequestError("Origem de impressão parcial inválida", status_code=400)
 
-    printable_details = []
-    for item in source_items:
-        if item.status == "cancelado" or not _item_is_printable(item):
-            continue
-        item_detail = _item_detail(item)
-        if item_detail is not None:
-            printable_details.append(item_detail)
+    active_items = [
+        item for item in source_items
+        if item.status != "cancelado" and item.produto is not None
+    ]
+    if not active_items:
+        raise PrintingRequestError(
+            "Não há itens ativos neste lançamento",
+            status_code=400,
+        )
 
-    if not printable_details:
+    is_manual_reprint = normalized_source == "reimpressao"
+    if not is_manual_reprint and not any(_item_is_printable(item) for item in active_items):
         raise PrintingRequestError(
             "Não há itens imprimíveis neste lançamento",
             status_code=400,
         )
+
+    source_details = []
+    for item in active_items:
+        item_detail = _item_detail(item)
+        if item_detail is not None:
+            source_details.append(item_detail)
 
     return TableReceiptSnapshot(
         mesa_id=mesa_id,
@@ -296,7 +311,7 @@ def load_table_source_snapshot(
             {
                 "id": comanda.id,
                 "identificador": comanda.identificador,
-                "itens": printable_details,
+                "itens": source_details,
             }
         ],
     )
