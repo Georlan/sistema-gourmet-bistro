@@ -1,7 +1,7 @@
 import React from 'react';
 import clsx from 'clsx';
-import logoDark from '../assets/logo.png';
-import logoLight from '../assets/logo-light.png';
+import logoOnDark from '../assets/logo-koma-on-dark.png';
+import logoOnLight from '../assets/logo-koma-on-light.png';
 
 export interface KomaLogoProps {
   className?: string;
@@ -36,7 +36,7 @@ export const KomaLogo: React.FC<KomaLogoProps> = ({
     if (variant === 'dark') {
       return (
         <img
-          src={logoDark}
+          src={logoOnDark}
           alt={alt}
           className={clsx(sizeClass, 'object-contain shrink-0', imageClassName)}
         />
@@ -46,23 +46,22 @@ export const KomaLogo: React.FC<KomaLogoProps> = ({
     if (variant === 'light') {
       return (
         <img
-          src={logoLight}
+          src={logoOnLight}
           alt={alt}
           className={clsx(sizeClass, 'object-contain shrink-0', imageClassName)}
         />
       );
     }
 
-    // Auto variant: shows light logo in light mode and dark logo in dark mode
     return (
       <>
         <img
-          src={logoLight}
+          src={logoOnLight}
           alt={alt}
           className={clsx(sizeClass, 'object-contain shrink-0 dark:hidden', imageClassName)}
         />
         <img
-          src={logoDark}
+          src={logoOnDark}
           alt={alt}
           className={clsx(sizeClass, 'object-contain shrink-0 hidden dark:block', imageClassName)}
         />
@@ -84,7 +83,7 @@ export const KomaLogo: React.FC<KomaLogoProps> = ({
           </span>
         )}
         {withSlogan && (
-          <span className="text-[9px] font-sans font-semibold tracking-wide text-emerald-700 dark:text-emerald-400 leading-tight mt-0.5">
+          <span className="text-[9px] font-sans font-semibold tracking-wide text-koma-accent leading-tight mt-0.5">
             Se está com fome, Kôma
           </span>
         )}

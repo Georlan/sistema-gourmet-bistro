@@ -136,6 +136,10 @@ run_flow_test \
   "tests/test_financial_final_reconciliation_stage3d.py" \
   "tests/test_money_input_stage3d.py"
 
+run_flow_test \
+  "11. UX / Tema / CSP (bootstrap global, logo e integrações permitidas)" \
+  "tests/test_ui_theme_csp_stage4.py"
+
 echo ""
 echo -e "${BLUE}${BOLD}========================================================================${NC}"
 
