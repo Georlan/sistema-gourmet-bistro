@@ -57,8 +57,30 @@
 - Estorno não apaga nem reescreve o pagamento original e nunca pode ultrapassar seu saldo estornável.
 - Sangria e suprimento movimentam caixa físico sem alterar faturamento.
 - O dia operacional é atribuído pelo turno de caixa, podendo atravessar a meia-noite civil.
+- Relatórios e Dashboard selecionam primeiro os turnos pertencentes ao período operacional e só então seus pagamentos/estornos.
+- Atendimento/Conta é o grão preferencial de leitura financeira; delivery, balcão e legado sem Atendimento usam fallback explícito por comanda.
+- Uma Conta paga em mais de um turno continua sendo uma única Conta no período consolidado.
+- Um pagamento dividido entre duas famílias financeiras não duplica receita: a soma das alocações precisa reconciliar com o pagamento.
+- Ledger parcialmente conhecido conserva parcelas válidas e deixa o residual sem atribuição; ledger sobrealocado falha de forma segura para o valor exato do pagamento.
+- Métricas de produto representam consumo operacional e nunca são usadas como fonte de faturamento reconhecido.
 - Valores monetários persistidos usam precisão decimal fixa; inputs monetários usam centavos automáticos no padrão brasileiro.
 - Caixa, Relatórios, Dashboard e Fechamento devem convergir para os mesmos totais financeiros no mesmo recorte operacional.
+
+---
+
+## Simulações financeiras obrigatórias da Etapa 3
+
+O fluxo financeiro crítico deve cobrir, além dos casos normais:
+
+- pagamento após 00:00 pertencendo ao turno aberto no dia anterior;
+- pagamento parcial e aprovação posterior de pagamento pendente;
+- uma Conta com múltiplas comandas sem multiplicar a quantidade de vendas;
+- um único pagamento alocado entre múltiplas Contas/famílias sem duplicar receita;
+- a mesma Conta recebendo parcelas em dois dias operacionais diferentes;
+- estorno em turno posterior afetando o dia da devolução, sem reescrever o dia da venda original;
+- relatório e Dashboard reconciliando bruto, estornos, líquido e meios de pagamento;
+- produto de R$ 100 com apenas R$ 20 pagos permanecendo R$ 100 de consumo operacional e apenas R$ 20 de receita reconhecida;
+- ledger historicamente corrompido/sobrealocado nunca fazendo a soma dos detalhes ultrapassar o Pagamento aprovado.
 
 ---
 
@@ -125,6 +147,9 @@ O script local aceita tanto `backend/venv/bin/python` quanto um `python3/python`
 - `backend/tests/test_money_types.py`
 - `backend/tests/test_financial_ledger_stage3.py`
 - `backend/tests/test_financial_allocation_stage3.py`
+- `backend/tests/test_financial_read_stage3b.py`
+- `backend/tests/test_product_read_stage3b.py`
+- `backend/tests/test_financial_read_adversarial_stage3b.py`
 
 ---
 
