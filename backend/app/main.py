@@ -29,6 +29,15 @@ from .routes import (
     websocket,
     whatsapp_webhook,
 )
+from .services.order_numbers import gerar_novo_numero_pedido_atomico
+
+
+# Há dois consumidores legados da função de numeração: orders (salão/caixa)
+# e cardapio (delivery/retirada público). Até a criação de pedidos inteira ser
+# consolidada em um único service, ambos apontam para o MESMO alocador atômico
+# do NumeradorOperacional. Isso evita Conta #47 e Delivery #47 simultâneos.
+orders.gerar_novo_numero_pedido = gerar_novo_numero_pedido_atomico
+cardapio.gerar_novo_numero_pedido = gerar_novo_numero_pedido_atomico
 
 
 if os.getenv("ENVIRONMENT") != "test" and settings.SENTRY_DSN:
