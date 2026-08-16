@@ -64,19 +64,13 @@ def remaining_refund_allocations_guarded(
     restaurante_id: int,
     payment: Pagamento,
 ) -> list[dict[str, object]]:
-    """Saldo estornável usado tanto pela UI quanto pela validação transacional.
-
-    Estornos do 3A podem não ter origem materializada. Em uma única origem o
-    residual legado é abatido com segurança. Em múltiplas origens a distribuição
-    passada é desconhecida; o pagamento fica visivelmente bloqueado em vez de
-    exibir saldo falso ou ratear por hipótese.
-    """
+    """Saldo estornável usado tanto pela UI quanto pela validação transacional."""
     rows = [dict(row) for row in _base_remaining_refund_allocations(
         db,
         restaurante_id,
         payment,
     )]
-    refund_total, allocated_total, unattributed, origin_count = _historical_refund_state(
+    refund_total, _, unattributed, origin_count = _historical_refund_state(
         db,
         restaurante_id,
         str(payment.id),
@@ -104,7 +98,6 @@ def remaining_refund_allocations_guarded(
             )
         return rows
 
-    # Única origem: todo residual legado necessariamente pertence a ela.
     if rows:
         row = rows[0]
         row["estornado"] = money(row.get("estornado", 0)) + unattributed
@@ -115,7 +108,6 @@ def remaining_refund_allocations_guarded(
         row["bloqueado"] = False
         row["motivo_bloqueio"] = None
 
-    # Defesa final: a soma visual nunca pode superar o saldo global real.
     visible = money(sum(
         (money(row.get("disponivel", 0)) for row in rows),
         Decimal("0.00"),
@@ -144,8 +136,10 @@ def create_refund_guarded(
 ) -> PagamentoEstorno:
     """Protege o serviço 3C contra estornos legados sem origem materializada.
 
-    O lock é adquirido ANTES do cálculo do saldo histórico. Assim dois estornos
-    concorrentes não conseguem ambos validar contra o mesmo saldo disponível.
+    O lock é adquirido ANTES do cálculo do saldo histórico. Retentativas
+    idempotentes são reconhecidas antes da regra de saldo: se um estorno de 100%
+    já foi persistido e a resposta se perdeu, repetir a mesma chave precisa
+    devolver o mesmo evento, não falhar por saldo remanescente igual a zero.
     """
     payment = (
         db.query(Pagamento)
@@ -158,6 +152,26 @@ def create_refund_guarded(
     )
     if payment is None:
         raise RefundDomainError("Pagamento não encontrado.", status_code=404)
+
+    existing = db.query(PagamentoEstorno).filter(
+        PagamentoEstorno.restaurante_id == restaurante_id,
+        PagamentoEstorno.idempotency_key == (idempotency_key or "").strip(),
+    ).first()
+    if existing is not None:
+        # O serviço central faz a validação estrita de payload drift e devolve
+        # o mesmo evento quando a retentativa é realmente idempotente.
+        return create_refund(
+            db,
+            restaurante_id=restaurante_id,
+            payment_id=payment_id,
+            turno_id=turno_id,
+            usuario_id=usuario_id,
+            valor=valor,
+            motivo=motivo,
+            idempotency_key=idempotency_key,
+            metodo_devolucao=metodo_devolucao,
+            alocacoes=alocacoes,
+        )
 
     refund_value = money(valor)
     refund_total, _, unattributed, origin_count = _historical_refund_state(
