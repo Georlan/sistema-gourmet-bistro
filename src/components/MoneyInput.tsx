@@ -7,44 +7,72 @@ interface MoneyInputProps extends Omit<
   value: number | '';
   onValueChange: (value: number | '') => void;
   selectOnFocus?: boolean;
+  fractionDigits?: number;
+  allowNegative?: boolean;
 }
 
-const moneyInputFormatter = new Intl.NumberFormat('pt-BR', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-  useGrouping: true,
-});
+const formatterCache = new Map<number, Intl.NumberFormat>();
+
+const formatterFor = (fractionDigits: number) => {
+  const cached = formatterCache.get(fractionDigits);
+  if (cached) return cached;
+
+  const formatter = new Intl.NumberFormat('pt-BR', {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+    useGrouping: true,
+  });
+  formatterCache.set(fractionDigits, formatter);
+  return formatter;
+};
 
 /**
  * Campo monetário no padrão de PDV brasileiro.
  *
- * A digitação trabalha sempre em centavos:
- * 1 -> 0,01 | 12 -> 0,12 | 123 -> 1,23 | 1234 -> 12,34.
+ * A digitação trabalha em unidades mínimas da escala configurada:
+ * - fractionDigits=2: 1 -> 0,01 | 1234 -> 12,34
+ * - fractionDigits=4: 1 -> 0,0001 | 12345 -> 1,2345
+ *
+ * Valores negativos são opt-in. Isso é necessário para conferências digitais
+ * (Pix/cartão) que podem ficar líquidas negativas quando o turno atual devolve
+ * vendas de turnos anteriores. Dinheiro físico continua positivo por domínio.
+ *
  * O componente entrega ao domínio apenas o valor numérico já convertido;
- * validação financeira e arredondamento continuam responsabilidade do backend.
+ * validação financeira, limites e arredondamento continuam responsabilidade do backend.
  */
 export const MoneyInput: React.FC<MoneyInputProps> = ({
   value,
   onValueChange,
   selectOnFocus = false,
+  fractionDigits = 2,
+  allowNegative = false,
   onFocus,
+  onKeyDown,
   ...props
 }) => {
+  const safeFractionDigits = Number.isInteger(fractionDigits)
+    ? Math.min(Math.max(fractionDigits, 0), 6)
+    : 2;
+  const scale = 10 ** safeFractionDigits;
+  const formatter = formatterFor(safeFractionDigits);
   const displayValue = value === ''
     ? ''
-    : moneyInputFormatter.format(Number(value) || 0);
+    : formatter.format(Number(value) || 0);
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const digits = event.target.value.replace(/\D/g, '');
+    const raw = event.target.value;
+    const isNegative = allowNegative && raw.trimStart().startsWith('-');
+    const digits = raw.replace(/\D/g, '');
     if (!digits) {
       onValueChange('');
       return;
     }
 
-    const cents = Number.parseInt(digits, 10);
-    if (!Number.isSafeInteger(cents)) return;
+    const units = Number.parseInt(digits, 10);
+    if (!Number.isSafeInteger(units)) return;
 
-    onValueChange(cents / 100);
+    const parsed = units / scale;
+    onValueChange(isNegative ? -parsed : parsed);
   };
 
   const handleFocus = (event: React.FocusEvent<HTMLInputElement>) => {
@@ -52,14 +80,23 @@ export const MoneyInput: React.FC<MoneyInputProps> = ({
     onFocus?.(event);
   };
 
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (allowNegative && event.key === '-' && value !== '') {
+      event.preventDefault();
+      onValueChange(Number(value) === 0 ? 0 : -Number(value));
+    }
+    onKeyDown?.(event);
+  };
+
   return (
     <input
       {...props}
       type="text"
-      inputMode="numeric"
+      inputMode={allowNegative ? 'decimal' : 'numeric'}
       value={displayValue}
       onChange={handleChange}
       onFocus={handleFocus}
+      onKeyDown={handleKeyDown}
     />
   );
 };
