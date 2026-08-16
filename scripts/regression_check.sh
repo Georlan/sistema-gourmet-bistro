@@ -106,6 +106,10 @@ run_flow_test \
   "7. Fila de impressão (claim atômico, anti-duplicação e recuperação)" \
   "tests/test_print_agents.py"
 
+run_flow_test \
+  "8. Identidade operacional da mesa (famílias, letras e movimentos)" \
+  "tests/test_atendimento_identity.py"
+
 echo ""
 echo -e "${BLUE}${BOLD}========================================================================${NC}"
 
