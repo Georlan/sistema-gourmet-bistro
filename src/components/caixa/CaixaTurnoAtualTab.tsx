@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   AlertCircle,
   ArrowDownRight,
@@ -10,11 +10,13 @@ import {
   Lock,
   ReceiptText,
   RefreshCw,
+  RotateCcw,
   WalletCards,
   WifiOff,
 } from 'lucide-react';
 import { CaixaAtividadeRecente, CaixaTurnoResumo } from '../../types';
 import { normalizeOperationalTimestamp } from '../../domain';
+import { EstornoModal } from './EstornoModal';
 
 interface CaixaTurnoAtualTabProps {
   turnoResumo: CaixaTurnoResumo | null;
@@ -49,6 +51,7 @@ const activityLabel: Record<string, string> = {
   recebimento: 'Venda recebida',
   suprimento: 'Suprimento',
   sangria: 'Sangria',
+  estorno: 'Estorno',
 };
 
 const paymentMethodLabel: Record<string, string> = {
@@ -77,11 +80,12 @@ const CaixaSummarySkeleton = () => (
 const ActivityIcon = ({ type }: { type: string }) => {
   if (type === 'suprimento') return <ArrowDownRight size={15} />;
   if (type === 'sangria') return <ArrowUpRight size={15} />;
+  if (type === 'estorno') return <RotateCcw size={15} />;
   return <ReceiptText size={15} />;
 };
 
 const ActivityRow = ({ activity }: { activity: CaixaAtividadeRecente }) => {
-  const isWithdrawal = activity.tipo === 'sangria';
+  const isOutflow = activity.tipo === 'sangria' || activity.tipo === 'estorno';
   const timestamp = normalizeOperationalTimestamp(activity.criado_em);
   const date = timestamp !== null ? new Date(timestamp) : null;
   const validDate = date !== null && !Number.isNaN(date.getTime());
@@ -90,7 +94,7 @@ const ActivityRow = ({ activity }: { activity: CaixaAtividadeRecente }) => {
   return (
     <li className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-t border-[#202522] px-4 py-3 first:border-t-0 sm:px-5">
       <span className={`flex h-9 w-9 items-center justify-center rounded-xl border ${
-        isWithdrawal
+        isOutflow
           ? 'border-rose-300 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30 text-rose-800 dark:text-rose-300'
           : 'border-emerald-300 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300'
       }`}>
@@ -107,8 +111,8 @@ const ActivityRow = ({ activity }: { activity: CaixaAtividadeRecente }) => {
           {activity.origem}{method ? ` · ${method}` : ''}{activity.operador_nome ? ` · ${activity.operador_nome}` : ''}
         </span>
       </span>
-      <strong className={`whitespace-nowrap text-xs tabular-nums ${isWithdrawal ? 'text-rose-800 dark:text-rose-300' : 'text-emerald-800 dark:text-emerald-300'}`}>
-        {isWithdrawal ? '−' : '+'} {formatCurrency(activity.valor)}
+      <strong className={`whitespace-nowrap text-xs tabular-nums ${isOutflow ? 'text-rose-800 dark:text-rose-300' : 'text-emerald-800 dark:text-emerald-300'}`}>
+        {isOutflow ? '−' : '+'} {formatCurrency(activity.valor)}
       </strong>
     </li>
   );
@@ -128,6 +132,8 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
   onOpenSuprimentoModal,
   onOpenNovoTurnoModal,
 }) => {
+  const [showRefundModal, setShowRefundModal] = useState(false);
+
   if (!turnoResumo) return <CaixaSummarySkeleton />;
 
   const isTurnoAberto = turnoResumo.status === 'aberto';
@@ -160,19 +166,19 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
 
   const metrics = [
     {
-      label: 'Vendas recebidas',
+      label: 'Vendas líquidas',
       value: turnoResumo.total_vendas,
-      help: `${turnoResumo.total_pedidos_pagos} comanda(s) paga(s)`,
+      help: `${turnoResumo.total_pedidos_pagos} comanda(s) com recebimento`,
       icon: ReceiptText,
     },
     {
       label: 'Dinheiro esperado',
       value: turnoResumo.saldo_esperado_dinheiro,
-      help: 'Valor físico previsto no caixa',
+      help: 'Valor físico previsto no caixa após devoluções',
       icon: Banknote,
     },
     {
-      label: 'Pix e cartões',
+      label: 'Pix e cartões líquidos',
       value: digitalTotal,
       help: `${formatCurrency(turnoResumo.total_pix)} Pix · ${formatCurrency(turnoResumo.total_cartao)} cartões`,
       icon: WalletCards,
@@ -196,7 +202,7 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
           </span>
           <div className="min-w-0">
             <h2 className="text-xs font-bold text-koma-foreground">Ações do turno</h2>
-            <p className="mt-0.5 truncate text-[10px] text-koma-muted">Registre entradas e saídas antes de fechar o caixa.</p>
+            <p className="mt-0.5 truncate text-[10px] text-koma-muted">Registre entradas, saídas e devoluções antes de fechar o caixa.</p>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
@@ -210,6 +216,9 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
           </button>
           <button type="button" onClick={onOpenSangriaModal} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-koma-border bg-koma-card px-3 py-2 text-[11px] font-bold text-rose-800 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:border-rose-500/50 transition-all cursor-pointer shadow-xs">
             <ArrowUpRight size={14} className="text-rose-700 dark:text-rose-400" /> Sangria
+          </button>
+          <button type="button" onClick={() => setShowRefundModal(true)} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-koma-border bg-koma-card px-3 py-2 text-[11px] font-bold text-rose-800 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:border-rose-500/50 transition-all cursor-pointer shadow-xs">
+            <RotateCcw size={14} /> Estornar
           </button>
           <button type="button" onClick={onNavigateToFechamento} className="col-span-2 sm:col-span-1 inline-flex items-center justify-center gap-2 rounded-xl koma-btn-success px-4 py-2.5 sm:py-2 text-[11px] font-bold uppercase tracking-[0.08em] transition-all cursor-pointer shadow-sm">
             <Lock size={14} /> Fechar caixa
@@ -236,7 +245,7 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
               <History size={15} className="text-emerald-800 dark:text-emerald-300" />
               <div>
                 <h3 className="text-xs font-bold text-koma-foreground">Atividade recente</h3>
-                <p className="mt-0.5 text-[10px] text-koma-muted">Últimos recebimentos e ajustes deste turno</p>
+                <p className="mt-0.5 text-[10px] text-koma-muted">Últimos recebimentos, devoluções e ajustes deste turno</p>
               </div>
             </div>
             <button type="button" onClick={onNavigateToMovimentacoes} className="shrink-0 text-[10px] font-bold text-emerald-800 dark:text-emerald-300 transition-colors hover:text-[#7becce]">Ver ajustes</button>
@@ -247,7 +256,7 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
             <div className="flex min-h-48 flex-col items-center justify-center px-5 text-center">
               <History size={22} className="text-koma-muted" />
               <strong className="mt-3 text-xs text-koma-subtle">O turno ainda não teve movimentações</strong>
-              <span className="mt-1 text-[10px] text-koma-muted">Vendas recebidas, sangrias e suprimentos aparecerão aqui.</span>
+              <span className="mt-1 text-[10px] text-koma-muted">Vendas recebidas, estornos, sangrias e suprimentos aparecerão aqui.</span>
             </div>
           )}
         </article>
@@ -260,7 +269,7 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
             </div>
             <dl className="mt-3 space-y-2.5 text-xs">
               <div className="flex justify-between gap-3 text-koma-subtle"><dt>Saldo inicial</dt><dd className="tabular-nums text-koma-foreground">{formatCurrency(turnoResumo.saldo_inicial)}</dd></div>
-              <div className="flex justify-between gap-3 text-koma-subtle"><dt>Recebido em dinheiro</dt><dd className="tabular-nums text-koma-foreground">+ {formatCurrency(turnoResumo.total_dinheiro)}</dd></div>
+              <div className="flex justify-between gap-3 text-koma-subtle"><dt>Líquido em dinheiro</dt><dd className={`tabular-nums ${turnoResumo.total_dinheiro < 0 ? 'text-rose-800 dark:text-rose-300' : 'text-koma-foreground'}`}>{turnoResumo.total_dinheiro >= 0 ? '+' : '−'} {formatCurrency(Math.abs(turnoResumo.total_dinheiro))}</dd></div>
               <div className="flex justify-between gap-3 text-koma-subtle"><dt>Suprimentos</dt><dd className="tabular-nums text-koma-foreground">+ {formatCurrency(turnoResumo.total_suprimentos)}</dd></div>
               <div className="flex justify-between gap-3 text-koma-subtle"><dt>Sangrias</dt><dd className="tabular-nums text-rose-800 dark:text-rose-300">− {formatCurrency(turnoResumo.total_sangrias)}</dd></div>
               <div className="flex items-end justify-between gap-3 border-t border-koma-border pt-3"><dt className="font-bold text-koma-secondary">Esperado no caixa</dt><dd className="text-base font-bold tabular-nums text-emerald-800 dark:text-emerald-300">{formatCurrency(turnoResumo.saldo_esperado_dinheiro)}</dd></div>
@@ -291,6 +300,15 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
           </article>
         </div>
       </section>
+
+      {showRefundModal && (
+        <EstornoModal
+          onClose={() => setShowRefundModal(false)}
+          onSuccess={() => {
+            onRefresh();
+          }}
+        />
+      )}
     </div>
   );
 };
