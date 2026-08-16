@@ -1372,9 +1372,6 @@ body {
     grid-template-columns: minmax(12rem, 1fr) auto;
   }
 
-  .orders-search__result {
-    display: none;
-  }
 
   .orders-toolbar__actions {
     grid-column: 1 / -1;
@@ -1529,16 +1526,37 @@ body {
 
   .orders-toolbar__actions {
     width: 100%;
-    gap: 0.55rem;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.55rem 0.75rem;
   }
 
-  .orders-auto-accept > span:last-child,
+  .orders-auto-accept {
+    min-width: 0;
+    white-space: normal;
+  }
+
+  .orders-switch {
+    flex: 0 0 auto;
+  }
+
+  .orders-auto-accept__label {
+    min-width: 0;
+    line-height: 1.25;
+    white-space: normal;
+  }
+
   .orders-delivery-total {
-    display: none;
+    grid-column: 1 / -1;
+    justify-self: start;
+    padding-left: 0;
+    border-left: 0;
   }
 
   .orders-new-orders {
-    margin-left: auto;
+    margin-left: 0;
+    justify-self: end;
   }
 }
 

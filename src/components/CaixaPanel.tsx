@@ -4596,7 +4596,7 @@ export function CaixaPanel({
                       aria-label="Aceitar pedidos online automaticamente"
                     />
                     <span className="orders-switch" aria-hidden="true"><span /></span>
-                    <span>Autoaceite online</span>
+                    <span className="orders-auto-accept__label">Aceitar pedidos online automaticamente</span>
                   </label>
                   <div className="orders-delivery-total">
                     <span>Delivery hoje</span>
