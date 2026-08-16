@@ -1,14 +1,25 @@
 from __future__ import annotations
 
+import datetime
+import uuid
 from typing import List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from ..database import get_db, require_tenant_id
-from ..models import Comanda, Item, Usuario
-from ..schemas import ComandaResponse, ItemResponse, LancamentoCreate, LancamentoResponse
+from ..models import Cliente, Comanda, Item, Usuario
+from ..operational_models import AtendimentoComanda
+from ..schemas import (
+    ComandaDetail,
+    ComandaResponse,
+    ItemCreate,
+    ItemResponse,
+    LancamentoCreate,
+    LancamentoResponse,
+    VendaDiretaCreate,
+)
 from ..security import get_current_user, require_permission
 from ..services.atendimentos import (
     AtendimentoError,
@@ -16,6 +27,7 @@ from ..services.atendimentos import (
     get_table_family_snapshot,
     merge_tables,
     principal_command_for_comanda,
+    principal_command_for_table,
     reopen_command_guarded,
     transfer_group_by_comanda,
     transfer_items_batch,
@@ -146,10 +158,6 @@ def imprimir_recibo_mesa_com_identidade(
     }
 
 
-# Depois de uma mesclagem, a família da mesa destino é a principal. O frontend
-# legado pode ainda apontar para uma Comanda da família incorporada; este
-# adaptador redireciona o NOVO lançamento para a Comanda principal, sem alterar
-# nenhum lançamento/ID antigo.
 @router.post(
     "/comandas/{comanda_id}/lancamentos",
     response_model=LancamentoResponse,
@@ -162,25 +170,31 @@ def lancar_itens_na_familia_principal(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    rid = require_tenant_id()
-    try:
-        supplied = db.query(Comanda).filter(
-            Comanda.restaurante_id == rid,
-            Comanda.id == comanda_id,
-        ).first()
-        if supplied is None:
-            raise AtendimentoError("Comanda não encontrada", status_code=404)
-        if supplied.tipo != "Consumo no Local" or supplied.mesa_id is None:
-            # Delivery/retirada mantêm exatamente o fluxo especializado legado.
-            from .orders import lancar_itens
-            return lancar_itens(
-                comanda_id,
-                lancamento_in,
-                background_tasks,
-                db,
-                current_user,
-            )
+    """Novo clique em Confirmar sempre pertence à família principal da mesa.
 
+    Depois de uma mesclagem, a UI pode ainda carregar uma Comanda da família
+    incorporada. Redirecionamos apenas o NOVO lançamento; IDs antigos não mudam.
+    """
+    rid = require_tenant_id()
+    supplied = db.query(Comanda).filter(
+        Comanda.restaurante_id == rid,
+        Comanda.id == comanda_id,
+    ).first()
+    if supplied is None:
+        raise HTTPException(status_code=404, detail="Comanda não encontrada")
+
+    from .orders import lancar_itens
+
+    if supplied.tipo != "Consumo no Local" or supplied.mesa_id is None:
+        return lancar_itens(
+            comanda_id,
+            lancamento_in,
+            background_tasks,
+            db,
+            current_user,
+        )
+
+    try:
         _materialize_table_accounts(db, rid, int(supplied.mesa_id), actor_id=current_user.id)
         principal = principal_command_for_comanda(
             db,
@@ -194,7 +208,6 @@ def lancar_itens_na_familia_principal(
         db.rollback()
         _raise_domain(exc)
 
-    from .orders import lancar_itens
     return lancar_itens(
         principal.id,
         lancamento_in,
@@ -202,6 +215,128 @@ def lancar_itens_na_familia_principal(
         db,
         current_user,
     )
+
+
+@router.post(
+    "/comandas/venda-direta",
+    response_model=ComandaDetail,
+    status_code=status.HTTP_201_CREATED,
+)
+async def venda_direta_respeitando_familia_principal(
+    venda_in: VendaDiretaCreate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """PDV em mesa mesclada cria o lançamento na família da mesa destino.
+
+    Fora desse caso delega 100% ao fluxo legado de venda direta. Em uma mesa
+    com duas famílias, criamos uma Comanda compatível ligada à família principal
+    e reutilizamos a mesma função de lançamento/validação/impressão do garçom.
+    """
+    from .orders import criar_venda_direta, lancar_itens
+
+    normalized_type = (venda_in.tipo or "").strip().casefold()
+    is_local = normalized_type in {"consumo no local", "mesa", "local"}
+    if not is_local or venda_in.mesa_id is None:
+        return await criar_venda_direta(
+            venda_in,
+            background_tasks,
+            db,
+            current_user,
+        )
+
+    rid = require_tenant_id()
+    try:
+        _materialize_table_accounts(db, rid, venda_in.mesa_id, actor_id=current_user.id)
+        families = get_table_family_snapshot(db, rid, venda_in.mesa_id)
+        if len(families) <= 1:
+            return await criar_venda_direta(
+                venda_in,
+                background_tasks,
+                db,
+                current_user,
+            )
+        principal = principal_command_for_table(db, rid, venda_in.mesa_id)
+        if principal is None:
+            raise AtendimentoError("Mesa mesclada sem família principal", status_code=409)
+        principal_account = ensure_atendimento_for_comanda(db, principal, actor_id=current_user.id)
+
+        garcom_id = venda_in.garcom_id or current_user.id
+        garcom = db.query(Usuario).filter(
+            Usuario.restaurante_id == rid,
+            Usuario.id == garcom_id,
+        ).first()
+        if garcom is None:
+            garcom_id = current_user.id
+
+        if venda_in.cliente_id:
+            exists = db.query(Cliente.id).filter(
+                Cliente.restaurante_id == rid,
+                Cliente.id == venda_in.cliente_id,
+            ).first()
+            if exists is None:
+                raise AtendimentoError("Cliente não encontrado", status_code=404)
+
+        command = Comanda(
+            id=f"c-{uuid.uuid4().hex[:8]}",
+            restaurante_id=rid,
+            cliente_id=venda_in.cliente_id,
+            mesa_id=venda_in.mesa_id,
+            garcom_id=garcom_id,
+            tipo="Consumo no Local",
+            identificador=venda_in.identificador,
+            numero_pedido=principal_account.numero_conta,
+            fechada=False,
+            criado_em=datetime.datetime.now(datetime.timezone.utc),
+        )
+        db.add(command)
+        db.flush()
+        db.add(
+            AtendimentoComanda(
+                restaurante_id=rid,
+                atendimento_id=principal_account.id,
+                comanda_id=command.id,
+            )
+        )
+        db.flush()
+
+        launch_payload = LancamentoCreate(
+            garcom_id=garcom_id,
+            itens=[
+                ItemCreate(
+                    produto_id=item.produto_id,
+                    observacao=item.observacao or "",
+                    cliente_nome=item.cliente_nome or venda_in.identificador or "Consumo Geral",
+                )
+                for item in venda_in.itens
+            ],
+        )
+        lancar_itens(
+            command.id,
+            launch_payload,
+            background_tasks,
+            db,
+            current_user,
+        )
+        completed = (
+            db.query(Comanda)
+            .options(
+                joinedload(Comanda.itens).joinedload(Item.produto),
+                joinedload(Comanda.criada_por),
+            )
+            .filter(
+                Comanda.restaurante_id == rid,
+                Comanda.id == command.id,
+            )
+            .first()
+        )
+        if completed is None:
+            raise AtendimentoError("Venda de mesa não pôde ser reconstruída", status_code=500)
+        return completed
+    except AtendimentoError as exc:
+        db.rollback()
+        _raise_domain(exc)
 
 
 # Rotas compatíveis com o frontend atual. Este router é registrado antes dos
@@ -246,32 +381,12 @@ def mesclar_atendimentos_compativel(
     try:
         _materialize_table_accounts(db, rid, mesa_origem_id, actor_id=current_user.id)
         _materialize_table_accounts(db, rid, mesa_destino_id, actor_id=current_user.id)
-        merge_tables(
-            db, rid, mesa_origem_id, mesa_destino_id, actor_id=current_user.id
-        )
-        command = principal_command_for_comanda(
-            db,
-            rid,
-            next(
-                command.id
-                for command in db.query(Comanda)
-                .filter(
-                    Comanda.restaurante_id == rid,
-                    Comanda.mesa_id == mesa_destino_id,
-                    Comanda.fechada == False,
-                )
-                .order_by(Comanda.criado_em.asc(), Comanda.id.asc())
-                .all()
-            ),
-            actor_id=current_user.id,
-        )
+        merge_tables(db, rid, mesa_origem_id, mesa_destino_id, actor_id=current_user.id)
+        command = principal_command_for_table(db, rid, mesa_destino_id)
         if command is None:
             raise AtendimentoError("Atendimento mesclado sem comanda principal ativa", status_code=409)
         db.commit()
         db.refresh(command)
-    except StopIteration:
-        db.rollback()
-        raise HTTPException(status_code=409, detail="Atendimento mesclado sem comanda ativa")
     except AtendimentoError as exc:
         db.rollback()
         _raise_domain(exc)
@@ -367,9 +482,7 @@ def transferir_item_compativel(
         return existing
     try:
         _materialize_table_accounts(db, rid, nova_mesa_id, actor_id=current_user.id)
-        items = transfer_items_batch(
-            db, rid, [item_id], nova_mesa_id, actor_id=current_user.id
-        )
+        items = transfer_items_batch(db, rid, [item_id], nova_mesa_id, actor_id=current_user.id)
         db.commit()
         item = items[0]
         db.refresh(item)
@@ -389,9 +502,7 @@ def reabrir_comanda_compativel(
 ):
     rid = require_tenant_id()
     try:
-        command = reopen_command_guarded(
-            db, rid, comanda_id, actor_id=current_user.id
-        )
+        command = reopen_command_guarded(db, rid, comanda_id, actor_id=current_user.id)
         db.commit()
         db.refresh(command)
     except AtendimentoError as exc:
