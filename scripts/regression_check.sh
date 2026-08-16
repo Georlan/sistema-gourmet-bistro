@@ -133,7 +133,8 @@ run_flow_test \
   "tests/test_financial_cash_extreme_stage3c.py" \
   "tests/test_financial_refund_retry_stage3c.py" \
   "tests/test_financial_refund_listing_stage3c.py" \
-  "tests/test_financial_final_reconciliation_stage3d.py"
+  "tests/test_financial_final_reconciliation_stage3d.py" \
+  "tests/test_money_input_stage3d.py"
 
 echo ""
 echo -e "${BLUE}${BOLD}========================================================================${NC}"
