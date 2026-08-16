@@ -54,33 +54,6 @@ export const SangriaModal: React.FC<SangriaModalProps> = ({
         motivo: motivo.trim(),
         observacao: observacao.trim()
       });
-
-      try {
-        const dataHora = new Date().toLocaleString('pt-BR');
-        const comprovanteText = `
-==============================================
-          COMPROVANTE DE SANGRIA
-              RESTAURANTE KÔMA
-==============================================
-Data/Hora: ${dataHora}
-Turno: Caixa 1
-Autorizado por: Gerente (PIN Confirmado)
-
-TIPO: SANGRIA DE CAIXA
-VALOR: R$ ${valorNumerico.toFixed(2)}
-MOTIVO: ${motivo.trim()}
-==============================================
-Assinatura do Responsável: _________________
-==============================================
-        `.trim();
-
-        window.dispatchEvent(new CustomEvent('koma_print_receipt', {
-          detail: { title: 'Comprovante de Sangria', content: comprovanteText }
-        }));
-      } catch (printErr) {
-        console.warn('Erro ao disparar impressão de sangria:', printErr);
-      }
-
       onClose();
     } catch (err: any) {
       setErrorMsg(err.message || 'Erro ao registrar sangria.');
