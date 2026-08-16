@@ -17,6 +17,8 @@ from app.services.atendimentos import (
     ensure_launch_identity,
     format_order_family_id,
     merge_tables,
+    principal_command_for_comanda,
+    reconcile_table_principal,
     sequence_to_letters,
     transfer_group_by_comanda,
     transfer_items_batch,
@@ -166,6 +168,35 @@ def test_two_comandas_same_family_share_one_letter_sequence():
         db.close()
 
 
+def test_legacy_merge_materializes_two_families_without_collapsing_numbers():
+    db = SessionLocal()
+    try:
+        destination = _command(db, "c-legacy-47", 2, 47)
+        source = _command(db, "c-legacy-46", 2, 46)
+        source.mesa_origem_id = 4
+        launch47 = _launch(db, destination, "l-legacy-47-a", "i-legacy-47-a")
+        launch46 = _launch(db, source, "l-legacy-46-a", "i-legacy-46-a")
+
+        account47 = ensure_atendimento_for_comanda(db, destination)
+        account46 = ensure_atendimento_for_comanda(db, source)
+        assert account46.id != account47.id
+        assert account47.numero_conta == 47
+        assert account46.numero_conta == 46
+        assert account47.principal_id is None
+        assert account46.principal_id == account47.id
+        assert ensure_launch_identity(db, launch47).label == "47-A"
+        assert ensure_launch_identity(db, launch46).label == "46-A"
+
+        # Mesmo que a UI entregue uma comanda da família incorporada, o próximo
+        # clique em Confirmar deve ser direcionado para a família da mesa destino.
+        principal_command = principal_command_for_comanda(db, TENANT, source.id, actor_id=USER)
+        assert principal_command is not None
+        assert principal_command.id == destination.id
+        db.commit()
+    finally:
+        db.close()
+
+
 def test_busy_table_flow_keeps_ids_stable_across_transfers_merge_and_unmerge():
     db = SessionLocal()
     try:
@@ -189,12 +220,10 @@ def test_busy_table_flow_keeps_ids_stable_across_transfers_merge_and_unmerge():
         id47_a = ensure_launch_identity(db, launch47_a)
         assert id47_a.label == "47-A"
 
-        # Transferir para mesa ocupada não cria mesclagem implícita.
         with pytest.raises(AtendimentoError) as blocked:
             transfer_group_by_comanda(db, TENANT, family46_a.id, 2, actor_id=USER)
         assert blocked.value.status_code == 409
 
-        # Mesclar M4 em M2 preserva as duas famílias; #47 permanece principal.
         principal = merge_tables(db, TENANT, 4, 2, actor_id=USER)
         account46 = ensure_atendimento_for_comanda(db, family46_a)
         account47 = ensure_atendimento_for_comanda(db, family47)
@@ -206,10 +235,17 @@ def test_busy_table_flow_keeps_ids_stable_across_transfers_merge_and_unmerge():
         launch47_b = _launch(db, family47, "l-flow-47-b", "i-flow-47-b")
         assert ensure_launch_identity(db, launch47_b).label == "47-B"
 
-        # Desmesclar #46 reconstrói M4 pelo ledger, não por um único campo de último salto.
+        # Grupo mesclado inteiro pode mudar fisicamente sem renumerar famílias.
+        transfer_group_by_comanda(db, TENANT, family46_a.id, 8, actor_id=USER)
+        assert family46_a.mesa_id == family46_b.mesa_id == family47.mesa_id == 8
+        assert ensure_launch_identity(db, launch46_a).label == "46-A"
+        assert ensure_launch_identity(db, launch47_b).label == "47-B"
+
+        # Desmesclar #46 volta à origem da MESCLAGEM (M4), mesmo depois do grupo
+        # ter sido transferido de M2 para M8.
         unmerge_by_comanda(db, TENANT, family46_a.id, actor_id=USER)
         assert family46_a.mesa_id == family46_b.mesa_id == 4
-        assert family47.mesa_id == 2
+        assert family47.mesa_id == 8
         assert account46.principal_id is None
 
         moves46 = (
@@ -224,8 +260,46 @@ def test_busy_table_flow_keeps_ids_stable_across_transfers_merge_and_unmerge():
         transfers = [(move.mesa_origem_id, move.mesa_destino_id) for move in moves46 if move.tipo == "transferencia"]
         assert (1, 3) in transfers
         assert (3, 4) in transfers
+        assert (2, 8) in transfers
         assert any(move.tipo == "mesclagem" for move in moves46)
         assert any(move.tipo == "desmesclagem" for move in moves46)
+        db.commit()
+    finally:
+        db.close()
+
+
+def test_surviving_family_is_promoted_if_destination_family_closes():
+    db = SessionLocal()
+    try:
+        source = _command(db, "c-promote-46", 4, 46)
+        destination = _command(db, "c-promote-47", 2, 47)
+        launch46_a = _launch(db, source, "l-promote-46-a", "i-promote-46-a")
+        _launch(db, destination, "l-promote-47-a", "i-promote-47-a")
+        ensure_launch_identity(db, launch46_a)
+        ensure_atendimento_for_comanda(db, destination)
+        merge_tables(db, TENANT, 4, 2, actor_id=USER)
+
+        account46 = ensure_atendimento_for_comanda(db, source)
+        account47 = ensure_atendimento_for_comanda(db, destination)
+        assert account46.principal_id == account47.id
+
+        destination.fechada = True
+        destination.fechado_em = datetime.datetime.now(datetime.timezone.utc)
+        db.flush()
+        new_root = reconcile_table_principal(db, TENANT, 2, actor_id=USER)
+        assert new_root is not None
+        assert new_root.id == account46.id
+        assert account46.principal_id is None
+        assert account47.status == "fechado"
+
+        launch46_b = _launch(db, source, "l-promote-46-b", "i-promote-46-b")
+        assert ensure_launch_identity(db, launch46_b).label == "46-B"
+        assert principal_command_for_comanda(db, TENANT, source.id, actor_id=USER).id == source.id
+        assert db.query(MovimentoAtendimento).filter(
+            MovimentoAtendimento.restaurante_id == TENANT,
+            MovimentoAtendimento.atendimento_id == account46.id,
+            MovimentoAtendimento.tipo == "promocao_principal",
+        ).count() == 1
         db.commit()
     finally:
         db.close()
@@ -264,7 +338,6 @@ def test_batch_item_transfer_preserves_original_order_identity_and_is_atomic_on_
         assert all(item.lancamento_id == launch.id for item in moved)
         assert ensure_launch_identity(db, launch).label == original.label == "46-A"
 
-        # Validação ocorre antes da mutação: um ID inexistente impede todo o lote.
         command2 = _command(db, "c-item-60", 6, 60)
         launch2 = _launch(db, command2, "l-item-60-a", "i-item-60-a")
         ensure_launch_identity(db, launch2)
