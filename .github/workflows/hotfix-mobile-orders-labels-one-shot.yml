@@ -1,0 +1,165 @@
+name: Hotfix mobile orders operational labels one-shot
+
+on:
+  push:
+    branches:
+      - fix/mobile-orders-operational-labels
+    paths:
+      - .github/workflows/hotfix-mobile-orders-labels-one-shot.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/mobile-orders-operational-labels
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Apply exact responsive information-preservation patch
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          caixa_path = Path('src/components/CaixaPanel.tsx')
+          caixa = caixa_path.read_text(encoding='utf-8')
+          old_label = '<span>Autoaceite online</span>'
+          new_label = '<span className="orders-auto-accept__label">Aceitar pedidos online automaticamente</span>'
+          assert caixa.count(old_label) == 1, f'expected one legacy autoaccept label, found {caixa.count(old_label)}'
+          assert new_label not in caixa
+          caixa = caixa.replace(old_label, new_label, 1)
+          caixa_path.write_text(caixa, encoding='utf-8')
+
+          css_path = Path('src/index.css')
+          css = css_path.read_text(encoding='utf-8')
+
+          hidden_search = '''  .orders-search__result {
+            display: none;
+          }
+'''.replace('          ', '')
+          assert css.count(hidden_search) == 1, f'expected one hidden search-result rule, found {css.count(hidden_search)}'
+          css = css.replace(hidden_search, '', 1)
+
+          old_mobile = '''  .orders-toolbar__actions {
+            width: 100%;
+            gap: 0.55rem;
+          }
+
+          .orders-auto-accept > span:last-child,
+          .orders-delivery-total {
+            display: none;
+          }
+
+          .orders-new-orders {
+            margin-left: auto;
+          }
+'''.replace('          ', '')
+          new_mobile = '''  .orders-toolbar__actions {
+            width: 100%;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 0.55rem 0.75rem;
+          }
+
+          .orders-auto-accept {
+            min-width: 0;
+            white-space: normal;
+          }
+
+          .orders-switch {
+            flex: 0 0 auto;
+          }
+
+          .orders-auto-accept__label {
+            min-width: 0;
+            line-height: 1.25;
+            white-space: normal;
+          }
+
+          .orders-delivery-total {
+            grid-column: 1 / -1;
+            justify-self: start;
+            padding-left: 0;
+            border-left: 0;
+          }
+
+          .orders-new-orders {
+            margin-left: 0;
+            justify-self: end;
+          }
+'''.replace('          ', '')
+          assert css.count(old_mobile) == 1, f'expected one legacy mobile actions block, found {css.count(old_mobile)}'
+          assert new_mobile not in css
+          css = css.replace(old_mobile, new_mobile, 1)
+          css_path.write_text(css, encoding='utf-8')
+
+          test_path = Path('backend/tests/test_ui_theme_csp_stage4.py')
+          tests = test_path.read_text(encoding='utf-8')
+          marker = '\ndef test_temporary_stage4_patch_workflows_are_not_part_of_runtime_branch():\n'
+          assert tests.count(marker) == 1
+          regression = r'''
+
+def test_mobile_orders_toolbar_preserves_operational_information_instead_of_hiding_it():
+    css = source("src/index.css")
+    caixa = source("src/components/CaixaPanel.tsx")
+
+    assert "Aceitar pedidos online automaticamente" in caixa
+    assert 'className="orders-auto-accept__label"' in caixa
+    assert 'aria-label="Aceitar pedidos online automaticamente"' in caixa
+
+    # Responsividade deve reorganizar o toolbar, não remover significado.
+    assert ".orders-auto-accept > span:last-child" not in css
+    assert ".orders-search__result {\n    display: none;" not in css
+    assert ".orders-delivery-total {\n    display: none;" not in css
+
+    assert "grid-template-columns: minmax(0, 1fr) auto;" in css
+    assert ".orders-auto-accept__label" in css
+    assert "white-space: normal;" in css
+    assert ".orders-delivery-total" in css
+    assert "grid-column: 1 / -1;" in css
+'''
+          assert 'def test_mobile_orders_toolbar_preserves_operational_information_instead_of_hiding_it():' not in tests
+          tests = tests.replace(marker, regression + marker, 1)
+          test_path.write_text(tests, encoding='utf-8')
+          PY
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Production build
+        run: npm run build
+
+      - name: Run isolated responsive regression
+        run: |
+          python3 <<'PY'
+          import runpy
+          ns = runpy.run_path('backend/tests/test_ui_theme_csp_stage4.py')
+          ns['test_mobile_orders_toolbar_preserves_operational_information_instead_of_hiding_it']()
+          ns['test_orders_kanban_has_no_desktop_breakpoint_gap_that_hides_closing_column']()
+          PY
+
+      - name: Commit verified hotfix and remove one-shot workflow
+        run: |
+          git config user.name "Georlan"
+          git config user.email "129700145+Georlan@users.noreply.github.com"
+          git rm .github/workflows/hotfix-mobile-orders-labels-one-shot.yml
+          git add -A
+          git diff --cached --check
+          git commit -m "fix(ui): preserva informações operacionais no mobile"
+          git push origin HEAD:fix/mobile-orders-operational-labels
