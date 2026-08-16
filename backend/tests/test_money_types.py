@@ -2,6 +2,7 @@
 
 from sqlalchemy import Float, Numeric
 
+from app.financial_models import PagamentoAlocacao, PagamentoEstorno
 from app.models import (
     CaixaMovimentacao,
     CaixaTurno,
@@ -37,6 +38,8 @@ MONEY_COLUMNS = (
     (CaixaMovimentacao, "saldo_anterior", 2),
     (CaixaMovimentacao, "saldo_posterior", 2),
     (Pagamento, "valor", 2),
+    (PagamentoAlocacao, "valor", 2),
+    (PagamentoEstorno, "valor", 2),
     (ConfiguracaoRestaurante, "meta_mensal", 2),
     (OpcaoModificador, "preco_adicional", 2),
     (ItemModificador, "preco_aplicado", 2),
@@ -65,7 +68,7 @@ def test_all_monetary_columns_use_fixed_precision_numeric():
 def test_non_monetary_fractional_values_remain_float():
     for model, column_name in (
         (ConfiguracaoRestaurante, "taxa_servico_padrao"),
-        (Insumo, "estoque_atual"),
+        (Insum, "estoque_atual"),
         (ItemEntradaEstoque, "quantidade"),
         (MovimentacaoEstoque, "saldo_posterior"),
     ):
