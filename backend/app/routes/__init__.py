@@ -28,3 +28,7 @@ _financial_cash_routes.remaining_refund_allocations = _remaining_refund_allocati
 _financial_cash_routes._refundable_payment_payload = _refundable_payment_payload_human
 _cash_reconciliation.remaining_refund_allocations = _remaining_refund_allocations_guarded
 _financial_cash_routes.legacy_cash._atividades_recentes_turno = _recent_cash_activities
+
+# Precisa entrar depois dos patches acima: substitui somente a listagem de
+# estornáveis por um scanner paginado pós-filtro, sem tocar no POST transacional.
+from . import financial_refund_listing as _financial_refund_listing  # noqa: F401,E402
