@@ -11,7 +11,10 @@ on:
       - 'audit/**'
 
 concurrency:
-  group: quality-gate-${{ github.ref }}
+  # Push em audit/** e o pull_request da mesma branch recebem refs diferentes
+  # (`refs/heads/...` vs `refs/pull/...`). Agrupar pela branch de origem evita
+  # executar duas suítes idênticas para o mesmo head.
+  group: quality-gate-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 
 permissions:
