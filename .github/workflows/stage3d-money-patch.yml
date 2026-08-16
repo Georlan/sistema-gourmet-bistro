@@ -49,12 +49,11 @@ jobs:
           replace_exact("const [prodFormPreco, setProdFormPreco] = useState('');", "const [prodFormPreco, setProdFormPreco] = useState<number | ''>('');")
           replace_exact("const [pdvDeliveryTaxa, setPdvDeliveryTaxa] = useState('0.00');", "const [pdvDeliveryTaxa, setPdvDeliveryTaxa] = useState<number | ''>(0);")
 
-          replace_exact("parseFloat(saldoInicial) || 0", "Number(saldoInicial || 0)")
+          replace_exact("parseFloat(saldoInicial)", "Number(saldoInicial || 0)")
           replace_exact("parseFloat(paymentValor)", "Number(paymentValor || 0)", expected=4)
           replace_exact("parseFloat(prodFormPreco)", "Number(prodFormPreco || 0)")
           replace_exact("parseFloat(deliveryTaxa) || 0.0", "Number(deliveryTaxa || 0)")
 
-          # Valores calculados internamente já são números; não os reconverta para strings.
           text, payment_fixed = re.subn(
               r"setPaymentValor\(([^\n;]+?)\.toFixed\(2\)\);",
               r"setPaymentValor(\1);",
@@ -63,7 +62,6 @@ jobs:
           if payment_fixed < 5:
               raise SystemExit(f'Expected at least 5 numeric payment setters, found {payment_fixed}')
 
-          # Produto editado/duplicado entra no estado monetário como número.
           text, product_price_setters = re.subn(
               r"setProdFormPreco\(([^\n;]+?)\.preco\.toString\(\)\);",
               r"setProdFormPreco(Number(\1.preco) || 0);",
@@ -104,7 +102,6 @@ jobs:
           convert_input('insumoFormCusto', expected=2)
           convert_input('pdvDeliveryTaxa')
 
-          # Guardas contra regressões/parsers paralelos nos fluxos convertidos.
           forbidden = [
               'parseFloat(saldoInicial)',
               'parseFloat(paymentValor)',
