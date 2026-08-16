@@ -145,7 +145,7 @@ def stage2_data():
                     identificador="Cliente Stage2 B",
                     numero_pedido=8001,
                     fechada=False,
-                    delivery_status="preparando",
+                    delivery_status="producao",
                     delivery_taxa=0,
                     idempotency_key=ORDER_KEY_B,
                 ),
@@ -344,4 +344,4 @@ def test_public_order_status_can_resolve_each_tenant_without_authentication():
     response = client.get(f"/cardapio/pedidos/{ORDER_B}/status?key={ORDER_KEY_B}")
     assert response.status_code == 200, response.text
     assert response.json()["id"] == ORDER_B
-    assert response.json()["status"] == "preparando"
+    assert response.json()["status"] == "producao"
