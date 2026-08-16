@@ -1081,7 +1081,7 @@ export function CaixaPanel({
   const [showNewCrmModal, setShowNewCrmModal] = useState(false);
   const [newCrmNome, setNewCrmNome] = useState('');
   const [newCrmTelefone, setNewCrmTelefone] = useState('');
-  const [newCrmSaldo, setNewCrmSaldo] = useState<string>('0');
+  const [newCrmSaldo, setNewCrmSaldo] = useState<number | ''>(0);
   
   // Form states for Product Modal
   const [prodFormId, setProdFormId] = useState('');
@@ -7066,12 +7066,20 @@ export function CaixaPanel({
 
                     <div className="space-y-1">
                       <label className={clsx('text-[9px]', 'font-bold', 'text-koma-secondary', 'uppercase', 'tracking-wider', 'block')}>Valor:</label>
-                      <input
-                        type="number"
-                        value={newCouponVal}
-                        onChange={(e) => setNewCouponVal(Number(e.target.value))}
-                        className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'font-mono', 'text-[10px]')}
-                      />
+                      {newCouponTipo === 'fixo' ? (
+              <MoneyInput
+                value={newCouponVal}
+                onValueChange={(value) => setNewCouponVal(Number(value || 0))}
+                className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'font-mono', 'text-[10px]')}
+              />
+            ) : (
+              <input
+                type="number"
+                value={newCouponVal}
+                onChange={(e) => setNewCouponVal(Number(e.target.value))}
+                className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'font-mono', 'text-[10px]')}
+              />
+            )}
                     </div>
                   </div>
 
@@ -8261,7 +8269,7 @@ export function CaixaPanel({
                     onClick={() => {
                       setNewCrmNome('');
                       setNewCrmTelefone('');
-                      setNewCrmSaldo('0');
+                      setNewCrmSaldo(0);
                       setShowNewCrmModal(true);
                     }}
                     className={clsx('px-4', 'py-2', 'koma-btn-success', 'rounded-xl', 'text-xs', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-xs', 'self-start', 'sm:self-auto')}
@@ -8318,7 +8326,7 @@ export function CaixaPanel({
                       onClick: () => {
                         setNewCrmNome('');
                         setNewCrmTelefone('');
-                        setNewCrmSaldo('0');
+                        setNewCrmSaldo(0);
                         setShowNewCrmModal(true);
                       },
                     }}
@@ -10344,14 +10352,12 @@ export function CaixaPanel({
                 ) : (
                   <div className={clsx('space-y-1', 'col-span-2')}>
                     <label className={clsx('text-[10px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>Saldo Cashback R$ (Ajuste):</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      required
-                      value={crmFormCashback}
-                      onChange={(e) => setCrmFormCashback(Number(e.target.value))}
-                      className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-panel', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono', 'text-xs')}
-                    />
+                    <MoneyInput
+            required
+            value={crmFormCashback}
+            onValueChange={(value) => setCrmFormCashback(Number(value || 0))}
+            className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-panel', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono', 'text-xs')}
+          />
                   </div>
                 )}
               </div>
@@ -10402,7 +10408,7 @@ export function CaixaPanel({
                   alert('Preencha todos os campos!');
                   return;
                 }
-                const created = await handleCreateClient(newCrmNome, newCrmTelefone, Number(newCrmSaldo));
+                const created = await handleCreateClient(newCrmNome, newCrmTelefone, Number(newCrmSaldo || 0));
                 if (created) setShowNewCrmModal(false);
               }}
               className="space-y-4"
@@ -10436,13 +10442,21 @@ export function CaixaPanel({
                 <label className={clsx('text-[10px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>
                   {fidelidadeConfig.tipo_recompensa === 'PONTOS' ? 'Pontos Iniciais:' : 'Cashback Inicial R$:'}
                 </label>
-                <input
-                  type="number"
-                  step={fidelidadeConfig.tipo_recompensa === 'PONTOS' ? '1' : '0.01'}
-                  value={newCrmSaldo}
-                  onChange={(e) => setNewCrmSaldo(e.target.value)}
-                  className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-panel', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono', 'text-xs')}
-                />
+                {fidelidadeConfig.tipo_recompensa === 'PONTOS' ? (
+        <input
+          type="number"
+          step="1"
+          value={newCrmSaldo}
+          onChange={(e) => setNewCrmSaldo(e.target.value === '' ? '' : Number(e.target.value))}
+          className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-panel', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono', 'text-xs')}
+        />
+      ) : (
+        <MoneyInput
+          value={newCrmSaldo}
+          onValueChange={setNewCrmSaldo}
+          className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-panel', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono', 'text-xs')}
+        />
+      )}
               </div>
 
               <div className={clsx('flex', 'gap-2', 'pt-2')}>
