@@ -94,7 +94,7 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess }
   const multipleOrigins = (selected?.origens_financeiras?.filter(origin => origin.saldo_estornavel > 0).length || 0) > 1;
   const refundValue = Number(value || 0);
   const isFullRemaining = !!selected && Math.abs(refundValue - selected.saldo_estornavel) < 0.005;
-  const explicitOriginTotal = Object.values(originValues).reduce(
+  const explicitOriginTotal = Object.values(originValues).reduce<number>(
     (total, current) => total + Number(current || 0),
     0,
   );
