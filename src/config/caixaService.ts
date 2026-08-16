@@ -32,9 +32,21 @@ export const cadastrarFuncionario = async (payload: { nome: string; telefone: st
   return res.json();
 };
 
+export const imprimirComprovanteFechamento = async (turnoId: number): Promise<void> => {
+  const res = await fetch(`${API_BASE_URL}/impressao/caixa/turnos/${turnoId}/comprovante`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Falha ao enfileirar o comprovante de fechamento');
+  }
+};
+
 export const API = {
   getFuncionarios,
-  cadastrarFuncionario
+  cadastrarFuncionario,
+  imprimirComprovanteFechamento,
 };
 
 export default API;
