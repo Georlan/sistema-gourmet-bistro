@@ -8,13 +8,14 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db, require_tenant_id
 from ..models import Comanda, Item, Usuario
-from ..schemas import ComandaResponse, ItemResponse
+from ..schemas import ComandaResponse, ItemResponse, LancamentoCreate, LancamentoResponse
 from ..security import get_current_user, require_permission
 from ..services.atendimentos import (
     AtendimentoError,
     ensure_atendimento_for_comanda,
     get_table_family_snapshot,
     merge_tables,
+    principal_command_for_comanda,
     reopen_command_guarded,
     transfer_group_by_comanda,
     transfer_items_batch,
@@ -145,6 +146,64 @@ def imprimir_recibo_mesa_com_identidade(
     }
 
 
+# Depois de uma mesclagem, a família da mesa destino é a principal. O frontend
+# legado pode ainda apontar para uma Comanda da família incorporada; este
+# adaptador redireciona o NOVO lançamento para a Comanda principal, sem alterar
+# nenhum lançamento/ID antigo.
+@router.post(
+    "/comandas/{comanda_id}/lancamentos",
+    response_model=LancamentoResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def lancar_itens_na_familia_principal(
+    comanda_id: str,
+    lancamento_in: LancamentoCreate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    rid = require_tenant_id()
+    try:
+        supplied = db.query(Comanda).filter(
+            Comanda.restaurante_id == rid,
+            Comanda.id == comanda_id,
+        ).first()
+        if supplied is None:
+            raise AtendimentoError("Comanda não encontrada", status_code=404)
+        if supplied.tipo != "Consumo no Local" or supplied.mesa_id is None:
+            # Delivery/retirada mantêm exatamente o fluxo especializado legado.
+            from .orders import lancar_itens
+            return lancar_itens(
+                comanda_id,
+                lancamento_in,
+                background_tasks,
+                db,
+                current_user,
+            )
+
+        _materialize_table_accounts(db, rid, int(supplied.mesa_id), actor_id=current_user.id)
+        principal = principal_command_for_comanda(
+            db,
+            rid,
+            comanda_id,
+            actor_id=current_user.id,
+        )
+        if principal is None:
+            raise AtendimentoError("Família principal sem comanda aberta", status_code=409)
+    except AtendimentoError as exc:
+        db.rollback()
+        _raise_domain(exc)
+
+    from .orders import lancar_itens
+    return lancar_itens(
+        principal.id,
+        lancamento_in,
+        background_tasks,
+        db,
+        current_user,
+    )
+
+
 # Rotas compatíveis com o frontend atual. Este router é registrado antes dos
 # routers legados para que transferências e mesclagens usem a família inteira.
 @router.post(
@@ -190,20 +249,29 @@ def mesclar_atendimentos_compativel(
         merge_tables(
             db, rid, mesa_origem_id, mesa_destino_id, actor_id=current_user.id
         )
-        command = (
-            db.query(Comanda)
-            .filter(
-                Comanda.restaurante_id == rid,
-                Comanda.mesa_id == mesa_destino_id,
-                Comanda.fechada == False,
-            )
-            .order_by(Comanda.criado_em.asc(), Comanda.id.asc())
-            .first()
+        command = principal_command_for_comanda(
+            db,
+            rid,
+            next(
+                command.id
+                for command in db.query(Comanda)
+                .filter(
+                    Comanda.restaurante_id == rid,
+                    Comanda.mesa_id == mesa_destino_id,
+                    Comanda.fechada == False,
+                )
+                .order_by(Comanda.criado_em.asc(), Comanda.id.asc())
+                .all()
+            ),
+            actor_id=current_user.id,
         )
         if command is None:
-            raise AtendimentoError("Atendimento mesclado sem comanda ativa", status_code=409)
+            raise AtendimentoError("Atendimento mesclado sem comanda principal ativa", status_code=409)
         db.commit()
         db.refresh(command)
+    except StopIteration:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Atendimento mesclado sem comanda ativa")
     except AtendimentoError as exc:
         db.rollback()
         _raise_domain(exc)
