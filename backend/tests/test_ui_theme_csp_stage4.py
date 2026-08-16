@@ -160,6 +160,28 @@ def test_mobile_contracts_cover_salao_cardapio_relatorios_and_fechamento():
     assert "divide-[#252b28]" not in closing
 
 
+def test_orders_kanban_has_no_desktop_breakpoint_gap_that_hides_closing_column():
+    css = source("src/index.css")
+    caixa = source("src/components/CaixaPanel.tsx")
+
+    # O modo compacto termina em 63rem. Logo acima disso, o desktop precisa
+    # imediatamente usar colunas flexíveis; um segundo breakpoint em 68rem
+    # criava uma faixa em que a terceira coluna ficava fora da viewport.
+    assert "@container (max-width: 63rem)" in css
+    assert "@container (min-width: 63rem)" in css
+    assert "@container (min-width: 68rem)" not in css
+
+    desktop_block = css.split("@container (min-width: 63rem)", 1)[1].split("@container (max-width: 63rem)", 1)[0]
+    assert "grid-template-columns: var(--orders-columns, repeat(3, minmax(0, 1fr)));" in desktop_block
+    assert ".orders-column" in desktop_block
+    assert "min-width: 0;" in desktop_block
+
+    # A terceira etapa continua estruturalmente presente no Kanban.
+    assert "orders-column--closing" in caixa
+    assert "03 / FECHAMENTO" in caixa
+    assert "Prontos para concluir" in caixa
+
+
 def test_temporary_stage4_patch_workflows_are_not_part_of_runtime_branch():
     assert not (ROOT / ".github/workflows/stage4b-one-shot.yml").exists()
     assert not (ROOT / ".github/workflows/stage4c-one-shot.yml").exists()
