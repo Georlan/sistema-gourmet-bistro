@@ -45,7 +45,6 @@ def setup_printing_architecture(monkeypatch):
     token = current_restaurante_id.set(TENANT_ID)
     db = SessionLocal()
     try:
-        # Limpeza isolada dos dados usados por esta suíte.
         db.query(PrintJob).filter(PrintJob.restaurante_id.in_([TENANT_ID, OTHER_TENANT_ID])).delete(synchronize_session=False)
         db.query(Item).filter(Item.restaurante_id.in_([TENANT_ID, OTHER_TENANT_ID])).delete(synchronize_session=False)
         db.query(Lancamento).filter(Lancamento.restaurante_id.in_([TENANT_ID, OTHER_TENANT_ID])).delete(synchronize_session=False)
@@ -193,19 +192,34 @@ def _jobs() -> list[PrintJob]:
         db.close()
 
 
-def test_automatico_extrato_e_reimpressao_usam_o_mesmo_documento_de_mesa():
+def test_lancamentos_automaticos_sao_parciais_e_extrato_e_mesa_inteira():
     comanda_id = _open_table_order()
-    lancamento_id = _launch(comanda_id, PRODUTO_1, "A")
+    lancamento_1 = _launch(comanda_id, PRODUTO_1, "A")
+    lancamento_2 = _launch(comanda_id, PRODUTO_2, "A")
 
-    jobs_after_launch = _jobs()
-    assert len(jobs_after_launch) == 1
-    automatic = jobs_after_launch[0]
-    assert automatic.document_type == "mesa"
-    assert automatic.destination == "FECHAMENTO"
-    assert automatic.source_type == "lancamento"
-    assert "CONSUMO NO LOCAL" in automatic.payload_text
-    assert "CLIENTE: A" in automatic.payload_text
-    assert "R$ 19,00" in automatic.payload_text
+    jobs = _jobs()
+    assert len(jobs) == 2
+
+    first, second = jobs
+    assert first.document_type == "producao"
+    assert first.destination == "COZINHA"
+    assert first.source_type == "lancamento"
+    assert first.source_id == lancamento_1
+    assert "1x HAMBÚRGUER ARQUITETURA" in first.payload_text
+    assert "1x CHEESE ARQUITETURA" not in first.payload_text
+    assert "R$ 19,00" in first.payload_text
+    assert "TOTAL DESTE PEDIDO:" in first.payload_text
+    assert "TOTAL GERAL DA MESA:" not in first.payload_text
+
+    assert second.document_type == "producao"
+    assert second.destination == "COZINHA"
+    assert second.source_type == "lancamento"
+    assert second.source_id == lancamento_2
+    assert "1x CHEESE ARQUITETURA" in second.payload_text
+    assert "1x HAMBÚRGUER ARQUITETURA" not in second.payload_text
+    assert "R$ 25,00" in second.payload_text
+    assert "TOTAL DESTE PEDIDO:" in second.payload_text
+    assert first.idempotency_key != second.idempotency_key
 
     extrato = client.post(
         f"/mesas/{MESA_ID}/imprimir-recibo",
@@ -214,40 +228,36 @@ def test_automatico_extrato_e_reimpressao_usam_o_mesmo_documento_de_mesa():
     )
     assert extrato.status_code == 200, extrato.text
 
-    jobs_after_extract = _jobs()
-    assert len(jobs_after_extract) == 2
-    explicit = jobs_after_extract[-1]
-    assert explicit.document_type == "mesa"
-    assert explicit.destination == "FECHAMENTO"
-    assert explicit.payload_text == automatic.payload_text
+    complete = _jobs()[-1]
+    assert complete.document_type == "mesa"
+    assert complete.destination == "FECHAMENTO"
+    assert "1x HAMBÚRGUER ARQUITETURA" in complete.payload_text
+    assert "1x CHEESE ARQUITETURA" in complete.payload_text
+    assert "R$ 44,00" in complete.payload_text
+    assert "TOTAL GERAL DA MESA:" in complete.payload_text
+    assert "TOTAL DESTE PEDIDO:" not in complete.payload_text
 
+
+def test_reimpressao_de_lote_repete_somente_a_instancia_original():
+    comanda_id = _open_table_order()
+    lancamento_1 = _launch(comanda_id, PRODUTO_1, "A")
+    _launch(comanda_id, PRODUTO_2, "A")
+
+    original_first = _jobs()[0]
     reprint = client.post(
-        f"/comandas/lancamentos/{lancamento_id}/reimprimir",
+        f"/comandas/lancamentos/{lancamento_1}/reimprimir",
         headers=_headers(USER_ID),
     )
     assert reprint.status_code == 200, reprint.text
 
-    jobs_after_reprint = _jobs()
-    assert len(jobs_after_reprint) == 3
-    reprinted = jobs_after_reprint[-1]
+    reprinted = _jobs()[-1]
     assert reprinted.source_type == "reimpressao"
-    assert reprinted.document_type == "mesa"
-    assert reprinted.destination == "FECHAMENTO"
-    assert reprinted.payload_text == automatic.payload_text
-
-
-def test_segundo_lancamento_imprime_snapshot_completo_sem_duplicar_jobs():
-    comanda_id = _open_table_order()
-    _launch(comanda_id, PRODUTO_1)
-    _launch(comanda_id, PRODUTO_2)
-
-    jobs = _jobs()
-    assert len(jobs) == 2
-    second = jobs[-1]
-    assert "1x HAMBÚRGUER ARQUITETURA" in second.payload_text
-    assert "1x CHEESE ARQUITETURA" in second.payload_text
-    assert "R$ 44,00" in second.payload_text
-    assert jobs[0].idempotency_key != jobs[1].idempotency_key
+    assert reprinted.source_id == lancamento_1
+    assert reprinted.document_type == "producao"
+    assert reprinted.destination == "COZINHA"
+    assert "1x HAMBÚRGUER ARQUITETURA" in reprinted.payload_text
+    assert "1x CHEESE ARQUITETURA" not in reprinted.payload_text
+    assert reprinted.payload_text == original_first.payload_text
 
 
 def test_idempotency_key_estavel_nao_cria_segunda_via_automatica():
