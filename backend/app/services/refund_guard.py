@@ -9,7 +9,11 @@ from sqlalchemy.orm import Session
 from ..financial_models import PagamentoAlocacao, PagamentoEstorno
 from ..financial_refund_models import PagamentoEstornoAlocacao
 from ..models import Pagamento
-from .cash_reconciliation import RefundDomainError, create_refund
+from .cash_reconciliation import (
+    RefundDomainError,
+    create_refund,
+    remaining_refund_allocations as _base_remaining_refund_allocations,
+)
 from .financeiro import money
 
 
@@ -18,12 +22,7 @@ def _historical_refund_state(
     restaurante_id: int,
     payment_id: str,
 ) -> tuple[Decimal, Decimal, Decimal, int]:
-    """Retorna total estornado, total com origem, residual legado e nº origens.
-
-    Estornos do checkpoint 3A podem existir sem `PagamentoEstornoAlocacao`.
-    Esse residual é seguro quando o pagamento possui uma única origem, mas não
-    pode ser atribuído retroativamente por hipótese se havia várias Contas.
-    """
+    """Retorna total estornado, total com origem, residual legado e nº origens."""
     refund_total = money(
         db.query(func.coalesce(func.sum(PagamentoEstorno.valor), 0))
         .filter(
@@ -57,9 +56,77 @@ def _historical_refund_state(
         .scalar()
         or 0
     )
-    # Sem ledger de alocação, payment.comanda_id constitui uma única origem
-    # histórica compatível para fins deste guard.
     return refund_total, allocated_total, unattributed, max(1, origin_count)
+
+
+def remaining_refund_allocations_guarded(
+    db: Session,
+    restaurante_id: int,
+    payment: Pagamento,
+) -> list[dict[str, object]]:
+    """Saldo estornável usado tanto pela UI quanto pela validação transacional.
+
+    Estornos do 3A podem não ter origem materializada. Em uma única origem o
+    residual legado é abatido com segurança. Em múltiplas origens a distribuição
+    passada é desconhecida; o pagamento fica visivelmente bloqueado em vez de
+    exibir saldo falso ou ratear por hipótese.
+    """
+    rows = [dict(row) for row in _base_remaining_refund_allocations(
+        db,
+        restaurante_id,
+        payment,
+    )]
+    refund_total, allocated_total, unattributed, origin_count = _historical_refund_state(
+        db,
+        restaurante_id,
+        str(payment.id),
+    )
+
+    global_available = money(payment.valor) - refund_total
+    if global_available < 0:
+        for row in rows:
+            row["disponivel"] = Decimal("0.00")
+            row["bloqueado"] = True
+            row["motivo_bloqueio"] = (
+                "Histórico inconsistente: estornos acima do valor original."
+            )
+        return rows
+
+    if unattributed <= 0:
+        return rows
+
+    if origin_count > 1:
+        for row in rows:
+            row["disponivel"] = Decimal("0.00")
+            row["bloqueado"] = True
+            row["motivo_bloqueio"] = (
+                "Há estorno histórico sem origem entre múltiplas Contas; revisão financeira necessária."
+            )
+        return rows
+
+    # Única origem: todo residual legado necessariamente pertence a ela.
+    if rows:
+        row = rows[0]
+        row["estornado"] = money(row.get("estornado", 0)) + unattributed
+        row["disponivel"] = max(
+            Decimal("0.00"),
+            money(row.get("disponivel", 0)) - unattributed,
+        )
+        row["bloqueado"] = False
+        row["motivo_bloqueio"] = None
+
+    # Defesa final: a soma visual nunca pode superar o saldo global real.
+    visible = money(sum(
+        (money(row.get("disponivel", 0)) for row in rows),
+        Decimal("0.00"),
+    ))
+    if visible > global_available and rows:
+        excess = money(visible - global_available)
+        rows[-1]["disponivel"] = max(
+            Decimal("0.00"),
+            money(rows[-1].get("disponivel", 0)) - excess,
+        )
+    return rows
 
 
 def create_refund_guarded(
