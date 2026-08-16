@@ -245,6 +245,7 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess }
                   <select value={payoutMethod} onChange={event => setPayoutMethod(event.target.value)} className="w-full rounded-xl border border-koma-border bg-koma-input px-3 py-3 text-xs text-koma-foreground outline-none focus:border-rose-500/50">
                     <option value="dinheiro">Dinheiro</option>
                     <option value="pix">Pix</option>
+                    <option value="cartao">Cartão</option>
                     <option value="cartao_credito">Cartão de crédito</option>
                     <option value="cartao_debito">Cartão de débito</option>
                   </select>
