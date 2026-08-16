@@ -182,6 +182,25 @@ def test_orders_kanban_has_no_desktop_breakpoint_gap_that_hides_closing_column()
     assert "Prontos para concluir" in caixa
 
 
+
+def test_mobile_orders_toolbar_preserves_operational_information_instead_of_hiding_it():
+    css = source("src/index.css")
+    caixa = source("src/components/CaixaPanel.tsx")
+
+    assert "Aceitar pedidos online automaticamente" in caixa
+    assert 'className="orders-auto-accept__label"' in caixa
+    assert 'aria-label="Aceitar pedidos online automaticamente"' in caixa
+
+    # Responsividade deve reorganizar o toolbar, não remover significado.
+    assert ".orders-auto-accept > span:last-child" not in css
+    assert ".orders-search__result {\n    display: none;" not in css
+    assert ".orders-delivery-total {\n    display: none;" not in css
+
+    assert "grid-template-columns: minmax(0, 1fr) auto;" in css
+    assert ".orders-auto-accept__label" in css
+    assert "white-space: normal;" in css
+    assert "grid-column: 1 / -1;" in css
+
 def test_temporary_stage4_patch_workflows_are_not_part_of_runtime_branch():
     assert not (ROOT / ".github/workflows/stage4b-one-shot.yml").exists()
     assert not (ROOT / ".github/workflows/stage4c-one-shot.yml").exists()
