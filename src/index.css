@@ -1343,7 +1343,7 @@ body {
   background: rgba(0, 201, 150, 0.2);
 }
 
-@container (min-width: 68rem) {
+@container (min-width: 63rem) {
   .orders-board {
     grid-template-columns: var(--orders-columns, repeat(3, minmax(0, 1fr)));
   }
