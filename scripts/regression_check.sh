@@ -121,9 +121,10 @@ run_flow_test \
   "tests/test_stage2_multitenant_rbac.py"
 
 run_flow_test \
-  "10. Consistência financeira (precisão, ledger, estornos e dia operacional)" \
+  "10. Consistência financeira (precisão, ledger, alocação, estornos e dia operacional)" \
   "tests/test_money_types.py" \
-  "tests/test_financial_ledger_stage3.py"
+  "tests/test_financial_ledger_stage3.py" \
+  "tests/test_financial_allocation_stage3.py"
 
 echo ""
 echo -e "${BLUE}${BOLD}========================================================================${NC}"
