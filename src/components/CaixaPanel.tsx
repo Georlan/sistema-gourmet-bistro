@@ -15,6 +15,7 @@ import {
 import { Order, OrderItem, CaixaTurno, CaixaMovimentacao, Pagamento, Table, Product, EntradaEstoque, MovimentacaoEstoque, SessaoContagemEstoque, CaixaTurnoResumo, FechamentoCaixaResult } from '../types';
 import { EstoqueEntradasTab } from './estoque/EstoqueEntradasTab';
 import { EntradaManualModal } from './estoque/EntradaManualModal';
+import MoneyInput from './MoneyInput';
 import { EstoqueMovimentacoesTab } from './estoque/EstoqueMovimentacoesTab';
 import { MovimentacaoEstoqueModal } from './estoque/MovimentacaoEstoqueModal';
 import { EstoqueContagemTab } from './estoque/EstoqueContagemTab';
@@ -1085,7 +1086,7 @@ export function CaixaPanel({
   // Form states for Product Modal
   const [prodFormId, setProdFormId] = useState('');
   const [prodFormNome, setProdFormNome] = useState('');
-  const [prodFormPreco, setProdFormPreco] = useState('');
+  const [prodFormPreco, setProdFormPreco] = useState<number | ''>('');
   const [prodFormCategoriaId, setProdFormCategoriaId] = useState('');
   const [prodFormDescricao, setProdFormDescricao] = useState('');
   const [prodFormImagem, setProdFormImagem] = useState('');
@@ -1119,7 +1120,7 @@ export function CaixaPanel({
   const [distFormLeadTime, setDistFormLeadTime] = useState<number>(3);
 
   // Form states
-  const [saldoInicial, setSaldoInicial] = useState('100.00');
+  const [saldoInicial, setSaldoInicial] = useState<number | ''>(100);
 
   // Counted values for closing cashier
 
@@ -1130,7 +1131,7 @@ export function CaixaPanel({
   const [unificarViasDelivery, setUnificarViasDelivery] = useState(false);
   const [splitPeople, setSplitPeople] = useState('1');
   const [paymentMetodo, setPaymentMetodo] = useState<'dinheiro' | 'pix' | 'cartao' | 'cartao_debito' | 'cartao_credito'>('pix');
-  const [paymentValor, setPaymentValor] = useState('');
+  const [paymentValor, setPaymentValor] = useState<number | ''>('');
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
 
   const updateConfiguracoes = async (updates: {
@@ -1323,7 +1324,7 @@ export function CaixaPanel({
   const [paymentCPF, setPaymentCPF] = useState('');
   const [pdvOrderType, setPdvOrderType] = useState<'retirada' | 'entrega' | 'mesa'>('retirada');
   const [pdvDeliveryAddress, setPdvDeliveryAddress] = useState('');
-  const [pdvDeliveryTaxa, setPdvDeliveryTaxa] = useState('0.00');
+  const [pdvDeliveryTaxa, setPdvDeliveryTaxa] = useState<number>(0);
   const [pdvTargetMesaId, setPdvTargetMesaId] = useState<number>(0);
   const selectedPdvTableOption = pdvTableOptions.find(option => option.table.id === pdvTargetMesaId);
   const pdvCartItemCount = pdvCart.reduce((sum, item) => sum + item.quantity, 0);
@@ -1388,10 +1389,10 @@ export function CaixaPanel({
   // Auto-initialize paymentValor with open balance when checkout modal opens
   useEffect(() => {
     if (showCheckoutModal && selectedOrder) {
-      if (!paymentValor || parseFloat(paymentValor) <= 0) {
+      if (!paymentValor || Number(paymentValor || 0) <= 0) {
         const balance = getCheckoutBalance(selectedOrder);
         if (balance > 0) {
-          setPaymentValor(balance.toFixed(2));
+          setPaymentValor(balance);
         }
       }
     } else if (!showCheckoutModal) {
@@ -2964,7 +2965,7 @@ export function CaixaPanel({
       const res = await fetch(`${apiBaseUrl}/caixa/turno/abrir`, {
         method: 'POST',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ saldo_inicial: parseFloat(saldoInicial) })
+        body: JSON.stringify({ saldo_inicial: Number(saldoInicial || 0) })
       });
       if (res.ok) {
         setShowAbrirModal(false);
@@ -2987,7 +2988,7 @@ export function CaixaPanel({
     setIsProcessingPayment(true);
 
     try {
-      let valorPagamento = parseFloat(paymentValor);
+      let valorPagamento = Number(paymentValor || 0);
       if (!Number.isFinite(valorPagamento) || valorPagamento <= 0) {
         const autoBalance = getCheckoutBalance(selectedOrder);
         if (autoBalance > 0) {
@@ -3056,7 +3057,7 @@ export function CaixaPanel({
         const comandaEntries = Object.entries(itemsByComanda);
         let idx = 0;
         const totalSubtotal = Object.values(itemsByComanda).reduce((sum, d) => sum + d.subtotal, 0);
-        const originalVal = parseFloat(paymentValor);
+        const originalVal = Number(paymentValor || 0);
 
         for (const [cid, data] of comandaEntries) {
           const isLast = idx === comandaEntries.length - 1;
@@ -3087,7 +3088,7 @@ export function CaixaPanel({
         }
       } else {
         // Opção 2: Valor geral. Liquida as comandas sequencialmente
-        let remainingVal = parseFloat(paymentValor);
+        let remainingVal = Number(paymentValor || 0);
 
         for (const cid of comandaIds) {
           if (remainingVal <= 0.01) break;
@@ -3429,7 +3430,7 @@ export function CaixaPanel({
     setPdvCustomerLookup('idle');
     setPdvCustomerCPF('');
     setPdvDeliveryAddress('');
-    setPdvDeliveryTaxa('0.00');
+    setPdvDeliveryTaxa(0);
 
     try {
       const itemsList = cartItems.flatMap(item =>
@@ -3451,7 +3452,7 @@ export function CaixaPanel({
           delivery_status: orderType === 'mesa' ? undefined : 'producao',
           delivery_telefone: orderType === 'mesa' ? undefined : customerPhone,
           delivery_endereco: orderType === 'entrega' ? deliveryAddress : undefined,
-          delivery_taxa: orderType === 'entrega' ? parseFloat(deliveryTaxa) || 0.0 : 0.0,
+          delivery_taxa: orderType === 'entrega' ? Number(deliveryTaxa || 0) : 0.0,
           itens: itemsList
         })
       });
@@ -5129,7 +5130,7 @@ export function CaixaPanel({
                                     .reduce((sum, item) => sum + item.preco, 0);
                                   const total = sub * (1.0 + (taxaServicoAtiva ? serviceTaxRate / 100 : 0));
                                   setPaymentValor(
-                                    Math.max(0, total - Number(checkoutOrder.valorPago || 0)).toFixed(2)
+                                    Math.max(0, total - Number(checkoutOrder.valorPago || 0))
                                   );
                                 }}
                                 className={clsx('orders-card__action', 'w-full', 'py-2', 'px-3', 'h-8', 'sm:h-9', 'font-bold', 'text-xs', 'sm:text-sm', 'rounded-xl', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1.5')}
@@ -5234,7 +5235,7 @@ export function CaixaPanel({
                                     setSplitPeople('1');
                                     setSelectedItemIds([]);
                                     const sub = fullOrder.itens.filter((item: any) => !item.pago).reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
-                                    setPaymentValor(sub.toFixed(2));
+                                    setPaymentValor(sub);
                                   } else {
                                     handleFinalizarPedido(order.id);
                                   }
@@ -5955,7 +5956,7 @@ export function CaixaPanel({
                                           .filter(item => (item.status as string) !== 'cancelado')
                                           .reduce((sum, item) => sum + item.preco, 0);
                                         const checkoutTotal = subtotal * (1.0 + (taxaServicoAtiva ? serviceTaxRate / 100 : 0));
-                                        setPaymentValor(Math.max(0, checkoutTotal - Number(checkoutOrder.valorPago || 0)).toFixed(2));
+                                        setPaymentValor(Math.max(0, checkoutTotal - Number(checkoutOrder.valorPago || 0)));
                                       }}
                                       className={clsx('flex', 'min-h-8 sm:min-h-9', 'flex-1', 'items-center', 'justify-center', 'gap-1', 'rounded-lg', 'koma-badge-warning', 'hover:bg-amber-200 dark:hover:bg-amber-900/40', 'px-2', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wide', 'transition-colors', 'disabled:cursor-wait', 'disabled:opacity-45', 'cursor-pointer')}
                                     >
@@ -7359,7 +7360,7 @@ export function CaixaPanel({
                 setEditingProduct(product);
                 setProdFormId(product.id);
                 setProdFormNome(product.nome);
-                setProdFormPreco(product.preco.toString());
+                setProdFormPreco(Number(product.preco) || 0);
                 setProdFormCategoriaId(product.categoria_id || '');
                 setProdFormDescricao(product.descricao || '');
                 const gallery = product.imagens_galeria || [];
@@ -7373,7 +7374,7 @@ export function CaixaPanel({
                 setEditingProduct(null);
                 setProdFormId('');
                 setProdFormNome(`${product.nome} (Cópia)`);
-                setProdFormPreco(product.preco.toString());
+                setProdFormPreco(Number(product.preco) || 0);
                 setProdFormCategoriaId(product.categoria_id || '');
                 setProdFormDescricao(product.descricao || '');
                 const gallery = product.imagens_galeria || [];
@@ -7563,7 +7564,7 @@ export function CaixaPanel({
                                   setEditingProduct(null);
                                   setProdFormId('');
                                   setProdFormNome(`${prod.nome} (Cópia)`);
-                                  setProdFormPreco(prod.preco.toString());
+                                  setProdFormPreco(Number(prod.preco) || 0);
                                   setProdFormCategoriaId((prod as any).categoria_id || '');
                                   setProdFormDescricao((prod as any).descricao || '');
                                   const galeriaDup = (prod as any).imagens_galeria || [];
@@ -7583,7 +7584,7 @@ export function CaixaPanel({
                                   setEditingProduct(prod);
                                   setProdFormId(prod.id);
                                   setProdFormNome(prod.nome);
-                                  setProdFormPreco(prod.preco.toString());
+                                  setProdFormPreco(Number(prod.preco) || 0);
                                   setProdFormCategoriaId((prod as any).categoria_id || '');
                                   setProdFormDescricao((prod as any).descricao || '');
                                   const galeriaEdit = (prod as any).imagens_galeria || [];
@@ -9041,12 +9042,10 @@ export function CaixaPanel({
                 <label className={clsx('text-[10px]', 'font-bold', 'text-koma-secondary', 'uppercase', 'tracking-wider', 'block')}>Fundo de Troco Inicial (R$):</label>
                 <div className="relative">
                   <span className={clsx('absolute', 'left-3.5', 'top-3', 'text-koma-subtle', 'font-mono')}>R$</span>
-                  <input
-                    type="number"
-                    step="0.01"
+                  <MoneyInput
                     required
                     value={saldoInicial}
-                    onChange={(e) => setSaldoInicial(e.target.value)}
+                    onValueChange={setSaldoInicial}
                     className={clsx('w-full', 'pl-9', 'pr-4', 'py-2.5', 'bg-koma-card', 'border', 'border-koma-border', 'rounded-xl', 'focus:outline-none', 'focus:ring-2', 'focus:ring-[#10b981]/20', 'focus:border-[#10b981]', 'text-koma-foreground', 'font-mono')}
                   />
                 </div>
@@ -9133,7 +9132,7 @@ export function CaixaPanel({
                                 selectedOrder,
                                 includeServiceTax
                               );
-                            setPaymentValor(nextValue.toFixed(2));
+                            setPaymentValor(nextValue);
                           }}
                           className={clsx('rounded', 'border-koma-border', 'text-emerald-500', 'focus:ring-emerald-500', 'h-3.5', 'w-3.5', 'bg-koma-card')}
                         />
@@ -9164,7 +9163,7 @@ export function CaixaPanel({
                               const nextValue = copy.length > 0
                                 ? getSelectedItemsTotal(selectedOrder, copy)
                                 : getCheckoutBalance(selectedOrder);
-                              setPaymentValor(nextValue.toFixed(2));
+                              setPaymentValor(nextValue);
                               return copy;
                             });
                           }}
@@ -9318,7 +9317,7 @@ export function CaixaPanel({
                           setSplitPeople(val);
                           setSelectedItemIds([]);
                           const peopleNum = parseInt(val, 10) || 1;
-                          setPaymentValor((getCheckoutBalance(selectedOrder) / peopleNum).toFixed(2));
+                          setPaymentValor((getCheckoutBalance(selectedOrder) / peopleNum));
                         }}
                         className={clsx('w-full', 'px-3', 'py-1.5', 'text-xs', 'bg-koma-panel', 'border', 'border-koma-border', 'rounded-xl', 'focus:outline-none', 'text-koma-foreground', 'text-center', 'font-mono')}
                       />
@@ -9380,12 +9379,10 @@ export function CaixaPanel({
                       <div className={clsx('flex', 'gap-2')}>
                         <div className={clsx('relative', 'flex-1')}>
                           <span className={clsx('absolute', 'left-3.5', 'top-2.5', 'text-koma-subtle', 'font-mono', 'text-[11px]')}>R$</span>
-                          <input
-                            type="number"
-                            step="0.01"
+                          <MoneyInput
                             required
                             value={paymentValor}
-                            onChange={(e) => setPaymentValor(e.target.value)}
+                            onValueChange={setPaymentValor}
                             readOnly={selectedItemIds.length > 0}
                             title={selectedItemIds.length > 0
                               ? 'O valor é calculado automaticamente pelos itens selecionados.'
@@ -9414,7 +9411,7 @@ export function CaixaPanel({
                             if (selectedOrder) {
                               setSelectedItemIds([]);
                               setSplitPeople('1');
-                              setPaymentValor(getCheckoutBalance(selectedOrder).toFixed(2));
+                              setPaymentValor(getCheckoutBalance(selectedOrder));
                             }
                           }}
                           className={clsx(
@@ -9455,7 +9452,7 @@ export function CaixaPanel({
                             type="button"
                             onClick={() => {
                               setSelectedItemIds([]);
-                              setPaymentValor(val.toFixed(2));
+                              setPaymentValor(val);
                             }}
                             className={clsx('px-2.5', 'py-1', 'bg-koma-panel', 'hover:bg-koma-raised', 'border', 'border-koma-border', 'rounded-lg', 'text-[9px]', 'font-bold', 'text-koma-secondary', 'font-mono', 'transition-all', 'cursor-pointer', 'hover:border-gray-500', 'hover:text-koma-foreground')}
                           >
@@ -9482,7 +9479,7 @@ export function CaixaPanel({
                     {(() => {
                       if (!selectedOrder) return null;
                       const restante = getCheckoutBalance(selectedOrder);
-                      const inputVal = parseFloat(paymentValor) || 0;
+                      const inputVal = Number(paymentValor || 0) || 0;
                       if (paymentMetodo === 'dinheiro' && inputVal > restante) {
                         const troco = inputVal - restante;
                         return (
@@ -9519,7 +9516,7 @@ export function CaixaPanel({
                           onClick={() => {
                             setSelectedItemIds([]);
                             setSplitPeople('1');
-                            setPaymentValor(getCheckoutBalance(selectedOrder).toFixed(2));
+                            setPaymentValor(getCheckoutBalance(selectedOrder));
                           }}
                           className={clsx('shrink-0', 'rounded-lg', 'border', 'border-emerald-500/30', 'px-2', 'py-1', 'text-[8px]', 'font-bold', 'uppercase', 'hover:bg-emerald-500/15')}
                         >
@@ -10086,7 +10083,7 @@ export function CaixaPanel({
                   const payload = {
                     nome: prodFormNome,
                     categoria_id: prodFormCategoriaId,
-                    preco: parseFloat(prodFormPreco),
+                    preco: Number(prodFormPreco || 0),
                     descricao: prodFormDescricao,
                     imagem: galeriaUrls[0] || prodFormImagem || '',
                     imagens_galeria: galeriaUrls,
@@ -10156,13 +10153,11 @@ export function CaixaPanel({
               <div className={clsx('grid', 'grid-cols-2', 'gap-3')}>
                 <div className="space-y-1">
                   <label className={clsx('text-[10px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>Preço (R$):</label>
-                  <input
-                    type="number"
-                    step="0.01"
+                  <MoneyInput
                     required
                     placeholder="25.90"
                     value={prodFormPreco}
-                    onChange={(e) => setProdFormPreco(e.target.value)}
+                    onValueChange={setProdFormPreco}
                     className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-panel', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono', 'text-[11px]')}
                   />
                 </div>
@@ -10564,12 +10559,10 @@ export function CaixaPanel({
 
               <div className="space-y-1">
                 <label className={clsx('text-[10px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>Preço de Custo Médio (R$):</label>
-                <input
-                  type="number"
-                  step="0.01"
+                <MoneyInput
                   required
                   value={insumoFormCusto}
-                  onChange={(e) => setInsumoFormCusto(Number(e.target.value))}
+                  onValueChange={(value) => setInsumoFormCusto(Number(value || 0))}
                   className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono', 'text-xs')}
                 />
               </div>
@@ -10682,12 +10675,10 @@ export function CaixaPanel({
 
               <div className="space-y-1">
                 <label className={clsx('text-[10px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>Preço de Custo Médio (R$):</label>
-                <input
-                  type="number"
-                  step="0.01"
+                <MoneyInput
                   required
                   value={insumoFormCusto}
-                  onChange={(e) => setInsumoFormCusto(Number(e.target.value))}
+                  onValueChange={(value) => setInsumoFormCusto(Number(value || 0))}
                   className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono', 'text-xs')}
                 />
               </div>
