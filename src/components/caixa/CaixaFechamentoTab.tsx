@@ -18,6 +18,7 @@ import {
   Printer,
 } from 'lucide-react';
 import { CaixaTurnoResumo, FechamentoCaixaResult } from '../../types';
+import { imprimirComprovanteFechamento } from '../../config/caixaService';
 import { formatBackendDateTime } from '../../utils/dateTime';
 
 interface CaixaFechamentoTabProps {
@@ -140,6 +141,7 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const openAccountsCount = turnoResumo?.comandas_abertas_count ?? 0;
@@ -219,53 +221,17 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
     }
   };
 
-
-  const handlePrintComprovante = () => {
-    if (!fechamentoResult) return;
-    const isSurplus = fechamentoResult.diferenca_total > 0;
-    const isExact = Math.abs(fechamentoResult.diferenca_total) < 0.01;
-    const diferencaLabel = isExact ? "Caixa exato" : (isSurplus ? "Sobra de caixa" : "Quebra/Falta de caixa");
-    
-    const comprovanteText = `
---------------------------------
-    COMPROVANTE DE FECHAMENTO
---------------------------------
-Turno: #${fechamentoResult.turno_id}
-Operador: ${fechamentoResult.fechado_por_nome}
-Fechado em: ${formatBackendDateTime(fechamentoResult.fechado_em)}
-Status: ${fechamentoResult.status.toUpperCase()}
---------------------------------
-VALORES ESPERADOS (SISTEMA)
-Dinheiro: ${formatMoney(fechamentoResult.esperado_dinheiro)}
-Cartões: ${formatMoney(fechamentoResult.esperado_cartao)}
-Pix: ${formatMoney(fechamentoResult.esperado_pix)}
-Total Esperado: ${formatMoney(fechamentoResult.total_esperado)}
---------------------------------
-VALORES DECLARADOS (FÍSICO)
-Dinheiro: ${formatMoney(fechamentoResult.declarado_dinheiro)}
-Cartões: ${formatMoney(fechamentoResult.declarado_cartao)}
-Pix: ${formatMoney(fechamentoResult.declarado_pix)}
-Total Declarado: ${formatMoney(fechamentoResult.total_declarado)}
---------------------------------
-DIFERENÇA
-Dinheiro: ${formatMoney(fechamentoResult.diferenca_dinheiro)}
-Cartões: ${formatMoney(fechamentoResult.diferenca_cartao)}
-Pix: ${formatMoney(fechamentoResult.diferenca_pix)}
---------------------------------
-RESULTADO FINAL
-${diferencaLabel}
-Diferença Total: ${formatMoney(fechamentoResult.diferenca_total)}
---------------------------------
-    CONFERIDO POR:
-
-________________________________
-    Assinatura do Responsável
-`.trim();
-
-    const event = new CustomEvent('koma-print', {
-      detail: { title: 'Comprovante de Fechamento', content: comprovanteText }
-    });
-    window.dispatchEvent(event);
+  const handlePrintComprovante = async () => {
+    if (!fechamentoResult || isPrinting) return;
+    try {
+      setIsPrinting(true);
+      setErrorMsg(null);
+      await imprimirComprovanteFechamento(fechamentoResult.turno_id);
+    } catch (error: unknown) {
+      setErrorMsg(error instanceof Error ? error.message : 'Erro ao enfileirar o comprovante de fechamento.');
+    } finally {
+      setIsPrinting(false);
+    }
   };
 
   if (!isTurnoAberto && fechamentoResult) {
@@ -299,6 +265,12 @@ ________________________________
           </header>
 
           <div className="p-5">
+            {errorMsg && (
+              <div className="mb-4 flex items-start gap-2 rounded-xl border border-rose-300 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30 p-3 text-xs text-rose-800 dark:text-rose-300" role="alert">
+                <AlertCircle size={16} className="mt-0.5 shrink-0" />
+                <span>{errorMsg}</span>
+              </div>
+            )}
             <div className={clsx(
               'mb-4 flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between',
               isExact ? 'border-emerald-300 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30' : 'border-rose-300 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30',
@@ -363,8 +335,8 @@ ________________________________
             </button>
           )}
           
-          <button type="button" onClick={handlePrintComprovante} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-koma-border-subtle bg-koma-panel px-4 py-3 text-xs font-bold text-koma-secondary transition-colors hover:bg-koma-raised hover:text-koma-foreground">
-            <Printer size={16} /> Imprimir comprovante
+          <button type="button" onClick={handlePrintComprovante} disabled={isPrinting} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-koma-border-subtle bg-koma-panel px-4 py-3 text-xs font-bold text-koma-secondary transition-colors hover:bg-koma-raised hover:text-koma-foreground disabled:cursor-not-allowed disabled:opacity-60">
+            <Printer size={16} /> {isPrinting ? 'Enviando para impressão...' : 'Imprimir comprovante'}
           </button>
         </aside>
       </div>
