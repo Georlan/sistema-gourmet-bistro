@@ -34,17 +34,7 @@ def get_relatorio_produtos_operacional(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("relatorios:consultar")),
 ):
-    """Métrica operacional de produtos, deliberadamente separada de receita.
-
-    O período é ancorado nas Contas/comandas que tiveram recebimento no dia
-    operacional selecionado. Seus itens não cancelados representam consumo
-    associado àquelas Contas. Nenhuma soma deste endpoint participa de
-    faturamento, ticket, caixa ou fechamento.
-
-    Isso evita o erro anterior em que um pagamento parcial de R$ 20 em uma
-    comanda de R$ 100 fazia os R$ 100 de itens aparecerem como faturamento por
-    produto.
-    """
+    """Métrica operacional de produtos, deliberadamente separada de receita."""
     rest_id = require_tenant_id()
     try:
         snapshot = load_financial_snapshot(db, rest_id, data_inicio, data_fim)
@@ -60,7 +50,6 @@ def get_relatorio_produtos_operacional(
 
     categories = db.query(Categoria).filter(Categoria.restaurante_id == rest_id).all()
     category_map = {str(category.id): category.nome for category in categories}
-
     command_ids = {
         command_id
         for sale in snapshot.sales.values()
@@ -105,23 +94,18 @@ def get_relatorio_produtos_operacional(
             if quantity
             else Decimal("0.00")
         )
-        result.append(
-            {
-                "produto_id": str(product.id),
-                "produto_nome": product.nome,
-                "categoria_nome": category_map.get(str(product.categoria_id), "Sem Categoria"),
-                "quantidade_consumida": quantity,
-                "valor_consumido": float(consumed_value),
-                "preco_medio_item": float(average_unit_value),
-                "natureza_valor": "consumo_operacional_nao_receita",
-                # Compatibilidade de leitura durante a migração do frontend.
-                # `faturamento_total` deixa de carregar um número para impedir
-                # que clientes antigos o somem como receita por engano.
-                "quantidade_vendida": quantity,
-                "faturamento_total": None,
-                "ticket_medio_item": float(average_unit_value),
-            }
-        )
+        result.append({
+            "produto_id": str(product.id),
+            "produto_nome": product.nome,
+            "categoria_nome": category_map.get(str(product.categoria_id), "Sem Categoria"),
+            "quantidade_consumida": quantity,
+            "valor_consumido": float(consumed_value),
+            "preco_medio_item": float(average_unit_value),
+            "natureza_valor": "consumo_operacional_nao_receita",
+            "quantidade_vendida": quantity,
+            "faturamento_total": None,
+            "ticket_medio_item": float(average_unit_value),
+        })
 
     if ordenacao == "menos_vendidos":
         result.sort(key=lambda row: (row["quantidade_consumida"], row["valor_consumido"]))
