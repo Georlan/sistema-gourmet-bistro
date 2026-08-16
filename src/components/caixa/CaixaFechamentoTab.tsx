@@ -61,6 +61,7 @@ interface CountFieldProps {
   value: number | '';
   expected: number;
   required?: boolean;
+  allowNegative?: boolean;
   onChange: (value: number | '') => void;
   onUseExpected: () => void;
 }
@@ -73,6 +74,7 @@ const CountField: React.FC<CountFieldProps> = ({
   value,
   expected,
   required,
+  allowNegative = false,
   onChange,
   onUseExpected,
 }) => {
@@ -99,7 +101,7 @@ const CountField: React.FC<CountFieldProps> = ({
           type="number"
           inputMode="decimal"
           step="0.01"
-          min="0"
+          min={allowNegative ? undefined : '0'}
           required={required}
           placeholder="0,00"
           value={value}
@@ -386,9 +388,9 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
 
         <form onSubmit={handlePreSubmit} className="mt-5">
           <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-            <CountField id="closing-cash" label="Dinheiro na gaveta" help="Fundo + vendas + suprimentos − sangrias." icon={DollarSign} value={declaradoDinheiro} expected={expectedCash} required onChange={setDeclaradoDinheiro} onUseExpected={() => setDeclaradoDinheiro(expectedCash)} />
-            <CountField id="closing-card" label="Cartões" help="Débito e crédito registrados no turno." icon={CreditCard} value={declaradoCartao} expected={expectedCard} required onChange={setDeclaradoCartao} onUseExpected={() => setDeclaradoCartao(expectedCard)} />
-            <CountField id="closing-pix" label="Pix" help="Recebimentos Pix aprovados no turno." icon={Smartphone} value={declaradoPix} expected={expectedPix} required onChange={setDeclaradoPix} onUseExpected={() => setDeclaradoPix(expectedPix)} />
+            <CountField id="closing-cash" label="Dinheiro na gaveta" help="Fundo + vendas líquidas em dinheiro + suprimentos − sangrias." icon={DollarSign} value={declaradoDinheiro} expected={expectedCash} required onChange={setDeclaradoDinheiro} onUseExpected={() => setDeclaradoDinheiro(expectedCash)} />
+            <CountField id="closing-card" label="Cartões" help="Recebimentos aprovados − devoluções efetivadas em cartão." icon={CreditCard} value={declaradoCartao} expected={expectedCard} required allowNegative onChange={setDeclaradoCartao} onUseExpected={() => setDeclaradoCartao(expectedCard)} />
+            <CountField id="closing-pix" label="Pix" help="Recebimentos aprovados − devoluções efetivadas via Pix." icon={Smartphone} value={declaradoPix} expected={expectedPix} required allowNegative onChange={setDeclaradoPix} onUseExpected={() => setDeclaradoPix(expectedPix)} />
           </div>
 
           <label htmlFor="closing-note" className="mt-4 block">
