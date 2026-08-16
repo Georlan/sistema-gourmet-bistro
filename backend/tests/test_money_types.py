@@ -68,7 +68,7 @@ def test_all_monetary_columns_use_fixed_precision_numeric():
 def test_non_monetary_fractional_values_remain_float():
     for model, column_name in (
         (ConfiguracaoRestaurante, "taxa_servico_padrao"),
-        (Insum, "estoque_atual"),
+        (Insumo, "estoque_atual"),
         (ItemEntradaEstoque, "quantidade"),
         (MovimentacaoEstoque, "saldo_posterior"),
     ):
