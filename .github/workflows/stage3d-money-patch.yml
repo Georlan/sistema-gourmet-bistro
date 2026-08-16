@@ -62,6 +62,10 @@ jobs:
           )
           if payment_fixed < 5:
               raise SystemExit(f'Expected at least 5 numeric payment setters, found {payment_fixed}')
+          replace_exact(
+              "setPaymentValor(\n                                    Math.max(0, total - Number(checkoutOrder.valorPago || 0)).toFixed(2)\n                                  );",
+              "setPaymentValor(\n                                    Math.max(0, total - Number(checkoutOrder.valorPago || 0))\n                                  );",
+          )
 
           text, product_price_setters = re.subn(
               r"setProdFormPreco\(([^\n;]+?)\.preco\.toString\(\)\);",
