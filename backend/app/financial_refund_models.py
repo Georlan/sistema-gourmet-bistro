@@ -17,6 +17,64 @@ from sqlalchemy import (
 from .database import Base, current_restaurante_id
 
 
+_ALLOWED_METHODS_SQL = "('dinheiro', 'pix', 'cartao', 'cartao_debito', 'cartao_credito')"
+
+
+class PagamentoEstornoLiquidacao(Base):
+    """Como um estorno foi efetivamente devolvido ao cliente.
+
+    `PagamentoEstorno.metodo` continua representando o método ORIGINAL da venda,
+    preservando relatórios de receita por meio. Esta tabela registra o método de
+    DEVOLUÇÃO que afeta o caixa/terminal no turno atual. Ex.: venda no cartão
+    devolvida excepcionalmente em dinheiro.
+    """
+
+    __tablename__ = "pagamento_estorno_liquidacoes"
+    __table_args__ = (
+        UniqueConstraint(
+            "restaurante_id",
+            "estorno_id",
+            name="uq_pagamento_estorno_liquidacao_estorno",
+        ),
+        CheckConstraint(
+            f"metodo_devolucao IN {_ALLOWED_METHODS_SQL}",
+            name="ck_pagamento_estorno_liquidacao_metodo",
+        ),
+        Index(
+            "ix_pagamento_estorno_liquidacoes_tenant_turno",
+            "restaurante_id",
+            "turno_id",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    restaurante_id = Column(
+        Integer,
+        ForeignKey("restaurantes.id", ondelete="CASCADE"),
+        default=lambda: current_restaurante_id.get(),
+        nullable=False,
+        index=True,
+    )
+    estorno_id = Column(
+        String,
+        ForeignKey("pagamento_estornos.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    turno_id = Column(
+        Integer,
+        ForeignKey("caixa_turnos.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    metodo_devolucao = Column(String(20), nullable=False)
+    criado_em = Column(
+        DateTime,
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        nullable=False,
+    )
+
+
 class PagamentoEstornoAlocacao(Base):
     """Origem financeira de uma parcela estornada.
 
