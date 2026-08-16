@@ -6,6 +6,7 @@
 import React, { useState } from 'react';
 import { EyeOff, DollarSign, CreditCard, QrCode, CheckCircle, X, ShieldAlert } from 'lucide-react';
 import clsx from 'clsx';
+import MoneyInput from './MoneyInput';
 
 interface FechamentoCegoModalProps {
   isOpen: boolean;
@@ -24,30 +25,25 @@ export function FechamentoCegoModal({
   onClose,
   onConfirm
 }: FechamentoCegoModalProps) {
-  const [dinheiro, setDinheiro] = useState<string>('');
-  const [cartaoCredito, setCartaoCredito] = useState<string>('');
-  const [cartaoDebito, setCartaoDebito] = useState<string>('');
-  const [pix, setPix] = useState<string>('');
+  const [dinheiro, setDinheiro] = useState<number | ''>('');
+  const [cartaoCredito, setCartaoCredito] = useState<number | ''>('');
+  const [cartaoDebito, setCartaoDebito] = useState<number | ''>('');
+  const [pix, setPix] = useState<number | ''>('');
   const [observacao, setObservacao] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const parseValue = (val: string): number => {
-    const clean = val.replace(/[^\d.,]/g, '').replace(',', '.');
-    return parseFloat(clean) || 0;
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
     const declaracao = {
-      dinheiro: parseValue(dinheiro),
-      cartaoCredito: parseValue(cartaoCredito),
-      cartaoDebito: parseValue(cartaoDebito),
-      pix: parseValue(pix),
+      dinheiro: Number(dinheiro || 0),
+      cartaoCredito: Number(cartaoCredito || 0),
+      cartaoDebito: Number(cartaoDebito || 0),
+      pix: Number(pix || 0),
       observacao: observacao.trim()
     };
 
@@ -99,71 +95,62 @@ export function FechamentoCegoModal({
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Campo Dinheiro */}
           <div>
             <label className="block text-xs font-semibold text-koma-secondary mb-1.5 flex items-center gap-2">
               <DollarSign size={14} className="text-emerald-400" />
               <span>Contagem Física Dinheiro (R$)</span>
             </label>
-            <input
-              type="text"
+            <MoneyInput
               placeholder="0,00"
               value={dinheiro}
-              onChange={e => setDinheiro(e.target.value)}
+              onValueChange={setDinheiro}
               className="w-full px-3.5 py-2.5 rounded-xl bg-koma-card border border-koma-border text-koma-foreground font-mono text-sm focus:border-amber-500 focus:outline-none"
               required
             />
           </div>
 
-          {/* Campo Cartão de Crédito */}
           <div>
             <label className="block text-xs font-semibold text-koma-secondary mb-1.5 flex items-center gap-2">
               <CreditCard size={14} className="text-blue-400" />
               <span>Contagem Cartão de Crédito (R$)</span>
             </label>
-            <input
-              type="text"
+            <MoneyInput
               placeholder="0,00"
               value={cartaoCredito}
-              onChange={e => setCartaoCredito(e.target.value)}
+              onValueChange={setCartaoCredito}
               className="w-full px-3.5 py-2.5 rounded-xl bg-koma-card border border-koma-border text-koma-foreground font-mono text-sm focus:border-amber-500 focus:outline-none"
               required
             />
           </div>
 
-          {/* Campo Cartão de Débito */}
           <div>
             <label className="block text-xs font-semibold text-koma-secondary mb-1.5 flex items-center gap-2">
               <CreditCard size={14} className="text-purple-400" />
               <span>Contagem Cartão de Débito (R$)</span>
             </label>
-            <input
-              type="text"
+            <MoneyInput
               placeholder="0,00"
               value={cartaoDebito}
-              onChange={e => setCartaoDebito(e.target.value)}
+              onValueChange={setCartaoDebito}
               className="w-full px-3.5 py-2.5 rounded-xl bg-koma-card border border-koma-border text-koma-foreground font-mono text-sm focus:border-amber-500 focus:outline-none"
               required
             />
           </div>
 
-          {/* Campo Pix */}
           <div>
             <label className="block text-xs font-semibold text-koma-secondary mb-1.5 flex items-center gap-2">
               <QrCode size={14} className="text-teal-400" />
               <span>Contagem Pix (R$)</span>
             </label>
-            <input
-              type="text"
+            <MoneyInput
               placeholder="0,00"
               value={pix}
-              onChange={e => setPix(e.target.value)}
+              onValueChange={setPix}
               className="w-full px-3.5 py-2.5 rounded-xl bg-koma-card border border-koma-border text-koma-foreground font-mono text-sm focus:border-amber-500 focus:outline-none"
               required
             />
           </div>
 
-          {/* Observação / Justificativa */}
           <div>
             <label className="block text-xs font-semibold text-koma-subtle mb-1.5">
               Observações do Fechamento (Opcional)
@@ -177,7 +164,6 @@ export function FechamentoCegoModal({
             />
           </div>
 
-          {/* Botões de Ação */}
           <div className="flex gap-3 pt-3">
             <button
               type="button"
