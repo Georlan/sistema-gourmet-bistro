@@ -1,0 +1,145 @@
+name: Stage 3D hybrid money patch
+
+on:
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.head_ref == 'audit/consistencia-financeira-etapa-3'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Apply deterministic hybrid money patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/components/CaixaPanel.tsx')
+          text = path.read_text()
+
+          def replace_exact(old: str, new: str, expected: int = 1):
+              global text
+              count = text.count(old)
+              if count != expected:
+                  raise SystemExit(f'Expected {expected} occurrence(s), found {count}: {old[:120]!r}')
+              text = text.replace(old, new)
+
+          replace_exact(
+              "const [newCrmSaldo, setNewCrmSaldo] = useState<string>('0');",
+              "const [newCrmSaldo, setNewCrmSaldo] = useState<number | ''>(0);",
+          )
+          replace_exact(
+              "const created = await handleCreateClient(newCrmNome, newCrmTelefone, Number(newCrmSaldo));",
+              "const created = await handleCreateClient(newCrmNome, newCrmTelefone, Number(newCrmSaldo || 0));",
+          )
+
+          old_new_client = '''                <input
+                  type="number"
+                  step={fidelidadeConfig.tipo_recompensa === 'PONTOS' ? '1' : '0.01'}
+                  value={newCrmSaldo}
+                  onChange={(e) => setNewCrmSaldo(e.target.value)}
+                  className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-panel', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono', 'text-xs')}
+                />'''
+          new_new_client = '''                {fidelidadeConfig.tipo_recompensa === 'PONTOS' ? (
+                  <input
+                    type="number"
+                    step="1"
+                    value={newCrmSaldo}
+                    onChange={(e) => setNewCrmSaldo(e.target.value === '' ? '' : Number(e.target.value))}
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-panel', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono', 'text-xs')}
+                  />
+                ) : (
+                  <MoneyInput
+                    value={newCrmSaldo}
+                    onValueChange={setNewCrmSaldo}
+                    className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-panel', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono', 'text-xs')}
+                  />
+                )}'''
+          replace_exact(old_new_client, new_new_client)
+
+          old_cashback = '''                    <input
+                      type="number"
+                      step="0.01"
+                      required
+                      value={crmFormCashback}
+                      onChange={(e) => setCrmFormCashback(Number(e.target.value))}
+                      className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-panel', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono', 'text-xs')}
+                    />'''
+          new_cashback = '''                    <MoneyInput
+                      required
+                      value={crmFormCashback}
+                      onValueChange={(value) => setCrmFormCashback(Number(value || 0))}
+                      className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-panel', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono', 'text-xs')}
+                    />'''
+          replace_exact(old_cashback, new_cashback)
+
+          old_coupon = '''                      <input
+                        type="number"
+                        value={newCouponVal}
+                        onChange={(e) => setNewCouponVal(Number(e.target.value))}
+                        className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'font-mono', 'text-[10px]')}
+                      />'''
+          new_coupon = '''                      {newCouponTipo === 'fixo' ? (
+                        <MoneyInput
+                          value={newCouponVal}
+                          onValueChange={(value) => setNewCouponVal(Number(value || 0))}
+                          className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'font-mono', 'text-[10px]')}
+                        />
+                      ) : (
+                        <input
+                          type="number"
+                          value={newCouponVal}
+                          onChange={(e) => setNewCouponVal(Number(e.target.value))}
+                          className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'font-mono', 'text-[10px]')}
+                        />
+                      )}'''
+          replace_exact(old_coupon, new_coupon)
+
+          forbidden = [
+              "step={fidelidadeConfig.tipo_recompensa === 'PONTOS' ? '1' : '0.01'}",
+              'onChange={(e) => setCrmFormCashback(Number(e.target.value))}',
+          ]
+          leftovers = [value for value in forbidden if value in text]
+          if leftovers:
+              raise SystemExit(f'Hybrid monetary patterns remain: {leftovers}')
+
+          for required in [
+              "newCouponTipo === 'fixo' ? (",
+              "fidelidadeConfig.tipo_recompensa === 'PONTOS' ? (",
+              '<MoneyInput',
+          ]:
+              if required not in text:
+                  raise SystemExit(f'Required hybrid pattern missing: {required}')
+
+          path.write_text(text)
+          PY
+
+      - name: Validate frontend after patch
+        run: |
+          npm ci
+          npm run lint
+          npm run build
+
+      - name: Commit validated patch and remove one-shot workflow
+        run: |
+          rm .github/workflows/stage3d-hybrid-money-patch.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/CaixaPanel.tsx .github/workflows/stage3d-hybrid-money-patch.yml
+          git diff --cached --check
+          git commit -m "refactor(finance): padroniza cashback e cupom fixo"
+          git push origin HEAD:${{ github.head_ref }}
