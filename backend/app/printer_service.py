@@ -1,23 +1,29 @@
 import datetime
 import textwrap
-from typing import List, Optional
+from typing import Optional
+
 from .config import settings
 from .timezone_utils import get_operational_now, to_operational_local_time
+
 
 def align_left(text: str, width: int) -> str:
     return text.ljust(width)[:width]
 
+
 def align_right(text: str, width: int) -> str:
     return text.rjust(width)[:width]
 
+
 def align_center(text: str, width: int) -> str:
     return text.center(width)[:width]
+
 
 def split_justified(left_text: str, right_text: str, width: int) -> str:
     available = width - len(right_text)
     if available <= 0:
         return (left_text + right_text)[:width]
     return left_text.ljust(available)[:available] + right_text
+
 
 def draw_separator(char: str = "-", width: int = 40) -> str:
     return char * width
@@ -33,7 +39,6 @@ ESC_TIGHT_LINE = "\x1b3\x18"
 
 
 def _single_line(value: object) -> str:
-    """Normaliza conteúdo livre sem permitir quebras artificiais no cupom."""
     return " ".join(str(value or "").replace("\x00", "").split())
 
 
@@ -42,7 +47,6 @@ def _format_brl(value: float) -> str:
 
 
 def _order_type_label(tipo: object, mesa_id: Optional[int]) -> str:
-    """Converte variações internas no rótulo curto que o salão reconhece."""
     raw = _single_line(tipo)
     normalized = raw.casefold()
     if any(term in normalized for term in ("delivery", "entrega")):
@@ -57,7 +61,6 @@ def _order_type_label(tipo: object, mesa_id: Optional[int]) -> str:
 
 
 def _is_general_client(value: object) -> bool:
-    """Consumo Geral é a conta padrão da mesa, não uma pessoa identificada."""
     return _single_line(value).casefold() in {"", "geral", "consumo geral"}
 
 
@@ -82,7 +85,6 @@ def _append_wrapped_in_font(
     font: str,
     restore_font: str = ESC_FONT_A,
 ) -> None:
-    """Aplica fonte sem criar linhas vazias só para comandos ESC/POS."""
     wrapped_lines: list[str] = []
     _append_wrapped(wrapped_lines, text, width, prefix)
     wrapped_lines[0] = font + wrapped_lines[0]
@@ -91,27 +93,23 @@ def _append_wrapped_in_font(
 
 
 def _printable_product_name(code: str, name: str) -> str:
-    """Oculta o código técnico somente na apresentação dos cupons."""
     clean_name = _single_line(name)
     clean_code = _single_line(code)
     if not clean_code:
         return clean_name
-
     normalized_name = clean_name.casefold()
-    prefixes = (
+    for prefix in (
         f"{clean_code} - ",
         f"{clean_code}-",
         f"[{clean_code}] ",
         f"[{clean_code}]",
-    )
-    for prefix in prefixes:
+    ):
         if normalized_name.startswith(prefix.casefold()):
             return clean_name[len(prefix):].lstrip()
     return clean_name
 
 
 def _append_amount_line(lines: list[str], left: str, right: str, width: int) -> None:
-    """Imprime texto e valor sem cortar nomes longos de produtos/clientes."""
     max_left = max(width - len(right) - 1, 1)
     wrapped = textwrap.wrap(
         _single_line(left),
@@ -124,17 +122,13 @@ def _append_amount_line(lines: list[str], left: str, right: str, width: int) -> 
         lines.append(f"   {continuation}"[:width])
 
 
-def _append_bold_amount_line(
-    lines: list[str], left: str, right: str, width: int
-) -> None:
-    """Destaca itens/valores sem duplicar a altura e o consumo de papel."""
+def _append_bold_amount_line(lines: list[str], left: str, right: str, width: int) -> None:
     first_line = len(lines)
     _append_amount_line(lines, left, right, width)
     lines[first_line] = ESC_BOLD_ON + lines[first_line]
     lines[-1] += ESC_BOLD_OFF
 
 
-# AJUSTADO: Função utilitária segura para buscar chaves/atributos em dicts ou objetos SQLAlchemy
 def safe_get(obj, key, default=""):
     if obj is None:
         return default
@@ -146,13 +140,6 @@ def safe_get(obj, key, default=""):
 
 
 def _resolve_missing_product_prices(items: list) -> dict[str, float]:
-    """Resolve em uma única consulta preços ausentes no payload de impressão.
-
-    Alguns fluxos legados do app do garçom enviam ao formatter apenas o ID do
-    produto. A impressão continua usando o preço persistido no catálogo do
-    próprio restaurante, mantendo isolamento por tenant e evitando confiar em
-    preço vindo do frontend.
-    """
     missing_codes = {
         _single_line(
             safe_get(item, "codigo")
@@ -178,12 +165,32 @@ def _resolve_missing_product_prices(items: list) -> dict[str, float]:
             Produto.restaurante_id == restaurante_id,
             Produto.id.in_(missing_codes),
         ).all()
-        return {
-            str(product_id): float(price or 0.0)
-            for product_id, price in rows
-        }
+        return {str(product_id): float(price or 0.0) for product_id, price in rows}
     except Exception:
         return {}
+    finally:
+        if db is not None:
+            db.close()
+
+
+def _resolve_service_charge_settings() -> tuple[bool, float]:
+    db = None
+    try:
+        from .database import SessionLocal, current_restaurante_id
+        from .models import ConfiguracaoRestaurante
+
+        restaurante_id = current_restaurante_id.get()
+        if not restaurante_id:
+            return False, 10.0
+        db = SessionLocal(restaurante_id=restaurante_id)
+        config = db.query(ConfiguracaoRestaurante).filter(
+            ConfiguracaoRestaurante.restaurante_id == restaurante_id
+        ).first()
+        if config is None:
+            return False, 10.0
+        return bool(config.taxa_servico_ativa), float(config.taxa_servico_padrao or 10.0)
+    except Exception:
+        return False, 10.0
     finally:
         if db is not None:
             db.close()
@@ -201,14 +208,20 @@ def format_item_line(name: str, qty: int, price_unit: float, width: int = 40) ->
     return line
 
 
-def format_kitchen_item(qty: int, name: str, observation: str = "", client_name: str = "", width: int = 40, preco_unit: float = 0.0) -> str:
+def format_kitchen_item(
+    qty: int,
+    name: str,
+    observation: str = "",
+    client_name: str = "",
+    width: int = 40,
+    preco_unit: float = 0.0,
+) -> str:
     qty_str = f"{qty}x"
     if preco_unit > 0:
         total = qty * preco_unit
         price_col = f"R${total:.2f}"
         name_width = width - len(qty_str) - 1 - len(price_col) - 1
-        name_trunc = name[:name_width].ljust(name_width)
-        header = f"{qty_str} {name_trunc} {price_col}"
+        header = f"{qty_str} {name[:name_width].ljust(name_width)} {price_col}"
     else:
         header = f"{qty_str} {name}"
     if observation:
@@ -219,7 +232,7 @@ def format_kitchen_item(qty: int, name: str, observation: str = "", client_name:
 
 
 class PrinterService:
-    """Formata cupons; persistência e hardware pertencem à fila PrintJob."""
+    """Fonte única dos layouts térmicos legados do Kôma."""
 
     def __init__(self):
         self.width = settings.PRINTER_WIDTH
@@ -236,48 +249,87 @@ class PrinterService:
         restaurant_name_position: str = "cabecalho",
         print_footer: Optional[str] = None,
     ) -> str:
+        """Compatibilidade com os fluxos antigos de produção.
+
+        Consumo no Local não possui layout próprio: o payload é adaptado e
+        encaminhado ao mesmo generate_receipt usado por Extrato Completo.
+        Assim impressão automática, caixa e reimpressão têm uma única fonte
+        visual. is_reprint não altera a aparência da via de mesa.
+        """
+        order_type = _order_type_label(tipo, mesa_id)
+        resolved_prices = _resolve_missing_product_prices(items)
+
+        if order_type == "CONSUMO NO LOCAL":
+            taxa_servico_ativa, taxa_servico_padrao = _resolve_service_charge_settings()
+            receipt_items = []
+            for item in items:
+                if safe_get(item, "status") == "cancelado":
+                    continue
+                produto = safe_get(item, "produto")
+                codigo = _single_line(
+                    safe_get(item, "codigo") or safe_get(produto, "id")
+                )
+                nome = _single_line(
+                    safe_get(item, "nome") or safe_get(produto, "nome")
+                )
+                preco_unit = float(
+                    safe_get(item, "preco_unit")
+                    or safe_get(item, "preco")
+                    or resolved_prices.get(codigo, 0.0)
+                    or 0.0
+                )
+                receipt_items.append(
+                    {
+                        "codigo": codigo,
+                        "produto": {"id": codigo, "nome": nome},
+                        "preco_unit": preco_unit,
+                        "status": safe_get(item, "status") or "preparando",
+                        "cliente_nome": (
+                            safe_get(item, "cliente_nome")
+                            or safe_get(item, "cliente_nome_custom")
+                            or "Consumo Geral"
+                        ),
+                        "observacao": safe_get(item, "observacao") or "",
+                        "quantidade": max(int(safe_get(item, "quantidade") or 1), 1),
+                    }
+                )
+
+            return self.generate_receipt(
+                num_pedido=num_pedido,
+                tipo=tipo,
+                mesa_id=mesa_id,
+                garcom_nome=garcom_nome,
+                comandas_details=[{"identificador": "Consumo Geral", "itens": receipt_items}],
+                print_header=restaurant_name,
+                print_footer=print_footer,
+                taxa_servico_ativa=taxa_servico_ativa,
+                taxa_servico_padrao=taxa_servico_padrao,
+                apenas_valores=False,
+                restaurant_name_position=restaurant_name_position,
+            )
+
         width = self.width
-        lines: list[str] = []
+        lines: list[str] = [ESC_TIGHT_LINE + ESC_FONT_A, draw_separator("=", width)]
         position = (
             restaurant_name_position
             if restaurant_name_position in {"cabecalho", "rodape", "oculto"}
             else "cabecalho"
         )
         brand = _single_line(restaurant_name or "KÔMA GOURMET BISTRÔ")
-        order_type = _order_type_label(tipo, mesa_id)
-        garcom_str = _single_line(garcom_nome or "CAIXA").upper()
         now = get_operational_now()
-        resolved_prices = _resolve_missing_product_prices(items)
 
-        lines.append(ESC_TIGHT_LINE + ESC_FONT_A)
-        lines.append(draw_separator("=", width))
         if position == "cabecalho" and brand:
-            lines.append(
-                ESC_DOUBLE_HEIGHT_ON
-                + ESC_BOLD_ON
-                + align_center(brand.upper(), width)
-                + ESC_BOLD_OFF
-                + ESC_NORMAL_SIZE
-            )
+            lines.append(ESC_BOLD_ON + align_center(brand.upper(), width) + ESC_BOLD_OFF)
             lines.append(draw_separator("=", width))
-
-        lines.append(
-            ESC_DOUBLE_HEIGHT_ON
-            + ESC_BOLD_ON
-            + align_center(order_type, width)
-            + ESC_BOLD_OFF
-            + ESC_NORMAL_SIZE
-        )
+        lines.append(ESC_BOLD_ON + align_center(order_type, width) + ESC_BOLD_OFF)
         if is_reprint:
             lines.append(ESC_BOLD_ON + align_center("REIMPRESSÃO", width) + ESC_BOLD_OFF)
         lines.append(draw_separator("=", width))
         mesa_str = f"MESA: {mesa_id}" if mesa_id is not None else "SEM MESA"
         lines.append(
-            ESC_DOUBLE_HEIGHT_ON
-            + ESC_BOLD_ON
+            ESC_BOLD_ON
             + split_justified(f"PEDIDO: #{num_pedido}", mesa_str, width)
             + ESC_BOLD_OFF
-            + ESC_NORMAL_SIZE
         )
         lines.append(
             split_justified(
@@ -286,16 +338,16 @@ class PrinterService:
                 width,
             )
         )
-        lines.append(f"GARÇOM: {garcom_str}")
+        lines.append(f"GARÇOM: {_single_line(garcom_nome or 'CAIXA').upper()}")
         lines.append(draw_separator("-", width))
 
-        grouped_by_client: dict[str, dict] = {}
+        grouped: dict[str, dict] = {}
         for item in items:
             if safe_get(item, "status") == "cancelado":
                 continue
             produto = safe_get(item, "produto")
-            nome = _single_line(safe_get(item, "nome") or safe_get(produto, "nome"))
             codigo = _single_line(safe_get(item, "codigo") or safe_get(produto, "id"))
+            nome = _single_line(safe_get(item, "nome") or safe_get(produto, "nome"))
             observacao = _single_line(safe_get(item, "observacao"))
             cliente = _single_line(
                 safe_get(item, "cliente_nome")
@@ -309,47 +361,32 @@ class PrinterService:
                 or resolved_prices.get(codigo, 0.0)
                 or 0.0
             )
+            group = grouped.setdefault(cliente.casefold(), {"label": cliente, "items": {}})
+            key = (codigo, nome, observacao, preco_unit)
+            group["items"][key] = group["items"].get(key, 0) + quantidade
 
-            client_key = cliente.casefold()
-            client_group = grouped_by_client.setdefault(
-                client_key,
-                {"label": cliente, "items": {}},
-            )
-            item_key = (codigo, nome, observacao, preco_unit)
-            client_group["items"][item_key] = (
-                client_group["items"].get(item_key, 0) + quantidade
-            )
-
-        for group_index, client_group in enumerate(grouped_by_client.values()):
-            if group_index:
+        for index, group in enumerate(grouped.values()):
+            if index:
                 lines.append(draw_separator("-", width))
-            if not _is_general_client(client_group["label"]):
+            if not _is_general_client(group["label"]):
                 lines.append(
-                    ESC_FONT_A
-                    + ESC_BOLD_ON
-                    + align_center(f"CLIENTE: {client_group['label'].upper()}", width)
+                    ESC_BOLD_ON
+                    + align_center(f"CLIENTE: {group['label'].upper()}", width)
                     + ESC_BOLD_OFF
                 )
-
-            for (codigo, nome, observacao, preco_unit), quantidade in client_group["items"].items():
-                printable_name = _printable_product_name(codigo, nome)
+            for (codigo, nome, observacao, preco_unit), quantidade in group["items"].items():
                 _append_bold_amount_line(
                     lines,
-                    f"{quantidade}x {printable_name.upper()}",
+                    f"{quantidade}x {_printable_product_name(codigo, nome).upper()}",
                     _format_brl(quantidade * preco_unit),
                     width,
                 )
                 if observacao:
                     _append_wrapped_in_font(
-                        lines,
-                        observacao.upper(),
-                        width,
-                        "   OBS: ",
-                        ESC_FONT_A,
+                        lines, observacao.upper(), width, "   OBS: ", ESC_FONT_A
                     )
                 lines.append("")
 
-        lines.append(ESC_FONT_A)
         lines.append(draw_separator("-", width))
         if print_footer:
             _append_wrapped(lines, print_footer, width)
@@ -374,6 +411,12 @@ class PrinterService:
         apenas_valores: bool = False,
         restaurant_name_position: str = "cabecalho",
     ) -> str:
+        """Renderizador canônico de mesa.
+
+        apenas_valores=False é o modelo de Extrato Completo e também a origem
+        de toda via automática/reimpressão de Consumo no Local.
+        apenas_valores=True mantém o modelo FECHAMENTO.
+        """
         width = self.width
         lines: list[str] = [ESC_TIGHT_LINE + ESC_FONT_A]
         position = (
@@ -404,18 +447,29 @@ class PrinterService:
             lines.append(draw_separator("=", width))
         else:
             if position == "cabecalho" and header_text:
-                lines.append(ESC_BOLD_ON + align_center(header_text.upper(), width) + ESC_BOLD_OFF)
+                lines.append(
+                    ESC_BOLD_ON + align_center(header_text.upper(), width) + ESC_BOLD_OFF
+                )
                 lines.append(draw_separator("=", width))
             order_type = _order_type_label(tipo, mesa_id)
             lines.append(ESC_BOLD_ON + align_center(order_type, width) + ESC_BOLD_OFF)
             lines.append(draw_separator("=", width))
             mesa_str = f"MESA: {mesa_id}" if mesa_id is not None else "SEM MESA"
-            lines.append(ESC_BOLD_ON + split_justified(f"PEDIDO: #{num_pedido}", mesa_str, width) + ESC_BOLD_OFF)
-            lines.append(split_justified(f"DATA: {now.strftime('%d/%m/%Y')}", f"HORA: {now.strftime('%H:%M')}", width))
+            lines.append(
+                ESC_BOLD_ON
+                + split_justified(f"PEDIDO: #{num_pedido}", mesa_str, width)
+                + ESC_BOLD_OFF
+            )
+            lines.append(
+                split_justified(
+                    f"DATA: {now.strftime('%d/%m/%Y')}",
+                    f"HORA: {now.strftime('%H:%M')}",
+                    width,
+                )
+            )
             lines.append(f"GARÇOM: {_single_line(garcom_nome)}")
             lines.append(draw_separator("-", width))
 
-        grand_total = 0.0
         grouped_by_client: dict[str, dict] = {}
         for comanda in comandas_details:
             for item in comanda.get("itens", []):
@@ -428,20 +482,29 @@ class PrinterService:
                     or "Consumo Geral"
                 )
                 client = _single_line(client) or "Consumo Geral"
-                group = grouped_by_client.setdefault(client.casefold(), {"label": client, "items": []})
+                group = grouped_by_client.setdefault(
+                    client.casefold(), {"label": client, "items": []}
+                )
                 group["items"].append(item)
 
-        has_named_client = any(not _is_general_client(group["label"]) for group in grouped_by_client.values())
+        has_named_client = any(
+            not _is_general_client(group["label"])
+            for group in grouped_by_client.values()
+        )
+        grand_total = 0.0
 
         for group in grouped_by_client.values():
             client = group["label"]
-            items_list = group["items"]
             is_general = _is_general_client(client)
             if not is_general:
-                lines.append(ESC_BOLD_ON + align_center(f"CLIENTE: {client.upper()}", width) + ESC_BOLD_OFF)
+                lines.append(
+                    ESC_BOLD_ON
+                    + align_center(f"CLIENTE: {client.upper()}", width)
+                    + ESC_BOLD_OFF
+                )
 
             grouped_items: dict[tuple[str, str, float, str], int] = {}
-            for item in items_list:
+            for item in group["items"]:
                 produto = item["produto"]
                 product_name = _single_line(produto["nome"])
                 product_code = _single_line(item.get("codigo") or produto.get("id"))
@@ -454,47 +517,77 @@ class PrinterService:
             for (product_code, product_name, unit_price, observation), qty in grouped_items.items():
                 item_total = qty * unit_price
                 client_subtotal += item_total
-                printable_name = _printable_product_name(product_code, product_name)
-                _append_bold_amount_line(lines, f"{qty}x {printable_name.upper()}", _format_brl(item_total), width)
+                _append_bold_amount_line(
+                    lines,
+                    f"{qty}x {_printable_product_name(product_code, product_name).upper()}",
+                    _format_brl(item_total),
+                    width,
+                )
                 if not apenas_valores and observation:
-                    _append_wrapped_in_font(lines, observation.upper(), width, "   OBS: ", ESC_FONT_A)
+                    _append_wrapped_in_font(
+                        lines, observation.upper(), width, "   OBS: ", ESC_FONT_A
+                    )
                 lines.append("")
 
             grand_total += client_subtotal
             lines.append(draw_separator("-", width))
             if is_general and not has_named_client:
                 continue
-            subtotal_label = "SUBTOTAL CONSUMO GERAL" if is_general else f"SUBTOTAL {client.upper()}"
+
+            subtotal_label = (
+                "SUBTOTAL CONSUMO GERAL"
+                if is_general
+                else f"SUBTOTAL {client.upper()}"
+            )
             _append_amount_line(lines, subtotal_label, _format_brl(client_subtotal), width)
             lines.append(draw_separator("-", width))
 
         if taxa_servico_ativa:
             service_charge = grand_total * (taxa_servico_padrao / 100.0)
             final_total = grand_total + service_charge
-            lines.append(split_justified("SUBTOTAL CONSUMO:", _format_brl(grand_total), width))
-            lines.append(split_justified(f"TAXA DE SERVIÇO ({taxa_servico_padrao:g}%):", _format_brl(service_charge), width))
+            lines.append(
+                split_justified("SUBTOTAL CONSUMO:", _format_brl(grand_total), width)
+            )
+            lines.append(
+                split_justified(
+                    f"TAXA DE SERVIÇO ({taxa_servico_padrao:g}%):",
+                    _format_brl(service_charge),
+                    width,
+                )
+            )
             lines.append(draw_separator("-", width))
         else:
             final_total = grand_total
 
-        lines.append(ESC_BOLD_ON + split_justified("TOTAL GERAL DA MESA:", _format_brl(final_total), width) + ESC_BOLD_OFF)
+        lines.append(
+            ESC_BOLD_ON
+            + split_justified(
+                "TOTAL GERAL DA MESA:", _format_brl(final_total), width
+            )
+            + ESC_BOLD_OFF
+        )
         lines.append(draw_separator("=", width))
         lines.append(align_center("Gerenciado por Kôma", width))
         if print_footer:
             _append_wrapped(lines, print_footer, width)
         if not apenas_valores and position == "rodape" and header_text:
-            lines.append(ESC_BOLD_ON + align_center(header_text.upper(), width) + ESC_BOLD_OFF)
+            lines.append(
+                ESC_BOLD_ON + align_center(header_text.upper(), width) + ESC_BOLD_OFF
+            )
         lines.append(align_center("Documento não fiscal", width))
         return "\n".join(lines)
 
     def generate_delivery_unified_ticket(self, comanda, motoboy_nome: str) -> str:
         width = self.width
-        lines = []
-        lines.append(draw_separator("=", width))
-        lines.append(align_center("*** VIA ÚNICA DELIVERY ***", width))
-        lines.append(align_center("KÔMA GOURMET BISTRÔ", width))
-        lines.append(draw_separator("=", width))
-        lines.append(f"CLIENTE: {comanda.identificador.upper() if comanda.identificador else 'NÃO INFORMADO'}")
+        lines = [
+            draw_separator("=", width),
+            align_center("*** VIA ÚNICA DELIVERY ***", width),
+            align_center("KÔMA GOURMET BISTRÔ", width),
+            draw_separator("=", width),
+        ]
+        lines.append(
+            f"CLIENTE: {comanda.identificador.upper() if comanda.identificador else 'NÃO INFORMADO'}"
+        )
         lines.append(f"TELEFONE: {mask_phone(comanda.delivery_telefone)}")
         lines.append(f"PEDIDO: #{comanda.numero_pedido} | ENTREGA")
         lines.append(f"MOTOBOY: {motoboy_nome.upper()}")
@@ -504,7 +597,15 @@ class PrinterService:
         total = 0.0
         for it in comanda.itens:
             if it.status != "cancelado":
-                lines.append(format_kitchen_item(1, it.produto.nome, it.observacao or "", it.cliente_nome or "", width))
+                lines.append(
+                    format_kitchen_item(
+                        1,
+                        it.produto.nome,
+                        it.observacao or "",
+                        it.cliente_nome or "",
+                        width,
+                    )
+                )
                 total += it.preco_unit
         lines.append(draw_separator("-", width))
         lines.append("ENDEREÇO DE ENTREGA:")
@@ -512,7 +613,11 @@ class PrinterService:
         lines.append(draw_separator("-", width))
         total_com_taxa = total + (comanda.delivery_taxa or 0.0)
         remaining = total_com_taxa - comanda.valor_pago
-        pay_status = "[PAGO ONLINE - NÃO COBRAR]" if remaining <= 0.01 or comanda.fechada else f"[COBRAR R$ {remaining:.2f} NO CARTÃO/DINHEIRO]"
+        pay_status = (
+            "[PAGO ONLINE - NÃO COBRAR]"
+            if remaining <= 0.01 or comanda.fechada
+            else f"[COBRAR R$ {remaining:.2f} NO CARTÃO/DINHEIRO]"
+        )
         lines.append(align_center("PAGAMENTO:", width))
         lines.append(align_center(pay_status, width))
         lines.append(draw_separator("=", width))
@@ -522,21 +627,42 @@ class PrinterService:
 
     def generate_delivery_kitchen_ticket(self, comanda) -> str:
         width = self.width
-        lines = [draw_separator("=", width), align_center("*** VIA COZINHA (DELIVERY) ***", width), draw_separator("=", width)]
-        lines.append(f"CLIENTE: {comanda.identificador.upper() if comanda.identificador else 'NÃO INFORMADO'}")
+        lines = [
+            draw_separator("=", width),
+            align_center("*** VIA COZINHA (DELIVERY) ***", width),
+            draw_separator("=", width),
+        ]
+        lines.append(
+            f"CLIENTE: {comanda.identificador.upper() if comanda.identificador else 'NÃO INFORMADO'}"
+        )
         lines.append(f"PEDIDO: #{comanda.numero_pedido} | ENTREGA")
         lines.append(f"DATA: {get_operational_now().strftime('%d/%m/%Y %H:%M')}")
         lines.append(draw_separator("-", width))
         for it in comanda.itens:
             if it.status != "cancelado":
-                lines.append(format_kitchen_item(1, it.produto.nome, it.observacao or "", it.cliente_nome or "", width))
+                lines.append(
+                    format_kitchen_item(
+                        1,
+                        it.produto.nome,
+                        it.observacao or "",
+                        it.cliente_nome or "",
+                        width,
+                    )
+                )
         lines.append(draw_separator("=", width))
         return "\n".join(lines)
 
     def generate_delivery_motoboy_ticket(self, comanda, motoboy_nome: str) -> str:
         width = self.width
-        lines = [draw_separator("=", width), align_center("*** VIA MOTOBOY / ENTREGA ***", width), align_center("KÔMA GOURMET BISTRÔ", width), draw_separator("=", width)]
-        lines.append(f"CLIENTE: {comanda.identificador.upper() if comanda.identificador else 'NÃO INFORMADO'}")
+        lines = [
+            draw_separator("=", width),
+            align_center("*** VIA MOTOBOY / ENTREGA ***", width),
+            align_center("KÔMA GOURMET BISTRÔ", width),
+            draw_separator("=", width),
+        ]
+        lines.append(
+            f"CLIENTE: {comanda.identificador.upper() if comanda.identificador else 'NÃO INFORMADO'}"
+        )
         lines.append(f"TELEFONE: {mask_phone(comanda.delivery_telefone)}")
         lines.append(f"PEDIDO: #{comanda.numero_pedido}")
         lines.append(f"MOTOBOY: {motoboy_nome.upper()}")
@@ -546,18 +672,34 @@ class PrinterService:
         total = 0.0
         for it in comanda.itens:
             if it.status != "cancelado":
-                lines.append(split_justified(it.produto.nome[:22], f"R$ {it.preco_unit:.2f}", width))
+                lines.append(
+                    split_justified(
+                        it.produto.nome[:22], f"R$ {it.preco_unit:.2f}", width
+                    )
+                )
                 total += it.preco_unit
-        lines.append(split_justified("TAXA DE ENTREGA:", f"R$ {comanda.delivery_taxa or 0.0:.2f}", width))
+        lines.append(
+            split_justified(
+                "TAXA DE ENTREGA:",
+                f"R$ {comanda.delivery_taxa or 0.0:.2f}",
+                width,
+            )
+        )
         total_com_taxa = total + (comanda.delivery_taxa or 0.0)
         lines.append(draw_separator("-", width))
-        lines.append(split_justified("TOTAL GERAL:", f"R$ {total_com_taxa:.2f}", width))
+        lines.append(
+            split_justified("TOTAL GERAL:", f"R$ {total_com_taxa:.2f}", width)
+        )
         lines.append(draw_separator("-", width))
         lines.append("ENDEREÇO DE ENTREGA:")
         lines.extend(textwrap.wrap(comanda.delivery_endereco or "Não informado", width=width))
         lines.append(draw_separator("-", width))
         remaining = total_com_taxa - comanda.valor_pago
-        pay_status = "[PAGO ONLINE - NÃO COBRAR]" if remaining <= 0.01 or comanda.fechada else f"[COBRAR R$ {remaining:.2f} NO CARTÃO/DINHEIRO]"
+        pay_status = (
+            "[PAGO ONLINE - NÃO COBRAR]"
+            if remaining <= 0.01 or comanda.fechada
+            else f"[COBRAR R$ {remaining:.2f} NO CARTÃO/DINHEIRO]"
+        )
         lines.append(align_center("PAGAMENTO:", width))
         lines.append(align_center(pay_status, width))
         lines.append(draw_separator("=", width))
@@ -569,7 +711,7 @@ class PrinterService:
 def mask_phone(phone: Optional[str]) -> str:
     if not phone:
         return "(XX) 9XXXX-XXXX"
-    digits = "".join([c for c in phone if c.isdigit()])
+    digits = "".join(c for c in phone if c.isdigit())
     if len(digits) >= 4:
         ddd = digits[:2]
         last_two = digits[-2:]
