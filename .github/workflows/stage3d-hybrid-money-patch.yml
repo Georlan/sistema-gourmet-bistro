@@ -57,6 +57,7 @@ jobs:
               "const created = await handleCreateClient(newCrmNome, newCrmTelefone, Number(newCrmSaldo));",
               "const created = await handleCreateClient(newCrmNome, newCrmTelefone, Number(newCrmSaldo || 0));",
           )
+          replace_exact("setNewCrmSaldo('0');", "setNewCrmSaldo(0);", expected=2)
 
           new_client_input = input_tag_for('newCrmSaldo')
           class_match = re.search(r'className=\{clsx\([^\n]+\)\}', new_client_input)
@@ -117,6 +118,7 @@ jobs:
           forbidden = [
               "step={fidelidadeConfig.tipo_recompensa === 'PONTOS' ? '1' : '0.01'}",
               'onChange={(e) => setCrmFormCashback(Number(e.target.value))}',
+              "setNewCrmSaldo('0')",
           ]
           leftovers = [value for value in forbidden if value in text]
           if leftovers:
