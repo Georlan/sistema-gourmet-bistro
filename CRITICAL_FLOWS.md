@@ -28,14 +28,37 @@
 - Login válido emite JWT com `restaurante_id` e `role` corretos.
 - Credenciais inválidas e ações sem permissão são rejeitadas.
 
-### 6. Impressão de mesa
-- Layouts térmicos críticos continuam renderizando os campos financeiros esperados.
-- O snapshot da mesa não pode perder nem duplicar itens ao combinar estado persistido e lançamento corrente.
+### 6. Arquitetura de impressão de mesa
+- Layouts térmicos críticos continuam renderizando os campos esperados.
+- Impressão automática representa apenas o lançamento novo.
+- Extrato/fechamento continuam representando a mesa/Conta completa sem duplicar itens.
 
 ### 7. Fila e agente de impressão
 - Claim de job é atômico.
 - Dois agentes não podem assumir o mesmo job.
 - Reprocessamento e reconexão não podem causar impressão duplicada de jobs expirados ou já assumidos.
+
+### 8. Identidade operacional da mesa
+- Mesa continua sendo localização física e Atendimento/Conta continua sendo identidade financeira/histórica.
+- Transferências e mesclagens não renumeram pedidos existentes.
+- Famílias, sequências e movimentos permanecem consistentes após transferências, mesclagens e pagamentos.
+
+### 9. Hardening multi-tenant e RBAC
+- `TenantSession`, ContextVar, filtros ORM, `before_flush` e PostgreSQL RLS precisam concordar sobre o tenant.
+- Escritas cross-tenant falham fechado.
+- O papel persistido do usuário prevalece sobre claim adulterado de JWT.
+- Rotas públicas resolvem tenant sem furar RLS e rotas de impressão respeitam permissões.
+
+### 10. Consistência financeira
+- Faturamento nasce de `Pagamento.status == "aprovado"`, não de item lançado ou comanda fechada.
+- Pagamento parcial entra no faturamento na proporção efetivamente aprovada.
+- Um pagamento distribuído por várias comandas continua sendo um único recebimento, com alocações auditáveis.
+- Venda bruta, estorno e venda líquida permanecem grandezas separadas.
+- Estorno não apaga nem reescreve o pagamento original e nunca pode ultrapassar seu saldo estornável.
+- Sangria e suprimento movimentam caixa físico sem alterar faturamento.
+- O dia operacional é atribuído pelo turno de caixa, podendo atravessar a meia-noite civil.
+- Valores monetários persistidos usam precisão decimal fixa; inputs monetários usam centavos automáticos no padrão brasileiro.
+- Caixa, Relatórios, Dashboard e Fechamento devem convergir para os mesmos totais financeiros no mesmo recorte operacional.
 
 ---
 
@@ -57,6 +80,8 @@ Ele possui dois gates independentes:
    python -m pip install -r backend/requirements-dev.txt
    bash scripts/regression_check.sh
    ```
+
+O backend é dividido em **10 fluxos críticos**. Uma falha em qualquer grupo bloqueia a mudança.
 
 As dependências exclusivas de teste ficam em `backend/requirements-dev.txt`; elas não são adicionadas à imagem de produção.
 
@@ -85,14 +110,26 @@ O script local aceita tanto `backend/venv/bin/python` quanto um `python3/python`
 - `backend/tests/test_critical_multitenant_rls.py`
 - `backend/tests/test_critical_pdv_caixa_flow.py`
 - `backend/tests/test_critical_auth_flow.py`
+- `backend/tests/test_auth_tenant_session_hardening.py`
+- `backend/tests/test_authorization.py`
 - `backend/tests/test_printer_service_layout.py`
 - `backend/tests/test_table_print_snapshot.py`
+- `backend/tests/test_printing_architecture.py`
 - `backend/tests/test_print_agents.py`
+- `backend/tests/test_atendimento_identity.py`
+- `backend/tests/test_atendimento_edge_cases.py`
+- `backend/tests/test_atendimento_http_flow.py`
+- `backend/tests/test_atendimento_caixa_merge.py`
+- `backend/tests/test_order_numbering_unified.py`
+- `backend/tests/test_stage2_multitenant_rbac.py`
+- `backend/tests/test_money_types.py`
+- `backend/tests/test_financial_ledger_stage3.py`
+- `backend/tests/test_financial_allocation_stage3.py`
 
 ---
 
-## Baseline da auditoria dos 100 commits
+## Baseline e evolução
 
 A Etapa 0 foi iniciada a partir do commit `db80168ec599133a412299d54464b5ef8add591c` da `main`, na branch `audit/100-commits-hardening`.
 
-Nenhuma regra de negócio deve ser refatorada nesta etapa. O objetivo é estabelecer uma linha de base reproduzível antes das Etapas 1–4.
+Desde então o gate foi ampliado para proteger a arquitetura de impressão, identidade operacional, hardening multi-tenant/RBAC e, na Etapa 3, consistência financeira. Mudanças estruturais só devem chegar à `main` com os dez grupos verdes.
