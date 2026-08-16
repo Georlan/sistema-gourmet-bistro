@@ -69,3 +69,14 @@ def test_stage3d_legacy_generic_card_method_has_human_readable_label():
     assert "cartao: 'Cartão'" in source
     assert "cartao_credito: 'Crédito'" in source
     assert "cartao_debito: 'Débito'" in source
+
+
+def test_stage3d_dead_quick_actions_checkout_cannot_return_as_parallel_financial_authority():
+    panel = _source("src/components/CaixaPanel.tsx")
+    legacy_modal = ROOT / "src/components/ComandaActionsModal.tsx"
+
+    assert not legacy_modal.exists()
+    assert "ComandaActionsModal" not in panel
+    assert "quickActionsOrder" not in panel
+    assert "setQuickActionsOrder" not in panel
+    assert "MODAL DE AÇÕES RÁPIDAS (RATEIO / DESCONTO / CHECKOUT)" not in panel
