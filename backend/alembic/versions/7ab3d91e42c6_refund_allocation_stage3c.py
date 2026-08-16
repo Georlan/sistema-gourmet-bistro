@@ -1,11 +1,12 @@
-"""add refund allocation ledger for stage 3C
+"""add refund execution and allocation ledgers for stage 3C
 
 Revision ID: 7ab3d91e42c6
 Revises: 3f91a8c7d2e4
 Create Date: 2026-08-16 11:58:00.000000
 
-Preserva a origem exata de estornos quando um Pagamento foi distribuído entre
-mais de uma comanda/Conta, sem inventar rateios em estornos parciais.
+Preserva duas dimensões que não podem ser confundidas:
+- de qual Conta/comanda saiu a parcela estornada;
+- por qual meio o dinheiro foi efetivamente devolvido ao cliente.
 """
 from typing import Sequence, Union
 
@@ -19,22 +20,29 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
-TABLE = "pagamento_estorno_alocacoes"
+TENANT_TABLES = (
+    "pagamento_estorno_liquidacoes",
+    "pagamento_estorno_alocacoes",
+)
 
 
 def _enable_rls() -> None:
     bind = op.get_bind()
     if bind.dialect.name != "postgresql":
         return
-    op.execute(f"ALTER TABLE {TABLE} ENABLE ROW LEVEL SECURITY")
-    op.execute(f"ALTER TABLE {TABLE} FORCE ROW LEVEL SECURITY")
-    op.execute(f"DROP POLICY IF EXISTS tenant_isolation ON {TABLE}")
+    for table in TENANT_TABLES:
+        op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
+        op.execute(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY")
+        op.execute(f"DROP POLICY IF EXISTS tenant_isolation ON {table}")
+        op.execute(
+            f"CREATE POLICY tenant_isolation ON {table} "
+            "USING (restaurante_id = current_setting('app.current_restaurante_id', true)::int) "
+            "WITH CHECK (restaurante_id = current_setting('app.current_restaurante_id', true)::int)"
+        )
+        op.execute(f"GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE {table} TO koma_app")
     op.execute(
-        f"CREATE POLICY tenant_isolation ON {TABLE} "
-        "USING (restaurante_id = current_setting('app.current_restaurante_id', true)::int) "
-        "WITH CHECK (restaurante_id = current_setting('app.current_restaurante_id', true)::int)"
+        "GRANT USAGE, SELECT ON SEQUENCE pagamento_estorno_liquidacoes_id_seq TO koma_app"
     )
-    op.execute(f"GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE {TABLE} TO koma_app")
     op.execute(
         "GRANT USAGE, SELECT ON SEQUENCE pagamento_estorno_alocacoes_id_seq TO koma_app"
     )
@@ -42,7 +50,40 @@ def _enable_rls() -> None:
 
 def upgrade() -> None:
     op.create_table(
-        TABLE,
+        "pagamento_estorno_liquidacoes",
+        sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
+        sa.Column("restaurante_id", sa.Integer(), nullable=False),
+        sa.Column("estorno_id", sa.String(), nullable=False),
+        sa.Column("turno_id", sa.Integer(), nullable=False),
+        sa.Column("metodo_devolucao", sa.String(length=20), nullable=False),
+        sa.Column("criado_em", sa.DateTime(), nullable=False),
+        sa.ForeignKeyConstraint(["restaurante_id"], ["restaurantes.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["estorno_id"], ["pagamento_estornos.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["turno_id"], ["caixa_turnos.id"], ondelete="RESTRICT"),
+        sa.UniqueConstraint(
+            "restaurante_id",
+            "estorno_id",
+            name="uq_pagamento_estorno_liquidacao_estorno",
+        ),
+        sa.CheckConstraint(
+            "metodo_devolucao IN ('dinheiro', 'pix', 'cartao', 'cartao_debito', 'cartao_credito')",
+            name="ck_pagamento_estorno_liquidacao_metodo",
+        ),
+    )
+    for column in ("restaurante_id", "estorno_id", "turno_id"):
+        op.create_index(
+            f"ix_pagamento_estorno_liquidacoes_{column}",
+            "pagamento_estorno_liquidacoes",
+            [column],
+        )
+    op.create_index(
+        "ix_pagamento_estorno_liquidacoes_tenant_turno",
+        "pagamento_estorno_liquidacoes",
+        ["restaurante_id", "turno_id"],
+    )
+
+    op.create_table(
+        "pagamento_estorno_alocacoes",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
         sa.Column("restaurante_id", sa.Integer(), nullable=False),
         sa.Column("estorno_id", sa.String(), nullable=False),
@@ -78,32 +119,55 @@ def upgrade() -> None:
         "atendimento_id",
     ):
         op.create_index(
-            f"ix_{TABLE}_{column}",
-            TABLE,
+            f"ix_pagamento_estorno_alocacoes_{column}",
+            "pagamento_estorno_alocacoes",
             [column],
         )
     op.create_index(
         "ix_pagamento_estorno_alocacoes_tenant_estorno",
-        TABLE,
+        "pagamento_estorno_alocacoes",
         ["restaurante_id", "estorno_id"],
     )
     op.create_index(
         "ix_pagamento_estorno_alocacoes_tenant_pagamento",
-        TABLE,
+        "pagamento_estorno_alocacoes",
         ["restaurante_id", "pagamento_id"],
     )
     op.create_index(
         "ix_pagamento_estorno_alocacoes_tenant_atendimento",
-        TABLE,
+        "pagamento_estorno_alocacoes",
         ["restaurante_id", "atendimento_id"],
     )
+
+    # Estornos criados no checkpoint 3A não possuíam dimensão separada de
+    # liquidação; neles a devolução era implicitamente feita no mesmo meio da
+    # venda. Materializamos essa semântica para manter o histórico consistente.
+    op.execute("""
+        INSERT INTO pagamento_estorno_liquidacoes (
+            restaurante_id,
+            estorno_id,
+            turno_id,
+            metodo_devolucao,
+            criado_em
+        )
+        SELECT
+            e.restaurante_id,
+            e.id,
+            e.turno_id,
+            e.metodo,
+            e.criado_em
+        FROM pagamento_estornos AS e
+    """)
+
     _enable_rls()
 
 
 def downgrade() -> None:
     bind = op.get_bind()
     if bind.dialect.name == "postgresql":
-        op.execute(f"DROP POLICY IF EXISTS tenant_isolation ON {TABLE}")
-        op.execute(f"ALTER TABLE {TABLE} NO FORCE ROW LEVEL SECURITY")
-        op.execute(f"ALTER TABLE {TABLE} DISABLE ROW LEVEL SECURITY")
-    op.drop_table(TABLE)
+        for table in reversed(TENANT_TABLES):
+            op.execute(f"DROP POLICY IF EXISTS tenant_isolation ON {table}")
+            op.execute(f"ALTER TABLE {table} NO FORCE ROW LEVEL SECURITY")
+            op.execute(f"ALTER TABLE {table} DISABLE ROW LEVEL SECURITY")
+    op.drop_table("pagamento_estorno_alocacoes")
+    op.drop_table("pagamento_estorno_liquidacoes")
