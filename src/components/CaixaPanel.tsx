@@ -43,6 +43,7 @@ import { normalizeCatalogSnapshot, type CatalogCategory } from '../catalog/catal
 import { getProductPresets, obterNomeCategoria, smartSearchMatch } from '../domain';
 import { formatBackendTime, localCalendarDate } from '../utils/dateTime';
 import { API } from '../config/caixaService';
+import { KOMA_THEME_CHANGED_EVENT, nextKomaTheme, persistKomaTheme, readKomaTheme, type KomaTheme } from '../config/theme';
 import {
   ONLINE_MENU_ADDON,
   SUBSCRIPTION_PLANS,
@@ -1873,16 +1874,11 @@ export function CaixaPanel({
     window.dispatchEvent(new Event('koma_font_size_changed'));
   };
 
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-    return (localStorage.getItem('@koma:theme') as 'dark' | 'light') || 'dark';
-  });
+  const [theme, setTheme] = useState<KomaTheme>(() => readKomaTheme());
 
   useEffect(() => {
     const handleStorageChange = () => {
-      const storedTheme = localStorage.getItem('@koma:theme') as 'dark' | 'light';
-      if (storedTheme && ['dark', 'light'].includes(storedTheme)) {
-        setTheme(storedTheme);
-      }
+      setTheme(readKomaTheme());
       
       const storedFontSize = localStorage.getItem('koma_font_size') as any;
       if (storedFontSize && ['padrao', 'grande', 'gigante'].includes(storedFontSize)) {
@@ -1891,11 +1887,11 @@ export function CaixaPanel({
     };
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener('koma_font_size_changed', handleStorageChange);
-    window.addEventListener('koma_theme_changed', handleStorageChange);
+    window.addEventListener(KOMA_THEME_CHANGED_EVENT, handleStorageChange);
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('koma_font_size_changed', handleStorageChange);
-      window.removeEventListener('koma_theme_changed', handleStorageChange);
+      window.removeEventListener(KOMA_THEME_CHANGED_EVENT, handleStorageChange);
     };
   }, []);
 
@@ -4034,10 +4030,7 @@ export function CaixaPanel({
                       <button
                         type="button"
                         onClick={() => {
-                          const newTheme = theme === 'dark' ? 'light' : 'dark';
-                          localStorage.setItem('@koma:theme', newTheme);
-                          setTheme(newTheme);
-                          window.dispatchEvent(new Event('koma_theme_changed'));
+                          setTheme(persistKomaTheme(nextKomaTheme(theme)));
                         }}
                         className={clsx('cashier-font-control__button', 'flex items-center justify-center py-1')}
                         title="Alternar Tema"
@@ -4176,10 +4169,7 @@ export function CaixaPanel({
                   <button
                     type="button"
                     onClick={() => {
-                      const newTheme = theme === 'dark' ? 'light' : 'dark';
-                      localStorage.setItem('@koma:theme', newTheme);
-                      setTheme(newTheme);
-                      window.dispatchEvent(new Event('koma_theme_changed'));
+                      setTheme(persistKomaTheme(nextKomaTheme(theme)));
                     }}
                     className={clsx('cashier-font-control__button', 'flex items-center justify-center py-1')}
                     title="Alternar Tema"
