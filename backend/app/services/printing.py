@@ -11,8 +11,8 @@ from ..models import (
     CaixaTurno,
     Comanda,
     ConfiguracaoRestaurante,
+    Item,
     Mesa,
-    Pagamento,
     PrintJob,
     Restaurante,
     Usuario,
@@ -101,7 +101,7 @@ def load_open_table_snapshot(
     comandas = (
         db.query(Comanda)
         .options(
-            joinedload(Comanda.itens).joinedload("produto"),
+            joinedload(Comanda.itens).joinedload(Item.produto),
             joinedload(Comanda.criada_por),
         )
         .filter(
