@@ -9,9 +9,12 @@ const getAuthHeaders = (): Record<string, string> => {
 export interface RefundOrigin {
   comanda_id: string;
   atendimento_id?: string | null;
+  label: string;
   valor_original: number;
   valor_estornado: number;
   saldo_estornavel: number;
+  bloqueado?: boolean;
+  motivo_bloqueio?: string | null;
 }
 
 export interface RefundablePayment {
@@ -27,6 +30,7 @@ export interface RefundablePayment {
   numero_pedido?: number | null;
   mesa_id?: number | null;
   origens_financeiras: RefundOrigin[];
+  bloqueado?: boolean;
 }
 
 export interface RefundResult {
