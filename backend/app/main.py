@@ -10,6 +10,7 @@ from .config import settings
 from .database import Base, current_restaurante_id, engine
 from .routes import (
     ai,
+    atendimento_printing,
     atendimentos,
     auth,
     caixa,
@@ -280,11 +281,12 @@ app.add_middleware(
 )
 
 
-# O router de atendimentos vem antes de tables/orders para sombrear somente as
-# URLs legadas que ganharam semântica transacional nova, sem quebrar o frontend.
+# Os adaptadores de atendimento/impressão vêm antes das rotas legadas para
+# preservar URLs do frontend com semântica transacional nova.
 app.include_router(auth.router)
 app.include_router(products.router)
 app.include_router(atendimentos.router)
+app.include_router(atendimento_printing.router)
 app.include_router(tables.router)
 app.include_router(orders.router)
 app.include_router(websocket.router)
