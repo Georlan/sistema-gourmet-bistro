@@ -1,0 +1,4 @@
+-r requirements.txt
+
+# Dependências exclusivas da suíte de qualidade/CI.
+pytest>=8.0,<9.0
