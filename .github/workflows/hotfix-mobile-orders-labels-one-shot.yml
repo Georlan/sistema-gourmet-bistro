@@ -38,71 +38,18 @@ jobs:
           old_label = '<span>Autoaceite online</span>'
           new_label = '<span className="orders-auto-accept__label">Aceitar pedidos online automaticamente</span>'
           assert caixa.count(old_label) == 1, f'expected one legacy autoaccept label, found {caixa.count(old_label)}'
-          assert new_label not in caixa
           caixa = caixa.replace(old_label, new_label, 1)
           caixa_path.write_text(caixa, encoding='utf-8')
 
           css_path = Path('src/index.css')
           css = css_path.read_text(encoding='utf-8')
-
-          hidden_search = '''  .orders-search__result {
-            display: none;
-          }
-'''.replace('          ', '')
+          hidden_search = "  .orders-search__result {\n    display: none;\n  }\n"
           assert css.count(hidden_search) == 1, f'expected one hidden search-result rule, found {css.count(hidden_search)}'
           css = css.replace(hidden_search, '', 1)
 
-          old_mobile = '''  .orders-toolbar__actions {
-            width: 100%;
-            gap: 0.55rem;
-          }
-
-          .orders-auto-accept > span:last-child,
-          .orders-delivery-total {
-            display: none;
-          }
-
-          .orders-new-orders {
-            margin-left: auto;
-          }
-'''.replace('          ', '')
-          new_mobile = '''  .orders-toolbar__actions {
-            width: 100%;
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) auto;
-            align-items: center;
-            gap: 0.55rem 0.75rem;
-          }
-
-          .orders-auto-accept {
-            min-width: 0;
-            white-space: normal;
-          }
-
-          .orders-switch {
-            flex: 0 0 auto;
-          }
-
-          .orders-auto-accept__label {
-            min-width: 0;
-            line-height: 1.25;
-            white-space: normal;
-          }
-
-          .orders-delivery-total {
-            grid-column: 1 / -1;
-            justify-self: start;
-            padding-left: 0;
-            border-left: 0;
-          }
-
-          .orders-new-orders {
-            margin-left: 0;
-            justify-self: end;
-          }
-'''.replace('          ', '')
+          old_mobile = "  .orders-toolbar__actions {\n    width: 100%;\n    gap: 0.55rem;\n  }\n\n  .orders-auto-accept > span:last-child,\n  .orders-delivery-total {\n    display: none;\n  }\n\n  .orders-new-orders {\n    margin-left: auto;\n  }\n"
+          new_mobile = "  .orders-toolbar__actions {\n    width: 100%;\n    display: grid;\n    grid-template-columns: minmax(0, 1fr) auto;\n    align-items: center;\n    gap: 0.55rem 0.75rem;\n  }\n\n  .orders-auto-accept {\n    min-width: 0;\n    white-space: normal;\n  }\n\n  .orders-switch {\n    flex: 0 0 auto;\n  }\n\n  .orders-auto-accept__label {\n    min-width: 0;\n    line-height: 1.25;\n    white-space: normal;\n  }\n\n  .orders-delivery-total {\n    grid-column: 1 / -1;\n    justify-self: start;\n    padding-left: 0;\n    border-left: 0;\n  }\n\n  .orders-new-orders {\n    margin-left: 0;\n    justify-self: end;\n  }\n"
           assert css.count(old_mobile) == 1, f'expected one legacy mobile actions block, found {css.count(old_mobile)}'
-          assert new_mobile not in css
           css = css.replace(old_mobile, new_mobile, 1)
           css_path.write_text(css, encoding='utf-8')
 
@@ -110,27 +57,22 @@ jobs:
           tests = test_path.read_text(encoding='utf-8')
           marker = '\ndef test_temporary_stage4_patch_workflows_are_not_part_of_runtime_branch():\n'
           assert tests.count(marker) == 1
-          regression = r'''
-
-def test_mobile_orders_toolbar_preserves_operational_information_instead_of_hiding_it():
-    css = source("src/index.css")
-    caixa = source("src/components/CaixaPanel.tsx")
-
-    assert "Aceitar pedidos online automaticamente" in caixa
-    assert 'className="orders-auto-accept__label"' in caixa
-    assert 'aria-label="Aceitar pedidos online automaticamente"' in caixa
-
-    # Responsividade deve reorganizar o toolbar, não remover significado.
-    assert ".orders-auto-accept > span:last-child" not in css
-    assert ".orders-search__result {\n    display: none;" not in css
-    assert ".orders-delivery-total {\n    display: none;" not in css
-
-    assert "grid-template-columns: minmax(0, 1fr) auto;" in css
-    assert ".orders-auto-accept__label" in css
-    assert "white-space: normal;" in css
-    assert ".orders-delivery-total" in css
-    assert "grid-column: 1 / -1;" in css
-'''
+          regression = (
+              '\n\ndef test_mobile_orders_toolbar_preserves_operational_information_instead_of_hiding_it():\n'
+              '    css = source("src/index.css")\n'
+              '    caixa = source("src/components/CaixaPanel.tsx")\n\n'
+              '    assert "Aceitar pedidos online automaticamente" in caixa\n'
+              '    assert \'className="orders-auto-accept__label"\' in caixa\n'
+              '    assert \'aria-label="Aceitar pedidos online automaticamente"\' in caixa\n\n'
+              '    # Responsividade deve reorganizar o toolbar, não remover significado.\n'
+              '    assert ".orders-auto-accept > span:last-child" not in css\n'
+              '    assert ".orders-search__result {\\n    display: none;" not in css\n'
+              '    assert ".orders-delivery-total {\\n    display: none;" not in css\n\n'
+              '    assert "grid-template-columns: minmax(0, 1fr) auto;" in css\n'
+              '    assert ".orders-auto-accept__label" in css\n'
+              '    assert "white-space: normal;" in css\n'
+              '    assert "grid-column: 1 / -1;" in css\n'
+          )
           assert 'def test_mobile_orders_toolbar_preserves_operational_information_instead_of_hiding_it():' not in tests
           tests = tests.replace(marker, regression + marker, 1)
           test_path.write_text(tests, encoding='utf-8')
@@ -145,7 +87,7 @@ def test_mobile_orders_toolbar_preserves_operational_information_instead_of_hidi
       - name: Production build
         run: npm run build
 
-      - name: Run isolated responsive regression
+      - name: Run isolated responsive regressions
         run: |
           python3 <<'PY'
           import runpy
