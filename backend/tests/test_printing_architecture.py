@@ -186,7 +186,7 @@ def _jobs() -> list[PrintJob]:
         return list(
             db.query(PrintJob)
             .filter(PrintJob.restaurante_id == TENANT_ID)
-            .order_by(PrintJob.id.asc())
+            .order_by(PrintJob.created_at.asc(), PrintJob.id.asc())
             .all()
         )
     finally:
