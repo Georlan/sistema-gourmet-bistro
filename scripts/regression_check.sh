@@ -129,7 +129,8 @@ run_flow_test \
   "tests/test_product_read_stage3b.py" \
   "tests/test_financial_read_adversarial_stage3b.py" \
   "tests/test_financial_cash_stage3c.py" \
-  "tests/test_financial_refund_history_stage3c.py"
+  "tests/test_financial_refund_history_stage3c.py" \
+  "tests/test_financial_cash_extreme_stage3c.py"
 
 echo ""
 echo -e "${BLUE}${BOLD}========================================================================${NC}"
@@ -142,6 +143,6 @@ if [ "$FAIL_COUNT" -eq 0 ]; then
 fi
 
 echo -e "${RED}${BOLD} FALHA: ${FAIL_COUNT} FLUXO(S) CRÍTICO(S) APRESENTARAM REGRESSÃO.${NC}"
-  echo -e "${RED} BLOQUEIO DE DEPLOY: a alteração não deve ir para produção até o gate voltar a 100%.${NC}"
+echo -e "${RED} BLOQUEIO DE DEPLOY: a alteração não deve ir para produção até o gate voltar a 100%.${NC}"
 echo -e "${BLUE}${BOLD}========================================================================${NC}"
 exit 1
