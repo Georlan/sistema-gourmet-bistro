@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import uuid
 from collections import defaultdict
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
@@ -244,3 +245,81 @@ def total_estornado_pagamento(
         PagamentoEstorno.pagamento_id == pagamento_id,
     ).all()
     return money(sum((money(row[0]) for row in rows), Decimal("0.00")))
+
+
+def registrar_estorno(
+    db: Session,
+    *,
+    restaurante_id: int,
+    pagamento_id: str,
+    turno_id: int,
+    usuario_id: str | None,
+    valor: object,
+    motivo: str,
+    idempotency_key: str,
+) -> PagamentoEstorno:
+    """Registra estorno parcial/total sem alterar o pagamento aprovado original.
+
+    O estorno pertence ao turno em que a devolução efetivamente acontece. Isso
+    permite estornar hoje uma venda de um turno anterior e reconciliar a saída
+    no caixa atual sem reescrever o histórico da venda original.
+    """
+    clean_key = (idempotency_key or "").strip()
+    clean_reason = (motivo or "").strip()
+    refund_value = money(valor)
+
+    if not clean_key:
+        raise ValueError("Estorno exige idempotency_key não vazia.")
+    if len(clean_reason) < 5:
+        raise ValueError("Estorno exige justificativa com pelo menos 5 caracteres.")
+    if refund_value <= 0:
+        raise ValueError("Valor do estorno deve ser maior que zero.")
+
+    existing = db.query(PagamentoEstorno).filter(
+        PagamentoEstorno.restaurante_id == restaurante_id,
+        PagamentoEstorno.idempotency_key == clean_key,
+    ).first()
+    if existing is not None:
+        if existing.pagamento_id != pagamento_id:
+            raise ValueError("Idempotency key já utilizada por outro estorno.")
+        return existing
+
+    payment = db.query(Pagamento).filter(
+        Pagamento.restaurante_id == restaurante_id,
+        Pagamento.id == pagamento_id,
+    ).first()
+    if payment is None:
+        raise ValueError("Pagamento não encontrado para este restaurante.")
+    if payment.status != "aprovado":
+        raise ValueError("Somente pagamentos aprovados podem ser estornados.")
+
+    shift = db.query(CaixaTurno).filter(
+        CaixaTurno.restaurante_id == restaurante_id,
+        CaixaTurno.id == turno_id,
+    ).first()
+    if shift is None or shift.status != "aberto":
+        raise ValueError("Estorno exige um turno de caixa aberto do mesmo restaurante.")
+
+    already_refunded = total_estornado_pagamento(db, restaurante_id, pagamento_id)
+    available = money(payment.valor) - already_refunded
+    if refund_value > available:
+        raise ValueError(
+            "Estorno excede o saldo disponível do pagamento: "
+            f"disponível={money(available)} solicitado={refund_value}."
+        )
+
+    refund = PagamentoEstorno(
+        id=str(uuid.uuid4()),
+        restaurante_id=restaurante_id,
+        pagamento_id=pagamento_id,
+        turno_id=turno_id,
+        usuario_id=usuario_id,
+        valor=float(refund_value),
+        metodo=payment.metodo,
+        motivo=clean_reason,
+        idempotency_key=clean_key,
+        criado_em=datetime.datetime.now(datetime.timezone.utc),
+    )
+    db.add(refund)
+    db.flush()
+    return refund
