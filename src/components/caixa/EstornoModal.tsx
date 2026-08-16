@@ -88,6 +88,7 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess }
       payment.id,
       payment.numero_pedido,
       payment.mesa_id,
+      ...payment.origens_financeiras.map(origin => origin.label),
     ].some(value => String(value ?? '').toLowerCase().includes(term)));
   }, [payments, search]);
 
@@ -175,7 +176,7 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess }
                 <input
                   value={search}
                   onChange={event => setSearch(event.target.value)}
-                  placeholder="Mesa, pedido ou meio..."
+                  placeholder="Mesa, Conta, pedido ou meio..."
                   className="w-full rounded-xl border border-koma-border bg-koma-input py-2.5 pl-9 pr-3 text-xs text-koma-foreground outline-none focus:border-emerald-500/50"
                 />
               </div>
@@ -262,10 +263,10 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess }
                       <span>Este recebimento foi dividido entre mais de uma Conta. Como o estorno é parcial, informe de qual origem sai cada parcela. O sistema não faz rateio automático.</span>
                     </div>
                     <div className="mt-3 space-y-2">
-                      {selected.origens_financeiras.filter(origin => origin.saldo_estornavel > 0).map((origin, index) => (
+                      {selected.origens_financeiras.filter(origin => origin.saldo_estornavel > 0).map(origin => (
                         <div key={origin.comanda_id} className="grid grid-cols-[minmax(0,1fr)_130px] items-center gap-3 rounded-xl border border-koma-border bg-koma-panel p-2.5">
                           <div className="min-w-0">
-                            <strong className="block text-[10px] text-koma-foreground">Origem financeira {index + 1}</strong>
+                            <strong className="block truncate text-[10px] text-koma-foreground">{origin.label}</strong>
                             <span className="mt-0.5 block text-[9px] text-koma-muted">Disponível {currency.format(origin.saldo_estornavel)}</span>
                           </div>
                           <MoneyInput
