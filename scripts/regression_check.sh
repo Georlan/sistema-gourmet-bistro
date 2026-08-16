@@ -126,7 +126,8 @@ run_flow_test \
   "tests/test_financial_ledger_stage3.py" \
   "tests/test_financial_allocation_stage3.py" \
   "tests/test_financial_read_stage3b.py" \
-  "tests/test_product_read_stage3b.py"
+  "tests/test_product_read_stage3b.py" \
+  "tests/test_financial_read_adversarial_stage3b.py"
 
 echo ""
 echo -e "${BLUE}${BOLD}========================================================================${NC}"
