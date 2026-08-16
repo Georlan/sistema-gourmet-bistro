@@ -19,6 +19,7 @@ Base = declarative_base()
 current_restaurante_id: ContextVar[int | None] = ContextVar(
     "current_restaurante_id", default=None
 )
+_UNSET_TENANT = object()
 
 
 class TenantScopeError(RuntimeError):
@@ -52,10 +53,17 @@ def require_tenant_id() -> int:
 
 class TenantSession(Session):
     def __init__(self, *args, **kwargs):
-        restaurante_id = kwargs.pop("restaurante_id", current_restaurante_id.get())
+        # Uma sessão só fica permanentemente vinculada quando o chamador passa
+        # restaurante_id explicitamente. SessionLocal() puro acompanha o
+        # ContextVar vigente em cada operação, o que permite jobs/contextos
+        # controlados mudarem de escopo antes de iniciar a transação sem manter
+        # uma identidade antiga capturada no construtor.
+        restaurante_id = kwargs.pop("restaurante_id", _UNSET_TENANT)
         super().__init__(*args, **kwargs)
         self.restaurante_id: int | None = (
-            int(restaurante_id) if _valid_tenant_id(restaurante_id) else None
+            int(restaurante_id)
+            if restaurante_id is not _UNSET_TENANT and _valid_tenant_id(restaurante_id)
+            else None
         )
 
 
@@ -64,7 +72,8 @@ def _effective_tenant_id(session: Session | None = None) -> int | None:
 
     Sessões explicitamente vinculadas têm precedência. Se também existir um
     ContextVar válido, ambos precisam concordar; a aplicação falha fechada em
-    vez de executar ORM sob um tenant e PostgreSQL RLS sob outro.
+    vez de executar ORM sob um tenant e PostgreSQL RLS sob outro. Sessões não
+    vinculadas acompanham o ContextVar atual.
     """
     session_tenant = getattr(session, "restaurante_id", None) if session else None
     context_tenant = current_restaurante_id.get()
@@ -262,8 +271,8 @@ def get_db(request: Request = None):
     except Exception:
         pass
 
-    # O listener after_begin aplica SET LOCAL em toda transação. Isso evita que
-    # sessões criadas fora do dependency HTTP (jobs/background) pulem o RLS.
+    # O dependency HTTP sempre fixa explicitamente o tenant resolvido pelo JWT.
+    # Sessões de request portanto não acompanham trocas acidentais de ContextVar.
     db = SessionLocal(restaurante_id=restaurante_id)
 
     try:
