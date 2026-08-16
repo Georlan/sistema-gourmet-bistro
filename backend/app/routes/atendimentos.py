@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from typing import List
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from ..database import get_db, require_tenant_id
-from ..models import Comanda, Usuario
+from ..models import Comanda, Item, Usuario
 from ..schemas import ComandaResponse, ItemResponse
 from ..security import get_current_user, require_permission
 from ..services.atendimentos import (
@@ -59,6 +59,27 @@ def _materialize_table_accounts(
     db.flush()
 
 
+def _item_already_at_table(
+    db: Session,
+    restaurante_id: int,
+    item_id: str,
+    mesa_id: int,
+) -> Item | None:
+    """Compatibilidade para retries e para o frontend legado pós-batch."""
+    return (
+        db.query(Item)
+        .join(Comanda, Comanda.id == Item.comanda_id)
+        .filter(
+            Item.restaurante_id == restaurante_id,
+            Item.id == item_id,
+            Comanda.restaurante_id == restaurante_id,
+            Comanda.mesa_id == mesa_id,
+            Comanda.fechada == False,
+        )
+        .first()
+    )
+
+
 @router.get("/atendimentos/mesas/{mesa_id}")
 def listar_familias_mesa(
     mesa_id: int,
@@ -76,11 +97,8 @@ def listar_familias_mesa(
         _raise_domain(exc)
 
 
-# ---------------------------------------------------------------------------
-# Compatibilidade: estas rotas são registradas ANTES do router legado orders.
-# O frontend atual pode continuar chamando os mesmos caminhos enquanto a
-# operação passa a ser atômica no nível da família/atendimento.
-# ---------------------------------------------------------------------------
+# Estas rotas entram antes do router legado de orders. Assim mantemos as URLs
+# do frontend enquanto trocamos a unidade transacional de Comanda para Família.
 @router.post(
     "/comandas/{comanda_id}/transferir/{nova_mesa_id}",
     response_model=ComandaResponse,
@@ -95,8 +113,6 @@ def transferir_atendimento_compativel(
     require_waiter_permission(db, current_user, "perm_garcom_transferir_mesa")
     rid = require_tenant_id()
     try:
-        # Materializar o destino primeiro impede que uma mesa ocupada legada
-        # seja tratada como vazia por engano.
         _materialize_table_accounts(db, rid, nova_mesa_id, actor_id=current_user.id)
         command = transfer_group_by_comanda(
             db,
@@ -206,6 +222,17 @@ def transferir_itens_em_lote(
     rid = require_tenant_id()
     try:
         _materialize_table_accounts(db, rid, nova_mesa_id, actor_id=current_user.id)
+        already = [
+            _item_already_at_table(db, rid, item_id, nova_mesa_id)
+            for item_id in payload.item_ids
+        ]
+        if all(item is not None for item in already):
+            return [item for item in already if item is not None]
+        if any(item is not None for item in already):
+            raise AtendimentoError(
+                "O lote mistura itens já transferidos com itens ainda na origem; atualize a mesa e tente novamente.",
+                status_code=409,
+            )
         items = transfer_items_batch(
             db,
             rid,
@@ -236,6 +263,11 @@ def transferir_item_compativel(
 ):
     require_waiter_permission(db, current_user, "perm_garcom_transferir_item")
     rid = require_tenant_id()
+    existing = _item_already_at_table(db, rid, item_id, nova_mesa_id)
+    if existing is not None:
+        # Retry idempotente: o batch pode ter sido concluído antes da atualização
+        # otimista do frontend legado disparar a requisição individual.
+        return existing
     try:
         _materialize_table_accounts(db, rid, nova_mesa_id, actor_id=current_user.id)
         items = transfer_items_batch(
