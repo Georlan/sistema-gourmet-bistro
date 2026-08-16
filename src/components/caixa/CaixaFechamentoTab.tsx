@@ -20,6 +20,7 @@ import {
 import { CaixaTurnoResumo, FechamentoCaixaResult } from '../../types';
 import { imprimirComprovanteFechamento } from '../../config/caixaService';
 import { formatBackendDateTime } from '../../utils/dateTime';
+import { MoneyInput } from '../MoneyInput';
 
 interface CaixaFechamentoTabProps {
   isTurnoAberto: boolean;
@@ -46,12 +47,6 @@ const money = new Intl.NumberFormat('pt-BR', {
 });
 
 const formatMoney = (value: number) => money.format(Number(value) || 0);
-
-const valueFromInput = (value: string): number | '' => {
-  if (value === '') return '';
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : '';
-};
 
 interface CountFieldProps {
   id: string;
@@ -96,18 +91,15 @@ const CountField: React.FC<CountFieldProps> = ({
       </div>
       <label htmlFor={id} className="mt-3 flex items-center rounded-xl border border-koma-border bg-koma-input px-3 focus-within:border-[#2a9f7d]">
         <span className="text-sm font-semibold text-koma-muted">R$</span>
-        <input
+        <MoneyInput
           id={id}
-          type="number"
-          inputMode="decimal"
-          step="0.01"
-          min={allowNegative ? undefined : '0'}
           required={required}
           placeholder="0,00"
           value={value}
-          onChange={(event) => onChange(valueFromInput(event.target.value))}
-          onFocus={(event) => event.currentTarget.select()}
-          className="min-w-0 flex-1 appearance-none bg-transparent px-2 py-3 text-lg font-semibold tabular-nums text-koma-foreground outline-none placeholder:text-zinc-700 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          onValueChange={onChange}
+          allowNegative={allowNegative}
+          selectOnFocus
+          className="min-w-0 flex-1 bg-transparent px-2 py-3 text-lg font-semibold tabular-nums text-koma-foreground outline-none placeholder:text-zinc-700"
         />
       </label>
       <div className="mt-2 flex items-center justify-between gap-3 text-[10px]">
