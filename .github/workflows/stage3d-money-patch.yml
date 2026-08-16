@@ -50,7 +50,7 @@ jobs:
           replace_exact("const [pdvDeliveryTaxa, setPdvDeliveryTaxa] = useState('0.00');", "const [pdvDeliveryTaxa, setPdvDeliveryTaxa] = useState<number | ''>(0);")
 
           replace_exact("parseFloat(saldoInicial)", "Number(saldoInicial || 0)")
-          replace_exact("parseFloat(paymentValor)", "Number(paymentValor || 0)", expected=4)
+          replace_exact("parseFloat(paymentValor)", "Number(paymentValor || 0)", expected=5)
           replace_exact("parseFloat(prodFormPreco)", "Number(prodFormPreco || 0)")
           replace_exact("parseFloat(deliveryTaxa) || 0.0", "Number(deliveryTaxa || 0)")
 
