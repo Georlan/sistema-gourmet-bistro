@@ -2,8 +2,9 @@ import uuid
 import datetime
 import logging
 from fastapi import APIRouter, Depends, Header, HTTPException, status, BackgroundTasks
+from sqlalchemy import text
 from sqlalchemy.orm import Session
-from ..database import get_db, current_restaurante_id
+from ..database import get_db, current_restaurante_id, tenant_session_scope
 from ..models import Comanda, Lancamento, Item, Produto, Usuario
 from ..schemas import CardapioPedidoCreate
 from ..websocket_manager import manager
@@ -272,6 +273,36 @@ def criar_pedido_online(
     }
 
 
+def _resolve_public_order_tenant(db: Session, comanda_id: str, key: str) -> int | None:
+    """Descobre o tenant somente quando ID + chave secreta do pedido conferem."""
+    if not comanda_id or not key:
+        return None
+
+    if db.get_bind().dialect.name == "postgresql":
+        return db.execute(
+            text(
+                "SELECT koma_internal.resolve_public_order_tenant("
+                ":comanda_id, :key)"
+            ),
+            {"comanda_id": comanda_id, "key": key},
+        ).scalar_one_or_none()
+
+    # SQLite de desenvolvimento/teste não possui SECURITY DEFINER. SQL textual
+    # faz o mesmo lookup mínimo sem depender do filtro ORM/tenant atual.
+    return db.execute(
+        text(
+            """
+            SELECT restaurante_id
+            FROM comandas
+            WHERE id = :comanda_id
+              AND idempotency_key = :key
+            LIMIT 1
+            """
+        ),
+        {"comanda_id": comanda_id, "key": key},
+    ).scalar_one_or_none()
+
+
 @router.get("/pedidos/{comanda_id}/status")
 def consultar_status_pedido_publico(
     comanda_id: str,
@@ -285,45 +316,45 @@ def consultar_status_pedido_publico(
     revelar que o comanda_id existe.
     """
     key = (key or "").strip()
-
-    # Busca a comanda e valida posse via idempotency_key em um único passo.
-    comanda = db.query(Comanda).filter(Comanda.id == comanda_id).first()
-    if not comanda:
+    rest_id = _resolve_public_order_tenant(db, comanda_id.strip(), key)
+    if rest_id is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Pedido não encontrado."
         )
 
-    # Validação de posse: idempotency_key obrigatória e deve bater.
-    # Pedidos legados sem idempotency_key no banco também passam se o
-    # cliente enviar a mesma key que foi salva no seu localStorage na
-    # criação do pedido. Se a comanda não tiver idempotency_key salva
-    # (pedido criado antes do hotfix), aceitar apenas se key não for
-    # vazia e bater — caso contrário, retornar 404 para não vazar dados.
-    if not key or not comanda.idempotency_key or comanda.idempotency_key != key:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Pedido não encontrado."
-        )
+    with tenant_session_scope(db, int(rest_id)):
+        # O lookup mínimo acima apenas descobre o tenant. A leitura financeira
+        # continua passando pelo ORM + RLS e inclui restaurante_id explicitamente.
+        comanda = db.query(Comanda).filter(
+            Comanda.restaurante_id == int(rest_id),
+            Comanda.id == comanda_id,
+            Comanda.idempotency_key == key,
+        ).first()
+        if not comanda:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Pedido não encontrado."
+            )
 
-    itens_payload = [
-        {
-            "id": item.id,
-            "nome": item.produto.nome if item.produto else "Item",
-            "quantidade": 1,
+        itens_payload = [
+            {
+                "id": item.id,
+                "nome": item.produto.nome if item.produto else "Item",
+                "quantidade": 1,
+            }
+            for item in comanda.itens
+        ]
+
+        total_val = sum(i.preco_unit for i in comanda.itens) + (comanda.delivery_taxa or 0.0)
+
+        return {
+            "id": comanda.id,
+            "numero_pedido": comanda.numero_pedido,
+            "status": comanda.delivery_status or "pendente",
+            "tipo": comanda.tipo,
+            "total": total_val,
+            "fechada": comanda.fechada,
+            "criado_em": comanda.criado_em.isoformat() if comanda.criado_em else None,
+            "itens": itens_payload
         }
-        for item in comanda.itens
-    ]
-
-    total_val = sum(i.preco_unit for i in comanda.itens) + (comanda.delivery_taxa or 0.0)
-
-    return {
-        "id": comanda.id,
-        "numero_pedido": comanda.numero_pedido,
-        "status": comanda.delivery_status or "pendente",
-        "tipo": comanda.tipo,
-        "total": total_val,
-        "fechada": comanda.fechada,
-        "criado_em": comanda.criado_em.isoformat() if comanda.criado_em else None,
-        "itens": itens_payload
-    }
