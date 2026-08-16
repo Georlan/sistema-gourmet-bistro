@@ -28,6 +28,7 @@ jobs:
         run: |
           python3 <<'PY'
           from pathlib import Path
+          import re
 
           path = Path('src/components/CaixaPanel.tsx')
           text = path.read_text(encoding='utf-8')
@@ -62,12 +63,17 @@ jobs:
               "      window.removeEventListener(KOMA_THEME_CHANGED_EVENT, handleStorageChange);",
           )
 
-          legacy_click = """                          const newTheme = theme === 'dark' ? 'light' : 'dark';
-                          localStorage.setItem('@koma:theme', newTheme);
-                          setTheme(newTheme);
-                          window.dispatchEvent(new Event('koma_theme_changed'));"""
-          shared_click = """                          setTheme(persistKomaTheme(nextKomaTheme(theme)));"""
-          replace_exact(legacy_click, shared_click, expected=2)
+          legacy_click = re.compile(
+              r"(?P<indent>[ \t]*)const newTheme = theme === 'dark' \? 'light' : 'dark';\s+"
+              r"localStorage\.setItem\('@koma:theme', newTheme\);\s+"
+              r"setTheme\(newTheme\);\s+"
+              r"window\.dispatchEvent\(new Event\('koma_theme_changed'\)\);"
+          )
+          text, click_count = legacy_click.subn(
+              lambda match: f"{match.group('indent')}setTheme(persistKomaTheme(nextKomaTheme(theme)));",
+              text,
+          )
+          assert click_count == 2, f'expected 2 legacy theme callbacks, found {click_count}'
 
           assert "localStorage.setItem('@koma:theme'" not in text
           assert "new Event('koma_theme_changed')" not in text
