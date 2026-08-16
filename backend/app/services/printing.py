@@ -20,7 +20,13 @@ from ..models import (
 )
 from ..printer_service import printer_service
 from ..subscription import subscription_has_printing
-from ..timezone_utils import to_operational_local_time
+from ..timezone_utils import get_operational_now, to_operational_local_time
+from .atendimentos import (
+    AtendimentoError,
+    ensure_atendimento_for_comanda,
+    ensure_launch_identity,
+    get_table_family_snapshot,
+)
 
 
 class PrintingRequestError(ValueError):
@@ -43,11 +49,12 @@ class PrintPreferences:
 @dataclass(frozen=True)
 class TableReceiptSnapshot:
     mesa_id: int
-    numero_pedido: int
+    numero_pedido: str
     tipo: str
     garcom_nome: str
     opened_at: Optional[datetime.datetime]
     comandas_details: list[dict]
+    account_numbers: tuple[int, ...] = ()
 
 
 def get_print_preferences(db: Session, restaurante_id: int) -> PrintPreferences:
@@ -74,7 +81,9 @@ def get_print_preferences(db: Session, restaurante_id: int) -> PrintPreferences:
         print_footer=(config.impressao_mensagem_rodape if config else None),
         taxa_servico_ativa=(config.taxa_servico_ativa if config else True),
         taxa_servico_padrao=float(
-            config.taxa_servico_padrao if config and config.taxa_servico_padrao is not None else 10.0
+            config.taxa_servico_padrao
+            if config and config.taxa_servico_padrao is not None
+            else 10.0
         ),
     )
 
@@ -100,17 +109,32 @@ def _item_detail(item: Item) -> Optional[dict]:
 
 
 def _item_is_printable(item: Item) -> bool:
-    """Define se um item habilita a impressão automática do lançamento."""
     produto = item.produto
     if produto is None:
         return False
     categoria = produto.categoria
-    destino = (
-        categoria.destino_impressao
-        if categoria is not None
-        else "COZINHA"
-    )
+    destino = categoria.destino_impressao if categoria is not None else "COZINHA"
     return (destino or "COZINHA").strip().upper() not in {"NENHUM", "NONE", ""}
+
+
+def _family_number_text(numbers: tuple[int, ...]) -> str:
+    return " + #".join(str(number) for number in numbers)
+
+
+def _materialize_receipt_families(
+    db: Session,
+    restaurante_id: int,
+    comandas: list[Comanda],
+) -> tuple[int, ...]:
+    for comanda in comandas:
+        try:
+            ensure_atendimento_for_comanda(db, comanda)
+        except AtendimentoError as exc:
+            raise PrintingRequestError(str(exc), status_code=exc.status_code) from exc
+    if not comandas or comandas[0].mesa_id is None:
+        return ()
+    families = get_table_family_snapshot(db, restaurante_id, int(comandas[0].mesa_id))
+    return tuple(sorted({int(family["numero_conta"]) for family in families}))
 
 
 def load_open_table_snapshot(
@@ -118,12 +142,7 @@ def load_open_table_snapshot(
     restaurante_id: int,
     mesa_id: int,
 ) -> TableReceiptSnapshot:
-    """Carrega a mesa inteira para Extrato Completo/Fechamento.
-
-    Esta função representa a fotografia financeira da mesa aberta. Ela nunca é
-    usada para a impressão automática de um lançamento novo; lançamentos têm
-    uma fronteira própria em ``load_table_source_snapshot``.
-    """
+    """Fotografia financeira da mesa inteira para Extrato/Fechamento."""
     db.flush()
 
     mesa = db.query(Mesa).filter(
@@ -148,19 +167,13 @@ def load_open_table_snapshot(
         .all()
     )
     if not comandas:
-        raise PrintingRequestError(
-            "Não há comandas abertas nesta mesa",
-            status_code=400,
-        )
+        raise PrintingRequestError("Não há comandas abertas nesta mesa", status_code=400)
 
+    account_numbers = _materialize_receipt_families(db, restaurante_id, comandas)
     has_active_items = False
     comandas_details: list[dict] = []
     for comanda in comandas:
-        detail = {
-            "id": comanda.id,
-            "identificador": comanda.identificador,
-            "itens": [],
-        }
+        detail = {"id": comanda.id, "identificador": comanda.identificador, "itens": []}
         for item in comanda.itens:
             item_detail = _item_detail(item)
             if item_detail is None:
@@ -171,23 +184,22 @@ def load_open_table_snapshot(
         comandas_details.append(detail)
 
     if not has_active_items:
-        raise PrintingRequestError(
-            "Não há itens ativos para imprimir nesta mesa",
-            status_code=400,
-        )
+        raise PrintingRequestError("Não há itens ativos para imprimir nesta mesa", status_code=400)
 
     first = comandas[0]
     opened_at_raw = min(
-        (c.criado_em for c in comandas if c.criado_em is not None),
+        (command.criado_em for command in comandas if command.criado_em is not None),
         default=None,
     )
+    number_text = _family_number_text(account_numbers) if account_numbers else str(first.numero_pedido)
     return TableReceiptSnapshot(
         mesa_id=mesa_id,
-        numero_pedido=first.numero_pedido,
+        numero_pedido=number_text,
         tipo=first.tipo,
         garcom_nome=(first.criada_por.nome if first.criada_por else "Garçom"),
         opened_at=to_operational_local_time(opened_at_raw),
         comandas_details=comandas_details,
+        account_numbers=account_numbers,
     )
 
 
@@ -199,21 +211,12 @@ def load_table_source_snapshot(
     source_type: str,
     source_id: str,
 ) -> TableReceiptSnapshot:
-    """Carrega somente a instância que originou um pedido impresso.
+    """Carrega somente o pedido/lote solicitado.
 
-    - ``lancamento``: exatamente o lote criado naquele clique em Confirmar.
-    - ``pedido``: a comanda criada em uma venda direta do caixa.
-    - ``reimpressao``: respeita o ID recebido (lote ``l-`` ou comanda ``c-``).
-
-    A regra de impressão automática é decidida no nível do lote: se existir ao
-    menos um item imprimível, a via contém TODOS os itens ativos daquele lote,
-    inclusive bebidas/categorias com destino NENHUM. Um lote composto somente
-    por itens não imprimíveis não gera via automática. Na impressão manual de
-    um lote, o pedido explícito do operador prevalece e o lote ativo pode ser
-    impresso mesmo que nenhum item habilite impressão automática.
-
-    O Extrato Completo continua usando ``load_open_table_snapshot`` e inclui
-    todo o consumo ativo da mesa.
+    A identidade humana pertence ao lançamento original (46-B), mesmo se um
+    item for transferido depois. O conteúdo, porém, respeita a localização
+    financeira ATUAL do item: uma reimpressão na mesa de origem não repete um
+    item que já foi transferido para outra mesa.
     """
     db.flush()
     normalized_source = (source_type or "").strip().casefold()
@@ -226,7 +229,6 @@ def load_table_source_snapshot(
         normalized_source == "reimpressao" and source_id.startswith("c-")
     )
 
-    lancamento = None
     if use_launch:
         lancamento = (
             db.query(Lancamento)
@@ -234,33 +236,45 @@ def load_table_source_snapshot(
                 joinedload(Lancamento.comanda).joinedload(Comanda.criada_por),
                 joinedload(Lancamento.garcom),
                 joinedload(Lancamento.itens).joinedload(Item.produto),
+                joinedload(Lancamento.itens).joinedload(Item.comanda),
             )
-            .join(Comanda, Comanda.id == Lancamento.comanda_id)
             .filter(
                 Lancamento.restaurante_id == restaurante_id,
                 Lancamento.id == source_id,
-                Comanda.restaurante_id == restaurante_id,
-                Comanda.mesa_id == mesa_id,
-                Comanda.fechada == False,
             )
             .first()
         )
         if lancamento is None:
             raise PrintingRequestError("Lançamento não encontrado", status_code=404)
         comanda = lancamento.comanda
-        source_items = list(lancamento.itens)
+        if comanda is None or comanda.restaurante_id != restaurante_id:
+            raise PrintingRequestError("Comanda do lançamento não encontrada", status_code=404)
+        source_items = [
+            item
+            for item in lancamento.itens
+            if item.comanda is not None
+            and item.comanda.restaurante_id == restaurante_id
+            and item.comanda.mesa_id == mesa_id
+        ]
         garcom_nome = (
             lancamento.garcom.nome
             if lancamento.garcom is not None
             else (comanda.criada_por.nome if comanda.criada_por else "Garçom")
         )
         source_opened_at = lancamento.timestamp
+        try:
+            identity = ensure_launch_identity(db, lancamento)
+            number_text = identity.label
+            account_numbers = (identity.numero_conta,)
+        except AtendimentoError as exc:
+            raise PrintingRequestError(str(exc), status_code=exc.status_code) from exc
     elif use_command:
         comanda = (
             db.query(Comanda)
             .options(
                 joinedload(Comanda.itens).joinedload(Item.produto),
                 joinedload(Comanda.criada_por),
+                joinedload(Comanda.lancamentos),
             )
             .filter(
                 Comanda.restaurante_id == restaurante_id,
@@ -275,46 +289,84 @@ def load_table_source_snapshot(
         source_items = list(comanda.itens)
         garcom_nome = comanda.criada_por.nome if comanda.criada_por else "Garçom"
         source_opened_at = comanda.criado_em
+        launches = sorted(
+            list(comanda.lancamentos),
+            key=lambda launch: (launch.timestamp or datetime.datetime.min, launch.id),
+        )
+        if launches:
+            try:
+                identity = ensure_launch_identity(db, launches[0])
+                number_text = identity.label
+                account_numbers = (identity.numero_conta,)
+            except AtendimentoError as exc:
+                raise PrintingRequestError(str(exc), status_code=exc.status_code) from exc
+        else:
+            number_text = str(comanda.numero_pedido)
+            account_numbers = (int(comanda.numero_pedido),)
     else:
         raise PrintingRequestError("Origem de impressão parcial inválida", status_code=400)
 
     active_items = [
-        item for item in source_items
-        if item.status != "cancelado" and item.produto is not None
+        item for item in source_items if item.status != "cancelado" and item.produto is not None
     ]
     if not active_items:
-        raise PrintingRequestError(
-            "Não há itens ativos neste lançamento",
-            status_code=400,
-        )
+        raise PrintingRequestError("Não há itens ativos neste lançamento nesta mesa", status_code=400)
 
     is_manual_reprint = normalized_source == "reimpressao"
     if not is_manual_reprint and not any(_item_is_printable(item) for item in active_items):
-        raise PrintingRequestError(
-            "Não há itens imprimíveis neste lançamento",
-            status_code=400,
-        )
+        raise PrintingRequestError("Não há itens imprimíveis neste lançamento", status_code=400)
 
-    source_details = []
-    for item in active_items:
-        item_detail = _item_detail(item)
-        if item_detail is not None:
-            source_details.append(item_detail)
-
+    source_details = [detail for item in active_items if (detail := _item_detail(item)) is not None]
     return TableReceiptSnapshot(
         mesa_id=mesa_id,
-        numero_pedido=comanda.numero_pedido,
+        numero_pedido=number_text,
         tipo=comanda.tipo,
         garcom_nome=garcom_nome,
         opened_at=to_operational_local_time(source_opened_at),
         comandas_details=[
-            {
-                "id": comanda.id,
-                "identificador": comanda.identificador,
-                "itens": source_details,
-            }
+            {"id": comanda.id, "identificador": comanda.identificador, "itens": source_details}
         ],
+        account_numbers=account_numbers,
     )
+
+
+def _replace_account_header(receipt: str, snapshot: TableReceiptSnapshot) -> str:
+    if not snapshot.account_numbers:
+        return receipt
+    label = "CONTAS" if len(snapshot.account_numbers) > 1 else "CONTA"
+    return receipt.replace("PEDIDO: #", f"{label}: #", 1)
+
+
+def _inject_closing_metadata(
+    receipt: str,
+    snapshot: TableReceiptSnapshot,
+    *,
+    printed_by: Optional[str],
+) -> str:
+    """Acrescenta auditoria humana sem criar um segundo formatter térmico."""
+    lines = receipt.split("\n")
+    width = int(getattr(printer_service, "width", 40) or 40)
+    now = get_operational_now()
+    account_prefix = "CONTAS" if len(snapshot.account_numbers) > 1 else "CONTA"
+    account_text = _family_number_text(snapshot.account_numbers) if snapshot.account_numbers else snapshot.numero_pedido
+    metadata = [f"{account_prefix}: #{account_text}"[:width]]
+    left = f"DATA: {now.strftime('%d/%m/%Y')}"
+    right = f"HORA: {now.strftime('%H:%M')}"
+    gap = max(width - len(left) - len(right), 1)
+    metadata.append((left + (" " * gap) + right)[:width])
+    metadata.append(f"IMPRESSO POR: {(printed_by or 'OPERADOR').strip().upper()}"[:width])
+
+    insert_at = next(
+        (index + 1 for index, line in enumerate(lines) if "ABERTURA:" in line and "MESA:" in line),
+        None,
+    )
+    if insert_at is None:
+        insert_at = next(
+            (index + 1 for index, line in enumerate(lines) if "FECHAMENTO" in line),
+            1,
+        )
+    lines[insert_at:insert_at] = metadata
+    return "\n".join(lines)
 
 
 def render_table_receipt(
@@ -325,12 +377,11 @@ def render_table_receipt(
     apenas_valores: bool = False,
     print_header: Optional[str] = None,
     print_footer: Optional[str] = None,
+    printed_by: Optional[str] = None,
 ) -> str:
-    """Fonte canônica da mesa inteira: Extrato Completo e Apenas Valores."""
     snapshot = load_open_table_snapshot(db, restaurante_id, mesa_id)
     preferences = get_print_preferences(db, restaurante_id)
-
-    return printer_service.generate_receipt(
+    receipt = printer_service.generate_receipt(
         num_pedido=snapshot.numero_pedido,
         tipo=snapshot.tipo,
         mesa_id=snapshot.mesa_id,
@@ -344,6 +395,9 @@ def render_table_receipt(
         apenas_valores=apenas_valores,
         restaurant_name_position=preferences.restaurant_name_position,
     )
+    if apenas_valores:
+        return _inject_closing_metadata(receipt, snapshot, printed_by=printed_by)
+    return _replace_account_header(receipt, snapshot)
 
 
 def render_table_source_receipt(
@@ -356,12 +410,6 @@ def render_table_source_receipt(
     print_header: Optional[str] = None,
     print_footer: Optional[str] = None,
 ) -> str:
-    """Renderiza somente o lote/pedido que originou a impressão automática.
-
-    O layout visual continua vindo do mesmo ``generate_receipt`` do Extrato
-    Completo, mas o escopo é a instância criada naquele momento. Taxa de serviço
-    é cálculo da conta inteira e, por isso, não é repetida em cada lote parcial.
-    """
     snapshot = load_table_source_snapshot(
         db,
         restaurante_id,
@@ -388,9 +436,7 @@ def render_table_source_receipt(
 
 
 def _printing_allowed(db: Session, restaurante_id: int) -> bool:
-    restaurante = db.query(Restaurante).filter(
-        Restaurante.id == restaurante_id
-    ).first()
+    restaurante = db.query(Restaurante).filter(Restaurante.id == restaurante_id).first()
     if restaurante is None:
         raise PrintingRequestError("Restaurante não encontrado", status_code=404)
     return subscription_has_printing(restaurante_id, restaurante.plano)
@@ -407,7 +453,6 @@ def enqueue_print_job(
     payload_text: str,
     idempotency_key: str,
 ) -> Optional[PrintJob]:
-    """Único construtor transacional de PrintJob usado pela arquitetura nova."""
     if not _printing_allowed(db, restaurante_id):
         return None
 
@@ -443,6 +488,7 @@ def enqueue_table_receipt(
     idempotency_key: Optional[str] = None,
     print_header: Optional[str] = None,
     print_footer: Optional[str] = None,
+    printed_by: Optional[str] = None,
 ) -> Optional[PrintJob]:
     normalized_source = (source_type or "").strip().casefold()
     source_id_value = str(source_id or "").strip()
@@ -474,6 +520,7 @@ def enqueue_table_receipt(
             apenas_valores=apenas_valores,
             print_header=print_header,
             print_footer=print_footer,
+            printed_by=printed_by,
         )
         document_type = "fechamento" if apenas_valores else "mesa"
         destination = "FECHAMENTO"
@@ -529,7 +576,6 @@ def render_cash_closing_receipt(
     observacao: Optional[str] = None,
     width: int = 48,
 ) -> str:
-    """Comprovante térmico do fechamento do turno; não é o FECHAMENTO da mesa."""
     esperado_dinheiro_d = Decimal(str(esperado_dinheiro or 0))
     esperado_cartao_d = Decimal(str(esperado_cartao or 0))
     esperado_pix_d = Decimal(str(esperado_pix or 0))
@@ -613,8 +659,6 @@ def enqueue_cash_closing_receipt(
             status_code=404,
         )
 
-    # Reutiliza a mesma regra financeira do resumo/fechamento do caixa em vez de
-    # recalcular vendas com outra semântica.
     from ..routes.caixa import _totais_financeiros_turno
 
     totals = _totais_financeiros_turno(db, restaurante_id, turno)

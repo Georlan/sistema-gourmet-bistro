@@ -1,14 +1,45 @@
+import os
+from contextlib import asynccontextmanager
+
 import sentry_sdk
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from contextlib import asynccontextmanager
-from .config import settings
-from .database import engine, Base, current_restaurante_id
-from .routes import auth, products, tables, orders, websocket, caixa, optimization, estoque, cardapio, cardapio_clientes, super_admin, ai, print_agents, printing, cardapio_digital, relatorios, whatsapp_webhook
 
-import os
-# Inicializa o Sentry antes de qualquer coisa no app (desativado em testes e PII desativado por padrão)
+from .config import settings
+from .database import Base, current_restaurante_id, engine
+from .routes import (
+    ai,
+    atendimento_printing,
+    atendimentos,
+    auth,
+    caixa,
+    cardapio,
+    cardapio_clientes,
+    cardapio_digital,
+    estoque,
+    optimization,
+    orders,
+    print_agents,
+    printing,
+    products,
+    relatorios,
+    super_admin,
+    tables,
+    websocket,
+    whatsapp_webhook,
+)
+from .services.order_numbers import gerar_novo_numero_pedido_atomico
+
+
+# Há dois consumidores legados da função de numeração: orders (salão/caixa)
+# e cardapio (delivery/retirada público). Até a criação de pedidos inteira ser
+# consolidada em um único service, ambos apontam para o MESMO alocador atômico
+# do NumeradorOperacional. Isso evita Conta #47 e Delivery #47 simultâneos.
+orders.gerar_novo_numero_pedido = gerar_novo_numero_pedido_atomico
+cardapio.gerar_novo_numero_pedido = gerar_novo_numero_pedido_atomico
+
+
 if os.getenv("ENVIRONMENT") != "test" and settings.SENTRY_DSN:
     sentry_sdk.init(
         dsn=settings.SENTRY_DSN,
@@ -16,96 +47,6 @@ if os.getenv("ENVIRONMENT") != "test" and settings.SENTRY_DSN:
         traces_sample_rate=0.2,
     )
 
-
-
-# Automatically create database tables and run migrations on startup (DISABLED: Controlled via Alembic)
-# try:
-#     Base.metadata.create_all(bind=engine)
-#     from sqlalchemy import text, inspect
-# 
-#     # 1. Seed default Restaurante (ID=1) and dynamically add restaurante_id column to business tables
-#     with engine.connect() as conn:
-#         conn.execute(text("INSERT INTO restaurantes (id, nome, plano) VALUES (1, 'Kôma Bistrô', 'pocket') ON CONFLICT (id) DO NOTHING"))
-#         conn.commit()
-#         
-#         tables_to_migrate = ['usuarios', 'mesas', 'categorias', 'produtos', 'comandas', 'pagamentos', 'configuracoes_restaurante', 'insumos']
-#         insp = inspect(engine)
-#         for table in tables_to_migrate:
-#             try:
-#                 cols = {c["name"] for c in insp.get_columns(table)}
-#                 if "restaurante_id" not in cols:
-#                     conn.execute(text(f"ALTER TABLE {table} ADD COLUMN restaurante_id INTEGER DEFAULT 1"))
-#                     conn.commit()
-#                     print(f"[MIGRATION] Added restaurante_id column to table: {table}")
-#             except Exception as e:
-#                 print(f"[MIGRATION ERROR] Failed to add restaurante_id to table {table}: {e}")
-# 
-#     # 2. Existing migrations for both local and production databases
-#     with engine.connect() as conn:
-#         insp = inspect(engine)
-#         
-#         # configuracoes_restaurante
-#         config_cols = {c["name"] for c in insp.get_columns("configuracoes_restaurante")}
-#         sqlite_migrations = [
-#             ("modo_exclusivo_salao", "BOOLEAN DEFAULT TRUE"),
-#             ("perm_garcom_delivery", "BOOLEAN DEFAULT TRUE"),
-#             ("perm_garcom_editar", "BOOLEAN DEFAULT TRUE"),
-#             ("perm_garcom_taxas", "BOOLEAN DEFAULT FALSE"),
-#             ("perm_garcom_cancelar", "BOOLEAN DEFAULT FALSE"),
-#             ("perm_garcom_status", "BOOLEAN DEFAULT TRUE"),
-#             ("perm_garcom_abrir_vazia", "BOOLEAN DEFAULT FALSE"),
-#             ("perm_garcom_print", "BOOLEAN DEFAULT TRUE"),
-#             ("perm_garcom_fechar", "BOOLEAN DEFAULT FALSE"),
-#             ("perm_garcom_desconto", "BOOLEAN DEFAULT FALSE"),
-#             ("perm_garcom_acrescimo", "BOOLEAN DEFAULT FALSE"),
-#             ("perm_garcom_pessoas", "BOOLEAN DEFAULT TRUE"),
-#             ("perm_garcom_transferir_mesa", "BOOLEAN DEFAULT TRUE"),
-#             ("perm_garcom_transferir_item", "BOOLEAN DEFAULT TRUE"),
-#             ("perm_garcom_chamar", "BOOLEAN DEFAULT TRUE"),
-#             ("perm_garcom_ociosas", "BOOLEAN DEFAULT TRUE"),
-#         ]
-#         for col, col_def in sqlite_migrations:
-#             if col not in config_cols:
-#                 conn.execute(text(f"ALTER TABLE configuracoes_restaurante ADD COLUMN {col} {col_def}"))
-#         conn.commit()
-# 
-#         # pagamentos
-#         pag_cols = {c["name"] for c in insp.get_columns("pagamentos")}
-#         pag_migrations = [
-#             ("status", "VARCHAR DEFAULT 'aprovado'"),
-#             ("idempotency_key", "VARCHAR"),
-#             ("cpf_cliente", "VARCHAR"),
-#             ("nome_cliente", "VARCHAR"),
-#             ("nsu_cartao", "VARCHAR"),
-#             ("chave_nfe_emitida", "VARCHAR"),
-#         ]
-#         for col, col_def in pag_migrations:
-#             if col not in pag_cols:
-#                 conn.execute(text(f"ALTER TABLE pagamentos ADD COLUMN {col} {col_def}"))
-#         conn.commit()
-# 
-#         # comandas — new Kanban flow fields
-#         cmd_cols = {c["name"] for c in insp.get_columns("comandas")}
-#         cmd_migrations = [
-#             ("status_comanda", "VARCHAR"),  # null | aguardando_pagamento
-#             ("mesa_origem_id", "INTEGER DEFAULT NULL"),
-#         ]
-#         for col, col_def in cmd_migrations:
-#             if col not in cmd_cols:
-#                 conn.execute(text(f"ALTER TABLE comandas ADD COLUMN {col} {col_def}"))
-#         conn.commit()
-# 
-#         # itens — new index/multi-tenancy fields
-#         item_cols = {c["name"] for c in insp.get_columns("itens")}
-#         item_migrations = [
-#             ("restaurante_id", "INTEGER DEFAULT 1"),
-#         ]
-#         for col, col_def in item_migrations:
-#             if col not in item_cols:
-#                 conn.execute(text(f"ALTER TABLE itens ADD COLUMN {col} {col_def}"))
-#         conn.commit()
-# except Exception as e:
-#     print(f"Error running database migrations: {e}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -121,11 +62,10 @@ async def lifespan(app: FastAPI):
     if run_migrations_here:
         await run_migrations_on_startup()
     else:
-        print(
-            "[ALEMBIC] Migração no startup ignorada; usando o pre-deploy.",
-            flush=True,
-        )
+        print("[ALEMBIC] Migração no startup ignorada; usando o pre-deploy.", flush=True)
+
     from .database import validate_postgres_runtime_role
+
     validate_postgres_runtime_role()
     try:
         Base.metadata.create_all(bind=engine)
@@ -133,31 +73,23 @@ async def lifespan(app: FastAPI):
         pass
     yield
 
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.PROJECT_VERSION,
     description="Backend API local para o App de Garçons e Caixas do Bistrô",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
-# ─── STARTUP: Auto-run Alembic migrations ─────────────────────────────────────
-async def run_migrations_on_startup():
-    """
-    Executa migrações Alembic automaticamente no startup do servidor.
 
-    Lida com dois cenários:
-    1. Banco pré-Alembic (tabela alembic_version não existe) → stamp inicial + upgrade
-    2. Estado quebrado (stamp aplicado mas migration não rodou) → reset stamp + upgrade
-       Detectado verificando se a coluna 'mesa_origem_id' existe fisicamente na tabela
-       'comandas'. Se não existir, a migration de emergência nunca rodou.
-    """
+async def run_migrations_on_startup():
+    """Executa as migrações Alembic no ambiente que não usa pre-deploy."""
     migration_engine = None
     try:
-        import os
         import sqlalchemy as sa
-        from sqlalchemy import inspect as sa_inspect
-        from alembic.config import Config
         from alembic import command
+        from alembic.config import Config
+        from sqlalchemy import inspect as sa_inspect
 
         backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         alembic_cfg_path = os.path.join(backend_dir, "alembic.ini")
@@ -165,64 +97,54 @@ async def run_migrations_on_startup():
         alembic_cfg.set_main_option("sqlalchemy.url", settings.MIGRATION_DATABASE_URL)
 
         print("[ALEMBIC] Verificando estado do banco de dados...")
-
         migration_engine = sa.create_engine(settings.MIGRATION_DATABASE_URL)
         with migration_engine.connect() as conn:
             insp = sa_inspect(conn)
             has_alembic_version = insp.has_table("alembic_version")
-
-            # Verifica se a coluna crítica foi realmente criada (prova física da migration)
             has_mesa_origem_id = False
             has_itens_restaurante_id = False
             if insp.has_table("comandas"):
-                cmd_cols = {c["name"] for c in insp.get_columns("comandas")}
+                cmd_cols = {column["name"] for column in insp.get_columns("comandas")}
                 has_mesa_origem_id = "mesa_origem_id" in cmd_cols
             if insp.has_table("itens"):
-                item_cols = {c["name"] for c in insp.get_columns("itens")}
+                item_cols = {column["name"] for column in insp.get_columns("itens")}
                 has_itens_restaurante_id = "restaurante_id" in item_cols
-
             migration_ran = has_mesa_origem_id and has_itens_restaurante_id
 
         if not has_alembic_version:
-            # Banco criado manualmente antes do Alembic existir
             print("[ALEMBIC] Banco pré-Alembic detectado. Aplicando stamp em dcbca6699d38...")
             command.stamp(alembic_cfg, "dcbca6699d38")
-
         elif not migration_ran:
-            # Estado quebrado: alembic_version existe mas a migration de emergência
-            # nunca rodou (stamp foi aplicado durante um deploy com erro anterior).
-            # Reseta o stamp para dcbca6699d38 para forçar re-execução da emergência.
-            print("[ALEMBIC] ⚠️  Estado inconsistente detectado!")
-            print("[ALEMBIC]    Colunas críticas ausentes mas alembic_version já existe.")
-            print("[ALEMBIC]    Resetando stamp para dcbca6699d38 e re-aplicando migration...")
+            print("[ALEMBIC] Estado inconsistente detectado; restaurando o marco inicial.")
             with migration_engine.connect() as conn:
-                conn.execute(sa.text(
-                    "UPDATE alembic_version SET version_num = 'dcbca6699d38'"
-                ))
+                conn.execute(sa.text("UPDATE alembic_version SET version_num = 'dcbca6699d38'"))
                 conn.commit()
 
         print("[ALEMBIC] Rodando upgrade heads...")
         command.upgrade(alembic_cfg, "heads")
-        print("[ALEMBIC] ✅ Migrações concluídas com sucesso.")
+        print("[ALEMBIC] Migrações concluídas com sucesso.")
 
-        # Executar DDL de emergência caso a coluna mesa_transferida_de não exista na tabela comandas
         with migration_engine.connect() as conn:
             insp = sa_inspect(conn)
             if insp.has_table("comandas"):
-                columns = {c["name"] for c in insp.get_columns("comandas")}
+                columns = {column["name"] for column in insp.get_columns("comandas")}
                 if "mesa_transferida_de" not in columns:
                     print("[DATABASE] Adicionando coluna 'mesa_transferida_de' na tabela comandas...")
                     conn.execute(sa.text("ALTER TABLE comandas ADD COLUMN mesa_transferida_de INTEGER;"))
                     conn.commit()
-    except Exception as e:
-        print(f"[ALEMBIC] ❌ Erro ao rodar migrações automáticas: {e}")
+    except Exception as exc:
+        print(f"[ALEMBIC] Erro ao rodar migrações automáticas: {exc}")
         import traceback
+
         traceback.print_exc()
         if os.getenv("ENVIRONMENT") != "test":
-            raise RuntimeError(f"Falha crítica na migração de inicialização do banco: {e}") from e
+            raise RuntimeError(
+                f"Falha crítica na migração de inicialização do banco: {exc}"
+            ) from exc
     finally:
         if migration_engine is not None:
             migration_engine.dispose()
+
 
 @app.middleware("http")
 async def handle_unhandled_exceptions_middleware(request: Request, call_next):
@@ -230,12 +152,17 @@ async def handle_unhandled_exceptions_middleware(request: Request, call_next):
         return await call_next(request)
     except Exception as exc:
         import traceback
-        print(f"[UNHANDLED ROUTE EXCEPTION] {request.method} {request.url.path}:\n{traceback.format_exc()}")
+
+        print(
+            f"[UNHANDLED ROUTE EXCEPTION] {request.method} {request.url.path}:\n"
+            f"{traceback.format_exc()}"
+        )
         is_dev = os.getenv("ENVIRONMENT", "production").lower() == "development"
         body = {"detail": "Erro interno do servidor."}
         if is_dev:
             body["error"] = str(exc)
         return JSONResponse(status_code=500, content=body)
+
 
 @app.middleware("http")
 async def add_sentry_context_and_tenant(request: Request, call_next):
@@ -244,119 +171,106 @@ async def add_sentry_context_and_tenant(request: Request, call_next):
 
     tenant_id = request.headers.get("X-Tenant-ID", "default")
     restaurante_id: int | None = None
-    
     auth_header = request.headers.get("Authorization")
+
     if auth_header:
-        if auth_header.startswith("Bearer "):
-            try:
-                parts = auth_header.split(" ")
-                if len(parts) < 2:
-                    import jwt
-                    raise jwt.DecodeError("Token ausente no cabeçalho Bearer")
-                token = parts[1]
-                import jwt
-                payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-                rid = payload.get("restaurante_id")
-                role = payload.get("role", "")
-
-                if isinstance(rid, bool):
-                    return JSONResponse(
-                        status_code=401,
-                        content={"detail": "Identificação do restaurante inválida ou ausente no token."},
-                    )
-
-                try:
-                    parsed_rid = int(rid)
-                except (TypeError, ValueError):
-                    return JSONResponse(
-                        status_code=401,
-                        content={"detail": "Identificação do restaurante inválida ou ausente no token."},
-                    )
-
-                if parsed_rid < 0 or (parsed_rid == 0 and role != "superadmin"):
-                    return JSONResponse(
-                        status_code=401,
-                        content={"detail": "Identificação do restaurante inválida ou ausente no token."},
-                    )
-
-                restaurante_id = parsed_rid
-            except jwt.PyJWTError as e:
-                from fastapi.responses import JSONResponse
-                return JSONResponse(
-                    status_code=401,
-                    content={"detail": f"Token de autenticação inválido ou expirado: {str(e)}"},
-                )
-            except Exception:
-                from fastapi.responses import JSONResponse
-                return JSONResponse(
-                    status_code=401,
-                    content={"detail": "Falha na validação do token de autenticação."},
-                )
-        else:
-            from fastapi.responses import JSONResponse
+        if not auth_header.startswith("Bearer "):
             return JSONResponse(
                 status_code=401,
-                content={"detail": "Cabeçalho de autorização mal-formatado. Formato esperado: 'Bearer <token>'."},
+                content={
+                    "detail": "Cabeçalho de autorização mal-formatado. Formato esperado: 'Bearer <token>'."
+                },
+            )
+        try:
+            parts = auth_header.split(" ")
+            if len(parts) < 2:
+                import jwt
+                raise jwt.DecodeError("Token ausente no cabeçalho Bearer")
+            token = parts[1]
+            import jwt
+
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+            rid = payload.get("restaurante_id")
+            role = payload.get("role", "")
+            if isinstance(rid, bool):
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "Identificação do restaurante inválida ou ausente no token."},
+                )
+            try:
+                parsed_rid = int(rid)
+            except (TypeError, ValueError):
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "Identificação do restaurante inválida ou ausente no token."},
+                )
+            if parsed_rid < 0 or (parsed_rid == 0 and role != "superadmin"):
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "Identificação do restaurante inválida ou ausente no token."},
+                )
+            restaurante_id = parsed_rid
+        except jwt.PyJWTError as exc:
+            return JSONResponse(
+                status_code=401,
+                content={"detail": f"Token de autenticação inválido ou expirado: {str(exc)}"},
+            )
+        except Exception:
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Falha na validação do token de autenticação."},
             )
 
     sentry_sdk.set_tag("tenant_id", tenant_id)
     sentry_sdk.set_tag("restaurante_id", str(restaurante_id) if restaurante_id is not None else "")
 
-    if restaurante_id is not None:
-        tenant_context = current_restaurante_id.set(restaurante_id)
-        try:
-            response = await call_next(request)
-            return response
-        finally:
-            current_restaurante_id.reset(tenant_context)
-    else:
+    if restaurante_id is None:
         return await call_next(request)
+
+    tenant_context = current_restaurante_id.set(restaurante_id)
+    try:
+        return await call_next(request)
+    finally:
+        current_restaurante_id.reset(tenant_context)
+
 
 @app.middleware("http")
 async def add_security_headers_middleware(request: Request, call_next):
     response = await call_next(request)
-    
-    # Headers HTTP de Segurança Fundamentais
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
     response.headers["X-Frame-Options"] = "DENY"
-    
-    # HSTS em produção quando a requisição original for HTTPS e não for localhost.
-    # O backend depende do proxy confiável (Railway/Cloudflare) para repassar X-Forwarded-Proto.
+
     env = os.getenv("ENVIRONMENT", "production").lower()
     is_https = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
     hostname = request.url.hostname or ""
     is_localhost = hostname in ("localhost", "127.0.0.1")
-    
     if env == "production" and is_https and not is_localhost:
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-        
     return response
+
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     import traceback
-    print(f"[GLOBAL UNHANDLED ERROR] {request.method} {request.url.path}:\n{traceback.format_exc()}")
-    
+
+    print(
+        f"[GLOBAL UNHANDLED ERROR] {request.method} {request.url.path}:\n"
+        f"{traceback.format_exc()}"
+    )
     is_dev = os.getenv("ENVIRONMENT") == "development"
     body = {"detail": "Erro interno do servidor."}
     if is_dev:
         body["error"] = str(exc)
+    return JSONResponse(status_code=500, content=body)
 
-    return JSONResponse(
-        status_code=500,
-        content=body,
-    )
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={"detail": exc.detail},
-    )
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
-# CORSMiddleware é adicionado por último para ser a camada externa (wrap de todas as respostas HTTP)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.get_cors_allowed_origins(),
@@ -375,9 +289,13 @@ app.add_middleware(
     expose_headers=[],
 )
 
-# Register routers
+
+# Os adaptadores de atendimento/impressão vêm antes das rotas legadas para
+# preservar URLs do frontend com semântica transacional nova.
 app.include_router(auth.router)
 app.include_router(products.router)
+app.include_router(atendimentos.router)
+app.include_router(atendimento_printing.router)
 app.include_router(tables.router)
 app.include_router(orders.router)
 app.include_router(websocket.router)
@@ -397,8 +315,6 @@ if settings.KOMA_WHATSAPP_AUTOMATION_ENABLED:
     app.include_router(whatsapp_webhook.router)
 
 
-
-
 @app.get("/")
 def read_root():
     return {
@@ -409,7 +325,6 @@ def read_root():
     }
 
 
-# Rota temporária para testar se o Sentry do Backend está capturando erros (desativada em produção)
 @app.get("/sentry-debug")
 def trigger_backend_error():
     if os.getenv("ENVIRONMENT") == "production":
@@ -420,21 +335,23 @@ def trigger_backend_error():
 
 @app.get("/health")
 def health_check():
-    # 1. Testar conexão com o banco de dados
     db_status = "healthy"
     try:
         from sqlalchemy import text
+
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
-    except Exception as e:
+    except Exception as exc:
         is_dev = os.getenv("ENVIRONMENT") == "development"
-        db_status = f"unhealthy: {e}" if is_dev else "unhealthy"
+        db_status = f"unhealthy: {exc}" if is_dev else "unhealthy"
 
-    # 2. Contar conexões ativas no WebSocket
     ws_connections_count = 0
     try:
         from .websocket_manager import manager
-        ws_connections_count = sum(len(conns) for conns in manager.active_connections.values())
+
+        ws_connections_count = sum(
+            len(connections) for connections in manager.active_connections.values()
+        )
     except Exception:
         pass
 
@@ -443,7 +360,5 @@ def health_check():
         "version": settings.PROJECT_VERSION,
         "database": db_status,
         "print_queue": {"backend": "postgres", "consumer": "koma-print"},
-        "websocket": {
-            "active_connections": ws_connections_count
-        }
+        "websocket": {"active_connections": ws_connections_count},
     }
