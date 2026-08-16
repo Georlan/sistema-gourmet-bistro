@@ -114,6 +114,10 @@ run_flow_test \
   "tests/test_atendimento_caixa_merge.py" \
   "tests/test_order_numbering_unified.py"
 
+run_flow_test \
+  "9. Hardening multi-tenant e RBAC (sessão, escrita, JWT e impressão)" \
+  "tests/test_stage2_multitenant_rbac.py"
+
 echo ""
 echo -e "${BLUE}${BOLD}========================================================================${NC}"
 
