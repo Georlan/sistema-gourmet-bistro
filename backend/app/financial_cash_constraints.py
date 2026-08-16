@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import CheckConstraint
+from sqlalchemy import CheckConstraint, event
 
 from .database import Base
 
@@ -27,29 +27,22 @@ DIGITAL_SQL = (
 def apply_cash_turno_constraints_to_metadata() -> None:
     """Mantém o metadata SQLAlchemy alinhado com a migration da Etapa 3C.
 
-    O modelo histórico agrupava fundo, dinheiro, Pix e cartão em uma única
-    constraint >= 0. Isso deixou de representar o domínio quando devoluções de
-    vendas antigas podem produzir liquidação digital líquida negativa.
-
-    A migration altera o banco persistente; este adaptador altera o metadata em
-    runtime/testes sem duplicar a classe CaixaTurno durante a Etapa 3.
+    A tabela histórica nasce em `models.py` com uma constraint única >= 0. Como
+    alguns imports podem materializar `CaixaTurno` depois da primeira chamada
+    deste módulo, a função também é reaplicada no evento `MetaData.before_create`.
+    Assim qualquer `Base.metadata.create_all()` usa a semântica 3C no instante
+    exato em que o DDL será emitido.
     """
     table = Base.metadata.tables.get("caixa_turnos")
     if table is None:
         return
 
-    existing_names = {
-        getattr(constraint, "name", None)
-        for constraint in table.constraints
-    }
-    if OLD_CONSTRAINT in existing_names:
-        for constraint in list(table.constraints):
-            if (
-                isinstance(constraint, CheckConstraint)
-                and constraint.name == OLD_CONSTRAINT
-            ):
-                table.constraints.remove(constraint)
-                break
+    for constraint in list(table.constraints):
+        if (
+            isinstance(constraint, CheckConstraint)
+            and constraint.name == OLD_CONSTRAINT
+        ):
+            table.constraints.remove(constraint)
 
     existing_names = {
         getattr(constraint, "name", None)
@@ -65,4 +58,10 @@ def apply_cash_turno_constraints_to_metadata() -> None:
         )
 
 
+def _before_metadata_create(_target, _connection, **_kwargs) -> None:
+    apply_cash_turno_constraints_to_metadata()
+
+
 apply_cash_turno_constraints_to_metadata()
+if not event.contains(Base.metadata, "before_create", _before_metadata_create):
+    event.listen(Base.metadata, "before_create", _before_metadata_create)
