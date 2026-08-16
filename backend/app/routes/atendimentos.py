@@ -21,6 +21,7 @@ from ..schemas import (
     VendaDiretaCreate,
 )
 from ..security import get_current_user, require_permission
+from ..services.atendimento_projection import build_table_family_view
 from ..services.atendimentos import (
     AtendimentoError,
     ensure_atendimento_for_comanda,
@@ -101,7 +102,7 @@ def listar_familias_mesa(
     rid = require_tenant_id()
     try:
         _materialize_table_accounts(db, rid, mesa_id, actor_id=current_user.id)
-        data = get_table_family_snapshot(db, rid, mesa_id)
+        data = build_table_family_view(db, rid, mesa_id)
         db.commit()
         return {"mesa_id": mesa_id, "familias": data}
     except AtendimentoError as exc:
@@ -118,7 +119,6 @@ def imprimir_recibo_mesa_com_identidade(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    """Extrato/Fechamento com famílias estáveis e ator real da impressão."""
     rid = require_tenant_id()
     try:
         _materialize_table_accounts(db, rid, mesa_id, actor_id=current_user.id)
@@ -170,11 +170,7 @@ def lancar_itens_na_familia_principal(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    """Novo clique em Confirmar sempre pertence à família principal da mesa.
-
-    Depois de uma mesclagem, a UI pode ainda carregar uma Comanda da família
-    incorporada. Redirecionamos apenas o NOVO lançamento; IDs antigos não mudam.
-    """
+    """Depois de mesclar, novos lançamentos pertencem à família da mesa destino."""
     rid = require_tenant_id()
     supplied = db.query(Comanda).filter(
         Comanda.restaurante_id == rid,
@@ -186,13 +182,7 @@ def lancar_itens_na_familia_principal(
     from .orders import lancar_itens
 
     if supplied.tipo != "Consumo no Local" or supplied.mesa_id is None:
-        return lancar_itens(
-            comanda_id,
-            lancamento_in,
-            background_tasks,
-            db,
-            current_user,
-        )
+        return lancar_itens(comanda_id, lancamento_in, background_tasks, db, current_user)
 
     try:
         _materialize_table_accounts(db, rid, int(supplied.mesa_id), actor_id=current_user.id)
@@ -208,13 +198,7 @@ def lancar_itens_na_familia_principal(
         db.rollback()
         _raise_domain(exc)
 
-    return lancar_itens(
-        principal.id,
-        lancamento_in,
-        background_tasks,
-        db,
-        current_user,
-    )
+    return lancar_itens(principal.id, lancamento_in, background_tasks, db, current_user)
 
 
 @router.post(
@@ -228,35 +212,20 @@ async def venda_direta_respeitando_familia_principal(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    """PDV em mesa mesclada cria o lançamento na família da mesa destino.
-
-    Fora desse caso delega 100% ao fluxo legado de venda direta. Em uma mesa
-    com duas famílias, criamos uma Comanda compatível ligada à família principal
-    e reutilizamos a mesma função de lançamento/validação/impressão do garçom.
-    """
+    """PDV em mesa mesclada também grava na família da mesa destino."""
     from .orders import criar_venda_direta, lancar_itens
 
     normalized_type = (venda_in.tipo or "").strip().casefold()
     is_local = normalized_type in {"consumo no local", "mesa", "local"}
     if not is_local or venda_in.mesa_id is None:
-        return await criar_venda_direta(
-            venda_in,
-            background_tasks,
-            db,
-            current_user,
-        )
+        return await criar_venda_direta(venda_in, background_tasks, db, current_user)
 
     rid = require_tenant_id()
     try:
         _materialize_table_accounts(db, rid, venda_in.mesa_id, actor_id=current_user.id)
         families = get_table_family_snapshot(db, rid, venda_in.mesa_id)
         if len(families) <= 1:
-            return await criar_venda_direta(
-                venda_in,
-                background_tasks,
-                db,
-                current_user,
-            )
+            return await criar_venda_direta(venda_in, background_tasks, db, current_user)
         principal = principal_command_for_table(db, rid, venda_in.mesa_id)
         if principal is None:
             raise AtendimentoError("Mesa mesclada sem família principal", status_code=409)
@@ -312,23 +281,14 @@ async def venda_direta_respeitando_familia_principal(
                 for item in venda_in.itens
             ],
         )
-        lancar_itens(
-            command.id,
-            launch_payload,
-            background_tasks,
-            db,
-            current_user,
-        )
+        lancar_itens(command.id, launch_payload, background_tasks, db, current_user)
         completed = (
             db.query(Comanda)
             .options(
                 joinedload(Comanda.itens).joinedload(Item.produto),
                 joinedload(Comanda.criada_por),
             )
-            .filter(
-                Comanda.restaurante_id == rid,
-                Comanda.id == command.id,
-            )
+            .filter(Comanda.restaurante_id == rid, Comanda.id == command.id)
             .first()
         )
         if completed is None:
@@ -339,8 +299,6 @@ async def venda_direta_respeitando_familia_principal(
         _raise_domain(exc)
 
 
-# Rotas compatíveis com o frontend atual. Este router é registrado antes dos
-# routers legados para que transferências e mesclagens usem a família inteira.
 @router.post(
     "/comandas/{comanda_id}/transferir/{nova_mesa_id}",
     response_model=ComandaResponse,
@@ -356,9 +314,7 @@ def transferir_atendimento_compativel(
     rid = require_tenant_id()
     try:
         _materialize_table_accounts(db, rid, nova_mesa_id, actor_id=current_user.id)
-        command = transfer_group_by_comanda(
-            db, rid, comanda_id, nova_mesa_id, actor_id=current_user.id
-        )
+        command = transfer_group_by_comanda(db, rid, comanda_id, nova_mesa_id, actor_id=current_user.id)
         db.commit()
         db.refresh(command)
     except AtendimentoError as exc:
@@ -451,9 +407,7 @@ def transferir_itens_em_lote(
                 "O lote mistura itens já transferidos com itens ainda na origem; atualize a mesa e tente novamente.",
                 status_code=409,
             )
-        items = transfer_items_batch(
-            db, rid, payload.item_ids, nova_mesa_id, actor_id=current_user.id
-        )
+        items = transfer_items_batch(db, rid, payload.item_ids, nova_mesa_id, actor_id=current_user.id)
         db.commit()
         for item in items:
             db.refresh(item)
