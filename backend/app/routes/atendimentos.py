@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import List
+from typing import List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -20,6 +20,7 @@ from ..services.atendimentos import (
     transfer_items_batch,
     unmerge_by_comanda,
 )
+from ..services.printing import PrintingRequestError, enqueue_table_receipt
 from ..waiter_permissions import require_waiter_permission
 from ..websocket_manager import manager
 
@@ -42,7 +43,6 @@ def _materialize_table_accounts(
     *,
     actor_id: str | None = None,
 ) -> None:
-    """Torna comandas legadas compatíveis antes de uma operação estrutural."""
     commands = (
         db.query(Comanda)
         .filter(
@@ -65,7 +65,6 @@ def _item_already_at_table(
     item_id: str,
     mesa_id: int,
 ) -> Item | None:
-    """Compatibilidade para retries e para o frontend legado pós-batch."""
     return (
         db.query(Item)
         .join(Comanda, Comanda.id == Item.comanda_id)
@@ -97,8 +96,57 @@ def listar_familias_mesa(
         _raise_domain(exc)
 
 
-# Estas rotas entram antes do router legado de orders. Assim mantemos as URLs
-# do frontend enquanto trocamos a unidade transacional de Comanda para Família.
+@router.post("/mesas/{mesa_id}/imprimir-recibo", status_code=status.HTTP_200_OK)
+def imprimir_recibo_mesa_com_identidade(
+    mesa_id: int,
+    print_header: Optional[str] = None,
+    print_footer: Optional[str] = None,
+    apenas_valores: bool = False,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Extrato/Fechamento com famílias estáveis e ator real da impressão."""
+    rid = require_tenant_id()
+    try:
+        _materialize_table_accounts(db, rid, mesa_id, actor_id=current_user.id)
+        job = enqueue_table_receipt(
+            db,
+            rid,
+            mesa_id,
+            apenas_valores=apenas_valores,
+            source_type="mesa",
+            source_id=str(mesa_id),
+            print_header=print_header,
+            print_footer=print_footer,
+            printed_by=current_user.nome,
+        )
+        db.commit()
+    except AtendimentoError as exc:
+        db.rollback()
+        _raise_domain(exc)
+    except PrintingRequestError as exc:
+        db.rollback()
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erro ao enfileirar impressão do recibo.",
+        ) from exc
+    if job is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="A impressão física não está disponível no plano atual.",
+        )
+    return {
+        "status": "success",
+        "detail": "Impressão do recibo enviada com sucesso para a fila de impressão",
+        "job_id": job.id,
+    }
+
+
+# Rotas compatíveis com o frontend atual. Este router é registrado antes dos
+# routers legados para que transferências e mesclagens usem a família inteira.
 @router.post(
     "/comandas/{comanda_id}/transferir/{nova_mesa_id}",
     response_model=ComandaResponse,
@@ -115,11 +163,7 @@ def transferir_atendimento_compativel(
     try:
         _materialize_table_accounts(db, rid, nova_mesa_id, actor_id=current_user.id)
         command = transfer_group_by_comanda(
-            db,
-            rid,
-            comanda_id,
-            nova_mesa_id,
-            actor_id=current_user.id,
+            db, rid, comanda_id, nova_mesa_id, actor_id=current_user.id
         )
         db.commit()
         db.refresh(command)
@@ -144,11 +188,7 @@ def mesclar_atendimentos_compativel(
         _materialize_table_accounts(db, rid, mesa_origem_id, actor_id=current_user.id)
         _materialize_table_accounts(db, rid, mesa_destino_id, actor_id=current_user.id)
         merge_tables(
-            db,
-            rid,
-            mesa_origem_id,
-            mesa_destino_id,
-            actor_id=current_user.id,
+            db, rid, mesa_origem_id, mesa_destino_id, actor_id=current_user.id
         )
         command = (
             db.query(Comanda)
@@ -192,12 +232,7 @@ def desmesclar_atendimento_compativel(
     require_waiter_permission(db, current_user, "perm_garcom_transferir_mesa")
     rid = require_tenant_id()
     try:
-        command = unmerge_by_comanda(
-            db,
-            rid,
-            comanda_id,
-            actor_id=current_user.id,
-        )
+        command = unmerge_by_comanda(db, rid, comanda_id, actor_id=current_user.id)
         db.commit()
         db.refresh(command)
     except AtendimentoError as exc:
@@ -234,11 +269,7 @@ def transferir_itens_em_lote(
                 status_code=409,
             )
         items = transfer_items_batch(
-            db,
-            rid,
-            payload.item_ids,
-            nova_mesa_id,
-            actor_id=current_user.id,
+            db, rid, payload.item_ids, nova_mesa_id, actor_id=current_user.id
         )
         db.commit()
         for item in items:
@@ -265,17 +296,11 @@ def transferir_item_compativel(
     rid = require_tenant_id()
     existing = _item_already_at_table(db, rid, item_id, nova_mesa_id)
     if existing is not None:
-        # Retry idempotente: o batch pode ter sido concluído antes da atualização
-        # otimista do frontend legado disparar a requisição individual.
         return existing
     try:
         _materialize_table_accounts(db, rid, nova_mesa_id, actor_id=current_user.id)
         items = transfer_items_batch(
-            db,
-            rid,
-            [item_id],
-            nova_mesa_id,
-            actor_id=current_user.id,
+            db, rid, [item_id], nova_mesa_id, actor_id=current_user.id
         )
         db.commit()
         item = items[0]
@@ -297,10 +322,7 @@ def reabrir_comanda_compativel(
     rid = require_tenant_id()
     try:
         command = reopen_command_guarded(
-            db,
-            rid,
-            comanda_id,
-            actor_id=current_user.id,
+            db, rid, comanda_id, actor_id=current_user.id
         )
         db.commit()
         db.refresh(command)
