@@ -20,9 +20,11 @@ from ..services.refund_guard import (  # noqa: E402
     create_refund_guarded as _create_refund_guarded,
     remaining_refund_allocations_guarded as _remaining_refund_allocations_guarded,
 )
+from ..services.refund_ui import refundable_payment_payload_human as _refundable_payment_payload_human  # noqa: E402
 from ..services.cash_activity import recent_cash_activities as _recent_cash_activities  # noqa: E402
 
 _financial_cash_routes.create_refund = _create_refund_guarded
 _financial_cash_routes.remaining_refund_allocations = _remaining_refund_allocations_guarded
+_financial_cash_routes._refundable_payment_payload = _refundable_payment_payload_human
 _cash_reconciliation.remaining_refund_allocations = _remaining_refund_allocations_guarded
 _financial_cash_routes.legacy_cash._atividades_recentes_turno = _recent_cash_activities
