@@ -39,7 +39,7 @@ jobs:
           products = 'src/components/cardapio/CardapioProdutosTab.tsx'
           replace_exact(products, "'hover:bg-white/[0.025]',", "'hover:bg-koma-raised/50',")
           replace_exact(products, "!isPublished && 'bg-black/10',", "!isPublished && 'bg-koma-canvas/40',")
-          replace_exact(products, "'flex items-center justify-between gap-2 pl-[4.25rem] sm:justify-end sm:pl-0'", "'flex flex-wrap items-center justify-between gap-2 pl-0 sm:flex-nowrap sm:justify-end'")
+          replace_exact(products, 'className="flex items-center justify-between gap-2 pl-[4.25rem] sm:justify-end sm:pl-0"', 'className="flex flex-wrap items-center justify-between gap-2 pl-0 sm:flex-nowrap sm:justify-end"')
           replace_exact(products, "'inline-flex min-w-[112px] items-center", "'inline-flex min-w-0 flex-1 items-center sm:min-w-[112px] sm:flex-none")
           replace_exact(products, "placeholder:text-zinc-500 focus:border-emerald-400/30", "placeholder:text-koma-muted focus:border-koma-accent")
 
