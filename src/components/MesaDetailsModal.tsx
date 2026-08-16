@@ -138,7 +138,19 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = (props) => {
         if (!launchToComanda.has(launchId)) {
           throw new Error('Este pedido não possui identificador de lançamento para impressão.');
         }
-        await onPrintKitchenLaunch(launchId);
+        const token = currentAuthToken();
+        if (!token) throw new Error('Sessão expirada. Entre novamente para imprimir.');
+        const response = await fetch(
+          `${API_BASE_URL}/comandas/lancamentos/${launchId}/reimprimir?mesa_id=${table.id}`,
+          {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+          },
+        );
+        if (!response.ok) {
+          const detail = await response.json().catch(() => null);
+          throw new Error(detail?.detail || 'Não foi possível reimprimir este pedido.');
+        }
       }
     : undefined;
 
