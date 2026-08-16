@@ -40,7 +40,7 @@ class NumeradorOperacional(Base):
         nullable=False,
         index=True,
     )
-    periodo_ref = Column(String(7), nullable=False)  # YYYY-MM no fuso operacional
+    periodo_ref = Column(String(7), nullable=False)
     ultimo_numero = Column(Integer, nullable=False, default=0)
     atualizado_em = Column(
         DateTime,
@@ -50,11 +50,7 @@ class NumeradorOperacional(Base):
 
 
 class AtendimentoMesa(Base):
-    """Família financeira imutável de uma ocupação de mesa.
-
-    A mesa é a localização física atual. O atendimento é a conta/família que
-    conserva sua identidade mesmo após transferências e mesclagens.
-    """
+    """Família financeira imutável de uma ocupação de mesa."""
 
     __tablename__ = "atendimentos_mesa"
     __table_args__ = (
@@ -223,7 +219,7 @@ class MovimentoAtendimento(Base):
     tipo = Column(String(32), nullable=False)
     mesa_origem_id = Column(Integer, nullable=True)
     mesa_destino_id = Column(Integer, nullable=True)
-    ator_id = Column(String, ForeignKey("usuarios.id"), nullable=True)
+    ator_id = Column(String, ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True)
     detalhes = Column(JSON, nullable=True)
     criado_em = Column(
         DateTime,
