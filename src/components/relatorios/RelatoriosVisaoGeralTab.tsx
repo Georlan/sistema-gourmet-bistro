@@ -156,7 +156,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
   const handleExportCsv = () => {
     if (!data) return;
     let csv = 'Métrica;Valor\n';
-    csv += `Faturamento Total (R$);${data.faturamento_total}\n`;
+    csv += `Vendas Líquidas (R$);${data.faturamento_total}\n`;
     csv += `Total de Pedidos;${data.total_pedidos}\n`;
     csv += `Ticket Médio (R$);${data.ticket_medio}\n`;
     csv += `Clientes Ativos;${data.clientes_ativos}\n`;
@@ -208,14 +208,14 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex w-full flex-wrap items-center gap-2.5 sm:w-auto">
           <button
             type="button"
             onClick={() => {
               setShowVendasDrawer(true);
               fetchVendasDetalhes(dataInicio, dataFim);
             }}
-            className="px-3.5 py-2 bg-emerald-500/15 hover:bg-[#10b981]/20 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 rounded-xl text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+            className="px-3.5 py-2 bg-emerald-500/15 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 rounded-xl text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
           >
             <Eye size={14} />
             Ver Vendas
@@ -265,7 +265,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
         <div className="bg-koma-panel border border-koma-border p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl space-y-1.5 sm:space-y-2 shadow-xs">
           <div className="flex justify-between items-center text-koma-subtle">
-            <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-wider truncate">Faturamento Total</span>
+            <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-wider truncate">Vendas Líquidas</span>
             <div className="p-1 sm:p-1.5 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 rounded-lg sm:rounded-xl">
               <TrendingUp size={14} className="sm:w-4 sm:h-4" />
             </div>

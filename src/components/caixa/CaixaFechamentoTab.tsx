@@ -77,7 +77,7 @@ const CountField: React.FC<CountFieldProps> = ({
   const isExact = difference !== null && Math.abs(difference) < 0.01;
 
   return (
-    <div className="rounded-2xl border border-koma-border bg-koma-panel p-4 transition-colors focus-within:border-emerald-500/40">
+    <div className="rounded-2xl border border-koma-border bg-koma-panel p-4 transition-colors focus-within:border-koma-accent">
       <div className="flex items-start justify-between gap-3">
         <label htmlFor={id} className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.12em] text-koma-secondary">
           <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-emerald-300 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300">
@@ -85,11 +85,11 @@ const CountField: React.FC<CountFieldProps> = ({
           </span>
           <span>{label}{required ? <span className="ml-1 text-emerald-800 dark:text-emerald-300">*</span> : null}</span>
         </label>
-        <button type="button" onClick={onUseExpected} className="rounded-lg border border-emerald-300 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 px-2.5 py-1.5 text-[9px] font-bold text-emerald-800 dark:text-emerald-300 transition-colors hover:border-[#3ba982] hover:text-koma-foreground">
+        <button type="button" onClick={onUseExpected} className="rounded-lg border border-emerald-300 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 px-2.5 py-1.5 text-[9px] font-bold text-emerald-800 dark:text-emerald-300 transition-colors hover:border-koma-accent hover:text-koma-foreground">
           Usar {formatMoney(expected)}
         </button>
       </div>
-      <label htmlFor={id} className="mt-3 flex items-center rounded-xl border border-koma-border bg-koma-input px-3 focus-within:border-[#2a9f7d]">
+      <label htmlFor={id} className="mt-3 flex items-center rounded-xl border border-koma-border bg-koma-input px-3 focus-within:border-koma-accent">
         <span className="text-sm font-semibold text-koma-muted">R$</span>
         <MoneyInput
           id={id}
@@ -282,7 +282,7 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
               </strong>
             </div>
 
-            <div className="overflow-x-auto rounded-2xl border border-koma-border">
+            <div className="overflow-x-auto overscroll-x-contain rounded-2xl border border-koma-border">
               <table className="w-full min-w-[620px] text-left text-xs">
                 <thead className="bg-koma-panel text-[9px] uppercase tracking-wider text-koma-muted">
                   <tr>
@@ -292,7 +292,7 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
                     <th className="p-3 text-right">Diferença</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#252b28] text-koma-secondary">
+                <tbody className="divide-y divide-koma-border text-koma-secondary">
                   {rows.map(([label, expected, declared, rowDifference]) => (
                     <tr key={label}>
                       <td className="p-3 font-semibold text-koma-foreground">{label}</td>
