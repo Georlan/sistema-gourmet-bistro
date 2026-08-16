@@ -39,7 +39,7 @@ class PedidoIdentidade:
 
 
 def sequence_to_letters(sequence: int) -> str:
-    """1 -> A, 26 -> Z, 27 -> AA, sem limite artificial de 26 lançamentos."""
+    """1=A, 26=Z, 27=AA. Não existe limite artificial de 26 pedidos."""
     if sequence < 1:
         raise ValueError("A sequência deve ser positiva")
     result = ""
@@ -56,31 +56,56 @@ def format_order_family_id(numero_conta: int, sequence: int) -> str:
 
 def _operational_period(dt: Optional[datetime.datetime] = None) -> str:
     local = to_operational_local_time(dt) if dt is not None else get_operational_now()
-    if local is None:
-        local = get_operational_now()
-    return local.strftime("%Y-%m")
+    return (local or get_operational_now()).strftime("%Y-%m")
 
 
 def _month_bounds_database(period_ref: str) -> tuple[datetime.datetime, datetime.datetime]:
     year, month = (int(part) for part in period_ref.split("-", 1))
-    local_start = datetime.datetime(year, month, 1, tzinfo=OPERATIONAL_TIMEZONE)
-    if month == 12:
-        local_end = datetime.datetime(year + 1, 1, 1, tzinfo=OPERATIONAL_TIMEZONE)
-    else:
-        local_end = datetime.datetime(year, month + 1, 1, tzinfo=OPERATIONAL_TIMEZONE)
-    return (
-        to_database_utc(local_start),
-        to_database_utc(local_end),
+    start = datetime.datetime(year, month, 1, tzinfo=OPERATIONAL_TIMEZONE)
+    end = (
+        datetime.datetime(year + 1, 1, 1, tzinfo=OPERATIONAL_TIMEZONE)
+        if month == 12
+        else datetime.datetime(year, month + 1, 1, tzinfo=OPERATIONAL_TIMEZONE)
     )
+    return to_database_utc(start), to_database_utc(end)
 
 
 def _advisory_number_lock(db: Session, restaurante_id: int, period_ref: str) -> None:
-    """Serializa o contador no PostgreSQL; SQLite já serializa os writes dos testes."""
     if db.bind is None or db.bind.dialect.name != "postgresql":
         return
     numeric_period = int(period_ref.replace("-", ""))
-    lock_key = int(restaurante_id) * 10_000_000 + numeric_period
-    db.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": lock_key})
+    key = int(restaurante_id) * 10_000_000 + numeric_period
+    db.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": key})
+
+
+def _reserve_legacy_number(
+    db: Session,
+    restaurante_id: int,
+    period_ref: str,
+    number: int,
+) -> None:
+    """Mantém o numerador novo acima dos números humanos legados já existentes."""
+    _advisory_number_lock(db, restaurante_id, period_ref)
+    counter = (
+        db.query(NumeradorOperacional)
+        .filter(
+            NumeradorOperacional.restaurante_id == restaurante_id,
+            NumeradorOperacional.periodo_ref == period_ref,
+        )
+        .with_for_update()
+        .first()
+    )
+    if counter is None:
+        counter = NumeradorOperacional(
+            restaurante_id=restaurante_id,
+            periodo_ref=period_ref,
+            ultimo_numero=number,
+        )
+        db.add(counter)
+    else:
+        counter.ultimo_numero = max(int(counter.ultimo_numero or 0), int(number))
+    counter.atualizado_em = datetime.datetime.now(datetime.timezone.utc)
+    db.flush()
 
 
 def allocate_account_number(
@@ -89,10 +114,9 @@ def allocate_account_number(
     *,
     opened_at: Optional[datetime.datetime] = None,
 ) -> tuple[int, str]:
-    """Aloca um número humano no mês operacional, não no mês UTC do servidor."""
+    """Aloca a Conta # humana no mês OPERACIONAL, serializada no PostgreSQL."""
     period_ref = _operational_period(opened_at)
     _advisory_number_lock(db, restaurante_id, period_ref)
-
     counter = (
         db.query(NumeradorOperacional)
         .filter(
@@ -130,7 +154,6 @@ def allocate_account_number(
         )
         db.add(counter)
         db.flush()
-
     counter.ultimo_numero += 1
     counter.atualizado_em = datetime.datetime.now(datetime.timezone.utc)
     db.flush()
@@ -139,21 +162,21 @@ def allocate_account_number(
 
 def _record_movement(
     db: Session,
-    atendimento: AtendimentoMesa,
-    tipo: str,
+    account: AtendimentoMesa,
+    movement_type: str,
     *,
     actor_id: Optional[str] = None,
-    origem: Optional[int] = None,
-    destino: Optional[int] = None,
+    origin: Optional[int] = None,
+    destination: Optional[int] = None,
     details: Optional[dict] = None,
 ) -> None:
     db.add(
         MovimentoAtendimento(
-            restaurante_id=atendimento.restaurante_id,
-            atendimento_id=atendimento.id,
-            tipo=tipo,
-            mesa_origem_id=origem,
-            mesa_destino_id=destino,
+            restaurante_id=account.restaurante_id,
+            atendimento_id=account.id,
+            tipo=movement_type,
+            mesa_origem_id=origin,
+            mesa_destino_id=destination,
             ator_id=actor_id,
             detalhes=details or None,
         )
@@ -169,10 +192,7 @@ def _account_for_comanda(
 ) -> Optional[AtendimentoMesa]:
     query = (
         db.query(AtendimentoMesa)
-        .join(
-            AtendimentoComanda,
-            AtendimentoComanda.atendimento_id == AtendimentoMesa.id,
-        )
+        .join(AtendimentoComanda, AtendimentoComanda.atendimento_id == AtendimentoMesa.id)
         .filter(
             AtendimentoMesa.restaurante_id == restaurante_id,
             AtendimentoComanda.restaurante_id == restaurante_id,
@@ -184,21 +204,33 @@ def _account_for_comanda(
     return query.first()
 
 
-def _linked_command_ids(
+def _account_by_number(
     db: Session,
     restaurante_id: int,
-    atendimento_id: str,
-) -> list[str]:
+    period_ref: str,
+    numero_conta: int,
+    *,
+    lock: bool = False,
+) -> Optional[AtendimentoMesa]:
+    query = db.query(AtendimentoMesa).filter(
+        AtendimentoMesa.restaurante_id == restaurante_id,
+        AtendimentoMesa.periodo_ref == period_ref,
+        AtendimentoMesa.numero_conta == numero_conta,
+    )
+    if lock:
+        query = query.with_for_update()
+    return query.first()
+
+
+def _linked_command_ids(db: Session, restaurante_id: int, atendimento_id: str) -> list[str]:
     return [
         row[0]
-        for row in (
-            db.query(AtendimentoComanda.comanda_id)
-            .filter(
-                AtendimentoComanda.restaurante_id == restaurante_id,
-                AtendimentoComanda.atendimento_id == atendimento_id,
-            )
-            .all()
+        for row in db.query(AtendimentoComanda.comanda_id)
+        .filter(
+            AtendimentoComanda.restaurante_id == restaurante_id,
+            AtendimentoComanda.atendimento_id == atendimento_id,
         )
+        .all()
     ]
 
 
@@ -225,31 +257,142 @@ def _sync_account_status(db: Session, account: AtendimentoMesa) -> None:
         account.fechado_em = datetime.datetime.now(datetime.timezone.utc)
 
 
-def _candidate_open_account_for_table(
+def reconcile_table_principal(
     db: Session,
     restaurante_id: int,
     mesa_id: int,
+    *,
+    actor_id: Optional[str] = None,
 ) -> Optional[AtendimentoMesa]:
+    """Garante exatamente uma família principal entre as famílias abertas da mesa.
+
+    Se a família principal foi paga/fechada e uma família mesclada continua
+    aberta, promove a sobrevivente sem renumerar nenhum Pedido # antigo.
+    """
     accounts = (
         db.query(AtendimentoMesa)
         .filter(
             AtendimentoMesa.restaurante_id == restaurante_id,
             AtendimentoMesa.mesa_id == mesa_id,
-            AtendimentoMesa.status == "aberto",
         )
-        .order_by(AtendimentoMesa.criado_em.asc(), AtendimentoMesa.id.asc())
+        .with_for_update()
         .all()
     )
     for account in accounts:
         _sync_account_status(db, account)
-    accounts = [account for account in accounts if account.status == "aberto"]
-    roots = [account for account in accounts if account.principal_id is None]
-    if len(roots) > 1:
+    open_accounts = [account for account in accounts if account.status == "aberto"]
+    if not open_accounts:
+        return None
+
+    by_id = {account.id: account for account in accounts}
+    valid_roots = [
+        account
+        for account in open_accounts
+        if account.principal_id is None
+        or account.principal_id not in by_id
+        or by_id[account.principal_id].status != "aberto"
+        or by_id[account.principal_id].mesa_id != mesa_id
+    ]
+
+    if len(valid_roots) > 1:
+        # Duas raízes independentes na mesma mesa significam estado legado
+        # ambíguo, não uma mesclagem comprovada. Não escolhemos silenciosamente.
         raise AtendimentoError(
-            "A mesa possui mais de uma família principal ativa; reconcilie o atendimento antes de continuar.",
+            "A mesa possui mais de uma família principal ativa; use Mesclar para reconciliar o atendimento.",
             status_code=409,
         )
-    return roots[0] if roots else None
+
+    root = valid_roots[0] if valid_roots else None
+    if root is None:
+        # Todos os abertos apontam para uma raiz já fechada. Como o sistema
+        # atualmente limita o grupo a duas famílias, a sobrevivente é inequívoca.
+        root = min(open_accounts, key=lambda account: (account.criado_em, account.id))
+
+    if root.principal_id is not None:
+        previous_parent = root.principal_id
+        root.principal_id = None
+        _record_movement(
+            db,
+            root,
+            "promocao_principal",
+            actor_id=actor_id,
+            origin=mesa_id,
+            destination=mesa_id,
+            details={"principal_anterior": previous_parent},
+        )
+
+    for account in open_accounts:
+        if account.id == root.id:
+            continue
+        parent = by_id.get(account.principal_id) if account.principal_id else None
+        if parent is None or parent.status != "aberto" or parent.mesa_id != mesa_id:
+            account.principal_id = root.id
+    db.flush()
+    return root
+
+
+def _new_account(
+    db: Session,
+    comanda: Comanda,
+    *,
+    actor_id: Optional[str],
+    principal: Optional[AtendimentoMesa],
+) -> AtendimentoMesa:
+    period_ref = _operational_period(comanda.criado_em)
+    legacy_number = int(comanda.numero_pedido or 0)
+    existing_number = (
+        _account_by_number(db, comanda.restaurante_id, period_ref, legacy_number)
+        if legacy_number > 0
+        else None
+    )
+    if legacy_number > 0 and existing_number is None:
+        number = legacy_number
+        _reserve_legacy_number(db, comanda.restaurante_id, period_ref, number)
+    else:
+        number, period_ref = allocate_account_number(
+            db,
+            comanda.restaurante_id,
+            opened_at=comanda.criado_em,
+        )
+
+    account = AtendimentoMesa(
+        id=f"a-{uuid.uuid4().hex[:12]}",
+        restaurante_id=comanda.restaurante_id,
+        numero_conta=number,
+        periodo_ref=period_ref,
+        mesa_id=comanda.mesa_id,
+        status="aberto",
+        principal_id=(principal.id if principal is not None else None),
+        proxima_sequencia=1,
+        criado_em=comanda.criado_em or datetime.datetime.now(datetime.timezone.utc),
+    )
+    db.add(account)
+    db.flush()
+
+    if principal is None:
+        _record_movement(
+            db,
+            account,
+            "abertura",
+            actor_id=actor_id or comanda.garcom_id,
+            destination=comanda.mesa_id,
+        )
+    else:
+        inferred_origin = comanda.mesa_origem_id or comanda.mesa_transferida_de
+        _record_movement(
+            db,
+            account,
+            "mesclagem",
+            actor_id=actor_id or comanda.garcom_id,
+            origin=inferred_origin,
+            destination=comanda.mesa_id,
+            details={
+                "principal": principal.id,
+                "materializado_de_legado": True,
+                "origem_inferida": inferred_origin is not None,
+            },
+        )
+    return account
 
 
 def ensure_atendimento_for_comanda(
@@ -266,72 +409,41 @@ def ensure_atendimento_for_comanda(
         _sync_account_status(db, existing)
         return existing
 
-    account = _candidate_open_account_for_table(
-        db,
-        comanda.restaurante_id,
-        int(comanda.mesa_id),
-    )
-    if account is None:
-        period_ref = _operational_period(comanda.criado_em)
-        legacy_number = int(comanda.numero_pedido or 0)
-        collision = None
-        if legacy_number > 0:
-            collision = (
-                db.query(AtendimentoMesa.id)
-                .filter(
-                    AtendimentoMesa.restaurante_id == comanda.restaurante_id,
-                    AtendimentoMesa.periodo_ref == period_ref,
-                    AtendimentoMesa.numero_conta == legacy_number,
-                )
-                .first()
-            )
-        if legacy_number > 0 and collision is None:
-            numero_conta = legacy_number
-            _advisory_number_lock(db, comanda.restaurante_id, period_ref)
-            counter = (
-                db.query(NumeradorOperacional)
-                .filter(
-                    NumeradorOperacional.restaurante_id == comanda.restaurante_id,
-                    NumeradorOperacional.periodo_ref == period_ref,
-                )
-                .with_for_update()
-                .first()
-            )
-            if counter is None:
-                counter = NumeradorOperacional(
-                    restaurante_id=comanda.restaurante_id,
-                    periodo_ref=period_ref,
-                    ultimo_numero=numero_conta,
-                )
-                db.add(counter)
-            else:
-                counter.ultimo_numero = max(int(counter.ultimo_numero or 0), numero_conta)
-        else:
-            numero_conta, period_ref = allocate_account_number(
-                db,
-                comanda.restaurante_id,
-                opened_at=comanda.criado_em,
-            )
-
-        account = AtendimentoMesa(
-            id=f"a-{uuid.uuid4().hex[:12]}",
-            restaurante_id=comanda.restaurante_id,
-            numero_conta=numero_conta,
-            periodo_ref=period_ref,
-            mesa_id=comanda.mesa_id,
-            status="aberto",
-            principal_id=None,
-            proxima_sequencia=1,
-            criado_em=comanda.criado_em or datetime.datetime.now(datetime.timezone.utc),
-        )
-        db.add(account)
-        db.flush()
-        _record_movement(
+    period_ref = _operational_period(comanda.criado_em)
+    legacy_number = int(comanda.numero_pedido or 0)
+    same_family = (
+        _account_by_number(
             db,
-            account,
-            "abertura",
-            actor_id=actor_id or comanda.garcom_id,
-            destino=comanda.mesa_id,
+            comanda.restaurante_id,
+            period_ref,
+            legacy_number,
+            lock=True,
+        )
+        if legacy_number > 0
+        else None
+    )
+
+    if same_family is not None:
+        account = same_family
+        # Uma comanda irmã pode ter ficado com mesa antiga no legado. A família
+        # é a autoridade sobre localização depois que existe.
+        if account.mesa_id is not None and comanda.mesa_id != account.mesa_id:
+            comanda.mesa_transferida_de = comanda.mesa_id
+            comanda.mesa_id = account.mesa_id
+    else:
+        principal = reconcile_table_principal(
+            db,
+            comanda.restaurante_id,
+            int(comanda.mesa_id),
+            actor_id=actor_id,
+        )
+        # Número diferente na mesma mesa = família distinta. Isso preserva
+        # mesclagens legadas em vez de colapsar #46 e #47 numa única conta.
+        account = _new_account(
+            db,
+            comanda,
+            actor_id=actor_id,
+            principal=principal,
         )
 
     db.add(
@@ -341,7 +453,6 @@ def ensure_atendimento_for_comanda(
             comanda_id=comanda.id,
         )
     )
-    # Compatibilidade: comandas da mesma família continuam compartilhando o base humano.
     comanda.numero_pedido = account.numero_conta
     db.flush()
     return account
@@ -352,14 +463,13 @@ def _ensure_related_open_comandas_linked(
     account: AtendimentoMesa,
     seed: Comanda,
 ) -> None:
-    """Absorve comandas-irmãs legadas da mesma mesa/número sem fundir outra família."""
     siblings = (
         db.query(Comanda)
         .filter(
             Comanda.restaurante_id == seed.restaurante_id,
-            Comanda.mesa_id == seed.mesa_id,
+            Comanda.mesa_id == account.mesa_id,
             Comanda.fechada == False,
-            Comanda.numero_pedido == seed.numero_pedido,
+            Comanda.numero_pedido == account.numero_conta,
         )
         .all()
     )
@@ -375,10 +485,7 @@ def _ensure_related_open_comandas_linked(
     db.flush()
 
 
-def ensure_launch_identity(
-    db: Session,
-    lancamento: Lancamento,
-) -> PedidoIdentidade:
+def ensure_launch_identity(db: Session, lancamento: Lancamento) -> PedidoIdentidade:
     existing = (
         db.query(LancamentoIdentidade)
         .filter(
@@ -388,42 +495,30 @@ def ensure_launch_identity(
         .first()
     )
     if existing is not None:
-        account = (
-            db.query(AtendimentoMesa)
-            .filter(
-                AtendimentoMesa.restaurante_id == lancamento.restaurante_id,
-                AtendimentoMesa.id == existing.atendimento_id,
-            )
-            .first()
-        )
+        account = db.query(AtendimentoMesa).filter(
+            AtendimentoMesa.restaurante_id == lancamento.restaurante_id,
+            AtendimentoMesa.id == existing.atendimento_id,
+        ).one()
         return PedidoIdentidade(
-            atendimento_id=existing.atendimento_id,
+            atendimento_id=account.id,
             numero_conta=account.numero_conta,
             sequencia=existing.sequencia,
             label=format_order_family_id(account.numero_conta, existing.sequencia),
         )
 
-    comanda = (
-        db.query(Comanda)
-        .filter(
-            Comanda.restaurante_id == lancamento.restaurante_id,
-            Comanda.id == lancamento.comanda_id,
-        )
-        .first()
-    )
+    comanda = db.query(Comanda).filter(
+        Comanda.restaurante_id == lancamento.restaurante_id,
+        Comanda.id == lancamento.comanda_id,
+    ).first()
     if comanda is None:
         raise AtendimentoError("Comanda do lançamento não encontrada", status_code=404)
+
     account = ensure_atendimento_for_comanda(db, comanda, actor_id=lancamento.garcom_id)
     _ensure_related_open_comandas_linked(db, account, comanda)
-    account = (
-        db.query(AtendimentoMesa)
-        .filter(
-            AtendimentoMesa.restaurante_id == lancamento.restaurante_id,
-            AtendimentoMesa.id == account.id,
-        )
-        .with_for_update()
-        .one()
-    )
+    account = db.query(AtendimentoMesa).filter(
+        AtendimentoMesa.restaurante_id == lancamento.restaurante_id,
+        AtendimentoMesa.id == account.id,
+    ).with_for_update().one()
 
     command_ids = _linked_command_ids(db, account.restaurante_id, account.id)
     launches = (
@@ -437,14 +532,12 @@ def ensure_launch_identity(
     )
     identities = {
         identity.lancamento_id: identity
-        for identity in (
-            db.query(LancamentoIdentidade)
-            .filter(
-                LancamentoIdentidade.restaurante_id == account.restaurante_id,
-                LancamentoIdentidade.atendimento_id == account.id,
-            )
-            .all()
+        for identity in db.query(LancamentoIdentidade)
+        .filter(
+            LancamentoIdentidade.restaurante_id == account.restaurante_id,
+            LancamentoIdentidade.atendimento_id == account.id,
         )
+        .all()
     }
     used = {identity.sequencia for identity in identities.values()}
     next_sequence = max(int(account.proxima_sequencia or 1), 1)
@@ -476,11 +569,8 @@ def ensure_launch_identity(
     )
 
 
-def get_table_family_snapshot(
-    db: Session,
-    restaurante_id: int,
-    mesa_id: int,
-) -> list[dict]:
+def get_table_family_snapshot(db: Session, restaurante_id: int, mesa_id: int) -> list[dict]:
+    reconcile_table_principal(db, restaurante_id, mesa_id)
     accounts = (
         db.query(AtendimentoMesa)
         .filter(
@@ -493,9 +583,6 @@ def get_table_family_snapshot(
     )
     result: list[dict] = []
     for account in accounts:
-        _sync_account_status(db, account)
-        if account.status != "aberto":
-            continue
         command_ids = _linked_command_ids(db, restaurante_id, account.id)
         launches = (
             db.query(Lancamento)
@@ -533,17 +620,67 @@ def get_table_family_snapshot(
     return result
 
 
-def _group_members(db: Session, account: AtendimentoMesa) -> tuple[AtendimentoMesa, list[AtendimentoMesa]]:
-    root_id = account.principal_id or account.id
-    root = (
-        db.query(AtendimentoMesa)
+def principal_command_for_table(
+    db: Session,
+    restaurante_id: int,
+    mesa_id: int,
+) -> Optional[Comanda]:
+    root = reconcile_table_principal(db, restaurante_id, mesa_id)
+    if root is None:
+        return None
+    ids = _linked_command_ids(db, restaurante_id, root.id)
+    if not ids:
+        return None
+    commands = (
+        db.query(Comanda)
         .filter(
-            AtendimentoMesa.restaurante_id == account.restaurante_id,
-            AtendimentoMesa.id == root_id,
+            Comanda.restaurante_id == restaurante_id,
+            Comanda.id.in_(ids),
+            Comanda.fechada == False,
         )
-        .with_for_update()
+        .order_by(Comanda.criado_em.asc(), Comanda.id.asc())
+        .all()
+    )
+    return next((command for command in commands if not (command.identificador or "").strip()), commands[0] if commands else None)
+
+
+def principal_command_for_comanda(
+    db: Session,
+    restaurante_id: int,
+    comanda_id: str,
+    *,
+    actor_id: Optional[str] = None,
+) -> Optional[Comanda]:
+    command = db.query(Comanda).filter(
+        Comanda.restaurante_id == restaurante_id,
+        Comanda.id == comanda_id,
+        Comanda.fechada == False,
+    ).first()
+    if command is None:
+        return None
+    account = ensure_atendimento_for_comanda(db, command, actor_id=actor_id)
+    root = reconcile_table_principal(db, restaurante_id, int(account.mesa_id), actor_id=actor_id)
+    if root is None or root.id == account.id:
+        return command
+    ids = _linked_command_ids(db, restaurante_id, root.id)
+    return (
+        db.query(Comanda)
+        .filter(
+            Comanda.restaurante_id == restaurante_id,
+            Comanda.id.in_(ids),
+            Comanda.fechada == False,
+        )
+        .order_by(Comanda.criado_em.asc(), Comanda.id.asc())
         .first()
     )
+
+
+def _group_members(db: Session, account: AtendimentoMesa) -> tuple[AtendimentoMesa, list[AtendimentoMesa]]:
+    root_id = account.principal_id or account.id
+    root = db.query(AtendimentoMesa).filter(
+        AtendimentoMesa.restaurante_id == account.restaurante_id,
+        AtendimentoMesa.id == root_id,
+    ).with_for_update().first()
     if root is None:
         raise AtendimentoError("Família principal não encontrada", status_code=409)
     members = (
@@ -551,10 +688,7 @@ def _group_members(db: Session, account: AtendimentoMesa) -> tuple[AtendimentoMe
         .filter(
             AtendimentoMesa.restaurante_id == account.restaurante_id,
             AtendimentoMesa.status == "aberto",
-            or_(
-                AtendimentoMesa.id == root.id,
-                AtendimentoMesa.principal_id == root.id,
-            ),
+            or_(AtendimentoMesa.id == root.id, AtendimentoMesa.principal_id == root.id),
         )
         .with_for_update()
         .all()
@@ -570,17 +704,13 @@ def _update_linked_command_tables(
     merge_origin: Optional[int] = None,
     clear_merge: bool = False,
 ) -> None:
-    command_ids = _linked_command_ids(db, account.restaurante_id, account.id)
-    if not command_ids:
+    ids = _linked_command_ids(db, account.restaurante_id, account.id)
+    if not ids:
         return
-    commands = (
-        db.query(Comanda)
-        .filter(
-            Comanda.restaurante_id == account.restaurante_id,
-            Comanda.id.in_(command_ids),
-        )
-        .all()
-    )
+    commands = db.query(Comanda).filter(
+        Comanda.restaurante_id == account.restaurante_id,
+        Comanda.id.in_(ids),
+    ).all()
     for command in commands:
         if command.mesa_id != new_table:
             command.mesa_transferida_de = command.mesa_id
@@ -599,41 +729,32 @@ def transfer_group_by_comanda(
     *,
     actor_id: Optional[str] = None,
 ) -> Comanda:
-    command = (
-        db.query(Comanda)
-        .filter(
-            Comanda.restaurante_id == restaurante_id,
-            Comanda.id == comanda_id,
-            Comanda.fechada == False,
-        )
-        .first()
-    )
+    command = db.query(Comanda).filter(
+        Comanda.restaurante_id == restaurante_id,
+        Comanda.id == comanda_id,
+        Comanda.fechada == False,
+    ).first()
     if command is None:
         raise AtendimentoError("Comanda não encontrada", status_code=404)
-    target = db.query(Mesa).filter(
+    if db.query(Mesa.id).filter(
         Mesa.restaurante_id == restaurante_id,
         Mesa.id == nova_mesa_id,
-    ).first()
-    if target is None:
+    ).first() is None:
         raise AtendimentoError("Mesa de destino não encontrada", status_code=404)
 
     account = ensure_atendimento_for_comanda(db, command, actor_id=actor_id)
     root, members = _group_members(db, account)
     member_ids = {member.id for member in members}
-    current_table = root.mesa_id
-    if current_table == nova_mesa_id:
+    if root.mesa_id == nova_mesa_id:
         return command
 
-    occupied = (
-        db.query(AtendimentoMesa.id)
-        .filter(
-            AtendimentoMesa.restaurante_id == restaurante_id,
-            AtendimentoMesa.mesa_id == nova_mesa_id,
-            AtendimentoMesa.status == "aberto",
-            AtendimentoMesa.id.notin_(member_ids),
-        )
-        .first()
-    )
+    # Sincroniza eventual ocupação legada antes da decisão estrutural.
+    occupied = db.query(AtendimentoMesa.id).filter(
+        AtendimentoMesa.restaurante_id == restaurante_id,
+        AtendimentoMesa.mesa_id == nova_mesa_id,
+        AtendimentoMesa.status == "aberto",
+        AtendimentoMesa.id.notin_(member_ids),
+    ).first()
     if occupied:
         raise AtendimentoError(
             "A mesa de destino está ocupada. Use Mesclar para unir os atendimentos.",
@@ -649,35 +770,12 @@ def transfer_group_by_comanda(
             member,
             "transferencia",
             actor_id=actor_id,
-            origem=origin,
-            destino=nova_mesa_id,
+            origin=origin,
+            destination=nova_mesa_id,
             details={"grupo_principal": root.id},
         )
     db.flush()
     return command
-
-
-def _root_at_table(db: Session, restaurante_id: int, mesa_id: int) -> Optional[AtendimentoMesa]:
-    candidates = (
-        db.query(AtendimentoMesa)
-        .filter(
-            AtendimentoMesa.restaurante_id == restaurante_id,
-            AtendimentoMesa.mesa_id == mesa_id,
-            AtendimentoMesa.status == "aberto",
-            AtendimentoMesa.principal_id.is_(None),
-        )
-        .with_for_update()
-        .all()
-    )
-    for candidate in candidates:
-        _sync_account_status(db, candidate)
-    candidates = [candidate for candidate in candidates if candidate.status == "aberto"]
-    if len(candidates) > 1:
-        raise AtendimentoError(
-            "Mesa com múltiplas famílias principais; operação bloqueada para preservar histórico.",
-            status_code=409,
-        )
-    return candidates[0] if candidates else None
 
 
 def merge_tables(
@@ -697,8 +795,8 @@ def merge_tables(
         ).first() is None:
             raise AtendimentoError(f"Mesa {mesa_id} não encontrada", status_code=404)
 
-    source_root = _root_at_table(db, restaurante_id, source_table)
-    target_root = _root_at_table(db, restaurante_id, target_table)
+    source_root = reconcile_table_principal(db, restaurante_id, source_table, actor_id=actor_id)
+    target_root = reconcile_table_principal(db, restaurante_id, target_table, actor_id=actor_id)
     if source_root is None or target_root is None:
         raise AtendimentoError("As duas mesas precisam possuir atendimento aberto", status_code=409)
 
@@ -716,19 +814,14 @@ def merge_tables(
         origin = member.mesa_id
         member.principal_id = target_root.id
         member.mesa_id = target_table
-        _update_linked_command_tables(
-            db,
-            member,
-            target_table,
-            merge_origin=source_table,
-        )
+        _update_linked_command_tables(db, member, target_table, merge_origin=source_table)
         _record_movement(
             db,
             member,
             "mesclagem",
             actor_id=actor_id,
-            origem=origin,
-            destino=target_table,
+            origin=origin,
+            destination=target_table,
             details={"principal": target_root.id},
         )
     db.flush()
@@ -769,23 +862,19 @@ def unmerge_by_comanda(
     origin = last_merge.mesa_origem_id if last_merge else None
     if origin is None:
         raise AtendimentoError("Origem da mesclagem não pôde ser reconstruída", status_code=409)
-    occupied = (
-        db.query(AtendimentoMesa.id)
-        .filter(
-            AtendimentoMesa.restaurante_id == restaurante_id,
-            AtendimentoMesa.mesa_id == origin,
-            AtendimentoMesa.status == "aberto",
-            AtendimentoMesa.id != account.id,
-        )
-        .first()
-    )
+    occupied = db.query(AtendimentoMesa.id).filter(
+        AtendimentoMesa.restaurante_id == restaurante_id,
+        AtendimentoMesa.mesa_id == origin,
+        AtendimentoMesa.status == "aberto",
+        AtendimentoMesa.id != account.id,
+    ).first()
     if occupied:
         raise AtendimentoError(
             "A mesa de origem já foi reutilizada; escolha uma transferência explícita.",
             status_code=409,
         )
 
-    previous_table = account.mesa_id
+    previous = account.mesa_id
     account.principal_id = None
     account.mesa_id = origin
     _update_linked_command_tables(db, account, origin, clear_merge=True)
@@ -794,8 +883,8 @@ def unmerge_by_comanda(
         account,
         "desmesclagem",
         actor_id=actor_id,
-        origem=previous_table,
-        destino=origin,
+        origin=previous,
+        destination=origin,
     )
     db.flush()
     return command
@@ -822,11 +911,11 @@ def _new_destination_account_and_command(
     source_command: Comanda,
     target_table: int,
 ) -> tuple[AtendimentoMesa, Comanda]:
-    numero, period = allocate_account_number(db, source_command.restaurante_id)
+    number, period = allocate_account_number(db, source_command.restaurante_id)
     account = AtendimentoMesa(
         id=f"a-{uuid.uuid4().hex[:12]}",
         restaurante_id=source_command.restaurante_id,
-        numero_conta=numero,
+        numero_conta=number,
         periodo_ref=period,
         mesa_id=target_table,
         status="aberto",
@@ -840,7 +929,7 @@ def _new_destination_account_and_command(
         garcom_id=source_command.garcom_id,
         tipo="Consumo no Local",
         identificador=source_command.identificador,
-        numero_pedido=numero,
+        numero_pedido=number,
         fechada=False,
         criado_em=datetime.datetime.now(datetime.timezone.utc),
     )
@@ -853,7 +942,13 @@ def _new_destination_account_and_command(
             comanda_id=command.id,
         )
     )
-    _record_movement(db, account, "abertura", actor_id=source_command.garcom_id, destino=target_table)
+    _record_movement(
+        db,
+        account,
+        "abertura",
+        actor_id=source_command.garcom_id,
+        destination=target_table,
+    )
     return account, command
 
 
@@ -865,8 +960,8 @@ def transfer_items_batch(
     *,
     actor_id: Optional[str] = None,
 ) -> list[Item]:
-    normalized_ids = list(dict.fromkeys(str(item_id) for item_id in item_ids if item_id))
-    if not normalized_ids:
+    normalized = list(dict.fromkeys(str(item_id) for item_id in item_ids if item_id))
+    if not normalized:
         raise AtendimentoError("Selecione ao menos um item", status_code=422)
     if db.query(Mesa.id).filter(
         Mesa.restaurante_id == restaurante_id,
@@ -877,14 +972,11 @@ def transfer_items_batch(
     items = (
         db.query(Item)
         .options(joinedload(Item.comanda))
-        .filter(
-            Item.restaurante_id == restaurante_id,
-            Item.id.in_(normalized_ids),
-        )
+        .filter(Item.restaurante_id == restaurante_id, Item.id.in_(normalized))
         .with_for_update()
         .all()
     )
-    if len(items) != len(normalized_ids):
+    if len(items) != len(normalized):
         raise AtendimentoError("Um ou mais itens não foram encontrados", status_code=404)
     if any(item.status == "cancelado" for item in items):
         raise AtendimentoError("Itens cancelados não podem ser transferidos", status_code=409)
@@ -899,7 +991,7 @@ def transfer_items_batch(
     if any(account.mesa_id == target_table for account in source_accounts.values()):
         raise AtendimentoError("O item já pertence à mesa de destino", status_code=409)
 
-    destination_account = _root_at_table(db, restaurante_id, target_table)
+    destination_account = reconcile_table_principal(db, restaurante_id, target_table, actor_id=actor_id)
     if destination_account is None:
         destination_account, destination_command = _new_destination_account_and_command(
             db,
@@ -915,49 +1007,44 @@ def transfer_items_batch(
                 Comanda.id.in_(destination_ids),
                 Comanda.fechada == False,
             )
-            .order_by(Comanda.criado_em.asc())
+            .order_by(Comanda.criado_em.asc(), Comanda.id.asc())
             .first()
         )
         if destination_command is None:
-            destination_account, destination_command = _new_destination_account_and_command(
-                db,
-                next(iter(source_commands.values())),
-                target_table,
-            )
+            raise AtendimentoError("Família destino sem comanda aberta", status_code=409)
 
     origin_by_item = {item.id: item.comanda.mesa_id for item in items}
     for item in items:
         source_account = source_accounts[item.comanda_id]
-        identity = (
-            db.query(Lancamento)
-            .filter(
-                Lancamento.restaurante_id == restaurante_id,
-                Lancamento.id == item.lancamento_id,
-            )
-            .first()
-        )
-        pedido_origem = ensure_launch_identity(db, identity).label if identity is not None else None
+        launch = db.query(Lancamento).filter(
+            Lancamento.restaurante_id == restaurante_id,
+            Lancamento.id == item.lancamento_id,
+        ).first()
+        original_order = ensure_launch_identity(db, launch).label if launch is not None else None
         old_command_id = item.comanda_id
+        # Atualiza FK e relacionamento no mesmo instante; evita objeto ORM stale
+        # após uma transferência parcial dentro da mesma transação.
         item.comanda_id = destination_command.id
+        item.comanda = destination_command
         _record_movement(
             db,
             source_account,
             "transferencia_item",
             actor_id=actor_id,
-            origem=origin_by_item[item.id],
-            destino=target_table,
+            origin=origin_by_item[item.id],
+            destination=target_table,
             details={
                 "item_id": item.id,
                 "comanda_origem": old_command_id,
                 "comanda_destino": destination_command.id,
                 "atendimento_destino": destination_account.id,
-                "pedido_origem": pedido_origem,
+                "pedido_origem": original_order,
             },
         )
 
     db.flush()
-    # Se toda a família de origem ficou sem itens, ela deixa de ocupar mesa.
-    for source_account in set(source_accounts.values()):
+    unique_sources = {account.id: account for account in source_accounts.values()}.values()
+    for source_account in unique_sources:
         if _account_active_item_count(db, source_account) == 0:
             source_account.status = "fechado"
             source_account.fechado_em = datetime.datetime.now(datetime.timezone.utc)
@@ -974,9 +1061,10 @@ def transfer_items_batch(
                 source_account,
                 "fechamento",
                 actor_id=actor_id,
-                origem=source_account.mesa_id,
+                origin=source_account.mesa_id,
                 details={"motivo": "familia_esvaziada_por_transferencia"},
             )
+    reconcile_table_principal(db, restaurante_id, target_table, actor_id=actor_id)
     db.flush()
     return items
 
@@ -999,9 +1087,8 @@ def reopen_command_guarded(
 
     account = _account_for_comanda(db, restaurante_id, command.id, lock=True)
     if account is None:
-        # Conta legada: só materializa a família depois de reabrir, mas ainda valida a mesa.
         if command.mesa_id is not None:
-            occupied = _root_at_table(db, restaurante_id, command.mesa_id)
+            occupied = reconcile_table_principal(db, restaurante_id, command.mesa_id, actor_id=actor_id)
             if occupied is not None:
                 raise AtendimentoError(
                     "A mesa original já está ocupada. Reabra escolhendo uma nova mesa ou mesclagem explícita.",
@@ -1011,10 +1098,10 @@ def reopen_command_guarded(
         command.fechado_em = None
         account = ensure_atendimento_for_comanda(db, command, actor_id=actor_id)
     else:
-        target_table = account.mesa_id
-        if target_table is not None:
-            root = _root_at_table(db, restaurante_id, target_table)
-            if root is not None and (root.id != account.id and root.id != account.principal_id):
+        target = account.mesa_id
+        if target is not None:
+            root = reconcile_table_principal(db, restaurante_id, target, actor_id=actor_id)
+            if root is not None and root.id not in {account.id, account.principal_id}:
                 raise AtendimentoError(
                     "A mesa original já foi reutilizada. Escolha explicitamente onde reabrir esta conta.",
                     status_code=409,
@@ -1029,7 +1116,7 @@ def reopen_command_guarded(
         account,
         "reabertura",
         actor_id=actor_id,
-        destino=account.mesa_id,
+        destination=account.mesa_id,
     )
     db.flush()
     return command
