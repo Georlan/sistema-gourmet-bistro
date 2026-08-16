@@ -107,10 +107,11 @@ run_flow_test \
   "tests/test_print_agents.py"
 
 run_flow_test \
-  "8. Identidade operacional da mesa (famílias, bordas, HTTP e movimentos)" \
+  "8. Identidade operacional da mesa (famílias, bordas, HTTP, caixa e movimentos)" \
   "tests/test_atendimento_identity.py" \
   "tests/test_atendimento_edge_cases.py" \
-  "tests/test_atendimento_http_flow.py"
+  "tests/test_atendimento_http_flow.py" \
+  "tests/test_atendimento_caixa_merge.py"
 
 echo ""
 echo -e "${BLUE}${BOLD}========================================================================${NC}"
