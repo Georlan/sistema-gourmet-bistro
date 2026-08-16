@@ -50,7 +50,6 @@ import {
   getSubscriptionPlan,
   normalizeSubscriptionPlan
 } from '../config/subscriptionPlans';
-import { ComandaActionsModal } from './ComandaActionsModal';
 import {
   formatWhatsAppPhone,
   openWhatsAppMessage,
@@ -481,7 +480,6 @@ export function CaixaPanel({
   }, [activeSubTab, activeTab]);
 
   const [selectedKanbanOrder, setSelectedKanbanOrder] = useState<any>(null);
-  const [quickActionsOrder, setQuickActionsOrder] = useState<Order | null>(null);
   const [cancelTableTarget, setCancelTableTarget] = useState<{
     mesaId: number;
     comandas: number;
@@ -11035,75 +11033,6 @@ export function CaixaPanel({
           </div>
         </div>
       )}
-
-      {/* MODAL DE AÇÕES RÁPIDAS (RATEIO / DESCONTO / CHECKOUT) */}
-      <ComandaActionsModal
-        isOpen={Boolean(quickActionsOrder)}
-        onClose={() => setQuickActionsOrder(null)}
-        comanda={quickActionsOrder}
-        onPrintKitchen={async (comandaId) => {
-          try {
-            const res = await fetch(`${apiBaseUrl}/comandas/lancamentos/${comandaId}/reimprimir`, {
-              method: "POST",
-              headers: authHeaders
-            });
-            if (res.ok) {
-              window.dispatchEvent(
-                new Event('koma_print_monitor_refresh')
-              );
-            } else {
-              const err = await res.json();
-              showToast(`Erro ao reimprimir: ${err.detail}`, 'error');
-            }
-          } catch (err) {
-            console.error(err);
-            showToast("Erro ao solicitar impressão.", 'error');
-          }
-        }}
-        onPrintBill={async (comandaId) => {
-          try {
-            const targetOrder = orders.find(o => o.id === comandaId) || quickActionsOrder;
-            const mesaId = targetOrder?.mesaId || 0;
-            const url = `${apiBaseUrl}/mesas/${mesaId}/imprimir-recibo?apenas_valores=false`;
-
-            const res = await fetch(url, {
-              method: 'POST',
-              headers: authHeaders
-            });
-            if (res.ok) {
-              window.dispatchEvent(
-                new Event('koma_print_monitor_refresh')
-              );
-            } else {
-              const err = await res.json();
-              showToast(`Erro ao imprimir pré-conta: ${err.detail}`, 'error');
-            }
-          } catch (err) {
-            console.error(err);
-            showToast("Erro ao solicitar pré-conta.", 'error');
-          }
-        }}
-        onFinalizeOrder={async (comandaId, totalFinal, metodoPagamento) => {
-          try {
-            const res = await fetch(`${apiBaseUrl}/comandas/${comandaId}/fechar`, {
-              method: "PUT",
-              headers: authHeaders
-            });
-            if (res.ok) {
-              showToast(`Comanda #${comandaId.slice(-4)} finalizada (${metodoPagamento.toUpperCase()}) - R$ ${totalFinal.toFixed(2)}`, 'success');
-              onRefreshOrders();
-              fetchDeliveryOrders();
-              setSelectedKanbanOrder(null);
-            } else {
-              const err = await res.json();
-              showToast(`Erro ao fechar comanda: ${err.detail}`, 'error');
-            }
-          } catch (err) {
-            console.error(err);
-            showToast("Erro de conexão ao fechar comanda.", 'error');
-          }
-        }}
-      />
 
       {/* MODAL DE ENTRADA MANUAL DE ESTOQUE */}
       {showEntradaManualModal && (
