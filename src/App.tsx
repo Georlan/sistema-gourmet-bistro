@@ -4,7 +4,6 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import logoImg from './assets/logo.png';
 import { KomaLogo } from './components/KomaLogo';
 import { LoginButton } from '../components/shadcnblocks/login-button';
 import { Menu, X, User, Wifi, WifiOff, SlidersHorizontal, ArrowDownRight, ArrowUpRight, RefreshCw, Bell, Printer, TrendingUp, Utensils, CheckCircle2, UserCheck, UserX, ShoppingBag, Sun, Moon } from 'lucide-react';
@@ -23,6 +22,7 @@ import { MotoboyPwaPage } from './components/MotoboyPwaPage';
 import { KitchenPanel } from './components/KitchenPanel';
 import LandingPage from './landing/LandingPage';
 import { API_BASE_URL } from './config/api';
+import { KOMA_THEME_CHANGED_EVENT, nextKomaTheme, persistKomaTheme, readKomaTheme, type KomaTheme } from './config/theme';
 import { saveOperatorSession, getOperatorSession, clearOperatorSession } from './utils/authSession';
 import { parseBackendTimestamp } from './utils/dateTime';
 
@@ -33,7 +33,7 @@ const MemoizedCaixaPanel = React.lazy(() =>
 );
 
 const CashierLoading = () => (
-  <div className="w-full h-full bg-koma-page text-[#00c996] flex items-center justify-center font-mono text-[10px] uppercase tracking-[0.18em]">
+  <div className="w-full h-full bg-koma-page text-koma-accent flex items-center justify-center font-mono text-[10px] uppercase tracking-[0.18em]">
     Preparando operação…
   </div>
 );
@@ -433,32 +433,21 @@ export default function App() {
     };
   }, []);
 
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-    return (localStorage.getItem('@koma:theme') as 'dark' | 'light') || 'dark';
-  });
+  const [theme, setTheme] = useState<KomaTheme>(() => readKomaTheme());
 
   const toggleTheme = () => {
-    const newTheme = theme === 'dark' ? 'light' : 'dark';
-    localStorage.setItem('@koma:theme', newTheme);
-    setTheme(newTheme);
-    window.dispatchEvent(new Event('koma_theme_changed'));
+    setTheme(persistKomaTheme(nextKomaTheme(theme)));
   };
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-koma-theme', theme);
-    const handleStorageChange = () => {
-      const stored = localStorage.getItem('@koma:theme') as 'dark' | 'light';
-      if (stored && ['dark', 'light'].includes(stored)) {
-        setTheme(stored);
-      }
-    };
-    window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('koma_theme_changed', handleStorageChange);
+    const handleThemeChange = () => setTheme(readKomaTheme());
+    window.addEventListener('storage', handleThemeChange);
+    window.addEventListener(KOMA_THEME_CHANGED_EVENT, handleThemeChange);
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('koma_theme_changed', handleStorageChange);
+      window.removeEventListener('storage', handleThemeChange);
+      window.removeEventListener(KOMA_THEME_CHANGED_EVENT, handleThemeChange);
     };
-  }, [theme]);
+  }, []);
 
   // 1.5. Dynamic Salon Tables State and Fetcher
   const [salonTables, setSalonTables] = useState<Table[]>([]);

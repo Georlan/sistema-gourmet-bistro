@@ -1,6 +1,5 @@
 import { CardapioAssetUploader } from './CardapioAssetUploader';
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import logoImg from '../assets/logo.png';
 import { KomaLogo } from './KomaLogo';
 import { KomaEmptyState } from './shared/KomaEmptyState';
 import { LoginButton } from '../../components/shadcnblocks/login-button';
@@ -9860,7 +9859,7 @@ export function CaixaPanel({
                 <h3 className={clsx('font-serif', 'text-sm', 'font-bold', 'text-koma-foreground')}>
                   {selectedKanbanOrder.mesaId && selectedKanbanOrder.mesaId > 0 ? `Detalhes: Mesa ${selectedKanbanOrder.mesaId}` : 'Detalhes: Balcão'}
                 </h3>
-                <span className={clsx('text-[9px]', 'text-koma-muted', 'font-mono', 'block', 'mt-0.5')}>Lote: #{selectedKanbanOrder.id.slice(-4)}</span>
+                <span className={clsx('text-[9px]', 'text-koma-muted', 'font-mono', 'block', 'mt-0.5')}>Pedido: #{selectedKanbanOrder.id.slice(-4)}</span>
               </div>
               <button
                 type="button"
@@ -9902,7 +9901,7 @@ export function CaixaPanel({
               )}
 
               <div className={clsx('space-y-2', 'max-h-48', 'overflow-y-auto')}>
-                <span className={clsx('text-[10px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>Itens do Lote:</span>
+                <span className={clsx('text-[10px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>Itens do Pedido:</span>
                 {selectedKanbanOrder.itens.map((item: any, idx: number) => (
                   <div key={idx} className={clsx('flex', 'justify-between', 'items-start', 'bg-koma-panel/40', 'p-2.5', 'rounded-xl', 'border', 'border-koma-border/40', 'text-xs')}>
                     <div>
