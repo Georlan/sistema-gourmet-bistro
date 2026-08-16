@@ -47,12 +47,13 @@ jobs:
           replace_exact("const [saldoInicial, setSaldoInicial] = useState('100.00');", "const [saldoInicial, setSaldoInicial] = useState<number | ''>(100);")
           replace_exact("const [paymentValor, setPaymentValor] = useState('');", "const [paymentValor, setPaymentValor] = useState<number | ''>('');")
           replace_exact("const [prodFormPreco, setProdFormPreco] = useState('');", "const [prodFormPreco, setProdFormPreco] = useState<number | ''>('');")
-          replace_exact("const [pdvDeliveryTaxa, setPdvDeliveryTaxa] = useState('0.00');", "const [pdvDeliveryTaxa, setPdvDeliveryTaxa] = useState<number | ''>(0);")
+          replace_exact("const [pdvDeliveryTaxa, setPdvDeliveryTaxa] = useState('0.00');", "const [pdvDeliveryTaxa, setPdvDeliveryTaxa] = useState<number>(0);")
 
           replace_exact("parseFloat(saldoInicial)", "Number(saldoInicial || 0)")
           replace_exact("parseFloat(paymentValor)", "Number(paymentValor || 0)", expected=5)
           replace_exact("parseFloat(prodFormPreco)", "Number(prodFormPreco || 0)")
           replace_exact("parseFloat(deliveryTaxa) || 0.0", "Number(deliveryTaxa || 0)")
+          replace_exact("setPdvDeliveryTaxa('0.00');", "setPdvDeliveryTaxa(0);")
 
           text, payment_fixed = re.subn(
               r"setPaymentValor\(([^\n;]+?)\.toFixed\(2\)\);",
@@ -78,7 +79,6 @@ jobs:
               "onValueChange={(value) => setInsumoFormCusto(Number(value || 0))}",
               expected=2,
           )
-          replace_exact("onChange={(e) => setPdvDeliveryTaxa(e.target.value)}", "onValueChange={setPdvDeliveryTaxa}")
 
           def convert_input(value_name: str, expected: int = 1):
               global text
@@ -100,17 +100,16 @@ jobs:
           convert_input('paymentValor')
           convert_input('prodFormPreco')
           convert_input('insumoFormCusto', expected=2)
-          convert_input('pdvDeliveryTaxa')
 
           forbidden = [
               'parseFloat(saldoInicial)',
               'parseFloat(paymentValor)',
               'parseFloat(prodFormPreco)',
               'parseFloat(deliveryTaxa)',
+              "setPdvDeliveryTaxa('0.00')",
               'onChange={(e) => setSaldoInicial(e.target.value)}',
               'onChange={(e) => setPaymentValor(e.target.value)}',
               'onChange={(e) => setProdFormPreco(e.target.value)}',
-              'onChange={(e) => setPdvDeliveryTaxa(e.target.value)}',
           ]
           leftovers = [value for value in forbidden if value in text]
           if leftovers:
