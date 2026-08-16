@@ -42,6 +42,7 @@ from ..services.clientes import (
     cadastrar_ou_atualizar_cliente,
     normalizar_telefone_cliente,
 )
+from ..services.printing import PrintingRequestError, enqueue_table_receipt
 from ..subscription import subscription_has_printing
 from ..waiter_permissions import (
     require_waiter_permission,
@@ -784,48 +785,63 @@ async def criar_venda_direta(
                 "status": "OCUPADA"
             }, tenant_id=current_user.tenant_id)
 
-        # Enfileira impressões se houver itens para cozinha
+        # Consumo no local usa exatamente a mesma fonte do Extrato Completo.
+        # Delivery/retirada continuam usando documentos de produção por destino.
         if itens_cozinha and waiter_permission_enabled(
             db,
             current_user,
             "perm_garcom_print",
         ):
             try:
-                from ..domain.printing import PrintDocumentService
-                from ..domain.printing.models import OrderPrintData, PrintItem as DomainPrintItem
-                
-                p_items = [
-                    DomainPrintItem(
-                        codigo=it.produto.codigo if hasattr(it.produto, "codigo") else "",
-                        nome=it.produto.nome,
-                        quantidade=1,
-                        preco_unit=it.preco_unit,
-                        observacao=it.observacao,
-                        cliente_nome=it.cliente_nome,
-                        destino_impressao=it.produto.categoria.destino_impressao if (it.produto and it.produto.categoria) else getattr(it.produto, 'local_impressao', getattr(it.produto, 'destino', 'COZINHA'))
-                    )
-                    for it in itens_cozinha
-                ]
-                doc_data = OrderPrintData(
-                    numero_pedido=str(numero_pedido),
-                    mesa=str(venda_in.mesa_id) if venda_in.mesa_id else "BALCAO",
-                    tipo_pedido=tipo_pedido,
-                    garcom_nome=garcom.nome if garcom else "CAIXA",
-                    horario=get_operational_now().strftime("%H:%M"),
-                    itens=p_items,
-                    restaurante_nome="KÔMA"
-                )
-                docs = PrintDocumentService.generate_production(doc_data)
-                for dest_name, ticket_text in docs.items():
-                    background_tasks.add_task(
-                        print_in_background,
-                        printer_name=dest_name,
-                        ticket_text=ticket_text,
-                        document_type="producao",
+                if tipo_pedido == "Consumo no Local" and venda_in.mesa_id is not None:
+                    enqueue_table_receipt(
+                        db,
+                        rid,
+                        venda_in.mesa_id,
+                        apenas_valores=False,
                         source_type="pedido",
                         source_id=comanda_id,
-                        restaurante_id=rid,
+                        idempotency_key=f"mesa:auto:comanda:{comanda_id}",
                     )
+                    db.commit()
+                else:
+                    from ..domain.printing import PrintDocumentService
+                    from ..domain.printing.models import OrderPrintData, PrintItem as DomainPrintItem
+                    
+                    p_items = [
+                        DomainPrintItem(
+                            codigo=it.produto.codigo if hasattr(it.produto, "codigo") else "",
+                            nome=it.produto.nome,
+                            quantidade=1,
+                            preco_unit=it.preco_unit,
+                            observacao=it.observacao,
+                            cliente_nome=it.cliente_nome,
+                            destino_impressao=it.produto.categoria.destino_impressao if (it.produto and it.produto.categoria) else getattr(it.produto, 'local_impressao', getattr(it.produto, 'destino', 'COZINHA'))
+                        )
+                        for it in itens_cozinha
+                    ]
+                    doc_data = OrderPrintData(
+                        numero_pedido=str(numero_pedido),
+                        mesa="BALCAO",
+                        tipo_pedido=tipo_pedido,
+                        garcom_nome=garcom.nome if garcom else "CAIXA",
+                        horario=get_operational_now().strftime("%H:%M"),
+                        itens=p_items,
+                        restaurante_nome="KÔMA"
+                    )
+                    docs = PrintDocumentService.generate_production(doc_data)
+                    for dest_name, ticket_text in docs.items():
+                        background_tasks.add_task(
+                            print_in_background,
+                            printer_name=dest_name,
+                            ticket_text=ticket_text,
+                            document_type="producao",
+                            source_type="pedido",
+                            source_id=comanda_id,
+                            restaurante_id=rid,
+                        )
+            except PrintingRequestError as print_err:
+                logger.warning("Falha ao gerar via canônica da mesa: %s", print_err)
             except Exception as print_err:
                 logger.warning(f"Falha ao gerar impressões de venda direta: {print_err}")
 
@@ -886,7 +902,9 @@ def pedir_conta(
 @router.post("/{comanda_id}/lancamentos", response_model=LancamentoResponse, status_code=status.HTTP_201_CREATED)
 def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """
-    Lança novos itens na comanda (gerando um novo lote de pedido) e aciona a impressão de cozinha.
+    Lança novos itens na comanda (gerando um novo lote de pedido). A via automática
+    de consumo no local é o mesmo Extrato Completo; outros tipos continuam com
+    documento de produção por destino.
     """
     rid = require_tenant_id()
 
@@ -1007,7 +1025,6 @@ def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_ta
             
             itens_criados.append(novo_item)
 
-        # Auto-print cozinha delta (novos itens)
         novo_lancamento.dispensado_impressao = False
         should_print = False
         items_payload = []
@@ -1016,12 +1033,13 @@ def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_ta
             if dest != "NENHUM":
                 should_print = True
             items_payload.append({
-                "quantidade": 1, # Quantidade unitária
+                "quantidade": 1,
                 "codigo": it.produto.id,
                 "nome": it.produto.nome,
                 "descricao": it.produto.descricao,
                 "observacao": it.observacao,
-                "cliente_nome": it.cliente_nome
+                "cliente_nome": it.cliente_nome,
+                "preco_unit": float(it.preco_unit or 0.0),
             })
             
         if should_print and waiter_permission_enabled(
@@ -1029,34 +1047,53 @@ def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_ta
             current_user,
             "perm_garcom_print",
         ):
-            from ..printer_service import printer_service
-            print_preferences = _get_print_preferences(
-                db,
-                comanda.restaurante_id,
+            print_job = None
+            is_local = (
+                (comanda.tipo or "").strip().casefold()
+                in {"consumo no local", "mesa", "local"}
+                and comanda.mesa_id is not None
             )
-            ticket_text = printer_service.generate_kitchen_ticket(
-                num_pedido=comanda.numero_pedido,
-                tipo=comanda.tipo,
-                mesa_id=comanda.mesa_id,
-                garcom_nome=garcom.nome,
-                items=items_payload,
-                is_reprint=False,
-                **print_preferences,
-            )
-            enqueue_print_job_in_session(
-                db,
-                restaurante_id=require_tenant_id(),
-                printer_name="cozinha",
-                ticket_text=ticket_text,
-                document_type="producao",
-                source_type="pedido",
-                source_id=comanda_id,
-            )
-            
-            # Mark items as printed
-            print_time = datetime.datetime.now(datetime.timezone.utc)
-            for it in itens_criados:
-                it.impresso_em = print_time
+            if is_local:
+                print_job = enqueue_table_receipt(
+                    db,
+                    rid,
+                    comanda.mesa_id,
+                    apenas_valores=False,
+                    source_type="lancamento",
+                    source_id=novo_lancamento.id,
+                    idempotency_key=f"mesa:auto:lancamento:{novo_lancamento.id}",
+                )
+            else:
+                from ..printer_service import printer_service
+                print_preferences = _get_print_preferences(
+                    db,
+                    comanda.restaurante_id,
+                )
+                ticket_text = printer_service.generate_kitchen_ticket(
+                    num_pedido=comanda.numero_pedido,
+                    tipo=comanda.tipo,
+                    mesa_id=comanda.mesa_id,
+                    garcom_nome=garcom.nome,
+                    items=items_payload,
+                    is_reprint=False,
+                    **print_preferences,
+                )
+                print_job = enqueue_print_job_in_session(
+                    db,
+                    restaurante_id=rid,
+                    printer_name="cozinha",
+                    ticket_text=ticket_text,
+                    document_type="producao",
+                    source_type="pedido",
+                    source_id=comanda_id,
+                )
+
+            if print_job is not None:
+                print_time = datetime.datetime.now(datetime.timezone.utc)
+                for it in itens_criados:
+                    it.impresso_em = print_time
+            else:
+                novo_lancamento.dispensado_impressao = True
         else:
             novo_lancamento.dispensado_impressao = True
 
@@ -1598,14 +1635,19 @@ def reimprimir_lancamento_cozinha(
     db: Session = Depends(get_db),
     current_garcom: Usuario = Depends(get_current_user)
 ):
+    """Reimprime um documento já lançado.
+
+    Para Consumo no Local, reimpressão significa emitir novamente o Extrato
+    Completo canônico da mesa. Delivery/retirada mantêm as vias próprias.
     """
-    Reimprime a via de cozinha de um lote/lançamento específico ou comanda inteira.
-    Aceita qualquer usuário autenticado (garçom ou caixa).
-    """
-        
-    # Check if this is a comanda ID or a launch ID
+    del current_garcom
+    rid = require_tenant_id()
+
     if lancamento_id.startswith("c-"):
-        comanda = db.query(Comanda).filter(Comanda.id == lancamento_id).first()
+        comanda = db.query(Comanda).filter(
+            Comanda.restaurante_id == rid,
+            Comanda.id == lancamento_id,
+        ).first()
         if not comanda:
             raise HTTPException(
                 status_code=404,
@@ -1616,16 +1658,18 @@ def reimprimir_lancamento_cozinha(
         if comanda.tipo in ["Delivery", "Entrega", "Retirada"]:
             try:
                 from ..printer_service import printer_service
-                from ..models import ConfiguracaoRestaurante, Motoboy
                 
                 motoboy_nome = "Balcão"
                 if comanda.motoboy_id:
-                    mb = db.query(Motoboy).filter(Motoboy.id == comanda.motoboy_id).first()
+                    mb = db.query(Motoboy).filter(
+                        Motoboy.restaurante_id == rid,
+                        Motoboy.id == comanda.motoboy_id,
+                    ).first()
                     if mb:
                         motoboy_nome = mb.nome
                         
                 config = db.query(ConfiguracaoRestaurante).filter(
-                    ConfiguracaoRestaurante.restaurante_id == comanda.restaurante_id
+                    ConfiguracaoRestaurante.restaurante_id == rid
                 ).first()
                 unificar = config.unificar_vias_delivery if config else False
                 
@@ -1635,7 +1679,7 @@ def reimprimir_lancamento_cozinha(
                         print_in_background,
                         "delivery_unico",
                         unified_text,
-                        restaurante_id=require_tenant_id(),
+                        restaurante_id=rid,
                     )
                 else:
                     kitchen_text = printer_service.generate_delivery_kitchen_ticket(comanda)
@@ -1644,13 +1688,13 @@ def reimprimir_lancamento_cozinha(
                         print_in_background,
                         "delivery_cozinha",
                         kitchen_text,
-                        restaurante_id=require_tenant_id(),
+                        restaurante_id=rid,
                     )
                     background_tasks.add_task(
                         print_in_background,
                         "delivery_motoboy",
                         motoboy_text,
-                        restaurante_id=require_tenant_id(),
+                        restaurante_id=rid,
                     )
                     
                 return {"status": "success", "detail": "Reimpressão de Delivery enviada com sucesso"}
@@ -1663,13 +1707,24 @@ def reimprimir_lancamento_cozinha(
         active_items = [i for i in comanda.itens if i.status != "cancelado"]
         garcom_nome = comanda.criada_por.nome if comanda.criada_por else "Garçom"
     else:
-        lancamento = db.query(Lancamento).filter(Lancamento.id == lancamento_id).first()
+        lancamento = (
+            db.query(Lancamento)
+            .join(Comanda, Comanda.id == Lancamento.comanda_id)
+            .filter(
+                Comanda.restaurante_id == rid,
+                Lancamento.id == lancamento_id,
+            )
+            .first()
+        )
         if not lancamento:
             raise HTTPException(
                 status_code=404,
                 detail="Lançamento não encontrado"
             )
-        comanda = db.query(Comanda).filter(Comanda.id == lancamento.comanda_id).first()
+        comanda = db.query(Comanda).filter(
+            Comanda.restaurante_id == rid,
+            Comanda.id == lancamento.comanda_id,
+        ).first()
         if not comanda:
             raise HTTPException(
                 status_code=404,
@@ -1683,6 +1738,47 @@ def reimprimir_lancamento_cozinha(
             status_code=400,
             detail="Não há itens ativos para imprimir"
         )
+
+    is_local = (
+        (comanda.tipo or "").strip().casefold()
+        in {"consumo no local", "mesa", "local"}
+        and comanda.mesa_id is not None
+    )
+    if is_local:
+        try:
+            job = enqueue_table_receipt(
+                db,
+                rid,
+                comanda.mesa_id,
+                apenas_valores=False,
+                source_type="reimpressao",
+                source_id=lancamento_id,
+            )
+            if job is None:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="A impressão física não está disponível no plano atual.",
+                )
+            db.commit()
+            return {
+                "status": "success",
+                "detail": "Extrato Completo da mesa enviado novamente para impressão",
+            }
+        except PrintingRequestError as print_err:
+            db.rollback()
+            raise HTTPException(
+                status_code=print_err.status_code,
+                detail=str(print_err),
+            ) from print_err
+        except HTTPException:
+            db.rollback()
+            raise
+        except Exception as print_err:
+            db.rollback()
+            raise HTTPException(
+                status_code=500,
+                detail=f"Erro na impressora: {print_err}"
+            ) from print_err
         
     try:
         from ..printer_service import printer_service
@@ -1716,10 +1812,9 @@ def reimprimir_lancamento_cozinha(
             print_in_background,
             "cozinha_reimpressao",
             ticket_text,
-            restaurante_id=require_tenant_id(),
+            restaurante_id=rid,
         )
         
-        # Mark items as printed and commit
         print_time = datetime.datetime.now(datetime.timezone.utc)
         for it in active_items:
             it.impresso_em = print_time
