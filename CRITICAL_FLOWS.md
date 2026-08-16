@@ -1,62 +1,98 @@
 # MAPA DE FLUXOS CRÍTICOS E PROTOCOLO DE REGRESSÃO (KÔMA SAAS)
 
-> **AVISO DE PRODUÇÃO:** Este repositório atende a um restaurante real operando diariamente com PDV e Cardápio Digital. Qualquer regressão que afete o atendimento ao cliente ou a operação de caixa é considerada incidente crítico P0.
+> **AVISO DE PRODUÇÃO:** Este repositório atende operação real de PDV, salão, cardápio digital, caixa e impressão. Qualquer regressão que afete atendimento, faturamento, isolamento multi-tenant ou emissão física é incidente crítico.
 
 ---
 
-## 📋 Mapeamento dos Fluxos Críticos Negociais
+## Fluxos críticos protegidos
 
 ### 1. Cardápio Digital Público (`/cardapio`)
-- **Carregamento de Configurações Whitelabel:** A rota `GET /api/cardapio-digital/config` deve retornar dinamicamente os dados do restaurante (`nome`, `subtitulo`, `logo_url`, `banner_url`, `endereco`, `google_maps_url`, `socials`).
-- **Listagem de Categorias e Produtos:** As rotas públicas `GET /api/cardapio-digital/categorias` e `GET /api/cardapio-digital/produtos` devem listar exclusivamente os itens ativos do restaurante requisitado.
-- **Montagem do Carrinho e Lançamento de Pedidos:** Abertura e envio de comandas de mesa/delivery sem exigir autenticação interna de funcionário.
+- Configurações whitelabel devem pertencer ao restaurante correto.
+- Categorias e produtos devem listar exclusivamente itens ativos do tenant requisitado.
+- O pedido público deve chegar ao fluxo interno sem depender de autenticação de funcionário.
 
-### 2. Segmentação e Segurança do WebSocket (`/ws/cliente` vs `/ws/{garcom_id}`)
-- **Privacidade do Cliente:** O WebSocket público do Cardápio Digital (`/ws/cliente`) **NUNCA** deve receber eventos operacionais internos (presença de garçons `waiter_connected`/`waiter_disconnected`, alteração de rascunho `draft_status`, atualização de mesas).
-- **Operação da Equipe:** O WebSocket interno (`/ws/{garcom_id}`) deve continuar recebendo todos os eventos de presença, comandas e sincronização da equipe de atendimento.
+### 2. Segmentação do WebSocket (`/ws/cliente` vs `/ws/{garcom_id}`)
+- O canal público nunca recebe eventos operacionais internos.
+- O canal interno continua recebendo presença, comandas e sincronização da equipe.
 
-### 3. Isolamento Multi-Tenant e Políticas RLS (PostgreSQL / Supabase)
-- **Isolamento Estrito por Tenant:** As consultas de um `restaurante_id` (Tenant A) jamais podem vazar dados ou produtos de outro `restaurante_id` (Tenant B).
-- **Integridade de Acesso:** Nenhuma tabela multitenant deve ficar acidentalmente exposta sem permissão ou indevidamente bloqueada (erros `401`/`42501`) para requisições legítimas.
+### 3. Isolamento Multi-Tenant e RLS
+- Tenant A nunca pode ler ou alterar recursos do Tenant B.
+- Requisições legítimas do próprio restaurante continuam autorizadas.
 
-### 4. Operação de PDV e Caixa (`/view-caixa`)
-- **Ciclo de Turno do Caixa:** Abertura de turno (`POST /caixa/turno/abrir`), verificação de turno ativo (`GET /caixa/turno/atual`) e fechamento de turno (`POST /caixa/turno/fechar`).
-- **Lançamento de Comandas:** Criação e adição de itens em comandas de mesa/balcão.
-- **Processamento de Pagamentos:** Registro de pagamentos via Pix, Cartão de Crédito/Débito ou Dinheiro (`POST /caixa/pagamentos`).
+### 4. Operação de PDV e Caixa
+- Abrir turno, consultar resumo e fechar turno.
+- Criar comandas e lançar itens.
+- Registrar recebimentos pelos meios suportados sem duplicar faturamento.
 
-### 5. Autenticação e Controle de Acesso Interno (`/auth/login`)
-- **Login de Funcionários:** O endpoint `POST /auth/login` deve autenticar usuários ativos (admin, caixa, garçom) e emitir tokens JWT válidos contendo `restaurante_id` e `role`.
-- **Rejeição de Credenciais Inválidas:** Senhas incorretas ou usuários inativos devem ser rejeitados com código HTTP `401 Unauthorized`.
+### 5. Autenticação e autorização interna
+- Login válido emite JWT com `restaurante_id` e `role` corretos.
+- Credenciais inválidas e ações sem permissão são rejeitadas.
 
----
+### 6. Impressão de mesa
+- Layouts térmicos críticos continuam renderizando os campos financeiros esperados.
+- O snapshot da mesa não pode perder nem duplicar itens ao combinar estado persistido e lançamento corrente.
 
-## 🛠️ Protocolo Obrigatório de Deploy em Produção
-
-Antes de aplicar qualquer alteração ou merge no branch principal (`main`) para produção, siga estritamente o protocolo abaixo:
-
-1. **Pré-Alteração:** Execute a suíte crítica de regressão antes de iniciar as modificações:
-   ```bash
-   ./scripts/regression_check.sh
-   ```
-   *Certifique-se de que todos os fluxos retornem `[PASS]`.*
-
-2. **Desenvolvimento:** Realize a alteração do código ou adição da funcionalidade.
-
-3. **Pós-Alteração:** Execute novamente a suíte crítica de regressão:
-   ```bash
-   ./scripts/regression_check.sh
-   ```
-
-4. **Regra de Ouro (Bloqueio de Deploy):**
-   > ⚠️ **SE QUALQUER TESTE QUE PASSAVA ANTES PASSAR A FALHAR, A ALTERAÇÃO NÃO PODE IR PARA PRODUÇÃO EM HIPÓTESE ALGUMA.** O problema deve ser corrigido até que 100% dos testes da suíte crítica passem.
+### 7. Fila e agente de impressão
+- Claim de job é atômico.
+- Dois agentes não podem assumir o mesmo job.
+- Reprocessamento e reconexão não podem causar impressão duplicada de jobs expirados ou já assumidos.
 
 ---
 
-## 🧪 Estrutura de Arquivos da Suíte de Regressão
+## Quality Gate automático
 
-- `scripts/regression_check.sh` — Script executor da verificação de regressão (tempo de execução < 1 minuto).
-- `backend/tests/test_critical_cardapio_flow.py` — Testes E2E do Cardápio Digital Público.
-- `backend/tests/test_websocket_segmentation.py` — Testes de segmentação de audiência do WebSocket.
-- `backend/tests/test_critical_multitenant_rls.py` — Testes de isolamento estrito de dados multi-tenant.
-- `backend/tests/test_critical_pdv_caixa_flow.py` — Testes E2E do fluxo de Caixa e PDV.
-- `backend/tests/test_critical_auth_flow.py` — Testes de autenticação e tokens JWT.
+O workflow `.github/workflows/quality-gate.yml` executa em Pull Requests para `main`, pushes em `main`, pushes em `audit/**` e manualmente por `workflow_dispatch`.
+
+Ele possui dois gates independentes:
+
+1. **Frontend**
+   ```bash
+   npm ci
+   npm run lint
+   npm run build
+   ```
+
+2. **Backend crítico**
+   ```bash
+   python -m pip install -r backend/requirements-dev.txt
+   bash scripts/regression_check.sh
+   ```
+
+As dependências exclusivas de teste ficam em `backend/requirements-dev.txt`; elas não são adicionadas à imagem de produção.
+
+---
+
+## Protocolo obrigatório antes de alterar arquitetura
+
+1. Execute o gate crítico no estado anterior à mudança:
+   ```bash
+   bash scripts/regression_check.sh
+   ```
+2. Faça a alteração em branch de trabalho.
+3. Execute novamente o gate local.
+4. Abra PR e aguarde o **Koma Quality Gate**.
+5. Se um teste que passava anteriormente falhar, a alteração não deve entrar na `main` até a regressão ser explicada e corrigida.
+
+O script local aceita tanto `backend/venv/bin/python` quanto um `python3/python` do ambiente que tenha `pytest` instalado.
+
+---
+
+## Arquivos da suíte crítica
+
+- `scripts/regression_check.sh`
+- `backend/tests/test_critical_cardapio_flow.py`
+- `backend/tests/test_websocket_segmentation.py`
+- `backend/tests/test_critical_multitenant_rls.py`
+- `backend/tests/test_critical_pdv_caixa_flow.py`
+- `backend/tests/test_critical_auth_flow.py`
+- `backend/tests/test_printer_service_layout.py`
+- `backend/tests/test_table_print_snapshot.py`
+- `backend/tests/test_print_agents.py`
+
+---
+
+## Baseline da auditoria dos 100 commits
+
+A Etapa 0 foi iniciada a partir do commit `db80168ec599133a412299d54464b5ef8add591c` da `main`, na branch `audit/100-commits-hardening`.
+
+Nenhuma regra de negócio deve ser refatorada nesta etapa. O objetivo é estabelecer uma linha de base reproduzível antes das Etapas 1–4.
