@@ -15,7 +15,7 @@ from sqlalchemy import (
     event,
     inspect as sa_inspect,
 )
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, relationship
 
 from .database import Base, current_restaurante_id
 
@@ -88,6 +88,12 @@ class PagamentoAlocacao(Base):
         default=lambda: datetime.datetime.now(datetime.timezone.utc),
         nullable=False,
     )
+
+    # A relação não é apenas conveniência de leitura: ela informa ao unit of
+    # work do SQLAlchemy que um Pagamento novo precisa ser INSERTado antes de
+    # sua alocação. Sem isso, SQLite/PostgreSQL podem receber os INSERTs na
+    # ordem inversa dentro do mesmo flush e a FK corretamente falha.
+    pagamento = relationship("Pagamento", foreign_keys=[pagamento_id])
 
 
 class PagamentoEstorno(Base):
@@ -287,6 +293,7 @@ def materialize_payment_allocations(session: Session, flush_context, instances) 
                 PagamentoAlocacao(
                     restaurante_id=payment.restaurante_id,
                     pagamento_id=payment.id,
+                    pagamento=payment,
                     comanda_id=command.id,
                     atendimento_id=attendance_map.get(str(command.id)),
                     valor=float(delta),
