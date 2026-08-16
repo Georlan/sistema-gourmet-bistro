@@ -10,6 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 from ..config import settings
 from ..database import (
+    bind_session_to_tenant,
     current_restaurante_id,
     get_db,
     require_tenant_id,
@@ -116,13 +117,16 @@ def resolve_restaurant_id(
     slug: Optional[str],
     db: Session,
     current_user: Optional[Usuario] = None,
+    *,
+    bind_session: bool = True,
 ) -> int:
     """
     Resolve um identificador público sem consultar tabelas tenant via ORM.
 
     No PostgreSQL, a função SECURITY DEFINER é a única operação autorizada antes
-    de a sessão receber o tenant. O vínculo ORM/RLS é feito pelo escopo público
-    somente depois que o identificador foi resolvido de forma inequívoca.
+    de a sessão receber o tenant. Consumidores diretos mantêm o comportamento
+    legado de vincular a sessão; escopos temporários usam ``bind_session=False``
+    e deixam a troca/restauração sob responsabilidade de ``tenant_session_scope``.
     """
     restaurant_identifier = (
         str(restaurante_id).strip() if restaurante_id is not None else ""
@@ -186,6 +190,8 @@ def resolve_restaurant_id(
                 detail="Identificador de restaurante é obrigatório.",
             )
 
+    if bind_session:
+        bind_session_to_tenant(db, rest_id)
     return rest_id
 
 
@@ -197,7 +203,13 @@ def public_tenant_scope(
     current_user: Optional[Usuario] = None,
 ):
     """Mantém ORM e RLS vinculados ao mesmo tenant e restaura a sessão ao sair."""
-    rest_id = resolve_restaurant_id(restaurante_id, slug, db, current_user)
+    rest_id = resolve_restaurant_id(
+        restaurante_id,
+        slug,
+        db,
+        current_user,
+        bind_session=False,
+    )
     with tenant_session_scope(db, rest_id):
         yield rest_id
 
