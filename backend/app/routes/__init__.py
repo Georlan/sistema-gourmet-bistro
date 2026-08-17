@@ -33,3 +33,9 @@ _financial_cash_routes.legacy_cash._atividades_recentes_turno = _recent_cash_act
 # Precisa entrar depois dos patches acima: substitui somente a listagem de
 # estornáveis por um scanner paginado pós-filtro, sem tocar no POST transacional.
 from . import financial_refund_listing as _financial_refund_listing  # noqa: F401,E402
+
+# SmartPOS reutiliza o router autenticado existente para evitar criar uma
+# segunda pilha de autenticação. O endpoint resultante é /auth/smartpos/contexto.
+from . import auth as _auth  # noqa: E402
+from . import smartpos as _smartpos  # noqa: E402
+_auth.router.include_router(_smartpos.router)
