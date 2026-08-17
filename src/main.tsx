@@ -2,6 +2,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import SmartPosPage from "./smartpos/SmartPosPage";
 import "./index.css";
 import * as Sentry from "@sentry/react";
 import { initializeKomaTheme } from "./config/theme";
@@ -19,8 +20,12 @@ if (sentryDsn) {
   });
 }
 
+const RootApp = window.location.pathname.startsWith("/smartpos")
+  ? SmartPosPage
+  : App;
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <App />
+    <RootApp />
   </React.StrictMode>
 );
