@@ -61,6 +61,22 @@ def _intent_payload(intent: SmartPosPaymentIntent) -> dict:
     }
 
 
+def _same_intent_request(
+    intent: SmartPosPaymentIntent,
+    payload: SmartPosPaymentIntentCreate,
+    *,
+    valor: Decimal,
+    normalized_items: list[str],
+) -> bool:
+    return (
+        intent.mesa_id == payload.mesa_id
+        and _money(intent.valor) == valor
+        and intent.metodo == payload.metodo
+        and intent.escopo == payload.escopo
+        and sorted(intent.item_ids or []) == normalized_items
+    )
+
+
 @router.get("/contexto")
 def obter_contexto_smartpos(
     db: Session = Depends(get_db),
@@ -130,22 +146,25 @@ def criar_payment_intent(
         )
 
     normalized_key = payload.idempotency_key.strip()
+    if len(normalized_key) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="A chave idempotente deve possuir ao menos 8 caracteres úteis.",
+        )
+    normalized_items = sorted(set(payload.item_ids or []))
+    valor = _money(payload.valor)
+
     existing = db.query(SmartPosPaymentIntent).filter(
         SmartPosPaymentIntent.restaurante_id == restaurante_id,
         SmartPosPaymentIntent.idempotency_key == normalized_key,
     ).first()
-    normalized_items = sorted(set(payload.item_ids or []))
-    valor = _money(payload.valor)
-
     if existing:
-        same_request = (
-            existing.mesa_id == payload.mesa_id
-            and _money(existing.valor) == valor
-            and existing.metodo == payload.metodo
-            and existing.escopo == payload.escopo
-            and sorted(existing.item_ids or []) == normalized_items
-        )
-        if not same_request:
+        if not _same_intent_request(
+            existing,
+            payload,
+            valor=valor,
+            normalized_items=normalized_items,
+        ):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="A chave idempotente já foi usada com outro recebimento.",
@@ -253,6 +272,16 @@ def criar_payment_intent(
             SmartPosPaymentIntent.idempotency_key == normalized_key,
         ).first()
         if concurrent:
+            if not _same_intent_request(
+                concurrent,
+                payload,
+                valor=valor,
+                normalized_items=normalized_items,
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="A chave idempotente já foi usada com outro recebimento.",
+                )
             return _intent_payload(concurrent)
         raise
     db.refresh(intent)
