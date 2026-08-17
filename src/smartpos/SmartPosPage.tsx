@@ -341,9 +341,9 @@ export default function SmartPosPage() {
           <section className="flex flex-1 flex-col justify-center py-8">
             <div className="rounded-3xl border border-koma-border bg-koma-surface p-6">
               <LockKeyhole className="mb-5 text-koma-accent" size={28} />
-              <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-koma-accent">Capability necessária</p>
+              <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-koma-accent">Acesso necessário</p>
               <h1 className="mt-2 text-2xl font-black tracking-[-0.03em]">SmartPOS não habilitado</h1>
-              <p className="mt-3 text-sm leading-6 text-koma-muted">Este restaurante não possui a capability SmartPOS ativa. O acesso não depende do nome do plano.</p>
+              <p className="mt-3 text-sm leading-6 text-koma-muted">O SmartPOS não está habilitado para este restaurante. Solicite a ativação do recurso para continuar.</p>
             </div>
           </section>
         </div>
@@ -361,8 +361,8 @@ export default function SmartPosPage() {
             <h1 className="mt-2 text-3xl font-black tracking-[-0.04em]">Venda rápida</h1>
             <div className="mt-6 rounded-2xl border border-koma-border bg-koma-surface p-5">
               <ShoppingBag className="text-koma-accent" size={24} />
-              <p className="mt-4 text-sm font-black">Fluxo reservado para recebimentos avulsos</p>
-              <p className="mt-2 text-xs leading-5 text-koma-muted">Este caminho continua acessível mesmo com o caixa do salão fechado. A criação e liquidação da venda serão conectadas nas próximas etapas sem criar pagamento órfão.</p>
+              <p className="mt-4 text-sm font-black">Recebimento sem mesa</p>
+              <p className="mt-2 text-xs leading-5 text-koma-muted">Este caminho continua acessível mesmo com o caixa do salão fechado. A venda rápida ainda está em preparação e não registra cobranças nesta versão.</p>
             </div>
           </section>
         </div>
@@ -379,7 +379,7 @@ export default function SmartPosPage() {
             <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-koma-accent">Consumo em aberto</p>
             <div className="mt-2 flex items-end justify-between gap-3">
               <div><h1 className="text-3xl font-black tracking-[-0.04em]">{selectedMesa.nome || `Mesa ${selectedMesa.id}`}</h1><p className="mt-1 text-xs text-koma-muted">{selectedComandas.length} comanda(s) aberta(s)</p></div>
-              <span className="rounded-full border border-koma-border px-2.5 py-1 text-[10px] font-bold uppercase text-koma-accent">Read-only</span>
+              <span className="rounded-full border border-koma-border px-2.5 py-1 text-[10px] font-bold uppercase text-koma-accent">Somente consulta</span>
             </div>
 
             <div className="mt-5 grid grid-cols-3 gap-2">
@@ -402,7 +402,7 @@ export default function SmartPosPage() {
               ))}
             </div>
 
-            <button type="button" disabled className="mt-5 flex min-h-14 w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-koma-accent px-4 text-sm font-black text-black opacity-55"><CreditCard size={18} /> Receber — Etapa 4</button>
+            <button type="button" disabled className="mt-5 flex min-h-14 w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-surface px-4 text-sm font-black text-koma-muted opacity-60"><CreditCard size={18} /> Receber <span className="rounded-full border border-koma-border px-2 py-0.5 text-[9px] uppercase tracking-wide">Em breve</span></button>
           </section>
         </div>
       </main>
@@ -450,7 +450,7 @@ export default function SmartPosPage() {
             </div>
           </div>
 
-          <div className="mb-6"><p className="mb-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-koma-accent">Canal de atendimento</p><h1 className="text-3xl font-black tracking-[-0.04em]">Kôma SmartPOS</h1><p className="mt-3 text-sm leading-6 text-koma-muted">Venda rápida funciona como domínio separado. Mesas e pedidos exigem o caixa do salão aberto.</p></div>
+          <div className="mb-6"><p className="mb-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-koma-accent">Canal de atendimento</p><h1 className="text-3xl font-black tracking-[-0.04em]">Kôma SmartPOS</h1><p className="mt-3 text-sm leading-6 text-koma-muted">Venda rápida permite receber sem vincular a uma mesa. Mesas e pedidos exigem o caixa do salão aberto.</p></div>
 
           {mesasError && <p role="alert" className="mb-3 rounded-xl border border-red-900/50 bg-red-950/30 px-3 py-2 text-xs text-red-300">{mesasError}</p>}
 
@@ -459,10 +459,10 @@ export default function SmartPosPage() {
 
             <button type="button" onClick={loadMesas} disabled={!context?.mesas_disponiveis || isLoadingMesas} className="flex min-h-24 items-center gap-4 rounded-2xl border border-koma-border bg-koma-surface px-4 py-4 text-left disabled:cursor-not-allowed disabled:opacity-50"><span className="flex size-12 items-center justify-center rounded-xl border border-koma-border bg-koma-page text-koma-accent">{isLoadingMesas ? <Loader2 size={22} className="animate-spin" /> : context?.mesas_disponiveis ? <Table2 size={22} /> : <LockKeyhole size={21} />}</span><span className="min-w-0 flex-1"><span className="block text-base font-extrabold">Mesas</span><span className="mt-1 block text-xs leading-5 text-koma-muted">{context?.mesas_disponiveis ? 'Consultar mesas e consumos em aberto.' : 'Abra o caixa do salão para acessar mesas e fichar pedidos.'}</span></span>{context?.mesas_disponiveis && <ChevronRight size={18} className="text-koma-muted" />}</button>
 
-            <button type="button" disabled className="flex min-h-24 cursor-not-allowed items-center gap-4 rounded-2xl border border-koma-border bg-koma-surface px-4 py-4 text-left opacity-50"><span className="flex size-12 items-center justify-center rounded-xl border border-koma-border bg-koma-page text-koma-accent"><ReceiptText size={22} /></span><span><span className="block text-base font-extrabold">Histórico</span><span className="mt-1 block text-xs leading-5 text-koma-muted">Será conectado na etapa de operação distribuída.</span></span></button>
+            <button type="button" disabled className="flex min-h-24 cursor-not-allowed items-center gap-4 rounded-2xl border border-koma-border bg-koma-surface px-4 py-4 text-left opacity-50"><span className="flex size-12 items-center justify-center rounded-xl border border-koma-border bg-koma-page text-koma-accent"><ReceiptText size={22} /></span><span><span className="block text-base font-extrabold">Histórico</span><span className="mt-1 block text-xs leading-5 text-koma-muted">Disponível em uma próxima atualização.</span></span></button>
           </div>
 
-          <div className="mt-auto pt-8"><div className="flex items-start gap-3 rounded-2xl border border-koma-border bg-koma-surface px-4 py-3"><Utensils className="mt-0.5 shrink-0 text-koma-accent" size={18} /><div><p className="text-xs font-bold">Etapa 3 — acesso & operação read-only</p><p className="mt-1 text-xs leading-5 text-koma-muted">Mesas e consumos são reais, mas nenhuma ação desta etapa registra pagamento ou altera pedido.</p></div></div></div>
+          <div className="mt-auto pt-8"><div className="flex items-start gap-3 rounded-2xl border border-koma-border bg-koma-surface px-4 py-3"><Utensils className="mt-0.5 shrink-0 text-koma-accent" size={18} /><div><p className="text-xs font-bold">Modo de consulta</p><p className="mt-1 text-xs leading-5 text-koma-muted">Você pode conferir mesas e consumos sem alterar pedidos ou registrar pagamentos.</p></div></div></div>
         </section>
       </div>
     </main>
