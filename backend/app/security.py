@@ -22,10 +22,10 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         return False
 
 def get_password_hash(password: str) -> str:
-    """Generates a bcrypt hash from a plain text password."""
+    """Generates a bcrypt hash for the password."""
     salt = bcrypt.gensalt()
-    hashed = bcrypt.hashpw(password.encode("utf-8"), salt)
-    return hashed.decode("utf-8")
+    hashed_password = bcrypt.hashpw(password.encode("utf-8"), salt)
+    return hashed_password.decode("utf-8")
 
 RESERVED_CLAIMS = {"sub", "exp", "restaurante_id", "role"}
 
@@ -33,6 +33,7 @@ RESERVED_CLAIMS = {"sub", "exp", "restaurante_id", "role"}
 # permissão de negócio, em vez de repetir listas de cargos localmente.
 PERMISSION_ROLES = MappingProxyType({
     "caixa:operar": frozenset({"admin", "gerente", "caixa"}),
+    "smartpos:receber": frozenset({"garcom", "caixa", "gerente"}),
     "equipe:administrar": frozenset({"admin", "gerente", "caixa"}),
     "estoque:consultar": frozenset({"admin", "gerente", "caixa"}),
     "estoque:administrar": frozenset({"admin", "gerente", "caixa"}),
