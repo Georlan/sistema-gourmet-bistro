@@ -44,6 +44,7 @@ def setup_smartpos_payment_intent():
         restaurante = db.query(Restaurante).filter(Restaurante.id == RESTAURANTE_ID).first()
         if restaurante is None:
             db.add(Restaurante(id=RESTAURANTE_ID, nome="SmartPOS Intent", plano="pocket"))
+            db.flush()
 
         usuario = db.query(Usuario).filter(Usuario.id == USER_ID).first()
         if usuario is None:
@@ -56,6 +57,7 @@ def setup_smartpos_payment_intent():
                 status="ativo",
                 restaurante_id=RESTAURANTE_ID,
             ))
+            db.flush()
 
         capability = db.query(RestauranteCapability).filter(
             RestauranteCapability.restaurante_id == RESTAURANTE_ID,
@@ -81,6 +83,7 @@ def setup_smartpos_payment_intent():
                 restaurante_id=RESTAURANTE_ID,
                 nome="Intent",
             ))
+            db.flush()
 
         produto = db.query(Produto).filter(
             Produto.restaurante_id == RESTAURANTE_ID,
@@ -95,6 +98,7 @@ def setup_smartpos_payment_intent():
                 preco=42,
                 ativo=True,
             ))
+            db.flush()
 
         mesa = db.query(Mesa).filter(
             Mesa.restaurante_id == RESTAURANTE_ID,
@@ -107,7 +111,7 @@ def setup_smartpos_payment_intent():
                 capacidade=4,
                 nome="Mesa 4",
             ))
-        db.flush()
+            db.flush()
 
         turno = CaixaTurno(
             restaurante_id=RESTAURANTE_ID,
@@ -116,6 +120,7 @@ def setup_smartpos_payment_intent():
             status="aberto",
         )
         db.add(turno)
+        db.flush()
 
         comanda = Comanda(
             id="cmd-smartpos-intent",
@@ -127,15 +132,19 @@ def setup_smartpos_payment_intent():
             valor_pago=0,
             fechada=False,
         )
+        db.add(comanda)
+        db.flush()
+
         lancamento = Lancamento(
             id="lan-smartpos-intent",
             restaurante_id=RESTAURANTE_ID,
             comanda_id=comanda.id,
             garcom_id=USER_ID,
         )
+        db.add(lancamento)
+        db.flush()
+
         db.add_all([
-            comanda,
-            lancamento,
             Item(
                 id="item-smartpos-intent-a",
                 restaurante_id=RESTAURANTE_ID,
