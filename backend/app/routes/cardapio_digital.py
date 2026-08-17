@@ -5,7 +5,7 @@ from urllib.parse import quote, unquote
 import uuid
 
 import httpx
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from ..config import settings
@@ -24,6 +24,7 @@ from ..schemas import (
     RestauranteConfigResponse,
     RestauranteConfigUpdate,
 )
+from ..websocket_manager import manager
 
 logger = logging.getLogger("koma.cardapio_digital")
 router = APIRouter(prefix="/api/cardapio-digital", tags=["Cardapio Digital Assets"])
@@ -34,6 +35,18 @@ ALLOWED_ASSET_TYPES = {
     "image/jpeg": ("jpg", b"\xff\xd8\xff"),
     "image/webp": ("webp", b"RIFF"),
 }
+
+
+def notify_cardapio_config_update(
+    background_tasks: BackgroundTasks,
+    restaurante_id: int,
+) -> None:
+    """Invalida configurações do cardápio em todos os canais do tenant."""
+    background_tasks.add_task(
+        manager.broadcast,
+        {"event": "config_updated"},
+        restaurante_id,
+    )
 
 
 def _validate_asset_content(content_type: str, content: bytes) -> str:
@@ -371,6 +384,7 @@ def obter_cardapio_publico(
 )
 async def upload_cardapio_asset(
     asset_type: str,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(
@@ -457,6 +471,7 @@ async def upload_cardapio_asset(
 
     db.commit()
     db.refresh(restaurante)
+    notify_cardapio_config_update(background_tasks, rest_id)
     return restaurante
 
 
@@ -466,6 +481,7 @@ async def upload_cardapio_asset(
 )
 async def delete_cardapio_asset(
     asset_type: str,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(
         require_permission("configuracoes:administrar")
@@ -551,6 +567,7 @@ async def delete_cardapio_asset(
         restaurante.cardapio_banner_path = None
     db.commit()
     db.refresh(restaurante)
+    notify_cardapio_config_update(background_tasks, rest_id)
     return restaurante
 
 
@@ -560,6 +577,7 @@ async def delete_cardapio_asset(
 @router.post("/", response_model=RestauranteConfigResponse)
 def atualizar_config_cardapio_digital(
     config_in: RestauranteConfigUpdate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("configuracoes:administrar"))
 ):
@@ -616,4 +634,5 @@ def atualizar_config_cardapio_digital(
 
     db.commit()
     db.refresh(restaurante)
+    notify_cardapio_config_update(background_tasks, int(rest_id))
     return restaurante
