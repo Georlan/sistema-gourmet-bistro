@@ -93,10 +93,11 @@ run_flow_test \
   "tests/test_critical_pdv_caixa_flow.py"
 
 run_flow_test \
-  "5. Autenticação e Autorização Interna (Login JWT, tenant e matriz RBAC)" \
+  "5. Autenticação, autorização e contexto SmartPOS" \
   "tests/test_critical_auth_flow.py" \
   "tests/test_auth_tenant_session_hardening.py" \
-  "tests/test_authorization.py"
+  "tests/test_authorization.py" \
+  "tests/test_smartpos_stage3_context.py"
 
 run_flow_test \
   "6. Arquitetura, layout e snapshot da impressão" \
