@@ -22,10 +22,10 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         return False
 
 def get_password_hash(password: str) -> str:
-    """Generates a bcrypt hash for the password."""
+    """Generates a bcrypt hash from a plain text password."""
     salt = bcrypt.gensalt()
-    hashed_password = bcrypt.hashpw(password.encode("utf-8"), salt)
-    return hashed_password.decode("utf-8")
+    hashed = bcrypt.hashpw(password.encode("utf-8"), salt)
+    return hashed.decode("utf-8")
 
 RESERVED_CLAIMS = {"sub", "exp", "restaurante_id", "role"}
 
