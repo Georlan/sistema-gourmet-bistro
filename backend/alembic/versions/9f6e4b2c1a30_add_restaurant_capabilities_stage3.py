@@ -28,7 +28,7 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("capability", sa.String(length=64), nullable=False),
-        sa.Column("enabled", sa.Boolean(), nullable=False, server_default=sa.true()),
+        sa.Column("enabled", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column("source", sa.String(length=16), nullable=False, server_default="manual"),
         sa.Column(
             "created_at",
