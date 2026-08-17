@@ -34,7 +34,7 @@ type SmartPosContext = {
   mesas_disponiveis: boolean;
   pedidos_disponiveis: boolean;
   venda_rapida_disponivel: boolean;
-  restaurante: {
+  restaurante?: {
     id: number;
     nome: string;
   };
@@ -576,7 +576,7 @@ export default function SmartPosPage() {
           <div className="mb-5 rounded-2xl border border-koma-border bg-koma-surface px-4 py-4">
             <div className="flex items-start gap-3">
               <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-koma-border bg-koma-page text-koma-accent">{validationError ? <RefreshCw size={18} /> : <ShieldCheck size={18} />}</span>
-              <div className="min-w-0 flex-1"><p className="truncate text-sm font-black">{session.user.nome}</p><p className="mt-1 truncate text-xs text-koma-muted">{roleLabel(session.user.role)} · {context?.restaurante.nome || 'Restaurante'}</p><p className={`mt-2 text-[11px] font-bold ${context?.turno_aberto ? 'text-koma-accent' : 'text-yellow-300'}`}>{validationError || (context?.turno_aberto ? 'Caixa do salão aberto' : 'Caixa do salão fechado')}</p></div>
+              <div className="min-w-0 flex-1"><p className="truncate text-sm font-black">{session.user.nome}</p><p className="mt-1 truncate text-xs text-koma-muted">{roleLabel(session.user.role)} · {context?.restaurante?.nome || 'Restaurante'}</p><p className={`mt-2 text-[11px] font-bold ${context?.turno_aberto ? 'text-koma-accent' : 'text-yellow-300'}`}>{validationError || (context?.turno_aberto ? 'Caixa do salão aberto' : 'Caixa do salão fechado')}</p></div>
               {context?.turno_aberto && <CheckCircle2 size={18} className="text-koma-accent" />}
             </div>
           </div>
