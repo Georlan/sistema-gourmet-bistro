@@ -7,6 +7,7 @@ import {
   Loader2,
   LockKeyhole,
   LogOut,
+  Plus,
   ReceiptText,
   RefreshCw,
   ShieldCheck,
@@ -16,6 +17,7 @@ import {
 } from 'lucide-react';
 import { KomaLogo } from '../components/KomaLogo';
 import { API_BASE_URL } from '../config/api';
+import SmartPosOrderingFlow from './SmartPosOrderingFlow';
 import {
   clearSmartPosSession,
   getSmartPosSession,
@@ -67,7 +69,7 @@ type Comanda = {
   itens: Item[];
 };
 
-type Screen = 'home' | 'mesas' | 'mesa' | 'venda-rapida';
+type Screen = 'home' | 'mesas' | 'mesa' | 'pedido' | 'venda-rapida';
 
 function roleLabel(role: SmartPosRole) {
   if (role === 'garcom') return 'Garçom';
@@ -230,7 +232,7 @@ export default function SmartPosPage() {
     setLoginError('');
   };
 
-  const loadMesas = async () => {
+  const loadMesas = async (targetScreen: 'mesas' | 'mesa' = 'mesas') => {
     if (!context?.mesas_disponiveis || !session) return;
     setIsLoadingMesas(true);
     setMesasError('');
@@ -250,7 +252,7 @@ export default function SmartPosPage() {
 
       setMesas((await mesasResponse.json()) as Mesa[]);
       setComandas((await comandasResponse.json()) as Comanda[]);
-      setScreen('mesas');
+      setScreen(targetScreen);
     } catch (error) {
       setMesasError(error instanceof Error ? error.message : 'Falha ao carregar mesas.');
     } finally {
@@ -306,12 +308,24 @@ export default function SmartPosPage() {
     );
   }
 
+  const handleHeaderBack = () => {
+    if (screen === 'mesa') {
+      setScreen('mesas');
+      return;
+    }
+    if (screen === 'pedido') {
+      setScreen('mesa');
+      return;
+    }
+    setScreen('home');
+  };
+
   const Header = () => (
     <header className="flex items-center justify-between gap-3 border-b border-koma-border pb-4">
       <KomaLogo withText size="lg" />
       <div className="flex items-center gap-2">
         {screen !== 'home' && (
-          <button type="button" onClick={() => setScreen(screen === 'mesa' ? 'mesas' : 'home')} className="flex size-10 items-center justify-center rounded-xl border border-koma-border text-koma-muted" aria-label="Voltar">
+          <button type="button" onClick={handleHeaderBack} className="flex size-10 items-center justify-center rounded-xl border border-koma-border text-koma-muted" aria-label="Voltar">
             <ArrowLeft size={17} />
           </button>
         )}
@@ -370,17 +384,39 @@ export default function SmartPosPage() {
     );
   }
 
+  if (screen === 'pedido' && selectedMesa) {
+    return (
+      <main className="min-h-dvh bg-koma-page text-koma-foreground">
+        <div className="mx-auto min-h-dvh w-full max-w-md px-4 pb-8 pt-4 sm:px-6">
+          <Header />
+          <SmartPosOrderingFlow
+            session={session}
+            mesa={selectedMesa}
+            comandas={selectedComandas}
+            onCancel={() => setScreen('mesa')}
+            onSessionInvalid={handleLogout}
+            onOrderCreated={async () => {
+              await loadMesas('mesa');
+            }}
+          />
+        </div>
+      </main>
+    );
+  }
+
   if (screen === 'mesa' && selectedMesa) {
     return (
       <main className="min-h-dvh bg-koma-page text-koma-foreground">
         <div className="mx-auto min-h-dvh w-full max-w-md px-4 pb-8 pt-4 sm:px-6">
           <Header />
           <section className="pt-6">
-            <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-koma-accent">Consumo em aberto</p>
+            <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-koma-accent">Atendimento da mesa</p>
             <div className="mt-2 flex items-end justify-between gap-3">
               <div><h1 className="text-3xl font-black tracking-[-0.04em]">{selectedMesa.nome || `Mesa ${selectedMesa.id}`}</h1><p className="mt-1 text-xs text-koma-muted">{selectedComandas.length} comanda(s) aberta(s)</p></div>
-              <span className="rounded-full border border-koma-border px-2.5 py-1 text-[10px] font-bold uppercase text-koma-accent">Somente consulta</span>
+              <span className="rounded-full border border-koma-border px-2.5 py-1 text-[10px] font-bold uppercase text-koma-accent">Atendimento</span>
             </div>
+
+            <button type="button" onClick={() => setScreen('pedido')} disabled={!context?.pedidos_disponiveis} className="mt-5 flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-koma-accent px-4 text-sm font-black text-black disabled:cursor-not-allowed disabled:opacity-50"><Plus size={18} /> Adicionar itens</button>
 
             <div className="mt-5 grid grid-cols-3 gap-2">
               <div className="rounded-xl border border-koma-border bg-koma-surface p-3"><p className="text-[10px] uppercase text-koma-muted">Consumo</p><p className="mt-1 text-sm font-black">{money(selectedTotal)}</p></div>
@@ -389,7 +425,7 @@ export default function SmartPosPage() {
             </div>
 
             <div className="mt-5 grid gap-3">
-              {selectedComandas.length === 0 && <div className="rounded-2xl border border-koma-border bg-koma-surface p-5 text-sm text-koma-muted">Mesa sem consumo aberto.</div>}
+              {selectedComandas.length === 0 && <div className="rounded-2xl border border-koma-border bg-koma-surface p-5 text-sm text-koma-muted">Mesa sem consumo aberto. Toque em <strong className="text-koma-foreground">Adicionar itens</strong> para iniciar.</div>}
               {selectedComandas.map((comanda) => (
                 <div key={comanda.id} className="rounded-2xl border border-koma-border bg-koma-surface p-4">
                   <div className="flex items-start justify-between gap-3"><div><p className="text-sm font-black">Pedido #{comanda.numero_pedido}</p><p className="mt-1 text-[11px] text-koma-muted">{comanda.criada_por?.nome || 'Operador'}{comanda.identificador ? ` · ${comanda.identificador}` : ''}</p></div><p className="text-sm font-black">{money(comandaBalance(comanda))}</p></div>
@@ -415,7 +451,7 @@ export default function SmartPosPage() {
         <div className="mx-auto min-h-dvh w-full max-w-md px-4 pb-8 pt-4 sm:px-6">
           <Header />
           <section className="pt-6">
-            <div className="flex items-end justify-between gap-3"><div><p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-koma-accent">Salão</p><h1 className="mt-2 text-3xl font-black tracking-[-0.04em]">Mesas</h1></div><button type="button" onClick={loadMesas} className="flex size-10 items-center justify-center rounded-xl border border-koma-border text-koma-muted" aria-label="Atualizar"><RefreshCw size={16} /></button></div>
+            <div className="flex items-end justify-between gap-3"><div><p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-koma-accent">Salão</p><h1 className="mt-2 text-3xl font-black tracking-[-0.04em]">Mesas</h1></div><button type="button" onClick={() => void loadMesas('mesas')} className="flex size-10 items-center justify-center rounded-xl border border-koma-border text-koma-muted" aria-label="Atualizar"><RefreshCw size={16} /></button></div>
             <div className="mt-5 grid grid-cols-2 gap-3">
               {mesas.map((mesa) => {
                 const mesaComandas = comandas.filter((comanda) => comanda.mesa_id === mesa.id);
@@ -450,19 +486,19 @@ export default function SmartPosPage() {
             </div>
           </div>
 
-          <div className="mb-6"><p className="mb-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-koma-accent">Canal de atendimento</p><h1 className="text-3xl font-black tracking-[-0.04em]">Kôma SmartPOS</h1><p className="mt-3 text-sm leading-6 text-koma-muted">Venda rápida permite receber sem vincular a uma mesa. Mesas e pedidos exigem o caixa do salão aberto.</p></div>
+          <div className="mb-6"><p className="mb-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-koma-accent">Canal de atendimento</p><h1 className="text-3xl font-black tracking-[-0.04em]">Kôma SmartPOS</h1><p className="mt-3 text-sm leading-6 text-koma-muted">Atenda mesas pelo fluxo rápido de categorias e itens. Venda rápida permanece disponível fora do salão.</p></div>
 
           {mesasError && <p role="alert" className="mb-3 rounded-xl border border-red-900/50 bg-red-950/30 px-3 py-2 text-xs text-red-300">{mesasError}</p>}
 
           <div className="grid gap-3">
             <button type="button" onClick={() => setScreen('venda-rapida')} disabled={!context?.venda_rapida_disponivel} className="flex min-h-24 items-center gap-4 rounded-2xl border border-koma-border bg-koma-surface px-4 py-4 text-left disabled:cursor-not-allowed disabled:opacity-50"><span className="flex size-12 items-center justify-center rounded-xl border border-koma-border bg-koma-page text-koma-accent"><ShoppingBag size={22} /></span><span className="min-w-0 flex-1"><span className="block text-base font-extrabold">Venda rápida</span><span className="mt-1 block text-xs leading-5 text-koma-muted">Recebimentos sem mesa. Continua acessível com o salão fechado.</span></span><ChevronRight size={18} className="text-koma-muted" /></button>
 
-            <button type="button" onClick={loadMesas} disabled={!context?.mesas_disponiveis || isLoadingMesas} className="flex min-h-24 items-center gap-4 rounded-2xl border border-koma-border bg-koma-surface px-4 py-4 text-left disabled:cursor-not-allowed disabled:opacity-50"><span className="flex size-12 items-center justify-center rounded-xl border border-koma-border bg-koma-page text-koma-accent">{isLoadingMesas ? <Loader2 size={22} className="animate-spin" /> : context?.mesas_disponiveis ? <Table2 size={22} /> : <LockKeyhole size={21} />}</span><span className="min-w-0 flex-1"><span className="block text-base font-extrabold">Mesas</span><span className="mt-1 block text-xs leading-5 text-koma-muted">{context?.mesas_disponiveis ? 'Consultar mesas e consumos em aberto.' : 'Abra o caixa do salão para acessar mesas e fichar pedidos.'}</span></span>{context?.mesas_disponiveis && <ChevronRight size={18} className="text-koma-muted" />}</button>
+            <button type="button" onClick={() => void loadMesas('mesas')} disabled={!context?.mesas_disponiveis || isLoadingMesas} className="flex min-h-24 items-center gap-4 rounded-2xl border border-koma-border bg-koma-surface px-4 py-4 text-left disabled:cursor-not-allowed disabled:opacity-50"><span className="flex size-12 items-center justify-center rounded-xl border border-koma-border bg-koma-page text-koma-accent">{isLoadingMesas ? <Loader2 size={22} className="animate-spin" /> : context?.mesas_disponiveis ? <Table2 size={22} /> : <LockKeyhole size={21} />}</span><span className="min-w-0 flex-1"><span className="block text-base font-extrabold">Mesas</span><span className="mt-1 block text-xs leading-5 text-koma-muted">{context?.mesas_disponiveis ? 'Abrir mesa, conferir consumo e adicionar itens.' : 'Abra o caixa do salão para acessar mesas e fichar pedidos.'}</span></span>{context?.mesas_disponiveis && <ChevronRight size={18} className="text-koma-muted" />}</button>
 
             <button type="button" disabled className="flex min-h-24 cursor-not-allowed items-center gap-4 rounded-2xl border border-koma-border bg-koma-surface px-4 py-4 text-left opacity-50"><span className="flex size-12 items-center justify-center rounded-xl border border-koma-border bg-koma-page text-koma-accent"><ReceiptText size={22} /></span><span><span className="block text-base font-extrabold">Histórico</span><span className="mt-1 block text-xs leading-5 text-koma-muted">Disponível em uma próxima atualização.</span></span></button>
           </div>
 
-          <div className="mt-auto pt-8"><div className="flex items-start gap-3 rounded-2xl border border-koma-border bg-koma-surface px-4 py-3"><Utensils className="mt-0.5 shrink-0 text-koma-accent" size={18} /><div><p className="text-xs font-bold">Modo de consulta</p><p className="mt-1 text-xs leading-5 text-koma-muted">Você pode conferir mesas e consumos sem alterar pedidos ou registrar pagamentos.</p></div></div></div>
+          <div className="mt-auto pt-8"><div className="flex items-start gap-3 rounded-2xl border border-koma-border bg-koma-surface px-4 py-3"><Utensils className="mt-0.5 shrink-0 text-koma-accent" size={18} /><div><p className="text-xs font-bold">Atendimento rápido</p><p className="mt-1 text-xs leading-5 text-koma-muted">Mesa → categoria → item. O cardápio acompanha alterações feitas no Caixa em tempo real.</p></div></div></div>
         </section>
       </div>
     </main>
