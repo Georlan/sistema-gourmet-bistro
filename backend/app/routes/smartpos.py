@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from ..database import get_db, require_tenant_id
-from ..models import CaixaTurno, Usuario
+from ..models import CaixaTurno, Restaurante, Usuario
 from ..security import get_current_user
 from ..services.capabilities import has_capability
 
@@ -25,6 +25,15 @@ def obter_contexto_smartpos(
         )
 
     restaurante_id = require_tenant_id()
+    restaurante = db.query(Restaurante).filter(
+        Restaurante.id == restaurante_id,
+    ).first()
+    if restaurante is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Restaurante não encontrado.",
+        )
+
     smartpos_enabled = has_capability(db, restaurante_id, "smartpos")
     turno = db.query(CaixaTurno).filter(
         CaixaTurno.restaurante_id == restaurante_id,
@@ -39,6 +48,10 @@ def obter_contexto_smartpos(
         "mesas_disponiveis": smartpos_enabled and turno_aberto,
         "pedidos_disponiveis": smartpos_enabled and turno_aberto,
         "venda_rapida_disponivel": smartpos_enabled,
+        "restaurante": {
+            "id": restaurante.id,
+            "nome": restaurante.nome,
+        },
         "operador": {
             "id": current_user.id,
             "nome": current_user.nome,

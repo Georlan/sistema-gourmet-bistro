@@ -91,7 +91,7 @@ def get_categorias(db: Session = Depends(get_db), current_user: Usuario = Depend
 
 @router.post("/categorias", response_model=CategoriaResponse, status_code=status.HTTP_201_CREATED)
 def create_categoria(
-    data: CategoriaCreate, 
+    data: CategoriaCreate,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("catalogo:administrar"))
@@ -138,7 +138,7 @@ def update_categoria(
 
 @router.delete("/categorias/{categoria_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_categoria(
-    categoria_id: str, 
+    categoria_id: str,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("catalogo:administrar"))
@@ -169,6 +169,7 @@ def get_observacoes(categoria_id: Optional[str] = None, db: Session = Depends(ge
 @router.post("/observacoes", response_model=ObservacaoResponse, status_code=status.HTTP_201_CREATED)
 def create_observacao(
     data: ObservacaoCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("catalogo:administrar"))
 ):
@@ -176,15 +177,21 @@ def create_observacao(
     rest_id = require_tenant_id()
     if not db.query(Categoria).filter_by(restaurante_id=rest_id, id=data.categoria_id).first():
         raise HTTPException(status_code=404, detail="Categoria não encontrada.")
-    obs = ObservacaoPredefinida(categoria_id=data.categoria_id, texto=data.texto)
+    obs = ObservacaoPredefinida(
+        restaurante_id=rest_id,
+        categoria_id=data.categoria_id,
+        texto=data.texto,
+    )
     db.add(obs)
     db.commit()
     db.refresh(obs)
+    notify_catalog_update(background_tasks, "Observação do cardápio criada", rest_id)
     return obs
 
 @router.delete("/observacoes/{obs_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_observacao(
     obs_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("catalogo:administrar"))
 ):
@@ -195,6 +202,7 @@ def delete_observacao(
         raise HTTPException(status_code=404, detail="Observação não encontrada.")
     db.delete(obs)
     db.commit()
+    notify_catalog_update(background_tasks, "Observação do cardápio removida", rest_id)
     return
 
 
@@ -289,14 +297,13 @@ def update_disponibilidade_lote(
 
 @router.post("/", response_model=ProdutoResponse, status_code=status.HTTP_201_CREATED)
 def create_produto(
-    produto_data: ProdutoCreate, 
+    produto_data: ProdutoCreate,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("catalogo:administrar"))
 ):
     """Cadastra um novo produto no cardápio."""
     rest_id = require_tenant_id()
-    # Check if category exists
     categoria = db.query(Categoria).filter(
         Categoria.restaurante_id == rest_id,
         Categoria.id == produto_data.categoria_id,
@@ -306,8 +313,7 @@ def create_produto(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="A categoria informada não existe"
         )
-        
-    # Check if product ID already exists
+
     existente = db.query(Produto).filter(
         Produto.restaurante_id == rest_id,
         Produto.id == produto_data.id,
@@ -317,7 +323,7 @@ def create_produto(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Já existe um produto cadastrado com este ID"
         )
-        
+
     novo_produto = Produto(
         **produto_data.model_dump(),
         restaurante_id=rest_id,
@@ -330,8 +336,8 @@ def create_produto(
 
 @router.put("/{produto_id}", response_model=ProdutoResponse)
 def update_produto(
-    produto_id: str, 
-    update_data: ProdutoUpdate, 
+    produto_id: str,
+    update_data: ProdutoUpdate,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("catalogo:administrar"))
@@ -347,10 +353,9 @@ def update_produto(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Produto não encontrado"
         )
-        
+
     data = update_data.model_dump(exclude_unset=True)
-    
-    # Check category if it is being updated
+
     if "categoria_id" in data:
         categoria = db.query(Categoria).filter(
             Categoria.restaurante_id == rest_id,
@@ -361,10 +366,10 @@ def update_produto(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="A categoria informada não existe"
             )
-            
+
     for key, value in data.items():
         setattr(db_produto, key, value)
-        
+
     db.commit()
     db.refresh(db_produto)
     notify_catalog_update(background_tasks, "Produto atualizado", require_tenant_id())
@@ -372,7 +377,7 @@ def update_produto(
 
 @router.delete("/{produto_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_produto(
-    produto_id: str, 
+    produto_id: str,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("catalogo:administrar"))
@@ -388,8 +393,6 @@ def delete_produto(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Produto não encontrado"
         )
-    # Exclusão lógica: o item some imediatamente dos três canais sem quebrar
-    # comandas antigas que preservam a FK e o preço praticado na venda.
     db_produto.ativo = False
     db.commit()
     notify_catalog_update(background_tasks, "Produto removido do cardápio", require_tenant_id())
@@ -443,7 +446,6 @@ def importar_cardapio(
 
     if isinstance(payload, CardapioImportPayload):
         produtos_data = payload.products or []
-        # Opcionalmente podemos criar/garantir categorias da lista de categorias se informadas
         if payload.categories:
             for category_data in payload.categories:
                 if isinstance(category_data, str):
@@ -460,7 +462,7 @@ def importar_cardapio(
                         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                         detail=f"Destino de impressão inválido na categoria {cat_nome}.",
                     )
-                
+
                 cat = db.query(Categoria).filter(
                     Categoria.restaurante_id == rest_id,
                     Categoria.id == id_cat,
@@ -479,15 +481,12 @@ def importar_cardapio(
             db.flush()
     else:
         produtos_data = payload
-        
-    # 1. Inativar temporariamente todos os produtos atuais no banco (com isolamento de tenant)
+
     db.query(Produto).filter(Produto.restaurante_id == rest_id).update({Produto.ativo: False})
-    
+
     imported_products = []
-    
-    # 2. Processar a lista importada (Upsert)
+
     for item in produtos_data:
-        # Garantir categoria
         cat_id = item.categoria_id
         cat = db.query(Categoria).filter(
             Categoria.restaurante_id == rest_id,
@@ -506,7 +505,7 @@ def importar_cardapio(
             )
             db.add(cat)
             db.flush()
-            
+
         existente = db.query(Produto).filter(
             Produto.restaurante_id == rest_id,
             Produto.id == item.id,
@@ -521,7 +520,6 @@ def importar_cardapio(
                 existente.imagem = item.imagem
             if item.imagens_galeria is not None:
                 existente.imagens_galeria = item.imagens_galeria
-            # Ativar o produto novamente
             existente.ativo = item.ativo if item.ativo is not None else True
             imported_products.append(existente)
         else:
@@ -541,8 +539,6 @@ def importar_cardapio(
 
     db.flush()
 
-    # 3. Limpeza preventiva de categorias órfãs (sem produtos ativos e sem observações)
-    # (Nenhum produto inativo é deletado do banco fisicamente, conforme regras)
     categorias = db.query(Categoria).filter(Categoria.restaurante_id == rest_id).all()
     for c in categorias:
         produtos_ativos_cat = db.query(Produto).filter(
@@ -556,7 +552,6 @@ def importar_cardapio(
                 ObservacaoPredefinida.categoria_id == c.id,
             ).first()
             if not obs_vinculo:
-                # Garantir que não existam produtos inativos remanescentes vinculados
                 prod_inativo = db.query(Produto).filter(
                     Produto.restaurante_id == rest_id,
                     Produto.categoria_id == c.id,
@@ -564,14 +559,11 @@ def importar_cardapio(
                 if not prod_inativo:
                     db.delete(c)
 
-    # 4. Um único db.commit() no final de toda a operação de import
     db.commit()
 
-    # 5. Refresh nos produtos importados para carregar relações e dados do banco pós-commit
     for prod in imported_products:
         db.refresh(prod)
 
-    # 6. Notificar os três canais uma única vez após o commit atômico.
     notify_catalog_update(background_tasks, "Cardápio importado", rest_id)
-    
+
     return imported_products

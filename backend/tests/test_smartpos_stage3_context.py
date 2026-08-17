@@ -35,6 +35,8 @@ def setup_smartpos_stage3():
             )
             db.add(restaurante)
             db.flush()
+        else:
+            restaurante.nome = "SmartPOS Stage 3"
 
         db.add(Usuario(
             id=USER_ID,
@@ -77,6 +79,11 @@ def test_pocket_pode_ter_smartpos_como_addon_sem_turno():
     assert data["mesas_disponiveis"] is False
     assert data["pedidos_disponiveis"] is False
     assert data["venda_rapida_disponivel"] is True
+    assert data["restaurante"] == {
+        "id": RESTAURANTE_ID,
+        "nome": "SmartPOS Stage 3",
+    }
+    assert data["operador"]["restaurante_id"] == RESTAURANTE_ID
 
 
 def test_turno_aberto_libera_salao_sem_dar_permissao_de_caixa_ao_garcom():
