@@ -99,7 +99,8 @@ run_flow_test \
   "tests/test_authorization.py" \
   "tests/test_smartpos_stage3_context.py" \
   "tests/test_smartpos_payment_intent_preview.py" \
-  "tests/test_smartpos_provider_orchestrator.py"
+  "tests/test_smartpos_provider_orchestrator.py" \
+  "tests/test_smartpos_provider_queue.py"
 
 run_flow_test \
   "6. Arquitetura, layout e snapshot da impressão" \
