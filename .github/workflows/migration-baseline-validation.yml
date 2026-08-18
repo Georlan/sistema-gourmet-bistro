@@ -94,12 +94,33 @@ jobs:
               version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
               assert version == "a6c2e9f4b8d1", version
 
-              db_tables = set(inspect(conn).get_table_names(schema="public"))
+              inspector = inspect(conn)
+              db_tables = set(inspector.get_table_names(schema="public"))
               declared_tables = {table.name for table in Base.metadata.sorted_tables}
-              missing = sorted(declared_tables - db_tables)
-              assert not missing, f"ORM tables missing after clean migration: {missing}"
+              missing_tables = sorted(declared_tables - db_tables)
+              assert not missing_tables, (
+                  f"ORM tables missing after clean migration: {missing_tables}"
+              )
+
+              missing_columns = {}
+              for table in Base.metadata.sorted_tables:
+                  db_columns = {
+                      column["name"]
+                      for column in inspector.get_columns(table.name, schema="public")
+                  }
+                  declared_columns = {column.name for column in table.columns}
+                  missing = sorted(declared_columns - db_columns)
+                  if missing:
+                      missing_columns[table.name] = missing
+
+              assert not missing_columns, (
+                  f"ORM columns missing after clean migration: {missing_columns}"
+              )
               assert "smartpos_payment_intents" in db_tables
-              print(f"B1.2 OK: revision={version}; tables={len(db_tables)}; orm_tables={len(declared_tables)}")
+              print(
+                  f"B1.2 OK: revision={version}; tables={len(db_tables)}; "
+                  f"orm_tables={len(declared_tables)}; missing_columns=0"
+              )
           engine.dispose()
           PY
 
@@ -137,7 +158,7 @@ jobs:
                   nome="B1 Operator",
                   email="b1-upgrade@koma.test",
                   senha_hash="$2b$12$dummyhashb1upgrade",
-                  role="garcom",
+                  cargo="garcom",
                   status="ativo",
                   restaurante_id=rid,
               ))
