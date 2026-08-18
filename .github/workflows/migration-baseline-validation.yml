@@ -66,10 +66,6 @@ jobs:
           conn.autocommit = True
           try:
               with conn.cursor() as cur:
-                  # O Kôma roda em Supabase PostgreSQL e algumas migrations de
-                  # hardening administram explicitamente estas roles. Criamos
-                  # apenas as roles de compatibilidade; Storage continua fora
-                  # deste teste de schema principal.
                   for role in ("anon", "authenticated", "service_role"):
                       cur.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", (role,))
                       if cur.fetchone() is None:
@@ -101,15 +97,13 @@ jobs:
           engine = create_engine(os.environ["DATABASE_URL"])
           with engine.connect() as conn:
               version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-              assert version == "a6c2e9f4b8d1", version
+              assert version == "b7d4c9e2f1a0", version
 
               inspector = inspect(conn)
               db_tables = set(inspector.get_table_names(schema="public"))
               declared_tables = {table.name for table in Base.metadata.sorted_tables}
               missing_tables = sorted(declared_tables - db_tables)
-              assert not missing_tables, (
-                  f"ORM tables missing after clean migration: {missing_tables}"
-              )
+              assert not missing_tables, f"ORM tables missing after clean migration: {missing_tables}"
 
               missing_columns = {}
               for table in Base.metadata.sorted_tables:
@@ -122,10 +116,19 @@ jobs:
                   if missing:
                       missing_columns[table.name] = missing
 
-              assert not missing_columns, (
-                  f"ORM columns missing after clean migration: {missing_columns}"
-              )
+              assert not missing_columns, f"ORM columns missing after clean migration: {missing_columns}"
               assert "smartpos_payment_intents" in db_tables
+
+              user_columns = {
+                  column["name"]: column
+                  for column in inspector.get_columns("usuarios", schema="public")
+              }
+              for legacy in ("usuario", "role"):
+                  if legacy in user_columns:
+                      assert user_columns[legacy]["nullable"] is True, (
+                          f"legacy usuarios.{legacy} still blocks current ORM inserts"
+                      )
+
               print(
                   f"B1.2 OK: revision={version}; tables={len(db_tables)}; "
                   f"orm_tables={len(declared_tables)}; missing_columns=0"
@@ -141,6 +144,7 @@ jobs:
           cd backend
           python -m alembic -c alembic.ini upgrade 9f6e4b2c1a30
           python - <<'PY'
+          from sqlalchemy import text
           from app.database import SessionLocal, current_restaurante_id
           from app.models import (
               CaixaTurno,
@@ -151,7 +155,6 @@ jobs:
               Mesa,
               Produto,
               Restaurante,
-              Usuario,
           )
           from app.smartpos_models import RestauranteCapability
 
@@ -162,16 +165,30 @@ jobs:
           try:
               db.add(Restaurante(id=rid, nome="B1 Upgrade Restaurant", plano="pocket"))
               db.flush()
-              db.add(Usuario(
-                  id=uid,
-                  nome="B1 Operator",
-                  email="b1-upgrade@koma.test",
-                  senha_hash="$2b$12$dummyhashb1upgrade",
-                  cargo="garcom",
-                  status="ativo",
-                  restaurante_id=rid,
-              ))
+
+              # Simula um usuário realmente existente no schema anterior: os
+              # campos legados usuario/role ainda eram NOT NULL nesse head.
+              db.execute(text("""
+                  INSERT INTO usuarios (
+                      id, restaurante_id, nome, usuario, senha_hash, role,
+                      email, cargo, status, created_at
+                  ) VALUES (
+                      :id, :rid, :nome, :usuario, :senha_hash, :role,
+                      :email, :cargo, :status, CURRENT_TIMESTAMP
+                  )
+              """), {
+                  "id": uid,
+                  "rid": rid,
+                  "nome": "B1 Operator",
+                  "usuario": "b1-upgrade@koma.test",
+                  "senha_hash": "$2b$12$dummyhashb1upgrade",
+                  "role": "garcom",
+                  "email": "b1-upgrade@koma.test",
+                  "cargo": "garcom",
+                  "status": "ativo",
+              })
               db.flush()
+
               db.add(RestauranteCapability(
                   restaurante_id=rid,
                   capability="smartpos",
@@ -246,11 +263,13 @@ jobs:
           python - <<'PY'
           import os
           from sqlalchemy import create_engine, inspect, text
+          from app.database import SessionLocal, current_restaurante_id
+          from app.models import Usuario
 
           engine = create_engine(os.environ["DATABASE_URL"])
           with engine.connect() as conn:
               version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-              assert version == "a6c2e9f4b8d1", version
+              assert version == "b7d4c9e2f1a0", version
               assert inspect(conn).has_table("smartpos_payment_intents")
 
               checks = {
@@ -269,7 +288,37 @@ jobs:
                   "SELECT COUNT(*) FROM smartpos_payment_intents WHERE restaurante_id = 9901"
               )).scalar_one()
               assert intents == 0
-              print(f"B1.3 OK: revision={version}; representative operational data preserved")
+          engine.dispose()
+
+          # Prova que, depois do upgrade, o ORM atual consegue criar um usuário
+          # sem escrever os campos legados usuario/role.
+          token = current_restaurante_id.set(9901)
+          db = SessionLocal()
+          try:
+              db.add(Usuario(
+                  id="b1-current-operator",
+                  nome="B1 Current Operator",
+                  email="b1-current@koma.test",
+                  senha_hash="$2b$12$dummyhashb1current",
+                  cargo="garcom",
+                  status="ativo",
+                  restaurante_id=9901,
+              ))
+              db.commit()
+          finally:
+              db.close()
+              current_restaurante_id.reset(token)
+
+          engine = create_engine(os.environ["DATABASE_URL"])
+          with engine.connect() as conn:
+              row = conn.execute(text("""
+                  SELECT usuario, role
+                  FROM usuarios
+                  WHERE id = 'b1-current-operator'
+              """)).one()
+              assert row.usuario is None
+              assert row.role is None
+              print("B1.3 OK: legacy data preserved and current ORM insert accepted")
           engine.dispose()
           PY
 
@@ -287,6 +336,8 @@ jobs:
           with engine.connect() as conn:
               assert not inspect(conn).has_table("smartpos_payment_intents")
               assert conn.execute(text("SELECT COUNT(*) FROM comandas WHERE id = 'cmd-b1-upgrade'")).scalar_one() == 1
+              current = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+              assert current == "9f6e4b2c1a30", current
           engine.dispose()
           PY
           python -m alembic -c alembic.ini upgrade head
@@ -296,8 +347,9 @@ jobs:
           engine = create_engine(os.environ["DATABASE_URL"])
           with engine.connect() as conn:
               assert inspect(conn).has_table("smartpos_payment_intents")
-              assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "a6c2e9f4b8d1"
+              assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "b7d4c9e2f1a0"
               assert conn.execute(text("SELECT COUNT(*) FROM comandas WHERE id = 'cmd-b1-upgrade'")).scalar_one() == 1
-              print("B1.3.1 OK: downgrade/re-upgrade round trip preserved legacy data")
+              assert conn.execute(text("SELECT COUNT(*) FROM usuarios WHERE id = 'b1-current-operator'")).scalar_one() == 1
+              print("B1.3.1 OK: downgrade/re-upgrade round trip preserved legacy and current data")
           engine.dispose()
           PY
