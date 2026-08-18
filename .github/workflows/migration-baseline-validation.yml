@@ -97,7 +97,7 @@ jobs:
           engine = create_engine(os.environ["DATABASE_URL"])
           with engine.connect() as conn:
               version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-              assert version == "d9b2c4e6f801", version
+              assert version == "e1c3a5b7d902", version
 
               inspector = inspect(conn)
               db_tables = set(inspector.get_table_names(schema="public"))
@@ -125,7 +125,8 @@ jobs:
               }
               assert "status_em" in intent_columns
               for provider_column in (
-                  "provider_name", "provider_operation_key", "provider_reference", "provider_last_error"
+                  "provider_name", "provider_operation_key", "provider_terminal_id",
+                  "provider_reference", "provider_last_error"
               ):
                   assert provider_column in intent_columns
 
@@ -277,7 +278,7 @@ jobs:
           engine = create_engine(os.environ["DATABASE_URL"])
           with engine.connect() as conn:
               version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-              assert version == "d9b2c4e6f801", version
+              assert version == "e1c3a5b7d902", version
               assert inspect(conn).has_table("smartpos_payment_intents")
               assert inspect(conn).has_table("smartpos_payment_intent_events")
 
@@ -335,16 +336,17 @@ jobs:
           MIGRATION_DATABASE_URL: postgresql+psycopg2://postgres:postgres@127.0.0.1:5432/koma_upgrade
         run: |
           cd backend
-          python -m alembic -c alembic.ini downgrade 9f6e4b2c1a30
+          python -m alembic -c alembic.ini downgrade d9b2c4e6f801
           python - <<'PY'
           import os
           from sqlalchemy import create_engine, inspect, text
           engine = create_engine(os.environ["DATABASE_URL"])
           with engine.connect() as conn:
-              assert not inspect(conn).has_table("smartpos_payment_intents")
-              assert conn.execute(text("SELECT COUNT(*) FROM comandas WHERE id = 'cmd-b1-upgrade'")).scalar_one() == 1
+              columns = {c["name"] for c in inspect(conn).get_columns("smartpos_payment_intents")}
+              assert "provider_terminal_id" not in columns
               current = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-              assert current == "9f6e4b2c1a30", current
+              assert current == "d9b2c4e6f801", current
+              assert conn.execute(text("SELECT COUNT(*) FROM comandas WHERE id = 'cmd-b1-upgrade'")).scalar_one() == 1
           engine.dispose()
           PY
           python -m alembic -c alembic.ini upgrade head
@@ -353,11 +355,11 @@ jobs:
           from sqlalchemy import create_engine, inspect, text
           engine = create_engine(os.environ["DATABASE_URL"])
           with engine.connect() as conn:
-              assert inspect(conn).has_table("smartpos_payment_intents")
-              assert inspect(conn).has_table("smartpos_payment_intent_events")
-              assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "d9b2c4e6f801"
+              columns = {c["name"] for c in inspect(conn).get_columns("smartpos_payment_intents")}
+              assert "provider_terminal_id" in columns
+              assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "e1c3a5b7d902"
               assert conn.execute(text("SELECT COUNT(*) FROM comandas WHERE id = 'cmd-b1-upgrade'")).scalar_one() == 1
               assert conn.execute(text("SELECT COUNT(*) FROM usuarios WHERE id = 'b1-current-operator'")).scalar_one() == 1
-              print("B1.3.1 OK: downgrade/re-upgrade round trip preserved legacy and current data")
+              print("B1.3.1 OK: terminal bridge downgrade/re-upgrade preserved data")
           engine.dispose()
           PY

@@ -21,6 +21,11 @@ from app.services.smartpos_provider_orchestrator import (
     SmartPosProviderError,
     execute_provider_payment,
 )
+from app.services.smartpos_terminal_bridge import (
+    SmartPosTerminalBridgeError,
+    apply_terminal_result,
+    prepare_terminal_command,
+)
 from app.smartpos_models import (
     RestauranteCapability,
     SmartPosPaymentIntent,
@@ -292,6 +297,130 @@ def test_manual_capture_cannot_enter_provider_flow():
                 terminal_id="POS-01",
                 actor_id=USER_ID,
             )
+        _assert_no_financial_effect(db)
+    finally:
+        db.close()
+
+
+def test_terminal_bridge_first_command_charges_then_restart_only_reconciles():
+    db = SessionLocal()
+    try:
+        intent = _new_intent(db, key="intent-bridge-0001")
+        first = prepare_terminal_command(
+            db,
+            intent=intent,
+            provider="pagbank",
+            operation_key="bridge-operation-0001",
+            terminal_id="POS-ANDROID-01",
+            actor_id=USER_ID,
+        )
+        assert first.mode == "charge"
+        assert first.should_execute is True
+        assert intent.status == "processando"
+        assert intent.provider_terminal_id == "POS-ANDROID-01"
+
+        restarted = prepare_terminal_command(
+            db,
+            intent=intent,
+            provider="pagbank",
+            operation_key="bridge-operation-0001",
+            terminal_id="POS-ANDROID-01",
+            actor_id=USER_ID,
+        )
+        assert restarted.mode == "reconcile"
+        assert restarted.should_execute is False
+        _assert_no_financial_effect(db)
+    finally:
+        db.close()
+
+
+def test_terminal_bridge_rejects_other_terminal_and_operation_key():
+    db = SessionLocal()
+    try:
+        intent = _new_intent(db, key="intent-bridge-0002")
+        prepare_terminal_command(
+            db,
+            intent=intent,
+            provider="pagbank",
+            operation_key="bridge-operation-0002",
+            terminal_id="POS-ANDROID-01",
+            actor_id=USER_ID,
+        )
+        with pytest.raises(SmartPosTerminalBridgeError):
+            prepare_terminal_command(
+                db,
+                intent=intent,
+                provider="pagbank",
+                operation_key="bridge-operation-0002",
+                terminal_id="POS-ANDROID-02",
+                actor_id=USER_ID,
+            )
+        with pytest.raises(SmartPosTerminalBridgeError):
+            prepare_terminal_command(
+                db,
+                intent=intent,
+                provider="pagbank",
+                operation_key="bridge-operation-OTHER",
+                terminal_id="POS-ANDROID-01",
+                actor_id=USER_ID,
+            )
+        _assert_no_financial_effect(db)
+    finally:
+        db.close()
+
+
+def test_terminal_bridge_timeout_then_late_approval_is_idempotent():
+    db = SessionLocal()
+    try:
+        intent = _new_intent(db, key="intent-bridge-0003")
+        prepare_terminal_command(
+            db,
+            intent=intent,
+            provider="pagbank",
+            operation_key="bridge-operation-0003",
+            terminal_id="POS-ANDROID-01",
+            actor_id=USER_ID,
+        )
+        timeout = apply_terminal_result(
+            db,
+            intent=intent,
+            provider="pagbank",
+            operation_key="bridge-operation-0003",
+            terminal_id="POS-ANDROID-01",
+            outcome=ProviderOutcome.TIMEOUT,
+            reference=None,
+            message="Sem resposta local",
+            actor_id=USER_ID,
+        )
+        assert timeout.intent.status == "processando"
+        assert timeout.intent.provider_last_error == "Sem resposta local"
+
+        approved = apply_terminal_result(
+            db,
+            intent=intent,
+            provider="pagbank",
+            operation_key="bridge-operation-0003",
+            terminal_id="POS-ANDROID-01",
+            outcome=ProviderOutcome.APPROVED,
+            reference="PB-REAL-LATER-001",
+            message="Aprovado após reconciliação",
+            actor_id=USER_ID,
+        )
+        assert approved.intent.status == "aprovada"
+        assert approved.intent.provider_reference == "PB-REAL-LATER-001"
+
+        replay = apply_terminal_result(
+            db,
+            intent=intent,
+            provider="pagbank",
+            operation_key="bridge-operation-0003",
+            terminal_id="POS-ANDROID-01",
+            outcome=ProviderOutcome.APPROVED,
+            reference="PB-REAL-LATER-001",
+            message="duplicado",
+            actor_id=USER_ID,
+        )
+        assert replay.replayed is True
         _assert_no_financial_effect(db)
     finally:
         db.close()
