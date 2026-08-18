@@ -18,7 +18,12 @@ from app.models import (
     Usuario,
 )
 from app.security import create_access_token
-from app.smartpos_models import RestauranteCapability, SmartPosPaymentIntent
+from app.services.smartpos_payment_state import can_transition
+from app.smartpos_models import (
+    RestauranteCapability,
+    SmartPosPaymentIntent,
+    SmartPosPaymentIntentEvent,
+)
 
 
 client = TestClient(app)
@@ -32,6 +37,9 @@ def setup_smartpos_payment_intent():
     token = current_restaurante_id.set(RESTAURANTE_ID)
     db = SessionLocal()
     try:
+        db.query(SmartPosPaymentIntentEvent).filter(
+            SmartPosPaymentIntentEvent.restaurante_id == RESTAURANTE_ID
+        ).delete()
         db.query(SmartPosPaymentIntent).filter(
             SmartPosPaymentIntent.restaurante_id == RESTAURANTE_ID
         ).delete()
@@ -272,6 +280,7 @@ def test_escopo_itens_exige_valor_exato_e_itens_da_mesa():
     assert ok.status_code == 201, ok.text
     assert ok.json()["item_ids"] == ["item-smartpos-intent-a"]
     assert ok.json()["captura"] == "dinheiro_pendente"
+    assert ok.json()["status"] == "pendente"
 
     mismatch = client.post(
         "/auth/smartpos/payment-intents",
@@ -319,6 +328,7 @@ def test_metodos_digitais_usam_integracao_por_padrao(metodo):
     assert response.status_code == 201, response.text
     assert response.json()["metodo"] == metodo
     assert response.json()["captura"] == "provider_integrado"
+    assert response.json()["status"] == "criada"
 
 
 @pytest.mark.parametrize("metodo", ["pix", "debito", "credito", "voucher"])
@@ -338,6 +348,7 @@ def test_metodos_digitais_aceitam_registro_em_outra_maquininha(metodo):
     assert response.status_code == 201, response.text
     assert response.json()["metodo"] == metodo
     assert response.json()["captura"] == "registro_externo"
+    assert response.json()["status"] == "pendente"
 
     token = current_restaurante_id.set(RESTAURANTE_ID)
     db = SessionLocal()
@@ -365,6 +376,7 @@ def test_dinheiro_deriva_captura_manual_e_rejeita_captura_forcada():
     )
     assert ok.status_code == 201, ok.text
     assert ok.json()["captura"] == "dinheiro_pendente"
+    assert ok.json()["status"] == "pendente"
 
     invalid = client.post(
         "/auth/smartpos/payment-intents",
@@ -379,6 +391,140 @@ def test_dinheiro_deriva_captura_manual_e_rejeita_captura_forcada():
         },
     )
     assert invalid.status_code == 422
+
+
+def test_confirmacao_manual_e_idempotente_e_nao_liquida_financeiro():
+    created = client.post(
+        "/auth/smartpos/payment-intents",
+        headers=headers(),
+        json={
+            "mesa_id": 4,
+            "valor": "10.00",
+            "metodo": "debito",
+            "captura": "registro_externo",
+            "escopo": "valor",
+            "idempotency_key": "manual-external-create-01",
+        },
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["status"] == "pendente"
+    intent_id = created.json()["id"]
+
+    confirm_payload = {
+        "idempotency_key": "manual-external-confirm-01",
+        "motivo": "Operador confirmou a transação na maquininha externa.",
+    }
+    first = client.post(
+        f"/auth/smartpos/payment-intents/{intent_id}/confirmar-manual",
+        headers=headers(),
+        json=confirm_payload,
+    )
+    replay = client.post(
+        f"/auth/smartpos/payment-intents/{intent_id}/confirmar-manual",
+        headers=headers(),
+        json=confirm_payload,
+    )
+    assert first.status_code == 200, first.text
+    assert first.json()["status"] == "aprovada"
+    assert first.json()["transition_replayed"] is False
+    assert replay.status_code == 200, replay.text
+    assert replay.json()["status"] == "aprovada"
+    assert replay.json()["transition_replayed"] is True
+
+    token = current_restaurante_id.set(RESTAURANTE_ID)
+    db = SessionLocal()
+    try:
+        events = db.query(SmartPosPaymentIntentEvent).filter(
+            SmartPosPaymentIntentEvent.intent_id == intent_id
+        ).order_by(SmartPosPaymentIntentEvent.criado_em.asc()).all()
+        assert [(event.from_status, event.to_status) for event in events] == [
+            ("criada", "pendente"),
+            ("pendente", "aprovada"),
+        ]
+        assert db.query(Pagamento).filter(Pagamento.restaurante_id == RESTAURANTE_ID).count() == 0
+        comanda = db.query(Comanda).filter(Comanda.id == "cmd-smartpos-intent").one()
+        assert Decimal(str(comanda.valor_pago)) == Decimal("0")
+        assert comanda.fechada is False
+    finally:
+        db.close()
+        current_restaurante_id.reset(token)
+
+
+def test_estado_terminal_exige_novo_intent_para_nova_tentativa():
+    created = client.post(
+        "/auth/smartpos/payment-intents",
+        headers=headers(),
+        json={
+            "mesa_id": 4,
+            "valor": "10.00",
+            "metodo": "dinheiro",
+            "escopo": "valor",
+            "idempotency_key": "terminal-create-0001",
+        },
+    )
+    intent_id = created.json()["id"]
+    confirmed = client.post(
+        f"/auth/smartpos/payment-intents/{intent_id}/confirmar-manual",
+        headers=headers(),
+        json={"idempotency_key": "terminal-confirm-0001"},
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    assert confirmed.json()["status"] == "aprovada"
+
+    second_confirmation = client.post(
+        f"/auth/smartpos/payment-intents/{intent_id}/confirmar-manual",
+        headers=headers(),
+        json={"idempotency_key": "terminal-confirm-0002"},
+    )
+    assert second_confirmation.status_code == 409
+
+    new_intent = client.post(
+        "/auth/smartpos/payment-intents",
+        headers=headers(),
+        json={
+            "mesa_id": 4,
+            "valor": "10.00",
+            "metodo": "dinheiro",
+            "escopo": "valor",
+            "idempotency_key": "terminal-create-0002",
+        },
+    )
+    assert new_intent.status_code == 201, new_intent.text
+    assert new_intent.json()["id"] != intent_id
+    assert new_intent.json()["status"] == "pendente"
+
+
+def test_integrado_nao_pode_ser_aprovado_manualmente():
+    created = client.post(
+        "/auth/smartpos/payment-intents",
+        headers=headers(),
+        json={
+            "mesa_id": 4,
+            "valor": "10.00",
+            "metodo": "pix",
+            "escopo": "valor",
+            "idempotency_key": "integrated-create-0001",
+        },
+    )
+    assert created.status_code == 201, created.text
+    response = client.post(
+        f"/auth/smartpos/payment-intents/{created.json()['id']}/confirmar-manual",
+        headers=headers(),
+        json={"idempotency_key": "integrated-confirm-01"},
+    )
+    assert response.status_code == 409
+
+
+def test_grafo_de_estados_bloqueia_saltos_e_estados_terminais():
+    assert can_transition("criada", "pendente") is True
+    assert can_transition("criada", "aprovada") is False
+    assert can_transition("pendente", "processando") is True
+    assert can_transition("pendente", "aprovada") is True
+    assert can_transition("processando", "aprovada") is True
+    assert can_transition("processando", "recusada") is True
+    for terminal in ("aprovada", "recusada", "cancelada", "expirada"):
+        assert can_transition(terminal, "pendente") is False
+        assert can_transition(terminal, "processando") is False
 
 
 def test_cartao_generico_nao_e_aceito_em_novas_intencoes():
@@ -422,6 +568,7 @@ def test_schema_mantem_leitura_de_cartao_legado():
         db.refresh(legacy)
         assert legacy.metodo == "cartao"
         assert legacy.captura == "provider_integrado"
+        assert legacy.status_em is not None
     finally:
         db.close()
         current_restaurante_id.reset(token)
