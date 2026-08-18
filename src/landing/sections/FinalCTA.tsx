@@ -16,7 +16,12 @@ export function FinalCTA() {
       >
         <span className="koma-cta-kicker">06 / PRÓXIMO PASSO</span>
         <div className="koma-cta-brand-signature">
-          <img src={KOMA_WORDMARK_SRC} alt="" aria-hidden="true" />
+          <img
+            src={KOMA_WORDMARK_SRC}
+            alt=""
+            aria-hidden="true"
+            style={{ width: 'clamp(150px, 14vw, 220px)', height: 'auto', objectFit: 'contain' }}
+          />
           <span>Se você está com fome, <strong>Kôma</strong></span>
         </div>
         <h2 className="koma-cta-title">
