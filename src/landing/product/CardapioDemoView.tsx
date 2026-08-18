@@ -1,5 +1,5 @@
 import React from 'react';
-import { KOMA_WORDMARK_SRC } from '../../brand/komaBrand';
+import { KomaLogo } from '../../components/KomaLogo';
 
 export function CardapioDemoView() {
   const categories = ['Destacados', 'Burgers', 'Acompanhamentos', 'Bebidas'];
@@ -40,7 +40,7 @@ export function CardapioDemoView() {
         overflow: 'hidden',
       }}
     >
-      {/* Header with Brand Logo */}
+      {/* Header with compact Brand Logo */}
       <div
         style={{
           padding: '16px 16px 12px 16px',
@@ -52,7 +52,7 @@ export function CardapioDemoView() {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <img src={KOMA_WORDMARK_SRC} alt="Kôma" style={{ height: '24px', width: 'auto', objectFit: 'contain' }} />
+          <KomaLogo size="lg" variant="dark" />
           <div>
             <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>KÔMA BISTRO</div>
             <div style={{ fontSize: '0.65rem', color: '#00b894', fontWeight: 600 }}>Mesa 04 / Atendimento aberto</div>
@@ -63,7 +63,6 @@ export function CardapioDemoView() {
         </div>
       </div>
 
-      {/* Categories Bar */}
       <div
         style={{
           display: 'flex',
@@ -95,7 +94,6 @@ export function CardapioDemoView() {
         })}
       </div>
 
-      {/* Product List */}
       <div style={{ flex: 1, padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px', overflowY: 'auto' }}>
         {products.map((item) => (
           <div
@@ -124,7 +122,6 @@ export function CardapioDemoView() {
         ))}
       </div>
 
-      {/* Bottom Cart Bar */}
       <div
         style={{
           padding: '10px 14px',
