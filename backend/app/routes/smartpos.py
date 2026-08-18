@@ -16,12 +16,12 @@ from ..smartpos_models import SmartPosPaymentIntent
 router = APIRouter(prefix="/smartpos", tags=["SmartPOS"])
 _ALLOWED_ROLES = {"garcom", "caixa", "gerente"}
 _CENTAVO = Decimal("0.01")
-_CAPTURE_BY_METHOD = {
-    "dinheiro": "dinheiro_pendente",
-    "pix": "provider_integrado",
-    "debito": "provider_integrado",
-    "credito": "provider_integrado",
-    "voucher": "provider_integrado",
+_CAPTURE_OPTIONS_BY_METHOD = {
+    "dinheiro": {"dinheiro_pendente"},
+    "pix": {"provider_integrado", "registro_externo"},
+    "debito": {"provider_integrado", "registro_externo"},
+    "credito": {"provider_integrado", "registro_externo"},
+    "voucher": {"provider_integrado", "registro_externo"},
 }
 
 
@@ -29,6 +29,7 @@ class SmartPosPaymentIntentCreate(BaseModel):
     mesa_id: int = Field(gt=0)
     valor: Decimal = Field(gt=0, max_digits=14, decimal_places=2)
     metodo: Literal["dinheiro", "pix", "debito", "credito", "voucher"]
+    captura: Optional[Literal["provider_integrado", "registro_externo"]] = None
     escopo: Literal["valor", "itens"] = "valor"
     item_ids: Optional[list[str]] = None
     idempotency_key: str = Field(min_length=8, max_length=128)
@@ -53,12 +54,27 @@ def _money(value: object) -> Decimal:
     return Decimal(str(value or 0)).quantize(_CENTAVO, rounding=ROUND_HALF_UP)
 
 
-def _capture_for_method(method: str) -> str:
-    capture = _CAPTURE_BY_METHOD.get(method)
-    if capture is None:
+def _capture_for_method(method: str, requested: Optional[str]) -> str:
+    allowed = _CAPTURE_OPTIONS_BY_METHOD.get(method)
+    if allowed is None:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Forma de pagamento não suportada pelo SmartPOS.",
+        )
+
+    if method == "dinheiro":
+        if requested is not None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Dinheiro usa conferência manual e não aceita outro modo de captura.",
+            )
+        return "dinheiro_pendente"
+
+    capture = requested or "provider_integrado"
+    if capture not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Modo de captura incompatível com a forma de pagamento.",
         )
     return capture
 
@@ -174,7 +190,7 @@ def criar_payment_intent(
         )
     normalized_items = sorted(set(payload.item_ids or []))
     valor = _money(payload.valor)
-    captura = _capture_for_method(payload.metodo)
+    captura = _capture_for_method(payload.metodo, payload.captura)
 
     existing = db.query(SmartPosPaymentIntent).filter(
         SmartPosPaymentIntent.restaurante_id == restaurante_id,
