@@ -8,7 +8,9 @@ P0-02:
 * força RLS inclusive para o proprietário das tabelas;
 * mantém a role de runtime sem LOGIN/BYPASSRLS;
 * fornece funções SECURITY DEFINER mínimas para descobrir o tenant durante
-  login, ativação e autenticação do agente de impressão.
+  login, ativação e autenticação do agente de impressão;
+* materializa, quando necessário, a transição do schema legado de usuários
+  antes de criar as funções de autenticação.
 """
 from typing import Sequence, Union
 
@@ -57,10 +59,65 @@ def _replace_tenant_policy(bind, table: str) -> None:
     """)
 
 
+def _ensure_user_auth_columns(bind) -> None:
+    """Materializa colunas atuais que bancos antigos recebiam pelo bootstrap ORM."""
+    columns = {column["name"] for column in sa.inspect(bind).get_columns("usuarios")}
+
+    additions = (
+        ("email", sa.String(100)),
+        ("telefone", sa.String(50)),
+        ("cargo", sa.String(20)),
+        ("token_convite", sa.String()),
+        ("token_expira_em", sa.DateTime(timezone=True)),
+        ("status", sa.String(20)),
+        ("created_at", sa.DateTime(timezone=True)),
+    )
+    for name, column_type in additions:
+        if name not in columns:
+            op.add_column("usuarios", sa.Column(name, column_type, nullable=True))
+
+    # O schema inicial possuía `usuario` e `role`. Preservamos essas colunas
+    # legadas para compatibilidade e usamos seus valores para preencher o
+    # contrato atual sem perder credenciais ou identidade operacional.
+    columns = {column["name"] for column in sa.inspect(bind).get_columns("usuarios")}
+    if "usuario" in columns:
+        bind.execute(sa.text("""
+            UPDATE usuarios
+            SET email = CASE
+                    WHEN usuario LIKE '%@%' THEN usuario
+                    ELSE email
+                END,
+                telefone = CASE
+                    WHEN usuario NOT LIKE '%@%' THEN usuario
+                    ELSE telefone
+                END
+            WHERE usuario IS NOT NULL
+              AND ((email IS NULL AND usuario LIKE '%@%')
+                   OR (telefone IS NULL AND usuario NOT LIKE '%@%'))
+        """))
+    if "role" in columns:
+        bind.execute(sa.text("""
+            UPDATE usuarios
+            SET cargo = role
+            WHERE cargo IS NULL AND role IS NOT NULL
+        """))
+
+    # Usuários que já existiam antes do fluxo de convite eram, por definição,
+    # contas operacionais ativas.
+    bind.execute(sa.text("""
+        UPDATE usuarios
+        SET cargo = COALESCE(cargo, 'garcom'),
+            status = COALESCE(status, 'ativo'),
+            created_at = COALESCE(created_at, CURRENT_TIMESTAMP)
+    """))
+
+
 def upgrade() -> None:
     bind = op.get_bind()
     if bind.dialect.name != "postgresql":
         return
+
+    _ensure_user_auth_columns(bind)
 
     op.execute("ALTER ROLE koma_app WITH NOLOGIN NOBYPASSRLS")
     op.execute("GRANT USAGE ON SCHEMA public TO koma_app")
