@@ -76,6 +76,7 @@ def _seed_smoke_fixture() -> None:
                     id=CATEGORIA_ID,
                     restaurante_id=RESTAURANTE_ID,
                     nome="Smoke B1.4",
+                    destino_impressao="COZINHA",
                 )
             )
             db.flush()
@@ -184,6 +185,7 @@ def test_b14_operational_smoke_postgres() -> None:
             },
         )
         assert launched.status_code in (200, 201), launched.text
+        lancamento_id = launched.json()["id"]
 
         tenant_token = current_restaurante_id.set(RESTAURANTE_ID)
         db = SessionLocal(restaurante_id=RESTAURANTE_ID)
@@ -191,11 +193,14 @@ def test_b14_operational_smoke_postgres() -> None:
             items = db.query(Item).filter(Item.comanda_id == comanda_id).all()
             print_jobs = db.query(PrintJob).filter(
                 PrintJob.restaurante_id == RESTAURANTE_ID,
-                PrintJob.source_id == comanda_id,
+                PrintJob.source_type == "lancamento",
+                PrintJob.source_id == lancamento_id,
             ).all()
             assert len(items) == 1
             assert items[0].produto_id == PRODUTO_ID
-            assert len(print_jobs) >= 1, "lançamento não gerou PrintJob"
+            assert len(print_jobs) == 1, "lançamento não gerou exatamente uma via automática"
+            assert print_jobs[0].destination == "COZINHA"
+            assert print_jobs[0].status == "pending"
         finally:
             db.close()
             current_restaurante_id.reset(tenant_token)
