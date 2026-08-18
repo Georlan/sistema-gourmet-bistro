@@ -97,7 +97,7 @@ jobs:
           engine = create_engine(os.environ["DATABASE_URL"])
           with engine.connect() as conn:
               version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-              assert version == "b7d3f1a8c902", version
+              assert version == "c8a1f7d2e604", version
 
               inspector = inspect(conn)
               db_tables = set(inspector.get_table_names(schema="public"))
@@ -118,6 +118,12 @@ jobs:
 
               assert not missing_columns, f"ORM columns missing after clean migration: {missing_columns}"
               assert "smartpos_payment_intents" in db_tables
+              assert "smartpos_payment_intent_events" in db_tables
+              intent_columns = {
+                  column["name"]
+                  for column in inspector.get_columns("smartpos_payment_intents", schema="public")
+              }
+              assert "status_em" in intent_columns
 
               user_columns = {
                   column["name"]: column
@@ -166,8 +172,6 @@ jobs:
               db.add(Restaurante(id=rid, nome="B1 Upgrade Restaurant", plano="pocket"))
               db.flush()
 
-              # Simula um usuário realmente existente no schema anterior: os
-              # campos legados usuario/role ainda eram NOT NULL nesse head.
               db.execute(text("""
                   INSERT INTO usuarios (
                       id, restaurante_id, nome, usuario, senha_hash, role,
@@ -269,8 +273,9 @@ jobs:
           engine = create_engine(os.environ["DATABASE_URL"])
           with engine.connect() as conn:
               version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-              assert version == "b7d3f1a8c902", version
+              assert version == "c8a1f7d2e604", version
               assert inspect(conn).has_table("smartpos_payment_intents")
+              assert inspect(conn).has_table("smartpos_payment_intent_events")
 
               checks = {
                   "restaurantes": "SELECT COUNT(*) FROM restaurantes WHERE id = 9901",
@@ -290,8 +295,6 @@ jobs:
               assert intents == 0
           engine.dispose()
 
-          # Prova que, depois do upgrade, o ORM atual consegue criar um usuário
-          # sem escrever os campos legados usuario/role.
           token = current_restaurante_id.set(9901)
           db = SessionLocal()
           try:
@@ -347,7 +350,8 @@ jobs:
           engine = create_engine(os.environ["DATABASE_URL"])
           with engine.connect() as conn:
               assert inspect(conn).has_table("smartpos_payment_intents")
-              assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "b7d3f1a8c902"
+              assert inspect(conn).has_table("smartpos_payment_intent_events")
+              assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "c8a1f7d2e604"
               assert conn.execute(text("SELECT COUNT(*) FROM comandas WHERE id = 'cmd-b1-upgrade'")).scalar_one() == 1
               assert conn.execute(text("SELECT COUNT(*) FROM usuarios WHERE id = 'b1-current-operator'")).scalar_one() == 1
               print("B1.3.1 OK: downgrade/re-upgrade round trip preserved legacy and current data")

@@ -10,6 +10,11 @@ from ..database import get_db, require_tenant_id
 from ..models import CaixaTurno, Comanda, Item, Mesa, Restaurante, Usuario
 from ..security import get_current_user, require_permission
 from ..services.capabilities import has_capability
+from ..services.smartpos_payment_state import (
+    InvalidSmartPosTransition,
+    initial_status_for_capture,
+    transition_intent,
+)
 from ..smartpos_models import SmartPosPaymentIntent
 
 
@@ -23,6 +28,7 @@ _CAPTURE_OPTIONS_BY_METHOD = {
     "credito": {"provider_integrado", "registro_externo"},
     "voucher": {"provider_integrado", "registro_externo"},
 }
+_MANUAL_CAPTURES = {"dinheiro_pendente", "registro_externo"}
 
 
 class SmartPosPaymentIntentCreate(BaseModel):
@@ -48,6 +54,15 @@ class SmartPosPaymentIntentResponse(BaseModel):
     idempotency_key: str
     status: str
     origem: str
+
+
+class SmartPosManualConfirmation(BaseModel):
+    idempotency_key: str = Field(min_length=8, max_length=128)
+    motivo: Optional[str] = Field(default=None, max_length=255)
+
+
+class SmartPosManualConfirmationResponse(SmartPosPaymentIntentResponse):
+    transition_replayed: bool = False
 
 
 def _money(value: object) -> Decimal:
@@ -304,6 +319,17 @@ def criar_payment_intent(
     )
     db.add(intent)
     try:
+        db.flush()
+        initial_status = initial_status_for_capture(captura)
+        if initial_status != "criada":
+            transition_intent(
+                db,
+                intent=intent,
+                target_status=initial_status,
+                transition_key=f"init:{normalized_key}",
+                actor_id=current_user.id,
+                motivo="Aguardando confirmação manual do recebimento.",
+            )
         db.commit()
     except IntegrityError:
         db.rollback()
@@ -327,3 +353,80 @@ def criar_payment_intent(
         raise
     db.refresh(intent)
     return _intent_payload(intent)
+
+
+@router.post(
+    "/payment-intents/{intent_id}/confirmar-manual",
+    response_model=SmartPosManualConfirmationResponse,
+)
+def confirmar_payment_intent_manual(
+    intent_id: str,
+    payload: SmartPosManualConfirmation,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("smartpos:receber")),
+):
+    """Confirma apenas captura manual; ainda não cria Pagamento nem baixa financeira."""
+    restaurante_id = require_tenant_id()
+    if not has_capability(db, restaurante_id, "smartpos"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="SmartPOS não habilitado para este restaurante.",
+        )
+
+    intent = db.query(SmartPosPaymentIntent).filter(
+        SmartPosPaymentIntent.restaurante_id == restaurante_id,
+        SmartPosPaymentIntent.id == intent_id,
+    ).first()
+    if intent is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Intenção de pagamento não encontrada.",
+        )
+    if intent.captura not in _MANUAL_CAPTURES:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Pagamentos integrados só podem ser aprovados pelo fluxo do provider.",
+        )
+
+    try:
+        result = transition_intent(
+            db,
+            intent=intent,
+            target_status="aprovada",
+            transition_key=payload.idempotency_key,
+            actor_id=current_user.id,
+            motivo=payload.motivo or "Recebimento confirmado manualmente pelo operador.",
+        )
+        db.commit()
+    except InvalidSmartPosTransition as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+    except IntegrityError:
+        db.rollback()
+        # Corrida de confirmação: recarrega e reaplica a chave idempotente.
+        intent = db.query(SmartPosPaymentIntent).filter(
+            SmartPosPaymentIntent.restaurante_id == restaurante_id,
+            SmartPosPaymentIntent.id == intent_id,
+        ).one()
+        try:
+            result = transition_intent(
+                db,
+                intent=intent,
+                target_status="aprovada",
+                transition_key=payload.idempotency_key,
+                actor_id=current_user.id,
+                motivo=payload.motivo or "Recebimento confirmado manualmente pelo operador.",
+            )
+            db.commit()
+        except InvalidSmartPosTransition as exc:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(exc),
+            ) from exc
+
+    db.refresh(intent)
+    return {**_intent_payload(intent), "transition_replayed": result.replayed}

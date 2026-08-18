@@ -94,7 +94,7 @@ class SmartPosPaymentIntent(Base):
             name="ck_smartpos_intent_escopo",
         ),
         CheckConstraint(
-            "status IN ('criada', 'cancelada', 'expirada')",
+            "status IN ('criada', 'pendente', 'processando', 'aprovada', 'recusada', 'cancelada', 'expirada')",
             name="ck_smartpos_intent_status",
         ),
         Index(
@@ -134,7 +134,62 @@ class SmartPosPaymentIntent(Base):
     item_ids = Column(JSON, nullable=True)
     idempotency_key = Column(String(128), nullable=False)
     status = Column(String(24), nullable=False, default="criada")
+    status_em = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+    )
     origem = Column(String(24), nullable=False, default="smartpos")
+    criado_em = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+    )
+
+
+class SmartPosPaymentIntentEvent(Base):
+    """Trilha imutável das transições do PaymentIntent."""
+
+    __tablename__ = "smartpos_payment_intent_events"
+    __table_args__ = (
+        UniqueConstraint(
+            "restaurante_id",
+            "intent_id",
+            "transition_key",
+            name="uq_smartpos_intent_event_transition_key",
+        ),
+        CheckConstraint(
+            "from_status IN ('criada', 'pendente', 'processando', 'aprovada', 'recusada', 'cancelada', 'expirada')",
+            name="ck_smartpos_event_from_status",
+        ),
+        CheckConstraint(
+            "to_status IN ('criada', 'pendente', 'processando', 'aprovada', 'recusada', 'cancelada', 'expirada')",
+            name="ck_smartpos_event_to_status",
+        ),
+        Index(
+            "ix_smartpos_event_tenant_intent",
+            "restaurante_id",
+            "intent_id",
+        ),
+    )
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    restaurante_id = Column(
+        Integer,
+        ForeignKey("restaurantes.id", ondelete="CASCADE"),
+        default=lambda: current_restaurante_id.get(),
+        nullable=False,
+    )
+    intent_id = Column(
+        String(36),
+        ForeignKey("smartpos_payment_intents.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    from_status = Column(String(24), nullable=False)
+    to_status = Column(String(24), nullable=False)
+    actor_id = Column(String, nullable=True)
+    transition_key = Column(String(128), nullable=False)
+    motivo = Column(String(255), nullable=True)
     criado_em = Column(
         DateTime(timezone=True),
         nullable=False,
