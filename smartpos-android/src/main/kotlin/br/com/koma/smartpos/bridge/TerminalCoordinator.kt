@@ -10,9 +10,24 @@ class TerminalCoordinator(
 
         val existing = store.get(command.operationKey)
         if (existing != null) {
+            require(existing.intentId == command.intentId) { "intent divergente" }
             require(existing.provider == command.provider) { "provider divergente" }
             require(existing.terminalId == command.terminalId) { "terminal divergente" }
-            val result = bridge.reconcile(command.copy(mode = CommandMode.RECONCILE, shouldExecute = false))
+
+            existing.lastResult?.let { cached ->
+                if (cached.outcome == PaymentOutcome.APPROVED || cached.outcome == PaymentOutcome.DECLINED) {
+                    return cached
+                }
+            }
+
+            val result = try {
+                bridge.reconcile(command.copy(mode = CommandMode.RECONCILE, shouldExecute = false))
+            } catch (exc: Exception) {
+                TerminalPaymentResult(
+                    outcome = PaymentOutcome.ERROR,
+                    message = exc.message ?: "Falha ao reconciliar operação no bridge.",
+                )
+            }
             store.put(existing.copy(lastResult = result))
             return result
         }
@@ -26,9 +41,23 @@ class TerminalCoordinator(
 
         // Reserva localmente antes de chamar o SDK. Se o processo morrer depois
         // daqui, o próximo boot entra em reconcile e nunca dispara charge outra vez.
-        store.put(LocalOperation(command.provider, command.operationKey, command.terminalId))
-        val result = bridge.charge(command)
-        store.put(LocalOperation(command.provider, command.operationKey, command.terminalId, lastResult = result))
+        val reserved = LocalOperation(
+            intentId = command.intentId,
+            provider = command.provider,
+            operationKey = command.operationKey,
+            terminalId = command.terminalId,
+        )
+        store.put(reserved)
+
+        val result = try {
+            bridge.charge(command)
+        } catch (exc: Exception) {
+            TerminalPaymentResult(
+                outcome = PaymentOutcome.ERROR,
+                message = exc.message ?: "Falha ao executar cobrança no bridge.",
+            )
+        }
+        store.put(reserved.copy(lastResult = result))
         return result
     }
 }
