@@ -16,12 +16,19 @@ from ..smartpos_models import SmartPosPaymentIntent
 router = APIRouter(prefix="/smartpos", tags=["SmartPOS"])
 _ALLOWED_ROLES = {"garcom", "caixa", "gerente"}
 _CENTAVO = Decimal("0.01")
+_CAPTURE_BY_METHOD = {
+    "dinheiro": "dinheiro_pendente",
+    "pix": "provider_integrado",
+    "debito": "provider_integrado",
+    "credito": "provider_integrado",
+    "voucher": "provider_integrado",
+}
 
 
 class SmartPosPaymentIntentCreate(BaseModel):
     mesa_id: int = Field(gt=0)
     valor: Decimal = Field(gt=0, max_digits=14, decimal_places=2)
-    metodo: Literal["dinheiro", "pix", "cartao"]
+    metodo: Literal["dinheiro", "pix", "debito", "credito", "voucher"]
     escopo: Literal["valor", "itens"] = "valor"
     item_ids: Optional[list[str]] = None
     idempotency_key: str = Field(min_length=8, max_length=128)
@@ -34,6 +41,7 @@ class SmartPosPaymentIntentResponse(BaseModel):
     operador_id: str
     valor: Decimal
     metodo: str
+    captura: str
     escopo: str
     item_ids: Optional[list[str]] = None
     idempotency_key: str
@@ -45,6 +53,16 @@ def _money(value: object) -> Decimal:
     return Decimal(str(value or 0)).quantize(_CENTAVO, rounding=ROUND_HALF_UP)
 
 
+def _capture_for_method(method: str) -> str:
+    capture = _CAPTURE_BY_METHOD.get(method)
+    if capture is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Forma de pagamento não suportada pelo SmartPOS.",
+        )
+    return capture
+
+
 def _intent_payload(intent: SmartPosPaymentIntent) -> dict:
     return {
         "id": intent.id,
@@ -53,6 +71,7 @@ def _intent_payload(intent: SmartPosPaymentIntent) -> dict:
         "operador_id": intent.operador_id,
         "valor": _money(intent.valor),
         "metodo": intent.metodo,
+        "captura": intent.captura,
         "escopo": intent.escopo,
         "item_ids": list(intent.item_ids or []) or None,
         "idempotency_key": intent.idempotency_key,
@@ -67,11 +86,13 @@ def _same_intent_request(
     *,
     valor: Decimal,
     normalized_items: list[str],
+    captura: str,
 ) -> bool:
     return (
         intent.mesa_id == payload.mesa_id
         and _money(intent.valor) == valor
         and intent.metodo == payload.metodo
+        and intent.captura == captura
         and intent.escopo == payload.escopo
         and sorted(intent.item_ids or []) == normalized_items
     )
@@ -153,6 +174,7 @@ def criar_payment_intent(
         )
     normalized_items = sorted(set(payload.item_ids or []))
     valor = _money(payload.valor)
+    captura = _capture_for_method(payload.metodo)
 
     existing = db.query(SmartPosPaymentIntent).filter(
         SmartPosPaymentIntent.restaurante_id == restaurante_id,
@@ -164,6 +186,7 @@ def criar_payment_intent(
             payload,
             valor=valor,
             normalized_items=normalized_items,
+            captura=captura,
         ):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -256,6 +279,7 @@ def criar_payment_intent(
         operador_id=current_user.id,
         valor=valor,
         metodo=payload.metodo,
+        captura=captura,
         escopo=payload.escopo,
         item_ids=normalized_items or None,
         idempotency_key=normalized_key,
@@ -277,6 +301,7 @@ def criar_payment_intent(
                 payload,
                 valor=valor,
                 normalized_items=normalized_items,
+                captura=captura,
             ):
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
