@@ -82,8 +82,12 @@ class SmartPosPaymentIntent(Base):
         ),
         CheckConstraint("valor > 0", name="ck_smartpos_intent_valor_positive"),
         CheckConstraint(
-            "metodo IN ('dinheiro', 'pix', 'cartao')",
+            "metodo IN ('dinheiro', 'pix', 'debito', 'credito', 'voucher', 'cartao')",
             name="ck_smartpos_intent_metodo",
+        ),
+        CheckConstraint(
+            "captura IN ('provider_integrado', 'dinheiro_pendente', 'registro_externo')",
+            name="ck_smartpos_intent_captura",
         ),
         CheckConstraint(
             "escopo IN ('valor', 'itens')",
@@ -125,6 +129,7 @@ class SmartPosPaymentIntent(Base):
     )
     valor = Column(Numeric(14, 2), nullable=False)
     metodo = Column(String(24), nullable=False)
+    captura = Column(String(24), nullable=False, default="provider_integrado")
     escopo = Column(String(16), nullable=False, default="valor")
     item_ids = Column(JSON, nullable=True)
     idempotency_key = Column(String(128), nullable=False)

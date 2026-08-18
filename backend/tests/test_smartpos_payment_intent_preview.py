@@ -194,6 +194,7 @@ def test_criar_intent_nao_cria_receita_nem_altera_mesa():
     assert response.status_code == 201, response.text
     assert response.json()["status"] == "criada"
     assert response.json()["origem"] == "smartpos"
+    assert response.json()["captura"] == "provider_integrado"
 
     token = current_restaurante_id.set(RESTAURANTE_ID)
     db = SessionLocal()
@@ -216,7 +217,7 @@ def test_idempotencia_retorna_mesma_intencao_e_rejeita_payload_diferente():
     payload = {
         "mesa_id": 4,
         "valor": "20.00",
-        "metodo": "cartao",
+        "metodo": "credito",
         "escopo": "valor",
         "idempotency_key": "smartpos-intent-0002",
     }
@@ -225,6 +226,7 @@ def test_idempotencia_retorna_mesma_intencao_e_rejeita_payload_diferente():
     assert first.status_code == 201, first.text
     assert second.status_code == 201, second.text
     assert first.json()["id"] == second.json()["id"]
+    assert first.json()["captura"] == "provider_integrado"
 
     conflict = client.post(
         "/auth/smartpos/payment-intents",
@@ -249,6 +251,7 @@ def test_escopo_itens_exige_valor_exato_e_itens_da_mesa():
     )
     assert ok.status_code == 201, ok.text
     assert ok.json()["item_ids"] == ["item-smartpos-intent-a"]
+    assert ok.json()["captura"] == "dinheiro_pendente"
 
     mismatch = client.post(
         "/auth/smartpos/payment-intents",
@@ -275,6 +278,39 @@ def test_intent_rejeita_valor_acima_do_saldo():
             "metodo": "pix",
             "escopo": "valor",
             "idempotency_key": "smartpos-intent-0005",
+        },
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize("metodo", ["pix", "debito", "credito", "voucher"])
+def test_metodos_digitais_derivam_captura_integrada(metodo):
+    response = client.post(
+        "/auth/smartpos/payment-intents",
+        headers=headers(),
+        json={
+            "mesa_id": 4,
+            "valor": "10.00",
+            "metodo": metodo,
+            "escopo": "valor",
+            "idempotency_key": f"capture-{metodo}-0001",
+        },
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["metodo"] == metodo
+    assert response.json()["captura"] == "provider_integrado"
+
+
+def test_cartao_generico_nao_e_aceito_em_novas_intencoes():
+    response = client.post(
+        "/auth/smartpos/payment-intents",
+        headers=headers(),
+        json={
+            "mesa_id": 4,
+            "valor": "10.00",
+            "metodo": "cartao",
+            "escopo": "valor",
+            "idempotency_key": "cartao-generico-0001",
         },
     )
     assert response.status_code == 422
