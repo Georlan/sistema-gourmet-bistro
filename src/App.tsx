@@ -1942,16 +1942,11 @@ export default function App() {
           {/* Logo / Header */}
           <div className="text-center space-y-3 mb-7">
             <div className="flex justify-center">
-              <div className="h-20 w-20 bg-koma-card border border-koma-border rounded-2xl flex items-center justify-center shadow-lg shrink-0 overflow-hidden p-2">
-                <KomaLogo size="xl" />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <span className="font-serif font-black tracking-[-0.03em] text-koma-foreground text-xl block">
-                KÔMA
-              </span>
+    <KomaLogo withText size="xl" />
+  </div>
+  <div className="space-y-1">
               <span className="text-[10px] font-sans font-semibold tracking-wide text-emerald-700 dark:text-emerald-400 block">
-                Se está com fome, Kôma
+                Se você está com fome, Kôma
               </span>
             </div>
             <p className="text-[10px] text-emerald-700 dark:text-emerald-400 uppercase tracking-widest font-sans font-bold bg-emerald-500/10 px-3 py-1 rounded-full w-fit mx-auto border border-emerald-500/15">
@@ -2117,7 +2112,7 @@ export default function App() {
                   <KomaLogo size="md" />
                   <div>
                     <span className={clsx('font-serif', 'font-bold', 'text-base', 'text-koma-foreground', 'leading-none', 'block')}>{restaurantName}</span>
-                    <span className="text-[9px] text-emerald-700 dark:text-emerald-400 font-sans font-medium block mt-0.5">Se está com fome, Kôma</span>
+                    <span className="text-[9px] text-emerald-700 dark:text-emerald-400 font-sans font-medium block mt-0.5">Se você está com fome, Kôma</span>
                   </div>
                 </div>
                 <button
