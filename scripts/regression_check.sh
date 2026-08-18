@@ -93,12 +93,13 @@ run_flow_test \
   "tests/test_critical_pdv_caixa_flow.py"
 
 run_flow_test \
-  "5. Autenticação, autorização e contexto SmartPOS" \
+  "5. Autenticação, autorização, contexto e stress da fundação SmartPOS" \
   "tests/test_critical_auth_flow.py" \
   "tests/test_auth_tenant_session_hardening.py" \
   "tests/test_authorization.py" \
   "tests/test_smartpos_stage3_context.py" \
-  "tests/test_smartpos_payment_intent_preview.py"
+  "tests/test_smartpos_payment_intent_preview.py" \
+  "tests/test_smartpos_macro0_foundation_stress.py"
 
 run_flow_test \
   "6. Arquitetura, layout e snapshot da impressão" \
