@@ -34,7 +34,8 @@ type Comanda = {
   itens: Item[];
 };
 
-type Metodo = 'dinheiro' | 'pix' | 'cartao';
+type Metodo = 'dinheiro' | 'pix' | 'debito' | 'credito' | 'voucher';
+type Captura = 'provider_integrado' | 'dinheiro_pendente';
 type Escopo = 'valor' | 'itens';
 type Step = 'valor' | 'metodo' | 'revisao' | 'pronto';
 
@@ -50,6 +51,27 @@ const money = (cents: number) => new Intl.NumberFormat('pt-BR', {
   style: 'currency',
   currency: 'BRL',
 }).format(Math.max(0, cents) / 100);
+
+const methodLabels: Record<Metodo, string> = {
+  dinheiro: 'Dinheiro',
+  pix: 'Pix',
+  debito: 'Débito',
+  credito: 'Crédito',
+  voucher: 'Voucher',
+};
+
+const captureByMethod: Record<Metodo, Captura> = {
+  dinheiro: 'dinheiro_pendente',
+  pix: 'provider_integrado',
+  debito: 'provider_integrado',
+  credito: 'provider_integrado',
+  voucher: 'provider_integrado',
+};
+
+const captureLabels: Record<Captura, string> = {
+  provider_integrado: 'Na maquininha',
+  dinheiro_pendente: 'Conferência no caixa',
+};
 
 const activeItems = (comandas: Comanda[]) => comandas.flatMap((comanda) =>
   (comanda.itens || []).filter((item) => item.status !== 'cancelado'),
@@ -91,6 +113,7 @@ export default function SmartPosPaymentFlow({
   const [method, setMethod] = useState<Metodo | null>(null);
   const [idempotencyKey, setIdempotencyKey] = useState('');
   const [intentId, setIntentId] = useState('');
+  const [captureMode, setCaptureMode] = useState<Captura | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -171,6 +194,7 @@ export default function SmartPosPaymentFlow({
         throw new Error(data?.detail || 'Não foi possível preparar o recebimento.');
       }
       setIntentId(String(data.id || ''));
+      setCaptureMode(data.captura === 'dinheiro_pendente' ? 'dinheiro_pendente' : 'provider_integrado');
       setStep('pronto');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Não foi possível preparar o recebimento.');
@@ -179,7 +203,8 @@ export default function SmartPosPaymentFlow({
     }
   };
 
-  const methodLabel = method === 'dinheiro' ? 'Dinheiro' : method === 'pix' ? 'Pix' : 'Cartão';
+  const methodLabel = method ? methodLabels[method] : '';
+  const expectedCapture = method ? captureByMethod[method] : null;
 
   if (step === 'pronto') {
     return (
@@ -194,7 +219,10 @@ export default function SmartPosPaymentFlow({
         <div className="mt-7 rounded-2xl border border-koma-border bg-koma-surface p-5">
           <p className="text-xs uppercase tracking-wide text-koma-muted">{mesa.nome || `Mesa ${mesa.id}`}</p>
           <p className="mt-2 text-3xl font-black">{money(amountCents)}</p>
-          <p className="mt-2 text-sm font-bold">{methodLabel}</p>
+          <div className="mt-4 grid gap-2 border-t border-koma-border pt-4 text-sm">
+            <div className="flex items-center justify-between gap-3"><span className="text-koma-muted">Forma</span><strong>{methodLabel}</strong></div>
+            {captureMode && <div className="flex items-center justify-between gap-3"><span className="text-koma-muted">Captura</span><strong>{captureLabels[captureMode]}</strong></div>}
+          </div>
           <p className="mt-5 border-t border-koma-border pt-4 text-xs text-koma-muted">Nenhuma cobrança ou baixa financeira foi realizada.</p>
           {intentId && <p className="mt-2 truncate font-mono text-[9px] text-koma-muted">{intentId}</p>}
         </div>
@@ -212,6 +240,7 @@ export default function SmartPosPaymentFlow({
           <div className="rounded-2xl border border-koma-border bg-koma-surface p-4">
             <div className="flex items-center justify-between gap-3 text-sm"><span className="text-koma-muted">Mesa</span><strong>{mesa.nome || `Mesa ${mesa.id}`}</strong></div>
             <div className="mt-3 flex items-center justify-between gap-3 text-sm"><span className="text-koma-muted">Forma</span><strong>{methodLabel}</strong></div>
+            {expectedCapture && <div className="mt-3 flex items-center justify-between gap-3 text-sm"><span className="text-koma-muted">Captura</span><strong>{captureLabels[expectedCapture]}</strong></div>}
             <div className="mt-3 flex items-center justify-between gap-3 text-sm"><span className="text-koma-muted">Escopo</span><strong>{scope === 'itens' ? `${selectedItemIds.length} item(ns)` : 'Por valor'}</strong></div>
           </div>
           {error && <p role="alert" className="rounded-xl border border-red-900/50 bg-red-950/30 px-3 py-2 text-xs text-red-300">{error}</p>}
@@ -227,19 +256,21 @@ export default function SmartPosPaymentFlow({
 
   if (step === 'metodo') {
     const methods = [
-      { id: 'dinheiro' as const, label: 'Dinheiro', icon: Banknote },
-      { id: 'pix' as const, label: 'Pix', icon: QrCode },
-      { id: 'cartao' as const, label: 'Cartão', icon: CreditCard },
+      { id: 'dinheiro' as const, label: 'Dinheiro', detail: 'Conferência no caixa', icon: Banknote },
+      { id: 'pix' as const, label: 'Pix', detail: 'Na maquininha', icon: QrCode },
+      { id: 'debito' as const, label: 'Débito', detail: 'Na maquininha', icon: CreditCard },
+      { id: 'credito' as const, label: 'Crédito', detail: 'Na maquininha', icon: CreditCard },
+      { id: 'voucher' as const, label: 'Voucher', detail: 'Na maquininha', icon: ReceiptText },
     ];
     return (
       <section className="pt-7">
         <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-koma-accent">Forma de pagamento</p>
         <h1 className="mt-2 text-3xl font-black tracking-[-0.04em]">{money(amountCents)}</h1>
         <div className="mt-6 grid gap-3">
-          {methods.map(({ id, label, icon: Icon }) => (
+          {methods.map(({ id, label, detail, icon: Icon }) => (
             <button key={id} type="button" onClick={() => chooseMethod(id)} className="flex min-h-20 items-center gap-4 rounded-2xl border border-koma-border bg-koma-surface px-4 text-left">
               <span className="flex size-11 items-center justify-center rounded-xl border border-koma-border bg-koma-page text-koma-accent"><Icon size={21} /></span>
-              <span className="flex-1 text-base font-black">{label}</span>
+              <span className="min-w-0 flex-1"><span className="block text-base font-black">{label}</span><span className="mt-1 block text-[10px] font-medium text-koma-muted">{detail}</span></span>
               <ChevronRight size={18} className="text-koma-muted" />
             </button>
           ))}
