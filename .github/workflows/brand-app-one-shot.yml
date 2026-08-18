@@ -1,0 +1,76 @@
+name: Koma Brand App One Shot
+
+on:
+  push:
+    branches:
+      - agent/brand-logo-slogan-standardization
+
+permissions:
+  contents: write
+
+jobs:
+  normalize-branding:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/brand-logo-slogan-standardization
+
+      - name: Normalize App branding
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          app = Path('src/App.tsx')
+          text = app.read_text(encoding='utf-8')
+
+          old_login = '''            <div className="flex justify-center">
+              <div className="h-20 w-20 bg-koma-card border border-koma-border rounded-2xl flex items-center justify-center shadow-lg shrink-0 overflow-hidden p-2">
+                <KomaLogo size="xl" />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <span className="font-serif font-black tracking-[-0.03em] text-koma-foreground text-xl block">
+                KÔMA
+              </span>
+          '''
+          new_login = '''            <div className="flex justify-center">
+              <KomaLogo withText size="xl" />
+            </div>
+            <div className="space-y-1">
+          '''
+
+          if old_login in text:
+              text = text.replace(old_login, new_login, 1)
+          elif '<KomaLogo withText size="xl" />' not in text:
+              raise SystemExit('Expected App login brand block was not found')
+
+          app.write_text(text, encoding='utf-8')
+
+          wrong = 'Se está com fome, Kôma'
+          correct = 'Se você está com fome, Kôma'
+          for path in Path('src').rglob('*'):
+              if path.suffix not in {'.ts', '.tsx', '.js', '.jsx', '.html'}:
+                  continue
+              source = path.read_text(encoding='utf-8')
+              if wrong in source:
+                  path.write_text(source.replace(wrong, correct), encoding='utf-8')
+          PY
+
+      - name: Commit normalization
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "Branding already normalized."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx src
+          git commit -m "fix(brand): normalize App logo and slogan [brand-one-shot]"
+          git push origin HEAD:agent/brand-logo-slogan-standardization
