@@ -1,0 +1,109 @@
+name: SmartPOS Foundation Stress
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'backend/app/database.py'
+      - 'backend/app/security.py'
+      - 'backend/app/routes/auth.py'
+      - 'backend/app/routes/websocket.py'
+      - 'backend/app/routes/smartpos.py'
+      - 'backend/app/smartpos_models.py'
+      - 'backend/app/services/capabilities.py'
+      - 'backend/alembic/**'
+      - 'backend/tests/test_smartpos_macro0_foundation_stress.py'
+      - 'scripts/smartpos_macro0_postgres_stress.py'
+      - '.github/workflows/smartpos-foundation-stress.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: smartpos-foundation-stress-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  postgres-stress:
+    name: PostgreSQL RLS + concurrency stress
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: koma_stress
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d koma_stress"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      ENVIRONMENT: test
+      SECRET_KEY: smartpos_foundation_stress_secret_key_only_for_ci_123456
+      ENCRYPTION_KEY: jW-j311rF_qj0Fh_77R-2n1B-Q0v4sK9M1S2T3U4V5o=
+      SENTRY_DSN: ''
+      SUPABASE_URL: ''
+      SUPABASE_SERVICE_ROLE_KEY: ''
+      MIGRATION_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/koma_stress
+      KOMA_STRESS_DB_NAME: koma_stress
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+
+      - name: Install backend dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r backend/requirements-dev.txt
+
+      - name: Apply full PostgreSQL migrations as owner
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/koma_stress
+        working-directory: backend
+        run: python -m alembic -c alembic.ini upgrade head
+
+      - name: Provision restricted runtime role
+        run: |
+          python - <<'PY'
+          import os
+          from sqlalchemy import create_engine
+
+          engine = create_engine(
+              os.environ['MIGRATION_DATABASE_URL'],
+              isolation_level='AUTOCOMMIT',
+          )
+          with engine.connect() as connection:
+              connection.exec_driver_sql('DROP ROLE IF EXISTS koma_runtime')
+              connection.exec_driver_sql(
+                  "CREATE ROLE koma_runtime LOGIN PASSWORD 'runtime_stress' "
+                  "NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS INHERIT"
+              )
+              connection.exec_driver_sql('GRANT koma_app TO koma_runtime')
+          engine.dispose()
+          PY
+
+      - name: Run concurrent SmartPOS foundation stress
+        env:
+          DATABASE_URL: postgresql://koma_runtime:runtime_stress@localhost:5432/koma_stress
+          DB_POOL_SIZE: '5'
+          DB_MAX_OVERFLOW: '5'
+          DB_POOL_TIMEOUT: '5'
+          DB_POOL_RECYCLE: '300'
+          STRICT_RLS_ROLE_CHECK: 'true'
+        run: python scripts/smartpos_macro0_postgres_stress.py
