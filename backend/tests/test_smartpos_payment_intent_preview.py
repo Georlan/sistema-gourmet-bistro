@@ -236,6 +236,26 @@ def test_idempotencia_retorna_mesma_intencao_e_rejeita_payload_diferente():
     assert conflict.status_code == 409
 
 
+def test_idempotencia_considera_modo_de_captura():
+    payload = {
+        "mesa_id": 4,
+        "valor": "10.00",
+        "metodo": "debito",
+        "captura": "provider_integrado",
+        "escopo": "valor",
+        "idempotency_key": "smartpos-capture-idem-01",
+    }
+    first = client.post("/auth/smartpos/payment-intents", headers=headers(), json=payload)
+    assert first.status_code == 201, first.text
+
+    conflict = client.post(
+        "/auth/smartpos/payment-intents",
+        headers=headers(),
+        json={**payload, "captura": "registro_externo"},
+    )
+    assert conflict.status_code == 409
+
+
 def test_escopo_itens_exige_valor_exato_e_itens_da_mesa():
     ok = client.post(
         "/auth/smartpos/payment-intents",
@@ -284,7 +304,7 @@ def test_intent_rejeita_valor_acima_do_saldo():
 
 
 @pytest.mark.parametrize("metodo", ["pix", "debito", "credito", "voucher"])
-def test_metodos_digitais_derivam_captura_integrada(metodo):
+def test_metodos_digitais_usam_integracao_por_padrao(metodo):
     response = client.post(
         "/auth/smartpos/payment-intents",
         headers=headers(),
@@ -293,12 +313,72 @@ def test_metodos_digitais_derivam_captura_integrada(metodo):
             "valor": "10.00",
             "metodo": metodo,
             "escopo": "valor",
-            "idempotency_key": f"capture-{metodo}-0001",
+            "idempotency_key": f"capture-{metodo}-integrado",
         },
     )
     assert response.status_code == 201, response.text
     assert response.json()["metodo"] == metodo
     assert response.json()["captura"] == "provider_integrado"
+
+
+@pytest.mark.parametrize("metodo", ["pix", "debito", "credito", "voucher"])
+def test_metodos_digitais_aceitam_registro_em_outra_maquininha(metodo):
+    response = client.post(
+        "/auth/smartpos/payment-intents",
+        headers=headers(),
+        json={
+            "mesa_id": 4,
+            "valor": "10.00",
+            "metodo": metodo,
+            "captura": "registro_externo",
+            "escopo": "valor",
+            "idempotency_key": f"capture-{metodo}-externo",
+        },
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["metodo"] == metodo
+    assert response.json()["captura"] == "registro_externo"
+
+    token = current_restaurante_id.set(RESTAURANTE_ID)
+    db = SessionLocal()
+    try:
+        assert db.query(Pagamento).filter(Pagamento.restaurante_id == RESTAURANTE_ID).count() == 0
+        comanda = db.query(Comanda).filter(Comanda.id == "cmd-smartpos-intent").one()
+        assert Decimal(str(comanda.valor_pago)) == Decimal("0")
+        assert comanda.fechada is False
+    finally:
+        db.close()
+        current_restaurante_id.reset(token)
+
+
+def test_dinheiro_deriva_captura_manual_e_rejeita_captura_forcada():
+    ok = client.post(
+        "/auth/smartpos/payment-intents",
+        headers=headers(),
+        json={
+            "mesa_id": 4,
+            "valor": "10.00",
+            "metodo": "dinheiro",
+            "escopo": "valor",
+            "idempotency_key": "dinheiro-pendente-0001",
+        },
+    )
+    assert ok.status_code == 201, ok.text
+    assert ok.json()["captura"] == "dinheiro_pendente"
+
+    invalid = client.post(
+        "/auth/smartpos/payment-intents",
+        headers=headers(),
+        json={
+            "mesa_id": 4,
+            "valor": "10.00",
+            "metodo": "dinheiro",
+            "captura": "registro_externo",
+            "escopo": "valor",
+            "idempotency_key": "dinheiro-externo-0001",
+        },
+    )
+    assert invalid.status_code == 422
 
 
 def test_cartao_generico_nao_e_aceito_em_novas_intencoes():
@@ -314,3 +394,34 @@ def test_cartao_generico_nao_e_aceito_em_novas_intencoes():
         },
     )
     assert response.status_code == 422
+
+
+def test_schema_mantem_leitura_de_cartao_legado():
+    token = current_restaurante_id.set(RESTAURANTE_ID)
+    db = SessionLocal()
+    try:
+        turno = db.query(CaixaTurno).filter(
+            CaixaTurno.restaurante_id == RESTAURANTE_ID,
+            CaixaTurno.status == "aberto",
+        ).one()
+        legacy = SmartPosPaymentIntent(
+            restaurante_id=RESTAURANTE_ID,
+            turno_id=turno.id,
+            mesa_id=4,
+            operador_id=USER_ID,
+            valor=Decimal("5.00"),
+            metodo="cartao",
+            captura="provider_integrado",
+            escopo="valor",
+            idempotency_key="legacy-cartao-0001",
+            status="criada",
+            origem="smartpos",
+        )
+        db.add(legacy)
+        db.commit()
+        db.refresh(legacy)
+        assert legacy.metodo == "cartao"
+        assert legacy.captura == "provider_integrado"
+    finally:
+        db.close()
+        current_restaurante_id.reset(token)
