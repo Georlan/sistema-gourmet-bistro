@@ -44,6 +44,10 @@ def upgrade() -> None:
     op.execute(
         "UPDATE smartpos_payment_intents SET status_em = criado_em WHERE criado_em IS NOT NULL"
     )
+    op.execute(
+        "UPDATE smartpos_payment_intents SET status = 'pendente' "
+        "WHERE status = 'criada' AND captura IN ('dinheiro_pendente', 'registro_externo')"
+    )
 
     with op.batch_alter_table("smartpos_payment_intents") as batch_op:
         batch_op.alter_column("status_em", server_default=None)
