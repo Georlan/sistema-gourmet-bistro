@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { KOMA_SLOGAN, KOMA_WORDMARK_SRC } from '../../brand/komaBrand';
+import { KomaLogo } from '../../components/KomaLogo';
 import { KOMA_LANDING_CONFIG } from '../config/landingConfig';
 import { WhatsAppIcon } from '../components/WhatsAppIcon';
 import { LeadCaptureModal } from '../components/LeadCaptureModal';
@@ -52,7 +53,7 @@ export function FinalCTA() {
 
       <footer className="koma-footer" role="contentinfo">
         <a href="/landing" aria-label="Kôma, início" className="koma-footer-brand">
-          <img src={KOMA_WORDMARK_SRC} alt="" />
+          <KomaLogo size="md" variant="dark" />
           <span>{KOMA_SLOGAN}</span>
         </a>
         <span>© {new Date().getFullYear()} KÔMA. TODOS OS DIREITOS RESERVADOS.</span>
