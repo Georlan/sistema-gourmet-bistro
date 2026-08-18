@@ -33,6 +33,7 @@ RESERVED_CLAIMS = {"sub", "exp", "restaurante_id", "role"}
 # permissão de negócio, em vez de repetir listas de cargos localmente.
 PERMISSION_ROLES = MappingProxyType({
     "caixa:operar": frozenset({"admin", "gerente", "caixa"}),
+    "smartpos:receber": frozenset({"garcom", "caixa", "gerente"}),
     "equipe:administrar": frozenset({"admin", "gerente", "caixa"}),
     "estoque:consultar": frozenset({"admin", "gerente", "caixa"}),
     "estoque:administrar": frozenset({"admin", "gerente", "caixa"}),

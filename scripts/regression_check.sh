@@ -97,7 +97,8 @@ run_flow_test \
   "tests/test_critical_auth_flow.py" \
   "tests/test_auth_tenant_session_hardening.py" \
   "tests/test_authorization.py" \
-  "tests/test_smartpos_stage3_context.py"
+  "tests/test_smartpos_stage3_context.py" \
+  "tests/test_smartpos_payment_intent_preview.py"
 
 run_flow_test \
   "6. Arquitetura, layout e snapshot da impressão" \

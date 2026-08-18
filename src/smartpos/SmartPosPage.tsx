@@ -3,7 +3,6 @@ import {
   ArrowLeft,
   CheckCircle2,
   ChevronRight,
-  CreditCard,
   Loader2,
   LockKeyhole,
   LogOut,
@@ -17,6 +16,7 @@ import {
 import { KomaLogo } from '../components/KomaLogo';
 import { API_BASE_URL, WS_BASE_URL } from '../config/api';
 import SmartPosOrderingFlow from './SmartPosOrderingFlow';
+import SmartPosPaymentFlow from './SmartPosPaymentFlow';
 import {
   clearSmartPosSession,
   getSmartPosSession,
@@ -72,7 +72,7 @@ type Comanda = {
   itens: Item[];
 };
 
-type Screen = 'home' | 'mesas' | 'mesa' | 'pedido' | 'venda-rapida';
+type Screen = 'home' | 'mesas' | 'mesa' | 'pedido' | 'receber' | 'venda-rapida';
 
 function roleLabel(role: SmartPosRole) {
   if (role === 'garcom') return 'Garçom';
@@ -408,7 +408,7 @@ export default function SmartPosPage() {
       setScreen('mesas');
       return;
     }
-    if (screen === 'pedido') {
+    if (screen === 'pedido' || screen === 'receber') {
       setScreen('mesa');
       return;
     }
@@ -499,6 +499,23 @@ export default function SmartPosPage() {
     );
   }
 
+  if (screen === 'receber' && selectedMesa) {
+    return (
+      <main className="min-h-dvh bg-koma-page text-koma-foreground">
+        <div className="mx-auto min-h-dvh w-full max-w-md px-4 pb-8 pt-4 sm:px-6">
+          <Header />
+          <SmartPosPaymentFlow
+            session={session}
+            mesa={selectedMesa}
+            comandas={selectedComandas}
+            onBack={() => setScreen('mesa')}
+            onSessionInvalid={handleLogout}
+          />
+        </div>
+      </main>
+    );
+  }
+
   if (screen === 'mesa' && selectedMesa) {
     return (
       <main className="min-h-dvh bg-koma-page text-koma-foreground">
@@ -533,7 +550,7 @@ export default function SmartPosPage() {
               ))}
             </div>
 
-            <button type="button" disabled className="mt-5 flex min-h-14 w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-surface px-4 text-sm font-black text-koma-muted opacity-60"><CreditCard size={18} /> Receber <span className="rounded-full border border-koma-border px-2 py-0.5 text-[9px] uppercase tracking-wide">Em breve</span></button>
+            <button type="button" onClick={() => setScreen('receber')} disabled={!context?.turno_aberto || selectedBalance <= 0} className="mt-5 flex min-h-14 w-full items-center justify-center gap-2 rounded-xl border border-koma-accent bg-koma-surface px-4 text-sm font-black text-koma-accent disabled:cursor-not-allowed disabled:border-koma-border disabled:text-koma-muted disabled:opacity-60">Receber</button>
           </section>
         </div>
       </main>
