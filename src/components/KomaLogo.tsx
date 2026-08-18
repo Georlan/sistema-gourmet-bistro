@@ -60,10 +60,14 @@ export const KomaLogo: React.FC<KomaLogoProps> = ({
 
     let typedBrandNode: HTMLElement | null = null;
     let logoWrap: HTMLElement | null = null;
+    let cashierBrandCopy: HTMLElement | null = null;
+    let cashierSloganNode: HTMLElement | null = null;
 
     const cashierBrand = root.closest('.cashier-sidebar__brand') as HTMLElement | null;
     if (cashierBrand) {
-      typedBrandNode = cashierBrand.querySelector('.cashier-sidebar__brand-copy strong') as HTMLElement | null;
+      cashierBrandCopy = cashierBrand.querySelector('.cashier-sidebar__brand-copy') as HTMLElement | null;
+      typedBrandNode = cashierBrandCopy?.querySelector('strong') as HTMLElement | null;
+      cashierSloganNode = cashierBrandCopy?.querySelector('small') as HTMLElement | null;
       logoWrap = root.closest('.cashier-sidebar__logo-wrap') as HTMLElement | null;
     } else {
       const row = root.parentElement;
@@ -93,12 +97,55 @@ export const KomaLogo: React.FC<KomaLogoProps> = ({
         background: logoWrap.style.background,
         overflow: logoWrap.style.overflow,
       };
-      logoWrap.style.width = size === 'sm' ? '5rem' : size === 'md' ? '6rem' : '7rem';
+      logoWrap.style.width = size === 'sm' ? '5rem' : size === 'md' ? '8rem' : '8.5rem';
       logoWrap.style.height = 'auto';
       logoWrap.style.border = '0';
       logoWrap.style.borderRadius = '0';
       logoWrap.style.background = 'transparent';
       logoWrap.style.overflow = 'visible';
+    }
+
+    let previousCashierBrandStyles: Record<string, string> | null = null;
+    let previousBrandCopyStyles: Record<string, string> | null = null;
+    let previousSloganStyles: Record<string, string> | null = null;
+
+    if (cashierBrand) {
+      previousCashierBrandStyles = {
+        flexDirection: cashierBrand.style.flexDirection,
+        alignItems: cashierBrand.style.alignItems,
+        gap: cashierBrand.style.gap,
+        maxWidth: cashierBrand.style.maxWidth,
+      };
+      cashierBrand.style.flexDirection = 'column';
+      cashierBrand.style.alignItems = 'flex-start';
+      cashierBrand.style.gap = '0.2rem';
+      cashierBrand.style.maxWidth = '9.5rem';
+    }
+
+    if (cashierBrandCopy) {
+      previousBrandCopyStyles = {
+        width: cashierBrandCopy.style.width,
+        gap: cashierBrandCopy.style.gap,
+      };
+      cashierBrandCopy.style.width = '100%';
+      cashierBrandCopy.style.gap = '0';
+    }
+
+    if (cashierSloganNode) {
+      previousSloganStyles = {
+        display: cashierSloganNode.style.display,
+        width: cashierSloganNode.style.width,
+        whiteSpace: cashierSloganNode.style.whiteSpace,
+        overflow: cashierSloganNode.style.overflow,
+        textOverflow: cashierSloganNode.style.textOverflow,
+        lineHeight: cashierSloganNode.style.lineHeight,
+      };
+      cashierSloganNode.style.display = 'block';
+      cashierSloganNode.style.width = '100%';
+      cashierSloganNode.style.whiteSpace = 'normal';
+      cashierSloganNode.style.overflow = 'visible';
+      cashierSloganNode.style.textOverflow = 'clip';
+      cashierSloganNode.style.lineHeight = '1.2';
     }
 
     return () => {
@@ -110,6 +157,24 @@ export const KomaLogo: React.FC<KomaLogoProps> = ({
         logoWrap.style.borderRadius = previousWrapStyles.borderRadius;
         logoWrap.style.background = previousWrapStyles.background;
         logoWrap.style.overflow = previousWrapStyles.overflow;
+      }
+      if (cashierBrand && previousCashierBrandStyles) {
+        cashierBrand.style.flexDirection = previousCashierBrandStyles.flexDirection;
+        cashierBrand.style.alignItems = previousCashierBrandStyles.alignItems;
+        cashierBrand.style.gap = previousCashierBrandStyles.gap;
+        cashierBrand.style.maxWidth = previousCashierBrandStyles.maxWidth;
+      }
+      if (cashierBrandCopy && previousBrandCopyStyles) {
+        cashierBrandCopy.style.width = previousBrandCopyStyles.width;
+        cashierBrandCopy.style.gap = previousBrandCopyStyles.gap;
+      }
+      if (cashierSloganNode && previousSloganStyles) {
+        cashierSloganNode.style.display = previousSloganStyles.display;
+        cashierSloganNode.style.width = previousSloganStyles.width;
+        cashierSloganNode.style.whiteSpace = previousSloganStyles.whiteSpace;
+        cashierSloganNode.style.overflow = previousSloganStyles.overflow;
+        cashierSloganNode.style.textOverflow = previousSloganStyles.textOverflow;
+        cashierSloganNode.style.lineHeight = previousSloganStyles.lineHeight;
       }
     };
   });
