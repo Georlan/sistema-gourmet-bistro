@@ -84,10 +84,14 @@ export const KomaLogo: React.FC<KomaLogoProps> = ({
   }
 
   return (
-    <div className={clsx('inline-flex flex-col items-start justify-center', className)}>
+    <div
+      data-koma-logo="wordmark"
+      className={clsx('inline-flex flex-col items-start justify-center', className)}
+    >
       <img
         src={KOMA_WORDMARK_SRC}
         alt={alt}
+        draggable={false}
         className={clsx(wordmarkSizeClass, 'object-contain shrink-0', imageClassName)}
       />
       {withSlogan && (
