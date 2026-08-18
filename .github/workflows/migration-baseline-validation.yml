@@ -1,0 +1,355 @@
+name: Koma Migration Baseline Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  migration-baseline:
+    name: PostgreSQL clean install + upgrade path
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      ENVIRONMENT: test
+      SECRET_KEY: b1-migration-validation-secret
+      ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+
+      - name: Install backend test dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r backend/requirements-dev.txt
+
+      - name: Create isolated Supabase-compatible PostgreSQL databases
+        run: |
+          python - <<'PY'
+          import psycopg2
+
+          conn = psycopg2.connect(
+              host="127.0.0.1",
+              port=5432,
+              dbname="postgres",
+              user="postgres",
+              password="postgres",
+          )
+          conn.autocommit = True
+          try:
+              with conn.cursor() as cur:
+                  for role in ("anon", "authenticated", "service_role"):
+                      cur.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", (role,))
+                      if cur.fetchone() is None:
+                          cur.execute(f'CREATE ROLE "{role}" NOLOGIN')
+
+                  for name in ("koma_clean", "koma_upgrade"):
+                      cur.execute(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
+                      cur.execute(f'CREATE DATABASE "{name}"')
+          finally:
+              conn.close()
+          PY
+
+      - name: B1.2 - migrate an empty PostgreSQL database to head
+        env:
+          DATABASE_URL: postgresql+psycopg2://postgres:postgres@127.0.0.1:5432/koma_clean
+          MIGRATION_DATABASE_URL: postgresql+psycopg2://postgres:postgres@127.0.0.1:5432/koma_clean
+        run: |
+          cd backend
+          python -m alembic -c alembic.ini upgrade head
+          python -m alembic -c alembic.ini current
+          python - <<'PY'
+          import os
+          from sqlalchemy import create_engine, inspect, text
+          from app.database import Base
+          from app import models  # noqa: F401
+          from app import smartpos_models  # noqa: F401
+          from app import financial_cash_constraints  # noqa: F401
+
+          engine = create_engine(os.environ["DATABASE_URL"])
+          with engine.connect() as conn:
+              version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+              assert version == "b7d4c9e2f1a0", version
+
+              inspector = inspect(conn)
+              db_tables = set(inspector.get_table_names(schema="public"))
+              declared_tables = {table.name for table in Base.metadata.sorted_tables}
+              missing_tables = sorted(declared_tables - db_tables)
+              assert not missing_tables, f"ORM tables missing after clean migration: {missing_tables}"
+
+              missing_columns = {}
+              for table in Base.metadata.sorted_tables:
+                  db_columns = {
+                      column["name"]
+                      for column in inspector.get_columns(table.name, schema="public")
+                  }
+                  declared_columns = {column.name for column in table.columns}
+                  missing = sorted(declared_columns - db_columns)
+                  if missing:
+                      missing_columns[table.name] = missing
+
+              assert not missing_columns, f"ORM columns missing after clean migration: {missing_columns}"
+              assert "smartpos_payment_intents" in db_tables
+
+              user_columns = {
+                  column["name"]: column
+                  for column in inspector.get_columns("usuarios", schema="public")
+              }
+              for legacy in ("usuario", "role"):
+                  if legacy in user_columns:
+                      assert user_columns[legacy]["nullable"] is True, (
+                          f"legacy usuarios.{legacy} still blocks current ORM inserts"
+                      )
+
+              print(
+                  f"B1.2 OK: revision={version}; tables={len(db_tables)}; "
+                  f"orm_tables={len(declared_tables)}; missing_columns=0"
+              )
+          engine.dispose()
+          PY
+
+      - name: B1.3 - create representative data on previous SmartPOS head
+        env:
+          DATABASE_URL: postgresql+psycopg2://postgres:postgres@127.0.0.1:5432/koma_upgrade
+          MIGRATION_DATABASE_URL: postgresql+psycopg2://postgres:postgres@127.0.0.1:5432/koma_upgrade
+        run: |
+          cd backend
+          python -m alembic -c alembic.ini upgrade 9f6e4b2c1a30
+          python - <<'PY'
+          from sqlalchemy import text
+          from app.database import SessionLocal, current_restaurante_id
+          from app.models import (
+              CaixaTurno,
+              Categoria,
+              Comanda,
+              Item,
+              Lancamento,
+              Mesa,
+              Produto,
+              Restaurante,
+          )
+          from app.smartpos_models import RestauranteCapability
+
+          rid = 9901
+          uid = "b1-upgrade-operator"
+          token = current_restaurante_id.set(rid)
+          db = SessionLocal()
+          try:
+              db.add(Restaurante(id=rid, nome="B1 Upgrade Restaurant", plano="pocket"))
+              db.flush()
+
+              # Simula um usuário realmente existente no schema anterior: os
+              # campos legados usuario/role ainda eram NOT NULL nesse head.
+              db.execute(text("""
+                  INSERT INTO usuarios (
+                      id, restaurante_id, nome, usuario, senha_hash, role,
+                      email, cargo, status, created_at
+                  ) VALUES (
+                      :id, :rid, :nome, :usuario, :senha_hash, :role,
+                      :email, :cargo, :status, CURRENT_TIMESTAMP
+                  )
+              """), {
+                  "id": uid,
+                  "rid": rid,
+                  "nome": "B1 Operator",
+                  "usuario": "b1-upgrade@koma.test",
+                  "senha_hash": "$2b$12$dummyhashb1upgrade",
+                  "role": "garcom",
+                  "email": "b1-upgrade@koma.test",
+                  "cargo": "garcom",
+                  "status": "ativo",
+              })
+              db.flush()
+
+              db.add(RestauranteCapability(
+                  restaurante_id=rid,
+                  capability="smartpos",
+                  enabled=True,
+                  source="beta",
+              ))
+              db.add(Categoria(id="cat-b1", restaurante_id=rid, nome="B1"))
+              db.flush()
+              db.add(Produto(
+                  id="prod-b1",
+                  restaurante_id=rid,
+                  categoria_id="cat-b1",
+                  nome="Produto B1",
+                  preco=42,
+                  ativo=True,
+              ))
+              db.flush()
+              db.add(Mesa(id=91, restaurante_id=rid, capacidade=4, nome="Mesa 91"))
+              db.flush()
+              turno = CaixaTurno(
+                  restaurante_id=rid,
+                  aberto_por_id=uid,
+                  saldo_inicial=0,
+                  status="aberto",
+              )
+              db.add(turno)
+              db.flush()
+              comanda = Comanda(
+                  id="cmd-b1-upgrade",
+                  restaurante_id=rid,
+                  mesa_id=91,
+                  garcom_id=uid,
+                  tipo="Consumo no Local",
+                  numero_pedido=9901,
+                  valor_pago=0,
+                  fechada=False,
+              )
+              db.add(comanda)
+              db.flush()
+              lancamento = Lancamento(
+                  id="lan-b1-upgrade",
+                  restaurante_id=rid,
+                  comanda_id=comanda.id,
+                  garcom_id=uid,
+              )
+              db.add(lancamento)
+              db.flush()
+              db.add(Item(
+                  id="item-b1-upgrade",
+                  restaurante_id=rid,
+                  comanda_id=comanda.id,
+                  lancamento_id=lancamento.id,
+                  produto_id="prod-b1",
+                  preco_unit=42,
+                  status="pronto",
+                  pago=False,
+              ))
+              db.commit()
+              print(f"Legacy fixture created: restaurante={rid}; turno={turno.id}")
+          finally:
+              db.close()
+              current_restaurante_id.reset(token)
+          PY
+
+      - name: B1.3 - upgrade populated database to current head and preserve data
+        env:
+          DATABASE_URL: postgresql+psycopg2://postgres:postgres@127.0.0.1:5432/koma_upgrade
+          MIGRATION_DATABASE_URL: postgresql+psycopg2://postgres:postgres@127.0.0.1:5432/koma_upgrade
+        run: |
+          cd backend
+          python -m alembic -c alembic.ini upgrade head
+          python - <<'PY'
+          import os
+          from sqlalchemy import create_engine, inspect, text
+          from app.database import SessionLocal, current_restaurante_id
+          from app.models import Usuario
+
+          engine = create_engine(os.environ["DATABASE_URL"])
+          with engine.connect() as conn:
+              version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+              assert version == "b7d4c9e2f1a0", version
+              assert inspect(conn).has_table("smartpos_payment_intents")
+
+              checks = {
+                  "restaurantes": "SELECT COUNT(*) FROM restaurantes WHERE id = 9901",
+                  "usuarios": "SELECT COUNT(*) FROM usuarios WHERE id = 'b1-upgrade-operator'",
+                  "mesas": "SELECT COUNT(*) FROM mesas WHERE restaurante_id = 9901 AND id = 91",
+                  "comandas": "SELECT COUNT(*) FROM comandas WHERE restaurante_id = 9901 AND id = 'cmd-b1-upgrade'",
+                  "lancamentos": "SELECT COUNT(*) FROM lancamentos WHERE restaurante_id = 9901 AND id = 'lan-b1-upgrade'",
+                  "itens": "SELECT COUNT(*) FROM itens WHERE restaurante_id = 9901 AND id = 'item-b1-upgrade'",
+              }
+              for label, sql in checks.items():
+                  count = conn.execute(text(sql)).scalar_one()
+                  assert count == 1, f"{label} not preserved: {count}"
+
+              intents = conn.execute(text(
+                  "SELECT COUNT(*) FROM smartpos_payment_intents WHERE restaurante_id = 9901"
+              )).scalar_one()
+              assert intents == 0
+          engine.dispose()
+
+          # Prova que, depois do upgrade, o ORM atual consegue criar um usuário
+          # sem escrever os campos legados usuario/role.
+          token = current_restaurante_id.set(9901)
+          db = SessionLocal()
+          try:
+              db.add(Usuario(
+                  id="b1-current-operator",
+                  nome="B1 Current Operator",
+                  email="b1-current@koma.test",
+                  senha_hash="$2b$12$dummyhashb1current",
+                  cargo="garcom",
+                  status="ativo",
+                  restaurante_id=9901,
+              ))
+              db.commit()
+          finally:
+              db.close()
+              current_restaurante_id.reset(token)
+
+          engine = create_engine(os.environ["DATABASE_URL"])
+          with engine.connect() as conn:
+              row = conn.execute(text("""
+                  SELECT usuario, role
+                  FROM usuarios
+                  WHERE id = 'b1-current-operator'
+              """)).one()
+              assert row.usuario is None
+              assert row.role is None
+              print("B1.3 OK: legacy data preserved and current ORM insert accepted")
+          engine.dispose()
+          PY
+
+      - name: B1.3.1 - latest migration downgrade and re-upgrade round trip
+        env:
+          DATABASE_URL: postgresql+psycopg2://postgres:postgres@127.0.0.1:5432/koma_upgrade
+          MIGRATION_DATABASE_URL: postgresql+psycopg2://postgres:postgres@127.0.0.1:5432/koma_upgrade
+        run: |
+          cd backend
+          python -m alembic -c alembic.ini downgrade 9f6e4b2c1a30
+          python - <<'PY'
+          import os
+          from sqlalchemy import create_engine, inspect, text
+          engine = create_engine(os.environ["DATABASE_URL"])
+          with engine.connect() as conn:
+              assert not inspect(conn).has_table("smartpos_payment_intents")
+              assert conn.execute(text("SELECT COUNT(*) FROM comandas WHERE id = 'cmd-b1-upgrade'")).scalar_one() == 1
+              current = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+              assert current == "9f6e4b2c1a30", current
+          engine.dispose()
+          PY
+          python -m alembic -c alembic.ini upgrade head
+          python - <<'PY'
+          import os
+          from sqlalchemy import create_engine, inspect, text
+          engine = create_engine(os.environ["DATABASE_URL"])
+          with engine.connect() as conn:
+              assert inspect(conn).has_table("smartpos_payment_intents")
+              assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "b7d4c9e2f1a0"
+              assert conn.execute(text("SELECT COUNT(*) FROM comandas WHERE id = 'cmd-b1-upgrade'")).scalar_one() == 1
+              assert conn.execute(text("SELECT COUNT(*) FROM usuarios WHERE id = 'b1-current-operator'")).scalar_one() == 1
+              print("B1.3.1 OK: downgrade/re-upgrade round trip preserved legacy and current data")
+          engine.dispose()
+          PY

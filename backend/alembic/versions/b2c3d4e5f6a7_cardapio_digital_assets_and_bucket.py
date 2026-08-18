@@ -35,8 +35,17 @@ def upgrade() -> None:
         if 'cardapio_banner_path' not in config_cols:
             op.add_column('configuracoes_restaurante', sa.Column('cardapio_banner_path', sa.String(), nullable=True))
 
-    # 2. PostgreSQL Storage setup
-    if conn.dialect.name == "postgresql":
+    # 2. Supabase Storage setup.
+    # Um PostgreSQL comum não possui o schema `storage`; isso não deve impedir
+    # as migrations do schema principal do Kôma. Quando executado no Supabase,
+    # as tabelas `storage.buckets` e `storage.objects` existem e a configuração
+    # continua sendo aplicada normalmente.
+    storage_available = (
+        conn.dialect.name == "postgresql"
+        and inspector.has_table("buckets", schema="storage")
+        and inspector.has_table("objects", schema="storage")
+    )
+    if storage_available:
         # Upsert bucket in storage.buckets (5 MB limit, png/jpeg/jpg/webp allowed)
         op.execute("""
             INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
@@ -59,6 +68,8 @@ def upgrade() -> None:
         op.execute("DROP POLICY IF EXISTS cardapio_assets_tenant_insert ON storage.objects;")
         op.execute("DROP POLICY IF EXISTS cardapio_assets_tenant_update ON storage.objects;")
         op.execute("DROP POLICY IF EXISTS cardapio_assets_tenant_delete ON storage.objects;")
+    elif conn.dialect.name == "postgresql":
+        print("ℹ️ Supabase Storage indisponível; mantendo apenas o schema principal do Kôma.")
 
 
 def downgrade() -> None:
