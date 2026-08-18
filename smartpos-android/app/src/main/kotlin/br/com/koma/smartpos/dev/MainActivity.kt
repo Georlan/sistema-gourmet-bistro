@@ -15,39 +15,61 @@ import android.widget.TextView
 import br.com.koma.smartpos.bridge.FakeTerminalPaymentBridge
 import br.com.koma.smartpos.bridge.FileOperationStore
 import br.com.koma.smartpos.bridge.JdkHttpTransport
+import br.com.koma.smartpos.bridge.KomaSmartPosSessionApi
 import br.com.koma.smartpos.bridge.KomaTerminalBackendApi
 import br.com.koma.smartpos.bridge.PaymentOutcome
+import br.com.koma.smartpos.bridge.PendingProviderIntent
+import br.com.koma.smartpos.bridge.SmartPosContext
+import br.com.koma.smartpos.bridge.StableOperationKey
 import br.com.koma.smartpos.bridge.TerminalCoordinator
 import br.com.koma.smartpos.bridge.TerminalPaymentResult
 import br.com.koma.smartpos.bridge.TerminalRuntime
 import java.io.File
-import java.util.UUID
 import java.util.concurrent.Executors
 
 class MainActivity : Activity() {
+    companion object {
+        private const val DEFAULT_API = "https://sistema-gourmet-bistro-production.up.railway.app"
+        private const val PROVIDER = "pagbank"
+    }
+
     private val executor = Executors.newSingleThreadExecutor()
     private lateinit var bridge: FakeTerminalPaymentBridge
     private lateinit var operationStore: FileOperationStore
+    private val terminalId: String by lazy { defaultTerminalId() }
 
+    @Volatile private var sessionToken: String? = null
+    private var transport: JdkHttpTransport? = null
+    private var sessionApi: KomaSmartPosSessionApi? = null
+    private var context: SmartPosContext? = null
+    private var pendingIntents: List<PendingProviderIntent> = emptyList()
+
+    private lateinit var loginSection: LinearLayout
+    private lateinit var operationSection: LinearLayout
     private lateinit var backendUrl: EditText
-    private lateinit var bearerToken: EditText
-    private lateinit var intentId: EditText
-    private lateinit var terminalId: EditText
-    private lateinit var operationKey: EditText
+    private lateinit var username: EditText
+    private lateinit var password: EditText
+    private lateinit var restauranteId: EditText
+    private lateinit var loginButton: Button
+    private lateinit var sessionInfo: TextView
+    private lateinit var intentsSpinner: Spinner
+    private lateinit var refreshButton: Button
     private lateinit var outcome: Spinner
     private lateinit var runButton: Button
+    private lateinit var logoutButton: Button
     private lateinit var status: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         bridge = FakeTerminalPaymentBridge()
         operationStore = FileOperationStore(File(filesDir, "smartpos-operations.tsv").toPath())
         setContentView(buildContent())
+        showLoggedOut()
     }
 
     override fun onDestroy() {
         executor.shutdownNow()
+        sessionToken = null
         super.onDestroy()
     }
 
@@ -58,35 +80,53 @@ class MainActivity : Activity() {
         }
 
         content.addView(TextView(this).apply {
-            text = "Kôma SmartPOS · Terminal Dev"
-            textSize = 24f
+            text = "Kôma SmartPOS"
+            textSize = 26f
         })
         content.addView(TextView(this).apply {
-            text = "FakeBridge — nenhuma cobrança real é executada."
-            textSize = 14f
-            setPadding(0, dp(4), 0, dp(16))
+            text = "Terminal DEV · FakeBridge · nenhuma cobrança real"
+            textSize = 13f
+            setPadding(0, dp(4), 0, dp(14))
         })
 
-        backendUrl = field("Backend URL", "https://")
-        bearerToken = field("Bearer token (não é salvo)", "").apply {
+        loginSection = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        backendUrl = field("API do Kôma", DEFAULT_API)
+        username = field("E-mail ou telefone", "")
+        password = field("Senha", "").apply {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
         }
-        intentId = field("PaymentIntent ID", "")
-        terminalId = field("Terminal ID", defaultTerminalId())
-        operationKey = field("Operation key", UUID.randomUUID().toString())
+        restauranteId = field("ID do estabelecimento (somente se solicitado)", "").apply {
+            inputType = InputType.TYPE_CLASS_NUMBER
+        }
+        loginButton = Button(this).apply {
+            text = "Entrar no SmartPOS"
+            setOnClickListener { login() }
+        }
+        loginSection.addView(backendUrl)
+        loginSection.addView(username)
+        loginSection.addView(password)
+        loginSection.addView(restauranteId)
+        loginSection.addView(loginButton)
+        content.addView(loginSection)
 
-        content.addView(backendUrl)
-        content.addView(bearerToken)
-        content.addView(intentId)
-        content.addView(terminalId)
-        content.addView(operationKey)
-
-        content.addView(Button(this).apply {
-            text = "Gerar nova operation key"
-            setOnClickListener { operationKey.setText(UUID.randomUUID().toString()) }
+        operationSection = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        sessionInfo = TextView(this).apply {
+            textSize = 16f
+            setPadding(0, 0, 0, dp(10))
+        }
+        operationSection.addView(sessionInfo)
+        operationSection.addView(TextView(this).apply {
+            text = "Recebimentos integrados disponíveis"
+            setPadding(0, dp(6), 0, dp(4))
         })
-
-        content.addView(TextView(this).apply {
+        intentsSpinner = Spinner(this)
+        operationSection.addView(intentsSpinner)
+        refreshButton = Button(this).apply {
+            text = "Atualizar recebimentos"
+            setOnClickListener { refreshQueue() }
+        }
+        operationSection.addView(refreshButton)
+        operationSection.addView(TextView(this).apply {
             text = "Resultado simulado do terminal"
             setPadding(0, dp(14), 0, dp(4))
         })
@@ -97,16 +137,21 @@ class MainActivity : Activity() {
                 listOf("APPROVED", "DECLINED", "PENDING", "TIMEOUT", "ERROR"),
             )
         }
-        content.addView(outcome)
-
+        operationSection.addView(outcome)
         runButton = Button(this).apply {
-            text = "Executar ciclo do terminal"
-            setOnClickListener { executeCycle() }
+            text = "Simular pagamento"
+            setOnClickListener { executeSelectedIntent() }
         }
-        content.addView(runButton)
+        operationSection.addView(runButton)
+        logoutButton = Button(this).apply {
+            text = "Sair"
+            setOnClickListener { logout() }
+        }
+        operationSection.addView(logoutButton)
+        content.addView(operationSection)
 
         val statusView = TextView(this).apply {
-            text = "Aguardando simulação."
+            text = "Faça login para carregar o contexto SmartPOS."
             setPadding(0, dp(16), 0, 0)
             setTextIsSelectable(true)
         }
@@ -116,76 +161,200 @@ class MainActivity : Activity() {
         return ScrollView(this).apply { addView(content) }
     }
 
-    private fun field(label: String, initial: String): EditText = EditText(this).apply {
-        hint = label
-        setText(initial)
-        setSingleLine(true)
-    }
-
-    private fun executeCycle() {
+    private fun login() {
         val url = backendUrl.text.toString().trim().trimEnd('/')
-        val token = bearerToken.text.toString().trim()
-        val intent = intentId.text.toString().trim()
-        val terminal = terminalId.text.toString().trim()
-        val operation = operationKey.text.toString().trim()
-        val selectedOutcome = PaymentOutcome.valueOf(outcome.selectedItem.toString())
+        val identifier = username.text.toString().trim()
+        val secret = password.text.toString()
+        val ridText = restauranteId.text.toString().trim()
+        val rid = if (ridText.isBlank()) null else ridText.toIntOrNull()
 
-        val validationError = when {
-            url.isBlank() || !url.startsWith("http") -> "Informe uma URL HTTP/HTTPS válida."
-            token.isBlank() -> "Informe o bearer token do operador SmartPOS."
-            intent.isBlank() -> "Informe o PaymentIntent ID."
-            terminal.isBlank() -> "Informe o terminal ID."
-            operation.length < 8 -> "A operation key precisa ter ao menos 8 caracteres."
+        val validation = when {
+            !url.startsWith("http://") && !url.startsWith("https://") -> "Informe uma URL HTTP/HTTPS válida."
+            identifier.isBlank() -> "Informe o e-mail ou telefone."
+            secret.isBlank() -> "Informe a senha."
+            ridText.isNotBlank() && rid == null -> "O ID do estabelecimento precisa ser numérico."
             else -> null
         }
-        if (validationError != null) {
-            status.text = validationError
+        if (validation != null) {
+            status.text = validation
             return
         }
 
-        val result = TerminalPaymentResult(
+        setBusy(true, "Autenticando e carregando contexto...")
+        executor.execute {
+            runCatching {
+                val localTransport = JdkHttpTransport(
+                    baseUrl = url,
+                    bearerToken = { sessionToken.orEmpty() },
+                )
+                val localApi = KomaSmartPosSessionApi(localTransport)
+                val token = localApi.login(identifier, secret, rid)
+                sessionToken = token
+                val loadedContext = localApi.context()
+                require(loadedContext.smartposEnabled) { "SmartPOS não está habilitado para este restaurante." }
+                val intents = localApi.pendingProviderIntents(terminalId, PROVIDER)
+                Triple(localTransport, localApi, loadedContext to intents)
+            }.onSuccess { (localTransport, localApi, loaded) ->
+                transport = localTransport
+                sessionApi = localApi
+                context = loaded.first
+                pendingIntents = loaded.second
+                runOnUiThread {
+                    password.setText("")
+                    showLoggedIn()
+                    renderSession()
+                    renderQueue()
+                    status.text = "Sessão SmartPOS carregada. Terminal: $terminalId"
+                    setBusy(false)
+                }
+            }.onFailure { error ->
+                sessionToken = null
+                transport = null
+                sessionApi = null
+                context = null
+                pendingIntents = emptyList()
+                runOnUiThread {
+                    status.text = "Falha no login: ${error.message ?: error::class.java.simpleName}"
+                    setBusy(false)
+                }
+            }
+        }
+    }
+
+    private fun refreshQueue() {
+        val api = sessionApi ?: return
+        setBusy(true, "Atualizando recebimentos...")
+        executor.execute {
+            runCatching { api.pendingProviderIntents(terminalId, PROVIDER) }
+                .onSuccess { intents ->
+                    pendingIntents = intents
+                    runOnUiThread {
+                        renderQueue()
+                        status.text = if (intents.isEmpty()) {
+                            "Nenhum recebimento integrado disponível para este terminal."
+                        } else {
+                            "${intents.size} recebimento(s) disponível(is)."
+                        }
+                        setBusy(false)
+                    }
+                }
+                .onFailure { error ->
+                    runOnUiThread {
+                        status.text = "Falha ao atualizar: ${error.message ?: error::class.java.simpleName}"
+                        setBusy(false)
+                    }
+                }
+        }
+    }
+
+    private fun executeSelectedIntent() {
+        val selected = pendingIntents.getOrNull(intentsSpinner.selectedItemPosition)
+        val localTransport = transport
+        if (selected == null || localTransport == null || sessionToken.isNullOrBlank()) {
+            status.text = "Selecione um recebimento integrado válido."
+            return
+        }
+
+        val selectedOutcome = PaymentOutcome.valueOf(outcome.selectedItem.toString())
+        val fakeResult = TerminalPaymentResult(
             outcome = selectedOutcome,
             reference = if (selectedOutcome in setOf(PaymentOutcome.APPROVED, PaymentOutcome.DECLINED)) {
-                "fake-${selectedOutcome.name.lowercase()}-${System.currentTimeMillis()}"
+                "fake-${selectedOutcome.name.lowercase()}-${selected.intentId.take(8)}"
             } else null,
             message = "Resultado gerado pelo FakeBridge Android.",
         )
-        bridge.setChargeResult(result)
-        bridge.setReconcileResult(result)
+        bridge.setChargeResult(fakeResult)
+        bridge.setReconcileResult(fakeResult)
+        val operationKey = StableOperationKey.forIntent(selected.intentId, terminalId, PROVIDER)
 
-        runButton.isEnabled = false
-        status.text = "Executando em thread de trabalho..."
-
+        setBusy(true, "Executando ${selected.displayLabel()}...")
         executor.execute {
             runCatching {
-                val transport = JdkHttpTransport(baseUrl = url, bearerToken = { token })
-                val backend = KomaTerminalBackendApi(transport)
+                val backend = KomaTerminalBackendApi(localTransport)
                 val coordinator = TerminalCoordinator(bridge, operationStore)
                 val runtime = TerminalRuntime(
                     backend = backend,
                     coordinator = coordinator,
-                    provider = "pagbank",
-                    terminalId = terminal,
+                    provider = PROVIDER,
+                    terminalId = terminalId,
                 )
-                runtime.runOnce(intent, operation)
+                runtime.runOnce(selected.intentId, operationKey)
             }.onSuccess { ack ->
                 runOnUiThread {
-                    status.text = buildString {
-                        appendLine("Ciclo concluído.")
-                        appendLine("intent: ${ack.intentId}")
-                        appendLine("status backend: ${ack.status}")
-                        append("replayed: ${ack.replayed}")
-                    }
-                    runButton.isEnabled = true
+                    status.text = "Resultado recebido pelo Kôma: ${ack.status}" +
+                        if (ack.replayed) " · replay idempotente" else ""
+                    setBusy(false)
+                    refreshQueue()
                 }
             }.onFailure { error ->
                 runOnUiThread {
-                    status.text = "Falha: ${error.message ?: error::class.java.simpleName}\n\n" +
-                        "A reserva local foi preservada. Repetir a mesma operation key executará reconciliação, não uma nova cobrança."
-                    runButton.isEnabled = true
+                    status.text = "Falha: ${error.message ?: error::class.java.simpleName}\n" +
+                        "A reserva local foi preservada; a próxima tentativa usará reconciliação."
+                    setBusy(false)
                 }
             }
         }
+    }
+
+    private fun logout() {
+        sessionToken = null
+        transport = null
+        sessionApi = null
+        context = null
+        pendingIntents = emptyList()
+        renderQueue()
+        showLoggedOut()
+        status.text = "Sessão encerrada. O token não foi persistido."
+    }
+
+    private fun renderSession() {
+        val loaded = context ?: return
+        sessionInfo.text = buildString {
+            appendLine(loaded.restauranteNome)
+            append(loaded.operadorNome).append(" · ").append(loaded.operadorRole)
+            append(" · Caixa ").append(if (loaded.turnoAberto) "aberto" else "fechado")
+        }
+    }
+
+    private fun renderQueue() {
+        val labels = if (pendingIntents.isEmpty()) {
+            listOf("Nenhum recebimento integrado")
+        } else {
+            pendingIntents.map { it.displayLabel() }
+        }
+        intentsSpinner.adapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_dropdown_item,
+            labels,
+        )
+        runButton.isEnabled = pendingIntents.isNotEmpty() && sessionToken != null
+    }
+
+    private fun showLoggedOut() {
+        loginSection.visibility = View.VISIBLE
+        operationSection.visibility = View.GONE
+        loginButton.isEnabled = true
+    }
+
+    private fun showLoggedIn() {
+        loginSection.visibility = View.GONE
+        operationSection.visibility = View.VISIBLE
+    }
+
+    private fun setBusy(busy: Boolean, message: String? = null) {
+        runOnUiThread {
+            loginButton.isEnabled = !busy
+            refreshButton.isEnabled = !busy
+            runButton.isEnabled = !busy && pendingIntents.isNotEmpty() && sessionToken != null
+            logoutButton.isEnabled = !busy
+            if (message != null) status.text = message
+        }
+    }
+
+    private fun field(label: String, initial: String): EditText = EditText(this).apply {
+        hint = label
+        setText(initial)
+        setSingleLine(true)
     }
 
     private fun defaultTerminalId(): String {

@@ -13,12 +13,17 @@ Núcleo Kotlin + shell Android de desenvolvimento da SmartPOS. A Fase 8 mantém 
 - `KomaTerminalBackendApi` implementa o protocolo HTTP `preparar-terminal -> executar/reconciliar -> resultado-terminal`;
 - o transporte HTTP usa `HttpURLConnection`, compatível com o harness JVM e com Android;
 - o módulo `app` gera um APK `debug` instalável com `FakeTerminalPaymentBridge`;
-- o token de operador digitado na tela técnica não é persistido pelo app;
+- login reutiliza `/auth/login` e o contexto oficial `/auth/smartpos/contexto`;
+- o token da sessão permanece somente em memória e é descartado no logout/process death;
+- a fila do terminal contém apenas intents `provider_integrado` ativos, do tenant atual, livres ou já vinculados ao mesmo terminal;
+- a `operationKey` é derivada de forma estável de `provider + terminal + intent`, sem entrada manual do operador;
 - nenhum dado sensível de cartão é armazenado pelo core.
 
 ## APK de desenvolvimento
 
-A tela técnica permite informar backend, bearer token, PaymentIntent, terminal e `operationKey`, escolher um retorno fake e executar o ciclo completo fora da UI thread. O `terminalId` é derivado do Android ID por padrão e o estado operacional fica no diretório privado do aplicativo.
+O APK parte da raiz da API do Kôma, autentica e carrega restaurante, operador e estado do caixa. Depois lista os recebimentos integrados disponíveis para aquele terminal. O resultado do hardware ainda é escolhido no `FakeBridge` (`approved`, `declined`, `pending`, `timeout`, `error`) para exercitar o fluxo completo sem maquininha.
+
+O `terminalId` é derivado do Android ID e o estado operacional fica no diretório privado do aplicativo. Retry ou reinício preservam a mesma chave de operação e entram em reconciliação.
 
 O build de CI executa os testes do core e `:app:assembleDebug`, publicando o APK como artifact `koma-smartpos-dev-apk`.
 
