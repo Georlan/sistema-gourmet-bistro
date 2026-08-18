@@ -17,6 +17,7 @@ data class TerminalResultAck(
 
 interface HttpTransport {
     fun post(path: String, body: String): HttpResponsePayload
+    fun get(path: String): HttpResponsePayload = error("GET não implementado por este transporte")
 }
 
 data class HttpResponsePayload(val statusCode: Int, val body: String)
@@ -27,18 +28,27 @@ class JdkHttpTransport(
     private val connectTimeoutMs: Int = 10_000,
     private val readTimeoutMs: Int = 30_000,
 ) : HttpTransport {
-    override fun post(path: String, body: String): HttpResponsePayload {
+    override fun post(path: String, body: String): HttpResponsePayload = request("POST", path, body)
+
+    override fun get(path: String): HttpResponsePayload = request("GET", path, null)
+
+    private fun request(method: String, path: String, body: String?): HttpResponsePayload {
         val connection = URL(baseUrl.trimEnd('/') + path).openConnection() as HttpURLConnection
         return try {
-            connection.requestMethod = "POST"
+            connection.requestMethod = method
             connection.connectTimeout = connectTimeoutMs
             connection.readTimeout = readTimeoutMs
-            connection.doOutput = true
-            connection.setRequestProperty("Content-Type", "application/json")
-            connection.setRequestProperty("Authorization", "Bearer ${bearerToken()}")
-
-            connection.outputStream.use { output ->
-                output.write(body.toByteArray(Charsets.UTF_8))
+            connection.setRequestProperty("Accept", "application/json")
+            val token = bearerToken().trim()
+            if (token.isNotBlank()) {
+                connection.setRequestProperty("Authorization", "Bearer $token")
+            }
+            if (body != null) {
+                connection.doOutput = true
+                connection.setRequestProperty("Content-Type", "application/json")
+                connection.outputStream.use { output ->
+                    output.write(body.toByteArray(Charsets.UTF_8))
+                }
             }
 
             val status = connection.responseCode
@@ -59,7 +69,7 @@ class KomaTerminalBackendApi(private val transport: HttpTransport) : TerminalBac
         terminalId: String,
     ): TerminalCommand {
         val response = transport.post(
-            "/smartpos/payment-intents/${encodePath(intentId)}/preparar-terminal",
+            "/auth/smartpos/payment-intents/${encodePath(intentId)}/preparar-terminal",
             "{\"provider\":${json(provider)},\"operation_key\":${json(operationKey)},\"terminal_id\":${json(terminalId)}}",
         )
         requireSuccess(response)
@@ -80,7 +90,7 @@ class KomaTerminalBackendApi(private val transport: HttpTransport) : TerminalBac
 
     override fun submitResult(command: TerminalCommand, result: TerminalPaymentResult): TerminalResultAck {
         val response = transport.post(
-            "/smartpos/payment-intents/${encodePath(command.intentId)}/resultado-terminal",
+            "/auth/smartpos/payment-intents/${encodePath(command.intentId)}/resultado-terminal",
             buildString {
                 append("{\"provider\":").append(json(command.provider))
                 append(",\"operation_key\":").append(json(command.operationKey))
@@ -114,7 +124,7 @@ class KomaTerminalBackendApi(private val transport: HttpTransport) : TerminalBac
         .replace("\n", "\\n") + "\""
 }
 
-private object JsonField {
+internal object JsonField {
     fun string(json: String, name: String): String {
         val pattern = Regex("\\\"${Regex.escape(name)}\\\"\\s*:\\s*\\\"((?:\\\\.|[^\\\"])*)\\\"")
         val raw = pattern.find(json)?.groupValues?.get(1)
@@ -135,5 +145,68 @@ private object JsonField {
         val pattern = Regex("\\\"${Regex.escape(name)}\\\"\\s*:\\s*(true|false)")
         return pattern.find(json)?.groupValues?.get(1)?.toBooleanStrict()
             ?: error("Campo JSON booleano ausente: $name")
+    }
+
+    fun nullableString(json: String, name: String): String? {
+        val nullPattern = Regex("\\\"${Regex.escape(name)}\\\"\\s*:\\s*null")
+        if (nullPattern.containsMatchIn(json)) return null
+        return runCatching { string(json, name) }.getOrNull()
+    }
+
+    fun objectBody(json: String, name: String): String {
+        val key = Regex("\\\"${Regex.escape(name)}\\\"\\s*:\\s*\\{").find(json)
+            ?: error("Objeto JSON ausente: $name")
+        val start = json.indexOf('{', key.range.first)
+        var depth = 0
+        var inString = false
+        var escaped = false
+        for (i in start until json.length) {
+            val ch = json[i]
+            if (inString) {
+                if (escaped) escaped = false
+                else if (ch == '\\') escaped = true
+                else if (ch == '"') inString = false
+                continue
+            }
+            if (ch == '"') inString = true
+            else if (ch == '{') depth++
+            else if (ch == '}') {
+                depth--
+                if (depth == 0) return json.substring(start, i + 1)
+            }
+        }
+        error("Objeto JSON inválido: $name")
+    }
+
+    fun objectArray(json: String): List<String> {
+        val trimmed = json.trim()
+        require(trimmed.startsWith('[') && trimmed.endsWith(']')) { "Array JSON inválido" }
+        val result = mutableListOf<String>()
+        var depth = 0
+        var start = -1
+        var inString = false
+        var escaped = false
+        for (i in trimmed.indices) {
+            val ch = trimmed[i]
+            if (inString) {
+                if (escaped) escaped = false
+                else if (ch == '\\') escaped = true
+                else if (ch == '"') inString = false
+                continue
+            }
+            if (ch == '"') inString = true
+            else if (ch == '{') {
+                if (depth == 0) start = i
+                depth++
+            } else if (ch == '}') {
+                depth--
+                if (depth == 0 && start >= 0) {
+                    result += trimmed.substring(start, i + 1)
+                    start = -1
+                }
+            }
+        }
+        require(depth == 0) { "Array JSON com objeto incompleto" }
+        return result
     }
 }
