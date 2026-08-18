@@ -9,7 +9,9 @@ P0-06:
 * persiste somente hashes de OTP em tabela compartilhada e isolada por tenant;
 * persiste limites de requisição públicos por tenant;
 * adiciona idempotência composta aos pedidos do cardápio;
-* fornece lookups mínimos de restaurantes públicos somente ao backend.
+* fornece lookups mínimos de restaurantes públicos somente ao backend;
+* materializa notificações WhatsApp que instalações antigas recebiam via
+  bootstrap ORM, tornando a cadeia Alembic suficiente em banco vazio.
 """
 from typing import Sequence, Union
 
@@ -42,8 +44,56 @@ def _secure_new_tenant_table(table: str) -> None:
     """)
 
 
+def _ensure_notificacoes_whatsapp(bind) -> None:
+    if sa.inspect(bind).has_table("notificacoes_whatsapp"):
+        return
+
+    op.create_table(
+        "notificacoes_whatsapp",
+        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+        sa.Column("restaurante_id", sa.Integer(), nullable=True),
+        sa.Column("comanda_id", sa.String(length=100), nullable=True),
+        sa.Column("telefone", sa.String(length=20), nullable=True),
+        sa.Column("tipo", sa.String(length=50), nullable=True, server_default="status_pedido"),
+        sa.Column("status_envio", sa.String(length=20), nullable=True, server_default="pendente"),
+        sa.Column("wamid", sa.String(length=255), nullable=True),
+        sa.Column("recipient_id", sa.String(length=50), nullable=True),
+        sa.Column("status", sa.String(length=50), nullable=True),
+        sa.Column("error_code", sa.Integer(), nullable=True),
+        sa.Column("error_title", sa.Text(), nullable=True),
+        sa.Column("error_message", sa.Text(), nullable=True),
+        sa.Column("conteudo", sa.Text(), nullable=True),
+        sa.Column("raw_payload", sa.Text(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
+        sa.ForeignKeyConstraint(
+            ["restaurante_id"],
+            ["restaurantes.id"],
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(
+        "ix_notificacoes_whatsapp_restaurante_id",
+        "notificacoes_whatsapp",
+        ["restaurante_id"],
+    )
+    op.create_index(
+        "ix_notificacoes_whatsapp_comanda_id",
+        "notificacoes_whatsapp",
+        ["comanda_id"],
+    )
+    op.create_index(
+        "ix_notificacoes_whatsapp_wamid",
+        "notificacoes_whatsapp",
+        ["wamid"],
+    )
+
+
 def upgrade() -> None:
     bind = op.get_bind()
+
+    _ensure_notificacoes_whatsapp(bind)
 
     if bind.dialect.name == "postgresql":
         # Recriar comandas em batch tenta remover sua PK e quebra todas as FKs
