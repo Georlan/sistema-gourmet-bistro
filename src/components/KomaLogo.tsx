@@ -30,6 +30,11 @@ const WORDMARK_SIZE_MAP = {
   custom: '',
 };
 
+const isKomaBrandLabel = (value: string | null | undefined) => {
+  const normalized = String(value || '').trim().toLocaleLowerCase('pt-BR');
+  return normalized === 'koma' || normalized === 'kôma';
+};
+
 export const KomaLogo: React.FC<KomaLogoProps> = ({
   className,
   imageClassName,
@@ -41,6 +46,73 @@ export const KomaLogo: React.FC<KomaLogoProps> = ({
 }) => {
   const sizeClass = SIZE_MAP[size] || SIZE_MAP.md;
   const wordmarkSizeClass = WORDMARK_SIZE_MAP[size] || WORDMARK_SIZE_MAP.md;
+  const iconRootRef = React.useRef<HTMLSpanElement>(null);
+  const [contextWordmark, setContextWordmark] = React.useState(false);
+
+  React.useEffect(() => {
+    if (withText || withSlogan) {
+      if (contextWordmark) setContextWordmark(false);
+      return undefined;
+    }
+
+    const root = iconRootRef.current;
+    if (!root) return undefined;
+
+    let typedBrandNode: HTMLElement | null = null;
+    let logoWrap: HTMLElement | null = null;
+
+    const cashierBrand = root.closest('.cashier-sidebar__brand') as HTMLElement | null;
+    if (cashierBrand) {
+      typedBrandNode = cashierBrand.querySelector('.cashier-sidebar__brand-copy strong') as HTMLElement | null;
+      logoWrap = root.closest('.cashier-sidebar__logo-wrap') as HTMLElement | null;
+    } else {
+      const row = root.parentElement;
+      typedBrandNode = (
+        row?.querySelector(':scope > div > h1')
+        || row?.querySelector(':scope > div > span:first-child')
+      ) as HTMLElement | null;
+    }
+
+    const shouldUseWordmark = isKomaBrandLabel(typedBrandNode?.textContent);
+    if (contextWordmark !== shouldUseWordmark) {
+      setContextWordmark(shouldUseWordmark);
+    }
+
+    if (!shouldUseWordmark || !typedBrandNode) return undefined;
+
+    const previousDisplay = typedBrandNode.style.display;
+    typedBrandNode.style.display = 'none';
+
+    let previousWrapStyles: Record<string, string> | null = null;
+    if (logoWrap) {
+      previousWrapStyles = {
+        width: logoWrap.style.width,
+        height: logoWrap.style.height,
+        border: logoWrap.style.border,
+        borderRadius: logoWrap.style.borderRadius,
+        background: logoWrap.style.background,
+        overflow: logoWrap.style.overflow,
+      };
+      logoWrap.style.width = size === 'sm' ? '5rem' : size === 'md' ? '6rem' : '7rem';
+      logoWrap.style.height = 'auto';
+      logoWrap.style.border = '0';
+      logoWrap.style.borderRadius = '0';
+      logoWrap.style.background = 'transparent';
+      logoWrap.style.overflow = 'visible';
+    }
+
+    return () => {
+      typedBrandNode.style.display = previousDisplay;
+      if (logoWrap && previousWrapStyles) {
+        logoWrap.style.width = previousWrapStyles.width;
+        logoWrap.style.height = previousWrapStyles.height;
+        logoWrap.style.border = previousWrapStyles.border;
+        logoWrap.style.borderRadius = previousWrapStyles.borderRadius;
+        logoWrap.style.background = previousWrapStyles.background;
+        logoWrap.style.overflow = previousWrapStyles.overflow;
+      }
+    };
+  });
 
   const renderImages = () => {
     if (variant === 'dark') {
@@ -80,7 +152,32 @@ export const KomaLogo: React.FC<KomaLogoProps> = ({
   };
 
   if (!withText && !withSlogan) {
-    return <span className={clsx('inline-flex items-center justify-center', className)}>{renderImages()}</span>;
+    if (contextWordmark) {
+      return (
+        <span
+          ref={iconRootRef}
+          data-koma-logo="context-wordmark"
+          className={clsx('inline-flex items-center justify-center', className)}
+        >
+          <img
+            src={KOMA_WORDMARK_SRC}
+            alt={alt}
+            draggable={false}
+            className={clsx(wordmarkSizeClass, 'h-auto object-contain shrink-0', imageClassName)}
+          />
+        </span>
+      );
+    }
+
+    return (
+      <span
+        ref={iconRootRef}
+        data-koma-logo="icon"
+        className={clsx('inline-flex items-center justify-center', className)}
+      >
+        {renderImages()}
+      </span>
+    );
   }
 
   return (
