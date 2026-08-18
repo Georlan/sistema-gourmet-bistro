@@ -25,7 +25,7 @@ jobs:
         with:
           gradle-version: '9.5.0'
       - name: Install Android SDK platform
-        run: '${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager "platforms;android-37" "build-tools;36.0.0"'
+        run: '${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0"'
       - name: Test bridge core and build debug APK
         run: gradle -p smartpos-android test :app:assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4
