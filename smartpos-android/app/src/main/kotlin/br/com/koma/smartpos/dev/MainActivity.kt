@@ -42,7 +42,7 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
 
         bridge = FakeTerminalPaymentBridge()
-        operationStore = FileOperationStore(File(filesDir, "smartpos-operations.tsv"))
+        operationStore = FileOperationStore(File(filesDir, "smartpos-operations.tsv").toPath())
         setContentView(buildContent())
     }
 
@@ -108,7 +108,7 @@ class MainActivity : Activity() {
         status = TextView(this).apply {
             text = "Aguardando simulação."
             setPadding(0, dp(16), 0, 0)
-            textIsSelectable = true
+            isTextSelectable = true
         }
         content.addView(status)
 
@@ -157,7 +157,7 @@ class MainActivity : Activity() {
 
         executor.execute {
             runCatching {
-                val transport = JdkHttpTransport(url) { token }
+                val transport = JdkHttpTransport(baseUrl = url, bearerToken = { token })
                 val backend = KomaTerminalBackendApi(transport)
                 val coordinator = TerminalCoordinator(bridge, operationStore)
                 val runtime = TerminalRuntime(
