@@ -2,6 +2,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import OnlineOrderEmergencyActions from "./components/OnlineOrderEmergencyActions";
 import SmartPosPage from "./smartpos/SmartPosPage";
 import SmartPosCashSupervisor from "./smartpos/SmartPosCashSupervisor";
 import "./index.css";
@@ -28,5 +29,6 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <RootApp />
     {!isSmartPosRoute && <SmartPosCashSupervisor />}
+    {!isSmartPosRoute && <OnlineOrderEmergencyActions />}
   </React.StrictMode>
 );
