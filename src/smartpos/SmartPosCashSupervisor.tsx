@@ -8,6 +8,7 @@ import {
   CircleDollarSign,
   CreditCard,
   Loader2,
+  Move,
   RefreshCw,
   WalletCards,
 } from 'lucide-react';
@@ -20,6 +21,8 @@ type OperationalState =
   | 'aguardando_pagamento'
   | 'pagamento_processando'
   | 'aprovado_pendente_liquidacao';
+
+type DockPosition = 'bottom-right' | 'bottom-left' | 'top-left' | 'top-right';
 
 type CashProjection = {
   mesa_id: number;
@@ -42,6 +45,27 @@ type CashProjection = {
     provider_reference?: string | null;
     pagamento_id?: string | null;
   } | null;
+};
+
+const DOCK_STORAGE_KEY = 'koma_smartpos_cash_supervisor_dock';
+const DOCK_ORDER: DockPosition[] = ['bottom-right', 'bottom-left', 'top-left', 'top-right'];
+const DOCK_CLASS: Record<DockPosition, string> = {
+  'bottom-right': 'bottom-4 right-4',
+  'bottom-left': 'bottom-4 left-4',
+  'top-left': 'top-20 left-4',
+  'top-right': 'top-20 right-4',
+};
+const DOCK_LABEL: Record<DockPosition, string> = {
+  'bottom-right': 'inferior direito',
+  'bottom-left': 'inferior esquerdo',
+  'top-left': 'superior esquerdo',
+  'top-right': 'superior direito',
+};
+
+const readDockPosition = (): DockPosition => {
+  if (typeof window === 'undefined') return 'bottom-right';
+  const stored = window.localStorage.getItem(DOCK_STORAGE_KEY) as DockPosition | null;
+  return stored && DOCK_ORDER.includes(stored) ? stored : 'bottom-right';
 };
 
 const isCashRoute = () => {
@@ -123,9 +147,19 @@ export default function SmartPosCashSupervisor() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [expanded, setExpanded] = useState(false);
+  const [dockPosition, setDockPosition] = useState<DockPosition>(readDockPosition);
 
   const visible = typeof window !== 'undefined' && isCashRoute();
   const token = visible ? localStorage.getItem('koma_caixa_token') : null;
+
+  const moveDock = useCallback(() => {
+    setDockPosition((current) => {
+      const currentIndex = DOCK_ORDER.indexOf(current);
+      const next = DOCK_ORDER[(currentIndex + 1) % DOCK_ORDER.length];
+      window.localStorage.setItem(DOCK_STORAGE_KEY, next);
+      return next;
+    });
+  }, []);
 
   const load = useCallback(async (silent = false) => {
     const currentToken = localStorage.getItem('koma_caixa_token');
@@ -189,12 +223,12 @@ export default function SmartPosCashSupervisor() {
   if (!visible || !token) return null;
 
   return (
-    <aside className={`fixed bottom-4 right-4 z-[90] overflow-hidden rounded-2xl border border-koma-border bg-koma-surface/95 shadow-2xl backdrop-blur transition-all ${
+    <aside className={`fixed ${DOCK_CLASS[dockPosition]} z-[90] overflow-hidden rounded-2xl border border-koma-border bg-koma-surface/95 shadow-2xl backdrop-blur transition-[width,top,bottom,left,right] duration-200 ${
       expanded
         ? 'w-[min(980px,calc(100vw-2rem))]'
         : 'w-[min(380px,calc(100vw-2rem))]'
     }`}>
-      <div className="flex items-center justify-between gap-3 border-b border-koma-border px-4 py-3">
+      <div className="flex items-center justify-between gap-2 border-b border-koma-border px-3 py-3 sm:px-4">
         <button
           type="button"
           onClick={() => setExpanded((value) => !value)}
@@ -214,6 +248,15 @@ export default function SmartPosCashSupervisor() {
             </span>
           )}
           {expanded ? <ChevronDown size={15} className="shrink-0 text-koma-muted" /> : <ChevronUp size={15} className="shrink-0 text-koma-muted" />}
+        </button>
+        <button
+          type="button"
+          onClick={moveDock}
+          aria-label={`Mover Operação SmartPOS. Posição atual: ${DOCK_LABEL[dockPosition]}`}
+          title={`Mover painel — atual: ${DOCK_LABEL[dockPosition]}`}
+          className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-koma-border text-koma-muted transition-colors hover:text-koma-foreground"
+        >
+          <Move size={14} />
         </button>
         <button
           type="button"
