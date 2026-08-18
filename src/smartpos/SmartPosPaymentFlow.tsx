@@ -35,9 +35,9 @@ type Comanda = {
 };
 
 type Metodo = 'dinheiro' | 'pix' | 'debito' | 'credito' | 'voucher';
-type Captura = 'provider_integrado' | 'dinheiro_pendente';
+type Captura = 'provider_integrado' | 'registro_externo' | 'dinheiro_pendente';
 type Escopo = 'valor' | 'itens';
-type Step = 'valor' | 'metodo' | 'revisao' | 'pronto';
+type Step = 'valor' | 'metodo' | 'captura' | 'revisao' | 'pronto';
 
 type Props = {
   session: SmartPosSession;
@@ -60,17 +60,10 @@ const methodLabels: Record<Metodo, string> = {
   voucher: 'Voucher',
 };
 
-const captureByMethod: Record<Metodo, Captura> = {
-  dinheiro: 'dinheiro_pendente',
-  pix: 'provider_integrado',
-  debito: 'provider_integrado',
-  credito: 'provider_integrado',
-  voucher: 'provider_integrado',
-};
-
 const captureLabels: Record<Captura, string> = {
-  provider_integrado: 'Na maquininha',
-  dinheiro_pendente: 'Conferência no caixa',
+  provider_integrado: 'Nesta maquininha',
+  registro_externo: 'Outra maquininha',
+  dinheiro_pendente: 'Conferência manual',
 };
 
 const activeItems = (comandas: Comanda[]) => comandas.flatMap((comanda) =>
@@ -158,11 +151,24 @@ export default function SmartPosPaymentFlow({
 
   const chooseMethod = (nextMethod: Metodo) => {
     setMethod(nextMethod);
+    setError('');
+    if (nextMethod === 'dinheiro') {
+      setCaptureMode('dinheiro_pendente');
+      setStep('revisao');
+      return;
+    }
+    setCaptureMode(null);
+    setStep('captura');
+  };
+
+  const chooseCapture = (nextCapture: 'provider_integrado' | 'registro_externo') => {
+    setCaptureMode(nextCapture);
+    setError('');
     setStep('revisao');
   };
 
   const submitIntent = async () => {
-    if (!method || amountCents <= 0) return;
+    if (!method || !captureMode || amountCents <= 0) return;
     setIsSubmitting(true);
     setError('');
     const key = idempotencyKey || makeIdempotencyKey();
@@ -179,6 +185,7 @@ export default function SmartPosPaymentFlow({
           mesa_id: mesa.id,
           valor: (amountCents / 100).toFixed(2),
           metodo: method,
+          captura: captureMode === 'dinheiro_pendente' ? undefined : captureMode,
           escopo: scope,
           item_ids: scope === 'itens' ? selectedItemIds : null,
           idempotency_key: key,
@@ -194,7 +201,13 @@ export default function SmartPosPaymentFlow({
         throw new Error(data?.detail || 'Não foi possível preparar o recebimento.');
       }
       setIntentId(String(data.id || ''));
-      setCaptureMode(data.captura === 'dinheiro_pendente' ? 'dinheiro_pendente' : 'provider_integrado');
+      if (data.captura === 'registro_externo') {
+        setCaptureMode('registro_externo');
+      } else if (data.captura === 'dinheiro_pendente') {
+        setCaptureMode('dinheiro_pendente');
+      } else {
+        setCaptureMode('provider_integrado');
+      }
       setStep('pronto');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Não foi possível preparar o recebimento.');
@@ -204,7 +217,6 @@ export default function SmartPosPaymentFlow({
   };
 
   const methodLabel = method ? methodLabels[method] : '';
-  const expectedCapture = method ? captureByMethod[method] : null;
 
   if (step === 'pronto') {
     return (
@@ -240,15 +252,41 @@ export default function SmartPosPaymentFlow({
           <div className="rounded-2xl border border-koma-border bg-koma-surface p-4">
             <div className="flex items-center justify-between gap-3 text-sm"><span className="text-koma-muted">Mesa</span><strong>{mesa.nome || `Mesa ${mesa.id}`}</strong></div>
             <div className="mt-3 flex items-center justify-between gap-3 text-sm"><span className="text-koma-muted">Forma</span><strong>{methodLabel}</strong></div>
-            {expectedCapture && <div className="mt-3 flex items-center justify-between gap-3 text-sm"><span className="text-koma-muted">Captura</span><strong>{captureLabels[expectedCapture]}</strong></div>}
+            {captureMode && <div className="mt-3 flex items-center justify-between gap-3 text-sm"><span className="text-koma-muted">Captura</span><strong>{captureLabels[captureMode]}</strong></div>}
             <div className="mt-3 flex items-center justify-between gap-3 text-sm"><span className="text-koma-muted">Escopo</span><strong>{scope === 'itens' ? `${selectedItemIds.length} item(ns)` : 'Por valor'}</strong></div>
           </div>
+          {captureMode === 'registro_externo' && (
+            <p className="rounded-xl border border-koma-border bg-koma-surface px-3 py-3 text-xs text-koma-muted">Esta etapa apenas registra que a cobrança será feita em outra maquininha. Ainda não há baixa financeira.</p>
+          )}
           {error && <p role="alert" className="rounded-xl border border-red-900/50 bg-red-950/30 px-3 py-2 text-xs text-red-300">{error}</p>}
           <button type="button" onClick={() => void submitIntent()} disabled={isSubmitting} className="flex min-h-14 items-center justify-center gap-2 rounded-xl bg-koma-accent px-4 text-sm font-black text-black disabled:opacity-60">
             {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <CircleDollarSign size={18} />}
             {isSubmitting ? 'Preparando…' : 'Preparar pagamento'}
           </button>
-          <button type="button" onClick={() => setStep('metodo')} disabled={isSubmitting} className="min-h-12 rounded-xl border border-koma-border text-sm font-bold text-koma-muted">Voltar</button>
+          <button type="button" onClick={() => setStep(method === 'dinheiro' ? 'metodo' : 'captura')} disabled={isSubmitting} className="min-h-12 rounded-xl border border-koma-border text-sm font-bold text-koma-muted">Voltar</button>
+        </div>
+      </section>
+    );
+  }
+
+  if (step === 'captura') {
+    return (
+      <section className="pt-7">
+        <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-koma-accent">Onde será cobrado?</p>
+        <h1 className="mt-2 text-3xl font-black tracking-[-0.04em]">{methodLabel}</h1>
+        <p className="mt-2 text-sm text-koma-muted">{money(amountCents)}</p>
+        <div className="mt-6 grid gap-3">
+          <button type="button" onClick={() => chooseCapture('provider_integrado')} className="flex min-h-20 items-center gap-4 rounded-2xl border border-koma-border bg-koma-surface px-4 text-left">
+            <span className="flex size-11 items-center justify-center rounded-xl border border-koma-border bg-koma-page text-koma-accent"><CreditCard size={21} /></span>
+            <span className="min-w-0 flex-1"><span className="block text-base font-black">Nesta maquininha</span><span className="mt-1 block text-[10px] font-medium text-koma-muted">Fluxo reservado para a integração do próprio terminal.</span></span>
+            <ChevronRight size={18} className="text-koma-muted" />
+          </button>
+          <button type="button" onClick={() => chooseCapture('registro_externo')} className="flex min-h-20 items-center gap-4 rounded-2xl border border-koma-border bg-koma-surface px-4 text-left">
+            <span className="flex size-11 items-center justify-center rounded-xl border border-koma-border bg-koma-page text-koma-accent"><ReceiptText size={21} /></span>
+            <span className="min-w-0 flex-1"><span className="block text-base font-black">Outra maquininha</span><span className="mt-1 block text-[10px] font-medium text-koma-muted">Registra o meio usado em um dispositivo externo.</span></span>
+            <ChevronRight size={18} className="text-koma-muted" />
+          </button>
+          <button type="button" onClick={() => setStep('metodo')} className="min-h-12 rounded-xl border border-koma-border text-sm font-bold text-koma-muted">Voltar</button>
         </div>
       </section>
     );
@@ -256,11 +294,11 @@ export default function SmartPosPaymentFlow({
 
   if (step === 'metodo') {
     const methods = [
-      { id: 'dinheiro' as const, label: 'Dinheiro', detail: 'Conferência no caixa', icon: Banknote },
-      { id: 'pix' as const, label: 'Pix', detail: 'Na maquininha', icon: QrCode },
-      { id: 'debito' as const, label: 'Débito', detail: 'Na maquininha', icon: CreditCard },
-      { id: 'credito' as const, label: 'Crédito', detail: 'Na maquininha', icon: CreditCard },
-      { id: 'voucher' as const, label: 'Voucher', detail: 'Na maquininha', icon: ReceiptText },
+      { id: 'dinheiro' as const, label: 'Dinheiro', detail: 'Conferência manual', icon: Banknote },
+      { id: 'pix' as const, label: 'Pix', detail: 'Escolher onde será cobrado', icon: QrCode },
+      { id: 'debito' as const, label: 'Débito', detail: 'Escolher onde será cobrado', icon: CreditCard },
+      { id: 'credito' as const, label: 'Crédito', detail: 'Escolher onde será cobrado', icon: CreditCard },
+      { id: 'voucher' as const, label: 'Voucher', detail: 'Escolher onde será cobrado', icon: ReceiptText },
     ];
     return (
       <section className="pt-7">
