@@ -9,12 +9,12 @@ repositories {
 
 android {
     namespace = "br.com.koma.smartpos.dev"
-    compileSdk = 37
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "br.com.koma.smartpos.dev"
         minSdk = 26
-        targetSdk = 37
+        targetSdk = 36
         versionCode = 1
         versionName = "0.8.0-dev"
     }
