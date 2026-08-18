@@ -105,12 +105,13 @@ class MainActivity : Activity() {
         }
         content.addView(runButton)
 
-        status = TextView(this).apply {
+        val statusView = TextView(this).apply {
             text = "Aguardando simulação."
             setPadding(0, dp(16), 0, 0)
-            isTextSelectable = true
+            setTextIsSelectable(true)
         }
-        content.addView(status)
+        status = statusView
+        content.addView(statusView)
 
         return ScrollView(this).apply { addView(content) }
     }
