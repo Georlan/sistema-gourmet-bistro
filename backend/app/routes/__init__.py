@@ -35,9 +35,11 @@ _financial_cash_routes.legacy_cash._atividades_recentes_turno = _recent_cash_act
 from . import financial_refund_listing as _financial_refund_listing  # noqa: F401,E402
 
 # SmartPOS reutiliza o router autenticado existente para evitar criar uma
-# segunda pilha de autenticação. O endpoint resultante é /auth/smartpos/contexto.
+# segunda pilha de autenticação. Os endpoints resultantes ficam sob /auth/smartpos/.
 from . import auth as _auth  # noqa: E402
 from . import smartpos as _smartpos  # noqa: E402
 from . import smartpos_provider as _smartpos_provider  # noqa: E402
+from . import smartpos_cash_projection as _smartpos_cash_projection  # noqa: E402
 _auth.router.include_router(_smartpos.router)
 _auth.router.include_router(_smartpos_provider.router)
+_auth.router.include_router(_smartpos_cash_projection.router)
