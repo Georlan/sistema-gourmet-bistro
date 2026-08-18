@@ -1,6 +1,6 @@
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -15,12 +15,17 @@ from ..services.smartpos_provider_orchestrator import (
     SmartPosProviderError,
     execute_provider_payment,
 )
+from ..services.smartpos_settlement import (
+    SmartPosSettlementError,
+    settle_approved_smartpos_intent,
+)
 from ..services.smartpos_terminal_bridge import (
     SmartPosTerminalBridgeError,
     apply_terminal_result,
     prepare_terminal_command,
 )
 from ..smartpos_models import SmartPosPaymentIntent
+from .websocket import manager
 
 
 router = APIRouter(prefix="/smartpos", tags=["SmartPOS Provider"])
@@ -88,6 +93,8 @@ class SmartPosTerminalResultResponse(BaseModel):
     provider: Optional[str] = None
     terminal_id: Optional[str] = None
     provider_reference: Optional[str] = None
+    payment_id: Optional[str] = None
+    settled: bool = False
     replayed: bool = False
     financial_effect: bool = False
 
@@ -225,10 +232,11 @@ def preparar_payment_intent_terminal(
 def registrar_resultado_terminal(
     intent_id: str,
     payload: SmartPosTerminalResultRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("smartpos:receber")),
 ):
-    """Aplica retorno normalizado do bridge Android sem liquidar o financeiro."""
+    """Persiste o retorno do terminal e liquida aprovações no financeiro canônico."""
     restaurante_id = require_tenant_id()
     _require_smartpos(db, restaurante_id)
     intent = _load_intent(db, restaurante_id, intent_id)
@@ -248,14 +256,68 @@ def registrar_resultado_terminal(
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
+    settlement = None
+    if applied.intent.status == "aprovada":
+        try:
+            settlement = settle_approved_smartpos_intent(
+                db,
+                restaurante_id=restaurante_id,
+                intent_id=applied.intent.id,
+            )
+        except SmartPosSettlementError as exc:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Cobrança aprovada pelo terminal, mas ainda não liquidada no Caixa: "
+                    f"{exc}"
+                ),
+            ) from exc
+
+    background_tasks.add_task(
+        manager.broadcast,
+        {
+            "event": "payment_intent_updated",
+            "detail": {
+                "intent_id": applied.intent.id,
+                "mesa_id": applied.intent.mesa_id,
+                "status": applied.intent.status,
+                "provider": applied.intent.provider_name,
+                "terminal_id": applied.intent.provider_terminal_id,
+                "payment_id": settlement.pagamento.id if settlement else None,
+            },
+        },
+        restaurante_id,
+    )
+    if settlement is not None:
+        for event_name in ("payment_updated", "cash_updated", "tables_updated"):
+            background_tasks.add_task(
+                manager.broadcast,
+                {
+                    "event": event_name,
+                    "detail": {
+                        "type": "smartpos_settlement",
+                        "intent_id": applied.intent.id,
+                        "payment_id": settlement.pagamento.id,
+                        "mesa_id": applied.intent.mesa_id,
+                        "metodo": settlement.pagamento.metodo,
+                        "valor": float(settlement.pagamento.valor),
+                        "mesa_liberada": settlement.mesa_liberada,
+                    },
+                },
+                restaurante_id,
+            )
+
     return {
         "intent_id": applied.intent.id,
         "status": applied.intent.status,
         "provider": applied.intent.provider_name,
         "terminal_id": applied.intent.provider_terminal_id,
         "provider_reference": applied.intent.provider_reference,
-        "replayed": applied.replayed,
-        "financial_effect": False,
+        "payment_id": settlement.pagamento.id if settlement else applied.intent.pagamento_id,
+        "settled": settlement is not None or applied.intent.pagamento_id is not None,
+        "replayed": applied.replayed or (settlement.replayed if settlement else False),
+        "financial_effect": settlement is not None or applied.intent.pagamento_id is not None,
     }
 
 

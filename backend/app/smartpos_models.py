@@ -97,6 +97,10 @@ class SmartPosPaymentIntent(Base):
             "status IN ('criada', 'pendente', 'processando', 'aprovada', 'recusada', 'cancelada', 'expirada')",
             name="ck_smartpos_intent_status",
         ),
+        UniqueConstraint(
+            "pagamento_id",
+            name="uq_smartpos_intent_pagamento",
+        ),
         Index(
             "ix_smartpos_intent_tenant_status",
             "restaurante_id",
@@ -144,6 +148,12 @@ class SmartPosPaymentIntent(Base):
     provider_terminal_id = Column(String(64), nullable=True)
     provider_reference = Column(String(128), nullable=True)
     provider_last_error = Column(String(255), nullable=True)
+    pagamento_id = Column(
+        String,
+        ForeignKey("pagamentos.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    liquidado_em = Column(DateTime(timezone=True), nullable=True)
     origem = Column(String(24), nullable=False, default="smartpos")
     criado_em = Column(
         DateTime(timezone=True),
