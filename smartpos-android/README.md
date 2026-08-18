@@ -1,11 +1,22 @@
 # Kôma SmartPOS Android Bridge
 
-Núcleo Kotlin isolado para o futuro app Android da SmartPOS.
+Núcleo Kotlin isolado do futuro app Android da SmartPOS. Ele existe para testar o domínio do terminal sem depender do Android Framework nem do SDK PlugPag.
 
-## Regra de segurança
+## Garantias atuais
 
-`charge` só pode executar uma vez por `operationKey`. Antes de chamar o SDK, a operação é reservada no armazenamento local. Se o processo reiniciar, a mesma operação entra obrigatoriamente em `reconcile`; nunca em nova cobrança.
+- `charge` ocorre no máximo uma vez por `operationKey`;
+- a operação local é vinculada a `intentId + provider + operationKey + terminalId`;
+- a reserva é persistida antes da chamada ao bridge;
+- reinício/retry de operação existente usa `reconcile`, nunca uma nova cobrança;
+- resultados finais (`approved`/`declined`) são cacheados e podem ser reenviados ao backend sem tocar novamente no SDK;
+- `FileOperationStore` persiste a operação em disco com troca atômica de arquivo;
+- `KomaTerminalBackendApi` implementa o protocolo HTTP `preparar-terminal -> executar/reconciliar -> resultado-terminal`;
+- `JdkHttpTransport` é apenas o transporte do harness JVM; no APK Android ele será substituído por um transporte Android mantendo o mesmo contrato;
+- nenhum dado sensível de cartão é armazenado pelo core.
 
-Hoje usamos `FakeTerminalPaymentBridge`. Quando houver terminal DEBUG/SDK PagBank, a implementação real entrará atrás da mesma interface `TerminalPaymentBridge`.
+## Ainda fora de escopo
 
-O módulo não conhece `Pagamento`, ledger, comanda ou mesa e não produz efeito financeiro.
+- SDK PlugPag real;
+- UI/APK Android final;
+- terminal físico/homologação;
+- criação de `Pagamento`, ledger, baixa de item ou fechamento de comanda.

@@ -22,6 +22,7 @@ data class TerminalPaymentResult(
 )
 
 data class LocalOperation(
+    val intentId: String,
     val provider: String,
     val operationKey: String,
     val terminalId: String,
