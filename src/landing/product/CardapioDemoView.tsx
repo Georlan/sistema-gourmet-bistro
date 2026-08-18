@@ -1,5 +1,5 @@
 import React from 'react';
-import logoKoma from '../../assets/logo-koma-on-dark.png';
+import { KOMA_WORDMARK_SRC } from '../../brand/komaBrand';
 
 export function CardapioDemoView() {
   const categories = ['Destacados', 'Burgers', 'Acompanhamentos', 'Bebidas'];
@@ -52,7 +52,7 @@ export function CardapioDemoView() {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <img src={logoKoma} alt="KÔMA" style={{ height: '24px', width: 'auto' }} />
+          <img src={KOMA_WORDMARK_SRC} alt="Kôma" style={{ height: '24px', width: 'auto', objectFit: 'contain' }} />
           <div>
             <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>KÔMA BISTRO</div>
             <div style={{ fontSize: '0.65rem', color: '#00b894', fontWeight: 600 }}>Mesa 04 / Atendimento aberto</div>
