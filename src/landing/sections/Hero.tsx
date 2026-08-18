@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { KOMA_WORDMARK_SRC } from '../../brand/komaBrand';
+import { KomaLogo } from '../../components/KomaLogo';
 import { TabletFrame } from '../product/TabletFrame';
 import { KOMA_LANDING_CONFIG } from '../config/landingConfig';
 import { LeadCaptureModal } from '../components/LeadCaptureModal';
@@ -158,12 +158,7 @@ export function Hero() {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.7, delay: 0.72 }}
           >
-            <img
-              src={KOMA_WORDMARK_SRC}
-              alt=""
-              aria-hidden="true"
-              style={{ width: 'clamp(96px, 8vw, 132px)', height: 'auto', objectFit: 'contain' }}
-            />
+            <KomaLogo size="md" variant="dark" />
             <span>Se você está com fome, <strong>Kôma</strong></span>
           </motion.div>
         </motion.div>
