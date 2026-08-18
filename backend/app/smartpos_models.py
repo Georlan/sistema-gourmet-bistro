@@ -141,6 +141,7 @@ class SmartPosPaymentIntent(Base):
     )
     provider_name = Column(String(32), nullable=True)
     provider_operation_key = Column(String(128), nullable=True)
+    provider_terminal_id = Column(String(64), nullable=True)
     provider_reference = Column(String(128), nullable=True)
     provider_last_error = Column(String(255), nullable=True)
     origem = Column(String(24), nullable=False, default="smartpos")
