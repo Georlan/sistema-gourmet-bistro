@@ -4,14 +4,10 @@ Revision ID: 8f3a2d1c9e7b
 Revises: dcbca6699d38
 Create Date: 2026-07-11 14:31:00.000000
 
-Migration de emergência: adiciona colunas que estão nos models Python mas
-que não foram criadas no banco PostgreSQL do Railway porque o schema foi
-inicializado via CREATE TABLE manual (main.py) antes do Alembic.
-
-A migration precisa funcionar tanto no banco legado quanto em reconstrução do
-zero. Em PostgreSQL, capturar ``DuplicateColumn`` não é idempotência: a exceção
-aborta a transação inteira. Por isso a existência é verificada por introspecção
-antes de qualquer DDL.
+Migration de compatibilidade entre o schema inicial gerado antes do Alembic e
+os models que passaram a ser a fonte de verdade. Precisa funcionar tanto em
+banco legado quanto em reconstrução limpa, sem usar exceção de DDL como fluxo
+normal (em PostgreSQL isso aborta a transação inteira).
 """
 from typing import Sequence, Union
 
@@ -25,17 +21,33 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _inspector(conn):
+    return sa.inspect(conn)
+
+
 def _column_exists(conn, table_name: str, column_name: str) -> bool:
-    inspector = sa.inspect(conn)
     return column_name in {
-        column["name"] for column in inspector.get_columns(table_name)
+        column["name"] for column in _inspector(conn).get_columns(table_name)
     }
 
 
 def _index_exists(conn, table_name: str, index_name: str) -> bool:
-    inspector = sa.inspect(conn)
     return index_name in {
-        index["name"] for index in inspector.get_indexes(table_name)
+        index["name"] for index in _inspector(conn).get_indexes(table_name)
+    }
+
+
+def _unique_exists(conn, table_name: str, unique_name: str) -> bool:
+    return unique_name in {
+        constraint.get("name")
+        for constraint in _inspector(conn).get_unique_constraints(table_name)
+    }
+
+
+def _check_exists(conn, table_name: str, check_name: str) -> bool:
+    return check_name in {
+        constraint.get("name")
+        for constraint in _inspector(conn).get_check_constraints(table_name)
     }
 
 
@@ -48,13 +60,130 @@ def _add_column_if_missing(
 ) -> None:
     if _column_exists(conn, table_name, column_name):
         return
-    with op.batch_alter_table(table_name) as batch_op:
-        batch_op.add_column(sa.Column(column_name, col_type, **kwargs))
+    op.add_column(table_name, sa.Column(column_name, col_type, **kwargs))
+
+
+def _normalize_legacy_users(conn) -> None:
+    """Converte a forma `usuario/role` inicial para a identidade tenant atual.
+
+    `usuario` e `role` permanecem como colunas legadas por compatibilidade de
+    histórico, porém deixam de ser NOT NULL para não obrigar novos INSERTs do
+    ORM a preencher campos que já não pertencem ao model.
+    """
+    _add_column_if_missing(conn, "usuarios", "telefone", sa.String(50), nullable=True)
+    _add_column_if_missing(conn, "usuarios", "email", sa.String(100), nullable=True)
+    _add_column_if_missing(conn, "usuarios", "cargo", sa.String(20), nullable=True)
+    _add_column_if_missing(conn, "usuarios", "token_convite", sa.String(), nullable=True)
+    _add_column_if_missing(
+        conn,
+        "usuarios",
+        "token_expira_em",
+        sa.DateTime(timezone=True),
+        nullable=True,
+    )
+    _add_column_if_missing(
+        conn,
+        "usuarios",
+        "status",
+        sa.String(20),
+        nullable=True,
+        server_default="pendente_ativacao",
+    )
+    _add_column_if_missing(
+        conn,
+        "usuarios",
+        "created_at",
+        sa.DateTime(timezone=True),
+        nullable=True,
+        server_default=sa.func.now(),
+    )
+
+    columns = {
+        column["name"]: column for column in _inspector(conn).get_columns("usuarios")
+    }
+    if "role" in columns:
+        conn.execute(sa.text("""
+            UPDATE usuarios
+            SET cargo = COALESCE(NULLIF(cargo, ''), NULLIF(role, ''), 'garcom')
+            WHERE cargo IS NULL OR cargo = ''
+        """))
+    else:
+        conn.execute(sa.text("""
+            UPDATE usuarios SET cargo = 'garcom'
+            WHERE cargo IS NULL OR cargo = ''
+        """))
+
+    conn.execute(sa.text("""
+        UPDATE usuarios
+        SET status = 'ativo'
+        WHERE status IS NULL OR status = '' OR status = 'pendente_ativacao'
+    """))
+
+    # O schema inicial exigia estes campos, mas o model atual não os persiste.
+    for legacy_name in ("usuario", "role"):
+        if legacy_name in columns and columns[legacy_name].get("nullable") is False:
+            op.alter_column(
+                "usuarios",
+                legacy_name,
+                existing_type=columns[legacy_name]["type"],
+                nullable=True,
+            )
+    if "senha_hash" in columns and columns["senha_hash"].get("nullable") is False:
+        op.alter_column(
+            "usuarios",
+            "senha_hash",
+            existing_type=columns["senha_hash"]["type"],
+            nullable=True,
+        )
+
+    cargo_column = next(
+        column for column in _inspector(conn).get_columns("usuarios")
+        if column["name"] == "cargo"
+    )
+    if cargo_column.get("nullable") is not False:
+        op.alter_column(
+            "usuarios",
+            "cargo",
+            existing_type=cargo_column["type"],
+            nullable=False,
+        )
+
+    if not _index_exists(conn, "usuarios", "ix_usuarios_email"):
+        op.create_index("ix_usuarios_email", "usuarios", ["email"], unique=False)
+    if not _index_exists(conn, "usuarios", "ix_usuarios_telefone"):
+        op.create_index("ix_usuarios_telefone", "usuarios", ["telefone"], unique=False)
+
+    if not _unique_exists(conn, "usuarios", "uq_usuarios_restaurante_email"):
+        op.create_unique_constraint(
+            "uq_usuarios_restaurante_email",
+            "usuarios",
+            ["restaurante_id", "email"],
+        )
+    if not _unique_exists(conn, "usuarios", "uq_usuarios_restaurante_telefone"):
+        op.create_unique_constraint(
+            "uq_usuarios_restaurante_telefone",
+            "usuarios",
+            ["restaurante_id", "telefone"],
+        )
+
+    if not _check_exists(conn, "usuarios", "ck_usuarios_cargo"):
+        op.create_check_constraint(
+            "ck_usuarios_cargo",
+            "usuarios",
+            "cargo IN ('admin', 'superadmin', 'caixa', 'garcom', 'gerente', 'motoboy')",
+        )
+    if not _check_exists(conn, "usuarios", "ck_usuarios_status"):
+        op.create_check_constraint(
+            "ck_usuarios_status",
+            "usuarios",
+            "status IS NULL OR status IN ('pendente_ativacao', 'ativo', 'inativo')",
+        )
 
 
 def upgrade() -> None:
-    """Adiciona somente as estruturas realmente ausentes."""
     conn = op.get_bind()
+
+    _normalize_legacy_users(conn)
 
     _add_column_if_missing(conn, "comandas", "mesa_origem_id", sa.Integer())
     _add_column_if_missing(conn, "comandas", "delivery_status", sa.String())
@@ -105,7 +234,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Remove as estruturas cujo ciclo de vida pertence a esta migration."""
     conn = op.get_bind()
 
     if _index_exists(conn, "itens", "ix_itens_restaurante_id"):
@@ -126,5 +254,4 @@ def downgrade() -> None:
         ("lancamentos", "numero_pedido"),
     ):
         if _column_exists(conn, table_name, column_name):
-            with op.batch_alter_table(table_name) as batch_op:
-                batch_op.drop_column(column_name)
+            op.drop_column(table_name, column_name)
