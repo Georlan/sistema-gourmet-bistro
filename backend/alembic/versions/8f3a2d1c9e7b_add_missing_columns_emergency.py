@@ -51,6 +51,7 @@ def upgrade() -> None:
 
     # ─── TABELA: comandas ─────────────────────────────────────────────────────
     safe_add_column('comandas', 'mesa_origem_id', sa.Integer())
+    safe_add_column('comandas', 'mesa_transferida_de', sa.Integer())
     safe_add_column('comandas', 'delivery_status', sa.String())
     safe_add_column('comandas', 'delivery_taxa', sa.Float())
     safe_add_column('comandas', 'delivery_telefone', sa.String())
@@ -108,6 +109,7 @@ def downgrade() -> None:
     conn = op.get_bind()
     conn.execute(sa.text("ALTER TABLE itens DROP COLUMN IF EXISTS restaurante_id"))
     conn.execute(sa.text("ALTER TABLE comandas DROP COLUMN IF EXISTS mesa_origem_id"))
+    conn.execute(sa.text("ALTER TABLE comandas DROP COLUMN IF EXISTS mesa_transferida_de"))
     conn.execute(sa.text("ALTER TABLE comandas DROP COLUMN IF EXISTS delivery_status"))
     conn.execute(sa.text("ALTER TABLE comandas DROP COLUMN IF EXISTS delivery_taxa"))
     conn.execute(sa.text("ALTER TABLE comandas DROP COLUMN IF EXISTS delivery_telefone"))
