@@ -8,7 +8,10 @@ Migration de emergência: adiciona colunas que estão nos models Python mas
 que não foram criadas no banco PostgreSQL do Railway porque o schema foi
 inicializado via CREATE TABLE manual (main.py) antes do Alembic.
 
-Usa ADD COLUMN IF NOT EXISTS para ser 100% seguro e idempotente.
+A migration precisa funcionar tanto no banco legado quanto em reconstrução do
+zero. Em PostgreSQL, capturar ``DuplicateColumn`` não é idempotência: a exceção
+aborta a transação inteira. Por isso a existência é verificada por introspecção
+antes de qualquer DDL.
 """
 from typing import Sequence, Union
 
@@ -16,91 +19,112 @@ from alembic import op
 import sqlalchemy as sa
 
 
-# revision identifiers, used by Alembic.
-revision: str = '8f3a2d1c9e7b'
-# Aponta para a migration inicial como pai — garante cadeia linear e sem
-# MultipleHeads. O banco de produção é tratado via stamp no startup (main.py).
-down_revision: Union[str, Sequence[str], None] = 'dcbca6699d38'
+revision: str = "8f3a2d1c9e7b"
+down_revision: Union[str, Sequence[str], None] = "dcbca6699d38"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _column_exists(conn, table_name: str, column_name: str) -> bool:
+    inspector = sa.inspect(conn)
+    return column_name in {
+        column["name"] for column in inspector.get_columns(table_name)
+    }
+
+
+def _index_exists(conn, table_name: str, index_name: str) -> bool:
+    inspector = sa.inspect(conn)
+    return index_name in {
+        index["name"] for index in inspector.get_indexes(table_name)
+    }
+
+
+def _add_column_if_missing(
+    conn,
+    table_name: str,
+    column_name: str,
+    col_type,
+    **kwargs,
+) -> None:
+    if _column_exists(conn, table_name, column_name):
+        return
+    with op.batch_alter_table(table_name) as batch_op:
+        batch_op.add_column(sa.Column(column_name, col_type, **kwargs))
 
 
 def upgrade() -> None:
-    """Adiciona colunas faltantes detectadas nos erros do Sentry/Railway."""
+    """Adiciona somente as estruturas realmente ausentes."""
     conn = op.get_bind()
 
-    def safe_add_column(table_name, column_name, col_type, **kwargs):
-        try:
-            with op.batch_alter_table(table_name) as batch_op:
-                batch_op.add_column(sa.Column(column_name, col_type, **kwargs))
-            print(f"✅ Coluna '{column_name}' adicionada em '{table_name}'.")
-        except Exception as e:
-            print(f"⚠️ Ignorado erro ao adicionar coluna '{column_name}' em '{table_name}': {e}")
+    _add_column_if_missing(conn, "comandas", "mesa_origem_id", sa.Integer())
+    _add_column_if_missing(conn, "comandas", "delivery_status", sa.String())
+    _add_column_if_missing(conn, "comandas", "delivery_taxa", sa.Float())
+    _add_column_if_missing(conn, "comandas", "delivery_telefone", sa.String())
+    _add_column_if_missing(conn, "comandas", "delivery_endereco", sa.String())
+    _add_column_if_missing(conn, "comandas", "motoboy_id", sa.Integer())
+    _add_column_if_missing(conn, "comandas", "status_comanda", sa.String())
+    _add_column_if_missing(
+        conn,
+        "comandas",
+        "valor_pago",
+        sa.Float(),
+        server_default="0",
+    )
+    _add_column_if_missing(conn, "comandas", "fechado_em", sa.DateTime())
+    _add_column_if_missing(conn, "comandas", "criado_em", sa.DateTime())
 
-    # ─── TABELA: comandas ─────────────────────────────────────────────────────
-    safe_add_column('comandas', 'mesa_origem_id', sa.Integer())
-    safe_add_column('comandas', 'delivery_status', sa.String())
-    safe_add_column('comandas', 'delivery_taxa', sa.Float())
-    safe_add_column('comandas', 'delivery_telefone', sa.String())
-    safe_add_column('comandas', 'delivery_endereco', sa.String())
-    safe_add_column('comandas', 'motoboy_id', sa.String())
-    safe_add_column('comandas', 'status_comanda', sa.String())
-    safe_add_column('comandas', 'valor_pago', sa.Float(), server_default='0')
-    safe_add_column('comandas', 'fechado_em', sa.DateTime())
-    safe_add_column('comandas', 'criado_em', sa.DateTime())
+    _add_column_if_missing(conn, "itens", "restaurante_id", sa.Integer())
 
-    # ─── TABELA: itens ────────────────────────────────────────────────────────
-    safe_add_column('itens', 'restaurante_id', sa.Integer())
+    if conn.dialect.name == "postgresql":
+        conn.execute(sa.text("""
+            UPDATE itens
+            SET restaurante_id = c.restaurante_id
+            FROM comandas c
+            WHERE itens.comanda_id = c.id
+              AND itens.restaurante_id IS NULL
+        """))
+    else:
+        conn.execute(sa.text("""
+            UPDATE itens
+            SET restaurante_id = (
+                SELECT restaurante_id FROM comandas
+                WHERE comandas.id = itens.comanda_id
+            )
+            WHERE restaurante_id IS NULL
+        """))
 
-    # Backfill: preenche restaurante_id nos itens existentes usando a comanda pai
-    try:
-        if conn.dialect.name == "postgresql":
-            conn.execute(sa.text("""
-                UPDATE itens
-                SET restaurante_id = c.restaurante_id
-                FROM comandas c
-                WHERE itens.comanda_id = c.id
-                  AND itens.restaurante_id IS NULL
-            """))
-        else:
-            conn.execute(sa.text("""
-                UPDATE itens
-                SET restaurante_id = (
-                    SELECT restaurante_id FROM comandas
-                    WHERE comandas.id = itens.comanda_id
-                )
-                WHERE restaurante_id IS NULL
-            """))
-        print("✅ Backfill de restaurante_id em itens executado.")
-    except Exception as e:
-        print(f"⚠️ Ignorado erro no backfill de restaurante_id em itens: {e}")
+    if not _index_exists(conn, "itens", "ix_itens_restaurante_id"):
+        op.create_index(
+            "ix_itens_restaurante_id",
+            "itens",
+            ["restaurante_id"],
+            unique=False,
+        )
 
-    # Criar índice de restaurante_id em itens
-    try:
-        with op.batch_alter_table('itens') as batch_op:
-            batch_op.create_index('ix_itens_restaurante_id', ['restaurante_id'])
-        print("✅ Índice ix_itens_restaurante_id criado.")
-    except Exception as e:
-        print(f"⚠️ Ignorado erro ao criar índice ix_itens_restaurante_id: {e}")
-
-    # ─── TABELA: lancamentos ──────────────────────────────────────────────────
-    safe_add_column('lancamentos', 'numero_pedido', sa.Integer())
+    _add_column_if_missing(conn, "lancamentos", "numero_pedido", sa.Integer())
 
 
 def downgrade() -> None:
-    """Remove as colunas adicionadas nesta migration de emergência."""
+    """Remove as estruturas cujo ciclo de vida pertence a esta migration."""
     conn = op.get_bind()
-    conn.execute(sa.text("ALTER TABLE itens DROP COLUMN IF EXISTS restaurante_id"))
-    conn.execute(sa.text("ALTER TABLE comandas DROP COLUMN IF EXISTS mesa_origem_id"))
-    conn.execute(sa.text("ALTER TABLE comandas DROP COLUMN IF EXISTS delivery_status"))
-    conn.execute(sa.text("ALTER TABLE comandas DROP COLUMN IF EXISTS delivery_taxa"))
-    conn.execute(sa.text("ALTER TABLE comandas DROP COLUMN IF EXISTS delivery_telefone"))
-    conn.execute(sa.text("ALTER TABLE comandas DROP COLUMN IF EXISTS delivery_endereco"))
-    conn.execute(sa.text("ALTER TABLE comandas DROP COLUMN IF EXISTS motoboy_id"))
-    conn.execute(sa.text("ALTER TABLE comandas DROP COLUMN IF EXISTS status_comanda"))
-    conn.execute(sa.text("ALTER TABLE comandas DROP COLUMN IF EXISTS valor_pago"))
-    conn.execute(sa.text("ALTER TABLE comandas DROP COLUMN IF EXISTS fechado_em"))
-    conn.execute(sa.text("ALTER TABLE comandas DROP COLUMN IF EXISTS criado_em"))
-    conn.execute(sa.text("ALTER TABLE lancamentos DROP COLUMN IF EXISTS numero_pedido"))
+
+    if _index_exists(conn, "itens", "ix_itens_restaurante_id"):
+        op.drop_index("ix_itens_restaurante_id", table_name="itens")
+
+    for table_name, column_name in (
+        ("itens", "restaurante_id"),
+        ("comandas", "mesa_origem_id"),
+        ("comandas", "delivery_status"),
+        ("comandas", "delivery_taxa"),
+        ("comandas", "delivery_telefone"),
+        ("comandas", "delivery_endereco"),
+        ("comandas", "motoboy_id"),
+        ("comandas", "status_comanda"),
+        ("comandas", "valor_pago"),
+        ("comandas", "fechado_em"),
+        ("comandas", "criado_em"),
+        ("lancamentos", "numero_pedido"),
+    ):
+        if _column_exists(conn, table_name, column_name):
+            with op.batch_alter_table(table_name) as batch_op:
+                batch_op.drop_column(column_name)
