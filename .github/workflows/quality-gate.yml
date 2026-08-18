@@ -14,9 +14,131 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
+  brand-one-shot:
+    name: Finish Kôma lockup normalization
+    if: github.event_name == 'pull_request' && github.head_ref == 'agent/brand-logo-slogan-standardization' && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Normalize remaining visual lockups
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          # Caixa/desktop sidebars: replace the hard-coded icon + typed Kôma + slogan
+          # with the shared official wordmark component.
+          caixa = Path('src/components/CaixaPanel.tsx')
+          text = caixa.read_text(encoding='utf-8')
+          pattern = re.compile(
+              r'<span className="cashier-sidebar__logo-wrap">\s*'
+              r'<KomaLogo size="md"\s*/>\s*'
+              r'</span>\s*'
+              r'<span className="cashier-sidebar__brand-copy">\s*'
+              r'<strong>Kôma</strong>\s*'
+              r'<small>Se você está com fome, Kôma</small>\s*'
+              r'</span>',
+              re.MULTILINE,
+          )
+          text, count = pattern.subn('<KomaLogo withText withSlogan size="lg" />', text)
+          if count == 0 and '<KomaLogo withText withSlogan size="lg" />' not in text:
+              raise SystemExit('Expected CaixaPanel Kôma lockups were not found')
+          caixa.write_text(text, encoding='utf-8')
+
+          # Waiter login/header/drawer: use the official brand lockup while preserving
+          # a tenant name when it is not simply the Kôma brand name.
+          app = Path('src/App.tsx')
+          text = app.read_text(encoding='utf-8')
+
+          malformed = '''            <div className="flex justify-center">
+    <KomaLogo withText size="xl" />
+  </div>
+  <div className="space-y-1">'''
+          formatted = '''            <div className="flex justify-center">
+              <KomaLogo withText size="xl" />
+            </div>
+            <div className="space-y-1">'''
+          text = text.replace(malformed, formatted, 1)
+
+          header_pattern = re.compile(
+              r'<div className="flex items-center gap-2\.5">\s*'
+              r'<KomaLogo size="lg"\s*/>\s*'
+              r'<div>\s*'
+              r'<h1 className="font-serif text-base sm:text-lg font-black tracking-\[-0\.03em\] text-koma-foreground leading-tight">\s*'
+              r'\{restaurantName\}\s*'</n              r'</h1>\s*'
+              r'<p className="text-\[9px\] text-koma-muted font-sans leading-none mt-0\.5 font-medium">\s*'
+              r'\{activeWaiter\.nome\}\s*'</n              r'</p>\s*'</n              r'</div>\s*'</n              r'</div>',
+              re.MULTILINE,
+          )
+          header_replacement = '''<div className="flex items-center gap-2.5">
+                <KomaLogo withText size="lg" />
+                <div>
+                  {!['koma', 'kôma'].includes(restaurantName.trim().toLowerCase()) && (
+                    <h1 className="font-serif text-base sm:text-lg font-black tracking-[-0.03em] text-koma-foreground leading-tight">
+                      {restaurantName}
+                    </h1>
+                  )}
+                  <p className="text-[9px] text-koma-muted font-sans leading-none mt-0.5 font-medium">
+                    {activeWaiter.nome}
+                  </p>
+                </div>
+              </div>'''
+          text, header_count = header_pattern.subn(header_replacement, text, count=1)
+
+          drawer_pattern = re.compile(
+              r'<div className=\{clsx\(\x27flex\x27, \x27items-center\x27, \x27gap-2\.5\x27\)\}>\s*'
+              r'<KomaLogo size="md"\s*/>\s*'
+              r'<div>\s*'
+              r'<span className=\{clsx\([^>]+\)\}>\{restaurantName\}</span>\s*'
+              r'<span className="text-\[9px\] text-emerald-700 dark:text-emerald-400 font-sans font-medium block mt-0\.5">Se você está com fome, Kôma</span>\s*'
+              r'</div>\s*'</n              r'</div>',
+              re.MULTILINE,
+          )
+          drawer_replacement = '''<div className={clsx('flex', 'items-center', 'gap-2.5')}>
+                  <KomaLogo withText withSlogan size="lg" />
+                  {!['koma', 'kôma'].includes(restaurantName.trim().toLowerCase()) && (
+                    <span className={clsx('font-serif', 'font-bold', 'text-base', 'text-koma-foreground', 'leading-none', 'block')}>
+                      {restaurantName}
+                    </span>
+                  )}
+                </div>'''
+          text, drawer_count = drawer_pattern.subn(drawer_replacement, text, count=1)
+
+          # The exact header/drawer may already have been normalized by a concurrent change.
+          if header_count == 0 and '<KomaLogo withText size="lg" />' not in text:
+              raise SystemExit('Expected waiter header Kôma lockup was not found')
+          if drawer_count == 0 and '<KomaLogo withText withSlogan size="lg" />' not in text:
+              raise SystemExit('Expected waiter drawer Kôma lockup was not found')
+
+          wrong = 'Se está com fome, Kôma'
+          text = text.replace(wrong, 'Se você está com fome, Kôma')
+          app.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Commit and push normalization
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "Branding already normalized."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx src/components/CaixaPanel.tsx
+          git commit -m "fix(brand): replace remaining typed Kôma lockups"
+          git push origin HEAD:${{ github.head_ref }}
+
   frontend:
     name: Frontend typecheck + build
     runs-on: ubuntu-latest
