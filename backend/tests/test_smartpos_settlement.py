@@ -25,7 +25,11 @@ from app.services.smartpos_settlement import (
     settle_approved_smartpos_intent,
 )
 from app.services.smartpos_terminal_bridge import prepare_terminal_command
-from app.smartpos_models import SmartPosPaymentIntent, SmartPosPaymentIntentEvent
+from app.smartpos_models import (
+    RestauranteCapability,
+    SmartPosPaymentIntent,
+    SmartPosPaymentIntentEvent,
+)
 
 
 RESTAURANTE_ID = 9820
@@ -65,6 +69,19 @@ def setup_settlement_flow():
                 restaurante_id=RESTAURANTE_ID,
             ))
             db.flush()
+        capability = db.query(RestauranteCapability).filter(
+            RestauranteCapability.restaurante_id == RESTAURANTE_ID,
+            RestauranteCapability.capability == "smartpos",
+        ).first()
+        if capability is None:
+            db.add(RestauranteCapability(
+                restaurante_id=RESTAURANTE_ID,
+                capability="smartpos",
+                enabled=True,
+                source="beta",
+            ))
+        else:
+            capability.enabled = True
         if db.query(Categoria).filter(Categoria.id == "cat-settlement").first() is None:
             db.add(Categoria(id="cat-settlement", restaurante_id=RESTAURANTE_ID, nome="Settlement"))
             db.flush()
