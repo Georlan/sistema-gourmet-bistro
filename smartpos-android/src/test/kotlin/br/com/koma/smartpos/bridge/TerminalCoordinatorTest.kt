@@ -26,6 +26,7 @@ class TerminalCoordinatorTest {
     fun duplicateChargeCommandNeverChargesTwice() {
         val bridge = FakeTerminalPaymentBridge(
             nextChargeResult = TerminalPaymentResult(PaymentOutcome.PENDING),
+            nextReconcileResult = TerminalPaymentResult(PaymentOutcome.APPROVED),
         )
         val coordinator = TerminalCoordinator(bridge, InMemoryOperationStore())
 
