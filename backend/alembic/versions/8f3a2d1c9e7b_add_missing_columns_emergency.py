@@ -63,6 +63,43 @@ def _add_column_if_missing(
     op.add_column(table_name, sa.Column(column_name, col_type, **kwargs))
 
 
+def _normalize_legacy_restaurants(conn) -> None:
+    """Materializa campos públicos/configuráveis criados via ORM no período legado.
+
+    Funções SECURITY DEFINER de migrations posteriores já dependem de ``slug``,
+    ``logo_url`` e ``subtitulo``. Centralizar aqui a compatibilidade evita que uma
+    reconstrução limpa dependa de um ``create_all`` executado fora do Alembic.
+    """
+    columns = (
+        ("slug", sa.String(), {}),
+        ("logo_url", sa.String(), {}),
+        ("banner_url", sa.String(), {}),
+        ("cardapio_logo_path", sa.String(), {}),
+        ("cardapio_banner_path", sa.String(), {}),
+        ("subtitulo", sa.String(), {}),
+        ("sobre_nos", sa.String(), {}),
+        ("endereco", sa.String(), {}),
+        ("google_maps_url", sa.String(), {}),
+        ("latitude", sa.Float(), {}),
+        ("longitude", sa.Float(), {}),
+        ("status_override", sa.String(), {"server_default": "Automático"}),
+        ("socials", sa.JSON(), {}),
+        ("horarios_funcionamento", sa.JSON(), {}),
+        ("formas_pagamento_aceitas", sa.JSON(), {}),
+        ("cor_primaria", sa.String(), {"server_default": "#00b894"}),
+        ("cor_fundo", sa.String(), {"server_default": "#090a0f"}),
+    )
+    for name, column_type, kwargs in columns:
+        _add_column_if_missing(
+            conn,
+            "restaurantes",
+            name,
+            column_type,
+            nullable=True,
+            **kwargs,
+        )
+
+
 def _normalize_legacy_users(conn) -> None:
     """Converte a forma `usuario/role` inicial para a identidade tenant atual.
 
@@ -119,7 +156,6 @@ def _normalize_legacy_users(conn) -> None:
         WHERE status IS NULL OR status = '' OR status = 'pendente_ativacao'
     """))
 
-    # O schema inicial exigia estes campos, mas o model atual não os persiste.
     for legacy_name in ("usuario", "role"):
         if legacy_name in columns and columns[legacy_name].get("nullable") is False:
             op.alter_column(
@@ -183,6 +219,7 @@ def _normalize_legacy_users(conn) -> None:
 def upgrade() -> None:
     conn = op.get_bind()
 
+    _normalize_legacy_restaurants(conn)
     _normalize_legacy_users(conn)
 
     _add_column_if_missing(conn, "comandas", "mesa_origem_id", sa.Integer())
