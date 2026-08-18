@@ -35,29 +35,19 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
-          import re
 
           app = Path('src/App.tsx')
           text = app.read_text(encoding='utf-8')
-
-          if '<KomaLogo withText size="xl" />' not in text:
-              pattern = re.compile(
-                  r'<div className="flex justify-center">\s*'
-                  r'<div className="h-20 w-20 bg-koma-card border border-koma-border rounded-2xl flex items-center justify-center shadow-lg shrink-0 overflow-hidden p-2">\s*'
-                  r'<KomaLogo size="xl"\s*/>\s*'
-                  r'</div>\s*</div>\s*'
-                  r'<div className="space-y-1">\s*'
-                  r'<span className="font-serif font-black tracking-\[-0\.03em\] text-koma-foreground text-xl block">\s*'
-                  r'KÔMA\s*</span>',
-                  re.MULTILINE,
-              )
-              replacement = '''<div className="flex justify-center">
+          malformed = '''            <div className="flex justify-center">
+    <KomaLogo withText size="xl" />
+  </div>
+  <div className="space-y-1">'''
+          formatted = '''            <div className="flex justify-center">
               <KomaLogo withText size="xl" />
             </div>
             <div className="space-y-1">'''
-              text, count = pattern.subn(replacement, text, count=1)
-              if count != 1:
-                  raise SystemExit('Expected App login brand block was not found')
+          if malformed in text:
+              text = text.replace(malformed, formatted, 1)
               app.write_text(text, encoding='utf-8')
 
           wrong = 'Se está com fome, Kôma'
@@ -80,7 +70,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src
-          git commit -m "fix(brand): normalize App logo and slogan"
+          git commit -m "style(brand): format App logo markup"
           git push origin HEAD:${{ github.head_ref }}
 
   frontend:
