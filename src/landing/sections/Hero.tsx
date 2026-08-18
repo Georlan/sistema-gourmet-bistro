@@ -158,7 +158,12 @@ export function Hero() {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.7, delay: 0.72 }}
           >
-            <img src={KOMA_WORDMARK_SRC} alt="" aria-hidden="true" />
+            <img
+              src={KOMA_WORDMARK_SRC}
+              alt=""
+              aria-hidden="true"
+              style={{ width: 'clamp(96px, 8vw, 132px)', height: 'auto', objectFit: 'contain' }}
+            />
             <span>Se você está com fome, <strong>Kôma</strong></span>
           </motion.div>
         </motion.div>
