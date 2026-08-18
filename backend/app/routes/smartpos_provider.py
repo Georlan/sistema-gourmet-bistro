@@ -1,7 +1,8 @@
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from ..database import get_db, require_tenant_id
@@ -23,6 +24,7 @@ from ..smartpos_models import SmartPosPaymentIntent
 
 
 router = APIRouter(prefix="/smartpos", tags=["SmartPOS Provider"])
+_ACTIVE_PROVIDER_STATUSES = ("criada", "pendente", "processando")
 
 
 class SmartPosProviderProcessRequest(BaseModel):
@@ -39,6 +41,17 @@ class SmartPosProviderProcessResponse(BaseModel):
     provider_message: Optional[str] = None
     replayed: bool = False
     financial_effect: bool = False
+
+
+class SmartPosPendingProviderIntentResponse(BaseModel):
+    intent_id: str
+    mesa_id: int
+    amount: str
+    method: str
+    status: str
+    created_at: str
+    provider: Optional[str] = None
+    terminal_id: Optional[str] = None
 
 
 class SmartPosTerminalPrepareRequest(BaseModel):
@@ -98,6 +111,70 @@ def _require_smartpos(db: Session, restaurante_id: int) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="SmartPOS não habilitado para este restaurante.",
         )
+
+
+def _load_pending_provider_intents(
+    db: Session,
+    *,
+    restaurante_id: int,
+    provider: str,
+    terminal_id: str,
+    limit: int = 50,
+) -> list[SmartPosPaymentIntent]:
+    """Fila operacional por tenant/provider/terminal, sem qualquer mutação financeira."""
+    return (
+        db.query(SmartPosPaymentIntent)
+        .filter(
+            SmartPosPaymentIntent.restaurante_id == restaurante_id,
+            SmartPosPaymentIntent.captura == "provider_integrado",
+            SmartPosPaymentIntent.status.in_(_ACTIVE_PROVIDER_STATUSES),
+            or_(
+                SmartPosPaymentIntent.provider_name.is_(None),
+                SmartPosPaymentIntent.provider_name == provider,
+            ),
+            or_(
+                SmartPosPaymentIntent.provider_terminal_id.is_(None),
+                SmartPosPaymentIntent.provider_terminal_id == terminal_id,
+            ),
+        )
+        .order_by(SmartPosPaymentIntent.criado_em.asc(), SmartPosPaymentIntent.id.asc())
+        .limit(limit)
+        .all()
+    )
+
+
+@router.get(
+    "/payment-intents/pendentes-provider",
+    response_model=list[SmartPosPendingProviderIntentResponse],
+)
+def listar_payment_intents_pendentes_provider(
+    terminal_id: str = Query(min_length=1, max_length=64),
+    provider: Literal["pagbank"] = "pagbank",
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("smartpos:receber")),
+):
+    """Lista somente intents integrados que este terminal pode iniciar ou reconciliar."""
+    restaurante_id = require_tenant_id()
+    _require_smartpos(db, restaurante_id)
+    intents = _load_pending_provider_intents(
+        db,
+        restaurante_id=restaurante_id,
+        provider=provider,
+        terminal_id=terminal_id,
+    )
+    return [
+        {
+            "intent_id": intent.id,
+            "mesa_id": intent.mesa_id,
+            "amount": str(intent.valor),
+            "method": intent.metodo,
+            "status": intent.status,
+            "created_at": intent.criado_em.isoformat(),
+            "provider": intent.provider_name,
+            "terminal_id": intent.provider_terminal_id,
+        }
+        for intent in intents
+    ]
 
 
 @router.post(
