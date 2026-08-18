@@ -3911,7 +3911,7 @@ export function CaixaPanel({
                     </span>
                     <span className="cashier-sidebar__brand-copy">
                       <strong>Kôma</strong>
-                      <small>Se está com fome, Kôma</small>
+                      <small>Se você está com fome, Kôma</small>
                     </span>
                   </div>
                   <div className={clsx('flex', 'items-center', 'gap-1.5')}>
@@ -4064,7 +4064,7 @@ export function CaixaPanel({
                 </span>
                 <span className="cashier-sidebar__brand-copy">
                   <strong>Kôma</strong>
-                  <small>Se está com fome, Kôma</small>
+                  <small>Se você está com fome, Kôma</small>
                 </span>
               </div>
                 <button

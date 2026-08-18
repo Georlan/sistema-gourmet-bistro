@@ -9,6 +9,7 @@ import { FAQ } from './sections/FAQ';
 import { Plans } from './sections/Plans';
 import { FinalCTA } from './sections/FinalCTA';
 import { SUBSCRIPTION_PLANS } from '../config/subscriptionPlans';
+import { KOMA_SLOGAN } from '../brand/komaBrand';
 
 type DividerVariant = 'dark-light' | 'light-dark' | 'light-green';
 
@@ -66,7 +67,7 @@ export default function LandingPage() {
       url: 'https://sistema-gourmet-bistro.pages.dev/landing',
       inLanguage: 'pt-BR',
       description: 'Sistema de gestão para restaurantes com PDV, gestão de mesas, KDS, caixa e cardápio digital.',
-      slogan: 'Se você está com fome, Kôma',
+      slogan: KOMA_SLOGAN,
       featureList: [
         'PDV e frente de caixa',
         'Gestão de mesas e comandas',
