@@ -49,7 +49,7 @@ def _seed_smoke_fixture() -> None:
                 Restaurante(
                     id=RESTAURANTE_ID,
                     nome="B1.4 Operational Smoke",
-                    plano="pocket",
+                    plano="bistro",
                 )
             )
             db.flush()
@@ -125,13 +125,11 @@ def test_b14_operational_smoke_postgres() -> None:
     _seed_smoke_fixture()
 
     with TestClient(app) as client:
-        # 0. Runtime/API + banco respondem antes de qualquer mutação operacional.
         health = client.get("/health")
         assert health.status_code == 200, health.text
         assert health.json()["status"] == "ok"
         assert health.json()["database"] == "healthy"
 
-        # 1. Login real: não fabricamos JWT no teste.
         login = client.post(
             "/auth/login",
             json={
@@ -148,7 +146,6 @@ def test_b14_operational_smoke_postgres() -> None:
 
         headers = {"Authorization": f"Bearer {token}"}
 
-        # 2. O fluxo começa sem turno e abre um caixa real pela rota pública.
         initial_summary = client.get("/caixa/turno-atual/resumo", headers=headers)
         assert initial_summary.status_code == 200, initial_summary.text
         assert initial_summary.json()["status"] == "sem_turno"
@@ -161,7 +158,6 @@ def test_b14_operational_smoke_postgres() -> None:
         assert opened.status_code == 201, opened.text
         assert opened.json()["status"] == "aberto"
 
-        # 3. Cria a comanda exatamente pela API usada pela operação.
         created = client.post(
             "/comandas/",
             headers=headers,
@@ -174,7 +170,6 @@ def test_b14_operational_smoke_postgres() -> None:
         assert created.status_code == 201, created.text
         comanda_id = created.json()["id"]
 
-        # 4. Lança um item. Esta operação deve também produzir o job de impressão.
         launched = client.post(
             f"/comandas/{comanda_id}/lancamentos",
             headers=headers,
@@ -205,8 +200,6 @@ def test_b14_operational_smoke_postgres() -> None:
             db.close()
             current_restaurante_id.reset(tenant_token)
 
-        # 5/6. Recebe o valor integral por Pix e repete a mesma requisição para
-        # provar que um retry/duplo toque não duplica faturamento.
         payment_payload = {
             "valor": PRODUTO_VALOR,
             "metodo": "pix",
@@ -247,7 +240,6 @@ def test_b14_operational_smoke_postgres() -> None:
             db.close()
             current_restaurante_id.reset(tenant_token)
 
-        # 7. Fecha o turno com exatamente o valor digital recebido.
         closed = client.post(
             "/caixa/turno/fechar",
             headers=headers,
