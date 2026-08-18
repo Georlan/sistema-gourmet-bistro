@@ -18,25 +18,38 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+RESTAURANTE_WHITELABEL_COLUMNS = (
+    ('slug', sa.String()),
+    ('logo_url', sa.String()),
+    ('banner_url', sa.String()),
+    ('subtitulo', sa.String()),
+    ('sobre_nos', sa.String()),
+    ('endereco', sa.String()),
+    ('google_maps_url', sa.String()),
+    ('latitude', sa.Float()),
+    ('longitude', sa.Float()),
+    ('status_override', sa.String()),
+    ('socials', sa.JSON()),
+    ('horarios_funcionamento', sa.JSON()),
+    ('formas_pagamento_aceitas', sa.JSON()),
+    ('cor_primaria', sa.String()),
+    ('cor_fundo', sa.String()),
+)
+
+
 def upgrade() -> None:
-    """Upgrade schema."""
+    """Materializa o contrato white-label e a chave composta de clientes."""
     bind = op.get_bind()
     inspector = sa.inspect(bind)
 
     # ─── ALTERAÇÕES NA TABELA: restaurantes ───────────────────
+    # Bancos antigos podiam ter recebido parte destes campos pelo bootstrap
+    # ORM. A migration deve ser idempotente em relação a esse estado legado e
+    # também construir sozinha um PostgreSQL vazio.
     if inspector.has_table('restaurantes'):
         existing_cols = {c['name'] for c in inspector.get_columns('restaurantes')}
         with op.batch_alter_table('restaurantes') as batch_op:
-            for col_name, col_type in [
-                ('slug', sa.String()),
-                ('subtitulo', sa.String()),
-                ('google_maps_url', sa.String()),
-                ('latitude', sa.Float()),
-                ('longitude', sa.Float()),
-                ('socials', sa.JSON()),
-                ('horarios_funcionamento', sa.JSON()),
-                ('formas_pagamento_aceitas', sa.JSON())
-            ]:
+            for col_name, col_type in RESTAURANTE_WHITELABEL_COLUMNS:
                 if col_name not in existing_cols:
                     batch_op.add_column(sa.Column(col_name, col_type, nullable=True))
 
@@ -60,15 +73,13 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Downgrade schema."""
-    with op.batch_alter_table('restaurantes') as batch_op:
-        batch_op.drop_column('slug')
-        batch_op.drop_column('subtitulo')
-        batch_op.drop_column('google_maps_url')
-        batch_op.drop_column('latitude')
-        batch_op.drop_column('longitude')
-        batch_op.drop_column('socials')
-        batch_op.drop_column('horarios_funcionamento')
-        batch_op.drop_column('formas_pagamento_aceitas')
+    bind = op.get_bind()
+    if sa.inspect(bind).has_table('restaurantes'):
+        existing_cols = {c['name'] for c in sa.inspect(bind).get_columns('restaurantes')}
+        with op.batch_alter_table('restaurantes') as batch_op:
+            for col_name, _ in reversed(RESTAURANTE_WHITELABEL_COLUMNS):
+                if col_name in existing_cols:
+                    batch_op.drop_column(col_name)
 
     op.drop_table('clientes')
     op.create_table(
