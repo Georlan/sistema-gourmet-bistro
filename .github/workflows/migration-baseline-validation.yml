@@ -51,7 +51,7 @@ jobs:
       - name: Install backend test dependencies
         run: python -m pip install --upgrade pip && python -m pip install -r backend/requirements-dev.txt
 
-      - name: Create isolated validation databases
+      - name: Create isolated Supabase-compatible PostgreSQL databases
         run: |
           python - <<'PY'
           import psycopg2
@@ -66,6 +66,15 @@ jobs:
           conn.autocommit = True
           try:
               with conn.cursor() as cur:
+                  # O Kôma roda em Supabase PostgreSQL e algumas migrations de
+                  # hardening administram explicitamente estas roles. Criamos
+                  # apenas as roles de compatibilidade; Storage continua fora
+                  # deste teste de schema principal.
+                  for role in ("anon", "authenticated", "service_role"):
+                      cur.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", (role,))
+                      if cur.fetchone() is None:
+                          cur.execute(f'CREATE ROLE "{role}" NOLOGIN')
+
                   for name in ("koma_clean", "koma_upgrade"):
                       cur.execute(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
                       cur.execute(f'CREATE DATABASE "{name}"')
