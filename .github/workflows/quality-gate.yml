@@ -14,65 +14,9 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  brand-one-shot:
-    name: Normalize App branding
-    if: github.event_name == 'pull_request' && github.head_ref == 'agent/brand-logo-slogan-standardization' && github.actor != 'github-actions[bot]'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-
-    steps:
-      - name: Checkout PR branch
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
-          fetch-depth: 0
-
-      - name: Normalize logo and slogan
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          app = Path('src/App.tsx')
-          text = app.read_text(encoding='utf-8')
-          malformed = '''            <div className="flex justify-center">
-    <KomaLogo withText size="xl" />
-  </div>
-  <div className="space-y-1">'''
-          formatted = '''            <div className="flex justify-center">
-              <KomaLogo withText size="xl" />
-            </div>
-            <div className="space-y-1">'''
-          if malformed in text:
-              text = text.replace(malformed, formatted, 1)
-              app.write_text(text, encoding='utf-8')
-
-          wrong = 'Se está com fome, Kôma'
-          correct = 'Se você está com fome, Kôma'
-          for path in Path('src').rglob('*'):
-              if path.suffix not in {'.ts', '.tsx', '.js', '.jsx', '.html'}:
-                  continue
-              source = path.read_text(encoding='utf-8')
-              if wrong in source:
-                  path.write_text(source.replace(wrong, correct), encoding='utf-8')
-          PY
-
-      - name: Commit and push normalization
-        shell: bash
-        run: |
-          if git diff --quiet; then
-            echo "Branding already normalized."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src
-          git commit -m "style(brand): format App logo markup"
-          git push origin HEAD:${{ github.head_ref }}
-
   frontend:
     name: Frontend typecheck + build
     runs-on: ubuntu-latest
