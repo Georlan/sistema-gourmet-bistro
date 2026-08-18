@@ -38,4 +38,6 @@ from . import financial_refund_listing as _financial_refund_listing  # noqa: F40
 # segunda pilha de autenticação. O endpoint resultante é /auth/smartpos/contexto.
 from . import auth as _auth  # noqa: E402
 from . import smartpos as _smartpos  # noqa: E402
+from . import smartpos_provider as _smartpos_provider  # noqa: E402
 _auth.router.include_router(_smartpos.router)
+_auth.router.include_router(_smartpos_provider.router)

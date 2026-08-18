@@ -97,7 +97,7 @@ jobs:
           engine = create_engine(os.environ["DATABASE_URL"])
           with engine.connect() as conn:
               version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-              assert version == "c8a1f7d2e604", version
+              assert version == "d9b2c4e6f801", version
 
               inspector = inspect(conn)
               db_tables = set(inspector.get_table_names(schema="public"))
@@ -124,6 +124,10 @@ jobs:
                   for column in inspector.get_columns("smartpos_payment_intents", schema="public")
               }
               assert "status_em" in intent_columns
+              for provider_column in (
+                  "provider_name", "provider_operation_key", "provider_reference", "provider_last_error"
+              ):
+                  assert provider_column in intent_columns
 
               user_columns = {
                   column["name"]: column
@@ -273,7 +277,7 @@ jobs:
           engine = create_engine(os.environ["DATABASE_URL"])
           with engine.connect() as conn:
               version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-              assert version == "c8a1f7d2e604", version
+              assert version == "d9b2c4e6f801", version
               assert inspect(conn).has_table("smartpos_payment_intents")
               assert inspect(conn).has_table("smartpos_payment_intent_events")
 
@@ -351,7 +355,7 @@ jobs:
           with engine.connect() as conn:
               assert inspect(conn).has_table("smartpos_payment_intents")
               assert inspect(conn).has_table("smartpos_payment_intent_events")
-              assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "c8a1f7d2e604"
+              assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "d9b2c4e6f801"
               assert conn.execute(text("SELECT COUNT(*) FROM comandas WHERE id = 'cmd-b1-upgrade'")).scalar_one() == 1
               assert conn.execute(text("SELECT COUNT(*) FROM usuarios WHERE id = 'b1-current-operator'")).scalar_one() == 1
               print("B1.3.1 OK: downgrade/re-upgrade round trip preserved legacy and current data")
