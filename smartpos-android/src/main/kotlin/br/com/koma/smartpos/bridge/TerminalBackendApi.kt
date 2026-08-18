@@ -1,10 +1,8 @@
 package br.com.koma.smartpos.bridge
 
 import java.math.BigDecimal
-import java.net.URI
-import java.net.http.HttpClient
-import java.net.http.HttpRequest
-import java.net.http.HttpResponse
+import java.net.HttpURLConnection
+import java.net.URL
 
 interface TerminalBackendApi {
     fun prepare(intentId: String, provider: String, operationKey: String, terminalId: String): TerminalCommand
@@ -26,17 +24,30 @@ data class HttpResponsePayload(val statusCode: Int, val body: String)
 class JdkHttpTransport(
     private val baseUrl: String,
     private val bearerToken: () -> String,
-    private val client: HttpClient = HttpClient.newHttpClient(),
+    private val connectTimeoutMs: Int = 10_000,
+    private val readTimeoutMs: Int = 30_000,
 ) : HttpTransport {
     override fun post(path: String, body: String): HttpResponsePayload {
-        val request = HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl.trimEnd('/') + path))
-            .header("Content-Type", "application/json")
-            .header("Authorization", "Bearer ${bearerToken()}")
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build()
-        val response = client.send(request, HttpResponse.BodyHandlers.ofString())
-        return HttpResponsePayload(response.statusCode(), response.body())
+        val connection = URL(baseUrl.trimEnd('/') + path).openConnection() as HttpURLConnection
+        return try {
+            connection.requestMethod = "POST"
+            connection.connectTimeout = connectTimeoutMs
+            connection.readTimeout = readTimeoutMs
+            connection.doOutput = true
+            connection.setRequestProperty("Content-Type", "application/json")
+            connection.setRequestProperty("Authorization", "Bearer ${bearerToken()}")
+
+            connection.outputStream.use { output ->
+                output.write(body.toByteArray(Charsets.UTF_8))
+            }
+
+            val status = connection.responseCode
+            val stream = if (status in 200..399) connection.inputStream else connection.errorStream
+            val responseBody = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+            HttpResponsePayload(status, responseBody)
+        } finally {
+            connection.disconnect()
+        }
     }
 }
 
