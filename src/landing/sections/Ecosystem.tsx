@@ -9,6 +9,7 @@ import {
   RefreshCw,
   Store,
 } from 'lucide-react';
+import { KOMA_WORDMARK_SRC } from '../../brand/komaBrand';
 import { LeadCaptureModal } from '../components/LeadCaptureModal';
 
 const CHANNELS = ['Retirada', 'Delivery', 'Garçom', 'Cardápio digital'];
@@ -51,7 +52,11 @@ export function Ecosystem() {
               </div>
               <div className="koma-eco-channel-core">
                 <small>ENTRA NO</small>
-                <strong>KÔMA</strong>
+                <img
+                  src={KOMA_WORDMARK_SRC}
+                  alt="Kôma"
+                  style={{ width: 'clamp(88px, 8vw, 124px)', height: 'auto', objectFit: 'contain' }}
+                />
                 <i />
               </div>
             </div>

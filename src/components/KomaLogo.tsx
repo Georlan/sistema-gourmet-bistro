@@ -2,6 +2,7 @@ import React from 'react';
 import clsx from 'clsx';
 import logoOnDark from '../assets/logo-koma-on-dark.png';
 import logoOnLight from '../assets/logo-koma-on-light.png';
+import { KOMA_SLOGAN, KOMA_WORDMARK_SRC } from '../brand/komaBrand';
 
 export interface KomaLogoProps {
   className?: string;
@@ -21,6 +22,14 @@ const SIZE_MAP = {
   custom: '',
 };
 
+const WORDMARK_SIZE_MAP = {
+  sm: 'w-20 h-auto',
+  md: 'w-24 h-auto',
+  lg: 'w-28 h-auto',
+  xl: 'w-44 h-auto',
+  custom: '',
+};
+
 export const KomaLogo: React.FC<KomaLogoProps> = ({
   className,
   imageClassName,
@@ -31,6 +40,7 @@ export const KomaLogo: React.FC<KomaLogoProps> = ({
   size = 'md',
 }) => {
   const sizeClass = SIZE_MAP[size] || SIZE_MAP.md;
+  const wordmarkSizeClass = WORDMARK_SIZE_MAP[size] || WORDMARK_SIZE_MAP.md;
 
   const renderImages = () => {
     if (variant === 'dark') {
@@ -74,20 +84,17 @@ export const KomaLogo: React.FC<KomaLogoProps> = ({
   }
 
   return (
-    <div className={clsx('inline-flex items-center gap-2.5', className)}>
-      <span className="inline-flex items-center justify-center shrink-0">{renderImages()}</span>
-      <div className="flex flex-col text-left">
-        {withText && (
-          <span className="font-serif font-black tracking-[-0.03em] text-koma-foreground leading-tight text-base">
-            KÔMA
-          </span>
-        )}
-        {withSlogan && (
-          <span className="text-[9px] font-sans font-semibold tracking-wide text-koma-accent leading-tight mt-0.5">
-            Se está com fome, Kôma
-          </span>
-        )}
-      </div>
+    <div className={clsx('inline-flex flex-col items-start justify-center', className)}>
+      <img
+        src={KOMA_WORDMARK_SRC}
+        alt={alt}
+        className={clsx(wordmarkSizeClass, 'object-contain shrink-0', imageClassName)}
+      />
+      {withSlogan && (
+        <span className="mt-0.5 text-[9px] font-sans font-semibold leading-tight tracking-wide text-koma-accent">
+          {KOMA_SLOGAN}
+        </span>
+      )}
     </div>
   );
 };

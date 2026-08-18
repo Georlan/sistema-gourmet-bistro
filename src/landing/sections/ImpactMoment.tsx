@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import logoOnGreen from '../../assets/logo-koma-on-green.png';
+import { KOMA_WORDMARK_SRC } from '../../brand/komaBrand';
 
 const TURN_METRICS = [
   { value: '12', label: 'MESAS EM ATENDIMENTO' },
@@ -43,7 +43,12 @@ export function ImpactMoment() {
           transition={{ duration: 0.62, delay: 0.08 }}
         >
           <div className="koma-impact-console-head">
-            <img src={logoOnGreen} alt="" aria-hidden="true" />
+            <img
+              src={KOMA_WORDMARK_SRC}
+              alt=""
+              aria-hidden="true"
+              style={{ width: 'clamp(86px, 8vw, 118px)', height: 'auto', objectFit: 'contain' }}
+            />
             <div>
               <span>AGORA NO RESTAURANTE</span>
               <strong>RESUMO DA OPERAÇÃO</strong>
