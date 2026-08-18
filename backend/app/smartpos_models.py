@@ -139,6 +139,10 @@ class SmartPosPaymentIntent(Base):
         nullable=False,
         default=lambda: datetime.datetime.now(datetime.timezone.utc),
     )
+    provider_name = Column(String(32), nullable=True)
+    provider_operation_key = Column(String(128), nullable=True)
+    provider_reference = Column(String(128), nullable=True)
+    provider_last_error = Column(String(255), nullable=True)
     origem = Column(String(24), nullable=False, default="smartpos")
     criado_em = Column(
         DateTime(timezone=True),
