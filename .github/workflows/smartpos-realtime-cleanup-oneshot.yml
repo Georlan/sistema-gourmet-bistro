@@ -1,0 +1,55 @@
+name: SmartPOS realtime navigation cleanup one shot
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.head_ref == 'fix/smartpos-table-realtime'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/smartpos-table-realtime
+          fetch-depth: 0
+
+      - name: Keep React state updaters pure
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('src/smartpos/SmartPosPage.tsx')
+          text = path.read_text(encoding='utf-8')
+
+          old = '''              setComandas((current) => current.filter((comanda) => comanda.mesa_id !== mesaId));\n              setSelectedMesaId((current) => {\n                if (current !== mesaId) return current;\n                setScreen((currentScreen) => (\n                  currentScreen === 'mesa' || currentScreen === 'pedido' || currentScreen === 'receber'\n                    ? 'mesas'\n                    : currentScreen\n                ));\n                return null;\n              });\n'''
+          new = '''              setComandas((current) => current.filter((comanda) => comanda.mesa_id !== mesaId));\n              setSelectedMesaId((current) => (current === mesaId ? null : current));\n'''
+          if text.count(old) != 1:
+              raise RuntimeError(f'selected mesa updater mismatch: {text.count(old)}')
+          text = text.replace(old, new, 1)
+
+          anchor = '''  }, [session?.token, session?.user.id, session?.user.restaurante_id]);\n\n  const handleLogin = async (event: React.FormEvent<HTMLFormElement>) => {\n'''
+          replacement = '''  }, [session?.token, session?.user.id, session?.user.restaurante_id]);\n\n  useEffect(() => {\n    if (selectedMesaId !== null) return;\n    if (screen === 'mesa' || screen === 'pedido' || screen === 'receber') {\n      setScreen('mesas');\n    }\n  }, [screen, selectedMesaId]);\n\n  const handleLogin = async (event: React.FormEvent<HTMLFormElement>) => {\n'''
+          if text.count(anchor) != 1:
+              raise RuntimeError(f'navigation effect anchor mismatch: {text.count(anchor)}')
+          text = text.replace(anchor, replacement, 1)
+          path.write_text(text, encoding='utf-8')
+
+      - name: Validate
+        run: |
+          git diff --check
+          npm ci
+          npm run lint
+          npm run build
+
+      - name: Commit cleanup
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/smartpos/SmartPosPage.tsx
+          git commit -m "fix(smartpos): keep realtime navigation state pure"
+          git push origin HEAD:fix/smartpos-table-realtime
