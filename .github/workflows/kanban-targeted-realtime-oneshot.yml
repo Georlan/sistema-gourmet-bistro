@@ -1,0 +1,83 @@
+name: Kanban targeted realtime one shot
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.head_ref == 'fix/kanban-targeted-realtime'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/kanban-targeted-realtime
+          fetch-depth: 0
+
+      - name: Patch targeted realtime path
+        shell: python
+        run: |
+          from pathlib import Path
+
+          app_path = Path('src/App.tsx')
+          text = app_path.read_text(encoding='utf-8')
+
+          ref_anchor = "  const fetchOrdersAbortControllerRef = useRef<AbortController | null>(null);\n"
+          ref_replacement = ref_anchor + "  const targetedOrderRequestRef = useRef<Record<string, number>>({});\n"
+          if text.count(ref_anchor) != 1:
+              raise RuntimeError(f'orders ref anchor mismatch: {text.count(ref_anchor)}')
+          text = text.replace(ref_anchor, ref_replacement, 1)
+
+          map_block = '''      const mappedOrders = comandas.map((comanda: any) => {\n        return {\n          id: comanda.id,\n          clienteId: comanda.cliente_id || null,\n          clientePhone: comanda.delivery_telefone || null,\n          mesaId: comanda.mesa_id || 0,\n          garcomId: comanda.garcom_id,\n          // Use name from API response (criada_por populated by SQLAlchemy relationship)\n          garcomNome: comanda.criada_por?.nome || comanda.garcom?.nome || 'Garçom',\n          timestamp: parseBackendDateTime(comanda.criado_em),\n          tipo: comanda.tipo,\n          valorPago: comanda.valor_pago || 0,\n          identificador: comanda.identificador || null,\n          statusComanda: comanda.status_comanda || null,       // aguardando_pagamento | null\n          deliveryStatus: comanda.delivery_status || null,    // pendente | producao | pronto | transito | finalizado\n          mesaOrigemId: comanda.mesa_origem_id || null,\n          mesaTransferidaDe: comanda.mesa_transferida_de || null,\n          itens: comanda.itens\n            .filter((item: any) => item.status !== 'cancelado')\n            .map((item: any) => {\n              const opt = optimisticItemStatusRef.current[item.id];\n              let effectiveStatus = item.status;\n              if (opt && (now - opt.ts < 8000)) {\n                if (opt.status === item.status) {\n                  delete optimisticItemStatusRef.current[item.id];\n                } else {\n                  effectiveStatus = opt.status;\n                }\n              }\n              return {\n                id: item.id,\n                produtoId: item.produto_id,\n                // Use name from API (produto populated by SQLAlchemy relationship)\n                nome: item.produto?.nome || liveProdutos.find(p => p.id === item.produto_id)?.nome || `Item #${item.produto_id}`,\n                preco: item.preco_unit,\n                observacao: item.observacao || '',\n                clienteNome: item.cliente_nome || 'Consumo Geral',\n                status: effectiveStatus,\n                lancamentoId: item.lancamento_id\n              };\n            })\n        };\n      });\n'''
+          helper = '''  const mapBackendComandaToOrder = (comanda: any, now = Date.now()): Order => ({\n    id: comanda.id,\n    clienteId: comanda.cliente_id || null,\n    clientePhone: comanda.delivery_telefone || null,\n    mesaId: comanda.mesa_id || 0,\n    garcomId: comanda.garcom_id,\n    garcomNome: comanda.criada_por?.nome || comanda.garcom?.nome || 'Garçom',\n    timestamp: parseBackendDateTime(comanda.criado_em),\n    tipo: comanda.tipo,\n    valorPago: comanda.valor_pago || 0,\n    identificador: comanda.identificador || null,\n    statusComanda: comanda.status_comanda || null,\n    deliveryStatus: comanda.delivery_status || null,\n    mesaOrigemId: comanda.mesa_origem_id || null,\n    mesaTransferidaDe: comanda.mesa_transferida_de || null,\n    itens: (comanda.itens || [])\n      .filter((item: any) => item.status !== 'cancelado')\n      .map((item: any) => {\n        const opt = optimisticItemStatusRef.current[item.id];\n        let effectiveStatus = item.status;\n        if (opt && (now - opt.ts < 8000)) {\n          if (opt.status === item.status) {\n            delete optimisticItemStatusRef.current[item.id];\n          } else {\n            effectiveStatus = opt.status;\n          }\n        }\n        return {\n          id: item.id,\n          produtoId: item.produto_id,\n          nome: item.produto?.nome || liveProdutos.find(p => p.id === item.produto_id)?.nome || `Item #${item.produto_id}`,\n          preco: item.preco_unit,\n          observacao: item.observacao || '',\n          clienteNome: item.cliente_nome || 'Consumo Geral',\n          status: effectiveStatus,\n          lancamentoId: item.lancamento_id\n        };\n      })\n  });\n\n'''
+          function_anchor = '  // Load active orders from backend API\n'
+          if text.count(function_anchor) != 1:
+              raise RuntimeError(f'fetch orders comment anchor mismatch: {text.count(function_anchor)}')
+          if text.count(map_block) != 1:
+              raise RuntimeError(f'order mapping block mismatch: {text.count(map_block)}')
+          text = text.replace(function_anchor, helper + function_anchor, 1)
+          text = text.replace(map_block, "      const mappedOrders = comandas.map((comanda: any) => mapBackendComandaToOrder(comanda, now));\n", 1)
+
+          after_full_anchor = '''  };\n\n  useEffect(() => {\n    if (!isAuthenticated) return;\n    fetchOrdersFromAPI();\n'''
+          targeted = '''  };\n\n  const fetchOrderByIdFromAPI = async (comandaId: string) => {\n    const normalizedId = String(comandaId || '').trim();\n    if (!normalizedId) {\n      fetchOrdersFromAPI();\n      return;\n    }\n\n    const requestVersion = (targetedOrderRequestRef.current[normalizedId] || 0) + 1;\n    targetedOrderRequestRef.current[normalizedId] = requestVersion;\n\n    try {\n      const response = await fetch(`${API_BASE_URL}/comandas/${encodeURIComponent(normalizedId)}`, {\n        headers: getAuthHeaders(),\n        cache: 'no-store'\n      });\n      if (response.status === 401) {\n        handleLogout();\n        return;\n      }\n      if (response.status === 404) {\n        if (targetedOrderRequestRef.current[normalizedId] === requestVersion) {\n          setOrders(prevOrders => prevOrders.filter(order => String(order.id) !== normalizedId));\n        }\n        return;\n      }\n      if (!response.ok) {\n        throw new Error(`HTTP ${response.status}`);\n      }\n\n      const mappedOrder = mapBackendComandaToOrder(await response.json());\n      if (targetedOrderRequestRef.current[normalizedId] !== requestVersion) return;\n\n      setOrders(prevOrders => {\n        const nextOrders = prevOrders.filter(order =>\n          String(order.id) !== String(mappedOrder.id)\n          && !(String(order.id).startsWith('temp-') && mappedOrder.mesaId > 0 && order.mesaId === mappedOrder.mesaId)\n        );\n        return [...nextOrders, mappedOrder].sort((a, b) => a.timestamp - b.timestamp);\n      });\n      setIsOrdersLoaded(true);\n      setFetchError(null);\n    } catch (err) {\n      console.warn('Falha no refresh direcionado da comanda; reconciliando snapshot completo.', err);\n      fetchOrdersFromAPI();\n    }\n  };\n\n  useEffect(() => {\n    if (!isAuthenticated) return;\n    fetchOrdersFromAPI();\n'''
+          if text.count(after_full_anchor) != 1:
+              raise RuntimeError(f'after fetch orders anchor mismatch: {text.count(after_full_anchor)}')
+          text = text.replace(after_full_anchor, targeted, 1)
+
+          launch_block = '''            } else if (isLaunchCreated) {\n              // Este é o primeiro momento em que existe conteúdo operacional real.\n              // Busca imediatamente para o card e o alerta nascerem no mesmo ciclo.\n              scheduleRealtimeRefresh({ orders: true, tables: true, summary: true }, 0);\n            } else {\n'''
+          launch_replacement = '''            } else if (isLaunchCreated) {\n              // O evento já informa qual comanda mudou. Evita reconstruir todo o salão\n              // no caminho crítico de um novo pedido.\n              const comandaId = String(data.detail?.comanda_id || '').trim();\n              if (comandaId) {\n                void fetchOrderByIdFromAPI(comandaId);\n                scheduleRealtimeRefresh({ tables: true, summary: true }, 0);\n              } else {\n                // Compatibilidade defensiva com produtores antigos sem comanda_id.\n                scheduleRealtimeRefresh({ orders: true, tables: true, summary: true }, 0);\n              }\n            } else {\n'''
+          if text.count(launch_block) != 1:
+              raise RuntimeError(f'launch realtime block mismatch: {text.count(launch_block)}')
+          text = text.replace(launch_block, launch_replacement, 1)
+          app_path.write_text(text, encoding='utf-8')
+
+          orders_path = Path('backend/app/routes/orders.py')
+          orders = orders_path.read_text(encoding='utf-8')
+          route_block = '''    comanda = db.query(Comanda).filter(\n        Comanda.restaurante_id == require_tenant_id(),\n        Comanda.id == comanda_id,\n    ).first()\n'''
+          route_replacement = '''    comanda = (\n        db.query(Comanda)\n        .options(\n            joinedload(Comanda.itens).joinedload(Item.produto),\n            joinedload(Comanda.criada_por),\n        )\n        .filter(\n            Comanda.restaurante_id == require_tenant_id(),\n            Comanda.id == comanda_id,\n        )\n        .first()\n    )\n'''
+          if orders.count(route_block) != 1:
+              raise RuntimeError(f'get_comanda query anchor mismatch: {orders.count(route_block)}')
+          orders = orders.replace(route_block, route_replacement, 1)
+          orders_path.write_text(orders, encoding='utf-8')
+
+      - name: Validate patch
+        run: |
+          git diff --check
+          npm ci
+          npm run lint
+          npm run build
+          cd backend
+          python -m pytest -q tests/test_smartpos_simulated_e2e.py tests/test_websocket_segmentation.py
+
+      - name: Commit optimization
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx backend/app/routes/orders.py
+          git commit -m "perf(realtime): fetch only changed order for Kanban"
+          git push origin HEAD:fix/kanban-targeted-realtime
