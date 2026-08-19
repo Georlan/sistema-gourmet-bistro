@@ -1,0 +1,82 @@
+name: SmartPOS table realtime one shot
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: smartpos-table-realtime-oneshot
+  cancel-in-progress: true
+
+jobs:
+  patch:
+    if: github.head_ref == 'fix/smartpos-table-realtime'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/smartpos-table-realtime
+          fetch-depth: 0
+
+      - name: Patch SmartPOS realtime consumer
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('src/smartpos/SmartPosPage.tsx')
+          text = path.read_text(encoding='utf-8')
+
+          old_state = '''    let socket: WebSocket | null = null;\n    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;\n    let stopped = false;\n'''
+          new_state = '''    let socket: WebSocket | null = null;\n    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;\n    let operationalSyncTimer: ReturnType<typeof setTimeout> | null = null;\n    let stopped = false;\n'''
+          if text.count(old_state) != 1:
+              raise RuntimeError(f'websocket state anchor mismatch: {text.count(old_state)}')
+          text = text.replace(old_state, new_state, 1)
+
+          old_connect = '''    const connect = () => {\n      if (stopped) return;\n      const wsUrl = `${WS_BASE_URL}/ws/${encodeURIComponent(session.user.id)}?token=${encodeURIComponent(session.token)}`;\n      socket = new WebSocket(wsUrl);\n\n      socket.onmessage = (event) => {\n'''
+          new_connect = '''    const reconcileOperationalState = async () => {\n      try {\n        const headers = { Authorization: `Bearer ${session.token}` };\n        const [mesasResponse, comandasResponse] = await Promise.all([\n          fetch(`${API_BASE_URL}/mesas/`, { headers, cache: 'no-store' }),\n          fetch(`${API_BASE_URL}/comandas/detalhes/todos?fechada=false`, { headers, cache: 'no-store' }),\n        ]);\n\n        if ([mesasResponse.status, comandasResponse.status].some((status) => status === 401 || status === 403)) {\n          clearSmartPosSession();\n          setSession(null);\n          setContext(null);\n          setScreen('home');\n          setMesas([]);\n          setComandas([]);\n          setSelectedMesaId(null);\n          return;\n        }\n        if (!mesasResponse.ok || !comandasResponse.ok) return;\n\n        const [nextMesas, nextComandas] = await Promise.all([\n          mesasResponse.json() as Promise<Mesa[]>,\n          comandasResponse.json() as Promise<Comanda[]>,\n        ]);\n        if (stopped) return;\n        setMesas(nextMesas);\n        setComandas(nextComandas);\n        setMesasError('');\n      } catch {\n        // Mantém o último snapshot válido e reconcilia no próximo evento/reconexão.\n      }\n    };\n\n    const scheduleOperationalReconcile = (delayMs = 60) => {\n      if (operationalSyncTimer) clearTimeout(operationalSyncTimer);\n      operationalSyncTimer = setTimeout(() => {\n        operationalSyncTimer = null;\n        void reconcileOperationalState();\n      }, delayMs);\n    };\n\n    const connect = () => {\n      if (stopped) return;\n      const wsUrl = `${WS_BASE_URL}/ws/${encodeURIComponent(session.user.id)}?token=${encodeURIComponent(session.token)}`;\n      socket = new WebSocket(wsUrl);\n\n      socket.onopen = () => {\n        if (stopped) return;\n        // Reconciliar ao reconectar cobre eventos perdidos durante uma queda de rede.\n        void reconcileContext();\n        scheduleOperationalReconcile(0);\n      };\n\n      socket.onmessage = (event) => {\n'''
+          if text.count(old_connect) != 1:
+              raise RuntimeError(f'connect anchor mismatch: {text.count(old_connect)}')
+          text = text.replace(old_connect, new_connect, 1)
+
+          old_event = '''          const message = JSON.parse(event.data);\n          const eventName = message.event || message.type;\n\n          if (eventName === 'config_updated') {\n'''
+          new_event = '''          const message = JSON.parse(event.data);\n          const eventName = message.event || message.type;\n\n          if (\n            eventName === 'tables_updated'\n            || eventName === 'TABLE_UPDATED'\n            || eventName === 'MESA_ATUALIZADA'\n            || eventName === 'MESA_UPDATED'\n            || eventName === 'NEW_ORDER'\n            || eventName === 'ORDER_UPDATED'\n            || eventName === 'order_updated'\n            || eventName === 'order_status_updated'\n          ) {\n            const payload = message.data || message.detail || {};\n            const mesaId = Number(payload.mesa_id);\n            const status = String(payload.status || '').trim().toLowerCase();\n\n            if (\n              (eventName === 'MESA_ATUALIZADA' || eventName === 'MESA_UPDATED')\n              && Number.isInteger(mesaId)\n              && mesaId > 0\n              && status === 'livre'\n            ) {\n              // Remove imediatamente o snapshot obsoleto; o fetch abaixo confirma o estado canônico.\n              setComandas((current) => current.filter((comanda) => comanda.mesa_id !== mesaId));\n              setSelectedMesaId((current) => {\n                if (current !== mesaId) return current;\n                setScreen((currentScreen) => (\n                  currentScreen === 'mesa' || currentScreen === 'pedido' || currentScreen === 'receber'\n                    ? 'mesas'\n                    : currentScreen\n                ));\n                return null;\n              });\n            }\n\n            // Cancelamento forçado publica MESA_ATUALIZADA + tables_updated em sequência.\n            // O debounce transforma a rajada em uma única reconciliação de mesas/comandas.\n            scheduleOperationalReconcile();\n          }\n\n          if (eventName === 'config_updated') {\n'''
+          if text.count(old_event) != 1:
+              raise RuntimeError(f'event anchor mismatch: {text.count(old_event)}')
+          text = text.replace(old_event, new_event, 1)
+
+          old_cash = '''          if (eventName === 'cash_updated') {\n            void reconcileContext();\n          }\n'''
+          new_cash = '''          if (eventName === 'cash_updated') {\n            void reconcileContext();\n            scheduleOperationalReconcile();\n          }\n'''
+          if text.count(old_cash) != 1:
+              raise RuntimeError(f'cash event anchor mismatch: {text.count(old_cash)}')
+          text = text.replace(old_cash, new_cash, 1)
+
+          old_cleanup = '''      stopped = true;\n      if (reconnectTimer) clearTimeout(reconnectTimer);\n      if (socket) {\n        socket.onmessage = null;\n        socket.onclose = null;\n        socket.onerror = null;\n        socket.close();\n      }\n'''
+          new_cleanup = '''      stopped = true;\n      if (reconnectTimer) clearTimeout(reconnectTimer);\n      if (operationalSyncTimer) clearTimeout(operationalSyncTimer);\n      if (socket) {\n        socket.onopen = null;\n        socket.onmessage = null;\n        socket.onclose = null;\n        socket.onerror = null;\n        socket.close();\n      }\n'''
+          if text.count(old_cleanup) != 1:
+              raise RuntimeError(f'cleanup anchor mismatch: {text.count(old_cleanup)}')
+          text = text.replace(old_cleanup, new_cleanup, 1)
+
+          path.write_text(text, encoding='utf-8')
+
+      - name: Validate patch
+        run: |
+          git diff --check
+          grep -q "eventName === 'MESA_ATUALIZADA'" src/smartpos/SmartPosPage.tsx
+          grep -q 'scheduleOperationalReconcile(0)' src/smartpos/SmartPosPage.tsx
+          grep -q 'setComandas((current) => current.filter' src/smartpos/SmartPosPage.tsx
+          npm ci
+          npm run lint
+          npm run build
+
+      - name: Commit realtime fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/smartpos/SmartPosPage.tsx
+          git commit -m "fix(smartpos): reconcile tables over websocket"
+          git push origin HEAD:fix/smartpos-table-realtime
