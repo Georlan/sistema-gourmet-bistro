@@ -215,14 +215,14 @@ async def audit_http_and_busy_day() -> None:
             response = await client.get(path, headers={"Authorization": f"Bearer {tokens[rid]}"})
             elapsed = (time.perf_counter() - started) * 1000
             if response.status_code != 200:
-      finding(
-          "BUSY_DAY_CAPACITY_FAILURE",
-          "HIGH",
-          "Concurrent restaurant traffic exhausted backend database capacity",
-          f"tenant={rid} path={path} returned HTTP {response.status_code}: {response.text[:160]}",
-          once=True,
-      )
-      return elapsed
+                finding(
+                    "BUSY_DAY_CAPACITY_FAILURE",
+                    "HIGH",
+                    "Concurrent restaurant traffic exhausted backend database capacity",
+                    f"tenant={rid} path={path} returned HTTP {response.status_code}: {response.text[:160]}",
+                    once=True,
+                )
+                return elapsed
             data = response.json()
             if path.endswith("contexto"):
                 assert data["restaurante"]["id"] == rid
