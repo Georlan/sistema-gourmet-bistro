@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..database import get_db, require_tenant_id
-from ..models import Comanda, Item, Usuario
+from ..models import Comanda, Item, Lancamento, Usuario
 from ..security import require_permission
 from ..smartpos_models import SmartPosPaymentIntent
 
@@ -47,6 +47,7 @@ class SmartPosCashTableProjection(BaseModel):
     itens_preparando: int
     itens_prontos: int
     conta_pedida: bool
+    origem_smartpos: bool = False
     pagamento: Optional[SmartPosCashPaymentProjection] = None
 
 
@@ -111,6 +112,24 @@ def projetar_operacao_smartpos_no_caixa(
     for intent in intents:
         latest_intent_by_table.setdefault(int(intent.mesa_id), intent)
 
+    smartpos_origin_tables = {
+        int(mesa_id)
+        for (mesa_id,) in (
+            db.query(Comanda.mesa_id)
+            .join(Lancamento, Lancamento.comanda_id == Comanda.id)
+            .filter(
+                Comanda.restaurante_id == restaurante_id,
+                Comanda.fechada == False,
+                Comanda.mesa_id.isnot(None),
+                Lancamento.restaurante_id == restaurante_id,
+                Lancamento.origem == "smartpos",
+            )
+            .distinct()
+            .all()
+        )
+        if mesa_id is not None
+    }
+
     grouped: dict[int, list[Comanda]] = {}
     for comanda in comandas:
         grouped.setdefault(int(comanda.mesa_id), []).append(comanda)
@@ -133,7 +152,7 @@ def projetar_operacao_smartpos_no_caixa(
 
         if intent is not None and intent.status == "aprovada" and intent.pagamento_id is None:
             operational_state = "aprovado_pendente_liquidacao"
-        elif intent is not None and intent.status in {"pendente", "processando"}:
+        elif intent is not None and intent.status in {"criada", "pendente", "processando"}:
             operational_state = "pagamento_processando"
         elif preparing > 0:
             operational_state = "em_preparo"
@@ -154,6 +173,7 @@ def projetar_operacao_smartpos_no_caixa(
             itens_preparando=preparing,
             itens_prontos=ready,
             conta_pedida=account_requested,
+            origem_smartpos=mesa_id in smartpos_origin_tables,
             pagamento=_project_payment(intent),
         ))
 

@@ -248,12 +248,15 @@ class VendaDiretaCreate(BaseModel):
 
 class LancamentoCreate(BaseModel):
     garcom_id: str
+    # Proveniencia operacional para UX. Não concede permissão nem altera RBAC.
+    origem: Optional[Literal["smartpos"]] = None
     itens: List[ItemCreate]
 
 class LancamentoResponse(BaseModel):
     id: str
     comanda_id: str
     garcom_id: str
+    origem: str = "desconhecida"
     timestamp: datetime
     itens: List[ItemResponse] = []
     dispensado_impressao: Optional[bool] = False

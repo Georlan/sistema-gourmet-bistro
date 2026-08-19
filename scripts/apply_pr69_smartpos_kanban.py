@@ -529,53 +529,42 @@ if caixa.count(old_col3_chip) != 1:
     raise RuntimeError(f"CaixaPanel: column 3 chip marker count={caixa.count(old_col3_chip)}")
 caixa = caixa.replace(old_col3_chip, new_col3_chip, 1)
 
-payment_button_pattern = re.compile(
-    r'''(?P<indent>\s+)<button\n'''
-    r'''(?P=indent)  type="button"\n'''
-    r'''(?P=indent)  onClick=\{async \(e\) => \{\n'''
-    r'''(?P=indent)    e\.stopPropagation\(\);\n'''
-    r'''(?P=indent)    if \(isLoading\) return;\n'''
-    r'''(?P<body>.*?)'''
-    r'''(?P=indent)  >\n'''
-    r'''(?P=indent)    <Check size=\{13\} /><span>Abrir pagamento</span>\n'''
-    r'''(?P=indent)  </button>''',
-    re.DOTALL,
-)
-match = payment_button_pattern.search(caixa)
-if match is None:
-    raise RuntimeError("CaixaPanel: canonical 'Abrir pagamento' button not found")
-if "const tableComandas = orders.filter" not in match.group("body"):
-    raise RuntimeError("CaixaPanel: matched a different payment button")
-indent = match.group("indent")
-body = match.group("body")
-body = body.replace(
-    "const tableComandas = orders.filter",
-    "if (smartPosState?.blocksPayment) return;\n\n" + indent + "    const tableComandas = orders.filter",
-    1,
-)
-# Keep existing class list, but add explicit disabled affordance.
-body = body.replace(
-    "'cursor-pointer', 'uppercase'",
-    "'cursor-pointer', 'disabled:cursor-wait', 'disabled:opacity-70', 'uppercase'",
-    1,
-)
-button_replacement = (
-    f"{indent}<button\n"
-    f"{indent}  type=\"button\"\n"
-    f"{indent}  disabled={{smartPosState?.blocksPayment === true}}\n"
-    f"{indent}  onClick={{async (e) => {{\n"
-    f"{indent}    e.stopPropagation();\n"
-    f"{indent}    if (isLoading) return;\n"
-    f"{body}"
-    f"{indent}  >\n"
-    f"{indent}    {{smartPosState?.blocksPayment ? (\n"
-    f"{indent}      <><Smartphone size={{13}} /><span>{{smartPosState.ctaLabel}}</span></>\n"
-    f"{indent}    ) : (\n"
-    f"{indent}      <><Check size={{13}} /><span>Abrir pagamento</span></>\n"
-    f"{indent}    )}}\n"
-    f"{indent}  </button>"
-)
-caixa = caixa[:match.start()] + button_replacement + caixa[match.end():]
+old_payment_guard = """                                  e.stopPropagation();
+                                  if (isLoading) return;
+                                  
+                                  const tableComandas = orders.filter("""
+new_payment_guard = """                                  e.stopPropagation();
+                                  if (smartPosState?.blocksPayment || isLoading) return;
+                                  
+                                  const tableComandas = orders.filter("""
+if caixa.count(old_payment_guard) != 1:
+    raise RuntimeError(f"CaixaPanel: payment guard marker count={caixa.count(old_payment_guard)}")
+caixa = caixa.replace(old_payment_guard, new_payment_guard, 1)
+
+old_payment_open = """                              <button
+                                type=\"button\"
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  if (smartPosState?.blocksPayment || isLoading) return;"""
+new_payment_open = """                              <button
+                                type=\"button\"
+                                disabled={smartPosState?.blocksPayment === true}
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  if (smartPosState?.blocksPayment || isLoading) return;"""
+if caixa.count(old_payment_open) != 1:
+    raise RuntimeError(f"CaixaPanel: payment button opening count={caixa.count(old_payment_open)}")
+caixa = caixa.replace(old_payment_open, new_payment_open, 1)
+
+old_payment_label = """                                <Check size={13} /><span>Abrir pagamento</span>"""
+new_payment_label = """                                {smartPosState?.blocksPayment ? (
+                                  <><Smartphone size={13} /><span>{smartPosState.ctaLabel}</span></>
+                                ) : (
+                                  <><Check size={13} /><span>Abrir pagamento</span></>
+                                )}"""
+if caixa.count(old_payment_label) != 1:
+    raise RuntimeError(f"CaixaPanel: payment button label count={caixa.count(old_payment_label)}")
+caixa = caixa.replace(old_payment_label, new_payment_label, 1)
 write(caixa_path, caixa)
 
 # ---------------------------------------------------------------------------

@@ -349,6 +349,7 @@ export default function SmartPosOrderingFlow({
         headers: authHeaders,
         body: JSON.stringify({
           garcom_id: session.user.id,
+          origem: 'smartpos',
           itens: items,
         }),
       });
