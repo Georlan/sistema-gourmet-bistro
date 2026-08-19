@@ -1,0 +1,64 @@
+name: PR69 SmartPOS Kanban One Shot
+
+on:
+  push:
+    branches:
+      - agent/smartpos-no-hardware-hardening
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    name: Apply SmartPOS Kanban refactor
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/smartpos-no-hardware-hardening
+          fetch-depth: 0
+
+      - name: Apply guarded refactor
+        run: python scripts/apply_pr69_smartpos_kanban.py
+
+      - name: Remove one-shot workflow
+        run: rm .github/workflows/pr69-smartpos-kanban-oneshot.yml
+
+      - name: Python syntax check
+        run: |
+          python -m py_compile \
+            backend/app/models.py \
+            backend/app/schemas.py \
+            backend/app/routes/orders.py \
+            backend/app/routes/cardapio.py \
+            backend/app/routes/smartpos_cash_projection.py \
+            backend/tests/test_smartpos_cash_projection.py \
+            backend/alembic/versions/b7f4d2e9c601_add_lancamento_origin.py
+
+      - name: Diff integrity
+        run: git diff --check
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: TypeScript check
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build
+
+      - name: Commit refactor to PR branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "refactor(smartpos): integrate status into cashier kanban"
+          git push origin HEAD:agent/smartpos-no-hardware-hardening
