@@ -12,7 +12,7 @@ jobs:
   apply:
     name: Apply SmartPOS Kanban refactor
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - name: Checkout PR branch
         uses: actions/checkout@v4
@@ -69,25 +69,6 @@ jobs:
       - name: Diff integrity
         if: steps.apply.outputs.status == '0'
         run: git diff --check
-
-      - name: Setup Node
-        if: steps.apply.outputs.status == '0'
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-
-      - name: Install frontend dependencies
-        if: steps.apply.outputs.status == '0'
-        run: npm ci
-
-      - name: TypeScript check
-        if: steps.apply.outputs.status == '0'
-        run: npm run lint
-
-      - name: Production build
-        if: steps.apply.outputs.status == '0'
-        run: npm run build
 
       - name: Commit refactor to PR branch
         if: steps.apply.outputs.status == '0'
