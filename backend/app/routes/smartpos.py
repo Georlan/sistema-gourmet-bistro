@@ -295,6 +295,41 @@ def criar_payment_intent(
             detail="A mesa não possui saldo pendente.",
         )
 
+    # Primeiro valida o conteúdo intrínseco da parcela contra o consumo real.
+    # Conflitos de formato/valor continuam 422; concorrência entre parcelas é 409.
+    if valor > saldo:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="O valor informado excede o saldo da mesa.",
+        )
+
+    if payload.escopo == "itens":
+        if not normalized_items:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Selecione ao menos um item para receber por itens.",
+            )
+        by_id = {item.id: item for item in itens if not item.pago}
+        if any(item_id not in by_id for item_id in normalized_items):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Há item inválido, pago ou fora desta mesa.",
+            )
+        selected_total = sum(
+            (_money(by_id[item_id].preco_unit) for item_id in normalized_items),
+            Decimal("0.00"),
+        )
+        if selected_total != valor:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="O valor deve corresponder exatamente aos itens selecionados.",
+            )
+    elif normalized_items:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="item_ids só pode ser informado quando o escopo for por itens.",
+        )
+
     # Parcelas ainda não liquidadas reservam saldo. O lock da Mesa acima faz
     # duas criações concorrentes enxergarem uma ordem total no PostgreSQL.
     reserving_intents = (
@@ -308,11 +343,6 @@ def criar_payment_intent(
         .with_for_update()
         .all()
     )
-    if payload.escopo == "itens" and not normalized_items:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Selecione ao menos um item para receber por itens.",
-        )
 
     reserved_item_ids = {
         item_id
@@ -345,28 +375,6 @@ def criar_payment_intent(
                 "O valor excede o saldo disponível após considerar pagamentos em andamento. "
                 f"Disponível: {disponivel}."
             ),
-        )
-
-    if payload.escopo == "itens":
-        by_id = {item.id: item for item in itens if not item.pago}
-        if any(item_id not in by_id for item_id in normalized_items):
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Há item inválido, pago ou fora desta mesa.",
-            )
-        selected_total = sum(
-            (_money(by_id[item_id].preco_unit) for item_id in normalized_items),
-            Decimal("0.00"),
-        )
-        if selected_total != valor:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="O valor deve corresponder exatamente aos itens selecionados.",
-            )
-    elif normalized_items:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="item_ids só pode ser informado quando o escopo for por itens.",
         )
 
     intent = SmartPosPaymentIntent(
