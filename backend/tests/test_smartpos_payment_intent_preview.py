@@ -4,6 +4,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.database import Base, SessionLocal, current_restaurante_id, engine
+from app.financial_models import PagamentoEstorno
+from app.financial_refund_models import PagamentoEstornoAlocacao, PagamentoEstornoLiquidacao
+from app.financial_models import PagamentoEstorno
+from app.financial_refund_models import PagamentoEstornoAlocacao, PagamentoEstornoLiquidacao
 from app.main import app
 from app.models import (
     CaixaTurno,
@@ -29,6 +33,8 @@ from app.smartpos_models import (
 client = TestClient(app)
 RESTAURANTE_ID = 9404
 USER_ID = "smartpos-intent-garcom"
+CAIXA_USER_ID = "smartpos-intent-caixa"
+CAIXA_USER_ID = "smartpos-intent-caixa"
 
 
 @pytest.fixture(autouse=True)
@@ -37,6 +43,24 @@ def setup_smartpos_payment_intent():
     token = current_restaurante_id.set(RESTAURANTE_ID)
     db = SessionLocal()
     try:
+        db.query(PagamentoEstornoAlocacao).filter(
+            PagamentoEstornoAlocacao.restaurante_id == RESTAURANTE_ID
+        ).delete()
+        db.query(PagamentoEstornoLiquidacao).filter(
+            PagamentoEstornoLiquidacao.restaurante_id == RESTAURANTE_ID
+        ).delete()
+        db.query(PagamentoEstorno).filter(
+            PagamentoEstorno.restaurante_id == RESTAURANTE_ID
+        ).delete()
+        db.query(PagamentoEstornoAlocacao).filter(
+            PagamentoEstornoAlocacao.restaurante_id == RESTAURANTE_ID
+        ).delete()
+        db.query(PagamentoEstornoLiquidacao).filter(
+            PagamentoEstornoLiquidacao.restaurante_id == RESTAURANTE_ID
+        ).delete()
+        db.query(PagamentoEstorno).filter(
+            PagamentoEstorno.restaurante_id == RESTAURANTE_ID
+        ).delete()
         db.query(SmartPosPaymentIntentEvent).filter(
             SmartPosPaymentIntentEvent.restaurante_id == RESTAURANTE_ID
         ).delete()
@@ -62,6 +86,19 @@ def setup_smartpos_payment_intent():
                 email="smartpos-intent@koma.test",
                 senha_hash="$2b$12$dummyhashsmartposintent",
                 role="garcom",
+                status="ativo",
+                restaurante_id=RESTAURANTE_ID,
+            ))
+            db.flush()
+
+        caixa_user = db.query(Usuario).filter(Usuario.id == CAIXA_USER_ID).first()
+        if caixa_user is None:
+            db.add(Usuario(
+                id=CAIXA_USER_ID,
+                nome="Caixa SmartPOS",
+                email="smartpos-caixa@koma.test",
+                senha_hash="$2b$12$dummyhashsmartposcaixa",
+                role="caixa",
                 status="ativo",
                 restaurante_id=RESTAURANTE_ID,
             ))
@@ -184,6 +221,15 @@ def setup_smartpos_payment_intent():
 
 def headers():
     token = create_access_token(subject=USER_ID, restaurante_id=RESTAURANTE_ID, role="garcom")
+    return {"Authorization": f"Bearer {token}"}
+
+
+def caixa_headers():
+    token = create_access_token(
+        subject=CAIXA_USER_ID,
+        restaurante_id=RESTAURANTE_ID,
+        role="caixa",
+    )
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -666,6 +712,216 @@ def test_f11_divisao_sequencial_debito_externo_e_dinheiro_fecha_mesa():
         comanda = db.query(Comanda).filter(Comanda.id == "cmd-smartpos-intent").one()
         assert Decimal(str(comanda.valor_pago)) == Decimal("42")
         assert comanda.fechada is True
+    finally:
+        db.close()
+        current_restaurante_id.reset(token)
+
+
+def test_f12_cancelamento_pre_cobranca_libera_reserva_e_e_idempotente():
+    first = client.post(
+        "/auth/smartpos/payment-intents",
+        headers=headers(),
+        json={
+            "mesa_id": 4,
+            "valor": "30.00",
+            "metodo": "pix",
+            "escopo": "valor",
+            "idempotency_key": "f12-cancel-create-01",
+        },
+    )
+    assert first.status_code == 201, first.text
+    intent_id = first.json()["id"]
+    payload = {
+        "idempotency_key": "f12-cancel-action-01",
+        "motivo": "Cliente desistiu antes da cobrança.",
+    }
+    cancelled = client.post(
+        f"/auth/smartpos/payment-intents/{intent_id}/cancelar",
+        headers=headers(),
+        json=payload,
+    )
+    replay = client.post(
+        f"/auth/smartpos/payment-intents/{intent_id}/cancelar",
+        headers=headers(),
+        json=payload,
+    )
+    assert cancelled.status_code == 200, cancelled.text
+    assert cancelled.json()["status"] == "cancelada"
+    assert cancelled.json()["financial_effect"] is False
+    assert replay.status_code == 200, replay.text
+    assert replay.json()["transition_replayed"] is True
+
+    full = client.post(
+        "/auth/smartpos/payment-intents",
+        headers=headers(),
+        json={
+            "mesa_id": 4,
+            "valor": "42.00",
+            "metodo": "dinheiro",
+            "escopo": "valor",
+            "idempotency_key": "f12-after-cancel-full",
+        },
+    )
+    assert full.status_code == 201, full.text
+
+
+def test_f12_cobranca_em_processamento_nao_pode_ser_cancelada():
+    created = client.post(
+        "/auth/smartpos/payment-intents",
+        headers=headers(),
+        json={
+            "mesa_id": 4,
+            "valor": "10.00",
+            "metodo": "credito",
+            "escopo": "valor",
+            "idempotency_key": "f12-processing-create",
+        },
+    )
+    intent_id = created.json()["id"]
+    prepared = client.post(
+        f"/auth/smartpos/payment-intents/{intent_id}/preparar-terminal",
+        headers=headers(),
+        json={
+            "provider": "pagbank",
+            "operation_key": "f12-processing-op-key",
+            "terminal_id": "terminal-f12",
+        },
+    )
+    assert prepared.status_code == 200, prepared.text
+    assert prepared.json()["should_execute"] is True
+
+    cancel = client.post(
+        f"/auth/smartpos/payment-intents/{intent_id}/cancelar",
+        headers=headers(),
+        json={"idempotency_key": "f12-processing-cancel"},
+    )
+    assert cancel.status_code == 409, cancel.text
+    assert "reconcil" in cancel.json()["detail"].lower()
+
+
+def test_f12_pagamento_manual_pode_ser_estornado_no_caixa_sem_reabrir_comanda():
+    created = client.post(
+        "/auth/smartpos/payment-intents",
+        headers=headers(),
+        json={
+            "mesa_id": 4,
+            "valor": "42.00",
+            "metodo": "dinheiro",
+            "escopo": "valor",
+            "idempotency_key": "f12-refund-cash-create",
+        },
+    )
+    confirmed = client.post(
+        f"/auth/smartpos/payment-intents/{created.json()['id']}/confirmar-manual",
+        headers=headers(),
+        json={
+            "idempotency_key": "f12-refund-cash-confirm",
+            "valor_recebido": "50.00",
+        },
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    payment_id = confirmed.json()["payment_id"]
+    refund_payload = {
+        "valor": "10.00",
+        "motivo": "Devolução parcial solicitada pelo cliente.",
+        "idempotency_key": "f12-refund-cash-action",
+        "metodo_devolucao": "dinheiro",
+    }
+    refunded = client.post(
+        f"/caixa/pagamentos/{payment_id}/estornar",
+        headers=caixa_headers(),
+        json=refund_payload,
+    )
+    replay = client.post(
+        f"/caixa/pagamentos/{payment_id}/estornar",
+        headers=caixa_headers(),
+        json=refund_payload,
+    )
+    assert refunded.status_code == 201, refunded.text
+    assert replay.status_code == 201, replay.text
+    assert replay.json()["id"] == refunded.json()["id"]
+    assert Decimal(str(refunded.json()["saldo_estornavel_pagamento"])) == Decimal("32.0")
+
+    token = current_restaurante_id.set(RESTAURANTE_ID)
+    db = SessionLocal()
+    try:
+        assert db.query(PagamentoEstorno).filter(
+            PagamentoEstorno.restaurante_id == RESTAURANTE_ID,
+            PagamentoEstorno.pagamento_id == payment_id,
+        ).count() == 1
+        comanda = db.query(Comanda).filter(Comanda.id == "cmd-smartpos-intent").one()
+        assert comanda.fechada is True
+        assert Decimal(str(comanda.valor_pago)) == Decimal("42")
+    finally:
+        db.close()
+        current_restaurante_id.reset(token)
+
+
+def test_f12_pagamento_provider_nao_pode_gerar_estorno_contabil_sem_reversao_real():
+    created = client.post(
+        "/auth/smartpos/payment-intents",
+        headers=headers(),
+        json={
+            "mesa_id": 4,
+            "valor": "42.00",
+            "metodo": "pix",
+            "escopo": "valor",
+            "idempotency_key": "f12-provider-refund-create",
+        },
+    )
+    intent_id = created.json()["id"]
+    prepared = client.post(
+        f"/auth/smartpos/payment-intents/{intent_id}/preparar-terminal",
+        headers=headers(),
+        json={
+            "provider": "pagbank",
+            "operation_key": "f12-provider-refund-op",
+            "terminal_id": "terminal-f12-refund",
+        },
+    )
+    assert prepared.status_code == 200, prepared.text
+    approved = client.post(
+        f"/auth/smartpos/payment-intents/{intent_id}/resultado-terminal",
+        headers=headers(),
+        json={
+            "provider": "pagbank",
+            "operation_key": "f12-provider-refund-op",
+            "terminal_id": "terminal-f12-refund",
+            "outcome": "approved",
+            "reference": "provider-f12-approved",
+        },
+    )
+    assert approved.status_code == 200, approved.text
+    payment_id = approved.json()["payment_id"]
+    assert payment_id
+
+    listing = client.get(
+        "/caixa/pagamentos/estornaveis",
+        headers=caixa_headers(),
+    )
+    assert listing.status_code == 200, listing.text
+    assert payment_id not in {str(row["id"]) for row in listing.json()}
+
+    refund = client.post(
+        f"/caixa/pagamentos/{payment_id}/estornar",
+        headers=caixa_headers(),
+        json={
+            "valor": "42.00",
+            "motivo": "Tentativa sem reversão no provider.",
+            "idempotency_key": "f12-provider-refund-block",
+            "metodo_devolucao": "pix",
+        },
+    )
+    assert refund.status_code == 409, refund.text
+    assert "provider" in refund.json()["detail"].lower()
+
+    token = current_restaurante_id.set(RESTAURANTE_ID)
+    db = SessionLocal()
+    try:
+        assert db.query(PagamentoEstorno).filter(
+            PagamentoEstorno.restaurante_id == RESTAURANTE_ID,
+            PagamentoEstorno.pagamento_id == payment_id,
+        ).count() == 0
     finally:
         db.close()
         current_restaurante_id.reset(token)

@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db, require_tenant_id
 from ..models import Pagamento, Usuario
+from ..smartpos_models import SmartPosPaymentIntent
+from ..smartpos_models import SmartPosPaymentIntent
 from ..security import require_permission
 from ..services.refund_ui import refundable_payment_payload_human
 from . import caixa as legacy_cash
@@ -44,7 +46,19 @@ def find_refundable_payments(
         if not payments:
             break
 
+        integrated_payment_ids = {
+            str(row[0])
+            for row in db.query(SmartPosPaymentIntent.pagamento_id).filter(
+                SmartPosPaymentIntent.restaurante_id == restaurante_id,
+                SmartPosPaymentIntent.pagamento_id.in_([payment.id for payment in payments]),
+                SmartPosPaymentIntent.captura == "provider_integrado",
+            ).all()
+            if row[0]
+        }
+
         for payment in payments:
+            if str(payment.id) in integrated_payment_ids:
+                continue
             payload = refundable_payment_payload_human(
                 db,
                 restaurante_id,

@@ -100,10 +100,15 @@ class SmartPosTerminalResultResponse(BaseModel):
 
 
 def _load_intent(db: Session, restaurante_id: int, intent_id: str) -> SmartPosPaymentIntent:
-    intent = db.query(SmartPosPaymentIntent).filter(
-        SmartPosPaymentIntent.restaurante_id == restaurante_id,
-        SmartPosPaymentIntent.id == intent_id,
-    ).first()
+    intent = (
+        db.query(SmartPosPaymentIntent)
+        .filter(
+            SmartPosPaymentIntent.restaurante_id == restaurante_id,
+            SmartPosPaymentIntent.id == intent_id,
+        )
+        .with_for_update()
+        .first()
+    )
     if intent is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
