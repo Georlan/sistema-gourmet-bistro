@@ -78,6 +78,16 @@ class SmartPosManualConfirmationResponse(SmartPosPaymentIntentResponse):
     troco: Decimal = Decimal("0.00")
 
 
+class SmartPosIntentCancellation(BaseModel):
+    idempotency_key: str = Field(min_length=8, max_length=128)
+    motivo: Optional[str] = Field(default=None, max_length=255)
+
+
+class SmartPosIntentCancellationResponse(SmartPosPaymentIntentResponse):
+    transition_replayed: bool = False
+    financial_effect: bool = False
+
+
 def _money(value: object) -> Decimal:
     return Decimal(str(value or 0)).quantize(_CENTAVO, rounding=ROUND_HALF_UP)
 
@@ -448,10 +458,15 @@ def confirmar_payment_intent_manual(
             detail="SmartPOS não habilitado para este restaurante.",
         )
 
-    intent = db.query(SmartPosPaymentIntent).filter(
-        SmartPosPaymentIntent.restaurante_id == restaurante_id,
-        SmartPosPaymentIntent.id == intent_id,
-    ).first()
+    intent = (
+        db.query(SmartPosPaymentIntent)
+        .filter(
+            SmartPosPaymentIntent.restaurante_id == restaurante_id,
+            SmartPosPaymentIntent.id == intent_id,
+        )
+        .with_for_update()
+        .first()
+    )
     if intent is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -575,4 +590,102 @@ def confirmar_payment_intent_manual(
         "settled": True,
         "financial_effect": True,
         "troco": troco,
+    }
+
+@router.post(
+    "/payment-intents/{intent_id}/cancelar",
+    response_model=SmartPosIntentCancellationResponse,
+)
+def cancelar_payment_intent(
+    intent_id: str,
+    payload: SmartPosIntentCancellation,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("smartpos:receber")),
+):
+    """Cancela somente antes de existir cobrança/efeito financeiro."""
+    restaurante_id = require_tenant_id()
+    if not has_capability(db, restaurante_id, "smartpos"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="SmartPOS não habilitado para este restaurante.",
+        )
+
+    intent = (
+        db.query(SmartPosPaymentIntent)
+        .filter(
+            SmartPosPaymentIntent.restaurante_id == restaurante_id,
+            SmartPosPaymentIntent.id == intent_id,
+        )
+        .with_for_update()
+        .first()
+    )
+    if intent is None:
+        raise HTTPException(status_code=404, detail="Intenção de pagamento não encontrada.")
+    if intent.pagamento_id is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Este recebimento já foi liquidado. Use o estorno financeiro do Caixa.",
+        )
+    if intent.status == "processando":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "A cobrança já está em processamento no terminal. "
+                "Não é seguro cancelar; reconcilie o resultado da mesma operação."
+            ),
+        )
+    if intent.status == "aprovada":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "A cobrança já foi aprovada e aguarda liquidação. "
+                "Não cancele: conclua a reconciliação financeira."
+            ),
+        )
+
+    try:
+        result = transition_intent(
+            db,
+            intent=intent,
+            target_status="cancelada",
+            transition_key=payload.idempotency_key,
+            actor_id=current_user.id,
+            motivo=payload.motivo or "Recebimento cancelado pelo operador antes da cobrança.",
+        )
+        db.commit()
+    except InvalidSmartPosTransition as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    db.refresh(intent)
+    background_tasks.add_task(
+        manager.broadcast,
+        {
+            "event": "payment_intent_updated",
+            "detail": {
+                "intent_id": intent.id,
+                "mesa_id": intent.mesa_id,
+                "status": intent.status,
+                "type": "smartpos_intent_cancelled",
+            },
+        },
+        restaurante_id,
+    )
+    background_tasks.add_task(
+        manager.broadcast,
+        {
+            "event": "tables_updated",
+            "detail": {
+                "type": "smartpos_intent_cancelled",
+                "mesa_id": intent.mesa_id,
+                "intent_id": intent.id,
+            },
+        },
+        restaurante_id,
+    )
+    return {
+        **_intent_payload(intent),
+        "transition_replayed": result.replayed,
+        "financial_effect": False,
     }

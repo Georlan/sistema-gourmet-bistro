@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from ..financial_models import PagamentoAlocacao, PagamentoEstorno
 from ..financial_refund_models import PagamentoEstornoAlocacao
 from ..models import Pagamento
+from ..smartpos_models import SmartPosPaymentIntent
 from .cash_reconciliation import (
     RefundDomainError,
     create_refund,
@@ -171,6 +172,17 @@ def create_refund_guarded(
             idempotency_key=idempotency_key,
             metodo_devolucao=metodo_devolucao,
             alocacoes=alocacoes,
+        )
+
+    smartpos_intent = db.query(SmartPosPaymentIntent).filter(
+        SmartPosPaymentIntent.restaurante_id == restaurante_id,
+        SmartPosPaymentIntent.pagamento_id == payment_id,
+    ).first()
+    if smartpos_intent is not None and smartpos_intent.captura == "provider_integrado":
+        raise RefundDomainError(
+            "Pagamento integrado da maquininha exige estorno confirmado pelo provider; "
+            "a reversão física ainda não está habilitada.",
+            status_code=409,
         )
 
     refund_value = money(valor)

@@ -108,6 +108,7 @@ export default function SmartPosPaymentFlow({
   const [captureMode, setCaptureMode] = useState<Captura | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isConfirmingManual, setIsConfirmingManual] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const [manualReceived, setManualReceived] = useState('');
   const [paymentId, setPaymentId] = useState('');
   const [changeCents, setChangeCents] = useState(0);
@@ -220,6 +221,36 @@ export default function SmartPosPaymentFlow({
     }
   };
 
+  const cancelPaymentIntent = async () => {
+    if (!intentId || manualSettled) return;
+    setIsCancelling(true);
+    setError('');
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/smartpos/payment-intents/${encodeURIComponent(intentId)}/cancelar`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          idempotency_key: `${idempotencyKey || intentId}:cancel`,
+          motivo: 'Cancelado pelo operador na maquininha antes da cobrança.',
+        }),
+      });
+      if (response.status === 401 || response.status === 403) {
+        onSessionInvalid();
+        return;
+      }
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.detail || 'Não foi possível cancelar o recebimento.');
+      onBack();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Não foi possível cancelar o recebimento.');
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
   const confirmManualPayment = async () => {
     if (!intentId || captureMode === 'provider_integrado') return;
     setIsConfirmingManual(true);
@@ -313,7 +344,17 @@ export default function SmartPosPaymentFlow({
             </div>
           )}
           {!manualCapture && !manualSettled && (
-            <p className="mt-5 border-t border-koma-border pt-4 text-xs text-koma-muted">A cobrança integrada será processada pelo aplicativo Android da maquininha.</p>
+            <p className="mt-5 border-t border-koma-border pt-4 text-xs text-koma-muted">A cobrança integrada será processada pelo aplicativo Android da maquininha. Depois que o terminal assumir a operação, o cancelamento fica bloqueado e o resultado precisa ser reconciliado.</p>
+          )}
+          {!manualSettled && intentId && (
+            <button
+              type="button"
+              onClick={() => void cancelPaymentIntent()}
+              disabled={isCancelling || isConfirmingManual}
+              className="mt-3 min-h-12 w-full rounded-xl border border-red-900/60 px-4 text-xs font-black text-red-300 disabled:opacity-50"
+            >
+              {isCancelling ? 'Cancelando…' : 'Cancelar recebimento'}
+            </button>
           )}
           {error && <p role="alert" className="mt-4 rounded-xl border border-red-900/50 bg-red-950/30 px-3 py-2 text-xs text-red-300">{error}</p>}
           {(paymentId || intentId) && <p className="mt-3 truncate font-mono text-[9px] text-koma-muted">{paymentId ? `Pagamento ${paymentId}` : intentId}</p>}
