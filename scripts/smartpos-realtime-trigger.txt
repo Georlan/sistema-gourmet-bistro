@@ -1,1 +1,0 @@
-Apply SmartPOS table realtime reconciliation patch.
