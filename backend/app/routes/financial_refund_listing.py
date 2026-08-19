@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db, require_tenant_id
 from ..models import Pagamento, Usuario
 from ..smartpos_models import SmartPosPaymentIntent
+from ..smartpos_models import SmartPosPaymentIntent
 from ..security import require_permission
 from ..services.refund_ui import refundable_payment_payload_human
 from . import caixa as legacy_cash

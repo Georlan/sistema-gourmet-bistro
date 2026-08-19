@@ -109,6 +109,7 @@ export default function SmartPosPaymentFlow({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isConfirmingManual, setIsConfirmingManual] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const [manualReceived, setManualReceived] = useState('');
   const [paymentId, setPaymentId] = useState('');
   const [changeCents, setChangeCents] = useState(0);

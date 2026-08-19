@@ -6,6 +6,8 @@ from fastapi.testclient import TestClient
 from app.database import Base, SessionLocal, current_restaurante_id, engine
 from app.financial_models import PagamentoEstorno
 from app.financial_refund_models import PagamentoEstornoAlocacao, PagamentoEstornoLiquidacao
+from app.financial_models import PagamentoEstorno
+from app.financial_refund_models import PagamentoEstornoAlocacao, PagamentoEstornoLiquidacao
 from app.main import app
 from app.models import (
     CaixaTurno,
@@ -32,6 +34,7 @@ client = TestClient(app)
 RESTAURANTE_ID = 9404
 USER_ID = "smartpos-intent-garcom"
 CAIXA_USER_ID = "smartpos-intent-caixa"
+CAIXA_USER_ID = "smartpos-intent-caixa"
 
 
 @pytest.fixture(autouse=True)
@@ -40,6 +43,15 @@ def setup_smartpos_payment_intent():
     token = current_restaurante_id.set(RESTAURANTE_ID)
     db = SessionLocal()
     try:
+        db.query(PagamentoEstornoAlocacao).filter(
+            PagamentoEstornoAlocacao.restaurante_id == RESTAURANTE_ID
+        ).delete()
+        db.query(PagamentoEstornoLiquidacao).filter(
+            PagamentoEstornoLiquidacao.restaurante_id == RESTAURANTE_ID
+        ).delete()
+        db.query(PagamentoEstorno).filter(
+            PagamentoEstorno.restaurante_id == RESTAURANTE_ID
+        ).delete()
         db.query(PagamentoEstornoAlocacao).filter(
             PagamentoEstornoAlocacao.restaurante_id == RESTAURANTE_ID
         ).delete()
