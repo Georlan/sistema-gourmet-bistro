@@ -828,12 +828,12 @@ def test_f12_pagamento_manual_pode_ser_estornado_no_caixa_sem_reabrir_comanda():
         "metodo_devolucao": "dinheiro",
     }
     refunded = client.post(
-        f"/auth/caixa/pagamentos/{payment_id}/estornar",
+        f"/caixa/pagamentos/{payment_id}/estornar",
         headers=caixa_headers(),
         json=refund_payload,
     )
     replay = client.post(
-        f"/auth/caixa/pagamentos/{payment_id}/estornar",
+        f"/caixa/pagamentos/{payment_id}/estornar",
         headers=caixa_headers(),
         json=refund_payload,
     )
@@ -896,14 +896,14 @@ def test_f12_pagamento_provider_nao_pode_gerar_estorno_contabil_sem_reversao_rea
     assert payment_id
 
     listing = client.get(
-        "/auth/caixa/pagamentos/estornaveis",
+        "/caixa/pagamentos/estornaveis",
         headers=caixa_headers(),
     )
     assert listing.status_code == 200, listing.text
     assert payment_id not in {str(row["id"]) for row in listing.json()}
 
     refund = client.post(
-        f"/auth/caixa/pagamentos/{payment_id}/estornar",
+        f"/caixa/pagamentos/{payment_id}/estornar",
         headers=caixa_headers(),
         json={
             "valor": "42.00",
