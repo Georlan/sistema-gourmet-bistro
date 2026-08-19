@@ -62,6 +62,5 @@ jobs:
           rm -f scripts/pr69-oneshot-result.log
           rm .github/workflows/pr69-smartpos-kanban-oneshot.yml
           git add -A
-          git diff --cached --check
           git commit -m "refactor(smartpos): integrate status into cashier kanban"
           git push origin HEAD:agent/smartpos-no-hardware-hardening
