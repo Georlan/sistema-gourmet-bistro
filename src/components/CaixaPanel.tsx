@@ -1735,14 +1735,12 @@ export function CaixaPanel({
   // Monitor universal de pedidos e mesas (Garçom / Caixa / Salão)
   const isInitialOrdersMountRef = useRef(true);
   const prevOrdersSignatureRef = useRef({
-    orderCount: 0,
     itemsCount: 0,
     billRequestedCount: 0
   });
 
   useEffect(() => {
     const active = orders.filter(o => o.status !== 'fechada' && o.status !== 'cancelado');
-    const orderCount = active.length;
     const itemsCount = active.reduce((sum, o) => sum + (o.itens ? o.itens.length : 0), 0);
     const billRequestedCount = active.filter(o =>
       (o as any).status_comanda === 'aguardando_pagamento' ||
@@ -1752,18 +1750,20 @@ export function CaixaPanel({
 
     if (isInitialOrdersMountRef.current) {
       isInitialOrdersMountRef.current = false;
-      prevOrdersSignatureRef.current = { orderCount, itemsCount, billRequestedCount };
+      prevOrdersSignatureRef.current = { itemsCount, billRequestedCount };
       return;
     }
 
     const prev = prevOrdersSignatureRef.current;
     if (billRequestedCount > prev.billRequestedCount) {
       playOrderAlert('bill_requested');
-    } else if (itemsCount > prev.itemsCount || orderCount > prev.orderCount) {
+    } else if (itemsCount > prev.itemsCount) {
+      // Uma comanda vazia é apenas sessão de mesa, não um pedido novo.
+      // O som nasce somente quando os itens que também geram o card chegam.
       playOrderAlert('new_order');
     }
 
-    prevOrdersSignatureRef.current = { orderCount, itemsCount, billRequestedCount };
+    prevOrdersSignatureRef.current = { itemsCount, billRequestedCount };
   }, [orders, playOrderAlert]);
 
   // Drawer Overlay do Operador/Login

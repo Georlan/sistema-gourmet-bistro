@@ -791,7 +791,7 @@ export default function App() {
 
     // Vários endpoints publicam eventos próximos entre si. Consolida a rajada
     // e busca somente os recursos realmente afetados pela mudança.
-    const scheduleRealtimeRefresh = (flags: RealtimeRefreshFlags) => {
+    const scheduleRealtimeRefresh = (flags: RealtimeRefreshFlags, delayMs = 90) => {
       pendingRefresh = { ...pendingRefresh, ...flags };
       if (wsUpdateTimeout) clearTimeout(wsUpdateTimeout);
       wsUpdateTimeout = setTimeout(() => {
@@ -809,7 +809,7 @@ export default function App() {
         if (refresh.orders || refresh.tables) {
           window.dispatchEvent(new Event('koma_orders_updated'));
         }
-      }, 90);
+      }, delayMs);
     };
 
     const connectWS = () => {
@@ -885,16 +885,28 @@ export default function App() {
             window.dispatchEvent(new Event('koma_cash_updated'));
           }
           if (eventName === "tables_updated" || eventName === "TABLE_UPDATED") {
-            const isLayoutChange = data.detail?.type === 'layout_mesa_atualizado';
-            scheduleRealtimeRefresh(isLayoutChange
-              ? { tables: true }
-              : {
-                  orders: true,
-                  tables: true,
-                  summary: true,
-                  payments: true
-                }
-            );
+            const detailType = String(data.detail?.type || '');
+            const isLayoutChange = detailType === 'layout_mesa_atualizado';
+            const isComandaOpened = detailType === 'comanda_aberta';
+            const isLaunchCreated = detailType === 'lancamento_criado';
+
+            if (isLayoutChange || isComandaOpened) {
+              // Abrir a comanda ocupa a mesa, mas ainda não existe pedido para o Kanban.
+              // Atualizar orders aqui causava um estado intermediário vazio e alerta duplicado.
+              scheduleRealtimeRefresh({ tables: true });
+            } else if (isLaunchCreated) {
+              // Este é o primeiro momento em que existe conteúdo operacional real.
+              // Busca imediatamente para o card e o alerta nascerem no mesmo ciclo.
+              scheduleRealtimeRefresh({ orders: true, tables: true, summary: true }, 0);
+            } else {
+              // Compatibilidade com eventos legados e demais mutações de mesa.
+              scheduleRealtimeRefresh({
+                orders: true,
+                tables: true,
+                summary: true,
+                payments: true
+              });
+            }
             if (data.detail && data.detail.type === "pagamento_registrado" && data.detail.status === "pendente") {
               showToast(`Confirmar recebimento em dinheiro: R$ ${data.detail.valor.toFixed(2)} - Garçom ${data.detail.garcom_nome}`, 'info', 5000);
             }
