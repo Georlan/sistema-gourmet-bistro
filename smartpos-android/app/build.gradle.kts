@@ -15,8 +15,8 @@ android {
         applicationId = "br.com.koma.smartpos.dev"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.8.0-dev"
+        versionCode = 2
+        versionName = "0.9.0-dev"
     }
 
     compileOptions {
