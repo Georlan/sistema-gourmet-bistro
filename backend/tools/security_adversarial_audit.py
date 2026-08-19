@@ -102,6 +102,8 @@ def audit_runtime_rls(turno_ids: dict[int, int]) -> None:
             if can_truncate:
                 finding("RUNTIME_GLOBAL_TRUNCATE_PRIVILEGE", "CRITICAL", "Runtime role can TRUNCATE a tenant table and TRUNCATE is not filtered by RLS", f"current_user={runtime_role} inherits TRUNCATE on public.{table}; no TRUNCATE was executed")
 
+        conn.rollback()
+
         for rid in TENANT_IDS:
             tx = conn.begin()
             try:
