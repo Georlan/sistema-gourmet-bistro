@@ -517,7 +517,7 @@ export function CaixaPanel({
 
     if (row.pagamento?.provider_last_error) {
       return {
-        label: 'SMARTPOS · ATENÇÃO',
+        label: 'MAQUININHA · ATENÇÃO',
         chipClass: 'is-attention',
         blocksPayment: true,
         ctaLabel: 'Pagamento requer atenção',
@@ -525,7 +525,7 @@ export function CaixaPanel({
     }
     if (row.estado_operacional === 'aprovado_pendente_liquidacao') {
       return {
-        label: 'SMARTPOS · FINALIZANDO',
+        label: 'MAQUININHA · FINALIZANDO',
         chipClass: 'is-primary',
         blocksPayment: true,
         ctaLabel: 'Finalizando pagamento…',
@@ -533,7 +533,7 @@ export function CaixaPanel({
     }
     if (row.estado_operacional === 'pagamento_processando') {
       return {
-        label: 'SMARTPOS · PROCESSANDO',
+        label: 'MAQUININHA · PROCESSANDO',
         chipClass: 'is-primary',
         blocksPayment: true,
         ctaLabel: 'Pagamento em andamento',
@@ -541,7 +541,7 @@ export function CaixaPanel({
     }
     if (row.origem_smartpos) {
       return {
-        label: 'SMARTPOS',
+        label: 'MAQUININHA',
         chipClass: 'is-muted',
         blocksPayment: false,
       };

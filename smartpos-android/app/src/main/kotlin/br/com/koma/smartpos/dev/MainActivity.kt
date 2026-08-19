@@ -87,7 +87,7 @@ class MainActivity : Activity() {
         }
 
         content.addView(TextView(this).apply {
-            text = "Kôma SmartPOS"
+            text = "Kôma Maquininha"
             textSize = 26f
         })
         content.addView(TextView(this).apply {
@@ -106,7 +106,7 @@ class MainActivity : Activity() {
             inputType = InputType.TYPE_CLASS_NUMBER
         }
         loginButton = Button(this).apply {
-            text = "Entrar no SmartPOS"
+            text = "Entrar na maquininha"
             setOnClickListener { login() }
         }
         loginSection.addView(backendUrl)
@@ -158,7 +158,7 @@ class MainActivity : Activity() {
         content.addView(operationSection)
 
         val statusView = TextView(this).apply {
-            text = "Faça login para carregar o contexto SmartPOS."
+            text = "Faça login para carregar o contexto da maquininha."
             setPadding(0, dp(16), 0, 0)
             setTextIsSelectable(true)
         }
@@ -198,7 +198,7 @@ class MainActivity : Activity() {
                 val token = localApi.login(identifier, secret, rid)
                 sessionToken = token
                 val loadedContext = localApi.context()
-                require(loadedContext.smartposEnabled) { "SmartPOS não está habilitado para este restaurante." }
+                require(loadedContext.smartposEnabled) { "A maquininha não está habilitada para este restaurante." }
                 val intents = localApi.pendingProviderIntents(terminalId, PROVIDER)
                 Triple(localTransport, localApi, loadedContext to intents)
             }.onSuccess { (localTransport, localApi, loaded) ->
@@ -211,7 +211,7 @@ class MainActivity : Activity() {
                     showLoggedIn()
                     renderSession()
                     renderQueue()
-                    status.text = "Sessão SmartPOS carregada. Terminal: $terminalId\n" +
+                    status.text = "Sessão da maquininha carregada. Terminal: $terminalId\n" +
                         "FakeBridge ativo: APPROVED/DECLINED/PENDING/TIMEOUT/ERROR podem ser simulados sem cartão."
                     setBusy(false)
                 }
