@@ -308,6 +308,26 @@ def criar_payment_intent(
         .with_for_update()
         .all()
     )
+    if payload.escopo == "itens" and not normalized_items:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Selecione ao menos um item para receber por itens.",
+        )
+
+    reserved_item_ids = {
+        item_id
+        for active_intent in reserving_intents
+        if active_intent.escopo == "itens"
+        for item_id in (active_intent.item_ids or [])
+    }
+    if payload.escopo == "itens" and any(
+        item_id in reserved_item_ids for item_id in normalized_items
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Um ou mais itens já estão reservados por outro pagamento em andamento.",
+        )
+
     reservado = sum(
         (_money(active_intent.valor) for active_intent in reserving_intents),
         Decimal("0.00"),
@@ -328,22 +348,6 @@ def criar_payment_intent(
         )
 
     if payload.escopo == "itens":
-        if not normalized_items:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Selecione ao menos um item para receber por itens.",
-            )
-        reserved_item_ids = {
-            item_id
-            for active_intent in reserving_intents
-            if active_intent.escopo == "itens"
-            for item_id in (active_intent.item_ids or [])
-        }
-        if any(item_id in reserved_item_ids for item_id in normalized_items):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Um ou mais itens já estão reservados por outro pagamento em andamento.",
-            )
         by_id = {item.id: item for item in itens if not item.pago}
         if any(item_id not in by_id for item_id in normalized_items):
             raise HTTPException(
