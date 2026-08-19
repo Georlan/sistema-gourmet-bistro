@@ -1,9 +1,9 @@
 name: WebSocket order sync one shot
 
 on:
-  push:
+  pull_request:
     branches:
-      - fix/websocket-order-sync
+      - main
 
 permissions:
   contents: write
@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   patch:
-    if: github.event.head_commit.message == 'chore: apply websocket sync patch'
+    if: github.head_ref == 'fix/websocket-order-sync'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -51,7 +51,11 @@ jobs:
           if text.count(old_schedule) != 1:
               raise RuntimeError(f'App.tsx: schedule function signature mismatch: {text.count(old_schedule)}')
           text = text.replace(old_schedule, new_schedule, 1)
-          text = text.replace('''      }, 90);\n    };\n\n    const connectWS = () => {''', '''      }, delayMs);\n    };\n\n    const connectWS = () => {''', 1)
+          old_delay = '''      }, 90);\n    };\n\n    const connectWS = () => {'''
+          new_delay = '''      }, delayMs);\n    };\n\n    const connectWS = () => {'''
+          if text.count(old_delay) != 1:
+              raise RuntimeError(f'App.tsx: debounce delay mismatch: {text.count(old_delay)}')
+          text = text.replace(old_delay, new_delay, 1)
 
           old_tables = '''          if (eventName === "tables_updated" || eventName === "TABLE_UPDATED") {\n            const isLayoutChange = data.detail?.type === 'layout_mesa_atualizado';\n            scheduleRealtimeRefresh(isLayoutChange\n              ? { tables: true }\n              : {\n                  orders: true,\n                  tables: true,\n                  summary: true,\n                  payments: true\n                }\n            );\n'''
           new_tables = '''          if (eventName === "tables_updated" || eventName === "TABLE_UPDATED") {\n            const detailType = String(data.detail?.type || '');\n            const isLayoutChange = detailType === 'layout_mesa_atualizado';\n            const isComandaOpened = detailType === 'comanda_aberta';\n            const isLaunchCreated = detailType === 'lancamento_criado';\n\n            if (isLayoutChange || isComandaOpened) {\n              // Abrir a comanda ocupa a mesa, mas ainda não existe pedido para o Kanban.\n              // Atualizar orders aqui causava um estado intermediário vazio e alerta duplicado.\n              scheduleRealtimeRefresh({ tables: true });\n            } else if (isLaunchCreated) {\n              // Este é o primeiro momento em que existe conteúdo operacional real.\n              // Busca imediatamente para o card e o alerta nascerem no mesmo ciclo.\n              scheduleRealtimeRefresh({ orders: true, tables: true, summary: true }, 0);\n            } else {\n              // Compatibilidade com eventos legados e demais mutações de mesa.\n              scheduleRealtimeRefresh({\n                orders: true,\n                tables: true,\n                summary: true,\n                payments: true\n              });\n            }\n'''
