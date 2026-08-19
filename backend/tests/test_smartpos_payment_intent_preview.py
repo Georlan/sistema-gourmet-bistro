@@ -353,12 +353,9 @@ def test_metodos_digitais_aceitam_registro_em_outra_maquininha(metodo):
     token = current_restaurante_id.set(RESTAURANTE_ID)
     db = SessionLocal()
     try:
-        pagamentos = db.query(Pagamento).filter(Pagamento.restaurante_id == RESTAURANTE_ID).all()
-        assert len(pagamentos) == 1
-        assert pagamentos[0].metodo == "cartao_debito"
-        assert Decimal(str(pagamentos[0].valor)) == Decimal("10")
+        assert db.query(Pagamento).filter(Pagamento.restaurante_id == RESTAURANTE_ID).count() == 0
         comanda = db.query(Comanda).filter(Comanda.id == "cmd-smartpos-intent").one()
-        assert Decimal(str(comanda.valor_pago)) == Decimal("10")
+        assert Decimal(str(comanda.valor_pago)) == Decimal("0")
         assert comanda.fechada is False
     finally:
         db.close()
@@ -448,9 +445,12 @@ def test_confirmacao_manual_e_idempotente_e_liquida_financeiro():
             ("criada", "pendente"),
             ("pendente", "aprovada"),
         ]
-        assert db.query(Pagamento).filter(Pagamento.restaurante_id == RESTAURANTE_ID).count() == 0
+        pagamentos = db.query(Pagamento).filter(Pagamento.restaurante_id == RESTAURANTE_ID).all()
+        assert len(pagamentos) == 1
+        assert pagamentos[0].metodo == "cartao_debito"
+        assert Decimal(str(pagamentos[0].valor)) == Decimal("10")
         comanda = db.query(Comanda).filter(Comanda.id == "cmd-smartpos-intent").one()
-        assert Decimal(str(comanda.valor_pago)) == Decimal("0")
+        assert Decimal(str(comanda.valor_pago)) == Decimal("10")
         assert comanda.fechada is False
     finally:
         db.close()
