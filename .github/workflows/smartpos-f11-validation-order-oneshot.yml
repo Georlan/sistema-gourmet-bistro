@@ -1,0 +1,40 @@
+name: SmartPOS F11 validation order one shot
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.head_ref == 'feat/smartpos-f11-split-payments'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/smartpos-f11-split-payments
+      - name: Reorder intrinsic and reservation validation
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('backend/app/routes/smartpos.py')
+          text = p.read_text(encoding='utf-8')
+          start_marker = '    # Parcelas ainda não liquidadas reservam saldo. O lock da Mesa acima faz\n'
+          end_marker = '    intent = SmartPosPaymentIntent(\n'
+          start = text.index(start_marker)
+          end = text.index(end_marker, start)
+          replacement = '''    # Primeiro valida o conteúdo intrínseco da parcela contra o consumo real.\n    # Conflitos de formato/valor continuam 422; concorrência entre parcelas é 409.\n    if valor > saldo:\n        raise HTTPException(\n            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,\n            detail="O valor informado excede o saldo da mesa.",\n        )\n\n    if payload.escopo == "itens":\n        if not normalized_items:\n            raise HTTPException(\n                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,\n                detail="Selecione ao menos um item para receber por itens.",\n            )\n        by_id = {item.id: item for item in itens if not item.pago}\n        if any(item_id not in by_id for item_id in normalized_items):\n            raise HTTPException(\n                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,\n                detail="Há item inválido, pago ou fora desta mesa.",\n            )\n        selected_total = sum(\n            (_money(by_id[item_id].preco_unit) for item_id in normalized_items),\n            Decimal("0.00"),\n        )\n        if selected_total != valor:\n            raise HTTPException(\n                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,\n                detail="O valor deve corresponder exatamente aos itens selecionados.",\n            )\n    elif normalized_items:\n        raise HTTPException(\n            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,\n            detail="item_ids só pode ser informado quando o escopo for por itens.",\n        )\n\n    # Parcelas ainda não liquidadas reservam saldo. O lock da Mesa acima faz\n    # duas criações concorrentes enxergarem uma ordem total no PostgreSQL.\n    reserving_intents = (\n        db.query(SmartPosPaymentIntent)\n        .filter(\n            SmartPosPaymentIntent.restaurante_id == restaurante_id,\n            SmartPosPaymentIntent.mesa_id == payload.mesa_id,\n            SmartPosPaymentIntent.status.in_(_RESERVING_STATUSES),\n            SmartPosPaymentIntent.pagamento_id.is_(None),\n        )\n        .with_for_update()\n        .all()\n    )\n\n    reserved_item_ids = {\n        item_id\n        for active_intent in reserving_intents\n        if active_intent.escopo == "itens"\n        for item_id in (active_intent.item_ids or [])\n    }\n    if payload.escopo == "itens" and any(\n        item_id in reserved_item_ids for item_id in normalized_items\n    ):\n        raise HTTPException(\n            status_code=status.HTTP_409_CONFLICT,\n            detail="Um ou mais itens já estão reservados por outro pagamento em andamento.",\n        )\n\n    reservado = sum(\n        (_money(active_intent.valor) for active_intent in reserving_intents),\n        Decimal("0.00"),\n    )\n    disponivel = max(Decimal("0.00"), saldo - reservado)\n    if disponivel <= 0:\n        raise HTTPException(\n            status_code=status.HTTP_409_CONFLICT,\n            detail="O saldo da mesa já está reservado por pagamento em andamento.",\n        )\n    if valor > disponivel:\n        raise HTTPException(\n            status_code=status.HTTP_409_CONFLICT,\n            detail=(\n                "O valor excede o saldo disponível após considerar pagamentos em andamento. "\n                f"Disponível: {disponivel}."\n            ),\n        )\n\n'''
+          p.write_text(text[:start] + replacement + text[end:], encoding='utf-8')
+      - run: |
+          git diff --check
+          python -m py_compile backend/app/routes/smartpos.py
+      - name: Commit fix
+        run: |
+          if git diff --quiet; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/app/routes/smartpos.py
+          git commit -m "fix(smartpos): preserve validation semantics before reservations"
+          git push origin HEAD:feat/smartpos-f11-split-payments
