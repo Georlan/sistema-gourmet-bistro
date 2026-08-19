@@ -172,6 +172,7 @@ export default function SmartPosPage() {
 
     let socket: WebSocket | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let operationalSyncTimer: ReturnType<typeof setTimeout> | null = null;
     let stopped = false;
 
     const reconcileContext = async () => {
@@ -194,15 +195,101 @@ export default function SmartPosPage() {
       }
     };
 
+    const reconcileOperationalState = async () => {
+      try {
+        const headers = { Authorization: `Bearer ${session.token}` };
+        const [mesasResponse, comandasResponse] = await Promise.all([
+          fetch(`${API_BASE_URL}/mesas/`, { headers, cache: 'no-store' }),
+          fetch(`${API_BASE_URL}/comandas/detalhes/todos?fechada=false`, { headers, cache: 'no-store' }),
+        ]);
+
+        if ([mesasResponse.status, comandasResponse.status].some((status) => status === 401 || status === 403)) {
+          clearSmartPosSession();
+          setSession(null);
+          setContext(null);
+          setScreen('home');
+          setMesas([]);
+          setComandas([]);
+          setSelectedMesaId(null);
+          return;
+        }
+        if (!mesasResponse.ok || !comandasResponse.ok) return;
+
+        const [nextMesas, nextComandas] = await Promise.all([
+          mesasResponse.json() as Promise<Mesa[]>,
+          comandasResponse.json() as Promise<Comanda[]>,
+        ]);
+        if (stopped) return;
+        setMesas(nextMesas);
+        setComandas(nextComandas);
+        setMesasError('');
+      } catch {
+        // Mantém o último snapshot válido e reconcilia no próximo evento/reconexão.
+      }
+    };
+
+    const scheduleOperationalReconcile = (delayMs = 60) => {
+      if (operationalSyncTimer) clearTimeout(operationalSyncTimer);
+      operationalSyncTimer = setTimeout(() => {
+        operationalSyncTimer = null;
+        void reconcileOperationalState();
+      }, delayMs);
+    };
+
     const connect = () => {
       if (stopped) return;
       const wsUrl = `${WS_BASE_URL}/ws/${encodeURIComponent(session.user.id)}?token=${encodeURIComponent(session.token)}`;
       socket = new WebSocket(wsUrl);
 
+      socket.onopen = () => {
+        if (stopped) return;
+        // Reconciliar ao reconectar cobre eventos perdidos durante uma queda de rede.
+        void reconcileContext();
+        scheduleOperationalReconcile(0);
+      };
+
       socket.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data);
           const eventName = message.event || message.type;
+
+          if (
+            eventName === 'tables_updated'
+            || eventName === 'TABLE_UPDATED'
+            || eventName === 'MESA_ATUALIZADA'
+            || eventName === 'MESA_UPDATED'
+            || eventName === 'NEW_ORDER'
+            || eventName === 'ORDER_UPDATED'
+            || eventName === 'order_updated'
+            || eventName === 'order_status_updated'
+          ) {
+            const payload = message.data || message.detail || {};
+            const mesaId = Number(payload.mesa_id);
+            const status = String(payload.status || '').trim().toLowerCase();
+
+            if (
+              (eventName === 'MESA_ATUALIZADA' || eventName === 'MESA_UPDATED')
+              && Number.isInteger(mesaId)
+              && mesaId > 0
+              && status === 'livre'
+            ) {
+              // Remove imediatamente o snapshot obsoleto; o fetch abaixo confirma o estado canônico.
+              setComandas((current) => current.filter((comanda) => comanda.mesa_id !== mesaId));
+              setSelectedMesaId((current) => {
+                if (current !== mesaId) return current;
+                setScreen((currentScreen) => (
+                  currentScreen === 'mesa' || currentScreen === 'pedido' || currentScreen === 'receber'
+                    ? 'mesas'
+                    : currentScreen
+                ));
+                return null;
+              });
+            }
+
+            // Cancelamento forçado publica MESA_ATUALIZADA + tables_updated em sequência.
+            // O debounce transforma a rajada em uma única reconciliação de mesas/comandas.
+            scheduleOperationalReconcile();
+          }
 
           if (eventName === 'config_updated') {
             const payload = message.data || message.detail || {};
@@ -233,6 +320,7 @@ export default function SmartPosPage() {
 
           if (eventName === 'cash_updated') {
             void reconcileContext();
+            scheduleOperationalReconcile();
           }
         } catch {
           // Eventos sem relação com a maquininha não alteram o contexto local.
@@ -250,7 +338,9 @@ export default function SmartPosPage() {
     return () => {
       stopped = true;
       if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (operationalSyncTimer) clearTimeout(operationalSyncTimer);
       if (socket) {
+        socket.onopen = null;
         socket.onmessage = null;
         socket.onclose = null;
         socket.onerror = null;
