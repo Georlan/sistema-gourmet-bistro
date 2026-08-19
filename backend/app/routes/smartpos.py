@@ -34,6 +34,7 @@ _CAPTURE_OPTIONS_BY_METHOD = {
     "voucher": {"provider_integrado", "registro_externo"},
 }
 _MANUAL_CAPTURES = {"dinheiro_pendente", "registro_externo"}
+_RESERVING_STATUSES = ("criada", "pendente", "processando", "aprovada")
 
 
 class SmartPosPaymentIntentCreate(BaseModel):
@@ -253,10 +254,15 @@ def criar_payment_intent(
             detail="Abra o caixa do salão antes de preparar um recebimento de mesa.",
         )
 
-    mesa = db.query(Mesa).filter(
-        Mesa.restaurante_id == restaurante_id,
-        Mesa.id == payload.mesa_id,
-    ).first()
+    mesa = (
+        db.query(Mesa)
+        .filter(
+            Mesa.restaurante_id == restaurante_id,
+            Mesa.id == payload.mesa_id,
+        )
+        .with_for_update()
+        .first()
+    )
     if mesa is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -288,10 +294,37 @@ def criar_payment_intent(
             status_code=status.HTTP_409_CONFLICT,
             detail="A mesa não possui saldo pendente.",
         )
-    if valor > saldo:
+
+    # Parcelas ainda não liquidadas reservam saldo. O lock da Mesa acima faz
+    # duas criações concorrentes enxergarem uma ordem total no PostgreSQL.
+    reserving_intents = (
+        db.query(SmartPosPaymentIntent)
+        .filter(
+            SmartPosPaymentIntent.restaurante_id == restaurante_id,
+            SmartPosPaymentIntent.mesa_id == payload.mesa_id,
+            SmartPosPaymentIntent.status.in_(_RESERVING_STATUSES),
+            SmartPosPaymentIntent.pagamento_id.is_(None),
+        )
+        .with_for_update()
+        .all()
+    )
+    reservado = sum(
+        (_money(active_intent.valor) for active_intent in reserving_intents),
+        Decimal("0.00"),
+    )
+    disponivel = max(Decimal("0.00"), saldo - reservado)
+    if disponivel <= 0:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="O valor informado excede o saldo da mesa.",
+            status_code=status.HTTP_409_CONFLICT,
+            detail="O saldo da mesa já está reservado por pagamento em andamento.",
+        )
+    if valor > disponivel:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "O valor excede o saldo disponível após considerar pagamentos em andamento. "
+                f"Disponível: {disponivel}."
+            ),
         )
 
     if payload.escopo == "itens":
@@ -299,6 +332,17 @@ def criar_payment_intent(
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Selecione ao menos um item para receber por itens.",
+            )
+        reserved_item_ids = {
+            item_id
+            for active_intent in reserving_intents
+            if active_intent.escopo == "itens"
+            for item_id in (active_intent.item_ids or [])
+        }
+        if any(item_id in reserved_item_ids for item_id in normalized_items):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Um ou mais itens já estão reservados por outro pagamento em andamento.",
             )
         by_id = {item.id: item for item in itens if not item.pago}
         if any(item_id not in by_id for item_id in normalized_items):

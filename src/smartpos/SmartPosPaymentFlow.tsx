@@ -257,6 +257,7 @@ export default function SmartPosPaymentFlow({
   };
 
   const methodLabel = method ? methodLabels[method] : '';
+  const remainingAfterCurrentCents = Math.max(0, balanceCents - amountCents);
 
   if (step === 'pronto') {
     const manualCapture = captureMode === 'dinheiro_pendente' || captureMode === 'registro_externo';
@@ -305,13 +306,19 @@ export default function SmartPosPaymentFlow({
           {manualSettled && changeCents > 0 && (
             <p className="mt-5 rounded-xl border border-koma-accent/30 bg-koma-accent/10 px-4 py-3 text-center text-sm font-black text-koma-accent">Troco: {money(changeCents)}</p>
           )}
+          {manualSettled && remainingAfterCurrentCents > 0 && (
+            <div className="mt-4 rounded-xl border border-koma-border bg-koma-page px-4 py-3">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-koma-muted">Restante da mesa</p>
+              <p className="mt-1 text-xl font-black text-koma-accent">{money(remainingAfterCurrentCents)}</p>
+            </div>
+          )}
           {!manualCapture && !manualSettled && (
             <p className="mt-5 border-t border-koma-border pt-4 text-xs text-koma-muted">A cobrança integrada será processada pelo aplicativo Android da maquininha.</p>
           )}
           {error && <p role="alert" className="mt-4 rounded-xl border border-red-900/50 bg-red-950/30 px-3 py-2 text-xs text-red-300">{error}</p>}
           {(paymentId || intentId) && <p className="mt-3 truncate font-mono text-[9px] text-koma-muted">{paymentId ? `Pagamento ${paymentId}` : intentId}</p>}
         </div>
-        <button type="button" onClick={onBack} className="mt-5 min-h-14 w-full rounded-xl border border-koma-border px-4 text-sm font-black text-koma-muted">Voltar para a mesa</button>
+        <button type="button" onClick={onBack} className="mt-5 min-h-14 w-full rounded-xl border border-koma-border px-4 text-sm font-black text-koma-muted">{manualSettled && remainingAfterCurrentCents > 0 ? 'Voltar e receber outra parte' : 'Voltar para a mesa'}</button>
       </section>
     );
   }

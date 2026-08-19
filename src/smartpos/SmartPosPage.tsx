@@ -597,7 +597,7 @@ export default function SmartPosPage() {
             session={session}
             mesa={selectedMesa}
             comandas={selectedComandas}
-            onBack={() => setScreen('mesa')}
+            onBack={() => void loadMesas('mesa')}
             onSessionInvalid={handleLogout}
           />
         </div>
