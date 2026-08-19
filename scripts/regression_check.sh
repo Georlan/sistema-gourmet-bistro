@@ -102,7 +102,9 @@ run_flow_test \
   "tests/test_smartpos_provider_orchestrator.py" \
   "tests/test_smartpos_provider_queue.py" \
   "tests/test_smartpos_settlement.py" \
-  "tests/test_smartpos_cash_projection.py"
+  "tests/test_smartpos_cash_projection.py" \
+  "tests/test_smartpos_simulated_e2e.py" \
+  "tests/test_smartpos_macro0_foundation_stress.py"
 
 run_flow_test \
   "6. Arquitetura, layout e snapshot da impressão" \

@@ -4,7 +4,6 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import OnlineOrderEmergencyActions from "./components/OnlineOrderEmergencyActions";
 import SmartPosPage from "./smartpos/SmartPosPage";
-import SmartPosCashSupervisor from "./smartpos/SmartPosCashSupervisor";
 import "./index.css";
 import * as Sentry from "@sentry/react";
 import { initializeKomaTheme } from "./config/theme";
@@ -28,7 +27,6 @@ const RootApp = isSmartPosRoute ? SmartPosPage : App;
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <RootApp />
-    {!isSmartPosRoute && <SmartPosCashSupervisor />}
     {!isSmartPosRoute && <OnlineOrderEmergencyActions />}
   </React.StrictMode>
 );

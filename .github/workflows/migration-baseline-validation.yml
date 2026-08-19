@@ -180,7 +180,6 @@ jobs:
               Categoria,
               Comanda,
               Item,
-              Lancamento,
               Mesa,
               Produto,
               Restaurante,
@@ -255,19 +254,29 @@ jobs:
               )
               db.add(comanda)
               db.flush()
-              lancamento = Lancamento(
-                  id="lan-b1-upgrade",
-                  restaurante_id=rid,
-                  comanda_id=comanda.id,
-                  garcom_id=uid,
-              )
-              db.add(lancamento)
+
+              # This fixture deliberately represents an old schema. Do not use
+              # the current ORM for rows whose model can gain later columns,
+              # otherwise the upgrade-path test breaks before testing migration.
+              lancamento_id = "lan-b1-upgrade"
+              db.execute(text("""
+                  INSERT INTO lancamentos (
+                      id, restaurante_id, comanda_id, garcom_id, timestamp
+                  ) VALUES (
+                      :id, :rid, :comanda_id, :garcom_id, CURRENT_TIMESTAMP
+                  )
+              """), {
+                  "id": lancamento_id,
+                  "rid": rid,
+                  "comanda_id": comanda.id,
+                  "garcom_id": uid,
+              })
               db.flush()
               db.add(Item(
                   id="item-b1-upgrade",
                   restaurante_id=rid,
                   comanda_id=comanda.id,
-                  lancamento_id=lancamento.id,
+                  lancamento_id=lancamento_id,
                   produto_id="prod-b1",
                   preco_unit=42,
                   status="pronto",
@@ -314,6 +323,13 @@ jobs:
               for label, sql in checks.items():
                   count = conn.execute(text(sql)).scalar_one()
                   assert count == 1, f"{label} not preserved: {count}"
+
+              launch_origin = conn.execute(text("""
+                  SELECT origem
+                  FROM lancamentos
+                  WHERE restaurante_id = 9901 AND id = 'lan-b1-upgrade'
+              """)).scalar_one()
+              assert launch_origin == "desconhecida", launch_origin
 
               intents = conn.execute(text(
                   "SELECT COUNT(*) FROM smartpos_payment_intents WHERE restaurante_id = 9901"
@@ -388,6 +404,7 @@ jobs:
               assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == os.environ["EXPECTED_ALEMBIC_HEAD"]
               assert conn.execute(text("SELECT COUNT(*) FROM comandas WHERE id = 'cmd-b1-upgrade'")).scalar_one() == 1
               assert conn.execute(text("SELECT COUNT(*) FROM usuarios WHERE id = 'b1-current-operator'")).scalar_one() == 1
+              assert conn.execute(text("SELECT origem FROM lancamentos WHERE id = 'lan-b1-upgrade'")).scalar_one() == "desconhecida"
               print("B1.3.1 OK: SmartPOS settlement downgrade/re-upgrade preserved data")
           engine.dispose()
           PY

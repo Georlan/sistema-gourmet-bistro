@@ -344,11 +344,23 @@ class Comanda(Base):
 
 class Lancamento(Base):
     __tablename__ = "lancamentos"
-    
+    __table_args__ = (
+        CheckConstraint(
+            "origem IN ('desconhecida', 'garcom', 'caixa', 'smartpos', 'cardapio')",
+            name="ck_lancamentos_origem",
+        ),
+    )
+
     id = Column(String, primary_key=True, index=True)
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
     comanda_id = Column(String, ForeignKey("comandas.id"), nullable=False)
     garcom_id = Column(String, ForeignKey("usuarios.id"), nullable=False)
+    origem = Column(
+        String(24),
+        nullable=False,
+        default="desconhecida",
+        server_default="desconhecida",
+    )
     timestamp = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
     
     # Relationships

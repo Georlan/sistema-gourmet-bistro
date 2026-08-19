@@ -171,6 +171,33 @@ interface DeliveryOrderView {
   numeroPedido?: number;
 }
 
+interface SmartPosCashPaymentView {
+  intent_id: string;
+  status: string;
+  metodo?: string;
+  provider_last_error?: string | null;
+  pagamento_id?: string | null;
+}
+
+interface SmartPosCashRow {
+  mesa_id: number;
+  estado_operacional:
+    | 'em_preparo'
+    | 'pronto'
+    | 'aguardando_pagamento'
+    | 'pagamento_processando'
+    | 'aprovado_pendente_liquidacao';
+  origem_smartpos?: boolean;
+  pagamento?: SmartPosCashPaymentView | null;
+}
+
+interface SmartPosCardState {
+  label: string;
+  chipClass: 'is-muted' | 'is-primary' | 'is-attention';
+  blocksPayment: boolean;
+  ctaLabel?: string;
+}
+
 interface SystemUser {
   id: string;
   nome: string;
@@ -432,6 +459,95 @@ export function CaixaPanel({
     if (['recuperador', 'carrinhos_abandonados'].includes(saved)) return 'clientes';
     return saved;
   });
+
+  const [smartPosCashRows, setSmartPosCashRows] = useState<SmartPosCashRow[]>([]);
+  const smartPosAuthorization = authHeaders.Authorization || authHeaders.authorization || '';
+  const smartPosCashByTable = useMemo(
+    () => new Map(smartPosCashRows.map(row => [Number(row.mesa_id), row])),
+    [smartPosCashRows],
+  );
+
+  const refreshSmartPosCashProjection = useCallback(async () => {
+    if (activeSubTab !== 'pedidos' || !smartPosAuthorization) {
+      setSmartPosCashRows([]);
+      return;
+    }
+    try {
+      const response = await fetch(`${apiBaseUrl}/auth/smartpos/caixa/operacao`, {
+        headers: { Authorization: smartPosAuthorization },
+        cache: 'no-store',
+      });
+      if (response.status === 401 || response.status === 403) {
+        setSmartPosCashRows([]);
+        return;
+      }
+      if (!response.ok) return;
+      const data = await response.json().catch(() => []);
+      setSmartPosCashRows(Array.isArray(data) ? data : []);
+    } catch {
+      // A fila principal continua utilizável; o próximo refresh reconcilia o indicador.
+    }
+  }, [activeSubTab, apiBaseUrl, smartPosAuthorization]);
+
+  useEffect(() => {
+    if (activeSubTab !== 'pedidos' || !smartPosAuthorization) {
+      setSmartPosCashRows([]);
+      return;
+    }
+
+    void refreshSmartPosCashProjection();
+    const timer = window.setInterval(() => void refreshSmartPosCashProjection(), 4000);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void refreshSmartPosCashProjection();
+    };
+    window.addEventListener('focus', refreshWhenVisible);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refreshWhenVisible);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
+  }, [activeSubTab, refreshSmartPosCashProjection, smartPosAuthorization]);
+
+  const getSmartPosCardState = useCallback((order: Order): SmartPosCardState | null => {
+    const mesaId = Number(order?.mesaId || 0);
+    if (mesaId <= 0) return null;
+    const row = smartPosCashByTable.get(mesaId);
+    if (!row) return null;
+
+    if (row.pagamento?.provider_last_error) {
+      return {
+        label: 'SMARTPOS · ATENÇÃO',
+        chipClass: 'is-attention',
+        blocksPayment: true,
+        ctaLabel: 'Pagamento requer atenção',
+      };
+    }
+    if (row.estado_operacional === 'aprovado_pendente_liquidacao') {
+      return {
+        label: 'SMARTPOS · FINALIZANDO',
+        chipClass: 'is-primary',
+        blocksPayment: true,
+        ctaLabel: 'Finalizando pagamento…',
+      };
+    }
+    if (row.estado_operacional === 'pagamento_processando') {
+      return {
+        label: 'SMARTPOS · PROCESSANDO',
+        chipClass: 'is-primary',
+        blocksPayment: true,
+        ctaLabel: 'Pagamento em andamento',
+      };
+    }
+    if (row.origem_smartpos) {
+      return {
+        label: 'SMARTPOS',
+        chipClass: 'is-muted',
+        blocksPayment: false,
+      };
+    }
+    return null;
+  }, [smartPosCashByTable]);
 
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [mobileOrdersStage, setMobileOrdersStage] = useState<'salon' | 'digital' | 'closing'>('salon');
@@ -4774,6 +4890,7 @@ export function CaixaPanel({
                           const sla = getOrderSlaData(order, nowTimestamp);
                           const isExpanded = !!expandedCardIds[cardId];
                           const totalVal = order.itens.reduce((sum: number, it: any) => sum + (it.preco_unit || it.preco || 0), 0);
+                          const smartPosState = getSmartPosCardState(order);
 
                           return (
                             <div 
@@ -4793,6 +4910,11 @@ export function CaixaPanel({
                                   <span className={clsx('orders-card__chip', 'is-primary')}>
                                     {order.mesaId && order.mesaId > 0 ? `MESA ${order.mesaId}` : 'BALCÃO'}
                                   </span>
+                                  {smartPosState && (
+                                    <span className={clsx('orders-card__chip', smartPosState.chipClass)}>
+                                      {smartPosState.label}
+                                    </span>
+                                  )}
                                   {tableMovement.transferredFromMesaIds.length > 0 && (
                                     <span className={clsx('orders-card__chip', 'is-muted')}>
                                       ↪ Transferida da M{tableMovement.transferredFromMesaIds.join(', M')}
@@ -5020,6 +5142,7 @@ export function CaixaPanel({
                           const totalVal = order.itens.reduce((sum: number, it: any) => sum + (it.preco_unit || it.preco || 0), 0);
                           const tableMovement = getTableMovementContext(order);
                           const pendingTableItems = Number((order as any).itensEmPreparoCount || 0);
+                          const smartPosState = getSmartPosCardState(order);
 
                           return (
                             <div
@@ -5037,6 +5160,11 @@ export function CaixaPanel({
                                     {sla.label}
                                   </span>
                                   <span className={clsx('orders-card__chip', contaPedida ? 'is-attention' : 'is-primary')}>{badgeText}</span>
+                                  {smartPosState && (
+                                    <span className={clsx('orders-card__chip', smartPosState.chipClass)}>
+                                      {smartPosState.label}
+                                    </span>
+                                  )}
                                   {tableMovement.transferredFromMesaIds.length > 0 && (
                                     <span className={clsx('orders-card__chip', 'is-muted')}>
                                       ↪ Transferida da M{tableMovement.transferredFromMesaIds.join(', M')}
@@ -5095,9 +5223,10 @@ export function CaixaPanel({
 
                               <button
                                 type="button"
+                                disabled={smartPosState?.blocksPayment === true}
                                 onClick={async (e) => {
                                   e.stopPropagation();
-                                  if (isLoading) return;
+                                  if (smartPosState?.blocksPayment || isLoading) return;
                                   
                                   const tableComandas = orders.filter(
                                     o => Number(o.mesaId) === Number(order.mesaId)
@@ -5122,7 +5251,11 @@ export function CaixaPanel({
                                 }}
                                 className={clsx('orders-card__action', 'w-full', 'py-2', 'px-3', 'h-8', 'sm:h-9', 'font-bold', 'text-xs', 'sm:text-sm', 'rounded-xl', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1.5')}
                               >
-                                <Check size={13} /><span>Abrir pagamento</span>
+                                {smartPosState?.blocksPayment ? (
+                                  <><Smartphone size={13} /><span>{smartPosState.ctaLabel}</span></>
+                                ) : (
+                                  <><Check size={13} /><span>Abrir pagamento</span></>
+                                )}
                               </button>
                             </div>
                           );

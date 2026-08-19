@@ -98,6 +98,7 @@ def setup_projection():
             restaurante_id=RESTAURANTE_ID,
             comanda_id=comanda.id,
             garcom_id=USER_ID,
+            origem="smartpos",
         )
         db.add(lancamento)
         db.flush()
@@ -160,6 +161,7 @@ def test_preparing_table_is_not_misclassified_as_ready():
         assert row.estado_operacional == "em_preparo"
         assert row.itens_preparando == 1
         assert row.saldo == Decimal("19.00")
+        assert row.origem_smartpos is True
     finally:
         db.close()
 
@@ -174,6 +176,22 @@ def test_all_ready_items_move_table_to_waiting_payment():
         assert row.estado_operacional == "aguardando_pagamento"
         assert row.itens_prontos == 1
         assert row.saldo == Decimal("19.00")
+    finally:
+        db.close()
+
+
+def test_created_smartpos_intent_already_blocks_duplicate_payment_flow():
+    db = SessionLocal()
+    try:
+        item = db.query(Item).filter(Item.id == "item-projection").one()
+        item.status = "pronto"
+        db.commit()
+        intent = _intent(db, "criada")
+        row = _projection(db)
+        assert row.estado_operacional == "pagamento_processando"
+        assert row.pagamento is not None
+        assert row.pagamento.intent_id == intent.id
+        assert row.pagamento.status == "criada"
     finally:
         db.close()
 

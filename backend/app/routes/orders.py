@@ -743,10 +743,16 @@ async def criar_venda_direta(
         db.add(nova_comanda)
 
 
+        operator_role = str(
+            getattr(current_user, "role", None)
+            or getattr(current_user, "cargo", None)
+            or "garcom"
+        ).lower().strip()
         novo_lancamento = Lancamento(
             id=lancamento_id,
             comanda_id=comanda_id,
             garcom_id=garcom_id,
+            origem=("caixa" if operator_role in {"admin", "gerente", "caixa", "superadmin"} else "garcom"),
             timestamp=datetime.datetime.now(datetime.timezone.utc)
         )
         db.add(novo_lancamento)
@@ -967,10 +973,21 @@ def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_ta
         )
 
     # 4. Criar o lançamento
+    operator_role = str(
+        getattr(current_user, "role", None)
+        or getattr(current_user, "cargo", None)
+        or "garcom"
+    ).lower().strip()
+    launch_origin = (
+        "smartpos"
+        if lancamento_in.origem == "smartpos"
+        else ("caixa" if operator_role in {"admin", "gerente", "caixa", "superadmin"} else "garcom")
+    )
     novo_lancamento = Lancamento(
         id=f"l-{uuid.uuid4().hex[:8]}",
         comanda_id=comanda_id,
         garcom_id=lancamento_in.garcom_id,
+        origem=launch_origin,
         timestamp=datetime.datetime.now(datetime.timezone.utc)
     )
     db.add(novo_lancamento)

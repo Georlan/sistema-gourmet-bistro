@@ -253,7 +253,15 @@ def get_tenant_id_str(restaurante_id: int | None) -> str:
 
 
 # DB Session dependency generator supporting dynamic tenant databases
-def get_db(request: Request = None):
+async def get_db(request: Request = None):
+    """Entrega uma sessão síncrona sem consumir um worker apenas para o yield/cleanup.
+
+    As consultas continuam executadas pelas rotas/dependências síncronas no threadpool,
+    mas criar e devolver a sessão como dependência assíncrona impede starvation quando
+    a concorrência HTTP supera o tamanho do QueuePool. O cleanup também fica garantido
+    no contexto da própria requisição, devolvendo a conexão ao pool sem depender de um
+    novo worker disponível.
+    """
     tenant_id = "default"
     restaurante_id = current_restaurante_id.get()
 

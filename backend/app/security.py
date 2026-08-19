@@ -100,6 +100,9 @@ def _authenticated_user_from_token(token: str, db: Session) -> Usuario:
 
     O JWT seleciona o escopo RLS da requisição, mas nunca é a fonte final de
     cargo ou status. Esses atributos são sempre recarregados da conta atual.
+    Depois da validação, a entidade é destacada e a transação somente-leitura é
+    encerrada para devolver a conexão ao pool antes da execução da rota. Isso
+    evita starvation quando muitas autenticações chegam em paralelo.
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -126,16 +129,27 @@ def _authenticated_user_from_token(token: str, db: Session) -> Usuario:
 
     user = db.query(Usuario).filter(Usuario.id == str(user_id)).first()
     if user is None or user.restaurante_id != restaurante_id:
+        if db.in_transaction():
+            db.rollback()
         raise credentials_exception
 
     status_val = str(
         getattr(user, "status", "pendente_ativacao") or "pendente_ativacao"
     ).lower().strip()
     if status_val != "ativo":
+        if db.in_transaction():
+            db.rollback()
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Conta de usuário pendente, inativa ou bloqueada.",
         )
+
+    # O restante da requisição só precisa dos campos já carregados do usuário.
+    # Destacar antes do rollback preserva esses escalares sem manter a conexão
+    # ocupada durante a fila entre a dependência de autenticação e a rota.
+    db.expunge(user)
+    if db.in_transaction():
+        db.rollback()
     return user
 
 def get_current_garcom_optional(

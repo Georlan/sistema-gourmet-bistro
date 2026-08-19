@@ -180,6 +180,7 @@ def criar_pedido_online(
             id=lancamento_id,
             comanda_id=comanda_id,
             garcom_id=garcom_id,
+            origem="cardapio",
             timestamp=datetime.datetime.now(datetime.timezone.utc)
         )
         db.add(novo_lancamento)
