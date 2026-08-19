@@ -536,6 +536,141 @@ def test_voucher_falha_antes_de_criar_intent_sem_liquidacao():
     assert response.status_code == 422
 
 
+def test_f11_pagamento_ativo_reserva_saldo_da_mesa():
+    first = client.post(
+        "/auth/smartpos/payment-intents",
+        headers=headers(),
+        json={
+            "mesa_id": 4,
+            "valor": "30.00",
+            "metodo": "pix",
+            "escopo": "valor",
+            "idempotency_key": "f11-reserve-first-01",
+        },
+    )
+    assert first.status_code == 201, first.text
+
+    overflow = client.post(
+        "/auth/smartpos/payment-intents",
+        headers=headers(),
+        json={
+            "mesa_id": 4,
+            "valor": "20.00",
+            "metodo": "dinheiro",
+            "escopo": "valor",
+            "idempotency_key": "f11-reserve-overflow-01",
+        },
+    )
+    assert overflow.status_code == 409, overflow.text
+    assert "pagamentos em andamento" in overflow.json()["detail"]
+
+    remaining = client.post(
+        "/auth/smartpos/payment-intents",
+        headers=headers(),
+        json={
+            "mesa_id": 4,
+            "valor": "12.00",
+            "metodo": "dinheiro",
+            "escopo": "valor",
+            "idempotency_key": "f11-reserve-remaining-01",
+        },
+    )
+    assert remaining.status_code == 201, remaining.text
+
+
+def test_f11_item_nao_pode_ser_reservado_por_duas_parcelas():
+    first = client.post(
+        "/auth/smartpos/payment-intents",
+        headers=headers(),
+        json={
+            "mesa_id": 4,
+            "valor": "30.00",
+            "metodo": "pix",
+            "escopo": "itens",
+            "item_ids": ["item-smartpos-intent-a"],
+            "idempotency_key": "f11-item-first-01",
+        },
+    )
+    assert first.status_code == 201, first.text
+
+    overlap = client.post(
+        "/auth/smartpos/payment-intents",
+        headers=headers(),
+        json={
+            "mesa_id": 4,
+            "valor": "30.00",
+            "metodo": "dinheiro",
+            "escopo": "itens",
+            "item_ids": ["item-smartpos-intent-a"],
+            "idempotency_key": "f11-item-overlap-01",
+        },
+    )
+    assert overlap.status_code == 409, overlap.text
+    assert "itens já estão reservados" in overlap.json()["detail"]
+
+
+def test_f11_divisao_sequencial_debito_externo_e_dinheiro_fecha_mesa():
+    first = client.post(
+        "/auth/smartpos/payment-intents",
+        headers=headers(),
+        json={
+            "mesa_id": 4,
+            "valor": "10.00",
+            "metodo": "debito",
+            "captura": "registro_externo",
+            "escopo": "valor",
+            "idempotency_key": "f11-split-debit-create",
+        },
+    )
+    assert first.status_code == 201, first.text
+    first_confirm = client.post(
+        f"/auth/smartpos/payment-intents/{first.json()['id']}/confirmar-manual",
+        headers=headers(),
+        json={"idempotency_key": "f11-split-debit-confirm"},
+    )
+    assert first_confirm.status_code == 200, first_confirm.text
+    assert first_confirm.json()["settled"] is True
+
+    second = client.post(
+        "/auth/smartpos/payment-intents",
+        headers=headers(),
+        json={
+            "mesa_id": 4,
+            "valor": "32.00",
+            "metodo": "dinheiro",
+            "escopo": "valor",
+            "idempotency_key": "f11-split-cash-create",
+        },
+    )
+    assert second.status_code == 201, second.text
+    second_confirm = client.post(
+        f"/auth/smartpos/payment-intents/{second.json()['id']}/confirmar-manual",
+        headers=headers(),
+        json={
+            "idempotency_key": "f11-split-cash-confirm",
+            "valor_recebido": "40.00",
+        },
+    )
+    assert second_confirm.status_code == 200, second_confirm.text
+    assert Decimal(str(second_confirm.json()["troco"])) == Decimal("8.00")
+
+    token = current_restaurante_id.set(RESTAURANTE_ID)
+    db = SessionLocal()
+    try:
+        pagamentos = db.query(Pagamento).filter(
+            Pagamento.restaurante_id == RESTAURANTE_ID
+        ).order_by(Pagamento.criado_em.asc()).all()
+        assert len(pagamentos) == 2
+        assert {pagamento.metodo for pagamento in pagamentos} == {"cartao_debito", "dinheiro"}
+        assert sum(Decimal(str(pagamento.valor)) for pagamento in pagamentos) == Decimal("42")
+        comanda = db.query(Comanda).filter(Comanda.id == "cmd-smartpos-intent").one()
+        assert Decimal(str(comanda.valor_pago)) == Decimal("42")
+        assert comanda.fechada is True
+    finally:
+        db.close()
+        current_restaurante_id.reset(token)
+
+
 def test_estado_terminal_exige_novo_intent_para_nova_tentativa():
     created = client.post(
         "/auth/smartpos/payment-intents",
