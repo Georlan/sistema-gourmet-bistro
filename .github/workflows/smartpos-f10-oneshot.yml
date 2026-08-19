@@ -1,0 +1,155 @@
+name: SmartPOS F10 one shot
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.head_ref == 'feat/smartpos-f10-manual-settlement'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/smartpos-f10-manual-settlement
+          fetch-depth: 0
+
+      - name: Apply F10 manual settlement
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              if old not in text:
+                  if new in text:
+                      return
+                  raise RuntimeError(f'anchor not found in {path}: {old[:100]!r}')
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          # Settlement becomes capture-agnostic while preserving method compatibility.
+          replace_once(
+              'backend/app/services/smartpos_settlement.py',
+              '''_METHOD_MAP = {\n    "pix": "pix",\n    "debito": "cartao_debito",\n    "credito": "cartao_credito",\n}\n''',
+              '''_METHOD_MAP = {\n    "dinheiro": "dinheiro",\n    "pix": "pix",\n    "debito": "cartao_debito",\n    "credito": "cartao_credito",\n}\n_ALLOWED_CAPTURE_METHODS = {\n    "provider_integrado": {"pix", "debito", "credito"},\n    "dinheiro_pendente": {"dinheiro"},\n    "registro_externo": {"pix", "debito", "credito"},\n}\n'''
+          )
+          replace_once(
+              'backend/app/services/smartpos_settlement.py',
+              '''    A aprovação do provider já deve estar persistida antes desta chamada. Se a\n    liquidação falhar, o intent permanece `aprovada` e pode ser reconciliado sem\n    repetir a cobrança no terminal.\n''',
+              '''    A aprovação (provider ou confirmação manual) já deve estar persistida antes\n    desta chamada. Se a liquidação falhar, o intent permanece `aprovada` e pode\n    ser reconciliado sem duplicar cobrança nem receita.\n'''
+          )
+          replace_once(
+              'backend/app/services/smartpos_settlement.py',
+              '''    if intent.status != "aprovada":\n        raise SmartPosSettlementError("Somente PaymentIntent aprovado pode ser liquidado.")\n    if intent.captura != "provider_integrado":\n        raise SmartPosSettlementError("A F9.1 liquida somente captura por provider integrado.")\n\n    metodo = _METHOD_MAP.get(intent.metodo)\n''',
+              '''    if intent.status != "aprovada":\n        raise SmartPosSettlementError("Somente PaymentIntent aprovado pode ser liquidado.")\n\n    allowed_methods = _ALLOWED_CAPTURE_METHODS.get(intent.captura)\n    if allowed_methods is None or intent.metodo not in allowed_methods:\n        raise SmartPosSettlementError(\n            "Método/captura ainda não possui liquidação financeira SmartPOS suportada."\n        )\n\n    metodo = _METHOD_MAP.get(intent.metodo)\n'''
+          )
+
+          # Route: manual confirmation now settles and broadcasts; cash computes change.
+          replace_once(
+              'backend/app/routes/smartpos.py',
+              'from fastapi import APIRouter, Depends, HTTPException, status\n',
+              'from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status\n'
+          )
+          replace_once(
+              'backend/app/routes/smartpos.py',
+              '''from ..services.smartpos_payment_state import (\n    InvalidSmartPosTransition,\n    initial_status_for_capture,\n    transition_intent,\n)\nfrom ..smartpos_models import SmartPosPaymentIntent\n''',
+              '''from ..services.smartpos_payment_state import (\n    InvalidSmartPosTransition,\n    initial_status_for_capture,\n    transition_intent,\n)\nfrom ..services.smartpos_settlement import (\n    SmartPosSettlementError,\n    settle_approved_smartpos_intent,\n)\nfrom ..smartpos_models import SmartPosPaymentIntent\nfrom .websocket import manager\n'''
+          )
+          replace_once(
+              'backend/app/routes/smartpos.py',
+              '''class SmartPosManualConfirmation(BaseModel):\n    idempotency_key: str = Field(min_length=8, max_length=128)\n    motivo: Optional[str] = Field(default=None, max_length=255)\n\n\nclass SmartPosManualConfirmationResponse(SmartPosPaymentIntentResponse):\n    transition_replayed: bool = False\n''',
+              '''class SmartPosManualConfirmation(BaseModel):\n    idempotency_key: str = Field(min_length=8, max_length=128)\n    motivo: Optional[str] = Field(default=None, max_length=255)\n    valor_recebido: Optional[Decimal] = Field(\n        default=None, gt=0, max_digits=14, decimal_places=2\n    )\n\n\nclass SmartPosManualConfirmationResponse(SmartPosPaymentIntentResponse):\n    transition_replayed: bool = False\n    payment_id: Optional[str] = None\n    settled: bool = False\n    financial_effect: bool = False\n    troco: Decimal = Decimal("0.00")\n'''
+          )
+          replace_once(
+              'backend/app/routes/smartpos.py',
+              '''    if method == "dinheiro":\n        if requested is not None:\n            raise HTTPException(\n                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,\n                detail="Dinheiro usa conferência manual e não aceita outro modo de captura.",\n            )\n        return "dinheiro_pendente"\n\n    capture = requested or "provider_integrado"\n''',
+              '''    if method == "dinheiro":\n        if requested is not None:\n            raise HTTPException(\n                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,\n                detail="Dinheiro usa conferência manual e não aceita outro modo de captura.",\n            )\n        return "dinheiro_pendente"\n\n    if method == "voucher":\n        raise HTTPException(\n            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,\n            detail="Voucher ainda não possui liquidação financeira na maquininha.",\n        )\n\n    capture = requested or "provider_integrado"\n'''
+          )
+
+          p = Path('backend/app/routes/smartpos.py')
+          text = p.read_text(encoding='utf-8')
+          start = text.index('@router.post(\n    "/payment-intents/{intent_id}/confirmar-manual",')
+          old_endpoint = text[start:]
+          new_endpoint = '''@router.post(\n    "/payment-intents/{intent_id}/confirmar-manual",\n    response_model=SmartPosManualConfirmationResponse,\n)\ndef confirmar_payment_intent_manual(\n    intent_id: str,\n    payload: SmartPosManualConfirmation,\n    background_tasks: BackgroundTasks,\n    db: Session = Depends(get_db),\n    current_user: Usuario = Depends(require_permission("smartpos:receber")),\n):\n    """Confirma captura manual e liquida no mesmo financeiro canônico do Caixa."""\n    restaurante_id = require_tenant_id()\n    if not has_capability(db, restaurante_id, "smartpos"):\n        raise HTTPException(\n            status_code=status.HTTP_403_FORBIDDEN,\n            detail="SmartPOS não habilitado para este restaurante.",\n        )\n\n    intent = db.query(SmartPosPaymentIntent).filter(\n        SmartPosPaymentIntent.restaurante_id == restaurante_id,\n        SmartPosPaymentIntent.id == intent_id,\n    ).first()\n    if intent is None:\n        raise HTTPException(\n            status_code=status.HTTP_404_NOT_FOUND,\n            detail="Intenção de pagamento não encontrada.",\n        )\n    if intent.captura not in _MANUAL_CAPTURES:\n        raise HTTPException(\n            status_code=status.HTTP_409_CONFLICT,\n            detail="Pagamentos integrados só podem ser aprovados pelo fluxo do provider.",\n        )\n\n    troco = Decimal("0.00")\n    motivo = payload.motivo or "Recebimento confirmado manualmente pelo operador."\n    if intent.captura == "dinheiro_pendente":\n        valor_recebido = _money(payload.valor_recebido if payload.valor_recebido is not None else intent.valor)\n        valor_intent = _money(intent.valor)\n        if valor_recebido < valor_intent:\n            raise HTTPException(\n                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,\n                detail="O valor recebido em dinheiro não pode ser menor que o valor a pagar.",\n            )\n        troco = _money(valor_recebido - valor_intent)\n        motivo = (\n            payload.motivo\n            or f"Dinheiro confirmado: recebido {valor_recebido}; troco {troco}."\n        )\n    elif payload.valor_recebido is not None:\n        raise HTTPException(\n            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,\n            detail="valor_recebido só se aplica a pagamentos em dinheiro.",\n        )\n\n    try:\n        result = transition_intent(\n            db,\n            intent=intent,\n            target_status="aprovada",\n            transition_key=payload.idempotency_key,\n            actor_id=current_user.id,\n            motivo=motivo,\n        )\n        db.commit()\n    except InvalidSmartPosTransition as exc:\n        db.rollback()\n        raise HTTPException(\n            status_code=status.HTTP_409_CONFLICT,\n            detail=str(exc),\n        ) from exc\n    except IntegrityError:\n        db.rollback()\n        intent = db.query(SmartPosPaymentIntent).filter(\n            SmartPosPaymentIntent.restaurante_id == restaurante_id,\n            SmartPosPaymentIntent.id == intent_id,\n        ).one()\n        try:\n            result = transition_intent(\n                db,\n                intent=intent,\n                target_status="aprovada",\n                transition_key=payload.idempotency_key,\n                actor_id=current_user.id,\n                motivo=motivo,\n            )\n            db.commit()\n        except InvalidSmartPosTransition as exc:\n            db.rollback()\n            raise HTTPException(\n                status_code=status.HTTP_409_CONFLICT,\n                detail=str(exc),\n            ) from exc\n\n    try:\n        settlement = settle_approved_smartpos_intent(\n            db,\n            restaurante_id=restaurante_id,\n            intent_id=intent_id,\n        )\n    except SmartPosSettlementError as exc:\n        db.rollback()\n        raise HTTPException(\n            status_code=status.HTTP_409_CONFLICT,\n            detail=f"Recebimento confirmado, mas ainda não liquidado no Caixa: {exc}",\n        ) from exc\n\n    background_tasks.add_task(\n        manager.broadcast,\n        {\n            "event": "payment_intent_updated",\n            "detail": {\n                "intent_id": intent_id,\n                "mesa_id": settlement.intent.mesa_id,\n                "status": settlement.intent.status,\n                "payment_id": settlement.pagamento.id,\n            },\n        },\n        restaurante_id,\n    )\n    for event_name in ("payment_updated", "cash_updated", "tables_updated"):\n        background_tasks.add_task(\n            manager.broadcast,\n            {\n                "event": event_name,\n                "detail": {\n                    "type": "smartpos_manual_settlement",\n                    "intent_id": intent_id,\n                    "payment_id": settlement.pagamento.id,\n                    "mesa_id": settlement.intent.mesa_id,\n                    "metodo": settlement.pagamento.metodo,\n                    "valor": float(settlement.pagamento.valor),\n                    "mesa_liberada": settlement.mesa_liberada,\n                },\n            },\n            restaurante_id,\n        )\n\n    db.refresh(settlement.intent)\n    return {\n        **_intent_payload(settlement.intent),\n        "transition_replayed": result.replayed,\n        "payment_id": settlement.pagamento.id,\n        "settled": True,\n        "financial_effect": True,\n        "troco": troco,\n    }\n'''
+          # confirmar-manual is the final endpoint in this module.
+          p.write_text(text[:start] + new_endpoint, encoding='utf-8')
+
+          # Tests: manual confirmation now MUST settle, and voucher is explicitly unsupported.
+          test_path = Path('backend/tests/test_smartpos_payment_intent_preview.py')
+          tests = test_path.read_text(encoding='utf-8')
+          tests = tests.replace(
+              '@pytest.mark.parametrize("metodo", ["pix", "debito", "credito", "voucher"])',
+              '@pytest.mark.parametrize("metodo", ["pix", "debito", "credito"])'
+          )
+          tests = tests.replace(
+              'def test_confirmacao_manual_e_idempotente_e_nao_liquida_financeiro():',
+              'def test_confirmacao_manual_e_idempotente_e_liquida_financeiro():'
+          )
+          tests = tests.replace(
+              '''    assert first.json()["transition_replayed"] is False\n    assert replay.status_code == 200, replay.text\n    assert replay.json()["status"] == "aprovada"\n    assert replay.json()["transition_replayed"] is True\n''',
+              '''    assert first.json()["transition_replayed"] is False\n    assert first.json()["settled"] is True\n    assert first.json()["financial_effect"] is True\n    assert first.json()["payment_id"]\n    assert replay.status_code == 200, replay.text\n    assert replay.json()["status"] == "aprovada"\n    assert replay.json()["transition_replayed"] is True\n    assert replay.json()["payment_id"] == first.json()["payment_id"]\n'''
+          )
+          tests = tests.replace(
+              '''        assert db.query(Pagamento).filter(Pagamento.restaurante_id == RESTAURANTE_ID).count() == 0\n        comanda = db.query(Comanda).filter(Comanda.id == "cmd-smartpos-intent").one()\n        assert Decimal(str(comanda.valor_pago)) == Decimal("0")\n        assert comanda.fechada is False\n''',
+              '''        pagamentos = db.query(Pagamento).filter(Pagamento.restaurante_id == RESTAURANTE_ID).all()\n        assert len(pagamentos) == 1\n        assert pagamentos[0].metodo == "cartao_debito"\n        assert Decimal(str(pagamentos[0].valor)) == Decimal("10")\n        comanda = db.query(Comanda).filter(Comanda.id == "cmd-smartpos-intent").one()\n        assert Decimal(str(comanda.valor_pago)) == Decimal("10")\n        assert comanda.fechada is False\n''',
+              1
+          )
+          insertion = '''\n\ndef test_dinheiro_confirma_troco_e_fecha_mesa_sem_inflar_receita():\n    created = client.post(\n        "/auth/smartpos/payment-intents",\n        headers=headers(),\n        json={\n            "mesa_id": 4,\n            "valor": "42.00",\n            "metodo": "dinheiro",\n            "escopo": "valor",\n            "idempotency_key": "cash-full-create-f10",\n        },\n    )\n    assert created.status_code == 201, created.text\n    confirmed = client.post(\n        f"/auth/smartpos/payment-intents/{created.json()['id']}/confirmar-manual",\n        headers=headers(),\n        json={\n            "idempotency_key": "cash-full-confirm-f10",\n            "valor_recebido": "50.00",\n        },\n    )\n    assert confirmed.status_code == 200, confirmed.text\n    assert Decimal(str(confirmed.json()["troco"])) == Decimal("8.00")\n    assert confirmed.json()["settled"] is True\n\n    token = current_restaurante_id.set(RESTAURANTE_ID)\n    db = SessionLocal()\n    try:\n        payment = db.query(Pagamento).filter(Pagamento.restaurante_id == RESTAURANTE_ID).one()\n        assert payment.metodo == "dinheiro"\n        assert Decimal(str(payment.valor)) == Decimal("42")\n        comanda = db.query(Comanda).filter(Comanda.id == "cmd-smartpos-intent").one()\n        assert Decimal(str(comanda.valor_pago)) == Decimal("42")\n        assert comanda.fechada is True\n        assert all(item.pago for item in db.query(Item).filter(Item.comanda_id == comanda.id).all())\n    finally:\n        db.close()\n        current_restaurante_id.reset(token)\n\n\ndef test_dinheiro_rejeita_valor_recebido_menor_que_pagamento():\n    created = client.post(\n        "/auth/smartpos/payment-intents",\n        headers=headers(),\n        json={\n            "mesa_id": 4,\n            "valor": "10.00",\n            "metodo": "dinheiro",\n            "escopo": "valor",\n            "idempotency_key": "cash-short-create-f10",\n        },\n    )\n    response = client.post(\n        f"/auth/smartpos/payment-intents/{created.json()['id']}/confirmar-manual",\n        headers=headers(),\n        json={\n            "idempotency_key": "cash-short-confirm-f10",\n            "valor_recebido": "9.99",\n        },\n    )\n    assert response.status_code == 422\n\n\ndef test_voucher_falha_antes_de_criar_intent_sem_liquidacao():\n    response = client.post(\n        "/auth/smartpos/payment-intents",\n        headers=headers(),\n        json={\n            "mesa_id": 4,\n            "valor": "10.00",\n            "metodo": "voucher",\n            "captura": "registro_externo",\n            "escopo": "valor",\n            "idempotency_key": "voucher-blocked-f10",\n        },\n    )\n    assert response.status_code == 422\n'''
+          anchor = '\n\ndef test_estado_terminal_exige_novo_intent_para_nova_tentativa():'
+          if insertion.strip() not in tests:
+              if anchor not in tests:
+                  raise RuntimeError('test insertion anchor not found')
+              tests = tests.replace(anchor, insertion + anchor, 1)
+          test_path.write_text(tests, encoding='utf-8')
+
+          # UI: remove voucher until the financial contract exists, add manual confirmation + change.
+          ui_path = Path('src/smartpos/SmartPosPaymentFlow.tsx')
+          ui = ui_path.read_text(encoding='utf-8')
+          ui = ui.replace(
+              "type Metodo = 'dinheiro' | 'pix' | 'debito' | 'credito' | 'voucher';",
+              "type Metodo = 'dinheiro' | 'pix' | 'debito' | 'credito';"
+          )
+          ui = ui.replace("  voucher: 'Voucher',\n", '')
+          ui = ui.replace(
+              "  const [isSubmitting, setIsSubmitting] = useState(false);\n  const [error, setError] = useState('');",
+              "  const [isSubmitting, setIsSubmitting] = useState(false);\n  const [isConfirmingManual, setIsConfirmingManual] = useState(false);\n  const [manualReceived, setManualReceived] = useState('');\n  const [paymentId, setPaymentId] = useState('');\n  const [changeCents, setChangeCents] = useState(0);\n  const [manualSettled, setManualSettled] = useState(false);\n  const [error, setError] = useState('');"
+          )
+          submit_anchor = "  const methodLabel = method ? methodLabels[method] : '';\n"
+          confirm_fn = '''  const confirmManualPayment = async () => {\n    if (!intentId || captureMode === 'provider_integrado') return;\n    setIsConfirmingManual(true);\n    setError('');\n    try {\n      const confirmationKey = `${idempotencyKey || intentId}:confirm`;\n      const receivedNumber = Number(String(manualReceived || '').replace(',', '.'));\n      const response = await fetch(`${API_BASE_URL}/auth/smartpos/payment-intents/${encodeURIComponent(intentId)}/confirmar-manual`, {\n        method: 'POST',\n        headers: {\n          Authorization: `Bearer ${session.token}`,\n          'Content-Type': 'application/json',\n        },\n        body: JSON.stringify({\n          idempotency_key: confirmationKey,\n          valor_recebido: captureMode === 'dinheiro_pendente'\n            ? (Number.isFinite(receivedNumber) && receivedNumber > 0 ? receivedNumber.toFixed(2) : (amountCents / 100).toFixed(2))\n            : undefined,\n        }),\n      });\n      if (response.status === 401 || response.status === 403) {\n        onSessionInvalid();\n        return;\n      }\n      const data = await response.json().catch(() => null);\n      if (!response.ok) throw new Error(data?.detail || 'Não foi possível confirmar o recebimento.');\n      setPaymentId(String(data.payment_id || ''));\n      setChangeCents(Math.round(Number(data.troco || 0) * 100));\n      setManualSettled(Boolean(data.settled));\n    } catch (cause) {\n      setError(cause instanceof Error ? cause.message : 'Não foi possível confirmar o recebimento.');\n    } finally {\n      setIsConfirmingManual(false);\n    }\n  };\n\n'''
+          if confirm_fn.strip() not in ui:
+              if submit_anchor not in ui:
+                  raise RuntimeError('UI submit anchor not found')
+              ui = ui.replace(submit_anchor, confirm_fn + submit_anchor, 1)
+
+          ready_start = "  if (step === 'pronto') {\n    return ("
+          ready_end = "\n  if (step === 'revisao') {"
+          if ready_start in ui:
+              s = ui.index(ready_start)
+              e = ui.index(ready_end, s)
+              ready_block = '''  if (step === 'pronto') {\n    const manualCapture = captureMode === 'dinheiro_pendente' || captureMode === 'registro_externo';\n    return (\n      <section className="pt-7">\n        <div className="flex items-center justify-between gap-3">\n          <div>\n            <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-koma-accent">Recebimento</p>\n            <h1 className="mt-2 text-3xl font-black tracking-[-0.04em]">{manualSettled ? 'Pagamento concluído' : manualCapture ? 'Confirmar pagamento' : 'Aguardando maquininha'}</h1>\n          </div>\n          <span className="flex size-11 items-center justify-center rounded-full bg-koma-accent text-black"><Check size={22} /></span>\n        </div>\n        <div className="mt-7 rounded-2xl border border-koma-border bg-koma-surface p-5">\n          <p className="text-xs uppercase tracking-wide text-koma-muted">{mesa.nome || `Mesa ${mesa.id}`}</p>\n          <p className="mt-2 text-3xl font-black">{money(amountCents)}</p>\n          <div className="mt-4 grid gap-2 border-t border-koma-border pt-4 text-sm">\n            <div className="flex items-center justify-between gap-3"><span className="text-koma-muted">Forma</span><strong>{methodLabel}</strong></div>\n            {captureMode && <div className="flex items-center justify-between gap-3"><span className="text-koma-muted">Captura</span><strong>{captureLabels[captureMode]}</strong></div>}\n          </div>\n\n          {!manualSettled && captureMode === 'dinheiro_pendente' && (\n            <label className="mt-5 block border-t border-koma-border pt-4">\n              <span className="text-xs font-bold text-koma-muted">Valor entregue pelo cliente</span>\n              <input\n                inputMode="decimal"\n                value={manualReceived}\n                onChange={(event) => setManualReceived(event.target.value)}\n                placeholder={(amountCents / 100).toFixed(2).replace('.', ',')}\n                className="mt-2 min-h-14 w-full rounded-xl border border-koma-border bg-koma-page px-4 text-xl font-black outline-none focus:border-koma-accent"\n              />\n            </label>\n          )}\n\n          {!manualSettled && manualCapture && (\n            <button\n              type="button"\n              onClick={() => void confirmManualPayment()}\n              disabled={isConfirmingManual}\n              className="mt-5 flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-koma-accent px-4 text-sm font-black text-black disabled:opacity-60"\n            >\n              {isConfirmingManual ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}\n              {isConfirmingManual ? 'Confirmando…' : captureMode === 'dinheiro_pendente' ? 'Receber dinheiro' : 'Confirmar pagamento externo'}\n            </button>\n          )}\n\n          {manualSettled && changeCents > 0 && (\n            <p className="mt-5 rounded-xl border border-koma-accent/30 bg-koma-accent/10 px-4 py-3 text-center text-sm font-black text-koma-accent">Troco: {money(changeCents)}</p>\n          )}\n          {!manualCapture && !manualSettled && (\n            <p className="mt-5 border-t border-koma-border pt-4 text-xs text-koma-muted">A cobrança integrada será processada pelo aplicativo Android da maquininha.</p>\n          )}\n          {error && <p role="alert" className="mt-4 rounded-xl border border-red-900/50 bg-red-950/30 px-3 py-2 text-xs text-red-300">{error}</p>}\n          {(paymentId || intentId) && <p className="mt-3 truncate font-mono text-[9px] text-koma-muted">{paymentId ? `Pagamento ${paymentId}` : intentId}</p>}\n        </div>\n        <button type="button" onClick={onBack} className="mt-5 min-h-14 w-full rounded-xl border border-koma-border px-4 text-sm font-black text-koma-muted">Voltar para a mesa</button>\n      </section>\n    );\n  }\n'''
+              ui = ui[:s] + ready_block + ui[e:]
+
+          ui = ui.replace("      { id: 'voucher' as const, label: 'Voucher', detail: 'Escolher onde será cobrado', icon: ReceiptText },\n", '')
+          ui_path.write_text(ui, encoding='utf-8')
+
+      - name: Validate patch syntax
+        run: |
+          git diff --check
+          python -m py_compile backend/app/routes/smartpos.py backend/app/services/smartpos_settlement.py
+
+      - name: Commit F10
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/app/routes/smartpos.py backend/app/services/smartpos_settlement.py backend/tests/test_smartpos_payment_intent_preview.py src/smartpos/SmartPosPaymentFlow.tsx
+          git commit -m "feat(smartpos): settle manual payments safely"
+          git push origin HEAD:feat/smartpos-f10-manual-settlement
