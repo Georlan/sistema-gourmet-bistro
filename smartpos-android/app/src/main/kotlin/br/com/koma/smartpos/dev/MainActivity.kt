@@ -67,6 +67,13 @@ class MainActivity : Activity() {
         showLoggedOut()
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (sessionApi != null && !sessionToken.isNullOrBlank()) {
+            refreshQueue(silent = true)
+        }
+    }
+
     override fun onDestroy() {
         executor.shutdownNow()
         sessionToken = null
@@ -139,7 +146,7 @@ class MainActivity : Activity() {
         }
         operationSection.addView(outcome)
         runButton = Button(this).apply {
-            text = "Simular pagamento"
+            text = "Executar / reconciliar simulação"
             setOnClickListener { executeSelectedIntent() }
         }
         operationSection.addView(runButton)
@@ -204,7 +211,8 @@ class MainActivity : Activity() {
                     showLoggedIn()
                     renderSession()
                     renderQueue()
-                    status.text = "Sessão SmartPOS carregada. Terminal: $terminalId"
+                    status.text = "Sessão SmartPOS carregada. Terminal: $terminalId\n" +
+                        "FakeBridge ativo: APPROVED/DECLINED/PENDING/TIMEOUT/ERROR podem ser simulados sem cartão."
                     setBusy(false)
                 }
             }.onFailure { error ->
@@ -221,26 +229,29 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun refreshQueue() {
+    private fun refreshQueue(silent: Boolean = false) {
         val api = sessionApi ?: return
-        setBusy(true, "Atualizando recebimentos...")
+        if (!silent) setBusy(true, "Atualizando recebimentos...")
         executor.execute {
             runCatching { api.pendingProviderIntents(terminalId, PROVIDER) }
                 .onSuccess { intents ->
                     pendingIntents = intents
                     runOnUiThread {
                         renderQueue()
-                        status.text = if (intents.isEmpty()) {
-                            "Nenhum recebimento integrado disponível para este terminal."
-                        } else {
-                            "${intents.size} recebimento(s) disponível(is)."
+                        if (!silent) {
+                            status.text = if (intents.isEmpty()) {
+                                "Nenhum recebimento integrado disponível para este terminal."
+                            } else {
+                                "${intents.size} recebimento(s) disponível(is)."
+                            }
                         }
                         setBusy(false)
                     }
                 }
                 .onFailure { error ->
                     runOnUiThread {
-                        status.text = "Falha ao atualizar: ${error.message ?: error::class.java.simpleName}"
+                        status.text = "Falha ao atualizar: ${error.message ?: error::class.java.simpleName}\n" +
+                            "A sessão local foi mantida; tente novamente quando a rede voltar."
                         setBusy(false)
                     }
                 }
@@ -261,13 +272,13 @@ class MainActivity : Activity() {
             reference = if (selectedOutcome in setOf(PaymentOutcome.APPROVED, PaymentOutcome.DECLINED)) {
                 "fake-${selectedOutcome.name.lowercase()}-${selected.intentId.take(8)}"
             } else null,
-            message = "Resultado gerado pelo FakeBridge Android.",
+            message = "Resultado gerado pelo FakeBridge Android: ${selectedOutcome.name}.",
         )
         bridge.setChargeResult(fakeResult)
         bridge.setReconcileResult(fakeResult)
         val operationKey = StableOperationKey.forIntent(selected.intentId, terminalId, PROVIDER)
 
-        setBusy(true, "Executando ${selected.displayLabel()}...")
+        setBusy(true, "Executando/reconciliando ${selected.displayLabel()}...")
         executor.execute {
             runCatching {
                 val backend = KomaTerminalBackendApi(localTransport)
@@ -281,15 +292,20 @@ class MainActivity : Activity() {
                 runtime.runOnce(selected.intentId, operationKey)
             }.onSuccess { ack ->
                 runOnUiThread {
-                    status.text = "Resultado recebido pelo Kôma: ${ack.status}" +
-                        if (ack.replayed) " · replay idempotente" else ""
+                    status.text = buildString {
+                        append("Resultado recebido pelo Kôma: ").append(ack.status)
+                        if (ack.replayed) append(" · replay idempotente")
+                        if (ack.status == "processando") {
+                            append("\nOperação preservada para reconciliação; nenhuma segunda cobrança deve ser criada.")
+                        }
+                    }
                     setBusy(false)
-                    refreshQueue()
+                    refreshQueue(silent = true)
                 }
             }.onFailure { error ->
                 runOnUiThread {
                     status.text = "Falha: ${error.message ?: error::class.java.simpleName}\n" +
-                        "A reserva local foi preservada; a próxima tentativa usará reconciliação."
+                        "A reserva local foi preservada; a próxima tentativa usará reconciliação, não nova cobrança."
                     setBusy(false)
                 }
             }
@@ -313,6 +329,7 @@ class MainActivity : Activity() {
             appendLine(loaded.restauranteNome)
             append(loaded.operadorNome).append(" · ").append(loaded.operadorRole)
             append(" · Caixa ").append(if (loaded.turnoAberto) "aberto" else "fechado")
+            append("\nTerminal ").append(terminalId)
         }
     }
 
