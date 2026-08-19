@@ -12,7 +12,7 @@ jobs:
   apply:
     name: Apply SmartPOS Kanban refactor
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - name: Checkout PR branch
         uses: actions/checkout@v4
@@ -20,13 +20,36 @@ jobs:
           ref: agent/smartpos-no-hardware-hardening
           fetch-depth: 0
 
-      - name: Apply guarded refactor
-        run: python scripts/apply_pr69_smartpos_kanban.py
+      - name: Apply guarded refactor and capture diagnostics
+        id: apply
+        shell: bash
+        run: |
+          set +e
+          python scripts/apply_pr69_smartpos_kanban.py > /tmp/pr69-apply.log 2>&1
+          status=$?
+          cat /tmp/pr69-apply.log
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          if [ "$status" -ne 0 ]; then
+            cp /tmp/pr69-apply.log scripts/pr69-oneshot-result.log
+          fi
+          exit 0
 
-      - name: Remove one-shot workflow
+      - name: Commit diagnostic when refactor guard fails
+        if: steps.apply.outputs.status != '0'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/pr69-oneshot-result.log
+          git commit -m "chore(pr69): capture one-shot refactor failure"
+          git push origin HEAD:agent/smartpos-no-hardware-hardening
+          exit 1
+
+      - name: Remove one-shot workflow after successful apply
+        if: steps.apply.outputs.status == '0'
         run: rm .github/workflows/pr69-smartpos-kanban-oneshot.yml
 
       - name: Python syntax check
+        if: steps.apply.outputs.status == '0'
         run: |
           python -m py_compile \
             backend/app/models.py \
@@ -38,27 +61,34 @@ jobs:
             backend/alembic/versions/b7f4d2e9c601_add_lancamento_origin.py
 
       - name: Diff integrity
+        if: steps.apply.outputs.status == '0'
         run: git diff --check
 
       - name: Setup Node
+        if: steps.apply.outputs.status == '0'
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
 
       - name: Install frontend dependencies
+        if: steps.apply.outputs.status == '0'
         run: npm ci
 
       - name: TypeScript check
+        if: steps.apply.outputs.status == '0'
         run: npm run lint
 
       - name: Production build
+        if: steps.apply.outputs.status == '0'
         run: npm run build
 
       - name: Commit refactor to PR branch
+        if: steps.apply.outputs.status == '0'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -f scripts/pr69-oneshot-result.log
           git add -A
           git commit -m "refactor(smartpos): integrate status into cashier kanban"
           git push origin HEAD:agent/smartpos-no-hardware-hardening
