@@ -134,7 +134,7 @@ export default function SmartPosPage() {
       return;
     }
     if (!response.ok) {
-      throw new Error('Não foi possível carregar o contexto do SmartPOS.');
+      throw new Error('Não foi possível carregar o contexto da maquininha.');
     }
     const data = (await response.json()) as SmartPosContext;
     setContext(data);
@@ -235,7 +235,7 @@ export default function SmartPosPage() {
             void reconcileContext();
           }
         } catch {
-          // Eventos sem relação com o SmartPOS não alteram o contexto local.
+          // Eventos sem relação com a maquininha não alteram o contexto local.
         }
       };
 
@@ -281,7 +281,7 @@ export default function SmartPosPage() {
 
       const rawRole = String(data?.usuario?.role || '').trim().toLowerCase();
       if (!SMARTPOS_ROLES.has(rawRole as SmartPosRole)) {
-        throw new Error('Esta conta não possui um perfil operacional permitido no SmartPOS.');
+        throw new Error('Esta conta não possui um perfil operacional permitido na maquininha.');
       }
 
       const restauranteId = Number(data?.usuario?.restaurante_id);
@@ -308,7 +308,7 @@ export default function SmartPosPage() {
       setValidationError('');
     } catch (error) {
       setLoginError(
-        error instanceof Error ? error.message : 'Não foi possível entrar no SmartPOS.',
+        error instanceof Error ? error.message : 'Não foi possível entrar na maquininha.',
       );
     } finally {
       setIsLoggingIn(false);
@@ -373,13 +373,13 @@ export default function SmartPosPage() {
           <header className="flex items-center justify-between gap-4 border-b border-koma-border pb-4">
             <KomaLogo withText size="lg" />
             <span className="rounded-full border border-koma-border px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-koma-muted">
-              SmartPOS
+              Maquininha
             </span>
           </header>
           <section className="flex flex-1 flex-col justify-center py-8">
             <div className="mb-7">
               <p className="mb-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-koma-accent">Identificação do operador</p>
-              <h1 className="text-3xl font-black tracking-[-0.04em] sm:text-4xl">Entrar no SmartPOS</h1>
+              <h1 className="text-3xl font-black tracking-[-0.04em] sm:text-4xl">Entrar na maquininha</h1>
               <p className="mt-3 text-sm leading-6 text-koma-muted">Mesma conta do Kôma.</p>
             </div>
             <form onSubmit={handleLogin} className="grid gap-4">
@@ -436,7 +436,7 @@ export default function SmartPosPage() {
       <main className="min-h-dvh bg-koma-page text-koma-foreground">
         <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-4 pb-6 pt-4 sm:px-6">
           <Header />
-          <div className="flex flex-1 items-center justify-center gap-3 text-sm text-koma-muted"><Loader2 className="animate-spin text-koma-accent" size={20} /> Preparando SmartPOS…</div>
+          <div className="flex flex-1 items-center justify-center gap-3 text-sm text-koma-muted"><Loader2 className="animate-spin text-koma-accent" size={20} /> Preparando maquininha…</div>
         </div>
       </main>
     );
@@ -451,7 +451,7 @@ export default function SmartPosPage() {
             <div className="rounded-3xl border border-koma-border bg-koma-surface p-6">
               <LockKeyhole className="mb-5 text-koma-accent" size={28} />
               <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-koma-accent">Acesso necessário</p>
-              <h1 className="mt-2 text-2xl font-black tracking-[-0.03em]">SmartPOS não habilitado</h1>
+              <h1 className="mt-2 text-2xl font-black tracking-[-0.03em]">Maquininha não habilitada</h1>
               <p className="mt-3 text-sm leading-6 text-koma-muted">Solicite a ativação para este restaurante.</p>
             </div>
           </section>
@@ -598,7 +598,7 @@ export default function SmartPosPage() {
             </div>
           </div>
 
-          <div className="mb-6"><p className="mb-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-koma-accent">Canal de atendimento</p><h1 className="text-3xl font-black tracking-[-0.04em]">Kôma SmartPOS</h1></div>
+          <div className="mb-6"><p className="mb-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-koma-accent">Canal de atendimento</p><h1 className="text-3xl font-black tracking-[-0.04em]">Kôma Maquininha</h1></div>
 
           {mesasError && <p role="alert" className="mb-3 rounded-xl border border-red-900/50 bg-red-950/30 px-3 py-2 text-xs text-red-300">{mesasError}</p>}
 
