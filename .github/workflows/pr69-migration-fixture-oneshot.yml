@@ -22,6 +22,7 @@ jobs:
           ref: agent/smartpos-no-hardware-hardening
           fetch-depth: 0
 
+      # This workflow exists only long enough to patch the large validation file.
       - name: Patch migration fixture
         run: python scripts/patch_migration_fixture_pr69.py
 
