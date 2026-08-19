@@ -312,7 +312,7 @@ def test_intent_rejeita_valor_acima_do_saldo():
     assert response.status_code == 422
 
 
-@pytest.mark.parametrize("metodo", ["pix", "debito", "credito", "voucher"])
+@pytest.mark.parametrize("metodo", ["pix", "debito", "credito"])
 def test_metodos_digitais_usam_integracao_por_padrao(metodo):
     response = client.post(
         "/auth/smartpos/payment-intents",
@@ -331,7 +331,7 @@ def test_metodos_digitais_usam_integracao_por_padrao(metodo):
     assert response.json()["status"] == "criada"
 
 
-@pytest.mark.parametrize("metodo", ["pix", "debito", "credito", "voucher"])
+@pytest.mark.parametrize("metodo", ["pix", "debito", "credito"])
 def test_metodos_digitais_aceitam_registro_em_outra_maquininha(metodo):
     response = client.post(
         "/auth/smartpos/payment-intents",
@@ -353,9 +353,12 @@ def test_metodos_digitais_aceitam_registro_em_outra_maquininha(metodo):
     token = current_restaurante_id.set(RESTAURANTE_ID)
     db = SessionLocal()
     try:
-        assert db.query(Pagamento).filter(Pagamento.restaurante_id == RESTAURANTE_ID).count() == 0
+        pagamentos = db.query(Pagamento).filter(Pagamento.restaurante_id == RESTAURANTE_ID).all()
+        assert len(pagamentos) == 1
+        assert pagamentos[0].metodo == "cartao_debito"
+        assert Decimal(str(pagamentos[0].valor)) == Decimal("10")
         comanda = db.query(Comanda).filter(Comanda.id == "cmd-smartpos-intent").one()
-        assert Decimal(str(comanda.valor_pago)) == Decimal("0")
+        assert Decimal(str(comanda.valor_pago)) == Decimal("10")
         assert comanda.fechada is False
     finally:
         db.close()
@@ -393,7 +396,7 @@ def test_dinheiro_deriva_captura_manual_e_rejeita_captura_forcada():
     assert invalid.status_code == 422
 
 
-def test_confirmacao_manual_e_idempotente_e_nao_liquida_financeiro():
+def test_confirmacao_manual_e_idempotente_e_liquida_financeiro():
     created = client.post(
         "/auth/smartpos/payment-intents",
         headers=headers(),
@@ -427,9 +430,13 @@ def test_confirmacao_manual_e_idempotente_e_nao_liquida_financeiro():
     assert first.status_code == 200, first.text
     assert first.json()["status"] == "aprovada"
     assert first.json()["transition_replayed"] is False
+    assert first.json()["settled"] is True
+    assert first.json()["financial_effect"] is True
+    assert first.json()["payment_id"]
     assert replay.status_code == 200, replay.text
     assert replay.json()["status"] == "aprovada"
     assert replay.json()["transition_replayed"] is True
+    assert replay.json()["payment_id"] == first.json()["payment_id"]
 
     token = current_restaurante_id.set(RESTAURANTE_ID)
     db = SessionLocal()
@@ -448,6 +455,85 @@ def test_confirmacao_manual_e_idempotente_e_nao_liquida_financeiro():
     finally:
         db.close()
         current_restaurante_id.reset(token)
+
+
+def test_dinheiro_confirma_troco_e_fecha_mesa_sem_inflar_receita():
+    created = client.post(
+        "/auth/smartpos/payment-intents",
+        headers=headers(),
+        json={
+            "mesa_id": 4,
+            "valor": "42.00",
+            "metodo": "dinheiro",
+            "escopo": "valor",
+            "idempotency_key": "cash-full-create-f10",
+        },
+    )
+    assert created.status_code == 201, created.text
+    confirmed = client.post(
+        f"/auth/smartpos/payment-intents/{created.json()['id']}/confirmar-manual",
+        headers=headers(),
+        json={
+            "idempotency_key": "cash-full-confirm-f10",
+            "valor_recebido": "50.00",
+        },
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    assert Decimal(str(confirmed.json()["troco"])) == Decimal("8.00")
+    assert confirmed.json()["settled"] is True
+
+    token = current_restaurante_id.set(RESTAURANTE_ID)
+    db = SessionLocal()
+    try:
+        payment = db.query(Pagamento).filter(Pagamento.restaurante_id == RESTAURANTE_ID).one()
+        assert payment.metodo == "dinheiro"
+        assert Decimal(str(payment.valor)) == Decimal("42")
+        comanda = db.query(Comanda).filter(Comanda.id == "cmd-smartpos-intent").one()
+        assert Decimal(str(comanda.valor_pago)) == Decimal("42")
+        assert comanda.fechada is True
+        assert all(item.pago for item in db.query(Item).filter(Item.comanda_id == comanda.id).all())
+    finally:
+        db.close()
+        current_restaurante_id.reset(token)
+
+
+def test_dinheiro_rejeita_valor_recebido_menor_que_pagamento():
+    created = client.post(
+        "/auth/smartpos/payment-intents",
+        headers=headers(),
+        json={
+            "mesa_id": 4,
+            "valor": "10.00",
+            "metodo": "dinheiro",
+            "escopo": "valor",
+            "idempotency_key": "cash-short-create-f10",
+        },
+    )
+    response = client.post(
+        f"/auth/smartpos/payment-intents/{created.json()['id']}/confirmar-manual",
+        headers=headers(),
+        json={
+            "idempotency_key": "cash-short-confirm-f10",
+            "valor_recebido": "9.99",
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_voucher_falha_antes_de_criar_intent_sem_liquidacao():
+    response = client.post(
+        "/auth/smartpos/payment-intents",
+        headers=headers(),
+        json={
+            "mesa_id": 4,
+            "valor": "10.00",
+            "metodo": "voucher",
+            "captura": "registro_externo",
+            "escopo": "valor",
+            "idempotency_key": "voucher-blocked-f10",
+        },
+    )
+    assert response.status_code == 422
 
 
 def test_estado_terminal_exige_novo_intent_para_nova_tentativa():

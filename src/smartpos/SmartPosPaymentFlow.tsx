@@ -34,7 +34,7 @@ type Comanda = {
   itens: Item[];
 };
 
-type Metodo = 'dinheiro' | 'pix' | 'debito' | 'credito' | 'voucher';
+type Metodo = 'dinheiro' | 'pix' | 'debito' | 'credito';
 type Captura = 'provider_integrado' | 'registro_externo' | 'dinheiro_pendente';
 type Escopo = 'valor' | 'itens';
 type Step = 'valor' | 'metodo' | 'captura' | 'revisao' | 'pronto';
@@ -57,7 +57,6 @@ const methodLabels: Record<Metodo, string> = {
   pix: 'Pix',
   debito: 'Débito',
   credito: 'Crédito',
-  voucher: 'Voucher',
 };
 
 const captureLabels: Record<Captura, string> = {
@@ -108,6 +107,11 @@ export default function SmartPosPaymentFlow({
   const [intentId, setIntentId] = useState('');
   const [captureMode, setCaptureMode] = useState<Captura | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isConfirmingManual, setIsConfirmingManual] = useState(false);
+  const [manualReceived, setManualReceived] = useState('');
+  const [paymentId, setPaymentId] = useState('');
+  const [changeCents, setChangeCents] = useState(0);
+  const [manualSettled, setManualSettled] = useState(false);
   const [error, setError] = useState('');
 
   const selectedItemsCents = selectableItems.reduce(
@@ -216,15 +220,52 @@ export default function SmartPosPaymentFlow({
     }
   };
 
+  const confirmManualPayment = async () => {
+    if (!intentId || captureMode === 'provider_integrado') return;
+    setIsConfirmingManual(true);
+    setError('');
+    try {
+      const confirmationKey = `${idempotencyKey || intentId}:confirm`;
+      const receivedNumber = Number(String(manualReceived || '').replace(',', '.'));
+      const response = await fetch(`${API_BASE_URL}/auth/smartpos/payment-intents/${encodeURIComponent(intentId)}/confirmar-manual`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          idempotency_key: confirmationKey,
+          valor_recebido: captureMode === 'dinheiro_pendente'
+            ? (Number.isFinite(receivedNumber) && receivedNumber > 0 ? receivedNumber.toFixed(2) : (amountCents / 100).toFixed(2))
+            : undefined,
+        }),
+      });
+      if (response.status === 401 || response.status === 403) {
+        onSessionInvalid();
+        return;
+      }
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.detail || 'Não foi possível confirmar o recebimento.');
+      setPaymentId(String(data.payment_id || ''));
+      setChangeCents(Math.round(Number(data.troco || 0) * 100));
+      setManualSettled(Boolean(data.settled));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Não foi possível confirmar o recebimento.');
+    } finally {
+      setIsConfirmingManual(false);
+    }
+  };
+
   const methodLabel = method ? methodLabels[method] : '';
 
   if (step === 'pronto') {
+    const manualCapture = captureMode === 'dinheiro_pendente' || captureMode === 'registro_externo';
     return (
       <section className="pt-7">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-koma-accent">Preview</p>
-            <h1 className="mt-2 text-3xl font-black tracking-[-0.04em]">Intenção criada</h1>
+            <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-koma-accent">Recebimento</p>
+            <h1 className="mt-2 text-3xl font-black tracking-[-0.04em]">{manualSettled ? 'Pagamento concluído' : manualCapture ? 'Confirmar pagamento' : 'Aguardando maquininha'}</h1>
           </div>
           <span className="flex size-11 items-center justify-center rounded-full bg-koma-accent text-black"><Check size={22} /></span>
         </div>
@@ -235,10 +276,42 @@ export default function SmartPosPaymentFlow({
             <div className="flex items-center justify-between gap-3"><span className="text-koma-muted">Forma</span><strong>{methodLabel}</strong></div>
             {captureMode && <div className="flex items-center justify-between gap-3"><span className="text-koma-muted">Captura</span><strong>{captureLabels[captureMode]}</strong></div>}
           </div>
-          <p className="mt-5 border-t border-koma-border pt-4 text-xs text-koma-muted">Nenhuma cobrança ou baixa financeira foi realizada.</p>
-          {intentId && <p className="mt-2 truncate font-mono text-[9px] text-koma-muted">{intentId}</p>}
+
+          {!manualSettled && captureMode === 'dinheiro_pendente' && (
+            <label className="mt-5 block border-t border-koma-border pt-4">
+              <span className="text-xs font-bold text-koma-muted">Valor entregue pelo cliente</span>
+              <input
+                inputMode="decimal"
+                value={manualReceived}
+                onChange={(event) => setManualReceived(event.target.value)}
+                placeholder={(amountCents / 100).toFixed(2).replace('.', ',')}
+                className="mt-2 min-h-14 w-full rounded-xl border border-koma-border bg-koma-page px-4 text-xl font-black outline-none focus:border-koma-accent"
+              />
+            </label>
+          )}
+
+          {!manualSettled && manualCapture && (
+            <button
+              type="button"
+              onClick={() => void confirmManualPayment()}
+              disabled={isConfirmingManual}
+              className="mt-5 flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-koma-accent px-4 text-sm font-black text-black disabled:opacity-60"
+            >
+              {isConfirmingManual ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
+              {isConfirmingManual ? 'Confirmando…' : captureMode === 'dinheiro_pendente' ? 'Receber dinheiro' : 'Confirmar pagamento externo'}
+            </button>
+          )}
+
+          {manualSettled && changeCents > 0 && (
+            <p className="mt-5 rounded-xl border border-koma-accent/30 bg-koma-accent/10 px-4 py-3 text-center text-sm font-black text-koma-accent">Troco: {money(changeCents)}</p>
+          )}
+          {!manualCapture && !manualSettled && (
+            <p className="mt-5 border-t border-koma-border pt-4 text-xs text-koma-muted">A cobrança integrada será processada pelo aplicativo Android da maquininha.</p>
+          )}
+          {error && <p role="alert" className="mt-4 rounded-xl border border-red-900/50 bg-red-950/30 px-3 py-2 text-xs text-red-300">{error}</p>}
+          {(paymentId || intentId) && <p className="mt-3 truncate font-mono text-[9px] text-koma-muted">{paymentId ? `Pagamento ${paymentId}` : intentId}</p>}
         </div>
-        <button type="button" onClick={onBack} className="mt-5 min-h-14 w-full rounded-xl bg-koma-accent px-4 text-sm font-black text-black">Voltar para a mesa</button>
+        <button type="button" onClick={onBack} className="mt-5 min-h-14 w-full rounded-xl border border-koma-border px-4 text-sm font-black text-koma-muted">Voltar para a mesa</button>
       </section>
     );
   }
@@ -298,7 +371,6 @@ export default function SmartPosPaymentFlow({
       { id: 'pix' as const, label: 'Pix', detail: 'Escolher onde será cobrado', icon: QrCode },
       { id: 'debito' as const, label: 'Débito', detail: 'Escolher onde será cobrado', icon: CreditCard },
       { id: 'credito' as const, label: 'Crédito', detail: 'Escolher onde será cobrado', icon: CreditCard },
-      { id: 'voucher' as const, label: 'Voucher', detail: 'Escolher onde será cobrado', icon: ReceiptText },
     ];
     return (
       <section className="pt-7">

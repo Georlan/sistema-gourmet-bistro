@@ -14,9 +14,15 @@ from ..smartpos_models import SmartPosPaymentIntent
 
 _CENTAVO = Decimal("0.01")
 _METHOD_MAP = {
+    "dinheiro": "dinheiro",
     "pix": "pix",
     "debito": "cartao_debito",
     "credito": "cartao_credito",
+}
+_ALLOWED_CAPTURE_METHODS = {
+    "provider_integrado": {"pix", "debito", "credito"},
+    "dinheiro_pendente": {"dinheiro"},
+    "registro_externo": {"pix", "debito", "credito"},
 }
 
 
@@ -55,9 +61,9 @@ def settle_approved_smartpos_intent(
 ) -> SmartPosSettlementResult:
     """Converte uma aprovação SmartPOS em Pagamento canônico exatamente uma vez.
 
-    A aprovação do provider já deve estar persistida antes desta chamada. Se a
-    liquidação falhar, o intent permanece `aprovada` e pode ser reconciliado sem
-    repetir a cobrança no terminal.
+    A aprovação (provider ou confirmação manual) já deve estar persistida antes
+    desta chamada. Se a liquidação falhar, o intent permanece `aprovada` e pode
+    ser reconciliado sem duplicar cobrança nem receita.
     """
     intent = (
         db.query(SmartPosPaymentIntent)
@@ -87,8 +93,12 @@ def settle_approved_smartpos_intent(
 
     if intent.status != "aprovada":
         raise SmartPosSettlementError("Somente PaymentIntent aprovado pode ser liquidado.")
-    if intent.captura != "provider_integrado":
-        raise SmartPosSettlementError("A F9.1 liquida somente captura por provider integrado.")
+
+    allowed_methods = _ALLOWED_CAPTURE_METHODS.get(intent.captura)
+    if allowed_methods is None or intent.metodo not in allowed_methods:
+        raise SmartPosSettlementError(
+            "Método/captura ainda não possui liquidação financeira SmartPOS suportada."
+        )
 
     metodo = _METHOD_MAP.get(intent.metodo)
     if metodo is None:
