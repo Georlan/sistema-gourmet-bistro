@@ -1,0 +1,1 @@
+Apply the operator-facing Maquininha copy patch.
