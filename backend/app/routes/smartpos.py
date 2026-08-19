@@ -1,7 +1,7 @@
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -15,7 +15,12 @@ from ..services.smartpos_payment_state import (
     initial_status_for_capture,
     transition_intent,
 )
+from ..services.smartpos_settlement import (
+    SmartPosSettlementError,
+    settle_approved_smartpos_intent,
+)
 from ..smartpos_models import SmartPosPaymentIntent
+from .websocket import manager
 
 
 router = APIRouter(prefix="/smartpos", tags=["SmartPOS"])
@@ -59,10 +64,17 @@ class SmartPosPaymentIntentResponse(BaseModel):
 class SmartPosManualConfirmation(BaseModel):
     idempotency_key: str = Field(min_length=8, max_length=128)
     motivo: Optional[str] = Field(default=None, max_length=255)
+    valor_recebido: Optional[Decimal] = Field(
+        default=None, gt=0, max_digits=14, decimal_places=2
+    )
 
 
 class SmartPosManualConfirmationResponse(SmartPosPaymentIntentResponse):
     transition_replayed: bool = False
+    payment_id: Optional[str] = None
+    settled: bool = False
+    financial_effect: bool = False
+    troco: Decimal = Decimal("0.00")
 
 
 def _money(value: object) -> Decimal:
@@ -84,6 +96,12 @@ def _capture_for_method(method: str, requested: Optional[str]) -> str:
                 detail="Dinheiro usa conferência manual e não aceita outro modo de captura.",
             )
         return "dinheiro_pendente"
+
+    if method == "voucher":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Voucher ainda não possui liquidação financeira na maquininha.",
+        )
 
     capture = requested or "provider_integrado"
     if capture not in allowed:
@@ -362,10 +380,11 @@ def criar_payment_intent(
 def confirmar_payment_intent_manual(
     intent_id: str,
     payload: SmartPosManualConfirmation,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("smartpos:receber")),
 ):
-    """Confirma apenas captura manual; ainda não cria Pagamento nem baixa financeira."""
+    """Confirma captura manual e liquida no mesmo financeiro canônico do Caixa."""
     restaurante_id = require_tenant_id()
     if not has_capability(db, restaurante_id, "smartpos"):
         raise HTTPException(
@@ -388,6 +407,27 @@ def confirmar_payment_intent_manual(
             detail="Pagamentos integrados só podem ser aprovados pelo fluxo do provider.",
         )
 
+    troco = Decimal("0.00")
+    motivo = payload.motivo or "Recebimento confirmado manualmente pelo operador."
+    if intent.captura == "dinheiro_pendente":
+        valor_recebido = _money(payload.valor_recebido if payload.valor_recebido is not None else intent.valor)
+        valor_intent = _money(intent.valor)
+        if valor_recebido < valor_intent:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="O valor recebido em dinheiro não pode ser menor que o valor a pagar.",
+            )
+        troco = _money(valor_recebido - valor_intent)
+        motivo = (
+            payload.motivo
+            or f"Dinheiro confirmado: recebido {valor_recebido}; troco {troco}."
+        )
+    elif payload.valor_recebido is not None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="valor_recebido só se aplica a pagamentos em dinheiro.",
+        )
+
     try:
         result = transition_intent(
             db,
@@ -395,7 +435,7 @@ def confirmar_payment_intent_manual(
             target_status="aprovada",
             transition_key=payload.idempotency_key,
             actor_id=current_user.id,
-            motivo=payload.motivo or "Recebimento confirmado manualmente pelo operador.",
+            motivo=motivo,
         )
         db.commit()
     except InvalidSmartPosTransition as exc:
@@ -406,7 +446,6 @@ def confirmar_payment_intent_manual(
         ) from exc
     except IntegrityError:
         db.rollback()
-        # Corrida de confirmação: recarrega e reaplica a chave idempotente.
         intent = db.query(SmartPosPaymentIntent).filter(
             SmartPosPaymentIntent.restaurante_id == restaurante_id,
             SmartPosPaymentIntent.id == intent_id,
@@ -418,7 +457,7 @@ def confirmar_payment_intent_manual(
                 target_status="aprovada",
                 transition_key=payload.idempotency_key,
                 actor_id=current_user.id,
-                motivo=payload.motivo or "Recebimento confirmado manualmente pelo operador.",
+                motivo=motivo,
             )
             db.commit()
         except InvalidSmartPosTransition as exc:
@@ -428,5 +467,56 @@ def confirmar_payment_intent_manual(
                 detail=str(exc),
             ) from exc
 
-    db.refresh(intent)
-    return {**_intent_payload(intent), "transition_replayed": result.replayed}
+    try:
+        settlement = settle_approved_smartpos_intent(
+            db,
+            restaurante_id=restaurante_id,
+            intent_id=intent_id,
+        )
+    except SmartPosSettlementError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Recebimento confirmado, mas ainda não liquidado no Caixa: {exc}",
+        ) from exc
+
+    background_tasks.add_task(
+        manager.broadcast,
+        {
+            "event": "payment_intent_updated",
+            "detail": {
+                "intent_id": intent_id,
+                "mesa_id": settlement.intent.mesa_id,
+                "status": settlement.intent.status,
+                "payment_id": settlement.pagamento.id,
+            },
+        },
+        restaurante_id,
+    )
+    for event_name in ("payment_updated", "cash_updated", "tables_updated"):
+        background_tasks.add_task(
+            manager.broadcast,
+            {
+                "event": event_name,
+                "detail": {
+                    "type": "smartpos_manual_settlement",
+                    "intent_id": intent_id,
+                    "payment_id": settlement.pagamento.id,
+                    "mesa_id": settlement.intent.mesa_id,
+                    "metodo": settlement.pagamento.metodo,
+                    "valor": float(settlement.pagamento.valor),
+                    "mesa_liberada": settlement.mesa_liberada,
+                },
+            },
+            restaurante_id,
+        )
+
+    db.refresh(settlement.intent)
+    return {
+        **_intent_payload(settlement.intent),
+        "transition_replayed": result.replayed,
+        "payment_id": settlement.pagamento.id,
+        "settled": True,
+        "financial_effect": True,
+        "troco": troco,
+    }
