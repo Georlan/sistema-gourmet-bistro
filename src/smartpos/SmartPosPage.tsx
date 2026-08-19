@@ -275,15 +275,7 @@ export default function SmartPosPage() {
             ) {
               // Remove imediatamente o snapshot obsoleto; o fetch abaixo confirma o estado canônico.
               setComandas((current) => current.filter((comanda) => comanda.mesa_id !== mesaId));
-              setSelectedMesaId((current) => {
-                if (current !== mesaId) return current;
-                setScreen((currentScreen) => (
-                  currentScreen === 'mesa' || currentScreen === 'pedido' || currentScreen === 'receber'
-                    ? 'mesas'
-                    : currentScreen
-                ));
-                return null;
-              });
+              setSelectedMesaId((current) => (current === mesaId ? null : current));
             }
 
             // Cancelamento forçado publica MESA_ATUALIZADA + tables_updated em sequência.
@@ -348,6 +340,13 @@ export default function SmartPosPage() {
       }
     };
   }, [session?.token, session?.user.id, session?.user.restaurante_id]);
+
+  useEffect(() => {
+    if (selectedMesaId !== null) return;
+    if (screen === 'mesa' || screen === 'pedido' || screen === 'receber') {
+      setScreen('mesas');
+    }
+  }, [screen, selectedMesaId]);
 
   const handleLogin = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
