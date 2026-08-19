@@ -1,0 +1,119 @@
+name: SmartPOS F11 one shot
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.head_ref == 'feat/smartpos-f11-split-payments'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/smartpos-f11-split-payments
+          fetch-depth: 0
+
+      - name: Apply F11 split-payment safety
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              if old not in text:
+                  if new in text:
+                      return
+                  raise RuntimeError(f'anchor not found in {path}: {old[:120]!r}')
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          # Backend: active intents reserve saldo/items; Mesa lock serializes concurrent splits.
+          replace_once(
+              'backend/app/routes/smartpos.py',
+              '_MANUAL_CAPTURES = {"dinheiro_pendente", "registro_externo"}\n',
+              '_MANUAL_CAPTURES = {"dinheiro_pendente", "registro_externo"}\n_RESERVING_STATUSES = ("criada", "pendente", "processando", "aprovada")\n'
+          )
+          replace_once(
+              'backend/app/routes/smartpos.py',
+              '''    mesa = db.query(Mesa).filter(\n        Mesa.restaurante_id == restaurante_id,\n        Mesa.id == payload.mesa_id,\n    ).first()\n''',
+              '''    mesa = (\n        db.query(Mesa)\n        .filter(\n            Mesa.restaurante_id == restaurante_id,\n            Mesa.id == payload.mesa_id,\n        )\n        .with_for_update()\n        .first()\n    )\n'''
+          )
+          replace_once(
+              'backend/app/routes/smartpos.py',
+              '''    saldo = max(Decimal("0.00"), total_consumo - total_pago)\n    if saldo <= 0:\n        raise HTTPException(\n            status_code=status.HTTP_409_CONFLICT,\n            detail="A mesa não possui saldo pendente.",\n        )\n    if valor > saldo:\n        raise HTTPException(\n            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,\n            detail="O valor informado excede o saldo da mesa.",\n        )\n\n    if payload.escopo == "itens":\n''',
+              '''    saldo = max(Decimal("0.00"), total_consumo - total_pago)\n    if saldo <= 0:\n        raise HTTPException(\n            status_code=status.HTTP_409_CONFLICT,\n            detail="A mesa não possui saldo pendente.",\n        )\n\n    # Parcelas ainda não liquidadas reservam saldo. O lock da Mesa acima faz\n    # duas criações concorrentes enxergarem uma ordem total no PostgreSQL.\n    reserving_intents = (\n        db.query(SmartPosPaymentIntent)\n        .filter(\n            SmartPosPaymentIntent.restaurante_id == restaurante_id,\n            SmartPosPaymentIntent.mesa_id == payload.mesa_id,\n            SmartPosPaymentIntent.status.in_(_RESERVING_STATUSES),\n            SmartPosPaymentIntent.pagamento_id.is_(None),\n        )\n        .with_for_update()\n        .all()\n    )\n    reservado = sum(\n        (_money(active_intent.valor) for active_intent in reserving_intents),\n        Decimal("0.00"),\n    )\n    disponivel = max(Decimal("0.00"), saldo - reservado)\n    if disponivel <= 0:\n        raise HTTPException(\n            status_code=status.HTTP_409_CONFLICT,\n            detail="O saldo da mesa já está reservado por pagamento em andamento.",\n        )\n    if valor > disponivel:\n        raise HTTPException(\n            status_code=status.HTTP_409_CONFLICT,\n            detail=(\n                "O valor excede o saldo disponível após considerar pagamentos em andamento. "\n                f"Disponível: {disponivel}."\n            ),\n        )\n\n    if payload.escopo == "itens":\n'''
+          )
+          replace_once(
+              'backend/app/routes/smartpos.py',
+              '''        by_id = {item.id: item for item in itens if not item.pago}\n        if any(item_id not in by_id for item_id in normalized_items):\n''',
+              '''        reserved_item_ids = {\n            item_id\n            for active_intent in reserving_intents\n            if active_intent.escopo == "itens"\n            for item_id in (active_intent.item_ids or [])\n        }\n        if any(item_id in reserved_item_ids for item_id in normalized_items):\n            raise HTTPException(\n                status_code=status.HTTP_409_CONFLICT,\n                detail="Um ou mais itens já estão reservados por outro pagamento em andamento.",\n            )\n        by_id = {item.id: item for item in itens if not item.pago}\n        if any(item_id not in by_id for item_id in normalized_items):\n'''
+          )
+
+          # Regression tests for reservation + mixed sequential split.
+          p = Path('backend/tests/test_smartpos_payment_intent_preview.py')
+          tests = p.read_text(encoding='utf-8')
+          insertion = '''\n\ndef test_f11_pagamento_ativo_reserva_saldo_da_mesa():\n    first = client.post(\n        "/auth/smartpos/payment-intents",\n        headers=headers(),\n        json={\n            "mesa_id": 4,\n            "valor": "30.00",\n            "metodo": "pix",\n            "escopo": "valor",\n            "idempotency_key": "f11-reserve-first-01",\n        },\n    )\n    assert first.status_code == 201, first.text\n\n    overflow = client.post(\n        "/auth/smartpos/payment-intents",\n        headers=headers(),\n        json={\n            "mesa_id": 4,\n            "valor": "20.00",\n            "metodo": "dinheiro",\n            "escopo": "valor",\n            "idempotency_key": "f11-reserve-overflow-01",\n        },\n    )\n    assert overflow.status_code == 409, overflow.text\n    assert "pagamentos em andamento" in overflow.json()["detail"]\n\n    remaining = client.post(\n        "/auth/smartpos/payment-intents",\n        headers=headers(),\n        json={\n            "mesa_id": 4,\n            "valor": "12.00",\n            "metodo": "dinheiro",\n            "escopo": "valor",\n            "idempotency_key": "f11-reserve-remaining-01",\n        },\n    )\n    assert remaining.status_code == 201, remaining.text\n\n\ndef test_f11_item_nao_pode_ser_reservado_por_duas_parcelas():\n    first = client.post(\n        "/auth/smartpos/payment-intents",\n        headers=headers(),\n        json={\n            "mesa_id": 4,\n            "valor": "30.00",\n            "metodo": "pix",\n            "escopo": "itens",\n            "item_ids": ["item-smartpos-intent-a"],\n            "idempotency_key": "f11-item-first-01",\n        },\n    )\n    assert first.status_code == 201, first.text\n\n    overlap = client.post(\n        "/auth/smartpos/payment-intents",\n        headers=headers(),\n        json={\n            "mesa_id": 4,\n            "valor": "30.00",\n            "metodo": "dinheiro",\n            "escopo": "itens",\n            "item_ids": ["item-smartpos-intent-a"],\n            "idempotency_key": "f11-item-overlap-01",\n        },\n    )\n    assert overlap.status_code == 409, overlap.text\n    assert "itens já estão reservados" in overlap.json()["detail"]\n\n\ndef test_f11_divisao_sequencial_debito_externo_e_dinheiro_fecha_mesa():\n    first = client.post(\n        "/auth/smartpos/payment-intents",\n        headers=headers(),\n        json={\n            "mesa_id": 4,\n            "valor": "10.00",\n            "metodo": "debito",\n            "captura": "registro_externo",\n            "escopo": "valor",\n            "idempotency_key": "f11-split-debit-create",\n        },\n    )\n    assert first.status_code == 201, first.text\n    first_confirm = client.post(\n        f"/auth/smartpos/payment-intents/{first.json()['id']}/confirmar-manual",\n        headers=headers(),\n        json={"idempotency_key": "f11-split-debit-confirm"},\n    )\n    assert first_confirm.status_code == 200, first_confirm.text\n    assert first_confirm.json()["settled"] is True\n\n    second = client.post(\n        "/auth/smartpos/payment-intents",\n        headers=headers(),\n        json={\n            "mesa_id": 4,\n            "valor": "32.00",\n            "metodo": "dinheiro",\n            "escopo": "valor",\n            "idempotency_key": "f11-split-cash-create",\n        },\n    )\n    assert second.status_code == 201, second.text\n    second_confirm = client.post(\n        f"/auth/smartpos/payment-intents/{second.json()['id']}/confirmar-manual",\n        headers=headers(),\n        json={\n            "idempotency_key": "f11-split-cash-confirm",\n            "valor_recebido": "40.00",\n        },\n    )\n    assert second_confirm.status_code == 200, second_confirm.text\n    assert Decimal(str(second_confirm.json()["troco"])) == Decimal("8.00")\n\n    token = current_restaurante_id.set(RESTAURANTE_ID)\n    db = SessionLocal()\n    try:\n        pagamentos = db.query(Pagamento).filter(\n            Pagamento.restaurante_id == RESTAURANTE_ID\n        ).order_by(Pagamento.criado_em.asc()).all()\n        assert len(pagamentos) == 2\n        assert {pagamento.metodo for pagamento in pagamentos} == {"cartao_debito", "dinheiro"}\n        assert sum(Decimal(str(pagamento.valor)) for pagamento in pagamentos) == Decimal("42")\n        comanda = db.query(Comanda).filter(Comanda.id == "cmd-smartpos-intent").one()\n        assert Decimal(str(comanda.valor_pago)) == Decimal("42")\n        assert comanda.fechada is True\n    finally:\n        db.close()\n        current_restaurante_id.reset(token)\n'''
+          anchor = '\n\ndef test_estado_terminal_exige_novo_intent_para_nova_tentativa():'
+          if insertion.strip() not in tests:
+              if anchor not in tests:
+                  raise RuntimeError('F11 test insertion anchor not found')
+              tests = tests.replace(anchor, insertion + anchor, 1)
+          p.write_text(tests, encoding='utf-8')
+
+          # UI: show remaining amount after a partial settlement.
+          ui_path = Path('src/smartpos/SmartPosPaymentFlow.tsx')
+          ui = ui_path.read_text(encoding='utf-8')
+          anchor = "  const methodLabel = method ? methodLabels[method] : '';\n"
+          replacement = "  const methodLabel = method ? methodLabels[method] : '';\n  const remainingAfterCurrentCents = Math.max(0, balanceCents - amountCents);\n"
+          if anchor in ui:
+              ui = ui.replace(anchor, replacement, 1)
+          elif replacement not in ui:
+              raise RuntimeError('F11 UI method label anchor not found')
+
+          old = '''          {manualSettled && changeCents > 0 && (\n            <p className="mt-5 rounded-xl border border-koma-accent/30 bg-koma-accent/10 px-4 py-3 text-center text-sm font-black text-koma-accent">Troco: {money(changeCents)}</p>\n          )}\n'''
+          new = '''          {manualSettled && changeCents > 0 && (\n            <p className="mt-5 rounded-xl border border-koma-accent/30 bg-koma-accent/10 px-4 py-3 text-center text-sm font-black text-koma-accent">Troco: {money(changeCents)}</p>\n          )}\n          {manualSettled && remainingAfterCurrentCents > 0 && (\n            <div className="mt-4 rounded-xl border border-koma-border bg-koma-page px-4 py-3">\n              <p className="text-[10px] font-bold uppercase tracking-wide text-koma-muted">Restante da mesa</p>\n              <p className="mt-1 text-xl font-black text-koma-accent">{money(remainingAfterCurrentCents)}</p>\n            </div>\n          )}\n'''
+          if old in ui:
+              ui = ui.replace(old, new, 1)
+          elif new not in ui:
+              raise RuntimeError('F11 UI remaining anchor not found')
+
+          old_button = '''        <button type="button" onClick={onBack} className="mt-5 min-h-14 w-full rounded-xl border border-koma-border px-4 text-sm font-black text-koma-muted">Voltar para a mesa</button>\n'''
+          new_button = '''        <button type="button" onClick={onBack} className="mt-5 min-h-14 w-full rounded-xl border border-koma-border px-4 text-sm font-black text-koma-muted">{manualSettled && remainingAfterCurrentCents > 0 ? 'Voltar e receber outra parte' : 'Voltar para a mesa'}</button>\n'''
+          if old_button in ui:
+              ui = ui.replace(old_button, new_button, 1)
+          elif new_button not in ui:
+              raise RuntimeError('F11 UI button anchor not found')
+          ui_path.write_text(ui, encoding='utf-8')
+
+          # Parent refreshes canonical balance before returning to the table screen.
+          page_path = Path('src/smartpos/SmartPosPage.tsx')
+          page = page_path.read_text(encoding='utf-8')
+          old = '''            onBack={() => setScreen('mesa')}\n            onSessionInvalid={handleLogout}\n'''
+          new = '''            onBack={() => void loadMesas('mesa')}\n            onSessionInvalid={handleLogout}\n'''
+          if old in page:
+              page = page.replace(old, new, 1)
+          elif new not in page:
+              raise RuntimeError('F11 SmartPosPage onBack anchor not found')
+          page_path.write_text(page, encoding='utf-8')
+
+      - name: Validate patch syntax
+        run: |
+          git diff --check
+          python -m py_compile backend/app/routes/smartpos.py
+
+      - name: Commit F11
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/app/routes/smartpos.py backend/tests/test_smartpos_payment_intent_preview.py src/smartpos/SmartPosPaymentFlow.tsx src/smartpos/SmartPosPage.tsx
+          git commit -m "feat(smartpos): reserve balance for split payments"
+          git push origin HEAD:feat/smartpos-f11-split-payments
