@@ -455,6 +455,7 @@ export default function App() {
 
   const fetchTablesAbortControllerRef = useRef<AbortController | null>(null);
   const fetchOrdersAbortControllerRef = useRef<AbortController | null>(null);
+  const targetedOrderRequestRef = useRef<Record<string, number>>({});
   const optimisticItemStatusRef = useRef<Record<string, { status: 'preparando' | 'pronto' | 'entregue'; ts: number }>>({});
   // Prevents duplicate API calls when clicking Pronto/Entregar rapidly
   const inflightItemIdsRef = useRef<Set<string>>(new Set());
@@ -895,9 +896,16 @@ export default function App() {
               // Atualizar orders aqui causava um estado intermediário vazio e alerta duplicado.
               scheduleRealtimeRefresh({ tables: true });
             } else if (isLaunchCreated) {
-              // Este é o primeiro momento em que existe conteúdo operacional real.
-              // Busca imediatamente para o card e o alerta nascerem no mesmo ciclo.
-              scheduleRealtimeRefresh({ orders: true, tables: true, summary: true }, 0);
+              // O evento já informa qual comanda mudou. Evita reconstruir todo o salão
+              // no caminho crítico de um novo pedido.
+              const comandaId = String(data.detail?.comanda_id || '').trim();
+              if (comandaId) {
+                void fetchOrderByIdFromAPI(comandaId);
+                scheduleRealtimeRefresh({ tables: true, summary: true }, 0);
+              } else {
+                // Compatibilidade defensiva com produtores antigos sem comanda_id.
+                scheduleRealtimeRefresh({ orders: true, tables: true, summary: true }, 0);
+              }
             } else {
               // Compatibilidade com eventos legados e demais mutações de mesa.
               scheduleRealtimeRefresh({
@@ -1146,6 +1154,46 @@ export default function App() {
     });
   };
 
+  const mapBackendComandaToOrder = (comanda: any, now = Date.now()): Order => ({
+    id: comanda.id,
+    clienteId: comanda.cliente_id || null,
+    clientePhone: comanda.delivery_telefone || null,
+    mesaId: comanda.mesa_id || 0,
+    garcomId: comanda.garcom_id,
+    garcomNome: comanda.criada_por?.nome || comanda.garcom?.nome || 'Garçom',
+    timestamp: parseBackendDateTime(comanda.criado_em),
+    tipo: comanda.tipo,
+    valorPago: comanda.valor_pago || 0,
+    identificador: comanda.identificador || null,
+    statusComanda: comanda.status_comanda || null,
+    deliveryStatus: comanda.delivery_status || null,
+    mesaOrigemId: comanda.mesa_origem_id || null,
+    mesaTransferidaDe: comanda.mesa_transferida_de || null,
+    itens: (comanda.itens || [])
+      .filter((item: any) => item.status !== 'cancelado')
+      .map((item: any) => {
+        const opt = optimisticItemStatusRef.current[item.id];
+        let effectiveStatus = item.status;
+        if (opt && (now - opt.ts < 8000)) {
+          if (opt.status === item.status) {
+            delete optimisticItemStatusRef.current[item.id];
+          } else {
+            effectiveStatus = opt.status;
+          }
+        }
+        return {
+          id: item.id,
+          produtoId: item.produto_id,
+          nome: item.produto?.nome || liveProdutos.find(p => p.id === item.produto_id)?.nome || `Item #${item.produto_id}`,
+          preco: item.preco_unit,
+          observacao: item.observacao || '',
+          clienteNome: item.cliente_nome || 'Consumo Geral',
+          status: effectiveStatus,
+          lancamentoId: item.lancamento_id
+        };
+      })
+  });
+
   // Load active orders from backend API
   const fetchOrdersFromAPI = async () => {
     if (fetchOrdersAbortControllerRef.current) {
@@ -1171,49 +1219,7 @@ export default function App() {
       const comandas = await response.json();
       const now = Date.now();
 
-      const mappedOrders = comandas.map((comanda: any) => {
-        return {
-          id: comanda.id,
-          clienteId: comanda.cliente_id || null,
-          clientePhone: comanda.delivery_telefone || null,
-          mesaId: comanda.mesa_id || 0,
-          garcomId: comanda.garcom_id,
-          // Use name from API response (criada_por populated by SQLAlchemy relationship)
-          garcomNome: comanda.criada_por?.nome || comanda.garcom?.nome || 'Garçom',
-          timestamp: parseBackendDateTime(comanda.criado_em),
-          tipo: comanda.tipo,
-          valorPago: comanda.valor_pago || 0,
-          identificador: comanda.identificador || null,
-          statusComanda: comanda.status_comanda || null,       // aguardando_pagamento | null
-          deliveryStatus: comanda.delivery_status || null,    // pendente | producao | pronto | transito | finalizado
-          mesaOrigemId: comanda.mesa_origem_id || null,
-          mesaTransferidaDe: comanda.mesa_transferida_de || null,
-          itens: comanda.itens
-            .filter((item: any) => item.status !== 'cancelado')
-            .map((item: any) => {
-              const opt = optimisticItemStatusRef.current[item.id];
-              let effectiveStatus = item.status;
-              if (opt && (now - opt.ts < 8000)) {
-                if (opt.status === item.status) {
-                  delete optimisticItemStatusRef.current[item.id];
-                } else {
-                  effectiveStatus = opt.status;
-                }
-              }
-              return {
-                id: item.id,
-                produtoId: item.produto_id,
-                // Use name from API (produto populated by SQLAlchemy relationship)
-                nome: item.produto?.nome || liveProdutos.find(p => p.id === item.produto_id)?.nome || `Item #${item.produto_id}`,
-                preco: item.preco_unit,
-                observacao: item.observacao || '',
-                clienteNome: item.cliente_nome || 'Consumo Geral',
-                status: effectiveStatus,
-                lancamentoId: item.lancamento_id
-              };
-            })
-        };
-      });
+      const mappedOrders = comandas.map((comanda: any) => mapBackendComandaToOrder(comanda, now));
 
       setOrders(prevOrders => {
         const tempOrders = prevOrders.filter(p =>
@@ -1228,6 +1234,53 @@ export default function App() {
         console.error("Connection error to backend:", err);
         setFetchError(`Erro de conexão comandas: ${err.message || String(err)}`);
       }
+    }
+  };
+
+  const fetchOrderByIdFromAPI = async (comandaId: string) => {
+    const normalizedId = String(comandaId || '').trim();
+    if (!normalizedId) {
+      fetchOrdersFromAPI();
+      return;
+    }
+
+    const requestVersion = (targetedOrderRequestRef.current[normalizedId] || 0) + 1;
+    targetedOrderRequestRef.current[normalizedId] = requestVersion;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/comandas/${encodeURIComponent(normalizedId)}`, {
+        headers: getAuthHeaders(),
+        cache: 'no-store'
+      });
+      if (response.status === 401) {
+        handleLogout();
+        return;
+      }
+      if (response.status === 404) {
+        if (targetedOrderRequestRef.current[normalizedId] === requestVersion) {
+          setOrders(prevOrders => prevOrders.filter(order => String(order.id) !== normalizedId));
+        }
+        return;
+      }
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const mappedOrder = mapBackendComandaToOrder(await response.json());
+      if (targetedOrderRequestRef.current[normalizedId] !== requestVersion) return;
+
+      setOrders(prevOrders => {
+        const nextOrders = prevOrders.filter(order =>
+          String(order.id) !== String(mappedOrder.id)
+          && !(String(order.id).startsWith('temp-') && mappedOrder.mesaId > 0 && order.mesaId === mappedOrder.mesaId)
+        );
+        return [...nextOrders, mappedOrder].sort((a, b) => a.timestamp - b.timestamp);
+      });
+      setIsOrdersLoaded(true);
+      setFetchError(null);
+    } catch (err) {
+      console.warn('Falha no refresh direcionado da comanda; reconciliando snapshot completo.', err);
+      fetchOrdersFromAPI();
     }
   };
 

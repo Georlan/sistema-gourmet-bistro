@@ -441,10 +441,18 @@ def get_comanda(comanda_id: str, db: Session = Depends(get_db), current_user: Us
     """
     Retorna os detalhes completos de uma comanda específica (incluindo lançamentos e itens).
     """
-    comanda = db.query(Comanda).filter(
-        Comanda.restaurante_id == require_tenant_id(),
-        Comanda.id == comanda_id,
-    ).first()
+    comanda = (
+        db.query(Comanda)
+        .options(
+            joinedload(Comanda.itens).joinedload(Item.produto),
+            joinedload(Comanda.criada_por),
+        )
+        .filter(
+            Comanda.restaurante_id == require_tenant_id(),
+            Comanda.id == comanda_id,
+        )
+        .first()
+    )
     if not comanda:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
