@@ -27,6 +27,7 @@ class SmartPosCashPaymentProjection(BaseModel):
     provider: Optional[str] = None
     terminal_id: Optional[str] = None
     provider_reference: Optional[str] = None
+    provider_last_error: Optional[str] = None
     pagamento_id: Optional[str] = None
 
 
@@ -65,6 +66,7 @@ def _project_payment(intent: SmartPosPaymentIntent | None) -> SmartPosCashPaymen
         provider=intent.provider_name,
         terminal_id=intent.provider_terminal_id,
         provider_reference=intent.provider_reference,
+        provider_last_error=intent.provider_last_error,
         pagamento_id=intent.pagamento_id,
     )
 
@@ -77,7 +79,8 @@ def projetar_operacao_smartpos_no_caixa(
     """Projeção read-only para o Caixa; não cria um segundo estado operacional.
 
     Estado é derivado de Comanda/Item/PaymentIntent. O Caixa continua sendo a
-    tela supervisora, enquanto o backend permanece a fonte de verdade.
+    tela supervisora, enquanto o backend permanece a fonte de verdade. Erros do
+    provider são projetados apenas como metadado para reconciliação operacional.
     """
     restaurante_id = require_tenant_id()
     comandas = (
