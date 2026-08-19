@@ -1,1 +1,0 @@
-Apply semantic WebSocket order synchronization patch.
