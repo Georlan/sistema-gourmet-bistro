@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: pr69-smartpos-kanban-oneshot
+  cancel-in-progress: true
+
 jobs:
   apply:
     name: Apply SmartPOS Kanban refactor
@@ -50,32 +54,14 @@ jobs:
           git push origin HEAD:agent/smartpos-no-hardware-hardening
           exit 1
 
-      - name: Remove one-shot workflow after successful apply
-        if: steps.apply.outputs.status == '0'
-        run: rm .github/workflows/pr69-smartpos-kanban-oneshot.yml
-
-      - name: Python syntax check
-        if: steps.apply.outputs.status == '0'
-        run: |
-          python -m py_compile \
-            backend/app/models.py \
-            backend/app/schemas.py \
-            backend/app/routes/orders.py \
-            backend/app/routes/cardapio.py \
-            backend/app/routes/smartpos_cash_projection.py \
-            backend/tests/test_smartpos_cash_projection.py \
-            backend/alembic/versions/b7f4d2e9c601_add_lancamento_origin.py
-
-      - name: Diff integrity
-        if: steps.apply.outputs.status == '0'
-        run: git diff --check
-
-      - name: Commit refactor to PR branch
+      - name: Commit successful refactor to PR branch
         if: steps.apply.outputs.status == '0'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           rm -f scripts/pr69-oneshot-result.log
+          rm .github/workflows/pr69-smartpos-kanban-oneshot.yml
           git add -A
+          git diff --cached --check
           git commit -m "refactor(smartpos): integrate status into cashier kanban"
           git push origin HEAD:agent/smartpos-no-hardware-hardening
