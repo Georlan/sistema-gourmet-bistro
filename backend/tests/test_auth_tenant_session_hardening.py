@@ -1,12 +1,16 @@
 import pytest
-from fastapi import HTTPException
-from sqlalchemy import create_engine
+from fastapi import BackgroundTasks, HTTPException
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base, TenantSession, current_restaurante_id
 from app.models import Restaurante, Usuario
-from app.routes.auth import _lookup_users_before_tenant, _select_login_identity
-from app.schemas import LoginRequest
+from app.routes.auth import (
+    _lookup_users_before_tenant,
+    _select_login_identity,
+    ativar_conta,
+)
+from app.schemas import AtivarContaRequest, LoginRequest
 from app.security import (
     _authenticated_user_from_token,
     create_access_token,
@@ -120,3 +124,62 @@ def test_existing_token_stops_working_as_soon_as_account_is_deactivated(auth_db)
 
     assert exc.value.status_code == 403
 
+
+def test_activation_allows_same_email_in_different_restaurants():
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(bind=engine)
+    Session = sessionmaker(class_=TenantSession, bind=engine)
+    db = Session(restaurante_id=None)
+    try:
+        db.merge(Restaurante(id=2, nome="Tenant Dois", plano="pocket"))
+        db.add_all(
+            [
+                Usuario(
+                    id="active-tenant-1",
+                    restaurante_id=1,
+                    nome="Conta Existente",
+                    email="mesmo-email@koma.test",
+                    senha_hash=get_password_hash("senha-antiga"),
+                    cargo="caixa",
+                    status="ativo",
+                ),
+                Usuario(
+                    id="invite-tenant-2",
+                    restaurante_id=2,
+                    nome="Novo Operador",
+                    telefone="88999999999",
+                    cargo="garcom",
+                    status="pendente_ativacao",
+                    token_convite="token-tenant-2",
+                ),
+            ]
+        )
+        db.commit()
+
+        response = ativar_conta(
+            AtivarContaRequest(
+                token_convite="token-tenant-2",
+                email="mesmo-email@koma.test",
+                senha="senha-nova-123",
+            ),
+            BackgroundTasks(),
+            db,
+        )
+
+        rows = db.execute(
+            text(
+                "SELECT restaurante_id, email, status FROM usuarios "
+                "WHERE email = :email ORDER BY restaurante_id"
+            ),
+            {"email": "mesmo-email@koma.test"},
+        ).mappings().all()
+
+        assert response["usuario"]["id"] == "invite-tenant-2"
+        assert response["usuario"]["restaurante_id"] == 2
+        assert [(row["restaurante_id"], row["status"]) for row in rows] == [
+            (1, "ativo"),
+            (2, "ativo"),
+        ]
+    finally:
+        db.close()
+        engine.dispose()

@@ -6,6 +6,10 @@ on:
       - main
   workflow_dispatch:
 
+concurrency:
+  group: migration-baseline-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -84,6 +88,9 @@ jobs:
           MIGRATION_DATABASE_URL: postgresql+psycopg2://postgres:postgres@127.0.0.1:5432/koma_clean
         run: |
           cd backend
+          expected_head="$(python -m alembic -c alembic.ini heads | awk '/\(head\)/ {print $1}')"
+          test -n "$expected_head"
+          export EXPECTED_ALEMBIC_HEAD="$expected_head"
           python -m alembic -c alembic.ini upgrade head
           python -m alembic -c alembic.ini current
           python - <<'PY'
@@ -97,7 +104,7 @@ jobs:
           engine = create_engine(os.environ["DATABASE_URL"])
           with engine.connect() as conn:
               version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-              assert version == "f2d4e6a8b013", version
+              assert version == os.environ["EXPECTED_ALEMBIC_HEAD"], version
 
               inspector = inspect(conn)
               db_tables = set(inspector.get_table_names(schema="public"))
@@ -141,6 +148,15 @@ jobs:
                       assert user_columns[legacy]["nullable"] is True, (
                           f"legacy usuarios.{legacy} still blocks current ORM inserts"
                       )
+
+              user_unique_constraints = {
+                  constraint["name"]
+                  for constraint in inspector.get_unique_constraints("usuarios", schema="public")
+              }
+              assert "uq_usuarios_restaurante_email" in user_unique_constraints
+              assert "uq_usuarios_restaurante_telefone" in user_unique_constraints
+              assert "usuarios_email_key" not in user_unique_constraints
+              assert "usuarios_telefone_key" not in user_unique_constraints
 
               print(
                   f"B1.2 OK: revision={version}; tables={len(db_tables)}; "
@@ -270,6 +286,9 @@ jobs:
           MIGRATION_DATABASE_URL: postgresql+psycopg2://postgres:postgres@127.0.0.1:5432/koma_upgrade
         run: |
           cd backend
+          expected_head="$(python -m alembic -c alembic.ini heads | awk '/\(head\)/ {print $1}')"
+          test -n "$expected_head"
+          export EXPECTED_ALEMBIC_HEAD="$expected_head"
           python -m alembic -c alembic.ini upgrade head
           python - <<'PY'
           import os
@@ -280,7 +299,7 @@ jobs:
           engine = create_engine(os.environ["DATABASE_URL"])
           with engine.connect() as conn:
               version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-              assert version == "f2d4e6a8b013", version
+              assert version == os.environ["EXPECTED_ALEMBIC_HEAD"], version
               assert inspect(conn).has_table("smartpos_payment_intents")
               assert inspect(conn).has_table("smartpos_payment_intent_events")
 
@@ -332,12 +351,15 @@ jobs:
           engine.dispose()
           PY
 
-      - name: B1.3.1 - latest migration downgrade and re-upgrade round trip
+      - name: B1.3.1 - SmartPOS settlement downgrade and re-upgrade round trip
         env:
           DATABASE_URL: postgresql+psycopg2://postgres:postgres@127.0.0.1:5432/koma_upgrade
           MIGRATION_DATABASE_URL: postgresql+psycopg2://postgres:postgres@127.0.0.1:5432/koma_upgrade
         run: |
           cd backend
+          expected_head="$(python -m alembic -c alembic.ini heads | awk '/\(head\)/ {print $1}')"
+          test -n "$expected_head"
+          export EXPECTED_ALEMBIC_HEAD="$expected_head"
           python -m alembic -c alembic.ini downgrade e1c3a5b7d902
           python - <<'PY'
           import os
@@ -363,7 +385,7 @@ jobs:
               assert "provider_terminal_id" in columns
               assert "pagamento_id" in columns
               assert "liquidado_em" in columns
-              assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "f2d4e6a8b013"
+              assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == os.environ["EXPECTED_ALEMBIC_HEAD"]
               assert conn.execute(text("SELECT COUNT(*) FROM comandas WHERE id = 'cmd-b1-upgrade'")).scalar_one() == 1
               assert conn.execute(text("SELECT COUNT(*) FROM usuarios WHERE id = 'b1-current-operator'")).scalar_one() == 1
               print("B1.3.1 OK: SmartPOS settlement downgrade/re-upgrade preserved data")

@@ -93,6 +93,21 @@ def _select_login_identity(candidates, password: str):
     return matches[0]
 
 
+def _login_user_payload(usuario: Usuario) -> dict:
+    """Contrato único de identidade retornado por login e ativação."""
+    return {
+        "id": usuario.id,
+        "nome": usuario.nome,
+        "usuario": usuario.usuario,
+        "email": usuario.email,
+        "telefone": usuario.telefone,
+        "role": usuario.role,
+        "cargo": getattr(usuario, "cargo", None) or usuario.role,
+        "restaurante_id": usuario.restaurante_id,
+        "status": usuario.status,
+    }
+
+
 def _lookup_invite_before_tenant(db: Session, token: str):
     if db.get_bind().dialect.name == "postgresql":
         return db.execute(
@@ -157,19 +172,8 @@ def login(login_data: LoginRequest, db: Session = Depends(get_db)):
         )
 
     access_token = create_access_token(subject=usuario.id, restaurante_id=usuario.restaurante_id)
-    
-    user_data = {
-        "id": usuario.id,
-        "nome": usuario.nome,
-        "usuario": usuario.usuario,
-        "email": usuario.email,
-        "telefone": usuario.telefone,
-        "role": usuario.role,
-        "cargo": getattr(usuario, "cargo", None) or usuario.role,
-        "restaurante_id": usuario.restaurante_id,
-        "status": usuario.status
-    }
-    
+    user_data = _login_user_payload(usuario)
+
     return {
         "access_token": access_token,
         "token_type": "bearer",
@@ -190,16 +194,16 @@ def ativar_conta(
     Retorna o token JWT e dados do usuário para login automático.
     """
     from datetime import datetime, timezone
-    
+
     token_str = payload.token_convite.strip()
     email_clean = payload.email.strip().lower()
-    
+
     if not email_clean or "@" not in email_clean:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Informe um e-mail válido para a conta."
         )
-        
+
     now_utc = datetime.now(timezone.utc)
 
     identity = _lookup_invite_before_tenant(db, token_str)
@@ -222,13 +226,13 @@ def ativar_conta(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Link de ativação inválido ou expirado"
         )
-        
+
     if usuario.status != "pendente_ativacao":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Esta conta já foi ativada previamente."
         )
-        
+
     if usuario.token_expira_em is not None:
         token_exp = usuario.token_expira_em
         if token_exp.tzinfo is None:
@@ -239,22 +243,40 @@ def ativar_conta(
                 detail="Link de ativação inválido ou expirado"
             )
 
-    # Validar se o e-mail já não está em uso por outro usuário
+    # A sessão já está vinculada ao restaurante do convite; portanto esta
+    # consulta valida duplicidade somente dentro do tenant correto.
     existente_email = db.query(Usuario).filter(Usuario.email == email_clean).first()
     if existente_email and existente_email.id != usuario.id:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Este e-mail já está cadastrado no sistema."
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Este e-mail já está cadastrado neste estabelecimento."
         )
-            
+
     usuario.email = email_clean
     usuario.senha_hash = get_password_hash(payload.senha)
     usuario.status = "ativo"
     usuario.token_convite = None
     usuario.token_expira_em = None
-    
-    db.commit()
-    db.refresh(usuario)
+
+    try:
+        db.commit()
+        db.refresh(usuario)
+    except IntegrityError as exc:
+        db.rollback()
+        logger.warning(
+            "Conflito de integridade ao ativar usuário %s no restaurante %s: %s",
+            identity["id"],
+            restaurante_id,
+            exc,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Não foi possível ativar a conta porque o e-mail ou telefone "
+                "já está em uso neste estabelecimento."
+            ),
+        ) from exc
+
     background_tasks.add_task(
         manager.broadcast,
         {
@@ -264,16 +286,10 @@ def ativar_conta(
         restaurante_id=usuario.restaurante_id,
         target_audience="internal",
     )
-    
+
     access_token = create_access_token(subject=usuario.id, restaurante_id=usuario.restaurante_id)
-    
-    user_data = {
-        "id": usuario.id,
-        "nome": usuario.nome,
-        "usuario": usuario.usuario,
-        "role": usuario.role
-    }
-    
+    user_data = _login_user_payload(usuario)
+
     return {
         "access_token": access_token,
         "token_type": "bearer",
@@ -366,11 +382,11 @@ def gdpr_opt_out(
     LGPD Compliance: Erases or anonymizes client's personal data.
     """
     target_phone = req.telefone.strip()
-    
+
     # 1. Locate all matching messages (check decrypted values)
     messages = db.query(MensagemWhatsApp).all()
     matched_msgs = [msg for msg in messages if msg.cliente_telefone == target_phone]
-            
+
     # 2. Locate matching drafts
     drafts = db.query(RascunhoPedido).all()
     matched_drafts = [d for d in drafts if d.cliente_telefone == target_phone]
@@ -394,7 +410,7 @@ def gdpr_opt_out(
                 d.ia_sugestao_resposta = "Removido."
             for c in matched_comandas:
                 c.identificador = "Cliente Anonimizado (LGPD)"
-            
+
             detail_msg = f"Anonimização realizada para telefone {target_phone}."
         else:
             # Hard delete
@@ -404,7 +420,7 @@ def gdpr_opt_out(
                 db.delete(d)
             for c in matched_comandas:
                 c.identificador = "Cliente Anonimizado (LGPD)"
-            
+
             detail_msg = f"Remoção de dados concluída para telefone {target_phone}."
 
         # Write immutable log record
@@ -425,7 +441,7 @@ def gdpr_opt_out(
             status_code=500,
             detail="Erro ao processar dado sensível, contate o suporte."
         )
-    
+
     return {"status": "success", "detail": detail_msg}
 
 
