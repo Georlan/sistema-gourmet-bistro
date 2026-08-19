@@ -572,7 +572,18 @@ def abrir_comanda(comanda_in: ComandaCreate, background_tasks: BackgroundTasks, 
             detail="Erro ao processar dado sensível, contate o suporte."
         )
     db.refresh(nova_comanda)
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
+    background_tasks.add_task(
+        manager.broadcast,
+        {
+            "event": "tables_updated",
+            "detail": {
+                "type": "comanda_aberta",
+                "mesa_id": nova_comanda.mesa_id,
+                "comanda_id": nova_comanda.id,
+            },
+        },
+        require_tenant_id(),
+    )
     return nova_comanda
 
 
@@ -1129,7 +1140,20 @@ def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_ta
     db.refresh(novo_lancamento)
     novo_lancamento.itens = itens_criados
 
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
+    background_tasks.add_task(
+        manager.broadcast,
+        {
+            "event": "tables_updated",
+            "detail": {
+                "type": "lancamento_criado",
+                "mesa_id": comanda.mesa_id,
+                "comanda_id": comanda.id,
+                "lancamento_id": novo_lancamento.id,
+                "itens": len(itens_criados),
+            },
+        },
+        require_tenant_id(),
+    )
     return novo_lancamento
 
 @router.post("/{comanda_id}/dividir", response_model=List[ComandaResponse])
