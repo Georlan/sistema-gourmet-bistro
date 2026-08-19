@@ -21,8 +21,7 @@ jobs:
           from pathlib import Path
           p = Path('backend/tools/security_adversarial_audit.py')
           text = p.read_text()
-          old = '''            assert response.status_code == 200, (rid, path, response.status_code, response.text[:300])
-            data = response.json()'''
+          old = '            assert response.status_code == 200, (rid, path, response.status_code, response.text[:300])'
           new = '''            if response.status_code != 200:
                 finding(
                     "BUSY_DAY_CAPACITY_FAILURE",
@@ -31,10 +30,9 @@ jobs:
                     f"tenant={rid} path={path} returned HTTP {response.status_code}: {response.text[:160]}",
                     once=True,
                 )
-                return elapsed
-            data = response.json()'''
+                return elapsed'''
           if old not in text:
-              raise SystemExit('capacity target block not found')
+              raise SystemExit('capacity assert not found')
           p.write_text(text.replace(old, new, 1))
           PY
       - name: Commit patch
