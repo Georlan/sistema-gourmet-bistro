@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/home/runner/work/sistema-gourmet-bistro/sistema-gourmet-bistro/scripts/apply_pr69_smartpos_kanban.py", line 546, in <module>
+    raise RuntimeError("CaixaPanel: canonical 'Abrir pagamento' button not found")
+RuntimeError: CaixaPanel: canonical 'Abrir pagamento' button not found
