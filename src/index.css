@@ -1974,6 +1974,7 @@ body {
 }
 
 @media (max-width: 1023px) {
+  .cashier-shell .group.peer:has(> .cashier-sidebar:not(.cashier-sidebar--mobile)),
   .cashier-sidebar:not(.cashier-sidebar--mobile) {
     display: none !important;
   }
