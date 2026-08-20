@@ -1,6 +1,8 @@
 from contextlib import contextmanager
 from contextvars import ContextVar
+import asyncio
 import os
+import weakref
 
 from fastapi import Request
 from sqlalchemy import create_engine, event, text
@@ -252,15 +254,42 @@ def get_tenant_id_str(restaurante_id: int | None) -> str:
     return "0"
 
 
+# Limita requisições que mantêm uma Session HTTP aberta a uma margem segura do
+# QueuePool. O excesso espera de forma assíncrona antes de criar a sessão, em vez
+# de ocupar workers esperando uma conexão até DB_POOL_TIMEOUT.
+if settings.DATABASE_URL.startswith("sqlite"):
+    _DEFAULT_DB_HTTP_MAX_INFLIGHT = 40
+else:
+    _DEFAULT_DB_HTTP_MAX_INFLIGHT = max(
+        1,
+        settings.DB_POOL_SIZE + settings.DB_MAX_OVERFLOW - 2,
+    )
+DB_HTTP_MAX_INFLIGHT = max(
+    1,
+    int(os.getenv("DB_HTTP_MAX_INFLIGHT", str(_DEFAULT_DB_HTTP_MAX_INFLIGHT))),
+)
+_db_http_limiters: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
+
+
+def _get_db_http_limiter() -> asyncio.Semaphore:
+    """Retorna um semaphore por event loop para evitar binding cross-loop em testes."""
+    loop = asyncio.get_running_loop()
+    limiter = _db_http_limiters.get(loop)
+    if limiter is None:
+        limiter = asyncio.Semaphore(DB_HTTP_MAX_INFLIGHT)
+        _db_http_limiters[loop] = limiter
+    return limiter
+
+
 # DB Session dependency generator supporting dynamic tenant databases
 async def get_db(request: Request = None):
-    """Entrega uma sessão síncrona sem consumir um worker apenas para o yield/cleanup.
+    """Entrega uma sessão síncrona com backpressure antes do QueuePool.
 
-    As consultas continuam executadas pelas rotas/dependências síncronas no threadpool,
-    mas criar e devolver a sessão como dependência assíncrona impede starvation quando
-    a concorrência HTTP supera o tamanho do QueuePool. O cleanup também fica garantido
-    no contexto da própria requisição, devolvendo a conexão ao pool sem depender de um
-    novo worker disponível.
+    As consultas continuam executadas pelas rotas/dependências síncronas no
+    threadpool. A dependência assíncrona limita quantas sessões HTTP podem estar
+    simultaneamente em voo por processo, mantendo uma pequena reserva do pool
+    para sessões auxiliares/background. O excesso fica aguardando no event loop
+    sem consumir uma conexão nem um worker e sem converter saturação em HTTP 500.
     """
     tenant_id = "default"
     restaurante_id = current_restaurante_id.get()
@@ -279,6 +308,9 @@ async def get_db(request: Request = None):
     except Exception:
         pass
 
+    limiter = _get_db_http_limiter()
+    await limiter.acquire()
+
     # O dependency HTTP sempre fixa explicitamente o tenant resolvido pelo JWT.
     # Sessões de request portanto não acompanham trocas acidentais de ContextVar.
     db = SessionLocal(restaurante_id=restaurante_id)
@@ -286,7 +318,10 @@ async def get_db(request: Request = None):
     try:
         yield db
     finally:
-        db.close()
+        try:
+            db.close()
+        finally:
+            limiter.release()
 
 
 def validate_postgres_runtime_role() -> None:
