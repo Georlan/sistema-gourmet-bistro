@@ -911,6 +911,11 @@ export function CaixaPanel({
         id: firstComanda.id, // ID real da comanda principal para rotear requisições
         comandaId: firstComanda.id,
         numeroPedido: firstComanda.numeroPedido,
+        numeroPedidos: Array.from(new Set(
+          entries
+            .map(entry => Number(entry.comanda.numeroPedido))
+            .filter(number => Number.isFinite(number) && number > 0)
+        )),
         origemOperacional: firstComanda.origemOperacional,
         mesaId: mesaId,
         mesaOrigemId: firstComanda.mesaOrigemId,
@@ -2015,11 +2020,19 @@ export function CaixaPanel({
     const mesaId = Number(order.mesaId || 0);
     const configuredName = salonTables.find(table => Number(table.id) === mesaId)?.nome?.trim();
     const activeItemCount = (order.itens || []).filter(item => item.status !== 'cancelado').length;
+    const orderNumbers = Array.from(new Set(
+      (order.numeroPedidos?.length ? order.numeroPedidos : [order.numeroPedido])
+        .map(number => Number(number))
+        .filter(number => Number.isFinite(number) && number > 0)
+    ));
+    const orderLabel = orderNumbers.length > 1
+      ? `Pedidos ${orderNumbers.map(number => `#${number}`).join(' + ')}`
+      : `Pedido #${orderNumbers[0] || humanOrderNumber(order)}`;
 
     return {
       shortLabel: mesaId > 0 ? `M${mesaId}` : 'B',
       title: configuredName || (mesaId > 0 ? `Mesa ${mesaId}` : 'Balcão'),
-      subtitle: `${activeItemCount} ${activeItemCount === 1 ? 'item' : 'itens'} · ${order.garcomNome || 'Atendimento'}`,
+      subtitle: `${orderLabel} · ${activeItemCount} ${activeItemCount === 1 ? 'item' : 'itens'} · ${order.garcomNome || 'Atendimento'}`,
     };
   };
 
@@ -6126,6 +6139,12 @@ export function CaixaPanel({
                     <div className={clsx('grid', 'grid-cols-2', 'gap-2', 'sm:grid-cols-3', 'sm:gap-2.5', 'xl:grid-cols-4', '2xl:grid-cols-6')}>
                       {visibleSalonTableCards.map((card) => {
                         const { table, displayMesaId, tableOrders, isMerged, isOccupied, hasPendingPayment, total } = card;
+                        const tableOrderNumbers = Array.from(new Set(
+                          tableOrders
+                            .flatMap(order => order.numeroPedidos?.length ? order.numeroPedidos : [order.numeroPedido])
+                            .map(number => Number(number))
+                            .filter(number => Number.isFinite(number) && number > 0)
+                        ));
                         const originId = tableOrders.find(order => order.mesaOrigemId && Number(order.mesaOrigemId) !== Number(displayMesaId))?.mesaOrigemId;
                         const transferredFromId = tableOrders.find(order => order.mesaTransferidaDe && Number(order.mesaTransferidaDe) !== Number(displayMesaId))?.mesaTransferidaDe;
                         const statusLabel = isMerged
@@ -6158,6 +6177,14 @@ export function CaixaPanel({
                                   )}
                                 </div>
                               </div>
+                              {tableOrderNumbers.length > 0 && (
+                                <span
+                                  className={clsx('shrink-0', 'rounded-lg', 'border', 'border-koma-border', 'bg-black/10', 'px-2', 'py-1', 'font-mono', 'text-[9px]', 'font-extrabold', 'text-koma-secondary')}
+                                  title={`Pedido ${tableOrderNumbers.map(number => `#${number}`).join(' + ')}`}
+                                >
+                                  #{tableOrderNumbers[0]}{tableOrderNumbers.length > 1 ? ` +${tableOrderNumbers.length - 1}` : ''}
+                                </span>
+                              )}
                             </div>
 
                             <div className="space-y-1.5 sm:space-y-2">

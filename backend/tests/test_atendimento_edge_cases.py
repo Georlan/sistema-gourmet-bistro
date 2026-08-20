@@ -18,6 +18,7 @@ from app.services.atendimentos import (
     ensure_launch_identity,
     merge_tables,
     reopen_command_guarded,
+    transfer_group_by_comanda,
     transfer_items_batch,
 )
 from app.services.printing import render_table_receipt, render_table_source_receipt
@@ -156,6 +157,43 @@ def test_operational_month_does_not_roll_over_at_21h_ceara():
         assert account.periodo_ref == "2026-08"
         assert account.numero_conta == 88
         db.commit()
+    finally:
+        db.close()
+
+
+def test_transfer_ignores_orphan_open_family_on_visually_free_destination():
+    db = SessionLocal()
+    try:
+        source = _command(db, "c-transfer-orphan-source", 1, 46)
+        _launch(db, source, "l-transfer-orphan-source", "i-transfer-orphan-source")
+        ensure_atendimento_for_comanda(db, source, actor_id=USER)
+
+        orphan = AtendimentoMesa(
+            id="a-transfer-orphan-target",
+            restaurante_id=TENANT,
+            numero_conta=99,
+            periodo_ref="2026-08",
+            mesa_id=2,
+            status="aberto",
+            proxima_sequencia=1,
+            criado_em=datetime.datetime(2026, 8, 16, 2, 0),
+        )
+        db.add(orphan)
+        db.flush()
+
+        transferred = transfer_group_by_comanda(
+            db,
+            TENANT,
+            source.id,
+            2,
+            actor_id=USER,
+        )
+
+        assert transferred.mesa_id == 2
+        assert source.mesa_transferida_de == 1
+        assert orphan.status == "fechado"
+        assert orphan.fechado_em is not None
+        db.rollback()
     finally:
         db.close()
 

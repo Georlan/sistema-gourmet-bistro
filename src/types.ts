@@ -43,6 +43,8 @@ export interface Order {
   id: string;
   /** Número curto e humano exibido na operação. */
   numeroPedido?: number;
+  /** Números preservados quando um card agrega famílias mescladas. */
+  numeroPedidos?: number[];
   /** Canal que originou o primeiro lançamento da comanda. */
   origemOperacional?: 'smartpos' | 'cardapio' | 'caixa' | 'garcom' | 'desconhecida';
   /** Quando o card representa um lote específico, mantém o id real do lançamento. */

@@ -237,6 +237,12 @@ def _linked_command_ids(db: Session, restaurante_id: int, atendimento_id: str) -
 def _sync_account_status(db: Session, account: AtendimentoMesa) -> None:
     command_ids = _linked_command_ids(db, account.restaurante_id, account.id)
     if not command_ids:
+        # Uma família sem nenhuma comanda vinculada não representa ocupação
+        # real. Registros órfãos podem restar de migrações ou operações antigas
+        # e não devem manter uma mesa visualmente livre bloqueada para sempre.
+        if account.status != "fechado":
+            account.status = "fechado"
+            account.fechado_em = datetime.datetime.now(datetime.timezone.utc)
         return
     open_exists = (
         db.query(Comanda.id)
@@ -282,6 +288,7 @@ def reconcile_table_principal(
         _sync_account_status(db, account)
     open_accounts = [account for account in accounts if account.status == "aberto"]
     if not open_accounts:
+        db.flush()
         return None
 
     by_id = {account.id: account for account in accounts}
@@ -747,6 +754,15 @@ def transfer_group_by_comanda(
     member_ids = {member.id for member in members}
     if root.mesa_id == nova_mesa_id:
         return command
+
+    # Reconciliar o destino fecha famílias órfãs antes da decisão estrutural.
+    # Sem isso, uma mesa sem comandas visíveis pode responder 409 como ocupada.
+    reconcile_table_principal(
+        db,
+        restaurante_id,
+        nova_mesa_id,
+        actor_id=actor_id,
+    )
 
     # Sincroniza eventual ocupação legada antes da decisão estrutural.
     occupied = db.query(AtendimentoMesa.id).filter(

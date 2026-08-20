@@ -1554,27 +1554,29 @@ export default function App() {
     const sourceComandas = orders.filter(o => o.mesaId === sourceTableId);
     if (sourceComandas.length === 0) { inflightTableOpsRef.current.delete(opKey); return; }
 
-    // 0ms Optimistic UI update
-    handleTransferTableOptimistic(sourceTableId, targetTableId);
-    setSelectedTableId(null);
-
     try {
-      for (const comanda of sourceComandas) {
-        const res = await fetch(`${API_BASE_URL}/comandas/${comanda.id}/transferir/${targetTableId}`, {
-          method: "POST",
-          headers: getAuthHeaders()
-        });
-        if (!res.ok) {
-          const errData = await res.json();
-          showToast(`Erro ao transferir comanda: ${errData.detail}`, 'error');
-          fetchOrdersFromAPI();
-          return;
-        }
+      // O endpoint atual transfere toda a família da mesa. Uma única chamada
+      // evita repetir a mesma mutação quando existem comandas irmãs.
+      const primaryComanda = sourceComandas[0];
+      const res = await fetch(`${API_BASE_URL}/comandas/${primaryComanda.id}/transferir/${targetTableId}`, {
+        method: "POST",
+        headers: getAuthHeaders()
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        showToast(errData?.detail || 'Não foi possível transferir a mesa.', 'error');
+        await fetchOrdersFromAPI();
+        return;
       }
+
+      handleTransferTableOptimistic(sourceTableId, targetTableId);
+      setSelectedTableId(null);
+      await fetchOrdersFromAPI();
+      showToast(`Mesa ${sourceTableId} transferida para a Mesa ${targetTableId}.`, 'success');
     } catch (err) {
       console.error(err);
       showToast("Erro de conexão ao transferir mesas.", 'error');
-      fetchOrdersFromAPI();
+      await fetchOrdersFromAPI();
     } finally {
       inflightTableOpsRef.current.delete(opKey);
     }

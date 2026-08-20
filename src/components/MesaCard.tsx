@@ -108,6 +108,16 @@ export const MesaCard = React.memo<MesaCardProps>(({
   const activeItemCount = orders.reduce((total, order) => (
     total + order.itens.filter((item) => (item.status as string) !== 'cancelado').length
   ), 0);
+  const orderNumbers = Array.from(new Set(
+    orders
+      .flatMap((order) => order.numeroPedidos?.length ? order.numeroPedidos : [order.numeroPedido])
+      .map((number) => Number(number))
+      .filter((number) => Number.isFinite(number) && number > 0)
+  ));
+  const orderNumbersText = orderNumbers.map((number) => `#${number}`).join(' + ');
+  const compactOrderNumbers = orderNumbers.length > 1
+    ? `#${orderNumbers[0]} +${orderNumbers.length - 1}`
+    : orderNumbersText;
   const defaultName = `Mesa ${table.id}`;
   const hasCustomName = Boolean(table.nome && table.nome !== defaultName);
 
@@ -116,7 +126,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
       id={`mesa-card-${table.id}`}
       type="button"
       onClick={() => onClick(table.id)}
-      aria-label={`${hasCustomName ? table.nome : defaultName}: ${statusConfig.label}`}
+      aria-label={`${hasCustomName ? table.nome : defaultName}: ${statusConfig.label}${orderNumbersText ? `, pedido ${orderNumbersText}` : ''}`}
       className={`group relative min-w-0 min-h-[112px] sm:min-h-[132px] overflow-hidden rounded-2xl border p-3 sm:p-4 text-left transition-all duration-200 ${statusConfig.surface} ${statusConfig.border} hover:-translate-y-0.5 hover:shadow-[0_16px_32px_rgba(0,0,0,0.24)] active:translate-y-0 active:scale-[0.98] focus:outline-none focus-visible:ring-2`}
     >
       <span className={`absolute left-0 top-0 h-[3px] w-full ${statusConfig.accent}`} aria-hidden="true" />
@@ -142,9 +152,14 @@ export const MesaCard = React.memo<MesaCardProps>(({
           ) : status === 'mesclada' ? (
             <GitMerge size={17} className="shrink-0 text-koma-muted" />
           ) : (
-            <div className="flex items-center gap-1.5 rounded-full border border-koma-border-subtle bg-black/20 px-2 py-1">
+            <div
+              className="flex items-center gap-1.5 rounded-full border border-koma-border-subtle bg-black/20 px-2 py-1"
+              title={orderNumbersText ? `Pedido ${orderNumbersText}` : 'Atendimento ativo'}
+            >
               <span className={`h-1.5 w-1.5 rounded-full ${statusConfig.dot}`} />
-              <span className="hidden 2xl:inline text-[8px] font-bold uppercase tracking-wider text-koma-subtle">Ativa</span>
+              <span className="font-mono text-[8px] font-bold uppercase tracking-wider text-koma-subtle">
+                {compactOrderNumbers || 'Ativa'}
+              </span>
             </div>
           )}
         </div>
