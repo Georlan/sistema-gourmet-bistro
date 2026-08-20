@@ -4170,7 +4170,7 @@ export function CaixaPanel({
     && selectedKanbanOrder?.deliveryStatus === 'producao';
 
   return (
-    <div className={`cashier-shell flex w-full h-screen bg-koma-page text-koma-foreground overflow-hidden font-sans selection:bg-[#10b981]/30 text-xs ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''
+    <div className={`cashier-shell flex w-full bg-koma-page text-koma-foreground font-sans selection:bg-[#10b981]/30 text-xs ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''
       }`}>
 
       {/* TOAST DE FEEDBACK NÃO-BLOQUEANTE */}
@@ -4490,7 +4490,7 @@ export function CaixaPanel({
       </SidebarProvider>
 
       {/* CONTENT AREA */}
-      <main className={clsx('cashier-main', 'flex-1', 'bg-koma-canvas', 'flex', 'flex-col', 'overflow-hidden', 'w-full')}>
+      <main className={clsx('cashier-main', 'min-w-0', 'min-h-0', 'flex-1', 'bg-koma-canvas', 'flex', 'flex-col', 'w-full')}>
         {/* Top header bar */}
         <header className={clsx('cashier-topbar', 'h-14', 'border-b', 'border-koma-border', 'bg-koma-panel', 'px-4', 'sm:px-6', 'flex', 'items-center', 'justify-between', 'shrink-0')}>
           <div className={clsx('flex', 'items-center', 'gap-2', 'truncate')}>
@@ -4733,7 +4733,7 @@ export function CaixaPanel({
         </div>
 
         {/* Dynamic Inner views */}
-        <div className={clsx('cashier-content', 'flex-1', 'overflow-y-auto', 'p-5', 'relative')}>
+        <div className={clsx('cashier-content', 'min-w-0', 'min-h-0', 'flex-1', 'p-5', 'relative')}>
 
           {/* CASHIER CLOSED WARNING BANNER */}
           {turno?.status !== 'aberto' && ['pedidos', 'balcao', 'mesas', 'kds'].includes(activeSubTab) && (
@@ -4756,7 +4756,7 @@ export function CaixaPanel({
 
           {/* VIEW 1: MEUS PEDIDOS (Kanban) */}
           {activeSubTab === 'pedidos' && (
-            <div className={clsx('orders-workspace', 'h-full', 'flex', 'flex-col', 'space-y-4')}>
+            <div className={clsx('orders-workspace', 'flex', 'flex-col', 'space-y-4')}>
 
               <OperationalBanner
                 id="orders-heading"
@@ -5038,13 +5038,13 @@ export function CaixaPanel({
 
               {/* Kanban operacional universal: mesas, pedidos online e finalização. */}
               <div
-                className={clsx('orders-board', 'flex-1', 'gap-3', 'overflow-x-auto', 'snap-x', 'snap-mandatory', 'pb-3', 'scrollbar-thin', 'scrollbar-thumb-zinc-800')}
+                className={clsx('orders-board', 'flex-1', 'gap-3', 'pb-3')}
                 style={ordersBoardStyle}
               >
 
 
                 {/* COLUMN 1: Em produção */}
-                <div className={clsx('orders-column orders-column--salon flex flex-col overflow-hidden snap-center', mobileOrdersStage === 'salon' && 'is-mobile-active', filteredCol1.length === 0 && 'is-empty')}>
+                <div className={clsx('orders-column orders-column--salon flex flex-col overflow-hidden', mobileOrdersStage === 'salon' && 'is-mobile-active', filteredCol1.length === 0 && 'is-empty')}>
                   <div className={clsx('orders-column__header', 'px-4', 'py-2.5', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
                     <div>
                       <span className="orders-column__number">01 / SALÃO</span>
@@ -5179,7 +5179,7 @@ export function CaixaPanel({
                 </div>
 
                 {/* COLUMN 2: pedidos sem mesa, de venda rápida, delivery ou retirada. */}
-                <div className={clsx('orders-column orders-column--digital flex flex-col overflow-hidden snap-center', mobileOrdersStage === 'digital' && 'is-mobile-active', filteredDigitalProduction.length === 0 && 'is-empty')}>
+                <div className={clsx('orders-column orders-column--digital flex flex-col overflow-hidden', mobileOrdersStage === 'digital' && 'is-mobile-active', filteredDigitalProduction.length === 0 && 'is-empty')}>
                   <div className={clsx('orders-column__header', 'px-4', 'py-2.5', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
                     <div>
                       <span className="orders-column__number">02 / SEM MESA</span>
@@ -5293,7 +5293,7 @@ export function CaixaPanel({
                 </div>
 
                 {/* COLUMN 3: pagamento e finalização de todas as modalidades. */}
-                <div className={clsx('orders-column orders-column--closing flex flex-col overflow-hidden snap-center', mobileOrdersStage === 'closing' && 'is-mobile-active', filteredCol2Table.length === 0 && filteredDeliveryFinalization.length === 0 && 'is-empty')}>
+                <div className={clsx('orders-column orders-column--closing flex flex-col overflow-hidden', mobileOrdersStage === 'closing' && 'is-mobile-active', filteredCol2Table.length === 0 && filteredDeliveryFinalization.length === 0 && 'is-empty')}>
                   <div className={clsx('orders-column__header', 'px-4', 'py-2.5', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
                     <div>
                       <span className="orders-column__number">03 / FECHAMENTO</span>
