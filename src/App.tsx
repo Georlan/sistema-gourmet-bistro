@@ -1156,6 +1156,16 @@ export default function App() {
 
   const mapBackendComandaToOrder = (comanda: any, now = Date.now()): Order => ({
     id: comanda.id,
+    numeroPedido: Number.isFinite(Number(comanda.numero_pedido)) ? Number(comanda.numero_pedido) : undefined,
+    origemOperacional: (() => {
+      const origins = (Array.isArray(comanda.lancamentos) ? comanda.lancamentos : [])
+        .map((launch: any) => String(launch?.origem || '').toLowerCase());
+      if (origins.includes('smartpos')) return 'smartpos';
+      if (origins.includes('cardapio')) return 'cardapio';
+      if (origins.includes('caixa')) return 'caixa';
+      if (origins.includes('garcom')) return 'garcom';
+      return 'desconhecida';
+    })(),
     clienteId: comanda.cliente_id || null,
     clientePhone: comanda.delivery_telefone || null,
     mesaId: comanda.mesa_id || 0,

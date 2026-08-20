@@ -41,6 +41,10 @@ export interface OrderItem {
 
 export interface Order {
   id: string;
+  /** Número curto e humano exibido na operação. */
+  numeroPedido?: number;
+  /** Canal que originou o primeiro lançamento da comanda. */
+  origemOperacional?: 'smartpos' | 'cardapio' | 'caixa' | 'garcom' | 'desconhecida';
   /** Quando o card representa um lote específico, mantém o id real do lançamento. */
   lancamentoId?: string;
   clienteId?: string | null;

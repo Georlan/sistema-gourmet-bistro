@@ -162,13 +162,66 @@ interface DeliveryOrderView {
   telefone: string;
   itens: string;
   total: number;
-  canal: 'ifood' | 'site' | 'whats';
+  canal: 'ifood' | 'site' | 'whats' | 'smartpos';
+  origemOperacional: 'smartpos' | 'cardapio' | 'caixa' | 'garcom' | 'desconhecida';
+  isQuickSale: boolean;
+  quantidadeItens: number;
   modalidade: 'delivery' | 'retirada';
   pago: boolean;
   status: 'pendente' | 'analise' | 'producao' | 'pronto' | 'transito';
   endereco?: string;
   criadoEm: string;
+  created_at?: string;
   numeroPedido?: number;
+}
+
+type KanbanDetailItem = {
+  nome: string;
+  observacao: string;
+  clienteNome: string;
+  status: string;
+  quantidade: number;
+};
+
+function humanOrderNumber(order: any): string {
+  const number = Number(order?.numeroPedido ?? order?.numero_pedido);
+  if (Number.isFinite(number) && number > 0) return String(number);
+  return String(order?.comandaId || order?.id || '—').slice(-4).toUpperCase();
+}
+
+function groupKanbanDetailItems(items: any[]): KanbanDetailItem[] {
+  const grouped = new Map<string, KanbanDetailItem>();
+  (Array.isArray(items) ? items : []).forEach((item: any) => {
+    if (String(item?.status || '').toLowerCase() === 'cancelado') return;
+    const nome = String(item?.nome || item?.produto?.nome || 'Item');
+    const observacao = String(item?.observacao || '').trim();
+    const clienteNome = String(item?.cliente_nome || item?.clienteNome || 'Consumo Geral').trim();
+    const status = String(item?.status || 'preparando').toLowerCase();
+    const key = [nome, observacao, clienteNome, status].join('\u0000');
+    const current = grouped.get(key);
+    if (current) {
+      current.quantidade += 1;
+    } else {
+      grouped.set(key, { nome, observacao, clienteNome, status, quantidade: 1 });
+    }
+  });
+  return Array.from(grouped.values());
+}
+
+function operationalOriginLabel(origin?: string): string {
+  if (origin === 'smartpos') return 'SmartPOS';
+  if (origin === 'cardapio') return 'Cardápio online';
+  if (origin === 'caixa') return 'Caixa';
+  if (origin === 'garcom') return 'Garçom';
+  return 'Kôma';
+}
+
+function deliveryStatusLabel(status?: string, modalidade?: string): string {
+  if (status === 'producao') return 'Em preparo';
+  if (status === 'pronto') return modalidade === 'delivery' ? 'Pronto para envio' : 'Pronto para retirada';
+  if (status === 'transito') return modalidade === 'delivery' ? 'Em rota' : 'Aguardando retirada';
+  if (status === 'pendente' || status === 'analise') return 'Aguardando aceite';
+  return 'Em atendimento';
 }
 
 interface SmartPosCashPaymentView {
@@ -751,6 +804,8 @@ export function CaixaPanel({
           list.push({
             id: lid,
             comandaId: comanda.id,
+            numeroPedido: comanda.numeroPedido,
+            origemOperacional: comanda.origemOperacional,
             mesaId: comanda.mesaId,
             mesaOrigemId: comanda.mesaOrigemId,
             mesaTransferidaDe: comanda.mesaTransferidaDe,
@@ -855,6 +910,8 @@ export function CaixaPanel({
       list.push({
         id: firstComanda.id, // ID real da comanda principal para rotear requisições
         comandaId: firstComanda.id,
+        numeroPedido: firstComanda.numeroPedido,
+        origemOperacional: firstComanda.origemOperacional,
         mesaId: mesaId,
         mesaOrigemId: firstComanda.mesaOrigemId,
         mesaTransferidaDe: firstComanda.mesaTransferidaDe,
@@ -2032,7 +2089,19 @@ export function CaixaPanel({
     const parsedTime = formatBackendTime(c.criado_em);
     const criadoEm = parsedTime === '—' ? '12:00' : parsedTime;
 
-    let canal: 'ifood' | 'site' | 'whats' = 'site';
+    const origins = (Array.isArray(c?.lancamentos) ? c.lancamentos : [])
+      .map((launch: any) => String(launch?.origem || '').toLowerCase());
+    const origemOperacional: DeliveryOrderView['origemOperacional'] = origins.includes('smartpos')
+      ? 'smartpos'
+      : origins.includes('cardapio')
+        ? 'cardapio'
+        : origins.includes('caixa')
+          ? 'caixa'
+          : origins.includes('garcom')
+            ? 'garcom'
+            : 'desconhecida';
+
+    let canal: DeliveryOrderView['canal'] = origemOperacional === 'smartpos' ? 'smartpos' : 'site';
     if (c.identificador && c.identificador.toLowerCase().includes('ifood')) {
       canal = 'ifood';
     } else if (c.identificador && c.identificador.toLowerCase().includes('whats')) {
@@ -2044,6 +2113,13 @@ export function CaixaPanel({
     const modalidade = rawType === 'retirada' || /retirada\s+no\s+balc[aã]o/i.test(rawAddress)
       ? 'retirada'
       : 'delivery';
+    const isQuickSale = modalidade === 'retirada' && (
+      origemOperacional === 'smartpos'
+      || (
+        String(c.identificador || '').trim().toLowerCase() === 'balcão'
+        && !String(c.delivery_telefone || '').trim()
+      )
+    );
 
     return {
       id: c.id,
@@ -2052,11 +2128,15 @@ export function CaixaPanel({
       itens: itensStr,
       total: total,
       canal: canal,
+      origemOperacional,
+      isQuickSale,
+      quantidadeItens: activeItems.length,
       modalidade,
       pago: activeItems.length > 0 && activeItems.every((it: any) => Boolean(it.pago)),
       status: c.delivery_status || 'pendente',
       endereco: modalidade === 'delivery' ? rawAddress : '',
       criadoEm: criadoEm,
+      created_at: c.criado_em,
       numeroPedido: c.numero_pedido
     };
   };
@@ -2121,7 +2201,8 @@ export function CaixaPanel({
           nome: it.produto?.nome || it.nome || 'Item',
           observacao: it.observacao || '',
           cliente_nome: it.cliente_nome || it.clienteNome || 'Consumo Geral',
-          status: it.status
+          status: it.status,
+          lancamentoId: it.lancamentoId || it.lancamento_id,
         }))
       : order.itens.split(' + ').map((itStr: string) => {
           const match = itStr.match(/^(\d+)x\s+(.+)$/);
@@ -2129,7 +2210,8 @@ export function CaixaPanel({
             nome: match ? match[2] : itStr,
             observacao: '',
             cliente_nome: 'Consumo Geral',
-            status: order.status === 'pronto' ? 'pronto' : (order.status === 'transito' ? 'entregue' : 'preparando')
+            status: order.status === 'pronto' ? 'pronto' : (order.status === 'transito' ? 'entregue' : 'preparando'),
+            lancamentoId: undefined,
           };
         });
 
@@ -2138,7 +2220,18 @@ export function CaixaPanel({
       mesaId: 0,
       identificador: order.cliente,
       itens: itemsMapped,
-      total: order.total
+      total: order.total,
+      numeroPedido: order.numeroPedido,
+      origemOperacional: order.origemOperacional,
+      isQuickSale: order.isQuickSale,
+      modalidade: order.modalidade,
+      deliveryStatus: order.status,
+      canal: order.canal,
+      telefone: order.telefone,
+      endereco: order.endereco,
+      criadoEm: order.criadoEm,
+      created_at: order.created_at,
+      lancamentoId: itemsMapped.find((item: any) => item.lancamentoId)?.lancamentoId,
     });
   };
 
@@ -2161,12 +2254,15 @@ export function CaixaPanel({
             openWhatsAppMessage(phone, msg);
           }
         }
+        return true;
       } else {
         showToast('Erro ao atualizar status do pedido.', 'error');
+        return false;
       }
     } catch (err) {
       console.error(err);
       showToast('Erro de conexão ao atualizar status.', 'error');
+      return false;
     }
   };
 
@@ -3988,6 +4084,29 @@ export function CaixaPanel({
     }
   };
 
+  const selectedDetailItems = selectedKanbanOrder
+    ? groupKanbanDetailItems(selectedKanbanOrder.itens)
+    : [];
+  const selectedOrderNumber = selectedKanbanOrder
+    ? humanOrderNumber(selectedKanbanOrder)
+    : '—';
+  const selectedIsQuickSale = Boolean(selectedKanbanOrder?.isQuickSale)
+    || (
+      selectedKanbanOrder?.origemOperacional === 'smartpos'
+      && Number(selectedKanbanOrder?.mesaId || 0) === 0
+      && String(selectedKanbanOrder?.modalidade || selectedKanbanOrder?.tipo || '').toLowerCase() === 'retirada'
+    );
+  const selectedIsDigital = Boolean(selectedKanbanOrder)
+    && ['retirada', 'entrega', 'delivery'].includes(String(selectedKanbanOrder?.modalidade || selectedKanbanOrder?.tipo || '').toLowerCase());
+  const selectedOrderTotal = selectedKanbanOrder
+    ? Number(selectedKanbanOrder.total ?? selectedKanbanOrder.itens?.reduce(
+        (sum: number, item: any) => sum + Number(item.preco_unit || item.preco || 0),
+        0,
+      ) ?? 0)
+    : 0;
+  const selectedCanAdvanceDigital = selectedIsDigital
+    && selectedKanbanOrder?.deliveryStatus === 'producao';
+
   return (
     <div className={`cashier-shell flex w-full h-screen bg-koma-page text-koma-foreground overflow-hidden font-sans selection:bg-[#10b981]/30 text-xs ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''
       }`}>
@@ -5025,30 +5144,52 @@ export function CaixaPanel({
                           const sla = getOrderSlaData(order, nowTimestamp);
                           const isExpanded = !!expandedCardIds[cardId];
                           const isDeliveryOrder = order.modalidade === 'delivery';
-                          const badgeText = isDeliveryOrder ? 'DELIVERY — PREPARANDO' : 'RETIRADA — PREPARANDO';
+                          const badgeText = deliveryStatusLabel(order.status, order.modalidade).toUpperCase();
                           const buttonText = isDeliveryOrder ? 'SAIU PARA ENTREGA' : 'PRONTO PARA RETIRADA';
 
                           return (
                             <div 
                               key={order.id} 
                               onClick={() => openDeliveryOrderDetails(order)}
+                              onKeyDown={(event) => {
+                                if (event.target !== event.currentTarget) return;
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                  event.preventDefault();
+                                  openDeliveryOrderDetails(order);
+                                }
+                              }}
+                              role="button"
+                              tabIndex={0}
+                              aria-label={`${order.isQuickSale ? 'Venda rápida' : order.modalidade} pedido ${humanOrderNumber(order)}, ver detalhes`}
                               className={clsx(
                                 'orders-card orders-card--digital rounded-xl p-2.5 sm:p-3 space-y-2 text-left cursor-pointer',
+                                order.isQuickSale && 'orders-card--quick-sale',
                                 sla.borderTopClass
                               )}
                             >
-                              {/* LINHA 1 (Top Bar do Card) */}
-                              <div className={clsx('flex', 'justify-between', 'items-center', 'gap-2')}>
-                                <div className={clsx('flex', 'items-center', 'gap-1.5', 'flex-wrap')}>
-                                  <span className={clsx('orders-card__chip', sla.badgeClass)}>
-                                    {sla.label}
-                                  </span>
-                                  <span className={clsx('orders-card__chip', 'is-primary')}>{badgeText}</span>
-                                  <span className={clsx('orders-card__chip', 'is-muted')}>
-                                    {order.canal}
-                                  </span>
+                              <div className="orders-card__identity">
+                                <div className={clsx('orders-card__number', order.isQuickSale && 'is-quick-sale')}>
+                                  {order.isQuickSale ? <Smartphone size={15} /> : <Globe size={15} />}
+                                  <strong>#{humanOrderNumber(order)}</strong>
                                 </div>
-                                <div className={clsx('flex', 'items-center', 'gap-1', 'shrink-0')}>
+                                <div className="min-w-0">
+                                  <strong className="orders-card__identity-title">
+                                    {order.isQuickSale ? 'Venda rápida' : order.cliente}
+                                  </strong>
+                                  <span className="orders-card__identity-subtitle">
+                                    {order.isQuickSale
+                                      ? `Retirada no balcão · ${order.quantidadeItens} ${order.quantidadeItens === 1 ? 'item' : 'itens'}`
+                                      : `${isDeliveryOrder ? 'Delivery' : 'Retirada'}${order.telefone ? ` · ${order.telefone}` : ''}`}
+                                  </span>
+                                  <div className="orders-card__identity-chips">
+                                    <span className={clsx('orders-card__chip', sla.badgeClass)}>{sla.label}</span>
+                                    <span className={clsx('orders-card__chip', 'is-primary')}>{badgeText}</span>
+                                    <span className={clsx('orders-card__chip', 'is-muted')}>{operationalOriginLabel(order.origemOperacional)}</span>
+                                  </div>
+                                </div>
+                                <div className="orders-card__identity-side">
+                                  <span className="orders-card__price">{formatCurrency(order.total)}</span>
+                                  <div className="flex items-center justify-end gap-1">
                                   <button
                                     type="button"
                                     onClick={(e) => handleQuickPrintOrder(order, e)}
@@ -5068,16 +5209,8 @@ export function CaixaPanel({
                                   >
                                     <ChevronRight size={12} />
                                   </button>
-                                  <span className="orders-card__price">
-                                    {formatCurrency(order.total)}
-                                  </span>
+                                  </div>
                                 </div>
-                              </div>
-
-                              {/* LINHA 2 (Sub-header) */}
-                              <div className="orders-card__meta">
-                                <strong className="orders-card__title">{order.cliente}</strong>
-                                <span className="shrink-0">{order.telefone}</span>
                               </div>
 
                               {renderCompactItemsList(order.itens, cardId, isExpanded, toggleCardExpansion)}
@@ -5267,30 +5400,53 @@ export function CaixaPanel({
                           const sla = getOrderSlaData(order, nowTimestamp);
                           const isExpanded = !!expandedCardIds[cardId];
                           const isDeliveryOrder = order.modalidade === 'delivery';
-                          const badgeText = isDeliveryOrder
-                            ? `DELIVERY — ${order.pago ? 'PAGO / EM ROTA' : 'EM ROTA'}`
-                            : `RETIRADA — ${order.pago ? 'PAGO' : 'AGUARDANDO PAGAMENTO'}`;
+                          const badgeText = order.pago
+                            ? 'PAGO'
+                            : deliveryStatusLabel(order.status, order.modalidade).toUpperCase();
 
                           return (
                             <div 
                               key={`transito-${order.id}`} 
                               onClick={() => openDeliveryOrderDetails(order)}
+                              onKeyDown={(event) => {
+                                if (event.target !== event.currentTarget) return;
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                  event.preventDefault();
+                                  openDeliveryOrderDetails(order);
+                                }
+                              }}
+                              role="button"
+                              tabIndex={0}
+                              aria-label={`${order.isQuickSale ? 'Venda rápida' : order.modalidade} pedido ${humanOrderNumber(order)}, ver detalhes`}
                               className={clsx(
                                 'orders-card orders-card--closing rounded-xl p-2.5 sm:p-3 space-y-2 text-left cursor-pointer',
+                                order.isQuickSale && 'orders-card--quick-sale',
                                 sla.borderTopClass
                               )}
                             >
-                              <div className={clsx('flex', 'justify-between', 'items-center', 'gap-2')}>
-                                <div className={clsx('flex', 'items-center', 'gap-1.5', 'flex-wrap')}>
-                                  <span className={clsx('orders-card__chip', sla.badgeClass)}>
-                                    {sla.label}
-                                  </span>
-                                  <span className={clsx('orders-card__chip', 'is-primary')}>{badgeText}</span>
-                                  <span className={clsx('orders-card__chip', 'is-muted')}>
-                                    {order.canal}
-                                  </span>
+                              <div className="orders-card__identity">
+                                <div className={clsx('orders-card__number', order.isQuickSale && 'is-quick-sale')}>
+                                  {order.isQuickSale ? <Smartphone size={15} /> : <Globe size={15} />}
+                                  <strong>#{humanOrderNumber(order)}</strong>
                                 </div>
-                                <div className={clsx('flex', 'items-center', 'gap-1', 'shrink-0')}>
+                                <div className="min-w-0">
+                                  <strong className="orders-card__identity-title">
+                                    {order.isQuickSale ? 'Venda rápida' : order.cliente}
+                                  </strong>
+                                  <span className="orders-card__identity-subtitle">
+                                    {order.isQuickSale
+                                      ? `Retirada no balcão · ${order.quantidadeItens} ${order.quantidadeItens === 1 ? 'item' : 'itens'}`
+                                      : `${isDeliveryOrder ? 'Delivery' : 'Retirada'}${order.telefone ? ` · ${order.telefone}` : ''}`}
+                                  </span>
+                                  <div className="orders-card__identity-chips">
+                                    <span className={clsx('orders-card__chip', sla.badgeClass)}>{sla.label}</span>
+                                    <span className={clsx('orders-card__chip', 'is-primary')}>{badgeText}</span>
+                                    <span className={clsx('orders-card__chip', 'is-muted')}>{operationalOriginLabel(order.origemOperacional)}</span>
+                                  </div>
+                                </div>
+                                <div className="orders-card__identity-side">
+                                  <span className="orders-card__price">{formatCurrency(order.total)}</span>
+                                  <div className="flex items-center justify-end gap-1">
                                   <button
                                     type="button"
                                     onClick={(e) => handleQuickPrintOrder(order, e)}
@@ -5310,16 +5466,8 @@ export function CaixaPanel({
                                   >
                                     <ChevronRight size={12} />
                                   </button>
-                                  <span className="orders-card__price">
-                                    {formatCurrency(order.total)}
-                                  </span>
+                                  </div>
                                 </div>
-                              </div>
-
-                              {/* LINHA 2 (Sub-header) */}
-                              <div className="orders-card__meta">
-                                <strong className="orders-card__title">{order.cliente}</strong>
-                                <span className="shrink-0">{order.telefone}</span>
                               </div>
 
                               {renderCompactItemsList(order.itens, cardId, isExpanded, toggleCardExpansion)}
@@ -8668,6 +8816,9 @@ export function CaixaPanel({
                           itens: draft.map(d => `${d.quantity}x ${d.product.nome}`).join(" + "),
                           total: draft.reduce((acc, c) => acc + (c.product.preco * c.quantity), 0),
                           canal: 'whats',
+                          origemOperacional: 'cardapio',
+                          isQuickSale: false,
+                          quantidadeItens: draft.reduce((acc, item) => acc + item.quantity, 0),
                           modalidade: 'delivery',
                           pago: false,
                           status: 'analise',
@@ -9975,24 +10126,47 @@ export function CaixaPanel({
           onClick={(e) => { if (e.target === e.currentTarget) setSelectedKanbanOrder(null); }}
           className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4', 'cursor-pointer')}
         >
-          <div className={clsx('orders-detail-modal', 'w-full', 'max-w-md', 'rounded-3xl', 'p-5', 'space-y-3', 'text-left', 'relative', 'animate-scale-in')}>
-            {/* Header */}
-            <div className={clsx('flex', 'justify-between', 'items-center', 'pb-2', 'border-b', 'border-koma-border')}>
-              <div>
-                <h3 className={clsx('font-serif', 'text-sm', 'font-bold', 'text-koma-foreground')}>
-                  {selectedKanbanOrder.mesaId && selectedKanbanOrder.mesaId > 0 ? `Detalhes: Mesa ${selectedKanbanOrder.mesaId}` : 'Detalhes: Balcão'}
-                </h3>
-                <span className={clsx('text-[9px]', 'text-koma-muted', 'font-mono', 'block', 'mt-0.5')}>Pedido: #{selectedKanbanOrder.id.slice(-4)}</span>
+          <div role="dialog" aria-modal="true" aria-labelledby="kanban-detail-title" className={clsx('orders-detail-modal', 'w-full', 'max-w-md', 'rounded-3xl', 'p-5', 'space-y-4', 'text-left', 'relative', 'animate-scale-in')}>
+            <div className="orders-detail-modal__hero">
+              <div className={clsx('orders-detail-modal__number', selectedIsQuickSale && 'is-quick-sale')}>
+                {selectedIsQuickSale ? <Smartphone size={18} /> : selectedKanbanOrder.mesaId > 0 ? <Users size={18} /> : <ShoppingCart size={18} />}
+                <strong>{selectedKanbanOrder.mesaId > 0 ? `M${selectedKanbanOrder.mesaId}` : `#${selectedOrderNumber}`}</strong>
               </div>
+              <div className="min-w-0 flex-1">
+                <span className="orders-detail-modal__eyebrow">
+                  {selectedIsQuickSale ? 'Venda rápida' : selectedKanbanOrder.mesaId > 0 ? 'Atendimento do salão' : selectedKanbanOrder.modalidade === 'delivery' ? 'Delivery' : 'Retirada'}
+                </span>
+                <h3 id="kanban-detail-title" className="orders-detail-modal__title">
+                  {selectedIsQuickSale
+                    ? `Pedido #${selectedOrderNumber}`
+                    : selectedKanbanOrder.mesaId > 0
+                      ? `Mesa ${selectedKanbanOrder.mesaId}`
+                      : selectedKanbanOrder.identificador || `Pedido #${selectedOrderNumber}`}
+                </h3>
+                <div className="orders-detail-modal__status-line">
+                  <span>{operationalOriginLabel(selectedKanbanOrder.origemOperacional)}</span>
+                  <span aria-hidden="true">•</span>
+                  <strong>{deliveryStatusLabel(selectedKanbanOrder.deliveryStatus, selectedKanbanOrder.modalidade)}</strong>
+                </div>
+              </div>
+              <div className="orders-detail-modal__hero-side">
+                <strong>{formatCurrency(selectedOrderTotal)}</strong>
               <button
                 type="button"
                 onClick={() => setSelectedKanbanOrder(null)}
-                className={clsx('p-1', 'text-koma-subtle', 'hover:text-koma-foreground', 'transition-colors', 'cursor-pointer')}
+                  className="orders-detail-modal__close"
+                  aria-label="Fechar detalhes"
               >
                 <X size={16} />
               </button>
+              </div>
             </div>
 
+            <div className="orders-detail-modal__metrics">
+              <div><span>Pedido</span><strong>#{selectedOrderNumber}</strong></div>
+              <div><span>Horário</span><strong>{selectedKanbanOrder.criadoEm || formatBackendTime(selectedKanbanOrder.created_at) || '—'}</strong></div>
+              <div><span>Itens</span><strong>{selectedDetailItems.reduce((sum, item) => sum + item.quantidade, 0)}</strong></div>
+            </div>
 
             {/* Itens e info extras */}
             <div className="space-y-3">
@@ -10016,34 +10190,63 @@ export function CaixaPanel({
                 </div>
               )}
 
-              {selectedKanbanOrder.identificador && (
-                <div className={clsx('bg-koma-panel', 'p-2.5', 'rounded-xl', 'border', 'border-koma-border', 'text-xs', 'text-koma-secondary')}>
-                  <strong className={clsx('text-koma-foreground', 'block', 'text-[10px]', 'uppercase', 'tracking-wider', 'text-koma-subtle')}>Cliente:</strong>
-                  {selectedKanbanOrder.identificador}
+              {selectedKanbanOrder.identificador && !selectedIsQuickSale && (
+                <div className="orders-detail-modal__customer">
+                  <div>
+                    <span>Cliente</span>
+                    <strong>{selectedKanbanOrder.identificador}</strong>
+                  </div>
+                  {selectedKanbanOrder.telefone && <span>{selectedKanbanOrder.telefone}</span>}
                 </div>
               )}
 
-              <div className={clsx('space-y-2', 'max-h-48', 'overflow-y-auto')}>
-                <span className={clsx('text-[10px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>Itens do Pedido:</span>
-                {selectedKanbanOrder.itens.map((item: any, idx: number) => (
-                  <div key={idx} className={clsx('flex', 'justify-between', 'items-start', 'bg-koma-panel/40', 'p-2.5', 'rounded-xl', 'border', 'border-koma-border/40', 'text-xs')}>
-                    <div>
-                      <strong className="text-koma-foreground">{item.nome || item.produto?.nome}</strong>
-                      {item.observacao && <span className={clsx('block', 'text-[10px]', 'text-emerald-600 dark:text-emerald-300/70', 'mt-0.5')}>Obs: {item.observacao}</span>}
-                      {item.cliente_nome && item.cliente_nome !== 'Consumo Geral' && <span className={clsx('block', 'text-[9px]', 'text-koma-subtle', 'mt-0.5')}>Para: {item.cliente_nome}</span>}
+              <div className="space-y-2">
+                <div className="orders-detail-modal__section-title">
+                  <span>Itens do pedido</span>
+                  <strong>{selectedDetailItems.reduce((sum, item) => sum + item.quantidade, 0)} no total</strong>
+                </div>
+                <div className="orders-detail-modal__items">
+                {selectedDetailItems.map((item, idx) => (
+                  <div key={`${item.nome}-${item.observacao}-${idx}`} className="orders-detail-modal__item">
+                    <span className="orders-detail-modal__quantity">{item.quantidade}×</span>
+                    <div className="min-w-0 flex-1">
+                      <strong>{item.nome}</strong>
+                      {item.observacao && <span className="orders-detail-modal__observation">{item.observacao}</span>}
+                      {item.clienteNome !== 'Consumo Geral' && item.clienteNome.toLowerCase() !== 'balcão' && (
+                        <span className="orders-detail-modal__for">Para: {item.clienteNome}</span>
+                      )}
                     </div>
-                    <span className={clsx('text-[10px]', 'font-mono', 'bg-koma-raised', 'text-koma-secondary', 'px-1.5', 'py-0.5', 'rounded', 'capitalize')}>{item.status}</span>
+                    <span className={clsx('orders-detail-modal__item-status', item.status === 'pronto' && 'is-ready')}>
+                      {item.status === 'preparando' ? 'Em preparo' : item.status === 'pronto' ? 'Pronto' : item.status}
+                    </span>
                   </div>
                 ))}
+                </div>
               </div>
 
               {/* Botões de impressão */}
               <div className={clsx('flex', 'flex-col', 'gap-2', 'pt-1')}>
+                {selectedCanAdvanceDigital && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const updated = await handleUpdateDeliveryStatus(selectedKanbanOrder.id, 'transito');
+                      if (updated) setSelectedKanbanOrder(null);
+                    }}
+                    className="orders-detail-modal__primary-action"
+                  >
+                    <Check size={15} />
+                    <span>{selectedKanbanOrder.modalidade === 'delivery' ? 'Marcar saída para entrega' : 'Marcar pronto para retirada'}</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={async () => {
                     try {
-                      const res = await fetch(`${apiBaseUrl}/comandas/lancamentos/${selectedKanbanOrder.id}/reimprimir`, {
+                      const printUrl = selectedKanbanOrder.lancamentoId
+                        ? `${apiBaseUrl}/comandas/lancamentos/${selectedKanbanOrder.lancamentoId}/reimprimir`
+                        : `${apiBaseUrl}/comandas/${selectedKanbanOrder.comandaId || selectedKanbanOrder.id}/imprimir-recibo`;
+                      const res = await fetch(printUrl, {
                         method: "POST",
                         headers: authHeaders
                       });
@@ -10063,10 +10266,10 @@ export function CaixaPanel({
                   className="orders-detail-modal__reprint"
                 >
                   <Printer size={13} />
-                  <span>Reimprimir cozinha</span>
+                  <span>Reimprimir produção</span>
                 </button>
 
-                {selectedKanbanOrder.mesaId && selectedKanbanOrder.mesaId > 0 && (
+                {Boolean(selectedKanbanOrder.mesaId && selectedKanbanOrder.mesaId > 0) && (
                   <div className={clsx('space-y-2', 'w-full')}>
                     <div className={clsx('flex', 'gap-2', 'w-full')}>
                     <button
