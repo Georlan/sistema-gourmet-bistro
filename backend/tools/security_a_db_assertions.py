@@ -108,6 +108,11 @@ def main() -> None:
                     f"runtime role {runtime_role} can TRUNCATE public.{table}"
                 )
 
+            # SQLAlchemy 2.x starts a transaction implicitly on the first execute.
+            # Close that read-only transaction before opening the scoped tenant
+            # transactions below; otherwise conn.begin() raises InvalidRequestError.
+            conn.rollback()
+
             tx = conn.begin()
             try:
                 conn.execute(
