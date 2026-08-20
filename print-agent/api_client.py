@@ -10,6 +10,10 @@ log = logging.getLogger("print-agent.api")
 AGENT_CAPABILITIES = ["connect_usb"]
 
 
+class AgentAuthenticationError(RuntimeError):
+    """A credencial persistida foi revogada e precisa de novo pareamento."""
+
+
 def _diagnostics_with_capabilities(
     diagnostics: Optional[Dict[str, Any]],
 ) -> Optional[Dict[str, Any]]:
@@ -82,7 +86,13 @@ class KomaApiClient:
             if resp.status_code == 200:
                 payload = resp.json()
                 return payload if isinstance(payload, dict) else {}
+            if resp.status_code in (401, 403):
+                raise AgentAuthenticationError(
+                    "A autorização deste computador expirou ou foi revogada."
+                )
             return None
+        except AgentAuthenticationError:
+            raise
         except Exception as e:
             log.debug(f"Erro ao enviar heartbeat: {e}")
             return None

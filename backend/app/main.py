@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 
 from .config import settings
 from .database import Base, current_restaurante_id, engine
+from .logging_security import install_sensitive_query_log_filter
 from .routes import (
     ai,
     atendimento_printing,
@@ -31,6 +32,9 @@ from .routes import (
     whatsapp_webhook,
 )
 from .services.order_numbers import gerar_novo_numero_pedido_atomico
+
+
+install_sensitive_query_log_filter()
 
 
 # Há dois consumidores legados da função de numeração: orders (salão/caixa)

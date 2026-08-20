@@ -16,7 +16,7 @@ if agent_dir not in sys.path:
     sys.path.insert(0, agent_dir)
 
 from config import AgentConfig
-from api_client import KomaApiClient
+from api_client import AgentAuthenticationError, KomaApiClient
 from journal import PrintJournal
 from adapters.file import FilePrinterAdapter
 from adapters.windows import (
@@ -616,6 +616,45 @@ def test_api_client_reuses_http_session():
                 "capabilities": ["connect_usb"],
             }
         }
+
+
+def test_heartbeat_rejects_revoked_agent_token_without_retry_storm():
+    with patch("api_client.requests.Session") as SessionClass:
+        response = MagicMock(status_code=401)
+        SessionClass.return_value.post.return_value = response
+        client = KomaApiClient("https://api.koma.test", "revoked-token")
+
+        with pytest.raises(AgentAuthenticationError):
+            client.heartbeat()
+
+        SessionClass.return_value.post.assert_called_once()
+
+
+def test_worker_propagates_revoked_agent_token_for_repair(temp_dir):
+    config = AgentConfig(
+        api_url="http://localhost:8000",
+        agent_token="revoked-token",
+        adapter="file",
+        output_dir=temp_dir,
+    )
+    with (
+        patch("worker.KomaApiClient") as ClientClass,
+        patch("worker.PrintJournal"),
+        patch("worker.get_adapter") as get_adapter_mock,
+    ):
+        get_adapter_mock.return_value.get_diagnostics.return_value = {
+            "adapter": "file",
+            "platform": "test",
+            "printers": [],
+            "default_printer": None,
+            "error": None,
+        }
+        ClientClass.return_value.heartbeat.side_effect = AgentAuthenticationError(
+            "revoked"
+        )
+
+        with pytest.raises(AgentAuthenticationError):
+            run_agent_loop(config, max_loops=1)
 
 
 def test_agent_executes_connect_usb_command():

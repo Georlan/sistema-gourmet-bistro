@@ -35,6 +35,17 @@ def load_stored_token() -> str:
         return ""
 
 
+def clear_stored_token() -> None:
+    """Remove somente a credencial já rejeitada; fila e journal são preservados."""
+
+    try:
+        credentials_path().unlink(missing_ok=True)
+    except OSError:
+        # O processo ainda encerra sem martelar a API. O próximo instalador
+        # poderá substituir o arquivo manualmente se o SO bloquear a remoção.
+        pass
+
+
 def save_stored_token(token: str) -> None:
     path = credentials_path()
     path.parent.mkdir(parents=True, exist_ok=True)

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { API_BASE_URL } from '../config/api';
 import type { SmartPosSession } from './smartPosSession';
+import { operationalFetch } from '../utils/operationalRequest';
 
 
 type Mesa = {
@@ -182,7 +183,7 @@ export default function SmartPosPaymentFlow({
     if (!idempotencyKey) setIdempotencyKey(key);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/smartpos/payment-intents`, {
+      const response = await operationalFetch(`${API_BASE_URL}/auth/smartpos/payment-intents`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${session.token}`,
@@ -228,7 +229,7 @@ export default function SmartPosPaymentFlow({
     setIsCancelling(true);
     setError('');
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/smartpos/payment-intents/${encodeURIComponent(intentId)}/cancelar`, {
+      const response = await operationalFetch(`${API_BASE_URL}/auth/smartpos/payment-intents/${encodeURIComponent(intentId)}/cancelar`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${session.token}`,
@@ -260,7 +261,7 @@ export default function SmartPosPaymentFlow({
     try {
       const confirmationKey = `${idempotencyKey || intentId}:confirm`;
       const receivedNumber = Number(String(manualReceived || '').replace(',', '.'));
-      const response = await fetch(`${API_BASE_URL}/auth/smartpos/payment-intents/${encodeURIComponent(intentId)}/confirmar-manual`, {
+      const response = await operationalFetch(`${API_BASE_URL}/auth/smartpos/payment-intents/${encodeURIComponent(intentId)}/confirmar-manual`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${session.token}`,

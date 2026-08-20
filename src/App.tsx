@@ -30,6 +30,7 @@ import {
   getOrCreatePersistedOperationKey,
   operationalFetch,
 } from './utils/operationalRequest';
+import { openAuthenticatedWebSocket } from './utils/authenticatedWebSocket';
 
 const MemoizedCaixaPanel = React.lazy(() =>
   import('./components/CaixaPanel').then(module => ({
@@ -837,8 +838,8 @@ export default function App() {
       const wsBase = API_BASE_URL.replace(/^http/, 'ws');
       const tokenKey = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
       const token = localStorage.getItem(tokenKey) || "";
-      const wsUrl = `${wsBase}/ws/${activeWaiterId}?token=${token}`;
-      const socket = new WebSocket(wsUrl);
+      const wsUrl = `${wsBase}/ws/${encodeURIComponent(activeWaiterId)}`;
+      const socket = openAuthenticatedWebSocket(wsUrl, token);
       activeSocket = socket;
       wsRef.current = socket;
 

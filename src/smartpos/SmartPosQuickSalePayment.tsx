@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { API_BASE_URL } from '../config/api';
 import type { SmartPosSession } from './smartPosSession';
+import { operationalFetch } from '../utils/operationalRequest';
 
 type QuickSale = {
   id: string;
@@ -61,7 +62,7 @@ export default function SmartPosQuickSalePayment({
     setIsSubmitting(true);
     setError('');
     try {
-      const response = await fetch(`${API_BASE_URL}/caixa/comandas/${encodeURIComponent(sale.id)}/pagar`, {
+      const response = await operationalFetch(`${API_BASE_URL}/caixa/comandas/${encodeURIComponent(sale.id)}/pagar`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${session.token}`,

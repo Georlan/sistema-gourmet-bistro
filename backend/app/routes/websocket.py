@@ -13,6 +13,22 @@ router = APIRouter(
     tags=["WebSocket"]
 )
 
+KOMA_AUTH_SUBPROTOCOL = "koma-auth"
+
+
+def _websocket_auth_token(websocket: WebSocket, legacy_query_token: str | None) -> str | None:
+    """Prefere o subprotocolo, que não é incluído na URL dos logs de acesso."""
+
+    protocols = websocket.scope.get("subprotocols") or []
+    for index, protocol in enumerate(protocols[:-1]):
+        if protocol == KOMA_AUTH_SUBPROTOCOL:
+            candidate = str(protocols[index + 1] or "").strip()
+            if candidate:
+                return candidate
+    # Compatibilidade durante a atualização de abas já abertas. O filtro de
+    # logging mascara essa query antes que o Uvicorn a grave.
+    return (legacy_query_token or "").strip() or None
+
 
 def _validated_internal_websocket_identity(token: str, requested_user_id: str):
     """Resolve a identidade canônica do socket interno e falha fechado.
@@ -139,6 +155,7 @@ async def websocket_endpoint(
     if not await validate_websocket_origin(websocket):
         return
 
+    token = _websocket_auth_token(websocket, token)
     if not token:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return

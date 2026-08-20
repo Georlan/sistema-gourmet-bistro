@@ -3257,7 +3257,7 @@ export function CaixaPanel({
         // A mesa é uma única conta monetária. O backend distribui esta baixa,
         // de forma atômica, entre todas as comandas abertas da mesa. A seleção
         // é opcional e serve para registrar quais itens foram quitados.
-        const res = await fetch(`${apiBaseUrl}/caixa/mesas/${selectedOrder.mesaId}/pagar`, {
+        const res = await operationalFetch(`${apiBaseUrl}/caixa/mesas/${selectedOrder.mesaId}/pagar`, {
           method: 'POST',
           headers: { ...authHeaders, 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -3304,7 +3304,7 @@ export function CaixaPanel({
             ? originalVal - comandaEntries.slice(0, idx).reduce((sum, entry) => sum + (entry[1].subtotal / totalSubtotal) * originalVal, 0)
             : originalVal * ratio;
 
-          const res = await fetch(`${apiBaseUrl}/caixa/comandas/${cid}/pagar`, {
+          const res = await operationalFetch(`${apiBaseUrl}/caixa/comandas/${cid}/pagar`, {
             method: 'POST',
             headers: { ...authHeaders, 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -3341,7 +3341,7 @@ export function CaixaPanel({
           // Valor a pagar para esta comanda
           const valToPay = Math.min(remainingVal, comTotal);
 
-          const res = await fetch(`${apiBaseUrl}/caixa/comandas/${cid}/pagar`, {
+          const res = await operationalFetch(`${apiBaseUrl}/caixa/comandas/${cid}/pagar`, {
             method: 'POST',
             headers: { ...authHeaders, 'Content-Type': 'application/json' },
             body: JSON.stringify({

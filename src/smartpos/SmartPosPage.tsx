@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { KomaLogo } from '../components/KomaLogo';
 import { API_BASE_URL, WS_BASE_URL } from '../config/api';
+import { openAuthenticatedWebSocket } from '../utils/authenticatedWebSocket';
 import SmartPosOrderingFlow from './SmartPosOrderingFlow';
 import SmartPosPaymentFlow from './SmartPosPaymentFlow';
 import SmartPosHistory from './SmartPosHistory';
@@ -303,8 +304,8 @@ export default function SmartPosPage() {
 
     const connect = () => {
       if (stopped) return;
-      const wsUrl = `${WS_BASE_URL}/ws/${encodeURIComponent(session.user.id)}?token=${encodeURIComponent(session.token)}`;
-      socket = new WebSocket(wsUrl);
+      const wsUrl = `${WS_BASE_URL}/ws/${encodeURIComponent(session.user.id)}`;
+      socket = openAuthenticatedWebSocket(wsUrl, session.token);
 
       socket.onopen = () => {
         if (stopped) return;

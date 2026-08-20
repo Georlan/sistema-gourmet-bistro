@@ -6,7 +6,7 @@ Gerencia a execução em loop (polling + heartbeat) com resiliência e idempotê
 import time
 import logging
 from config import AgentConfig, is_automatic_printer_name
-from api_client import KomaApiClient
+from api_client import AgentAuthenticationError, KomaApiClient
 from journal import PrintJournal
 from adapters import get_adapter
 from dispatcher import dispatch_claimed_jobs
@@ -15,7 +15,7 @@ log = logging.getLogger("print-agent.worker")
 
 RECONCILIATION_INTERVAL_SECONDS = 5.0
 DIAGNOSTIC_REFRESH_INTERVAL_SECONDS = 5.0
-NOT_READY_LOG_INTERVAL_SECONDS = 30.0
+NOT_READY_LOG_INTERVAL_SECONDS = 300.0
 
 
 def bind_single_ready_windows_usb(
@@ -434,6 +434,10 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
         except KeyboardInterrupt:
             print("\n[DAEMON] Encerrando Kôma Print Agent graciosamente...")
             break
+        except AgentAuthenticationError:
+            # A camada principal limpa apenas a credencial rejeitada e abre o
+            # pareamento. Continuar aqui geraria 401 a cada heartbeat.
+            raise
         except Exception as e:
             log.error(f"[ERRO WORKER] Exceção no loop principal: {e}")
 

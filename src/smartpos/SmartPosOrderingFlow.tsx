@@ -22,6 +22,7 @@ import { API_BASE_URL, WS_BASE_URL } from '../config/api';
 import { getIngredientObservationPresets, normalizeText } from '../domain';
 import type { SmartPosSession } from './smartPosSession';
 import { makeOperationKey, operationalFetch } from '../utils/operationalRequest';
+import { openAuthenticatedWebSocket } from '../utils/authenticatedWebSocket';
 
 type MesaResumo = {
   id: number;
@@ -155,8 +156,8 @@ export default function SmartPosOrderingFlow({
 
     const connect = () => {
       if (stopped) return;
-      const wsUrl = `${WS_BASE_URL}/ws/${encodeURIComponent(session.user.id)}?token=${encodeURIComponent(session.token)}`;
-      socket = new WebSocket(wsUrl);
+      const wsUrl = `${WS_BASE_URL}/ws/${encodeURIComponent(session.user.id)}`;
+      socket = openAuthenticatedWebSocket(wsUrl, session.token);
 
       socket.onopen = () => {
         if (!stopped) setIsRealtimeConnected(true);
