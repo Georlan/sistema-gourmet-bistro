@@ -274,7 +274,7 @@ def update_disponibilidade_lote(
     product_ids = list(dict.fromkeys(product_id.strip() for product_id in data.produto_ids if product_id.strip()))
     if not product_ids:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Informe ao menos um produto válido.",
         )
 
@@ -459,7 +459,7 @@ def importar_cardapio(
 
                 if destino not in ("COZINHA", "BAR", "NENHUM"):
                     raise HTTPException(
-                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                         detail=f"Destino de impressão inválido na categoria {cat_nome}.",
                     )
 

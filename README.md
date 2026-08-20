@@ -61,6 +61,11 @@ O KÔMA resolve o desafio da fragmentação de sistemas em estabelecimentos de a
 - Spooler nativo em Python (`print-agent`) para impressoras térmicas USB ou de rede.
 - Impressão automática por setor (cozinha, bar, balcão) e corte de papel.
 
+### 💳 SmartPOS
+- Fluxo F1–F12 para contexto do operador, pedidos, `PaymentIntent`, idempotência, liquidação, split, cancelamento e recuperação manual.
+- Bridge Android de desenvolvimento com terminal simulado e reconciliação segura após retry/reinício.
+- A integração real PagBank/PlugPag, o estorno no adquirente e a homologação física ainda são gates obrigatórios da Fase A.
+
 ### 🛡️ Multi-Tenant & Segurança (LGPD)
 - Isolamento rígido de dados por restaurante (`restaurante_id`) com Row Level Security (RLS) no PostgreSQL.
 - Criptografia Fernet para dados sensíveis de clientes (PII).
@@ -142,8 +147,8 @@ sistema-gourmet-bistro/
 
 Antes de iniciar, certifique-se de ter instalado em sua máquina:
 
-- **Node.js**: versão 18.0.0 ou superior
-- **Python**: versão 3.10 ou superior (Python 3.12 recomendado)
+- **Node.js**: versão 22 ou superior
+- **Python**: versão 3.12
 - **Git**: para clonagem do repositório
 
 ---
@@ -168,16 +173,16 @@ pip install -r backend/requirements.txt
 # Configurar variáveis de ambiente
 cp .env.example .env
 
-# Executar a aplicação backend
-uvicorn app.main:app --reload --port 8000
+# Executar a aplicação backend a partir da raiz do repositório
+python -m uvicorn app.main:app --app-dir backend --reload --port 8000
 ```
 O backend estará acessível em `http://localhost:8000` e a documentação Swagger em `http://localhost:8000/docs`.
 
 ### 3. Configurar o Frontend (React + Vite)
 Em um novo terminal:
 ```bash
-# Instalar dependências do Node.js
-npm install
+# Instalar exatamente as dependências registradas no lockfile
+npm ci
 
 # Iniciar servidor de desenvolvimento
 npm run dev
@@ -206,6 +211,9 @@ META_ACCESS_TOKEN="SEU_TOKEN_DE_ACESSO_META"
 # Impressão Térmica
 SIMULATE_PRINTER="True"
 PRINTER_NAME="Generic / Text Only"
+
+# SmartPOS: "pagbank_simulator" é somente desenvolvimento/teste
+KOMA_SMARTPOS_PROVIDER="disabled"
 ```
 
 ---
@@ -221,17 +229,22 @@ O KÔMA utiliza uma arquitetura multi-tenant por isolamento de registros baseada
 
 ## 🧪 Testes Automatizados & Qualidade
 
-O backend possui uma suíte abrangente de testes cobrindo isolamento multi-tenant, idempotência de pedidos, cálculo de caixa e envio de OTP por WhatsApp:
+O backend possui uma suíte isolada em SQLite para regressão local. O smoke operacional B1.4 usa PostgreSQL 17 efêmero em workflow próprio e não é substituído silenciosamente por SQLite.
 
 ```bash
-# Executar a suíte completa de testes no backend
-SECRET_KEY=dev_secret_key ENCRYPTION_KEY=32_bytes_dev_encryption_key_123 ./.venv/bin/pytest backend/tests/ -v
+# Instalar dependências de desenvolvimento do backend
+python -m pip install -r backend/requirements-dev.txt
 
-# Verificar compilação do frontend
+# Executar a suíte completa local; o conftest cria e remove o banco isolado
+python -m pytest backend/tests -q
+
+# Executar o recorte crítico usado pelo Quality Gate
+bash scripts/regression_check.sh
+
+# Verificar tipos, dependências e build do frontend
+npm run lint
+npm audit --audit-level=high
 npm run build
-
-# Verificar sintaxe dos serviços Python
-python3 -m py_compile backend/app/services/whatsapp.py
 ```
 
 ---
@@ -270,4 +283,4 @@ Veja o arquivo [LICENSE](LICENSE) para o texto completo da licença proprietári
 
 ## 🟢 Status do Projeto
 
-O KÔMA está em **desenvolvimento ativo e em uso operacional em produção**.
+O KÔMA está em **desenvolvimento ativo e em uso operacional em produção**. O SmartPOS permanece em beta técnica simulada até a integração e homologação do terminal físico.

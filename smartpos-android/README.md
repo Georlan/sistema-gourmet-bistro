@@ -1,6 +1,6 @@
 # Kôma SmartPOS Android Bridge
 
-Núcleo Kotlin + shell Android de desenvolvimento da SmartPOS. A Fase 8 mantém o domínio de pagamento independente do SDK PagBank e permite testar o ciclo do terminal sem hardware físico.
+Núcleo Kotlin + aplicativo Android de desenvolvimento do SmartPOS. O core F8–F12 mantém o domínio de pagamento independente do SDK PagBank e permite validar o ciclo completo de uma operação simulada. Este módulo ainda não processa cobranças reais.
 
 ## Garantias atuais
 
@@ -18,6 +18,8 @@ Núcleo Kotlin + shell Android de desenvolvimento da SmartPOS. A Fase 8 mantém 
 - a fila do terminal contém apenas intents `provider_integrado` ativos, do tenant atual, livres ou já vinculados ao mesmo terminal;
 - a `operationKey` é derivada de forma estável de `provider + terminal + intent`, sem entrada manual do operador;
 - nenhum dado sensível de cartão é armazenado pelo core.
+- aprovações confirmadas pelo simulador são liquidadas no backend, criando `Pagamento`, alocações financeiras e projeção no Caixa;
+- dinheiro, PIX e cartões manuais, split de pagamentos, reservas, cancelamento seguro e recuperação manual de estorno são cobertos pelo backend F9–F12.
 
 ## APK de desenvolvimento
 
@@ -25,12 +27,18 @@ O APK parte da raiz da API do Kôma, autentica e carrega restaurante, operador e
 
 O `terminalId` é derivado do Android ID e o estado operacional fica no diretório privado do aplicativo. Retry ou reinício preservam a mesma chave de operação e entram em reconciliação.
 
-O build de CI executa os testes do core e `:app:assembleDebug`, publicando o APK como artifact `koma-smartpos-dev-apk`.
+O workflow Android executa os testes do core e `:app:assembleDebug`, publicando o APK como artifact `koma-smartpos-dev-apk`. O artifact é exclusivo para desenvolvimento e homologação interna.
 
 ## Ainda fora de escopo
 
 - SDK PlugPag real;
-- UX final da SmartPOS;
+- adapter de provider real no backend;
+- estorno físico confirmado pelo adquirente;
+- UX final e processo de atualização do aplicativo;
+- APK release assinado e distribuição controlada;
 - terminal físico/homologação PagBank;
-- criação de `Pagamento`, ledger, baixa de item ou fechamento de comanda;
-- F9/liquidação.
+- testes de campo, observabilidade e runbook de suporte.
+
+## Ativação segura
+
+O backend usa `KOMA_SMARTPOS_PROVIDER=disabled` por padrão. Somente ambientes de desenvolvimento/teste devem definir `pagbank_simulator`. A existência do APK ou da capability `smartpos` não transforma o simulador em meio de pagamento real.

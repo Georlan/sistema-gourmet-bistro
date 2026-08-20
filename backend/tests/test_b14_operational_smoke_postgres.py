@@ -10,6 +10,9 @@ impressão -> pagar -> retry idempotente -> fechar caixa.
 A saída física da impressora continua sendo um gate manual separado.
 """
 
+import os
+
+import pytest
 from fastapi.testclient import TestClient
 
 from app.database import SessionLocal, current_restaurante_id
@@ -38,6 +41,12 @@ MESA_ID = 14
 CATEGORIA_ID = "cat-b14-smoke"
 PRODUTO_ID = "prod-b14-smoke"
 PRODUTO_VALOR = 42.0
+
+
+pytestmark = pytest.mark.skipif(
+    os.getenv("KOMA_PYTEST_USE_EXTERNAL_DATABASE", "false").lower() != "true",
+    reason="Smoke B1.4 exige o PostgreSQL efêmero do workflow dedicado.",
+)
 
 
 def _seed_smoke_fixture() -> None:

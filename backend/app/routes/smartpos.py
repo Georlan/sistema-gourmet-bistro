@@ -96,28 +96,28 @@ def _capture_for_method(method: str, requested: Optional[str]) -> str:
     allowed = _CAPTURE_OPTIONS_BY_METHOD.get(method)
     if allowed is None:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Forma de pagamento não suportada pelo SmartPOS.",
         )
 
     if method == "dinheiro":
         if requested is not None:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Dinheiro usa conferência manual e não aceita outro modo de captura.",
             )
         return "dinheiro_pendente"
 
     if method == "voucher":
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Voucher ainda não possui liquidação financeira na maquininha.",
         )
 
     capture = requested or "provider_integrado"
     if capture not in allowed:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Modo de captura incompatível com a forma de pagamento.",
         )
     return capture
@@ -229,7 +229,7 @@ def criar_payment_intent(
     normalized_key = payload.idempotency_key.strip()
     if len(normalized_key) < 8:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="A chave idempotente deve possuir ao menos 8 caracteres úteis.",
         )
     normalized_items = sorted(set(payload.item_ids or []))
@@ -309,20 +309,20 @@ def criar_payment_intent(
     # Conflitos de formato/valor continuam 422; concorrência entre parcelas é 409.
     if valor > saldo:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="O valor informado excede o saldo da mesa.",
         )
 
     if payload.escopo == "itens":
         if not normalized_items:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Selecione ao menos um item para receber por itens.",
             )
         by_id = {item.id: item for item in itens if not item.pago}
         if any(item_id not in by_id for item_id in normalized_items):
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Há item inválido, pago ou fora desta mesa.",
             )
         selected_total = sum(
@@ -331,12 +331,12 @@ def criar_payment_intent(
         )
         if selected_total != valor:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="O valor deve corresponder exatamente aos itens selecionados.",
             )
     elif normalized_items:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="item_ids só pode ser informado quando o escopo for por itens.",
         )
 
@@ -485,7 +485,7 @@ def confirmar_payment_intent_manual(
         valor_intent = _money(intent.valor)
         if valor_recebido < valor_intent:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="O valor recebido em dinheiro não pode ser menor que o valor a pagar.",
             )
         troco = _money(valor_recebido - valor_intent)
@@ -495,7 +495,7 @@ def confirmar_payment_intent_manual(
         )
     elif payload.valor_recebido is not None:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="valor_recebido só se aplica a pagamentos em dinheiro.",
         )
 

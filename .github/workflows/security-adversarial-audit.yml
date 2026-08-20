@@ -9,6 +9,14 @@ on:
       - 'backend/tools/security_b_db_assertions.py'
       - 'backend/alembic/versions/**'
       - '.github/workflows/security-adversarial-audit.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'backend/tools/security_adversarial_audit.py'
+      - 'backend/tools/security_a_db_assertions.py'
+      - 'backend/tools/security_b_db_assertions.py'
+      - 'backend/alembic/versions/**'
+      - '.github/workflows/security-adversarial-audit.yml'
   workflow_dispatch:
 
 permissions:
@@ -47,9 +55,9 @@ jobs:
       KOMA_SECURITY_AUDIT_REPORT: security-audit-report.json
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
           cache: pip
@@ -116,7 +124,7 @@ jobs:
 
       - name: Upload audit report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: koma-security-adversarial-audit-${{ github.run_id }}
           path: security-audit-report.json

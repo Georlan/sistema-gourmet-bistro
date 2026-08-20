@@ -40,14 +40,14 @@ def criar_pedido_online(
     modalidade = payload.tipo_pedido.strip().lower()
     if modalidade not in {"delivery", "retirada"}:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="tipo_pedido deve ser 'delivery' ou 'retirada'."
         )
 
     endereco_entrega = payload.endereco_entrega.strip()
     if modalidade == "delivery" and not endereco_entrega:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="O endereço de entrega é obrigatório para pedidos de delivery."
         )
 

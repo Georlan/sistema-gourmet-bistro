@@ -4,6 +4,12 @@ on:
   pull_request:
     branches:
       - main
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/**'
+      - '.github/workflows/b14-operational-smoke.yml'
   workflow_dispatch:
 
 concurrency:
@@ -41,13 +47,14 @@ jobs:
       DATABASE_URL: postgresql+psycopg2://postgres:postgres@127.0.0.1:5432/koma_b14_smoke
       MIGRATION_DATABASE_URL: postgresql+psycopg2://postgres:postgres@127.0.0.1:5432/koma_b14_smoke
       RUN_MIGRATIONS_ON_STARTUP: "false"
+      KOMA_PYTEST_USE_EXTERNAL_DATABASE: "true"
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
           cache: pip

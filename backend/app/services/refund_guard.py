@@ -10,7 +10,6 @@ from ..financial_models import PagamentoAlocacao, PagamentoEstorno
 from ..financial_refund_models import PagamentoEstornoAlocacao
 from ..models import Pagamento
 from ..smartpos_models import SmartPosPaymentIntent
-from ..smartpos_models import SmartPosPaymentIntent
 from .cash_reconciliation import (
     RefundDomainError,
     create_refund,

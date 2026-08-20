@@ -330,7 +330,7 @@ def fechar_turno_reconciliado(
         if pending:
             parts.append(f"{pending} pagamento(s) aguardando confirmação")
         if open_commands:
-            parts.append(f"{open_commands} comanda(s) aberta(s)")
+            parts.append(f"{open_commands} comanda(s) ainda aberta(s)")
         raise HTTPException(
             status_code=409,
             detail="Resolva as pendências antes de fechar o caixa: " + " e ".join(parts) + ".",
@@ -358,7 +358,10 @@ def fechar_turno_reconciliado(
     if divergent and not observation:
         raise HTTPException(
             status_code=400,
-            detail="Diferença identificada. Informe uma observação para auditoria.",
+            detail=(
+                "Diferença de caixa identificada. É obrigatório informar o motivo "
+                "na observação para auditoria gerencial."
+            ),
         )
 
     closed_at = datetime.datetime.now(datetime.timezone.utc)

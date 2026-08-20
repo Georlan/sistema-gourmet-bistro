@@ -178,7 +178,7 @@ def cancelar_consumo_mesa(
     motivo = " ".join(payload.motivo.split())
     if len(motivo) < 3:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Informe um motivo válido com pelo menos 3 caracteres.",
         )
 

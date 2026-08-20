@@ -150,7 +150,7 @@ def resolve_restaurant_id(
     if identifier:
         if len(identifier) > 128:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Identificador de restaurante inválido.",
             )
 

@@ -114,6 +114,11 @@ def setup_database():
 
         # --- Comanda FORA do período (90 dias atrás) ---
         past90 = now - datetime.timedelta(days=90)
+        db.add(CaixaTurno(
+            id=2, restaurante_id=1, aberto_por_id="u-admin",
+            aberto_em=past90, fechado_em=past90 + datetime.timedelta(hours=8),
+            fechado_por_id="u-admin", saldo_inicial=0.0, status="fechado",
+        ))
         c2 = Comanda(
             id="cmd-old", restaurante_id=1, garcom_id="u-garcom",
             fechada=True, fechado_em=past90, criado_em=past90,
@@ -129,7 +134,7 @@ def setup_database():
         db.add(Item(id="item-old", comanda_id="cmd-old", lancamento_id="lan-2",
                     produto_id="p-1", preco_unit=25.0, status="entregue", restaurante_id=1))
         db.add(Pagamento(
-            id="pay-old", restaurante_id=1, comanda_id="cmd-old", turno_id=1,
+            id="pay-old", restaurante_id=1, comanda_id="cmd-old", turno_id=2,
             valor=25.0, metodo="dinheiro", status="aprovado", criado_em=past90,
             idempotency_key="report-pay-old",
         ))
@@ -202,6 +207,12 @@ def test_visao_geral_uses_local_payment_day_and_ignores_empty_comandas():
     try:
         paid_at_utc = datetime.datetime(2026, 8, 12, 2, 31, 17)
         opened_at_utc = datetime.datetime(2026, 8, 11, 21, 30)
+        db.add(CaixaTurno(
+            id=3, restaurante_id=1, aberto_por_id="u-admin",
+            aberto_em=opened_at_utc,
+            fechado_em=opened_at_utc + datetime.timedelta(hours=8),
+            fechado_por_id="u-admin", saldo_inicial=0.0, status="fechado",
+        ))
         db.add(Comanda(
             id="cmd-real", restaurante_id=1, garcom_id="u-garcom",
             fechada=True, fechado_em=paid_at_utc, criado_em=opened_at_utc,
@@ -224,7 +235,7 @@ def test_visao_geral_uses_local_payment_day_and_ignores_empty_comandas():
             produto_id="p-1", preco_unit=100.0, status="entregue", restaurante_id=1,
         ))
         db.add(Pagamento(
-            id="pay-real", restaurante_id=1, comanda_id="cmd-real", turno_id=1,
+            id="pay-real", restaurante_id=1, comanda_id="cmd-real", turno_id=3,
             valor=100.0, metodo="pix", status="aprovado", criado_em=paid_at_utc,
             idempotency_key="report-pay-real",
         ))
@@ -245,12 +256,16 @@ def test_visao_geral_uses_local_payment_day_and_ignores_empty_comandas():
     assert data["ticket_medio"] == 100.0
     assert data["vendas_por_dia"] == [{
         "data": "2026-08-11",
+        "bruto": 100.0,
+        "estornos": 0.0,
         "total": 100.0,
         "quantidade_pedidos": 1,
     }]
     assert next(row for row in data["horarios_pico"] if row["hora"] == "23h") == {
         "hora": "23h",
         "total_pedidos": 1,
+        "bruto": 100.0,
+        "estornos": 0.0,
         "faturamento": 100.0,
     }
 

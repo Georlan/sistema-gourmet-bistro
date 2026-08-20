@@ -2,3 +2,4 @@
 
 # Dependências exclusivas da suíte de qualidade/CI.
 pytest>=8.0,<9.0
+httpx2>=2.12,<3.0
