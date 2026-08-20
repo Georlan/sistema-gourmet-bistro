@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -15,6 +15,11 @@ from ..security import (
     require_permission,
     verify_password,
 )
+from ..services.staff_login_rate_limit import (
+    clear_staff_login_failures,
+    record_staff_login_failure,
+    staff_login_is_blocked,
+)
 from ..services.whatsapp import enviar_texto_whatsapp
 from ..websocket_manager import manager
 
@@ -24,6 +29,13 @@ router = APIRouter(
     prefix="/auth",
     tags=["Autenticação"]
 )
+
+
+def _client_ip(request: Request) -> str:
+    forwarded = (request.headers.get("x-forwarded-for") or "").split(",", 1)[0].strip()
+    if forwarded:
+        return forwarded
+    return request.client.host if request.client else "unknown"
 
 
 def _lookup_users_before_tenant(
@@ -127,19 +139,48 @@ def _lookup_invite_before_tenant(db: Session, token: str):
     ).mappings().first()
 
 @router.post("/login", response_model=LoginResponse)
-def login(login_data: LoginRequest, db: Session = Depends(get_db)):
+def login(
+    login_data: LoginRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
     """
     Realiza a autenticação do usuário por e-mail ou telefone.
     Retorna o token JWT e as informações do usuário.
     """
     username_val = (login_data.username or "").strip().lower()
+    client_ip = _client_ip(request)
     candidates = _lookup_users_before_tenant(
         db,
         username_val,
         login_data.restaurante_id,
     )
+    candidate_restaurants = [candidate.get("restaurante_id") for candidate in candidates]
+
+    if candidates and staff_login_is_blocked(
+        candidate_restaurants,
+        identifier=username_val,
+        client_ip=client_ip,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Muitas tentativas de login. Aguarde alguns minutos e tente novamente.",
+        )
+
     identity = _select_login_identity(candidates, login_data.password)
     if not identity:
+        blocked = False
+        if candidates:
+            blocked = record_staff_login_failure(
+                candidate_restaurants,
+                identifier=username_val,
+                client_ip=client_ip,
+            )
+        if blocked:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Muitas tentativas de login. Aguarde alguns minutos e tente novamente.",
+            )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Usuário ou senha incorretos"
@@ -170,6 +211,12 @@ def login(login_data: LoginRequest, db: Session = Depends(get_db)):
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Conta de usuário pendente, inativa ou bloqueada.",
         )
+
+    clear_staff_login_failures(
+        restaurante_id,
+        identifier=username_val,
+        client_ip=client_ip,
+    )
 
     access_token = create_access_token(subject=usuario.id, restaurante_id=usuario.restaurante_id)
     user_data = _login_user_payload(usuario)
