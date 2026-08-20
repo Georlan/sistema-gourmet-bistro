@@ -179,7 +179,7 @@ export default function OnlineOrderEmergencyActions() {
         event.stopPropagation();
         openEmergencyActions();
       }}
-      className="ml-2 inline-flex h-7 items-center gap-1.5 rounded-lg border border-red-900/60 bg-red-950/20 px-2 text-[10px] font-bold uppercase tracking-wide text-red-300 transition hover:bg-red-950/35"
+      className="ml-2 inline-flex h-7 items-center gap-1.5 rounded-lg border border-red-300 bg-red-50 px-2 text-[10px] font-bold uppercase tracking-wide text-red-800 transition hover:bg-red-100 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-300 dark:hover:bg-red-950/35"
       title="Ações de exceção para pedidos online ativos"
     >
       <ShieldAlert size={12} /> Exceção

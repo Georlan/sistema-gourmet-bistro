@@ -1973,6 +1973,12 @@ body {
   font-size: 0.625rem !important;
 }
 
+@media (max-width: 1023px) {
+  .cashier-sidebar:not(.cashier-sidebar--mobile) {
+    display: none !important;
+  }
+}
+
 @media (max-width: 768px) {
   .cashier-content {
     padding: 0.7rem !important;
