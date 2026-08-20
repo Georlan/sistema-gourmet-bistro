@@ -13,7 +13,26 @@ data class SmartPosContext(
     val operadorId: String,
     val operadorNome: String,
     val operadorRole: String,
+    val providerIntegratedAvailable: Boolean,
+    val terminalMode: String,
 )
+
+data class RecentSmartPosOperation(
+    val intentId: String,
+    val mesaNome: String,
+    val amountMinor: Long,
+    val method: String,
+    val status: String,
+    val createdAt: String,
+    val capture: String,
+    val paymentId: String?,
+) {
+    fun displayLabel(): String {
+        val reais = BigDecimal(amountMinor).movePointLeft(2).setScale(2)
+            .toPlainString().replace('.', ',')
+        return "$mesaNome · ${method.replaceFirstChar { it.uppercase() }} · R$ $reais · $status"
+    }
+}
 
 data class PendingProviderIntent(
     val intentId: String,
@@ -61,7 +80,29 @@ class KomaSmartPosSessionApi(private val transport: HttpTransport) {
             operadorId = JsonField.string(operador, "id"),
             operadorNome = JsonField.string(operador, "nome"),
             operadorRole = JsonField.string(operador, "role"),
+            providerIntegratedAvailable = JsonField.boolean(response.body, "provider_integrado_disponivel"),
+            terminalMode = JsonField.string(response.body, "terminal_mode"),
         )
+    }
+
+    fun recentOperations(limit: Int = 5): List<RecentSmartPosOperation> {
+        require(limit in 1..20) { "O limite deve estar entre 1 e 20." }
+        val response = transport.get("/auth/smartpos/payment-intents/recentes?limit=$limit")
+        requireSuccess(response, "histórico SmartPOS")
+        return JsonField.objectArray(response.body).map { item ->
+            RecentSmartPosOperation(
+                intentId = JsonField.string(item, "intent_id"),
+                mesaNome = JsonField.string(item, "mesa_nome"),
+                amountMinor = BigDecimal(JsonField.string(item, "amount"))
+                    .movePointRight(2)
+                    .longValueExact(),
+                method = JsonField.string(item, "method"),
+                status = JsonField.string(item, "status"),
+                createdAt = JsonField.string(item, "created_at"),
+                capture = JsonField.string(item, "capture"),
+                paymentId = JsonField.nullableString(item, "payment_id"),
+            )
+        }
     }
 
     fun pendingProviderIntents(

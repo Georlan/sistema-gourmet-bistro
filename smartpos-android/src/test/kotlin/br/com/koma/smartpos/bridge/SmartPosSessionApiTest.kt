@@ -43,6 +43,8 @@ class SmartPosSessionApiTest {
             {
               "smartpos_enabled":true,
               "turno_aberto":true,
+              "provider_integrado_disponivel":true,
+              "terminal_mode":"simulator",
               "restaurante":{"id":7,"nome":"Bistrô Teste"},
               "operador":{"id":"user-1","nome":"Operador","role":"caixa","restaurante_id":7}
             }
@@ -53,11 +55,17 @@ class SmartPosSessionApiTest {
               {"intent_id":"i-2","mesa_id":8,"amount":"18.00","method":"pix","status":"processando","created_at":"2026-08-18T20:01:00+00:00","provider":"pagbank","terminal_id":"POS-1"}
             ]
         """.trimIndent()
+        val recentJson = """
+            [
+              {"intent_id":"i-2","mesa_id":8,"mesa_nome":"Mesa 8","operador_id":"user-1","operador_nome":"Operador","amount":"18.00","method":"pix","capture":"registro_externo","status":"aprovada","created_at":"2026-08-18T20:01:00+00:00","status_at":"2026-08-18T20:02:00+00:00","settled_at":"2026-08-18T20:02:00+00:00","provider":null,"terminal_id":null,"provider_reference":null,"provider_last_error":null,"payment_id":"pay-1"}
+            ]
+        """.trimIndent()
         val transport = FakeTransport(
             gets = ArrayDeque(
                 listOf(
                     HttpResponsePayload(200, contextJson),
                     HttpResponsePayload(200, queueJson),
+                    HttpResponsePayload(200, recentJson),
                 )
             )
         )
@@ -68,6 +76,8 @@ class SmartPosSessionApiTest {
         assertTrue(context.turnoAberto)
         assertEquals("Bistrô Teste", context.restauranteNome)
         assertEquals("Operador", context.operadorNome)
+        assertTrue(context.providerIntegratedAvailable)
+        assertEquals("simulator", context.terminalMode)
 
         val intents = api.pendingProviderIntents("POS-1")
         assertEquals(2, intents.size)
@@ -76,6 +86,13 @@ class SmartPosSessionApiTest {
         assertEquals(null, intents[0].provider)
         assertEquals("POS-1", intents[1].terminalId)
         assertTrue(transport.getRequests.last().startsWith("/auth/smartpos/payment-intents/pendentes-provider?"))
+
+        val recent = api.recentOperations()
+        assertEquals(1, recent.size)
+        assertEquals("Mesa 8", recent.single().mesaNome)
+        assertEquals(1800, recent.single().amountMinor)
+        assertEquals("pay-1", recent.single().paymentId)
+        assertEquals("/auth/smartpos/payment-intents/recentes?limit=5", transport.getRequests.last())
     }
 
     @Test

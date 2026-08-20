@@ -10,7 +10,11 @@ from ..models import Usuario
 from ..security import require_permission
 from ..services.capabilities import has_capability
 from ..services.payment_providers.base import ProviderOutcome
-from ..services.payment_providers.registry import ProviderUnavailable, get_configured_provider
+from ..services.payment_providers.registry import (
+    ProviderUnavailable,
+    get_configured_provider,
+    integrated_provider_available,
+)
 from ..services.smartpos_provider_orchestrator import (
     SmartPosProviderError,
     execute_provider_payment,
@@ -125,6 +129,17 @@ def _require_smartpos(db: Session, restaurante_id: int) -> None:
         )
 
 
+def _require_integrated_provider() -> None:
+    if not integrated_provider_available():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "O terminal integrado está desabilitado neste ambiente. "
+                "O simulador só pode operar em desenvolvimento ou teste."
+            ),
+        )
+
+
 def _load_pending_provider_intents(
     db: Session,
     *,
@@ -168,6 +183,7 @@ def listar_payment_intents_pendentes_provider(
     """Lista somente intents integrados que este terminal pode iniciar ou reconciliar."""
     restaurante_id = require_tenant_id()
     _require_smartpos(db, restaurante_id)
+    _require_integrated_provider()
     intents = _load_pending_provider_intents(
         db,
         restaurante_id=restaurante_id,
@@ -202,6 +218,7 @@ def preparar_payment_intent_terminal(
     """Reserva a operação para um terminal; não chama o SDK Android pelo backend."""
     restaurante_id = require_tenant_id()
     _require_smartpos(db, restaurante_id)
+    _require_integrated_provider()
     intent = _load_intent(db, restaurante_id, intent_id)
     try:
         command = prepare_terminal_command(
@@ -244,6 +261,7 @@ def registrar_resultado_terminal(
     """Persiste o retorno do terminal e liquida aprovações no financeiro canônico."""
     restaurante_id = require_tenant_id()
     _require_smartpos(db, restaurante_id)
+    _require_integrated_provider()
     intent = _load_intent(db, restaurante_id, intent_id)
     try:
         applied = apply_terminal_result(

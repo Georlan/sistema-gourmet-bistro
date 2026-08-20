@@ -37,7 +37,9 @@ USER_ID = "smartpos-settlement-user"
 
 
 @pytest.fixture(autouse=True)
-def setup_settlement_flow():
+def setup_settlement_flow(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "test")
+    monkeypatch.setenv("KOMA_SMARTPOS_PROVIDER", "pagbank_simulator")
     Base.metadata.create_all(bind=engine)
     token = current_restaurante_id.set(RESTAURANTE_ID)
     db = SessionLocal()

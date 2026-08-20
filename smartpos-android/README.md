@@ -18,12 +18,13 @@ Núcleo Kotlin + aplicativo Android de desenvolvimento do SmartPOS. O core F8–
 - a fila do terminal contém apenas intents `provider_integrado` ativos, do tenant atual, livres ou já vinculados ao mesmo terminal;
 - a `operationKey` é derivada de forma estável de `provider + terminal + intent`, sem entrada manual do operador;
 - nenhum dado sensível de cartão é armazenado pelo core.
-- aprovações confirmadas pelo simulador são liquidadas no backend, criando `Pagamento`, alocações financeiras e projeção no Caixa;
+- aprovações confirmadas pelo simulador só são aceitas em desenvolvimento/teste e então exercitam a liquidação completa no backend;
 - dinheiro, PIX e cartões manuais, split de pagamentos, reservas, cancelamento seguro e recuperação manual de estorno são cobertos pelo backend F9–F12.
+- as cinco operações mais recentes continuam disponíveis no celular mesmo sem integração física;
 
 ## APK de desenvolvimento
 
-O APK parte da raiz da API do Kôma, autentica e carrega restaurante, operador e estado do caixa. Depois lista os recebimentos integrados disponíveis para aquele terminal. O resultado do hardware ainda é escolhido no `FakeBridge` (`approved`, `declined`, `pending`, `timeout`, `error`) para exercitar o fluxo completo sem maquininha.
+O APK parte da raiz da API do Kôma, autentica e carrega restaurante, operador, estado do caixa, modo do terminal e últimas operações. Em produção sem provider ele funciona como diagnóstico/consulta e não oferece a simulação. Em desenvolvimento/teste, lista os recebimentos integrados disponíveis e permite escolher no `FakeBridge` (`approved`, `declined`, `pending`, `timeout`, `error`) o resultado necessário para exercitar o fluxo completo sem maquininha.
 
 O `terminalId` é derivado do Android ID e o estado operacional fica no diretório privado do aplicativo. Retry ou reinício preservam a mesma chave de operação e entram em reconciliação.
 

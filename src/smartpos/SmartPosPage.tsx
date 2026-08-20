@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   ChevronRight,
+  History,
   Loader2,
   LockKeyhole,
   LogOut,
@@ -10,12 +11,14 @@ import {
   RefreshCw,
   ShieldCheck,
   ShoppingBag,
+  Smartphone,
   Table2,
 } from 'lucide-react';
 import { KomaLogo } from '../components/KomaLogo';
 import { API_BASE_URL, WS_BASE_URL } from '../config/api';
 import SmartPosOrderingFlow from './SmartPosOrderingFlow';
 import SmartPosPaymentFlow from './SmartPosPaymentFlow';
+import SmartPosHistory from './SmartPosHistory';
 import {
   clearSmartPosSession,
   getSmartPosSession,
@@ -33,6 +36,8 @@ type SmartPosContext = {
   mesas_disponiveis: boolean;
   pedidos_disponiveis: boolean;
   venda_rapida_disponivel: boolean;
+  provider_integrado_disponivel: boolean;
+  terminal_mode: 'disabled' | 'simulator';
   restaurante?: {
     id: number;
     nome: string;
@@ -71,7 +76,7 @@ type Comanda = {
   itens: Item[];
 };
 
-type Screen = 'home' | 'mesas' | 'mesa' | 'pedido' | 'receber' | 'venda-rapida';
+type Screen = 'home' | 'mesas' | 'mesa' | 'pedido' | 'receber' | 'venda-rapida' | 'historico';
 
 function roleLabel(role: SmartPosRole) {
   if (role === 'garcom') return 'Garçom';
@@ -604,6 +609,7 @@ export default function SmartPosPage() {
             comandas={selectedComandas}
             onBack={() => void loadMesas('mesa')}
             onSessionInvalid={handleLogout}
+            integratedProviderAvailable={Boolean(context?.provider_integrado_disponivel)}
           />
         </div>
       </main>
@@ -679,6 +685,21 @@ export default function SmartPosPage() {
     );
   }
 
+  if (screen === 'historico') {
+    return (
+      <main className="min-h-dvh bg-koma-page text-koma-foreground">
+        <div className="mx-auto min-h-dvh w-full max-w-md px-4 pb-8 pt-4 sm:px-6">
+          <Header />
+          <SmartPosHistory
+            session={session}
+            restauranteNome={context?.restaurante?.nome || 'Restaurante'}
+            onSessionInvalid={handleLogout}
+          />
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-dvh bg-koma-page text-koma-foreground">
       <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-4 pb-6 pt-4 sm:px-6">
@@ -701,6 +722,17 @@ export default function SmartPosPage() {
             <button type="button" onClick={() => void loadMesas('mesas')} disabled={!context?.mesas_disponiveis || isLoadingMesas} className="flex min-h-20 items-center gap-4 rounded-2xl border border-koma-accent bg-koma-accent px-4 py-3 text-left text-black shadow-lg shadow-koma-accent/10 disabled:cursor-not-allowed disabled:border-koma-border disabled:bg-koma-surface disabled:text-koma-muted disabled:shadow-none"><span className="flex size-11 items-center justify-center rounded-xl bg-black/10">{isLoadingMesas ? <Loader2 size={22} className="animate-spin" /> : context?.mesas_disponiveis ? <Table2 size={22} /> : <LockKeyhole size={21} />}</span><span className="min-w-0 flex-1"><span className="block text-base font-black">Mesas</span><span className="mt-0.5 block text-xs text-black/70">{context?.mesas_disponiveis ? 'Abrir ou continuar atendimento' : 'Caixa fechado'}</span></span>{context?.mesas_disponiveis && <ChevronRight size={18} />}</button>
 
             <button type="button" onClick={() => setScreen('venda-rapida')} disabled={!context?.venda_rapida_disponivel} className="flex min-h-18 items-center gap-4 rounded-2xl border border-koma-border bg-koma-surface px-4 py-3 text-left disabled:cursor-not-allowed disabled:opacity-50"><span className="flex size-11 items-center justify-center rounded-xl border border-koma-border bg-koma-page text-koma-accent"><ShoppingBag size={21} /></span><span className="min-w-0 flex-1"><span className="block text-sm font-extrabold">Venda rápida</span><span className="mt-0.5 block text-xs text-koma-muted">Pedido sem mesa</span></span><ChevronRight size={18} className="text-koma-muted" /></button>
+
+            <button type="button" onClick={() => setScreen('historico')} className="flex min-h-18 items-center gap-4 rounded-2xl border border-koma-border bg-koma-surface px-4 py-3 text-left"><span className="flex size-11 items-center justify-center rounded-xl border border-koma-border bg-koma-page text-koma-accent"><History size={21} /></span><span className="min-w-0 flex-1"><span className="block text-sm font-extrabold">Últimas operações</span><span className="mt-0.5 block text-xs text-koma-muted">Consultar e compartilhar comprovante</span></span><ChevronRight size={18} className="text-koma-muted" /></button>
+          </div>
+
+          <div className="mt-4 flex items-start gap-3 rounded-xl border border-koma-border bg-koma-surface px-3 py-3 text-xs text-koma-muted">
+            <Smartphone size={17} className="mt-0.5 shrink-0 text-koma-accent" />
+            {context?.provider_integrado_disponivel ? (
+              <p><strong className="text-koma-foreground">Modo de homologação.</strong> O simulador integrado está ativo somente para validar o fluxo técnico.</p>
+            ) : (
+              <p><strong className="text-koma-foreground">Modo celular ativo.</strong> Dinheiro e cobranças feitas em outra maquininha já podem ser registradas. A captura integrada permanece bloqueada até a homologação do terminal.</p>
+            )}
           </div>
         </section>
       </div>

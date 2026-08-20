@@ -19,6 +19,7 @@ import br.com.koma.smartpos.bridge.KomaSmartPosSessionApi
 import br.com.koma.smartpos.bridge.KomaTerminalBackendApi
 import br.com.koma.smartpos.bridge.PaymentOutcome
 import br.com.koma.smartpos.bridge.PendingProviderIntent
+import br.com.koma.smartpos.bridge.RecentSmartPosOperation
 import br.com.koma.smartpos.bridge.SmartPosContext
 import br.com.koma.smartpos.bridge.StableOperationKey
 import br.com.koma.smartpos.bridge.TerminalCoordinator
@@ -43,6 +44,7 @@ class MainActivity : Activity() {
     private var sessionApi: KomaSmartPosSessionApi? = null
     private var context: SmartPosContext? = null
     private var pendingIntents: List<PendingProviderIntent> = emptyList()
+    private var recentOperations: List<RecentSmartPosOperation> = emptyList()
 
     private lateinit var loginSection: LinearLayout
     private lateinit var operationSection: LinearLayout
@@ -53,6 +55,8 @@ class MainActivity : Activity() {
     private lateinit var loginButton: Button
     private lateinit var sessionInfo: TextView
     private lateinit var intentsSpinner: Spinner
+    private lateinit var simulatorSection: LinearLayout
+    private lateinit var recentOperationsView: TextView
     private lateinit var refreshButton: Button
     private lateinit var outcome: Spinner
     private lateinit var runButton: Button
@@ -122,18 +126,18 @@ class MainActivity : Activity() {
             setPadding(0, 0, 0, dp(10))
         }
         operationSection.addView(sessionInfo)
-        operationSection.addView(TextView(this).apply {
+        simulatorSection = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        simulatorSection.addView(TextView(this).apply {
             text = "Recebimentos integrados disponíveis"
             setPadding(0, dp(6), 0, dp(4))
         })
         intentsSpinner = Spinner(this)
-        operationSection.addView(intentsSpinner)
+        simulatorSection.addView(intentsSpinner)
         refreshButton = Button(this).apply {
-            text = "Atualizar recebimentos"
+            text = "Atualizar operações"
             setOnClickListener { refreshQueue() }
         }
-        operationSection.addView(refreshButton)
-        operationSection.addView(TextView(this).apply {
+        simulatorSection.addView(TextView(this).apply {
             text = "Resultado simulado do terminal"
             setPadding(0, dp(14), 0, dp(4))
         })
@@ -144,12 +148,25 @@ class MainActivity : Activity() {
                 listOf("APPROVED", "DECLINED", "PENDING", "TIMEOUT", "ERROR"),
             )
         }
-        operationSection.addView(outcome)
+        simulatorSection.addView(outcome)
         runButton = Button(this).apply {
             text = "Executar / reconciliar simulação"
             setOnClickListener { executeSelectedIntent() }
         }
-        operationSection.addView(runButton)
+        simulatorSection.addView(runButton)
+        operationSection.addView(simulatorSection)
+        operationSection.addView(refreshButton)
+        operationSection.addView(TextView(this).apply {
+            text = "Últimas 5 operações"
+            textSize = 18f
+            setPadding(0, dp(16), 0, dp(6))
+        })
+        recentOperationsView = TextView(this).apply {
+            text = "Nenhuma operação carregada."
+            setTextIsSelectable(true)
+            setPadding(0, 0, 0, dp(10))
+        }
+        operationSection.addView(recentOperationsView)
         logoutButton = Button(this).apply {
             text = "Sair"
             setOnClickListener { logout() }
@@ -199,20 +216,32 @@ class MainActivity : Activity() {
                 sessionToken = token
                 val loadedContext = localApi.context()
                 require(loadedContext.smartposEnabled) { "A maquininha não está habilitada para este restaurante." }
-                val intents = localApi.pendingProviderIntents(terminalId, PROVIDER)
-                Triple(localTransport, localApi, loadedContext to intents)
-            }.onSuccess { (localTransport, localApi, loaded) ->
+                val intents = if (loadedContext.providerIntegratedAvailable) {
+                    localApi.pendingProviderIntents(terminalId, PROVIDER)
+                } else {
+                    emptyList()
+                }
+                val recent = localApi.recentOperations()
+                LoadedSession(localTransport, localApi, loadedContext, intents, recent)
+            }.onSuccess { loaded ->
+                val localTransport = loaded.transport
+                val localApi = loaded.api
                 transport = localTransport
                 sessionApi = localApi
-                context = loaded.first
-                pendingIntents = loaded.second
+                context = loaded.context
+                pendingIntents = loaded.pending
+                recentOperations = loaded.recent
                 runOnUiThread {
                     password.setText("")
                     showLoggedIn()
                     renderSession()
                     renderQueue()
-                    status.text = "Sessão da maquininha carregada. Terminal: $terminalId\n" +
-                        "FakeBridge ativo: APPROVED/DECLINED/PENDING/TIMEOUT/ERROR podem ser simulados sem cartão."
+                    renderRecentOperations()
+                    status.text = if (loaded.context.providerIntegratedAvailable) {
+                        "Sessão de homologação carregada. FakeBridge ativo; nenhuma cobrança real."
+                    } else {
+                        "Sessão carregada em modo celular. Captura integrada bloqueada até a homologação da maquininha."
+                    }
                     setBusy(false)
                 }
             }.onFailure { error ->
@@ -221,6 +250,7 @@ class MainActivity : Activity() {
                 sessionApi = null
                 context = null
                 pendingIntents = emptyList()
+                recentOperations = emptyList()
                 runOnUiThread {
                     status.text = "Falha no login: ${error.message ?: error::class.java.simpleName}"
                     setBusy(false)
@@ -233,13 +263,24 @@ class MainActivity : Activity() {
         val api = sessionApi ?: return
         if (!silent) setBusy(true, "Atualizando recebimentos...")
         executor.execute {
-            runCatching { api.pendingProviderIntents(terminalId, PROVIDER) }
-                .onSuccess { intents ->
+            runCatching {
+                val intents = if (context?.providerIntegratedAvailable == true) {
+                    api.pendingProviderIntents(terminalId, PROVIDER)
+                } else {
+                    emptyList()
+                }
+                intents to api.recentOperations()
+            }
+                .onSuccess { (intents, recent) ->
                     pendingIntents = intents
+                    recentOperations = recent
                     runOnUiThread {
                         renderQueue()
+                        renderRecentOperations()
                         if (!silent) {
-                            status.text = if (intents.isEmpty()) {
+                            status.text = if (context?.providerIntegratedAvailable != true) {
+                                "Operações atualizadas. Captura integrada continua bloqueada neste ambiente."
+                            } else if (intents.isEmpty()) {
                                 "Nenhum recebimento integrado disponível para este terminal."
                             } else {
                                 "${intents.size} recebimento(s) disponível(is)."
@@ -318,7 +359,9 @@ class MainActivity : Activity() {
         sessionApi = null
         context = null
         pendingIntents = emptyList()
+        recentOperations = emptyList()
         renderQueue()
+        renderRecentOperations()
         showLoggedOut()
         status.text = "Sessão encerrada. O token não foi persistido."
     }
@@ -330,7 +373,9 @@ class MainActivity : Activity() {
             append(loaded.operadorNome).append(" · ").append(loaded.operadorRole)
             append(" · Caixa ").append(if (loaded.turnoAberto) "aberto" else "fechado")
             append("\nTerminal ").append(terminalId)
+            append("\nModo ").append(loaded.terminalMode)
         }
+        simulatorSection.visibility = if (loaded.providerIntegratedAvailable) View.VISIBLE else View.GONE
     }
 
     private fun renderQueue() {
@@ -345,6 +390,16 @@ class MainActivity : Activity() {
             labels,
         )
         runButton.isEnabled = pendingIntents.isNotEmpty() && sessionToken != null
+    }
+
+    private fun renderRecentOperations() {
+        recentOperationsView.text = if (recentOperations.isEmpty()) {
+            "Nenhuma operação registrada."
+        } else {
+            recentOperations.mapIndexed { index, operation ->
+                "${index + 1}. ${operation.displayLabel()}"
+            }.joinToString("\n\n")
+        }
     }
 
     private fun showLoggedOut() {
@@ -379,6 +434,14 @@ class MainActivity : Activity() {
             ?: "unknown"
         return "DEV-${androidId.takeLast(10)}"
     }
+
+    private data class LoadedSession(
+        val transport: JdkHttpTransport,
+        val api: KomaSmartPosSessionApi,
+        val context: SmartPosContext,
+        val pending: List<PendingProviderIntent>,
+        val recent: List<RecentSmartPosOperation>,
+    )
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 }

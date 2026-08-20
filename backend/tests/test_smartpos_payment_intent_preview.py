@@ -35,7 +35,9 @@ CAIXA_USER_ID = "smartpos-intent-caixa"
 
 
 @pytest.fixture(autouse=True)
-def setup_smartpos_payment_intent():
+def setup_smartpos_payment_intent(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "test")
+    monkeypatch.setenv("KOMA_SMARTPOS_PROVIDER", "pagbank_simulator")
     Base.metadata.create_all(bind=engine)
     token = current_restaurante_id.set(RESTAURANTE_ID)
     db = SessionLocal()
@@ -219,6 +221,113 @@ def caixa_headers():
         role="caixa",
     )
     return {"Authorization": f"Bearer {token}"}
+
+
+def test_historico_retorna_ultimas_operacoes_com_dados_operacionais():
+    first = client.post(
+        "/auth/smartpos/payment-intents",
+        headers=headers(),
+        json={
+            "mesa_id": 4,
+            "valor": "10.00",
+            "metodo": "pix",
+            "captura": "registro_externo",
+            "escopo": "valor",
+            "idempotency_key": "recent-operation-first",
+        },
+    )
+    second = client.post(
+        "/auth/smartpos/payment-intents",
+        headers=headers(),
+        json={
+            "mesa_id": 4,
+            "valor": "11.00",
+            "metodo": "credito",
+            "captura": "registro_externo",
+            "escopo": "valor",
+            "idempotency_key": "recent-operation-second",
+        },
+    )
+    assert first.status_code == 201, first.text
+    assert second.status_code == 201, second.text
+
+    response = client.get(
+        "/auth/smartpos/payment-intents/recentes?limit=1",
+        headers=headers(),
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json() == [
+        {
+            "intent_id": second.json()["id"],
+            "mesa_id": 4,
+            "mesa_nome": "Mesa 4",
+            "operador_id": USER_ID,
+            "operador_nome": "Garçom Intent",
+            "amount": "11.00",
+            "method": "credito",
+            "capture": "registro_externo",
+            "status": "pendente",
+            "created_at": response.json()[0]["created_at"],
+            "status_at": response.json()[0]["status_at"],
+            "settled_at": None,
+            "provider": None,
+            "terminal_id": None,
+            "provider_reference": None,
+            "provider_last_error": None,
+            "payment_id": None,
+        }
+    ]
+
+
+def test_integracao_fica_bloqueada_quando_provider_nao_esta_disponivel(monkeypatch):
+    monkeypatch.setenv("KOMA_SMARTPOS_PROVIDER", "disabled")
+
+    response = client.post(
+        "/auth/smartpos/payment-intents",
+        headers=headers(),
+        json={
+            "mesa_id": 4,
+            "valor": "10.00",
+            "metodo": "pix",
+            "captura": "provider_integrado",
+            "escopo": "valor",
+            "idempotency_key": "provider-disabled-safe",
+        },
+    )
+
+    assert response.status_code == 503
+    assert "outra maquininha" in response.json()["detail"].lower()
+
+
+def test_apk_dev_nao_pode_enviar_resultado_ao_ambiente_sem_provider(monkeypatch):
+    created = client.post(
+        "/auth/smartpos/payment-intents",
+        headers=headers(),
+        json={
+            "mesa_id": 4,
+            "valor": "10.00",
+            "metodo": "credito",
+            "captura": "provider_integrado",
+            "escopo": "valor",
+            "idempotency_key": "provider-before-disable",
+        },
+    )
+    assert created.status_code == 201, created.text
+    monkeypatch.setenv("KOMA_SMARTPOS_PROVIDER", "disabled")
+
+    response = client.post(
+        f"/auth/smartpos/payment-intents/{created.json()['id']}/preparar-terminal",
+        headers=headers(),
+        json={
+            "provider": "pagbank",
+            "operation_key": "blocked-dev-apk-operation",
+            "terminal_id": "DEV-ANDROID",
+        },
+    )
+
+    assert response.status_code == 503
+    assert "simulador" in response.json()["detail"].lower()
 
 
 def test_criar_intent_nao_cria_receita_nem_altera_mesa():

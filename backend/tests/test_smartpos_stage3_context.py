@@ -79,11 +79,30 @@ def test_pocket_pode_ter_smartpos_como_addon_sem_turno():
     assert data["mesas_disponiveis"] is False
     assert data["pedidos_disponiveis"] is False
     assert data["venda_rapida_disponivel"] is True
+    assert data["provider_integrado_disponivel"] is False
+    assert data["terminal_mode"] == "disabled"
     assert data["restaurante"] == {
         "id": RESTAURANTE_ID,
         "nome": "SmartPOS Stage 3",
     }
     assert data["operador"]["restaurante_id"] == RESTAURANTE_ID
+
+
+def test_simulador_so_aparece_fora_de_producao(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "test")
+    monkeypatch.setenv("KOMA_SMARTPOS_PROVIDER", "pagbank_simulator")
+
+    response = client.get("/auth/smartpos/contexto", headers=_headers())
+
+    assert response.status_code == 200
+    assert response.json()["provider_integrado_disponivel"] is True
+    assert response.json()["terminal_mode"] == "simulator"
+
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    response = client.get("/auth/smartpos/contexto", headers=_headers())
+    assert response.status_code == 200
+    assert response.json()["provider_integrado_disponivel"] is False
+    assert response.json()["terminal_mode"] == "disabled"
 
 
 def test_turno_aberto_libera_salao_sem_dar_permissao_de_caixa_ao_garcom():

@@ -45,6 +45,7 @@ type Props = {
   comandas: Comanda[];
   onBack: () => void;
   onSessionInvalid: () => void;
+  integratedProviderAvailable: boolean;
 };
 
 const money = (cents: number) => new Intl.NumberFormat('pt-BR', {
@@ -82,6 +83,7 @@ export default function SmartPosPaymentFlow({
   comandas,
   onBack,
   onSessionInvalid,
+  integratedProviderAvailable,
 }: Props) {
   const allItems = useMemo(() => activeItems(comandas), [comandas]);
   const totalCents = useMemo(
@@ -397,10 +399,10 @@ export default function SmartPosPaymentFlow({
         <h1 className="mt-2 text-3xl font-black tracking-[-0.04em]">{methodLabel}</h1>
         <p className="mt-2 text-sm text-koma-muted">{money(amountCents)}</p>
         <div className="mt-6 grid gap-3">
-          <button type="button" onClick={() => chooseCapture('provider_integrado')} className="flex min-h-20 items-center gap-4 rounded-2xl border border-koma-border bg-koma-surface px-4 text-left">
+          <button type="button" onClick={() => chooseCapture('provider_integrado')} disabled={!integratedProviderAvailable} className="flex min-h-20 items-center gap-4 rounded-2xl border border-koma-border bg-koma-surface px-4 text-left disabled:cursor-not-allowed disabled:opacity-45">
             <span className="flex size-11 items-center justify-center rounded-xl border border-koma-border bg-koma-page text-koma-accent"><CreditCard size={21} /></span>
-            <span className="min-w-0 flex-1"><span className="block text-base font-black">Nesta maquininha</span><span className="mt-1 block text-[10px] font-medium text-koma-muted">Fluxo reservado para a integração do próprio terminal.</span></span>
-            <ChevronRight size={18} className="text-koma-muted" />
+            <span className="min-w-0 flex-1"><span className="block text-base font-black">Nesta maquininha</span><span className="mt-1 block text-[10px] font-medium text-koma-muted">{integratedProviderAvailable ? 'Integração do terminal disponível.' : 'Disponível após conectar e homologar a maquininha.'}</span></span>
+            {integratedProviderAvailable && <ChevronRight size={18} className="text-koma-muted" />}
           </button>
           <button type="button" onClick={() => chooseCapture('registro_externo')} className="flex min-h-20 items-center gap-4 rounded-2xl border border-koma-border bg-koma-surface px-4 text-left">
             <span className="flex size-11 items-center justify-center rounded-xl border border-koma-border bg-koma-page text-koma-accent"><ReceiptText size={21} /></span>

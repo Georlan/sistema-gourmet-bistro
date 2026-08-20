@@ -32,7 +32,9 @@ MESA_ID = 84
 
 
 @pytest.fixture(autouse=True)
-def setup_simulated_e2e():
+def setup_simulated_e2e(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "test")
+    monkeypatch.setenv("KOMA_SMARTPOS_PROVIDER", "pagbank_simulator")
     Base.metadata.create_all(bind=engine)
     token = current_restaurante_id.set(RESTAURANTE_ID)
     db = SessionLocal()

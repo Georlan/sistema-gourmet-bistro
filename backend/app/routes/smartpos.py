@@ -1,7 +1,7 @@
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Literal, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -10,6 +10,10 @@ from ..database import get_db, require_tenant_id
 from ..models import CaixaTurno, Comanda, Item, Mesa, Restaurante, Usuario
 from ..security import get_current_user, require_permission
 from ..services.capabilities import has_capability
+from ..services.payment_providers.registry import (
+    integrated_provider_available,
+    terminal_mode,
+)
 from ..services.smartpos_payment_state import (
     InvalidSmartPosTransition,
     initial_status_for_capture,
@@ -86,6 +90,26 @@ class SmartPosIntentCancellation(BaseModel):
 class SmartPosIntentCancellationResponse(SmartPosPaymentIntentResponse):
     transition_replayed: bool = False
     financial_effect: bool = False
+
+
+class SmartPosRecentIntentResponse(BaseModel):
+    intent_id: str
+    mesa_id: int
+    mesa_nome: str
+    operador_id: str
+    operador_nome: str
+    amount: str
+    method: str
+    capture: str
+    status: str
+    created_at: str
+    status_at: str
+    settled_at: Optional[str] = None
+    provider: Optional[str] = None
+    terminal_id: Optional[str] = None
+    provider_reference: Optional[str] = None
+    provider_last_error: Optional[str] = None
+    payment_id: Optional[str] = None
 
 
 def _money(value: object) -> Decimal:
@@ -187,6 +211,7 @@ def obter_contexto_smartpos(
         CaixaTurno.status == "aberto",
     ).first()
     turno_aberto = turno is not None
+    provider_available = smartpos_enabled and integrated_provider_available()
 
     return {
         "smartpos_enabled": smartpos_enabled,
@@ -195,6 +220,8 @@ def obter_contexto_smartpos(
         "mesas_disponiveis": smartpos_enabled and turno_aberto,
         "pedidos_disponiveis": smartpos_enabled and turno_aberto,
         "venda_rapida_disponivel": smartpos_enabled,
+        "provider_integrado_disponivel": provider_available,
+        "terminal_mode": terminal_mode() if smartpos_enabled else "disabled",
         "restaurante": {
             "id": restaurante.id,
             "nome": restaurante.nome,
@@ -206,6 +233,74 @@ def obter_contexto_smartpos(
             "restaurante_id": restaurante_id,
         },
     }
+
+
+@router.get(
+    "/payment-intents/recentes",
+    response_model=list[SmartPosRecentIntentResponse],
+)
+def listar_payment_intents_recentes(
+    limit: int = Query(default=5, ge=1, le=20),
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("smartpos:receber")),
+):
+    """Últimas operações do tenant para suporte, histórico e comprovante digital."""
+    restaurante_id = require_tenant_id()
+    if not has_capability(db, restaurante_id, "smartpos"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="SmartPOS não habilitado para este restaurante.",
+        )
+
+    intents = (
+        db.query(SmartPosPaymentIntent)
+        .filter(SmartPosPaymentIntent.restaurante_id == restaurante_id)
+        .order_by(
+            SmartPosPaymentIntent.criado_em.desc(),
+            SmartPosPaymentIntent.id.desc(),
+        )
+        .limit(limit)
+        .all()
+    )
+    mesa_ids = {intent.mesa_id for intent in intents}
+    operador_ids = {intent.operador_id for intent in intents}
+    mesas = {
+        mesa.id: mesa.nome or f"Mesa {mesa.id}"
+        for mesa in db.query(Mesa).filter(
+            Mesa.restaurante_id == restaurante_id,
+            Mesa.id.in_(mesa_ids),
+        ).all()
+    } if mesa_ids else {}
+    operadores = {
+        operador.id: operador.nome
+        for operador in db.query(Usuario).filter(
+            Usuario.restaurante_id == restaurante_id,
+            Usuario.id.in_(operador_ids),
+        ).all()
+    } if operador_ids else {}
+
+    return [
+        {
+            "intent_id": intent.id,
+            "mesa_id": intent.mesa_id,
+            "mesa_nome": mesas.get(intent.mesa_id, f"Mesa {intent.mesa_id}"),
+            "operador_id": intent.operador_id,
+            "operador_nome": operadores.get(intent.operador_id, "Operador"),
+            "amount": str(_money(intent.valor)),
+            "method": intent.metodo,
+            "capture": intent.captura,
+            "status": intent.status,
+            "created_at": intent.criado_em.isoformat(),
+            "status_at": intent.status_em.isoformat(),
+            "settled_at": intent.liquidado_em.isoformat() if intent.liquidado_em else None,
+            "provider": intent.provider_name,
+            "terminal_id": intent.provider_terminal_id,
+            "provider_reference": intent.provider_reference,
+            "provider_last_error": intent.provider_last_error,
+            "payment_id": intent.pagamento_id,
+        }
+        for intent in intents
+    ]
 
 
 @router.post(
@@ -235,6 +330,14 @@ def criar_payment_intent(
     normalized_items = sorted(set(payload.item_ids or []))
     valor = _money(payload.valor)
     captura = _capture_for_method(payload.metodo, payload.captura)
+    if captura == "provider_integrado" and not integrated_provider_available():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "A integração desta maquininha não está habilitada neste ambiente. "
+                "Use outra maquininha e confirme o registro externo."
+            ),
+        )
 
     existing = db.query(SmartPosPaymentIntent).filter(
         SmartPosPaymentIntent.restaurante_id == restaurante_id,
