@@ -39,6 +39,7 @@ from ..services.clientes import (
     registrar_movimento_fidelidade,
 )
 from ..services.whatsapp import enviar_texto_whatsapp
+from ..services.capabilities import has_capability
 from ..timezone_utils import elapsed_minutes_since, to_utc
 
 logger = logging.getLogger("koma.caixa")
@@ -1364,12 +1365,28 @@ def registrar_pagamento_comanda(
 ):
     """Registra o recebimento financeiro parcial ou total de uma comanda."""
     rest_id = require_tenant_id()
+    if pag_in.origem == "smartpos":
+        ensure_permission(current_user, "smartpos:receber")
+        if not has_capability(db, rest_id, "smartpos"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="SmartPOS não habilitado para este restaurante.",
+            )
     # Idempotency Check
     existing = db.query(Pagamento).filter(
         Pagamento.restaurante_id == rest_id,
         Pagamento.idempotency_key == pag_in.idempotency_key
     ).first()
     if existing:
+        if (
+            existing.comanda_id != comanda_id
+            or _valor_monetario(existing.valor) != _valor_monetario(pag_in.valor)
+            or existing.metodo != pag_in.metodo
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A chave idempotente já foi usada em outro pagamento.",
+            )
         return existing
 
     # 1. Check if there is an active shift FOR THIS TENANT
@@ -1448,7 +1465,11 @@ def registrar_pagamento_comanda(
         )
 
     # Determine if payment should be pending confirmation (Garçom + Dinheiro)
-    is_pending = (current_user.role == "garcom" and pag_in.metodo == "dinheiro")
+    is_pending = (
+        current_user.role == "garcom"
+        and pag_in.metodo == "dinheiro"
+        and pag_in.origem != "smartpos"
+    )
     pag_status = "pendente" if is_pending else "aprovado"
 
     # 3. Process payment if approved immediately
@@ -1545,6 +1566,15 @@ def registrar_pagamento_comanda(
             Pagamento.idempotency_key == pag_in.idempotency_key
         ).first()
         if existing:
+            if (
+                existing.comanda_id != comanda_id
+                or _valor_monetario(existing.valor) != _valor_monetario(pag_in.valor)
+                or existing.metodo != pag_in.metodo
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="A chave idempotente já foi usada em outro pagamento.",
+                )
             return existing
         logger.exception("Falha de integridade ao processar pagamento idempotente")
         raise HTTPException(

@@ -244,7 +244,9 @@ class VendaDiretaCreate(BaseModel):
     delivery_telefone: Optional[str] = None
     delivery_endereco: Optional[str] = None
     delivery_taxa: float = 0.0
-    itens: List[VendaDiretaItemSchema]
+    origem: Optional[Literal["smartpos"]] = None
+    idempotency_key: Optional[str] = Field(default=None, min_length=8, max_length=128)
+    itens: List[VendaDiretaItemSchema] = Field(min_length=1)
 
 class LancamentoCreate(BaseModel):
     garcom_id: str
@@ -379,6 +381,7 @@ class PagamentoRequest(BaseModel):
     cliente_id: Optional[str] = None
     cpf_cliente: Optional[str] = None
     nome_cliente: Optional[str] = None
+    origem: Optional[Literal["smartpos"]] = None
 
 class PagamentoMesaRequest(PagamentoRequest):
     """Baixa monetária atômica de todas as comandas abertas de uma mesa."""

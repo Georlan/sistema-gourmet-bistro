@@ -78,7 +78,7 @@ def test_pocket_pode_ter_smartpos_como_addon_sem_turno():
     assert data["turno_aberto"] is False
     assert data["mesas_disponiveis"] is False
     assert data["pedidos_disponiveis"] is False
-    assert data["venda_rapida_disponivel"] is True
+    assert data["venda_rapida_disponivel"] is False
     assert data["provider_integrado_disponivel"] is False
     assert data["terminal_mode"] == "disabled"
     assert data["restaurante"] == {

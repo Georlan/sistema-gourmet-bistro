@@ -7,7 +7,16 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..database import get_db, require_tenant_id
-from ..models import CaixaTurno, Comanda, Item, Mesa, Restaurante, Usuario
+from ..models import (
+    CaixaTurno,
+    Comanda,
+    Item,
+    Lancamento,
+    Mesa,
+    Pagamento,
+    Restaurante,
+    Usuario,
+)
 from ..security import get_current_user, require_permission
 from ..services.capabilities import has_capability
 from ..services.payment_providers.registry import (
@@ -94,7 +103,7 @@ class SmartPosIntentCancellationResponse(SmartPosPaymentIntentResponse):
 
 class SmartPosRecentIntentResponse(BaseModel):
     intent_id: str
-    mesa_id: int
+    mesa_id: Optional[int] = None
     mesa_nome: str
     operador_id: str
     operador_nome: str
@@ -219,7 +228,7 @@ def obter_contexto_smartpos(
         "turno_id": turno.id if turno else None,
         "mesas_disponiveis": smartpos_enabled and turno_aberto,
         "pedidos_disponiveis": smartpos_enabled and turno_aberto,
-        "venda_rapida_disponivel": smartpos_enabled,
+        "venda_rapida_disponivel": smartpos_enabled and turno_aberto,
         "provider_integrado_disponivel": provider_available,
         "terminal_mode": terminal_mode() if smartpos_enabled else "disabled",
         "restaurante": {
@@ -262,8 +271,39 @@ def listar_payment_intents_recentes(
         .limit(limit)
         .all()
     )
-    mesa_ids = {intent.mesa_id for intent in intents}
-    operador_ids = {intent.operador_id for intent in intents}
+    linked_payment_ids = db.query(SmartPosPaymentIntent.pagamento_id).filter(
+        SmartPosPaymentIntent.restaurante_id == restaurante_id,
+        SmartPosPaymentIntent.pagamento_id.isnot(None),
+    )
+    smartpos_launch_exists = db.query(Lancamento.id).filter(
+        Lancamento.restaurante_id == restaurante_id,
+        Lancamento.comanda_id == Comanda.id,
+        Lancamento.origem == "smartpos",
+    ).exists()
+    quick_payments = (
+        db.query(Pagamento, Comanda)
+        .join(
+            Comanda,
+            (Comanda.restaurante_id == Pagamento.restaurante_id)
+            & (Comanda.id == Pagamento.comanda_id),
+        )
+        .filter(
+            Pagamento.restaurante_id == restaurante_id,
+            smartpos_launch_exists,
+            ~Pagamento.id.in_(linked_payment_ids),
+        )
+        .order_by(Pagamento.criado_em.desc(), Pagamento.id.desc())
+        .limit(limit)
+        .all()
+    )
+    mesa_ids = {intent.mesa_id for intent in intents} | {
+        comanda.mesa_id
+        for _, comanda in quick_payments
+        if comanda.mesa_id is not None
+    }
+    operador_ids = {intent.operador_id for intent in intents} | {
+        comanda.garcom_id for _, comanda in quick_payments
+    }
     mesas = {
         mesa.id: mesa.nome or f"Mesa {mesa.id}"
         for mesa in db.query(Mesa).filter(
@@ -279,7 +319,7 @@ def listar_payment_intents_recentes(
         ).all()
     } if operador_ids else {}
 
-    return [
+    recent_entries = [
         {
             "intent_id": intent.id,
             "mesa_id": intent.mesa_id,
@@ -301,6 +341,55 @@ def listar_payment_intents_recentes(
         }
         for intent in intents
     ]
+    method_names = {
+        "cartao": "credito",
+        "cartao_debito": "debito",
+        "cartao_credito": "credito",
+    }
+    status_names = {
+        "aprovado": "aprovada",
+        "pendente": "pendente",
+        "cancelado": "cancelada",
+    }
+    recent_entries.extend(
+        {
+            "intent_id": f"quick:{payment.id}",
+            "mesa_id": comanda.mesa_id,
+            "mesa_nome": (
+                mesas.get(comanda.mesa_id, f"Mesa {comanda.mesa_id}")
+                if comanda.mesa_id is not None
+                else f"Venda rápida #{comanda.numero_pedido}"
+            ),
+            "operador_id": comanda.garcom_id,
+            "operador_nome": operadores.get(comanda.garcom_id, "Operador"),
+            "amount": str(_money(payment.valor)),
+            "method": method_names.get(payment.metodo, payment.metodo),
+            "capture": (
+                "dinheiro_pendente"
+                if payment.metodo == "dinheiro"
+                else "registro_externo"
+            ),
+            "status": status_names.get(payment.status, "pendente"),
+            "created_at": payment.criado_em.isoformat(),
+            "status_at": payment.criado_em.isoformat(),
+            "settled_at": (
+                payment.criado_em.isoformat()
+                if payment.status == "aprovado"
+                else None
+            ),
+            "provider": None,
+            "terminal_id": None,
+            "provider_reference": None,
+            "provider_last_error": None,
+            "payment_id": payment.id,
+        }
+        for payment, comanda in quick_payments
+    )
+    return sorted(
+        recent_entries,
+        key=lambda entry: (entry["created_at"], entry["intent_id"]),
+        reverse=True,
+    )[:limit]
 
 
 @router.post(

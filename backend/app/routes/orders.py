@@ -3,6 +3,7 @@ import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from typing import List, Optional, Any
 import logging
 
@@ -43,6 +44,7 @@ from ..services.clientes import (
     normalizar_telefone_cliente,
 )
 from ..services.printing import PrintingRequestError, enqueue_table_receipt
+from ..services.capabilities import has_capability
 from ..subscription import subscription_has_printing
 from ..waiter_permissions import (
     require_waiter_permission,
@@ -608,6 +610,16 @@ async def criar_venda_direta(
     delivery e retirada criados pelo caixa já entram aceitos em produção.
     """
     rid = require_tenant_id()
+    raw_order_type = venda_in.tipo.strip().lower()
+    is_smartpos = venda_in.origem == "smartpos"
+    is_counter_sale = raw_order_type in {"balcao", "balcão"}
+    if is_smartpos:
+        ensure_permission(current_user, "smartpos:receber")
+        if not has_capability(db, rid, "smartpos"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="SmartPOS não habilitado para este restaurante.",
+            )
     tipo_pedido = {
         "consumo no local": "Consumo no Local",
         "mesa": "Consumo no Local",
@@ -615,13 +627,15 @@ async def criar_venda_direta(
         "entrega": "Entrega",
         "retirada": "Retirada",
         "viagem": "Retirada",
-    }.get(venda_in.tipo.strip().lower())
+        "balcao": "Retirada",
+        "balcão": "Retirada",
+    }.get(raw_order_type)
     if tipo_pedido is None:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Tipo de pedido inválido. Use Mesa, Delivery ou Retirada.",
         )
-    if tipo_pedido in {"Entrega", "Retirada"}:
+    if tipo_pedido in {"Entrega", "Retirada"} and not (is_smartpos and is_counter_sale):
         require_waiter_permission(
             db,
             current_user,
@@ -654,7 +668,7 @@ async def criar_venda_direta(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Informe o endereço de entrega.",
             )
-    if tipo_pedido == "Retirada":
+    if tipo_pedido == "Retirada" and not is_counter_sale:
         if not (venda_in.identificador or "").strip():
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -666,6 +680,9 @@ async def criar_venda_direta(
                 detail="Informe o telefone do cliente para a retirada.",
             )
 
+    effective_identifier = (
+        "Balcão" if is_counter_sale else venda_in.identificador
+    )
     telefone_cliente = None
     if venda_in.delivery_telefone:
         try:
@@ -675,6 +692,50 @@ async def criar_venda_direta(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=str(exc),
             ) from exc
+
+    normalized_idempotency_key = (
+        venda_in.idempotency_key.strip() if venda_in.idempotency_key else None
+    )
+
+    def ensure_sale_replay_matches(existing_sale: Comanda) -> Comanda:
+        existing_items = sorted(
+            (
+                item.produto_id,
+                (item.observacao or "").strip(),
+                (item.cliente_nome or "Consumo Geral").strip(),
+            )
+            for item in existing_sale.itens
+            if item.status != "cancelado"
+        )
+        requested_items = sorted(
+            (
+                item.produto_id,
+                (item.observacao or "").strip(),
+                (item.cliente_nome or "Consumo Geral").strip(),
+            )
+            for item in venda_in.itens
+        )
+        if (
+            existing_sale.mesa_id != venda_in.mesa_id
+            or existing_sale.tipo != tipo_pedido
+            or existing_items != requested_items
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A chave idempotente já foi usada em outro pedido.",
+            )
+        return existing_sale
+
+    if normalized_idempotency_key:
+        existing_sale = db.query(Comanda).options(
+            joinedload(Comanda.itens).joinedload(Item.produto),
+            joinedload(Comanda.criada_por),
+        ).filter(
+            Comanda.restaurante_id == rid,
+            Comanda.idempotency_key == normalized_idempotency_key,
+        ).first()
+        if existing_sale is not None:
+            return ensure_sale_replay_matches(existing_sale)
 
     garcom_id = venda_in.garcom_id or current_user.id
     garcom = db.query(Usuario).filter(
@@ -731,7 +792,7 @@ async def criar_venda_direta(
                     db,
                     restaurante_id=rid,
                     telefone=telefone_cliente,
-                    nome=venda_in.identificador or "Cliente",
+                    nome=effective_identifier or "Cliente",
                     endereco=(
                         venda_in.delivery_endereco
                         if tipo_pedido == "Entrega"
@@ -739,7 +800,7 @@ async def criar_venda_direta(
                     ),
                 )
             else:
-                cliente.nome = (venda_in.identificador or cliente.nome).strip()
+                cliente.nome = (effective_identifier or cliente.nome).strip()
                 if tipo_pedido == "Entrega" and venda_in.delivery_endereco:
                     cliente.endereco = venda_in.delivery_endereco.strip()
 
@@ -750,8 +811,9 @@ async def criar_venda_direta(
             mesa_id=venda_in.mesa_id,
             garcom_id=garcom_id,
             tipo=tipo_pedido,
-            identificador=venda_in.identificador,
+            identificador=effective_identifier,
             numero_pedido=numero_pedido,
+            idempotency_key=normalized_idempotency_key,
             fechada=False,
             criado_em=datetime.datetime.now(datetime.timezone.utc),
             delivery_status=auto_delivery_status,
@@ -771,7 +833,11 @@ async def criar_venda_direta(
             id=lancamento_id,
             comanda_id=comanda_id,
             garcom_id=garcom_id,
-            origem=("caixa" if operator_role in {"admin", "gerente", "caixa", "superadmin"} else "garcom"),
+            origem=(
+                "smartpos"
+                if is_smartpos
+                else ("caixa" if operator_role in {"admin", "gerente", "caixa", "superadmin"} else "garcom")
+            ),
             timestamp=datetime.datetime.now(datetime.timezone.utc)
         )
         db.add(novo_lancamento)
@@ -782,8 +848,11 @@ async def criar_venda_direta(
                 Produto.restaurante_id == rid,
                 Produto.id == item_in.produto_id,
             ).first()
-            if not produto:
-                continue
+            if not produto or produto.ativo is False:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail="Um produto do pedido não está mais disponível.",
+                )
             novo_item = Item(
                 id=f"i-{uuid.uuid4().hex[:8]}",
                 restaurante_id=rid,
@@ -895,6 +964,23 @@ async def criar_venda_direta(
     except HTTPException:
         db.rollback()
         raise
+    except IntegrityError as exc:
+        db.rollback()
+        if normalized_idempotency_key:
+            existing_sale = db.query(Comanda).options(
+                joinedload(Comanda.itens).joinedload(Item.produto),
+                joinedload(Comanda.criada_por),
+            ).filter(
+                Comanda.restaurante_id == rid,
+                Comanda.idempotency_key == normalized_idempotency_key,
+            ).first()
+            if existing_sale is not None:
+                return ensure_sale_replay_matches(existing_sale)
+        logger.exception("Conflito de integridade ao criar venda direta idempotente")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Não foi possível confirmar se o pedido já havia sido criado.",
+        ) from exc
     except Exception as e:
         db.rollback()
         logger.exception(f"Erro ao criar venda direta atômica: {e}")

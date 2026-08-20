@@ -330,6 +330,183 @@ def test_apk_dev_nao_pode_enviar_resultado_ao_ambiente_sem_provider(monkeypatch)
     assert "simulador" in response.json()["detail"].lower()
 
 
+def test_venda_rapida_smartpos_e_idempotente_liquida_e_aparece_no_historico():
+    payload = {
+        "mesa_id": None,
+        "garcom_id": USER_ID,
+        "tipo": "Balcão",
+        "origem": "smartpos",
+        "idempotency_key": "quick-sale-order-idempotent-01",
+        "itens": [
+            {
+                "produto_id": "prod-intent",
+                "observacao": "Sem cebola",
+                "cliente_nome": "Balcão",
+            }
+        ],
+    }
+
+    first = client.post("/comandas/venda-direta", headers=headers(), json=payload)
+    replay = client.post("/comandas/venda-direta", headers=headers(), json=payload)
+
+    assert first.status_code == 201, first.text
+    assert replay.status_code == 201, replay.text
+    assert replay.json()["id"] == first.json()["id"]
+    assert first.json()["mesa_id"] is None
+    assert first.json()["tipo"] == "Retirada"
+    assert first.json()["identificador"] == "Balcão"
+    assert len(first.json()["itens"]) == 1
+
+    paid = client.post(
+        f"/caixa/comandas/{first.json()['id']}/pagar",
+        headers=headers(),
+        json={
+            "valor": "42.00",
+            "metodo": "dinheiro",
+            "idempotency_key": "quick-sale-payment-idempotent-01",
+            "origem": "smartpos",
+        },
+    )
+    assert paid.status_code == 201, paid.text
+    assert paid.json()["status"] == "aprovado"
+    payment_replay = client.post(
+        f"/caixa/comandas/{first.json()['id']}/pagar",
+        headers=headers(),
+        json={
+            "valor": "42.00",
+            "metodo": "dinheiro",
+            "idempotency_key": "quick-sale-payment-idempotent-01",
+            "origem": "smartpos",
+        },
+    )
+    assert payment_replay.status_code == 201, payment_replay.text
+    assert payment_replay.json()["id"] == paid.json()["id"]
+
+    conflicting_payment = client.post(
+        f"/caixa/comandas/{first.json()['id']}/pagar",
+        headers=headers(),
+        json={
+            "valor": "41.00",
+            "metodo": "dinheiro",
+            "idempotency_key": "quick-sale-payment-idempotent-01",
+            "origem": "smartpos",
+        },
+    )
+    assert conflicting_payment.status_code == 409
+
+    history = client.get(
+        "/auth/smartpos/payment-intents/recentes?limit=5",
+        headers=headers(),
+    )
+    assert history.status_code == 200, history.text
+    quick_entry = next(
+        entry for entry in history.json()
+        if entry["intent_id"] == f"quick:{paid.json()['id']}"
+    )
+    assert quick_entry["mesa_id"] is None
+    assert quick_entry["mesa_nome"] == f"Venda rápida #{first.json()['numero_pedido']}"
+    assert quick_entry["amount"] == "42.00"
+    assert quick_entry["method"] == "dinheiro"
+    assert quick_entry["status"] == "aprovada"
+    assert quick_entry["payment_id"] == paid.json()["id"]
+
+    token = current_restaurante_id.set(RESTAURANTE_ID)
+    db = SessionLocal()
+    try:
+        assert db.query(Comanda).filter(
+            Comanda.restaurante_id == RESTAURANTE_ID,
+            Comanda.idempotency_key == payload["idempotency_key"],
+        ).count() == 1
+        assert db.query(Pagamento).filter(
+            Pagamento.restaurante_id == RESTAURANTE_ID,
+            Pagamento.idempotency_key == "quick-sale-payment-idempotent-01",
+        ).count() == 1
+        sale = db.query(Comanda).filter(Comanda.id == first.json()["id"]).one()
+        assert sale.fechada is True
+        assert Decimal(str(sale.valor_pago)) == Decimal("42.00")
+    finally:
+        db.close()
+        current_restaurante_id.reset(token)
+
+
+def test_venda_rapida_rejeita_reuso_da_chave_com_outro_conteudo():
+    payload = {
+        "tipo": "Balcão",
+        "origem": "smartpos",
+        "idempotency_key": "quick-sale-conflicting-order",
+        "itens": [{"produto_id": "prod-intent", "observacao": "Sem cebola"}],
+    }
+    first = client.post("/comandas/venda-direta", headers=headers(), json=payload)
+    assert first.status_code == 201, first.text
+
+    conflicting = client.post(
+        "/comandas/venda-direta",
+        headers=headers(),
+        json={
+            **payload,
+            "itens": [{"produto_id": "prod-intent", "observacao": "Com cebola"}],
+        },
+    )
+
+    assert conflicting.status_code == 409
+
+
+def test_dinheiro_do_garcom_fora_do_smartpos_continua_pendente():
+    created = client.post(
+        "/comandas/venda-direta",
+        headers=headers(),
+        json={
+            "tipo": "Balcão",
+            "origem": "smartpos",
+            "idempotency_key": "quick-sale-regular-cash-pending",
+            "itens": [{"produto_id": "prod-intent"}],
+        },
+    )
+    assert created.status_code == 201, created.text
+
+    paid = client.post(
+        f"/caixa/comandas/{created.json()['id']}/pagar",
+        headers=headers(),
+        json={
+            "valor": "42.00",
+            "metodo": "dinheiro",
+            "idempotency_key": "regular-waiter-cash-still-pending",
+        },
+    )
+
+    assert paid.status_code == 201, paid.text
+    assert paid.json()["status"] == "pendente"
+
+
+def test_origem_smartpos_nao_contorna_capability_desabilitada():
+    token = current_restaurante_id.set(RESTAURANTE_ID)
+    db = SessionLocal()
+    try:
+        capability = db.query(RestauranteCapability).filter(
+            RestauranteCapability.restaurante_id == RESTAURANTE_ID,
+            RestauranteCapability.capability == "smartpos",
+        ).one()
+        capability.enabled = False
+        db.commit()
+    finally:
+        db.close()
+        current_restaurante_id.reset(token)
+
+    response = client.post(
+        "/comandas/venda-direta",
+        headers=headers(),
+        json={
+            "tipo": "Balcão",
+            "origem": "smartpos",
+            "idempotency_key": "quick-sale-disabled-capability",
+            "itens": [{"produto_id": "prod-intent"}],
+        },
+    )
+
+    assert response.status_code == 403
+    assert "não habilitado" in response.json()["detail"].lower()
+
+
 def test_criar_intent_nao_cria_receita_nem_altera_mesa():
     response = client.post(
         "/auth/smartpos/payment-intents",

@@ -15,7 +15,7 @@ import type { SmartPosSession } from './smartPosSession';
 
 type RecentOperation = {
   intent_id: string;
-  mesa_id: number;
+  mesa_id: number | null;
   mesa_nome: string;
   operador_id: string;
   operador_nome: string;

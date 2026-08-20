@@ -19,6 +19,7 @@ import { API_BASE_URL, WS_BASE_URL } from '../config/api';
 import SmartPosOrderingFlow from './SmartPosOrderingFlow';
 import SmartPosPaymentFlow from './SmartPosPaymentFlow';
 import SmartPosHistory from './SmartPosHistory';
+import SmartPosQuickSalePayment from './SmartPosQuickSalePayment';
 import {
   clearSmartPosSession,
   getSmartPosSession,
@@ -78,6 +79,57 @@ type Comanda = {
 
 type Screen = 'home' | 'mesas' | 'mesa' | 'pedido' | 'receber' | 'venda-rapida' | 'historico';
 
+type QuickSale = {
+  id: string;
+  numeroPedido: number;
+  total: number;
+  paymentKey: string;
+};
+
+const QUICK_SALE_STORAGE_KEY = 'koma.smartpos.pendingQuickSale.v1';
+
+function makeQuickSalePaymentKey(saleId: string) {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `smartpos-quick-pay-${saleId}-${crypto.randomUUID()}`;
+  }
+  return `smartpos-quick-pay-${saleId}-${Date.now()}`;
+}
+
+function loadPendingQuickSale(restauranteId?: number): QuickSale | null {
+  if (!restauranteId) return null;
+  try {
+    const raw = localStorage.getItem(QUICK_SALE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as QuickSale & { restauranteId?: number };
+    if (
+      parsed.restauranteId !== restauranteId
+      || !parsed.id
+      || !Number.isInteger(parsed.numeroPedido)
+      || !Number.isFinite(parsed.total)
+      || !parsed.paymentKey
+    ) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function rememberPendingQuickSale(sale: QuickSale, restauranteId: number) {
+  try {
+    localStorage.setItem(QUICK_SALE_STORAGE_KEY, JSON.stringify({ ...sale, restauranteId }));
+  } catch {
+    // A venda continua recuperável pelo backend mesmo se o navegador bloquear storage.
+  }
+}
+
+function forgetPendingQuickSale() {
+  try {
+    localStorage.removeItem(QUICK_SALE_STORAGE_KEY);
+  } catch {
+    // Sem efeito operacional.
+  }
+}
+
 function roleLabel(role: SmartPosRole) {
   if (role === 'garcom') return 'Garçom';
   if (role === 'caixa') return 'Caixa';
@@ -118,6 +170,15 @@ export default function SmartPosPage() {
   const [selectedMesaId, setSelectedMesaId] = useState<number | null>(null);
   const [isLoadingMesas, setIsLoadingMesas] = useState(false);
   const [mesasError, setMesasError] = useState('');
+  const [quickSale, setQuickSale] = useState<QuickSale | null>(() => (
+    loadPendingQuickSale(session?.user.restaurante_id)
+  ));
+
+  useEffect(() => {
+    if (!session || quickSale) return;
+    const pending = loadPendingQuickSale(session.user.restaurante_id);
+    if (pending) setQuickSale(pending);
+  }, [quickSale, session?.user.restaurante_id]);
 
   const authHeaders = useMemo(
     () => (session ? { Authorization: `Bearer ${session.token}` } : {}),
@@ -416,6 +477,7 @@ export default function SmartPosPage() {
     setMesas([]);
     setComandas([]);
     setSelectedMesaId(null);
+    setQuickSale(null);
     setValidationError('');
     setLoginError('');
   };
@@ -563,15 +625,38 @@ export default function SmartPosPage() {
       <main className="min-h-dvh bg-koma-page text-koma-foreground">
         <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-4 pb-6 pt-4 sm:px-6">
           <Header />
-          <section className="pt-7">
-            <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-koma-accent">Sem mesa</p>
-            <h1 className="mt-2 text-3xl font-black tracking-[-0.04em]">Venda rápida</h1>
-            <div className="mt-6 rounded-2xl border border-koma-border bg-koma-surface p-5">
-              <ShoppingBag className="text-koma-accent" size={24} />
-              <p className="mt-4 text-sm font-black">Recebimento sem mesa</p>
-              <p className="mt-2 text-xs leading-5 text-koma-muted">Em preparação.</p>
-            </div>
-          </section>
+          {quickSale ? (
+            <SmartPosQuickSalePayment
+              session={session}
+              sale={quickSale}
+              onSessionInvalid={handleLogout}
+              onNewSale={() => {
+                forgetPendingQuickSale();
+                setQuickSale(null);
+              }}
+              onOpenHistory={() => {
+                forgetPendingQuickSale();
+                setQuickSale(null);
+                setScreen('historico');
+              }}
+            />
+          ) : (
+            <SmartPosOrderingFlow
+              session={session}
+              mode="quick-sale"
+              onCancel={() => setScreen('home')}
+              cancelLabel="Voltar ao início"
+              onSessionInvalid={handleLogout}
+              onQuickSaleCreated={(sale) => {
+                const pendingSale = {
+                  ...sale,
+                  paymentKey: makeQuickSalePaymentKey(sale.id),
+                };
+                rememberPendingQuickSale(pendingSale, session.user.restaurante_id);
+                setQuickSale(pendingSale);
+              }}
+            />
+          )}
         </div>
       </main>
     );
@@ -721,7 +806,7 @@ export default function SmartPosPage() {
           <div className="grid gap-3">
             <button type="button" onClick={() => void loadMesas('mesas')} disabled={!context?.mesas_disponiveis || isLoadingMesas} className="flex min-h-20 items-center gap-4 rounded-2xl border border-koma-accent bg-koma-accent px-4 py-3 text-left text-black shadow-lg shadow-koma-accent/10 disabled:cursor-not-allowed disabled:border-koma-border disabled:bg-koma-surface disabled:text-koma-muted disabled:shadow-none"><span className="flex size-11 items-center justify-center rounded-xl bg-black/10">{isLoadingMesas ? <Loader2 size={22} className="animate-spin" /> : context?.mesas_disponiveis ? <Table2 size={22} /> : <LockKeyhole size={21} />}</span><span className="min-w-0 flex-1"><span className="block text-base font-black">Mesas</span><span className="mt-0.5 block text-xs text-black/70">{context?.mesas_disponiveis ? 'Abrir ou continuar atendimento' : 'Caixa fechado'}</span></span>{context?.mesas_disponiveis && <ChevronRight size={18} />}</button>
 
-            <button type="button" onClick={() => setScreen('venda-rapida')} disabled={!context?.venda_rapida_disponivel} className="flex min-h-18 items-center gap-4 rounded-2xl border border-koma-border bg-koma-surface px-4 py-3 text-left disabled:cursor-not-allowed disabled:opacity-50"><span className="flex size-11 items-center justify-center rounded-xl border border-koma-border bg-koma-page text-koma-accent"><ShoppingBag size={21} /></span><span className="min-w-0 flex-1"><span className="block text-sm font-extrabold">Venda rápida</span><span className="mt-0.5 block text-xs text-koma-muted">Pedido sem mesa</span></span><ChevronRight size={18} className="text-koma-muted" /></button>
+            <button type="button" onClick={() => setScreen('venda-rapida')} disabled={!context?.venda_rapida_disponivel} className="flex min-h-18 items-center gap-4 rounded-2xl border border-koma-border bg-koma-surface px-4 py-3 text-left disabled:cursor-not-allowed disabled:opacity-50"><span className="flex size-11 items-center justify-center rounded-xl border border-koma-border bg-koma-page text-koma-accent"><ShoppingBag size={21} /></span><span className="min-w-0 flex-1"><span className="block text-sm font-extrabold">{quickSale ? `Receber pedido #${quickSale.numeroPedido}` : 'Venda rápida'}</span><span className="mt-0.5 block text-xs text-koma-muted">{quickSale ? `${money(quickSale.total)} pendente neste celular` : 'Pedido sem mesa'}</span></span><ChevronRight size={18} className="text-koma-muted" /></button>
 
             <button type="button" onClick={() => setScreen('historico')} className="flex min-h-18 items-center gap-4 rounded-2xl border border-koma-border bg-koma-surface px-4 py-3 text-left"><span className="flex size-11 items-center justify-center rounded-xl border border-koma-border bg-koma-page text-koma-accent"><History size={21} /></span><span className="min-w-0 flex-1"><span className="block text-sm font-extrabold">Últimas operações</span><span className="mt-0.5 block text-xs text-koma-muted">Consultar e compartilhar comprovante</span></span><ChevronRight size={18} className="text-koma-muted" /></button>
           </div>

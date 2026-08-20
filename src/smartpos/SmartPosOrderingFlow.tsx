@@ -51,12 +51,25 @@ type OrderingView = 'categories' | 'products' | 'review';
 
 interface SmartPosOrderingFlowProps {
   session: SmartPosSession;
-  mesa: MesaResumo;
-  comandas: ComandaResumo[];
+  mesa?: MesaResumo;
+  comandas?: ComandaResumo[];
+  mode?: 'table' | 'quick-sale';
   onCancel: () => void;
   cancelLabel?: string;
   onSessionInvalid: () => void;
-  onOrderCreated: () => Promise<void> | void;
+  onOrderCreated?: () => Promise<void> | void;
+  onQuickSaleCreated?: (sale: {
+    id: string;
+    numeroPedido: number;
+    total: number;
+  }) => Promise<void> | void;
+}
+
+function makeIdempotencyKey() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `smartpos-sale-${crypto.randomUUID()}`;
+  }
+  return `smartpos-sale-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
 function money(value: number) {
@@ -73,11 +86,13 @@ function categoryLabel(category: CatalogCategory) {
 export default function SmartPosOrderingFlow({
   session,
   mesa,
-  comandas,
+  comandas = [],
+  mode = 'table',
   onCancel,
   cancelLabel = 'Voltar para a mesa',
   onSessionInvalid,
   onOrderCreated,
+  onQuickSaleCreated,
 }: SmartPosOrderingFlowProps) {
   const [catalog, setCatalog] = useState<CatalogSnapshot>({ categorias: [], produtos: [] });
   const [observations, setObservations] = useState<ObservacaoPredefinida[]>([]);
@@ -90,6 +105,11 @@ export default function SmartPosOrderingFlow({
   const [catalogError, setCatalogError] = useState('');
   const [submitError, setSubmitError] = useState('');
   const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
+  const [saleIdempotencyKey] = useState(makeIdempotencyKey);
+  const isQuickSale = mode === 'quick-sale';
+  const destinationLabel = isQuickSale
+    ? 'Venda rápida'
+    : (mesa?.nome || (mesa ? `Mesa ${mesa.id}` : 'Mesa'));
 
   const authHeaders = useMemo(() => ({
     Authorization: `Bearer ${session.token}`,
@@ -312,12 +332,13 @@ export default function SmartPosOrderingFlow({
   };
 
   const targetLabel = useMemo(() => {
+    if (isQuickSale) return 'Balcão';
     if (targetComandaId === 'new') {
       return comandas.length > 0 ? `Cliente ${comandas.length + 1}` : 'Consumo Geral';
     }
     const target = comandas.find((comanda) => comanda.id === targetComandaId);
     return target?.identificador || 'Consumo Geral';
-  }, [comandas, targetComandaId]);
+  }, [comandas, isQuickSale, targetComandaId]);
 
   const buildObservation = (line: CartLine) => {
     const selected = line.observationIds
@@ -333,6 +354,53 @@ export default function SmartPosOrderingFlow({
     setSubmitError('');
 
     try {
+      const items = cartLines.flatMap((line) => {
+        const observation = buildObservation(line);
+        return Array.from({ length: line.quantity }, () => ({
+          produto_id: line.productId,
+          observacao: observation,
+          cliente_nome: targetLabel,
+        }));
+      });
+
+      if (isQuickSale) {
+        const saleResponse = await fetch(`${API_BASE_URL}/comandas/venda-direta`, {
+          method: 'POST',
+          headers: authHeaders,
+          body: JSON.stringify({
+            mesa_id: null,
+            garcom_id: session.user.id,
+            tipo: 'Balcão',
+            origem: 'smartpos',
+            idempotency_key: saleIdempotencyKey,
+            itens: items,
+          }),
+        });
+        if (saleResponse.status === 401) {
+          onSessionInvalid();
+          return;
+        }
+        const sale = await saleResponse.json().catch(() => null);
+        if (!saleResponse.ok || !sale?.id) {
+          throw new Error(sale?.detail || 'Não foi possível criar a venda rápida.');
+        }
+        const confirmedTotal = Array.isArray(sale.itens)
+          ? sale.itens
+              .filter((item: { status?: string }) => item.status !== 'cancelado')
+              .reduce((sum: number, item: { preco_unit?: number }) => sum + Number(item.preco_unit || 0), 0)
+          : cartTotal;
+        setCart({});
+        await onQuickSaleCreated?.({
+          id: String(sale.id),
+          numeroPedido: Number(sale.numero_pedido),
+          total: confirmedTotal,
+        });
+        return;
+      }
+
+      if (!mesa) {
+        throw new Error('A mesa desta operação não está disponível.');
+      }
       let comandaId = targetComandaId !== 'new' ? targetComandaId : null;
 
       if (!comandaId) {
@@ -358,15 +426,6 @@ export default function SmartPosOrderingFlow({
         comandaId = String(opened.id);
       }
 
-      const items = cartLines.flatMap((line) => {
-        const observation = buildObservation(line);
-        return Array.from({ length: line.quantity }, () => ({
-          produto_id: line.productId,
-          observacao: observation,
-          cliente_nome: targetLabel,
-        }));
-      });
-
       const launchResponse = await fetch(`${API_BASE_URL}/comandas/${encodeURIComponent(comandaId)}/lancamentos`, {
         method: 'POST',
         headers: authHeaders,
@@ -386,7 +445,7 @@ export default function SmartPosOrderingFlow({
       }
 
       setCart({});
-      await onOrderCreated();
+      await onOrderCreated?.();
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : 'Falha ao confirmar o pedido.');
     } finally {
@@ -429,14 +488,14 @@ export default function SmartPosOrderingFlow({
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-koma-accent">Revisar pedido</p>
-            <h1 className="mt-2 text-3xl font-black tracking-[-0.04em]">{mesa.nome || `Mesa ${mesa.id}`}</h1>
+            <h1 className="mt-2 text-3xl font-black tracking-[-0.04em]">{destinationLabel}</h1>
           </div>
           <span className="flex items-center gap-1 rounded-full border border-koma-border px-2 py-1 text-[9px] font-bold uppercase text-koma-muted">
             {isRealtimeConnected ? <Wifi size={11} className="text-koma-accent" /> : <WifiOff size={11} />} catálogo
           </span>
         </div>
 
-        {comandas.length > 0 && (
+        {!isQuickSale && comandas.length > 0 && (
           <div className="mt-5">
             <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-koma-muted">Adicionar em</p>
             <div className="grid grid-cols-2 gap-2">
@@ -515,7 +574,7 @@ export default function SmartPosOrderingFlow({
           <div className="flex items-center justify-between text-sm"><span className="text-koma-muted">{totalUnits} {totalUnits === 1 ? 'item' : 'itens'}</span><strong className="text-lg">{money(cartTotal)}</strong></div>
           <button type="button" onClick={() => void submitOrder()} disabled={isSubmitting || totalUnits === 0 || unavailableProducts.length > 0} className="mt-4 flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-koma-accent px-4 text-sm font-black text-black disabled:cursor-not-allowed disabled:opacity-50">
             {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
-            {isSubmitting ? 'Enviando…' : 'Confirmar pedido'}
+            {isSubmitting ? 'Enviando…' : isQuickSale ? 'Confirmar e receber' : 'Confirmar pedido'}
           </button>
           <p className="mt-2 text-center text-[10px] leading-4 text-koma-muted">Preço e disponibilidade são validados novamente pelo Kôma ao confirmar.</p>
         </div>
@@ -528,7 +587,7 @@ export default function SmartPosOrderingFlow({
       <section className="pb-5 pt-6">
         <button type="button" onClick={goBack} className="mb-4 flex items-center gap-2 text-xs font-bold text-koma-muted"><ArrowLeft size={16} /> Categorias</button>
         <div className="flex items-start justify-between gap-3">
-          <div><p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-koma-accent">{mesa.nome || `Mesa ${mesa.id}`}</p><h1 className="mt-2 text-3xl font-black tracking-[-0.04em]">{selectedCategory.nome}</h1></div>
+          <div><p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-koma-accent">{destinationLabel}</p><h1 className="mt-2 text-3xl font-black tracking-[-0.04em]">{selectedCategory.nome}</h1></div>
           <span className="flex items-center gap-1 rounded-full border border-koma-border px-2 py-1 text-[9px] font-bold uppercase text-koma-muted">{isRealtimeConnected ? <Wifi size={11} className="text-koma-accent" /> : <WifiOff size={11} />} catálogo</span>
         </div>
         <p className="mt-2 text-xs text-koma-muted">Toque no item para adicionar. Toques repetidos aumentam a quantidade.</p>
@@ -586,7 +645,7 @@ export default function SmartPosOrderingFlow({
     <section className="pb-5 pt-6">
       <button type="button" onClick={goBack} className="mb-4 flex items-center gap-2 text-xs font-bold text-koma-muted"><ArrowLeft size={16} /> {cancelLabel}</button>
       <div className="flex items-start justify-between gap-3">
-        <div><p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-koma-accent">Novo pedido · {mesa.nome || `Mesa ${mesa.id}`}</p><h1 className="mt-2 text-3xl font-black tracking-[-0.04em]">Escolha a categoria</h1></div>
+        <div><p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-koma-accent">Novo pedido · {destinationLabel}</p><h1 className="mt-2 text-3xl font-black tracking-[-0.04em]">Escolha a categoria</h1></div>
         <button type="button" onClick={() => void loadCatalog()} className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-koma-border text-koma-muted" aria-label="Atualizar cardápio"><RefreshCw size={16} /></button>
       </div>
       <p className="mt-2 text-xs leading-5 text-koma-muted">Sem teclado: categoria primeiro, depois os itens.</p>
