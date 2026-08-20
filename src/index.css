@@ -258,6 +258,18 @@ body {
   color: var(--koma-text-primary);
 }
 
+/*
+ * The management wrapper must never clip the document. On desktop the
+ * cashier shell below owns the fixed viewport and its internal scroll; on
+ * mobile/touch the cashier shell grows and the document becomes the single
+ * vertical scroll owner.
+ */
+.management-shell {
+  min-width: 0;
+  min-height: 100vh;
+  min-height: 100svh;
+}
+
 /* Cashier workspace — same editorial language as the public landing page. */
 .cashier-shell {
   --cashier-ink: var(--koma-surface-canvas);

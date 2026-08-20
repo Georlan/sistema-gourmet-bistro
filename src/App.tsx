@@ -2105,7 +2105,7 @@ export default function App() {
 
   if (isManagementRole(activeRole)) {
     return (
-      <div className={`w-full h-screen bg-koma-page text-koma-foreground flex flex-col font-sans overflow-hidden ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''}`}>
+      <div className={`management-shell w-full bg-koma-page text-koma-foreground flex flex-col font-sans ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''}`}>
         <React.Suspense fallback={<CashierLoading />}>
           <MemoizedCaixaPanel
             orders={orders}
