@@ -189,7 +189,7 @@ def test_cashier_mobile_uses_one_natural_scroll_owner():
 
     management_shell = css.split(".management-shell {", 1)[1].split("}", 1)[0]
     assert "min-height: 100svh;" in management_shell
-    assert "overflow:" not in management_shell
+    assert "overflow-x: clip;" in management_shell
 
     assert "management-shell w-full bg-koma-page" in app
     assert (
@@ -213,11 +213,41 @@ def test_cashier_mobile_uses_one_natural_scroll_owner():
     assert ".cashier-shell" in mobile_block
     assert "height: auto;" in mobile_block
     assert ".cashier-content" in mobile_block
-    assert "overflow: visible;" in mobile_block
+    for selector in (".cashier-shell", ".cashier-main", ".cashier-content"):
+        selector_block = mobile_block.split(f"{selector} {{", 1)[1].split("}", 1)[0]
+        assert "overflow-x: clip;" in selector_block
+        assert "overflow-y: visible;" in selector_block
+        assert "overflow: visible;" not in selector_block
     assert ".orders-column__body" in mobile_block
     assert "overflow-y: visible !important;" in mobile_block
 
     assert "@media (hover: none) and (pointer: coarse)" in css
+
+
+def test_cashier_width_tracks_the_real_content_container_without_page_overflow():
+    css = source("src/index.css")
+    caixa = source("src/components/CaixaPanel.tsx")
+    closing = source("src/components/caixa/CaixaFechamentoTab.tsx")
+
+    content_block = css.split(".cashier-content {", 1)[1].split("}", 1)[0]
+    assert "width: 100%;" in content_block
+    assert "max-width: 100%;" in content_block
+    assert "overflow-x: clip;" in content_block
+    assert "container-name: cashier-content;" in content_block
+    assert "container-type: inline-size;" in content_block
+
+    assert ".cashier-content > *" in css
+    assert ".cashier-content :where(.grid, .flex)" in css
+    assert ".cashier-fluid-view" in css
+    assert "@container cashier-content (max-width: 30rem)" in css
+
+    assert "cashier-fluid-view closing-workspace" in closing
+    assert "cashier-fluid-panel" in closing
+    assert "closing-count-field__header" in closing
+    assert "closing-toolbar-actions" in closing
+
+    assert "w-screen" not in caixa
+    assert "100vw" not in css.split("/* Cashier workspace", 1)[1]
 
 
 def test_cashier_narrow_cards_return_space_to_order_identity():

@@ -77,19 +77,19 @@ const CountField: React.FC<CountFieldProps> = ({
   const isExact = difference !== null && Math.abs(difference) < 0.01;
 
   return (
-    <div className="rounded-2xl border border-koma-border bg-koma-panel p-4 transition-colors focus-within:border-koma-accent">
-      <div className="flex items-start justify-between gap-3">
-        <label htmlFor={id} className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.12em] text-koma-secondary">
-          <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-emerald-300 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300">
+    <div className="closing-count-field min-w-0 rounded-2xl border border-koma-border bg-koma-panel p-4 transition-colors focus-within:border-koma-accent">
+      <div className="closing-count-field__header flex min-w-0 items-start justify-between gap-3">
+        <label htmlFor={id} className="flex min-w-0 items-center gap-2 text-[10px] font-bold uppercase tracking-[0.12em] text-koma-secondary">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-emerald-300 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300">
             <Icon size={15} />
           </span>
-          <span>{label}{required ? <span className="ml-1 text-emerald-800 dark:text-emerald-300">*</span> : null}</span>
+          <span className="min-w-0">{label}{required ? <span className="ml-1 text-emerald-800 dark:text-emerald-300">*</span> : null}</span>
         </label>
-        <button type="button" onClick={onUseExpected} className="rounded-lg border border-emerald-300 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 px-2.5 py-1.5 text-[9px] font-bold text-emerald-800 dark:text-emerald-300 transition-colors hover:border-koma-accent hover:text-koma-foreground">
+        <button type="button" onClick={onUseExpected} className="closing-count-field__use-expected min-w-0 rounded-lg border border-emerald-300 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 px-2.5 py-1.5 text-center text-[9px] font-bold leading-tight text-emerald-800 dark:text-emerald-300 transition-colors hover:border-koma-accent hover:text-koma-foreground">
           Usar {formatMoney(expected)}
         </button>
       </div>
-      <label htmlFor={id} className="mt-3 flex items-center rounded-xl border border-koma-border bg-koma-input px-3 focus-within:border-koma-accent">
+      <label htmlFor={id} className="mt-3 flex w-full min-w-0 items-center rounded-xl border border-koma-border bg-koma-input px-3 focus-within:border-koma-accent">
         <span className="text-sm font-semibold text-koma-muted">R$</span>
         <MoneyInput
           id={id}
@@ -102,10 +102,10 @@ const CountField: React.FC<CountFieldProps> = ({
           className="min-w-0 flex-1 bg-transparent px-2 py-3 text-lg font-semibold tabular-nums text-koma-foreground outline-none placeholder:text-zinc-700"
         />
       </label>
-      <div className="mt-2 flex items-center justify-between gap-3 text-[10px]">
-        <span className="leading-relaxed text-koma-muted">{help}</span>
+      <div className="closing-count-field__meta mt-2 flex min-w-0 items-center justify-between gap-3 text-[10px]">
+        <span className="min-w-0 leading-relaxed text-koma-muted">{help}</span>
         <span className={clsx(
-          'shrink-0 font-semibold tabular-nums',
+          'closing-count-field__expected shrink-0 font-semibold tabular-nums',
           difference === null ? 'text-koma-muted' : isExact ? 'text-emerald-800 dark:text-emerald-300' : 'text-rose-800 dark:text-rose-300',
         )}>
           {difference === null ? `Esperado ${formatMoney(expected)}` : isExact ? 'Confere' : `${difference > 0 ? '+' : ''}${formatMoney(difference)}`}
@@ -239,8 +239,8 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
     ] as const;
 
     return (
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(280px,.5fr)]">
-        <section className="overflow-hidden rounded-3xl border border-koma-border bg-koma-panel">
+      <div className="cashier-fluid-view closing-workspace grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(280px,.5fr)]">
+        <section className="cashier-fluid-panel overflow-hidden rounded-3xl border border-koma-border bg-koma-panel">
           <header className="flex flex-col gap-4 border-b border-koma-border p-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
               <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-emerald-300 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300">
@@ -317,7 +317,7 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
           </div>
         </section>
 
-        <aside className="flex flex-col justify-between rounded-3xl border border-koma-border bg-koma-panel p-5">
+        <aside className="cashier-fluid-panel flex flex-col justify-between rounded-3xl border border-koma-border bg-koma-panel p-5">
           <div>
             <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-emerald-800 dark:text-emerald-300">Próximo turno</p>
             <h3 className="mt-2 text-lg font-bold text-koma-foreground">Caixa pronto para recomeçar</h3>
@@ -353,15 +353,15 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
   }
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,.55fr)]">
-      <section className="rounded-2xl sm:rounded-3xl border border-koma-border bg-koma-panel p-4 sm:p-6">
+    <div className="cashier-fluid-view closing-workspace grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,.55fr)]">
+      <section className="cashier-fluid-panel rounded-2xl sm:rounded-3xl border border-koma-border bg-koma-panel p-4 sm:p-6">
         <div className="flex flex-col gap-2.5 border-b border-koma-border pb-3 sm:pb-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-emerald-800 dark:text-emerald-300">Conferência assistida</p>
             <h2 className="mt-0.5 text-base sm:text-lg font-bold text-koma-foreground">Confira e feche mais rápido</h2>
             <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-koma-muted hidden sm:block">Compare cada meio com o sistema. Use os valores esperados e altere apenas quando houver divergência.</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="closing-toolbar-actions flex min-w-0 items-center gap-2">
             <button type="button" onClick={handleRefresh} disabled={!onRefresh || isRefreshing} className="inline-flex w-fit items-center gap-1.5 rounded-xl border border-koma-border-subtle bg-koma-panel px-3 py-2 text-[10px] font-semibold text-koma-secondary hover:border-[#3a4540] hover:text-koma-foreground disabled:opacity-50">
               <RefreshCw size={13} className={isRefreshing ? 'animate-spin' : ''} /> Atualizar
             </button>
@@ -410,7 +410,7 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
         </form>
       </section>
 
-      <aside className="rounded-3xl border border-koma-border bg-koma-panel p-5">
+      <aside className="cashier-fluid-panel rounded-3xl border border-koma-border bg-koma-panel p-5">
         <div className="flex items-center justify-between border-b border-koma-border pb-4">
           <div>
             <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-emerald-800 dark:text-emerald-300">Validação do turno</p>
