@@ -345,9 +345,18 @@ class Comanda(Base):
 class Lancamento(Base):
     __tablename__ = "lancamentos"
     __table_args__ = (
+        UniqueConstraint(
+            "restaurante_id",
+            "idempotency_key",
+            name="uq_lancamentos_restaurante_idempotency",
+        ),
         CheckConstraint(
             "origem IN ('desconhecida', 'garcom', 'caixa', 'smartpos', 'cardapio')",
             name="ck_lancamentos_origem",
+        ),
+        CheckConstraint(
+            "idempotency_key IS NULL OR trim(idempotency_key) <> ''",
+            name="ck_lancamentos_idempotency_nonblank",
         ),
     )
 
@@ -355,6 +364,7 @@ class Lancamento(Base):
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
     comanda_id = Column(String, ForeignKey("comandas.id"), nullable=False)
     garcom_id = Column(String, ForeignKey("usuarios.id"), nullable=False)
+    idempotency_key = Column(String(128), nullable=True, index=True)
     origem = Column(
         String(24),
         nullable=False,

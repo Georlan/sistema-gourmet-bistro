@@ -143,12 +143,14 @@ def _launch_items(
     comanda_id: str,
     observations: list[str],
     cliente: str = "Consumo Geral",
+    idempotency_key: str | None = None,
 ) -> dict:
     response = client.post(
         f"/comandas/{comanda_id}/lancamentos",
         headers=_headers(),
         json={
             "garcom_id": USER,
+            "idempotency_key": idempotency_key,
             "itens": [
                 {
                     "produto_id": PRODUCT,
@@ -161,6 +163,84 @@ def _launch_items(
     )
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def test_launch_retry_is_idempotent_and_rejects_payload_reuse():
+    command = _open(1)
+    key = "field-test-launch-retry-1970"
+
+    first = _launch_items(command["id"], ["Sem cebola"], idempotency_key=key)
+    replay = _launch_items(command["id"], ["Sem cebola"], idempotency_key=key)
+
+    assert replay["id"] == first["id"]
+    db = SessionLocal()
+    try:
+        launches = db.query(Lancamento).filter(
+            Lancamento.restaurante_id == TENANT,
+            Lancamento.idempotency_key == key,
+        ).all()
+        assert len(launches) == 1
+        assert len(launches[0].itens) == 1
+
+        print_jobs = db.query(PrintJob).filter(
+            PrintJob.restaurante_id == TENANT,
+            PrintJob.source_id == first["id"],
+        ).all()
+        assert len(print_jobs) == 1
+    finally:
+        db.close()
+
+    conflict = client.post(
+        f"/comandas/{command['id']}/lancamentos",
+        headers=_headers(),
+        json={
+            "garcom_id": USER,
+            "idempotency_key": key,
+            "itens": [
+                {
+                    "produto_id": PRODUCT,
+                    "observacao": "Com cebola",
+                    "cliente_nome": "Consumo Geral",
+                }
+            ],
+        },
+    )
+    assert conflict.status_code == 409, conflict.text
+
+
+def test_compressed_five_hour_shift_keeps_retries_single():
+    """Simula um lançamento a cada cinco minutos e uma resposta perdida."""
+    command = _open(1)
+    launch_ids: list[str] = []
+
+    for cycle in range(60):
+        key = f"field-shift-1970-{cycle:03d}"
+        observation = f"Ciclo operacional {cycle:03d}"
+        first = _launch_items(command["id"], [observation], idempotency_key=key)
+        replay = _launch_items(command["id"], [observation], idempotency_key=key)
+        assert replay["id"] == first["id"]
+        launch_ids.append(first["id"])
+
+    db = SessionLocal()
+    try:
+        launches = db.query(Lancamento).filter(
+            Lancamento.restaurante_id == TENANT,
+            Lancamento.idempotency_key.like("field-shift-1970-%"),
+        ).all()
+        items = db.query(Item).filter(
+            Item.restaurante_id == TENANT,
+            Item.lancamento_id.in_(launch_ids),
+        ).all()
+        print_jobs = db.query(PrintJob).filter(
+            PrintJob.restaurante_id == TENANT,
+            PrintJob.source_id.in_(launch_ids),
+        ).all()
+
+        assert len(launches) == 60
+        assert len(items) == 60
+        assert len(print_jobs) == 60
+    finally:
+        db.close()
 
 
 def _launch(comanda_id: str, cliente: str = "Consumo Geral") -> dict:

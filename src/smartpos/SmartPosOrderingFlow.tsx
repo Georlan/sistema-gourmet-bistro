@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   Check,
@@ -21,6 +21,7 @@ import {
 import { API_BASE_URL, WS_BASE_URL } from '../config/api';
 import { getIngredientObservationPresets, normalizeText } from '../domain';
 import type { SmartPosSession } from './smartPosSession';
+import { makeOperationKey, operationalFetch } from '../utils/operationalRequest';
 
 type MesaResumo = {
   id: number;
@@ -65,13 +66,6 @@ interface SmartPosOrderingFlowProps {
   }) => Promise<void> | void;
 }
 
-function makeIdempotencyKey() {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return `smartpos-sale-${crypto.randomUUID()}`;
-  }
-  return `smartpos-sale-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
-}
-
 function money(value: number) {
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
@@ -105,7 +99,7 @@ export default function SmartPosOrderingFlow({
   const [catalogError, setCatalogError] = useState('');
   const [submitError, setSubmitError] = useState('');
   const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
-  const [saleIdempotencyKey] = useState(makeIdempotencyKey);
+  const pendingSubmitRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const isQuickSale = mode === 'quick-sale';
   const destinationLabel = isQuickSale
     ? 'Venda rápida'
@@ -362,9 +356,22 @@ export default function SmartPosOrderingFlow({
           cliente_nome: targetLabel,
         }));
       });
+      const submitFingerprint = JSON.stringify({
+        mode,
+        mesaId: mesa?.id || null,
+        targetComandaId,
+        items,
+      });
+      if (pendingSubmitRef.current?.fingerprint !== submitFingerprint) {
+        pendingSubmitRef.current = {
+          fingerprint: submitFingerprint,
+          key: makeOperationKey(isQuickSale ? 'smartpos-sale' : 'smartpos-launch'),
+        };
+      }
+      const submitIdempotencyKey = pendingSubmitRef.current.key;
 
       if (isQuickSale) {
-        const saleResponse = await fetch(`${API_BASE_URL}/comandas/venda-direta`, {
+        const saleResponse = await operationalFetch(`${API_BASE_URL}/comandas/venda-direta`, {
           method: 'POST',
           headers: authHeaders,
           body: JSON.stringify({
@@ -372,7 +379,7 @@ export default function SmartPosOrderingFlow({
             garcom_id: session.user.id,
             tipo: 'Balcão',
             origem: 'smartpos',
-            idempotency_key: saleIdempotencyKey,
+            idempotency_key: submitIdempotencyKey,
             itens: items,
           }),
         });
@@ -390,6 +397,7 @@ export default function SmartPosOrderingFlow({
               .reduce((sum: number, item: { preco_unit?: number }) => sum + Number(item.preco_unit || 0), 0)
           : cartTotal;
         setCart({});
+        pendingSubmitRef.current = null;
         await onQuickSaleCreated?.({
           id: String(sale.id),
           numeroPedido: Number(sale.numero_pedido),
@@ -405,7 +413,7 @@ export default function SmartPosOrderingFlow({
 
       if (!comandaId) {
         const identifier = comandas.length > 0 ? `Cliente ${comandas.length + 1}` : null;
-        const openResponse = await fetch(`${API_BASE_URL}/comandas/`, {
+        const openResponse = await operationalFetch(`${API_BASE_URL}/comandas/`, {
           method: 'POST',
           headers: authHeaders,
           body: JSON.stringify({
@@ -426,12 +434,13 @@ export default function SmartPosOrderingFlow({
         comandaId = String(opened.id);
       }
 
-      const launchResponse = await fetch(`${API_BASE_URL}/comandas/${encodeURIComponent(comandaId)}/lancamentos`, {
+      const launchResponse = await operationalFetch(`${API_BASE_URL}/comandas/${encodeURIComponent(comandaId)}/lancamentos`, {
         method: 'POST',
         headers: authHeaders,
         body: JSON.stringify({
           garcom_id: session.user.id,
           origem: 'smartpos',
+          idempotency_key: submitIdempotencyKey,
           itens: items,
         }),
       });
@@ -445,6 +454,7 @@ export default function SmartPosOrderingFlow({
       }
 
       setCart({});
+      pendingSubmitRef.current = null;
       await onOrderCreated?.();
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : 'Falha ao confirmar o pedido.');

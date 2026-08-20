@@ -44,6 +44,7 @@ import { getProductPresets, obterNomeCategoria, smartSearchMatch } from '../doma
 import { formatBackendTime, localCalendarDate } from '../utils/dateTime';
 import { API } from '../config/caixaService';
 import { KOMA_THEME_CHANGED_EVENT, nextKomaTheme, persistKomaTheme, readKomaTheme, type KomaTheme } from '../config/theme';
+import { makeOperationKey, operationalFetch } from '../utils/operationalRequest';
 import {
   ONLINE_MENU_ADDON,
   SUBSCRIPTION_PLANS,
@@ -549,15 +550,21 @@ export function CaixaPanel({
     }
 
     void refreshSmartPosCashProjection();
-    const timer = window.setInterval(() => void refreshSmartPosCashProjection(), 4000);
+    // O WebSocket já reconcilia eventos operacionais. Este fallback mais lento
+    // evita milhares de leituras durante um expediente e pausa em aba oculta.
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void refreshSmartPosCashProjection();
+    }, 30_000);
     const refreshWhenVisible = () => {
       if (document.visibilityState === 'visible') void refreshSmartPosCashProjection();
     };
     window.addEventListener('focus', refreshWhenVisible);
+    window.addEventListener('koma_orders_updated', refreshWhenVisible);
     document.addEventListener('visibilitychange', refreshWhenVisible);
     return () => {
       window.clearInterval(timer);
       window.removeEventListener('focus', refreshWhenVisible);
+      window.removeEventListener('koma_orders_updated', refreshWhenVisible);
       document.removeEventListener('visibilitychange', refreshWhenVisible);
     };
   }, [activeSubTab, refreshSmartPosCashProjection, smartPosAuthorization]);
@@ -3578,6 +3585,7 @@ export function CaixaPanel({
   };
 
   const isPdvSubmittingRef = React.useRef(false); // Synchronous guard for PDV order submission
+  const pdvPendingOperationRef = React.useRef<{ fingerprint: string; key: string } | null>(null);
 
   // Submit Order from PDV Counter
   const handlePdvSubmitOrder = async (e: React.FormEvent) => {
@@ -3670,24 +3678,36 @@ export function CaixaPanel({
           cliente_nome: customerName || 'Consumo Geral'
         }))
       );
+      const salePayload = {
+        cliente_id: orderType === 'mesa' ? undefined : customerId || undefined,
+        mesa_id: orderType === 'mesa' ? mesaId : null,
+        tipo: orderType === 'mesa' ? 'Consumo no Local' : (orderType === 'entrega' ? 'Entrega' : 'Retirada'),
+        identificador: customerName || undefined,
+        delivery_status: orderType === 'mesa' ? undefined : 'producao',
+        delivery_telefone: orderType === 'mesa' ? undefined : customerPhone,
+        delivery_endereco: orderType === 'entrega' ? deliveryAddress : undefined,
+        delivery_taxa: orderType === 'entrega' ? Number(deliveryTaxa || 0) : 0.0,
+        itens: itemsList,
+      };
+      const saleFingerprint = JSON.stringify(salePayload);
+      if (pdvPendingOperationRef.current?.fingerprint !== saleFingerprint) {
+        pdvPendingOperationRef.current = {
+          fingerprint: saleFingerprint,
+          key: makeOperationKey('cashier-sale'),
+        };
+      }
 
-      const res = await fetch(`${apiBaseUrl}/comandas/venda-direta`, {
+      const res = await operationalFetch(`${apiBaseUrl}/comandas/venda-direta`, {
         method: "POST",
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          cliente_id: orderType === 'mesa' ? undefined : customerId || undefined,
-          mesa_id: orderType === 'mesa' ? mesaId : null,
-          tipo: orderType === 'mesa' ? 'Consumo no Local' : (orderType === 'entrega' ? 'Entrega' : 'Retirada'),
-          identificador: customerName || undefined,
-          delivery_status: orderType === 'mesa' ? undefined : 'producao',
-          delivery_telefone: orderType === 'mesa' ? undefined : customerPhone,
-          delivery_endereco: orderType === 'entrega' ? deliveryAddress : undefined,
-          delivery_taxa: orderType === 'entrega' ? Number(deliveryTaxa || 0) : 0.0,
-          itens: itemsList
+          ...salePayload,
+          idempotency_key: pdvPendingOperationRef.current.key,
         })
       });
 
       if (res.ok) {
+        pdvPendingOperationRef.current = null;
         playOrderAlert('new_order');
         onRefreshOrders();
         fetchDeliveryOrders();

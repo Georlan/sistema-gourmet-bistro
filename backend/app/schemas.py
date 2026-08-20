@@ -252,6 +252,9 @@ class LancamentoCreate(BaseModel):
     garcom_id: str
     # Proveniencia operacional para UX. Não concede permissão nem altera RBAC.
     origem: Optional[Literal["smartpos"]] = None
+    # Mantém o mesmo lote quando a resposta HTTP se perde e o operador tenta
+    # novamente. Sem isso, uma oscilação de rede pode duplicar itens/cozinha.
+    idempotency_key: Optional[str] = Field(default=None, min_length=8, max_length=128)
     itens: List[ItemCreate]
 
 class LancamentoResponse(BaseModel):

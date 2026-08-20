@@ -1018,6 +1018,40 @@ def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_ta
     documento de produção por destino.
     """
     rid = require_tenant_id()
+    normalized_idempotency_key = (
+        lancamento_in.idempotency_key.strip()
+        if lancamento_in.idempotency_key
+        else None
+    )
+
+    def ensure_launch_replay_matches(existing_launch: Lancamento) -> Lancamento:
+        existing_items = sorted(
+            (
+                item.produto_id,
+                (item.observacao or "").strip(),
+                (item.cliente_nome or "Consumo Geral").strip(),
+            )
+            for item in existing_launch.itens
+            if item.status != "cancelado"
+        )
+        requested_items = sorted(
+            (
+                item.produto_id,
+                (item.observacao or "").strip(),
+                (item.cliente_nome or "Consumo Geral").strip(),
+            )
+            for item in lancamento_in.itens
+        )
+        if (
+            existing_launch.comanda_id != comanda_id
+            or existing_launch.garcom_id != lancamento_in.garcom_id
+            or existing_items != requested_items
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A chave idempotente já foi usada em outro lançamento.",
+            )
+        return existing_launch
 
     # 1. Verificar se a comanda existe no restaurante autenticado
     comanda = db.query(Comanda).filter(
@@ -1029,6 +1063,16 @@ def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_ta
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Comanda não encontrada"
         )
+
+    if normalized_idempotency_key:
+        existing_launch = db.query(Lancamento).options(
+            joinedload(Lancamento.itens),
+        ).filter(
+            Lancamento.restaurante_id == rid,
+            Lancamento.idempotency_key == normalized_idempotency_key,
+        ).first()
+        if existing_launch is not None:
+            return ensure_launch_replay_matches(existing_launch)
         
     has_existing_items = db.query(Item.id).filter(
         Item.restaurante_id == rid,
@@ -1092,6 +1136,7 @@ def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_ta
         id=f"l-{uuid.uuid4().hex[:8]}",
         comanda_id=comanda_id,
         garcom_id=lancamento_in.garcom_id,
+        idempotency_key=normalized_idempotency_key,
         origem=launch_origin,
         timestamp=datetime.datetime.now(datetime.timezone.utc)
     )
@@ -1103,7 +1148,6 @@ def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_ta
     produtos = {}
     if prod_ids:
         # Usamos joinedload para trazer a categoria associada, resolvendo N+1 na verificação de impressão logo depois
-        from sqlalchemy.orm import joinedload
         produtos = {
             p.id: p
             for p in db.query(Produto).options(joinedload(Produto.categoria)).filter(
@@ -1223,6 +1267,22 @@ def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_ta
     except HTTPException:
         db.rollback()
         raise
+    except IntegrityError as exc:
+        db.rollback()
+        if normalized_idempotency_key:
+            existing_launch = db.query(Lancamento).options(
+                joinedload(Lancamento.itens),
+            ).filter(
+                Lancamento.restaurante_id == rid,
+                Lancamento.idempotency_key == normalized_idempotency_key,
+            ).first()
+            if existing_launch is not None:
+                return ensure_launch_replay_matches(existing_launch)
+        logger.exception("Conflito de integridade ao lançar pedido idempotente")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Não foi possível confirmar se o lançamento já havia sido criado.",
+        ) from exc
     except Exception:
         db.rollback()
         logger.exception("Falha ao lançar itens e registrar impressão")

@@ -25,6 +25,11 @@ import { API_BASE_URL } from './config/api';
 import { KOMA_THEME_CHANGED_EVENT, nextKomaTheme, persistKomaTheme, readKomaTheme, type KomaTheme } from './config/theme';
 import { saveOperatorSession, getOperatorSession, clearOperatorSession } from './utils/authSession';
 import { parseBackendTimestamp } from './utils/dateTime';
+import {
+  clearPersistedOperationKey,
+  getOrCreatePersistedOperationKey,
+  operationalFetch,
+} from './utils/operationalRequest';
 
 const MemoizedCaixaPanel = React.lazy(() =>
   import('./components/CaixaPanel').then(module => ({
@@ -1483,7 +1488,7 @@ export default function App() {
       let comandaId = activeComanda?.id;
 
       if (!comandaId) {
-        const openRes = await fetch(`${API_BASE_URL}/comandas/`, {
+        const openRes = await operationalFetch(`${API_BASE_URL}/comandas/`, {
           method: "POST",
           headers: getAuthHeaders(),
           body: JSON.stringify({
@@ -1502,23 +1507,36 @@ export default function App() {
         comandaId = newComanda.id;
       }
 
-      const launchRes = await fetch(`${API_BASE_URL}/comandas/${comandaId}/lancamentos`, {
+      const launchItems = items.flatMap(item => {
+        const expanded = [];
+        const qty = item.quantidade || 1;
+        for (let i = 0; i < qty; i++) {
+          expanded.push({
+            produto_id: item.produtoId,
+            observacao: item.observacao,
+            cliente_nome: item.clienteNome.trim() || 'Consumo Geral'
+          });
+        }
+        return expanded;
+      });
+      const launchStorageKey = `koma_pending_launch_${comandaId}`;
+      const launchFingerprint = JSON.stringify({
+        comandaId,
+        garcomId: activeWaiterId,
+        itens: launchItems,
+      });
+      const launchIdempotencyKey = getOrCreatePersistedOperationKey(
+        launchStorageKey,
+        launchFingerprint,
+        'table-launch',
+      );
+      const launchRes = await operationalFetch(`${API_BASE_URL}/comandas/${comandaId}/lancamentos`, {
         method: "POST",
         headers: getAuthHeaders(),
         body: JSON.stringify({
           garcom_id: activeWaiterId,
-          itens: items.flatMap(item => {
-            const expanded = [];
-            const qty = item.quantidade || 1;
-            for (let i = 0; i < qty; i++) {
-              expanded.push({
-                produto_id: item.produtoId,
-                observacao: item.observacao,
-                cliente_nome: item.clienteNome.trim() || 'Consumo Geral'
-              });
-            }
-            return expanded;
-          })
+          idempotency_key: launchIdempotencyKey,
+          itens: launchItems,
         })
       });
       if (!launchRes.ok) {
@@ -1529,6 +1547,7 @@ export default function App() {
       }
 
       const launchData = await launchRes.json();
+      clearPersistedOperationKey(launchStorageKey, launchIdempotencyKey);
       if (launchData.dispensado_impressao) {
         showToast('Pedido registrado (sem impressão física).', 'info');
       } else {
@@ -1558,7 +1577,7 @@ export default function App() {
       // O endpoint atual transfere toda a família da mesa. Uma única chamada
       // evita repetir a mesma mutação quando existem comandas irmãs.
       const primaryComanda = sourceComandas[0];
-      const res = await fetch(`${API_BASE_URL}/comandas/${primaryComanda.id}/transferir/${targetTableId}`, {
+      const res = await operationalFetch(`${API_BASE_URL}/comandas/${primaryComanda.id}/transferir/${targetTableId}`, {
         method: "POST",
         headers: getAuthHeaders()
       });
@@ -1591,7 +1610,7 @@ export default function App() {
     handleTransferTableOptimistic(sourceMesaId, targetMesaId);
     setSelectedTableId(null);
     try {
-      const res = await fetch(`${API_BASE_URL}/comandas/mesclar?mesa_origem_id=${sourceMesaId}&mesa_destino_id=${targetMesaId}`, {
+      const res = await operationalFetch(`${API_BASE_URL}/comandas/mesclar?mesa_origem_id=${sourceMesaId}&mesa_destino_id=${targetMesaId}`, {
         method: "POST",
         headers: getAuthHeaders()
       });
@@ -1614,7 +1633,7 @@ export default function App() {
 
   const handleUnmergeTable = async (comandaId: string) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/comandas/desmesclar?comanda_id=${comandaId}`, {
+      const res = await operationalFetch(`${API_BASE_URL}/comandas/desmesclar?comanda_id=${comandaId}`, {
         method: "POST",
         headers: getAuthHeaders()
       });
@@ -1837,7 +1856,7 @@ export default function App() {
     showToast(`Item transferido para a Mesa ${targetTableId}.`, 'success');
 
     try {
-      const res = await fetch(`${API_BASE_URL}/comandas/itens/${itemId}/transferir/${targetTableId}`, {
+      const res = await operationalFetch(`${API_BASE_URL}/comandas/itens/${itemId}/transferir/${targetTableId}`, {
         method: "POST",
         headers: getAuthHeaders()
       });
@@ -1864,7 +1883,7 @@ export default function App() {
     try {
       let failMessage = "";
       for (const itemId of itemIds) {
-        const res = await fetch(`${API_BASE_URL}/comandas/itens/${itemId}/transferir/${targetTableId}`, {
+        const res = await operationalFetch(`${API_BASE_URL}/comandas/itens/${itemId}/transferir/${targetTableId}`, {
           method: "POST",
           headers: getAuthHeaders()
         });
