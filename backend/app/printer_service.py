@@ -36,6 +36,9 @@ ESC_BOLD_OFF = "\x1bE\x00"
 ESC_DOUBLE_HEIGHT_ON = "\x1b!\x10"
 ESC_NORMAL_SIZE = "\x1b!\x00"
 ESC_TIGHT_LINE = "\x1b3\x18"
+# Mantém a fonte A no tamanho normal e aumenta somente o avanço vertical.
+# 32 dots deixam a comanda mais longa e legível sem ampliar os caracteres.
+ESC_RECEIPT_LINE = "\x1b3\x20"
 
 
 def _single_line(value: object) -> str:
@@ -492,7 +495,10 @@ class PrinterService:
         apenas_valores=True mantém o modelo FECHAMENTO.
         """
         width = self.width
-        lines: list[str] = [ESC_TIGHT_LINE + ESC_FONT_A]
+        # Comandas de cliente usam a mesma fonte de antes, mas com entrelinha
+        # confortável. Este renderizador é compartilhado por garçom, Caixa,
+        # reimpressão e pedidos locais originados na Maquininha.
+        lines: list[str] = [ESC_RECEIPT_LINE + ESC_FONT_A]
         position = (
             restaurant_name_position
             if restaurant_name_position in {"cabecalho", "rodape", "oculto"}
@@ -519,6 +525,7 @@ class PrinterService:
                 + ESC_BOLD_OFF
             )
             lines.append(draw_separator("=", width))
+            lines.append("")
         else:
             if position == "cabecalho" and header_text:
                 lines.append(
@@ -543,6 +550,10 @@ class PrinterService:
             )
             lines.append(f"GARÇOM: {_single_line(garcom_nome)}")
             lines.append(draw_separator("-", width))
+            lines.append("")
+
+        lines.append(ESC_BOLD_ON + "ITENS" + ESC_BOLD_OFF)
+        lines.append("")
 
         grouped_by_client: dict[str, dict] = {}
         for comanda in comandas_details:
@@ -615,6 +626,7 @@ class PrinterService:
             )
             _append_amount_line(lines, subtotal_label, _format_brl(client_subtotal), width)
             lines.append(draw_separator("-", width))
+            lines.append("")
 
         if taxa_servico_ativa:
             service_charge = grand_total * (taxa_servico_padrao / 100.0)
@@ -633,6 +645,8 @@ class PrinterService:
         else:
             final_total = grand_total
 
+        if lines and lines[-1] != "":
+            lines.append("")
         lines.append(
             ESC_BOLD_ON
             + split_justified(
@@ -641,6 +655,7 @@ class PrinterService:
             + ESC_BOLD_OFF
         )
         lines.append(draw_separator("=", width))
+        lines.append("")
         lines.append(align_center("Gerenciado por Kôma", width))
         if print_footer:
             _append_wrapped(lines, print_footer, width)
@@ -649,6 +664,7 @@ class PrinterService:
                 ESC_BOLD_ON + align_center(header_text.upper(), width) + ESC_BOLD_OFF
             )
         lines.append(align_center("Documento não fiscal", width))
+        lines.append("")
         return "\n".join(lines)
 
     def generate_delivery_unified_ticket(self, comanda, motoboy_nome: str) -> str:
