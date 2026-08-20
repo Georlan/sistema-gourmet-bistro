@@ -114,6 +114,7 @@ def record_staff_login_failure(
                     .with_for_update()
                     .first()
                 )
+                created = False
 
                 if rate is None:
                     candidate = PublicRateLimit(
@@ -128,6 +129,7 @@ def record_staff_login_failure(
                             db.add(candidate)
                             db.flush([candidate])
                         rate = candidate
+                        created = True
                     except IntegrityError:
                         rate = (
                             db.query(PublicRateLimit)
@@ -140,11 +142,11 @@ def record_staff_login_failure(
                             .one()
                         )
 
-                if rate is not candidate if 'candidate' in locals() else True:
+                if not created:
                     if not _window_is_current(rate, now):
                         rate.janela_iniciada_em = now
                         rate.requisicoes = 1
-                    elif rate is not None and rate is not locals().get("candidate"):
+                    else:
                         rate.requisicoes = int(rate.requisicoes or 0) + 1
 
                 blocked = blocked or int(rate.requisicoes or 0) >= _MAX_FAILURES
