@@ -6,6 +6,7 @@ on:
     paths:
       - 'backend/tools/security_adversarial_audit.py'
       - 'backend/tools/security_a_db_assertions.py'
+      - 'backend/tools/security_b_db_assertions.py'
       - 'backend/alembic/versions/**'
       - '.github/workflows/security-adversarial-audit.yml'
   workflow_dispatch:
@@ -109,6 +110,9 @@ jobs:
 
       - name: Enforce Security A database invariants
         run: PYTHONPATH=backend python backend/tools/security_a_db_assertions.py
+
+      - name: Enforce Security B tenant FK invariants
+        run: PYTHONPATH=backend python backend/tools/security_b_db_assertions.py
 
       - name: Upload audit report
         if: always()
