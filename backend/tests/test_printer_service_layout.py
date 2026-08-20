@@ -1,6 +1,13 @@
 import datetime
 
-from app.printer_service import ESC_BOLD_ON, ESC_FONT_A, PrinterService
+from app.printer_service import (
+    ESC_BOLD_ON,
+    ESC_DOUBLE_HEIGHT_ON,
+    ESC_FONT_A,
+    ESC_RECEIPT_LINE,
+    ESC_TIGHT_LINE,
+    PrinterService,
+)
 
 
 def _service() -> PrinterService:
@@ -221,6 +228,74 @@ def test_full_receipt_keeps_complete_header():
     assert "GARÇOM: Georlan" in ticket
     assert "TOTAL GERAL DA MESA:" in ticket
     assert "ABERTURA:" not in ticket
+
+
+def test_customer_receipt_uses_more_paper_without_changing_font_size():
+    ticket = _service().generate_receipt(
+        num_pedido=305,
+        tipo="Consumo no Local",
+        mesa_id=3,
+        garcom_nome="Georlan",
+        taxa_servico_ativa=False,
+        apenas_valores=False,
+        comandas_details=[
+            {
+                "itens": [
+                    {
+                        "produto": {"nome": "Hambúrguer Tradicional"},
+                        "preco_unit": 19.0,
+                        "status": "preparando",
+                        "observacao": "sem cheddar",
+                    },
+                    {
+                        "produto": {"nome": "Refrigerante 600ml"},
+                        "preco_unit": 8.0,
+                        "status": "preparando",
+                    },
+                ]
+            }
+        ],
+    )
+
+    assert ticket.startswith(ESC_RECEIPT_LINE + ESC_FONT_A)
+    assert ESC_TIGHT_LINE not in ticket
+    assert ESC_DOUBLE_HEIGHT_ON not in ticket
+    assert "----------------------------------------\n\n\x1bE\x01ITENS\x1bE\x00\n\n" in ticket
+    assert "OBS: SEM CHEDDAR\x1bM\x00\n\n" in ticket
+    assert "========================================\n\n" in ticket
+    assert "Gerenciado por Kôma" in ticket
+    assert ticket.rstrip().endswith("Documento não fiscal")
+
+
+def test_values_only_receipt_uses_the_same_spacious_customer_layout():
+    ticket = _service().generate_receipt(
+        num_pedido=305,
+        tipo="Consumo no Local",
+        mesa_id=3,
+        garcom_nome="Georlan",
+        opened_at=datetime.datetime(2026, 7, 28, 18, 0),
+        taxa_servico_ativa=False,
+        apenas_valores=True,
+        comandas_details=[
+            {
+                "itens": [
+                    {
+                        "produto": {"nome": "Hambúrguer Tradicional"},
+                        "preco_unit": 19.0,
+                        "status": "preparando",
+                    }
+                ]
+            }
+        ],
+    )
+
+    assert ticket.startswith(ESC_RECEIPT_LINE + ESC_FONT_A)
+    assert "MESA: 3" in ticket
+    assert "ABERTURA: 18:00" in ticket
+    assert "========================================\n\n\x1bE\x01ITENS\x1bE\x00\n\n" in ticket
+    assert "1x HAMBÚRGUER TRADICIONAL" in ticket
+    assert "TOTAL GERAL DA MESA:" in ticket
+    assert ESC_DOUBLE_HEIGHT_ON not in ticket
 
 
 def test_receipt_omits_general_subtotal_when_table_has_no_named_clients():
