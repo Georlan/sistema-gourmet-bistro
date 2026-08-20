@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'backend/tools/security_adversarial_audit.py'
+      - 'backend/tools/security_a_db_assertions.py'
+      - 'backend/alembic/versions/**'
       - '.github/workflows/security-adversarial-audit.yml'
   workflow_dispatch:
 
@@ -104,6 +106,9 @@ jobs:
 
       - name: Run five-tenant busy-day and adversarial audit
         run: PYTHONPATH=backend python backend/tools/security_adversarial_audit.py
+
+      - name: Enforce Security A database invariants
+        run: PYTHONPATH=backend python backend/tools/security_a_db_assertions.py
 
       - name: Upload audit report
         if: always()
